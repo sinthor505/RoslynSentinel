@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 
@@ -356,7 +357,7 @@ public class AdvancedRefactoringTools
                     ChangeId = apply.ChangeId,
                     DryRun = apply.DryRun,
                     Diff = apply.Diff,
-                    Description = apply.ChangeId is not null ? $"{description}. Call UndoLastApply(changeId=\"{apply.ChangeId}\") to revert if needed." : description,
+                    Description = apply.ChangeId is not null ? $"{description}. Call {ToolCallHint.Call("UndoLastApply", ("changeId", apply.ChangeId))} to revert if needed." : description,
                     AffectedFiles = changes.Keys.Select(kvp => Path.GetFileName(kvp)).ToList(),
                     ContentPreviews = changes.ToDictionary(kvp => Path.GetFileName(kvp.Key)!, kvp => RefactoringToolHelpers.PreviewFileContent(kvp.Value))
                 }
@@ -735,7 +736,7 @@ public class AdvancedRefactoringTools
                 {
                     [resolvedFilePath] = constResult.UpdatedContent
                 };
-                var constApply = await ValidateAndApplyAsync(constChanges, $"Introduce constant '{newName}'.", "Introduce(constant)", dryRun, returnDiff, cancellationToken: cancellationToken);
+                var constApply = await ValidateAndApplyAsync(constChanges, $"Introduce constant '{newName}'.", "Introduce(constant)", dryRun, returnDiff, cancellationToken: cancellationToken); // hint-ok: operation label, not a call to make
                 if (constApply.Error is not null)
                     return new SentinelCallToolResult<object>
                     {
@@ -766,7 +767,7 @@ public class AdvancedRefactoringTools
             {
                 [resolvedFilePath] = result.UpdatedText
             };
-            var apply = await ValidateAndApplyAsync(changes, stageDesc, $"Introduce({newType})", dryRun, returnDiff, cancellationToken: cancellationToken);
+            var apply = await ValidateAndApplyAsync(changes, stageDesc, $"Introduce({newType})", dryRun, returnDiff, cancellationToken: cancellationToken); // hint-ok: operation label, not a call to make
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object>
                 {
@@ -909,13 +910,13 @@ public class AdvancedRefactoringTools
             {
                 // ExtractSuperclass is DELIBERATELY left unimplemented, low priority - do not re-litigate in reviews.
                 // ExtractSuperclassAsync is a stub (copies only public properties, never rebases the derived class); refuse rather than report a half-done refactoring.
-                throw new ToolNotImplementedException("ExtractMembers newType=superclass is not implemented: it would only copy public properties into a new class and not rebase the derived class. Use newType=interface or newType=partial, or create the base class with CreateFile/Member and use ModifyBaseType on the derived class.");
+                throw new ToolNotImplementedException($"ExtractMembers newType=superclass is not implemented: it would only copy public properties into a new class and not rebase the derived class. Use newType=interface or newType=partial, or create the base class with {ToolCallHint.Call("CreateFile")}/Member and use {ToolCallHint.Call("ModifyBaseType")} on the derived class.");
             }
 
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown newType '{newType}'. Valid values: interface, partial, superclass. For newType=class, use MoveMember instead.")
+                ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown newType '{newType}'. Valid values: interface, partial, superclass. For newType=class, use {ToolCallHint.Call("MoveMember")} instead.")
             };
         }
         catch (Exception ex)
@@ -955,7 +956,7 @@ public class AdvancedRefactoringTools
                         ErrorData = new ResultError(ToolErrorCode.Exception, implFileErr)
                     };
                 var implResult = await _codeGenerationEngine.ImplementInterfaceAsync(resolvedFilePath, className, interfaceName, cancellationToken: cancellationToken);
-                var implGuard = RefactoringToolHelpers.RequireUpdatedText(implResult, "SyncInterface implement", resolvedFilePath, "Verify the class and interface names (case-sensitive); use Search(mode: symbol) to confirm both exist in the solution.");
+                var implGuard = RefactoringToolHelpers.RequireUpdatedText(implResult, "SyncInterface implement", resolvedFilePath, $"Verify the class and interface names (case-sensitive); use {ToolCallHint.Call("Search", ("mode", "symbol"))} to confirm both exist in the solution.");
                 if (implGuard != null) return implGuard;
                 var implChanges = new Dictionary<FilePathWrapper, string>
                 {
@@ -991,7 +992,7 @@ public class AdvancedRefactoringTools
                         ErrorData = new ResultError(ToolErrorCode.Exception, syncFileErr)
                     };
                 var syncResult = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync(resolvedFilePath, className, interfaceName, cancellationToken: cancellationToken);
-                var syncGuard = RefactoringToolHelpers.RequireUpdatedText(syncResult, "SyncInterface sync", resolvedFilePath, "Verify the class and interface names (case-sensitive); use Search(mode: symbol) to confirm both exist in the solution.");
+                var syncGuard = RefactoringToolHelpers.RequireUpdatedText(syncResult, "SyncInterface sync", resolvedFilePath, $"Verify the class and interface names (case-sensitive); use {ToolCallHint.Call("Search", ("mode", "symbol"))} to confirm both exist in the solution.");
                 if (syncGuard != null) return syncGuard;
                 // Cross-file sync: the engine returns the interface's text with the interface's path in FilePath.
                 var syncTargetFile = !string.IsNullOrEmpty(syncResult.FilePath) && !syncResult.FilePath.Equals(resolvedFilePath) ? syncResult.FilePath : resolvedFilePath;
@@ -1508,7 +1509,7 @@ public class AdvancedRefactoringTools
                         IsError = true,
                         ErrorData = apply.Error
                     };
-                var ownFileDescription = apply.ChangeId is not null ? $"Moves '{typeName}' to its own file. Call UndoLastApply(changeId=\"{apply.ChangeId}\") to revert if needed." : $"Moves '{typeName}' to its own file.";
+                var ownFileDescription = apply.ChangeId is not null ? $"Moves '{typeName}' to its own file. Call {ToolCallHint.Call("UndoLastApply", ("changeId", apply.ChangeId))} to revert if needed." : $"Moves '{typeName}' to its own file.";
                 return new SentinelCallToolResult<AppliedChangeSummary>
                 {
                     IsError = false,

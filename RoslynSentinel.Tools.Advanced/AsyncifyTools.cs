@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 
@@ -3356,14 +3357,14 @@ public class AsyncifyTools
             {
                 directive = $"Phase 1 (flag) scanned {state.FlagPhaseScanned} methods but none qualified for async bridging " +
                             $"— all scored below minScore={input.MinScore} or were already marked for manual review. " +
-                            $"Re-run Asyncify with a lower minScore (e.g., minScore=25), or run " +
-                            $"flag_migration_candidates(scope=\"project\", minScore=25) first to review the candidate pool.";
+                            $"Re-run {ToolCallHint.Call("Asyncify")} with a lower minScore (e.g., minScore=25), or run " +
+                            $"{ToolCallHint.Call("ScanAsyncMigrationCandidates", ("scope", "project"), ("minScore", "25"))} first to review the candidate pool.";
             }
             else
             {
                 directive = "No [MigrationCandidate] attributes found in the solution. " +
-                            $"Run flag_migration_candidates(scope=\"project\", minScore={DefaultMinScore}) first to identify " +
-                            "and tag async migration candidates, then re-run asyncify.";
+                            $"Run {ToolCallHint.Call("ScanAsyncMigrationCandidates", ("scope", "project"), ("minScore", DefaultMinScore.ToString()))} first to identify " +
+                            $"and tag async migration candidates, then re-run {ToolCallHint.Call("Asyncify")}.";
             }
         }
         else if (state.Succeeded == 0 && !status2.Open && !state.StoppedEarly && state.BridgeMinScore.HasValue)
@@ -3379,14 +3380,14 @@ public class AsyncifyTools
             {
                 directive = $"{state.BridgeBodyRewriteFailures} candidate(s) required manual review - " +
                             $"the async body rewrite produced compiler errors after replacing sync bridge calls with async equivalents. " +
-                            $"Call GetOperationDetail(changeId=\"{changeId}\", filter=\"manual_review\") to see per-method compiler diagnostics.";
+                            $"Call {ToolCallHint.Call("GetOperationDetail", ("changeId", changeId), ("filter", "manual_review"))} to see per-method compiler diagnostics.";
             }
             else
             {
                 directive = $"{state.BridgeStaleFlagSkips} candidate(s) skipped - async overloads already exist with CancellationToken " +
                             $"(stale [AsyncBridgeCandidate] flags from a prior Asyncify run). " +
-                            $"Run ScanAsyncMigrationCandidates to refresh the candidate list, or " +
-                            $"call GetOperationDetail(changeId=\"{changeId}\", filter=\"skipped\") to inspect skip reasons.";
+                            $"Run {ToolCallHint.Call("ScanAsyncMigrationCandidates")} to refresh the candidate list, or " +
+                            $"call {ToolCallHint.Call("GetOperationDetail", ("changeId", changeId), ("filter", "skipped"))} to inspect skip reasons."; // hint-ok: prose about a prior run, not a call
             }
         }
         else
@@ -3611,7 +3612,7 @@ public class AsyncifyTools
         {
             if (string.IsNullOrWhiteSpace(target.NewMethodName))
             {
-                var reason = $"NewMethodName is required for ExtractEventHandlers (file: {target.FilePath})";
+                var reason = $"NewMethodName is required for {ToolCallHint.Call("ExtractEventHandlers")} (file: {target.FilePath})";
                 items.Add(new OperationItemRecord
                 {
                     FilePath = target.FilePath,
@@ -3634,7 +3635,7 @@ public class AsyncifyTools
 
             if (string.IsNullOrWhiteSpace(target.ContextSnippet) && !target.ExtractEntireBody)
             {
-                var reason = $"ContextSnippet is required for ExtractEventHandlers (file: {target.FilePath})";
+                var reason = $"ContextSnippet is required for {ToolCallHint.Call("ExtractEventHandlers")} (file: {target.FilePath})";
                 items.Add(new OperationItemRecord
                 {
                     FilePath = target.FilePath,
@@ -3691,7 +3692,7 @@ public class AsyncifyTools
                 failed++;
                 _logger.LogWarning(
                     "ExtractEventHandlers: {Method} in {File} threw: {Reason}",
-                    target.NewMethodName, target.FilePath, reason);
+                    target.NewMethodName, target.FilePath, reason); // hint-ok: logger-only text
                 continue;
             }
 
@@ -3718,7 +3719,7 @@ public class AsyncifyTools
                 failed++;
                 _logger.LogWarning(
                     "ExtractEventHandlers: {Method} in {File} failed: {Reason}",
-                    target.NewMethodName, target.FilePath, reason);
+                    target.NewMethodName, target.FilePath, reason); // hint-ok: logger-only text
                 continue;
             }
 
@@ -3776,7 +3777,7 @@ public class AsyncifyTools
                 failed++;
                 _logger.LogWarning(
                     "ExtractEventHandlers: apply changes for {Method} in {File} failed: {Reason}",
-                    target.NewMethodName, target.FilePath, reason);
+                    target.NewMethodName, target.FilePath, reason); // hint-ok: logger-only text
             }
         }
 

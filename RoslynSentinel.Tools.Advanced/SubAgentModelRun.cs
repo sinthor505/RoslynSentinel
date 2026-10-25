@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Common.AgentLoop;
 
 namespace RoslynSentinel.Tools.Advanced;
@@ -96,7 +97,7 @@ public static class SubAgentModelRun
         // Mirrors PlanStepRunner: the solution is already loaded by the launcher, and the task is
         // inlined by value so the model has no reason to go looking for it on disk.
         var userPrompt =
-            "The solution is already loaded - do not call LoadSolution or ListWorkspaceSolutions, " +
+            $"The solution is already loaded - do not call {ToolCallHint.Call("LoadSolution")} or {ToolCallHint.Call("ListWorkspaceSolutions")}, " +
             "go straight to reading/editing.\n\n" + prompt;
 
         return await runner.RunAsync(systemPrompt, userPrompt, child.LogDirectory, cancellationToken, runId: child.RunId);

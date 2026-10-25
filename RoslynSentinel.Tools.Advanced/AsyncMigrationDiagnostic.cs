@@ -1,3 +1,5 @@
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Tools.Advanced;
 
 /// <summary>
@@ -42,7 +44,7 @@ public static class AsyncMigrationDiagnostic
         {
             suggestions.Add(
                 $"{failed} failure(s) recorded. " +
-                $"Use GetOperationDetail(changeId=\"{changeId}\", filter=\"failures\") for details.");
+                $"Use {ToolCallHint.Call("GetOperationDetail", ("changeId", changeId), ("filter", "failures"))} for details.");
         }
 
         return suggestions.Count > 0 ? suggestions : null;
@@ -67,7 +69,7 @@ public static class AsyncMigrationDiagnostic
         {
             suggestions.Add(
                 $"{belowThreshold} method(s) were scanned but scored below the minScore threshold - " +
-                "they were not flagged. Lower minScore or run ScanAsyncMigrationCandidates with a " +
+                $"they were not flagged. Lower minScore or run {ToolCallHint.Call("ScanAsyncMigrationCandidates")} with a " +
                 "higher minScore to find additional candidates.");
         }
 
@@ -75,7 +77,7 @@ public static class AsyncMigrationDiagnostic
         {
             suggestions.Add(
                 $"{alreadyFlagged} method(s) were skipped in the flag phase because they already " +
-                "carry a [MigrationCandidate] attribute. Run Asyncify to process them.");
+                $"carry a [MigrationCandidate] attribute. Run {ToolCallHint.Call("Asyncify")} to process them.");
         }
     }
 
@@ -124,7 +126,7 @@ public static class AsyncMigrationDiagnostic
             suggestions.Add(
                 $"{alreadyBridged.Count} method(s) skipped - async overload already exists with CancellationToken. " +
                 "These sync wrappers have already been bridged and the [MigrationCandidate(\"AsyncBridgeCandidate\")] " +
-                "attribute is stale. Run ScanAsyncMigrationCandidates to refresh the candidate list.");
+                $"attribute is stale. Run {ToolCallHint.Call("ScanAsyncMigrationCandidates")} to refresh the candidate list.");
         }
 
         if (priorManualReview.Count > 0)
@@ -134,8 +136,8 @@ public static class AsyncMigrationDiagnostic
                 $"{priorManualReview.Count} method(s) were previously marked NeedsManualReview - " +
                 "a prior Asyncify run attempted bridging but encountered compiler errors, meaning no " +
                 $"async API equivalent was found. Sample: {sample}. " +
-                "Use GetMethodSource on these methods to review the synchronous calls that block " +
-                "automatic conversion.");
+                $"Use {ToolCallHint.Call("GetMethodSource")} on these methods to review the synchronous calls that block " +
+                "automatic conversion."); // hint-ok: prose about a prior run, not a call
         }
 
         if (newCompilerErrors.Count > 0)
@@ -145,7 +147,7 @@ public static class AsyncMigrationDiagnostic
                 $"{newCompilerErrors.Count} method(s) flagged NeedsManualReview this run - " +
                 "the bridge produced compiler errors (likely no async API equivalent for the sync " +
                 $"calls they make). Sample: {sample}. " +
-                $"Use GetOperationDetail(changeId=\"{changeId}\", filter=\"manual_review\") for the full " +
+                $"Use {ToolCallHint.Call("GetOperationDetail", ("changeId", changeId), ("filter", "manual_review"))} for the full " +
                 "per-method compiler diagnostic list.");
         }
 
@@ -154,7 +156,7 @@ public static class AsyncMigrationDiagnostic
             suggestions.Add(
                 $"{eventHandlers.Count} event handler(s) skipped - event handlers cannot be converted " +
                 "automatically because their signature is fixed by the delegate contract. " +
-                "Use ExtractEventHandlers to separate the business logic into an async method, " +
+                $"Use {ToolCallHint.Call("ExtractEventHandlers")} to separate the business logic into an async method, " +
                 "then bridge that method instead.");
         }
 
@@ -164,7 +166,7 @@ public static class AsyncMigrationDiagnostic
             suggestions.Add(
                 $"{unexpectedFailures.Count} bridge item(s) failed with unexpected errors (pre-condition " +
                 $"or runtime exceptions). Sample: {sample}. " +
-                $"Use GetOperationDetail(changeId=\"{changeId}\", filter=\"failures\") to see details.");
+                $"Use {ToolCallHint.Call("GetOperationDetail", ("changeId", changeId), ("filter", "failures"))} to see details.");
         }
     }
 
@@ -194,7 +196,7 @@ public static class AsyncMigrationDiagnostic
             suggestions.Add(
                 $"{upliftErrors.Count} caller(s) could not be uplifted - compiler errors during " +
                 $"caller async conversion. Sample: {sample}. " +
-                $"Use GetOperationDetail(changeId=\"{changeId}\", filter=\"manual_review\") for compiler diagnostics.");
+                $"Use {ToolCallHint.Call("GetOperationDetail", ("changeId", changeId), ("filter", "manual_review"))} for compiler diagnostics.");
         }
 
         if (noCallSites.Count > 0)
@@ -224,7 +226,7 @@ public static class AsyncMigrationDiagnostic
         {
             suggestions.Add(
                 $"{ctFailures.Count} CancellationToken propagation failure(s). " +
-                $"Use GetOperationDetail(changeId=\"{changeId}\", filter=\"failures\") for details.");
+                $"Use {ToolCallHint.Call("GetOperationDetail", ("changeId", changeId), ("filter", "failures"))} for details.");
         }
     }
 
