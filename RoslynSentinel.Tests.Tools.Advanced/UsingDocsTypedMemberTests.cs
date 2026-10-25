@@ -77,6 +77,21 @@ public sealed class UsingDocsTypedMemberTests
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("NotFound"));
     }
 
+    [Test]
+    [Category("RefactoringExtractionDocsTools")] // sentinel:auto-category
+    public async Task ExtractLocalVariable_ExpressionAlreadyLocal_IsNoWriteSuccess()
+    {
+        const string source = "public class C\r\n{\r\n    public int Compute(int n) => n;\r\n    public void M()\r\n    {\r\n        var x = Compute(7);\r\n    }\r\n}";
+        using var workspace = InMemoryWorkspace.Create(("C.cs", source));
+        var tools = BatteryToolFactory.CreateRefactoringExtractionDocsTools(workspace.Manager);
+        var result = await tools.ExtractLocalVariableTool(reason: "test message", workspace.PathOf("C.cs"), "Compute(7)", "y");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(result.SuccessData, Is.TypeOf<AppliedChangeSummary>());
+        Assert.That(((AppliedChangeSummary)result.SuccessData!).AffectedFiles, Is.Empty);
+        Assert.That(result.StatusMessage, Does.Not.StartWith("Extracted"));
+        Assert.That(workspace.ReadText("C.cs"), Is.EqualTo(source));
+    }
+
     // --- AddProperty (TypedMemberTool) ---
     [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category

@@ -256,13 +256,13 @@ public class RefactoringExtractionDocsImpl
         try
         {
             var result = await _refactoringEngine.ExtractLocalVariableAsync(filePathResolved, exactExpressionText, variableName, lineBefore, lineAfter, cancellationToken: cancellationToken);
-            if (string.IsNullOrEmpty(result.UpdatedText))
+            if (RefactoringToolHelpers.RequireUpdatedText(result, "ExtractLocalVariable", filePathResolved) is { } guardResult)
             {
-                string errorReason = $"ExtractLocalVariable: no change produced for '{variableName}' in '{filePathResolved}' ({result.Outcome}). {result.Message}";
-                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(RefactoringToolHelpers.ErrorCodeFor(result), errorReason) };
+                return guardResult;
             }
 
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
+            // TODO S4: UpdatedText becomes non-nullable (RequireUpdatedText guarantees it here)
+            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"Extract local variable '{variableName}'.", "ExtractLocalVariable", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
