@@ -84,6 +84,8 @@ public class BatteryThirtyFiveTests
 
         Assert.That(result.Message, Does.StartWith("// Already"),
             "Should return message when namespace is already file-scoped");
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
+        Assert.That(result.UpdatedText, Is.EqualTo(src), "No change, so the text is returned unchanged");
     }
 
     [Test]

@@ -586,7 +586,8 @@ public class SyntaxUpgradeEngine
             {
                 Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
-                Message = "// Already uses file-scoped namespace declaration."
+                Message = "// Already uses file-scoped namespace declaration.",
+                UpdatedText = root.ToFullString()
             };
         }
 
