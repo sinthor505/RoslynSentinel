@@ -3145,7 +3145,7 @@ public class AsyncifyTools
                 });
                 state.P3bSucceeded++; state.Succeeded++;
             }
-            catch (Exception ex) when (ex.Message.Contains("is already async"))
+            catch (Exception ex) when (ex is AsyncBridgePreconditionException { Kind: AsyncBridgePreconditionKind.AlreadyAsync })
             {
                 // Already converted in a prior run -> flag is genuinely stale. Strip only.
                 _logger.LogInformation(
@@ -3176,7 +3176,7 @@ public class AsyncifyTools
                 });
                 state.P3bSkipped++; state.Skipped++;
             }
-            catch (Exception ex) when (ex.Message.Contains("does not call any Asyncify-bridge"))
+            catch (Exception ex) when (ex is AsyncBridgePreconditionException { Kind: AsyncBridgePreconditionKind.NoBridgeCalls })
             {
                 // Scored by heuristic (blocking-calls) but has no bridge wrappers to replace.
                 // Strip AsyncHandlerCandidate and add NeedsManualReview so Phase 1 does not

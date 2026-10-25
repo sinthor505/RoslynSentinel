@@ -680,24 +680,24 @@ public class AsyncOptimizationEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
                                .Select(solution.GetDocument)
-                               .FirstOrDefault() ?? throw new InvalidOperationException(
-                $"File '{filePath}' not found in the loaded solution. Ensure LoadSolution has been called.");
+                               .FirstOrDefault() ?? throw new ToolNotFoundException(
+                $"File '{filePath}' not found in the loaded solution. Ensure LoadSolution has been called.", "file", filePath);
 
-        var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException($"Could not get syntax root for '{filePath}'.");
+        var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new ToolInvalidArgumentException($"Could not get syntax root for '{filePath}'.");
         var methodNode = root.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName)
-            ?? throw new InvalidOperationException(
-                $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.");
+            ?? throw new ToolNotFoundException(
+                $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.", "method", methodName);
 
         if (methodNode.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)))
         {
-            throw new InvalidOperationException($"Method '{methodName}' is already async.");
+            throw new AsyncBridgePreconditionException(AsyncBridgePreconditionKind.AlreadyAsync, $"Method '{methodName}' is already async.");
         }
 
         if (methodNode.ReturnType.ToString() != "void")
         {
-            throw new InvalidOperationException(
+            throw new AsyncBridgePreconditionException(AsyncBridgePreconditionKind.Other,
                 $"Method '{methodName}' does not return void - only void-returning methods can be converted to async void.");
         }
 
@@ -726,7 +726,7 @@ public class AsyncOptimizationEngine
 
         if (bridgeTargets.Count == 0)
         {
-            throw new InvalidOperationException(
+            throw new AsyncBridgePreconditionException(AsyncBridgePreconditionKind.NoBridgeCalls,
                 $"Method '{methodName}' does not call any Asyncify-bridge sync wrapper. " +
                 "Bridge wrappers must be marked [Obsolete(\"Asyncify-bridge: call … instead.\")].");
         }
