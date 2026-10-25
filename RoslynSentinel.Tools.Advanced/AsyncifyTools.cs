@@ -1539,7 +1539,7 @@ public class AsyncifyTools
                     bool handled = false;
                     List<DiagnosticInfo>? compilerDiagnostics = null;
 
-                    if ((ex is InvalidOperationException && ex.Message.Contains("already exists")) || ex is AsyncBridgePreconditionException { Kind: AsyncBridgePreconditionKind.OverloadExists })
+                    if (ex is AsyncBridgePreconditionException { Kind: AsyncBridgePreconditionKind.OverloadExists })
                     {
                         var asyncMethodName = methodName + "Async";
                         try
