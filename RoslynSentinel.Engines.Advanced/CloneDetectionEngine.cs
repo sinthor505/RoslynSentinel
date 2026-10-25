@@ -65,9 +65,10 @@ public class CloneDetectionEngine
             return [];
         }
 
-        var classDecl = root.DescendantNodes()
+        var classMatches = root.DescendantNodes()
             .OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault(c => c.Identifier.Text == className);
+            .Where(c => c.Identifier.Text == className).ToList();
+        var classDecl = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className);
         if (classDecl == null)
         {
             return [];
