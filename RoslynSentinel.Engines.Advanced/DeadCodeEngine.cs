@@ -26,7 +26,8 @@ public class DeadCodeEngine
             return new List<DeadCodeReport>();
         }
 
-        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        var classMatches = root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList();
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className);
         if (classNode == null)
         {
             return new List<DeadCodeReport>();

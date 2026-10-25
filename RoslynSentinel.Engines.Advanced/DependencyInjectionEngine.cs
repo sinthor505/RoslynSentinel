@@ -39,7 +39,8 @@ public class DependencyInjectionEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        var classNode = (root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className)) ?? throw new ToolNotFoundException($"Class not found: {className}");
+        var classMatches = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>();
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className) ?? throw new ToolNotFoundException($"Class not found: {className}");
         var reports = new List<DependencyReport>();
         var constructor = classNode.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
 
@@ -247,7 +248,8 @@ public class DependencyInjectionEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var classNode = (root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className)) ?? throw new ToolNotFoundException($"Class '{className}' not found in file: {filePath}");
+        var classMatches = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>();
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className) ?? throw new ToolNotFoundException($"Class '{className}' not found in file: {filePath}");
         var fieldName = $"_{char.ToLower(dependencyName[0])}{dependencyName.Substring(1)}";
 
         // 1. Create the field

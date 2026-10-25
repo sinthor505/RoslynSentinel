@@ -96,7 +96,8 @@ public class CodeStyleEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        var prop = root?.DescendantNodes().OfType<PropertyDeclarationSyntax>().FirstOrDefault(p => p.Identifier.Text == propertyName);
+        var propMatches = root?.DescendantNodes().OfType<PropertyDeclarationSyntax>().Where(p => p.Identifier.Text == propertyName).ToList() ?? new System.Collections.Generic.List<PropertyDeclarationSyntax>();
+        var prop = RoslynSentinel.Common.NameTargetLookup.RequireSingle(propMatches, "Property", propertyName);
         if (prop == null)
         {
             throw new ToolNotFoundException($"Property '{propertyName}' not found.", "property", propertyName);
