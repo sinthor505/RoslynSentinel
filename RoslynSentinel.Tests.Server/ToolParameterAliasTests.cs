@@ -582,12 +582,14 @@ public class ToolParameterAliasTests
         Assert.That(text, Does.Contain("CreateFile only creates a seeded file and takes no content."), $"Got: {text}");
         if (writeFileRegistered)
         {
-            Assert.That(text, Does.Contain("WriteFile(operation: CreateFile, filePath: "), $"Got: {text}");
+            Assert.That(text, Does.Contain("WriteFile(reason:"), $"Got: {text}");
+            Assert.That(text, Does.Contain("operation: CreateFile"), $"Got: {text}");
         }
         else
         {
             Assert.That(text, Does.Not.Contain("WriteFile("), $"WriteFile is not registered, so it must not be named. Got: {text}");
-            Assert.That(text, Does.Contain("Member(operation: addMember, containerName: "), $"Got: {text}");
+            Assert.That(text, Does.Contain("Member(reason:"), $"Got: {text}");
+            Assert.That(text, Does.Contain("operation: addMember"), $"Got: {text}");
         }
     }
 
@@ -601,16 +603,21 @@ public class ToolParameterAliasTests
         };
 
         var withWriteFile = ToolArgumentValidator.GetUnknownParameterHint("CreateFile", "content", arguments, name => name == "WriteFile");
-        Assert.That(withWriteFile, Does.Contain("WriteFile(operation: CreateFile, filePath: Foo.cs, content: ...)"));
+        Assert.That(withWriteFile, Does.Contain("WriteFile(reason:"));
+        Assert.That(withWriteFile, Does.Contain("operation: CreateFile"));
+        Assert.That(withWriteFile, Does.Contain("filePath: \"Foo.cs\""));
         Assert.That(withWriteFile, Does.Not.Contain("Member("));
 
         var withoutWriteFile = ToolArgumentValidator.GetUnknownParameterHint("CreateFile", "content", arguments, _ => false);
-        Assert.That(withoutWriteFile, Does.Contain("Member(operation: addMember, containerName: Foo, newMemberSource: ...)"));
+        Assert.That(withoutWriteFile, Does.Contain("Member(reason:"));
+        Assert.That(withoutWriteFile, Does.Contain("operation: addMember"));
+        Assert.That(withoutWriteFile, Does.Contain("containerName: \"Foo\""));
         Assert.That(withoutWriteFile, Does.Not.Contain("WriteFile("));
 
         // Case-insensitive key, and a literal placeholder when the value was not supplied.
         var placeholder = ToolArgumentValidator.GetUnknownParameterHint("createfile", "CONTENT", new Dictionary<string, System.Text.Json.JsonElement>(), _ => true);
-        Assert.That(placeholder, Does.Contain("filePath: <filePath>"));
+        Assert.That(placeholder, Does.Contain("filePath: "));
+        Assert.That(placeholder, Does.Contain("<filePath>"));
     }
 
     [Test]

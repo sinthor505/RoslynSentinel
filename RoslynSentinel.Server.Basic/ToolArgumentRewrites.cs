@@ -1,5 +1,7 @@
 using System.Text.Json;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Server.Basic;
 
 public static class ToolArgumentRewrites
@@ -268,7 +270,7 @@ public static class ToolArgumentRewrites
 
         Remove(arguments, "head_limit");
         arguments["maxResults"] = JsonSerializer.SerializeToElement(limit);
-        return $"Note: 'head_limit' is not a parameter of Search; it was treated as maxResults: {limit}. Use Search(maxResults: {limit}) in future calls.";
+        return $"Note: 'head_limit' is not a parameter of Search; it was treated as maxResults: {limit}. Use {ToolCallHint.Call("Search", ("maxResults", limit.ToString()))} in future calls.";
     }
 
     /// <summary>
@@ -360,11 +362,13 @@ public static class ToolArgumentRewrites
         }
 
         var targets = new List<string>();
+        var callArgs = new List<(string Name, string Value)>();
         if (hasOffset)
         {
             Remove(arguments, "offset");
             arguments["startLine"] = JsonSerializer.SerializeToElement(offset);
             targets.Add($"startLine: {offset}");
+            callArgs.Add(("startLine", offset.ToString()));
         }
 
         if (hasLimit)
@@ -372,13 +376,14 @@ public static class ToolArgumentRewrites
             Remove(arguments, "limit");
             arguments["endLine"] = JsonSerializer.SerializeToElement(end);
             targets.Add($"endLine: {end}");
+            callArgs.Add(("endLine", end.ToString()));
         }
 
         var sources = hasOffset && hasLimit
             ? "'offset' and 'limit' are not parameters"
             : hasOffset ? "'offset' is not a parameter" : "'limit' is not a parameter";
         var joined = string.Join(", ", targets);
-        return $"Note: {sources} of ReadFile; they were treated as {joined}. Use ReadFile({joined}) in future calls.";
+        return $"Note: {sources} of ReadFile; they were treated as {joined}. Use {ToolCallHint.Call("ReadFile", callArgs.ToArray())} in future calls.";
     }
 
     /// <summary>
@@ -408,7 +413,7 @@ public static class ToolArgumentRewrites
             Remove(arguments, source);
             arguments["scope"] = JsonSerializer.SerializeToElement(scope);
             arguments["scopeName"] = JsonSerializer.SerializeToElement(project);
-            return $"Note: '{source}' is not a parameter of RunTest; it was treated as scope: \"{scope}\", scopeName: \"{project}\". Use RunTest(scope: \"{scope}\", scopeName: \"{project}\") in future calls.";
+            return $"Note: '{source}' is not a parameter of RunTest; it was treated as scope: \"{scope}\", scopeName: \"{project}\". Use {ToolCallHint.Call("RunTest", ("scope", scope), ("scopeName", project))} in future calls.";
         }
 
         return null;
@@ -437,7 +442,7 @@ public static class ToolArgumentRewrites
         Remove(arguments, "filePath");
         arguments["scope"] = JsonSerializer.SerializeToElement(scope);
         arguments["scopeName"] = JsonSerializer.SerializeToElement(file);
-        return $"Note: 'filePath' is not a parameter of GetDiagnostics; it was treated as scope: \"{scope}\", scopeName: \"{file}\". Use GetDiagnostics(scope: \"{scope}\", scopeName: \"{file}\") in future calls.";
+        return $"Note: 'filePath' is not a parameter of GetDiagnostics; it was treated as scope: \"{scope}\", scopeName: \"{file}\". Use {ToolCallHint.Call("GetDiagnostics", ("scope", scope), ("scopeName", file))} in future calls.";
     }
 
     /// <summary>
@@ -460,7 +465,7 @@ public static class ToolArgumentRewrites
             {
                 Remove(arguments, "fullBuild");
                 arguments["level"] = JsonSerializer.SerializeToElement(level);
-                return $"Note: 'fullBuild' is not a parameter of Build; it was treated as level: \"{level}\". Use Build(level: \"{level}\") in future calls.";
+                return $"Note: 'fullBuild' is not a parameter of Build; it was treated as level: \"{level}\". Use {ToolCallHint.Call("Build", ("level", level))} in future calls.";
             }
         }
 
@@ -471,7 +476,7 @@ public static class ToolArgumentRewrites
             {
                 Remove(arguments, "mode");
                 arguments["level"] = JsonSerializer.SerializeToElement(level);
-                return $"Note: 'mode' is not a parameter of Build; it was treated as level: \"{level}\". Use Build(level: \"{level}\") in future calls.";
+                return $"Note: 'mode' is not a parameter of Build; it was treated as level: \"{level}\". Use {ToolCallHint.Call("Build", ("level", level))} in future calls.";
             }
         }
 

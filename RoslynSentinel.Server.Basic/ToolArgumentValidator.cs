@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Server.Basic;
 
@@ -312,22 +313,22 @@ public static class ToolArgumentValidator
     private static System.Collections.Generic.Dictionary<string, System.Func<UnknownParameterContext, string>> BuildUnknownParameterHints()
     {
         System.Func<UnknownParameterContext, string> lineRange = ctx =>
-            $"For a line range use ReadFile(filePath: {ctx.ValueOr("filePath", "<filePath>")}, startLine: ..., endLine: ...).";
+            $"For a line range use {ToolCallHint.Call("ReadFile", ("filePath", ctx.ValueOr("filePath", "<filePath>")))} with startLine and endLine.";
         System.Func<UnknownParameterContext, string> textPathUnmappable = _ =>
             "The value could not be turned into a fileGlob (it must be a file or folder inside the solution, without '..'). In text mode restrict files with fileGlob ('Foo.cs', or 'MyProject/**').";
         System.Func<UnknownParameterContext, string> textPathFilter = _ =>
             "In text mode restrict files with fileGlob (bare filename 'Foo.cs', or 'MyProject/**'); filePath only pins symbol resolution.";
         System.Func<UnknownParameterContext, string> previewsOnly = _ =>
-            "Search returns one-line previews and searches C# only. For surrounding lines use ReadFile(filePath: ..., startLine: ..., endLine: ...).";
+            $"Search returns one-line previews and searches C# only. For surrounding lines use {ToolCallHint.Call("ReadFile")} with startLine and endLine.";
         System.Func<UnknownParameterContext, string> renameByDocCommentId = ctx =>
-            $"RenameSymbol targets a symbol by docCommentId. Get it with Search(mode: symbol, query: {ctx.ValueOr("symbolName", "<name>")}) and pass docCommentId, projectName, newName.";
+            $"RenameSymbol targets a symbol by docCommentId. Get it with {ToolCallHint.Call("Search", ("mode", "symbol"), ("query", ctx.ValueOr("symbolName", "<name>")))} and pass docCommentId, projectName, newName.";
 
         return new System.Collections.Generic.Dictionary<string, System.Func<UnknownParameterContext, string>>(StringComparer.OrdinalIgnoreCase)
         {
             ["CreateFile.content"] = ctx => "CreateFile only creates a seeded file and takes no content. " +
                 (ctx.IsToolRegistered("WriteFile")
-                    ? $"To create it with its full content use WriteFile(operation: CreateFile, filePath: {ctx.ValueOr("filePath", "<filePath>")}, content: ...)."
-                    : $"Create it with CreateFile, then add members with Member(operation: addMember, containerName: {ctx.ValueOr("typeName", "<typeName>")}, newMemberSource: ...)."),
+                    ? $"To create it with its full content use {ToolCallHint.Call("WriteFile", ("operation", "CreateFile"), ("filePath", ctx.ValueOr("filePath", "<filePath>")))} (pass the full text as content)."
+                    : $"Create it with {ToolCallHint.Call("CreateFile", ("filePath", ctx.ValueOr("filePath", "<filePath>")))}, then add members with {ToolCallHint.Call("Member", ("operation", "addMember"), ("containerName", ctx.ValueOr("typeName", "<typeName>")))}."),
             ["GetMethodSource.maxLines"] = lineRange,
             ["GetMethodSource.startLine"] = lineRange,
             ["GetMethodSource.endLine"] = lineRange,
@@ -341,7 +342,7 @@ public static class ToolArgumentValidator
             ["RunTest.timeout"] = _ => "Use timeoutSeconds (seconds, not milliseconds).",
             // fullBuild: true is rewritten to level: fullBuild; only false reaches here.
             ["Build.fullBuild"] = ctx => ctx.Values.TryGetValue("fullBuild", out var value) && string.Equals(value, "false", StringComparison.OrdinalIgnoreCase)
-                ? "Build(level: fullBuild) writes the shared bin/; the default level fullBuildThrowaway builds without it."
+                ? $"{ToolCallHint.Call("Build", ("level", "fullBuild"))} writes the shared bin/; the default level fullBuildThrowaway builds without it."
                 : string.Empty,
             ["RenameSymbol.symbolName"] = renameByDocCommentId,
             ["RenameSymbol.filePath"] = renameByDocCommentId,
@@ -465,18 +466,18 @@ public static class ToolArgumentValidator
     /// value, and the tool that discovers a real one where such a tool exists. Rejecting a call
     /// without naming a way to obtain the missing value just relocates the guessing.
     /// </summary>
-    private static readonly System.Collections.Generic.Dictionary<string, string> ParameterHints = new(StringComparer.Ordinal)
+    private static System.Collections.Generic.Dictionary<string, string> ParameterHints => new(StringComparer.Ordinal)
     {
-        ["solutionPath"] = "the absolute path to a .slnx/.sln/.csproj file, e.g. \"C:\\\\repos\\\\MyApp\\\\MyApp.slnx\". Call ListWorkspaceSolutions to discover the solutions available on this host.",
-        ["filePath"] = "a repo-relative or absolute path to a file in the loaded solution, e.g. \"src/Orders/OrderService.cs\". Call ListAll or ListSolutionItems to list the files in the solution.",
-        ["filePath"] = "a repo-relative or absolute path to a file in the loaded solution, e.g. \"src/Orders/OrderService.cs\". Call ListAll or ListSolutionItems to list the files in the solution.",
-        ["docCommentId"] = "a documentation comment ID, e.g. \"M:MyApp.Orders.OrderService.Total(System.Int32)\". Call Search(mode: symbol) to obtain the exact ID for a symbol - do not hand-write one.",
+        ["solutionPath"] = $"the absolute path to a .slnx/.sln/.csproj file, e.g. \"C:\\\\repos\\\\MyApp\\\\MyApp.slnx\". Call {ToolCallHint.Call("ListWorkspaceSolutions")} to discover the solutions available on this host.",
+        ["filePath"] = $"a repo-relative or absolute path to a file in the loaded solution, e.g. \"src/Orders/OrderService.cs\". Call {ToolCallHint.Call("ListAll", ("kind", "all"))} or {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} to list the files in the solution.",
+        ["filePath"] = $"a repo-relative or absolute path to a file in the loaded solution, e.g. \"src/Orders/OrderService.cs\". Call {ToolCallHint.Call("ListAll", ("kind", "all"))} or {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} to list the files in the solution.",
+        ["docCommentId"] = $"a documentation comment ID, e.g. \"M:MyApp.Orders.OrderService.Total(System.Int32)\". Call {ToolCallHint.Call("Search", ("mode", "symbol"))} to obtain the exact ID for a symbol - do not hand-write one.",
         ["reason"] = "a short phrase (at least 10 characters, containing a space) saying why you are calling this tool right now, e.g. \"checking the working tree before staging\".",
         ["operation"] = "one of the operation names listed in this tool's schema enum. Re-read the tool's parameter schema and pick one of them verbatim.",
-        ["typeName"] = "the name of a type in the loaded solution, e.g. \"OrderService\". Call ListAll(kind: types) or Search(mode: symbol) to find the exact name.",
-        ["memberName"] = "the name of a member on the target type, e.g. \"CalculateTotal\". Call Member(operation: view) or GetFileOutline to list a container's members.",
-        ["containerName"] = "the name of the type that holds the member, e.g. \"OrderService\". Call GetFileOutline to see the types declared in a file.",
-        ["oldContent"] = "the exact text to replace, copied verbatim from a prior ReadFile/GetMethodSource result - not retyped from memory.",
+        ["typeName"] = $"the name of a type in the loaded solution, e.g. \"OrderService\". Call {ToolCallHint.Call("ListAll", ("kind", "class"))} or {ToolCallHint.Call("Search", ("mode", "symbol"))} to find the exact name.",
+        ["memberName"] = $"the name of a member on the target type, e.g. \"CalculateTotal\". Call {ToolCallHint.Call("Member", ("operation", "view"))} or {ToolCallHint.Call("GetFileOutline")} to list a container's members.",
+        ["containerName"] = $"the name of the type that holds the member, e.g. \"OrderService\". Call {ToolCallHint.Call("GetFileOutline")} to see the types declared in a file.",
+        ["oldContent"] = $"the exact text to replace, copied verbatim from a prior {ToolCallHint.Call("ReadFile")} or {ToolCallHint.Call("GetMethodSource")} result - not retyped from memory.",
         ["newContent"] = "the replacement text.",
         ["message"] = "the commit message describing what the change does.",
     };

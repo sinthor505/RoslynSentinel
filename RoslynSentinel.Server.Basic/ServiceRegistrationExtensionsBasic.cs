@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Basic;
 
@@ -819,7 +820,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                     {
                         return new ModelContextProtocol.Protocol.CallToolResult
                         {
-                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = automaticBreaker.StateMessage() ?? "Search(mode: text) is DISABLED. You MUST call ListAll(kind: all) or ListSolutionItems(kind: all) now." }],
+                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = automaticBreaker.StateMessage() ?? $"{ToolCallHint.Call("Search", ("mode", "text"))} is DISABLED. You MUST call {ToolCallHint.Call("ListAll", ("kind", "all"))} or {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} now." }],
                             IsError = true,
                         };
                     }

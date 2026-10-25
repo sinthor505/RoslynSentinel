@@ -163,8 +163,10 @@ public class ToolArgumentRewritesTests
         Assert.That(arguments.ContainsKey("head_limit"), Is.False);
         Assert.That(arguments["maxResults"].GetInt32(), Is.EqualTo(5));
         Assert.That(notes, Has.Count.EqualTo(1));
-        Assert.That(notes![0], Is.EqualTo(
-            "Note: 'head_limit' is not a parameter of Search; it was treated as maxResults: 5. Use Search(maxResults: 5) in future calls."));
+        Assert.That(notes![0], Does.StartWith("Note: 'head_limit' is not a parameter of Search; it was treated as maxResults: 5. Use "));
+        Assert.That(notes[0], Does.Contain("Search(reason:"));
+        Assert.That(notes[0], Does.Contain("maxResults: 5"));
+        Assert.That(notes[0], Does.EndWith(" in future calls."));
     }
 
     [Test]
@@ -191,8 +193,11 @@ public class ToolArgumentRewritesTests
         Assert.That(arguments["startLine"].GetInt32(), Is.EqualTo(1659));
         Assert.That(arguments["endLine"].GetInt32(), Is.EqualTo(1678));
         Assert.That(notes, Has.Count.EqualTo(1));
-        Assert.That(notes![0], Is.EqualTo(
-            "Note: 'offset' and 'limit' are not parameters of ReadFile; they were treated as startLine: 1659, endLine: 1678. Use ReadFile(startLine: 1659, endLine: 1678) in future calls."));
+        Assert.That(notes![0], Does.StartWith("Note: 'offset' and 'limit' are not parameters of ReadFile; they were treated as startLine: 1659, endLine: 1678. Use "));
+        Assert.That(notes[0], Does.Contain("ReadFile(reason:"));
+        Assert.That(notes[0], Does.Contain("startLine: 1659"));
+        Assert.That(notes[0], Does.Contain("endLine: 1678"));
+        Assert.That(notes[0], Does.EndWith(" in future calls."));
     }
 
     [Test]
@@ -232,8 +237,11 @@ public class ToolArgumentRewritesTests
         Assert.That(arguments["scope"].GetString(), Is.EqualTo("project"));
         Assert.That(arguments["scopeName"].GetString(), Is.EqualTo("RoslynSentinel.Tests.Server"));
         Assert.That(notes, Has.Count.EqualTo(1));
-        Assert.That(notes![0], Is.EqualTo(
-            "Note: 'projectName' is not a parameter of RunTest; it was treated as scope: \"project\", scopeName: \"RoslynSentinel.Tests.Server\". Use RunTest(scope: \"project\", scopeName: \"RoslynSentinel.Tests.Server\") in future calls."));
+        Assert.That(notes![0], Does.StartWith("Note: 'projectName' is not a parameter of RunTest; it was treated as scope: \"project\", scopeName: \"RoslynSentinel.Tests.Server\". Use "));
+        Assert.That(notes[0], Does.Contain("RunTest(reason:"));
+        Assert.That(notes[0], Does.Contain("scope: "));
+        Assert.That(notes[0], Does.Contain("scopeName: \"RoslynSentinel.Tests.Server\""));
+        Assert.That(notes[0], Does.EndWith(" in future calls."));
     }
 
     [Test]
@@ -272,8 +280,10 @@ public class ToolArgumentRewritesTests
         Assert.That(arguments.ContainsKey("fullBuild"), Is.False);
         Assert.That(arguments["level"].GetString(), Is.EqualTo("fullBuild"));
         Assert.That(notes, Has.Count.EqualTo(1));
-        Assert.That(notes![0], Is.EqualTo(
-            "Note: 'fullBuild' is not a parameter of Build; it was treated as level: \"fullBuild\". Use Build(level: \"fullBuild\") in future calls."));
+        Assert.That(notes![0], Does.StartWith("Note: 'fullBuild' is not a parameter of Build; it was treated as level: \"fullBuild\". Use "));
+        Assert.That(notes[0], Does.Contain("Build(reason:"));
+        Assert.That(notes[0], Does.Contain("level: \"fullBuild\""));
+        Assert.That(notes[0], Does.EndWith(" in future calls."));
     }
 
     [Test]
