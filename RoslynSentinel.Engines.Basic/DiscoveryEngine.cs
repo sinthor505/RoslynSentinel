@@ -235,7 +235,7 @@ public class DiscoveryEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<ApiSurfaceEntry>();
         //return results;
-        var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase)) ?? throw new ToolNotFoundException($"Project '{projectName}' not found in solution.");
+        var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw new ToolNotFoundException($"Project '{projectName}' not found in solution.");
         foreach (var doc in project.Documents)
         {
             var root = await doc.GetSyntaxRootAsync(cancellationToken);
@@ -607,7 +607,7 @@ public class DiscoveryEngine
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
-            var proj = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            var proj = ProjectLookup.FindProject(solution, projectName, ignoreCase: true);
             documents = proj?.Documents.Cast<Document?>() ?? [];
         }
         else

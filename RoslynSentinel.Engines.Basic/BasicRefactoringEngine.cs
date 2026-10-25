@@ -720,7 +720,7 @@ public class BasicRefactoringEngine
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase)) ?? throw new ToolNotFoundException($"Project '{projectName}' not found.");
+        var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw new ToolNotFoundException($"Project '{projectName}' not found.");
         var allChanges = new Dictionary<FilePathWrapper, string>();
         foreach (var document in project.Documents.Where(d => d.FilePath?.EndsWith(".cs") == true))
         {

@@ -17,7 +17,7 @@ public class DependencyEngine
     public async Task<ProjectDependencyReport> GetProjectDependenciesAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase)) ?? throw new ToolNotFoundException($"Project '{projectName}' not found.");
+        var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw new ToolNotFoundException($"Project '{projectName}' not found.");
         var projectRefs = project.ProjectReferences
             .Select(r => solution.Projects.First(p => p.Id == r.ProjectId).Name)
             .ToList();
@@ -42,7 +42,7 @@ public class DependencyEngine
     public async Task<List<string>> FindUnusedReferencesAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var project = solution.Projects.FirstOrDefault(p => p.Name == projectName) ?? throw new ToolNotFoundException($"Project '{projectName}' not found.");
+        var project = ProjectLookup.FindProject(solution, projectName) ?? throw new ToolNotFoundException($"Project '{projectName}' not found.");
 
         var compilation = await project.GetCompilationAsync(cancellationToken) ?? throw new InvalidOperationException($"Failed to get compilation for project '{projectName}'.");
         var usedAssemblies = new HashSet<string>();

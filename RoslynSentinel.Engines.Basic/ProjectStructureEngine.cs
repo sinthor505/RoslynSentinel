@@ -372,7 +372,7 @@ public class SolutionStructureEngine
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
-            var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase)) ?? throw new ToolNotFoundException($"Project '{projectName}' not found in the solution.");
+            var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw new ToolNotFoundException($"Project '{projectName}' not found in the solution.");
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else
@@ -1050,7 +1050,7 @@ public class SolutionStructureEngine
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
-            var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true);
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else

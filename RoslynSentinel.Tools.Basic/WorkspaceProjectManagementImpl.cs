@@ -93,7 +93,7 @@ public class WorkspaceProjectManagementImpl
                 try
                 {
                     var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-                    var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
+                    var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true);
                     if (project == null)
                     {
                         return new SentinelCallToolResult<object>()

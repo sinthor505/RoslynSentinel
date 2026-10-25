@@ -47,7 +47,7 @@ public class DiagnosticEngine
     public async Task<EngineResultWrapper<DiagnosticSummary>> GetProjectDiagnosticsAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var project = solution.Projects.FirstOrDefault(p => p.Name == projectName) ?? throw new ToolNotFoundException("Project not found.");
+        var project = ProjectLookup.FindProject(solution, projectName) ?? throw new ToolNotFoundException("Project not found.");
         var compilation = await project.GetCompilationAsync(cancellationToken);
         var diagnostics = compilation?.GetDiagnostics(cancellationToken) ?? Enumerable.Empty<Diagnostic>();
 

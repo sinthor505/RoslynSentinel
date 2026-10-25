@@ -125,7 +125,7 @@ public class TestRunEngine
             }
 
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-            var project = solution.Projects.FirstOrDefault(p => p.Name == scopeName);
+            var project = ProjectLookup.FindProject(solution, scopeName);
             if (project?.FilePath is null)
             {
                 return new EngineResultWrapper<TestRunResult>(EngineOutcome.InvalidInput,

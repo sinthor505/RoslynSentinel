@@ -53,7 +53,7 @@ public class SolutionManagementEngine
 
         // 2. Identify files to move
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var sourceProject = solution.Projects.FirstOrDefault(p => p.Name == sourceProjectName) ?? throw new ToolNotFoundException("Source project not found.");
+        var sourceProject = ProjectLookup.FindProject(solution, sourceProjectName) ?? throw new ToolNotFoundException("Source project not found.");
         var filesToMove = sourceProject.Documents.Where(d => d.Folders.Contains(folderName)).ToList();
 
         // 3. Physically move files and update solution (simulated for expansion)
