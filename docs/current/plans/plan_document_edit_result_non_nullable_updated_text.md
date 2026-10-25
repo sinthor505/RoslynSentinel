@@ -1,6 +1,6 @@
 # Plan: UpdatedText becomes a non-nullable member of DocumentEditResult only (S4, option B)
 
-**Status:** DRAFT 2026-10-24. Option B chosen by the user 2026-10-24; steps measured by a read-only survey, not yet started (prep commit `db42dc87` is the only code change so far).
+**Status:** IN PROGRESS 2026-10-24. Option B chosen and the 12 steps approved by the user 2026-10-24. Done: prep `db42dc87`, step 1 (probe), step 2 `e08331ea`, step 3 `3dde4347`, step 4a `35bf3db2`, step 4b `071960a2`, step 5 (empty: the probe found no other producer), step 6 `c32774eb`, step 7-pre `b6d3696b`, step 7 (see the deviation note under Step 7). Remaining: steps 8-12.
 
 ## Problem
 `EngineResultBase.UpdatedText` is `string?` (`RoslynSentinel.Common/EngineResultBase.cs:19`). The rule from
@@ -110,6 +110,13 @@ Two slices, each with its tool caller and tests, definitions first.
   parameterless and 3-arg constructors get `[SetsRequiredMembers]` and set `string.Empty`, the 5-arg
   constructor's `updatedText` parameter becomes non-null; point the cref at `DocumentEditResult.UpdatedText`.
   The five other `EngineResultBase` records are unaffected.
+- DEVIATION (2026-10-24): `required` could not be kept. System.Text.Json throws `InvalidOperationException:
+  JsonPropertyInfo 'UpdatedText' ... is marked required but does not specify a setter` when serializing
+  `DocumentEditResult` because the member is `[JsonIgnore]` (found by
+  `EditOutcome_EveryMember_ErrorStatusAgreesWithCode_AndUnsetIsError`). The member is now
+  `[JsonIgnore] public string UpdatedText { get; init; } = string.Empty;`; the compiler no longer proves
+  every initializer sets it. The step 1 probe (run with `required`) proved that at this commit no
+  initializer omits it; the write-boundary guard in `RequireUpdatedText` (step 10) is the backstop.
 - Done when: `Build` of the solution has 0 errors (warnings only for the remaining `!`); tests that build
   results with `new DocumentEditResult(...)` (`ResultStatusTests.cs:106,120,123`,
   `RefactoringToolHelpersTests.cs:21,35,56,69,84`) compile and pass.
