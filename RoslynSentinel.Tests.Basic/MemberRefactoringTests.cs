@@ -140,7 +140,7 @@ public class Animal
             "Blank line between untouched siblings First and Second must survive unchanged - appending a " +
             "new member must not reformat the whole container.");
 
-        var secondIdx = result.UpdatedText!.IndexOf("public int Second()", StringComparison.Ordinal);
+        var secondIdx = result.UpdatedText.IndexOf("public int Second()", StringComparison.Ordinal);
         var thirdIdx = result.UpdatedText.IndexOf("public int Third()", StringComparison.Ordinal);
         Assert.That(thirdIdx, Is.GreaterThan(secondIdx));
 
@@ -1140,7 +1140,7 @@ public class C
         var result = await _memberRefactoringEngine.AddEnumMemberAsync("ToolScope.cs", "ToolScope", "process", afterMemberName: "project");
 
         Assert.That(result.UpdatedText, Does.Contain("process"));
-        var projectIndex = result.UpdatedText!.IndexOf("project", StringComparison.Ordinal);
+        var projectIndex = result.UpdatedText.IndexOf("project", StringComparison.Ordinal);
         var processIndex = result.UpdatedText.IndexOf("process", StringComparison.Ordinal);
         Assert.That(processIndex, Is.GreaterThan(projectIndex), "'process' should appear after 'project' in the member list.");
     }
@@ -1474,9 +1474,9 @@ public class Service
             "public void Pause() { }");
 
         // Pause should appear between Start and Stop
-        var startIdx = result.UpdatedText!.IndexOf("Start");
-        var pauseIdx = result.UpdatedText!.IndexOf("Pause");
-        var stopIdx = result.UpdatedText!.IndexOf("Stop");
+        var startIdx = result.UpdatedText.IndexOf("Start");
+        var pauseIdx = result.UpdatedText.IndexOf("Pause");
+        var stopIdx = result.UpdatedText.IndexOf("Stop");
         Assert.That(pauseIdx, Is.GreaterThan(startIdx), "Pause should come after Start.");
         Assert.That(pauseIdx, Is.LessThan(stopIdx), "Pause should come before Stop.");
     }
@@ -1511,8 +1511,8 @@ public class Widget
         var result = await _memberRefactoringEngine.InsertMemberAfterAsync("Widget.cs", "Widget", "Draw",
             "public void Resize() { }");
 
-        var drawIdx = result.UpdatedText!.IndexOf("Draw");
-        var resizeIdx = result.UpdatedText!.IndexOf("Resize");
+        var drawIdx = result.UpdatedText.IndexOf("Draw");
+        var resizeIdx = result.UpdatedText.IndexOf("Resize");
         Assert.That(resizeIdx, Is.GreaterThan(drawIdx), "Resize should be after Draw.");
     }
 
@@ -1557,7 +1557,7 @@ public enum ToolScope
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         Assert.That(result.UpdatedText, Does.Contain("public int OneAndAHalf() => 1;"), "New member should be inserted.");
 
-        var firstIdx = result.UpdatedText!.IndexOf("public int First()", StringComparison.Ordinal);
+        var firstIdx = result.UpdatedText.IndexOf("public int First()", StringComparison.Ordinal);
         var newIdx = result.UpdatedText.IndexOf("public int OneAndAHalf()", StringComparison.Ordinal);
         var secondIdx = result.UpdatedText.IndexOf("public int Second()", StringComparison.Ordinal);
         var thirdIdx = result.UpdatedText.IndexOf("public int Third()", StringComparison.Ordinal);
@@ -1598,9 +1598,9 @@ public class Controller
         var result = await _memberRefactoringEngine.InsertMemberBeforeAsync("Controller.cs", "Controller", "Post",
             "public void Put() { }");
 
-        var getIdx = result.UpdatedText!.IndexOf("Get()");
-        var putIdx = result.UpdatedText!.IndexOf("Put()");
-        var postIdx = result.UpdatedText!.IndexOf("Post()");
+        var getIdx = result.UpdatedText.IndexOf("Get()");
+        var putIdx = result.UpdatedText.IndexOf("Put()");
+        var postIdx = result.UpdatedText.IndexOf("Post()");
         Assert.That(putIdx, Is.GreaterThan(getIdx), "Put should come after Get.");
         Assert.That(putIdx, Is.LessThan(postIdx), "Put should come before Post.");
     }
@@ -1635,8 +1635,8 @@ public class Logger
         var result = await _memberRefactoringEngine.InsertMemberBeforeAsync("Logger.cs", "Logger", "Log",
             "public void Init() { }");
 
-        var initIdx = result.UpdatedText!.IndexOf("Init");
-        var logIdx = result.UpdatedText!.IndexOf("Log()");
+        var initIdx = result.UpdatedText.IndexOf("Init");
+        var logIdx = result.UpdatedText.IndexOf("Log()");
         Assert.That(initIdx, Is.LessThan(logIdx), "Init should appear before Log.");
     }
 
@@ -1758,7 +1758,7 @@ public class Worker : IWorker
         var result = await _memberRefactoringEngine.AddBaseTypeAsync("Worker.cs", "Worker", "IWorker");
 
         // Only one occurrence in the base list
-        var count = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, "IWorker").Count;
+        var count = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText, "IWorker").Count;
         Assert.That(count, Is.EqualTo(1), "IWorker should not be duplicated.");
     }
 
@@ -2048,7 +2048,7 @@ public class Calc
         Assert.That(result.UpdatedText, Does.Contain("public int Third() => 3;"));
         Assert.That(result.UpdatedText, Does.Not.Contain("public int Second() => 2;"));
 
-        var firstIndex = result.UpdatedText!.IndexOf("public int First()", StringComparison.Ordinal);
+        var firstIndex = result.UpdatedText.IndexOf("public int First()", StringComparison.Ordinal);
         var secondIndex = result.UpdatedText.IndexOf("public int Second()", StringComparison.Ordinal);
         var thirdIndex = result.UpdatedText.IndexOf("public int Third()", StringComparison.Ordinal);
         var between1and2 = result.UpdatedText.Substring(firstIndex, secondIndex - firstIndex);
@@ -2102,7 +2102,7 @@ public class Calc
             "'(int    x , int y)' -> '(int x, int y)' respacing symptom from the 2026-09-07 memory " +
             "(project_member_replace_drops_leading_blank_line_and_verify_gap.md, run 5).");
 
-        var beforeIdx = result.UpdatedText!.IndexOf("UnrelatedMethodBefore", StringComparison.Ordinal);
+        var beforeIdx = result.UpdatedText.IndexOf("UnrelatedMethodBefore", StringComparison.Ordinal);
         var afterIdx = result.UpdatedText.IndexOf("UnrelatedMethodAfter", StringComparison.Ordinal);
         Assert.That(afterIdx, Is.GreaterThan(beforeIdx));
 
@@ -2152,7 +2152,7 @@ public class SecondAccuracyTests
         Assert.That(result.UpdatedText, Does.Not.Contain("_memberRefactoringEngine = \"two\";"),
             "The old SecondAccuracyTests.Setup() body must be gone after the replace.");
 
-        var firstIndex = result.UpdatedText!.IndexOf("class FirstAccuracyTests", StringComparison.Ordinal);
+        var firstIndex = result.UpdatedText.IndexOf("class FirstAccuracyTests", StringComparison.Ordinal);
         var secondIndex = result.UpdatedText.IndexOf("class SecondAccuracyTests", StringComparison.Ordinal);
         var replacedIndex = result.UpdatedText.IndexOf("_memberRefactoringEngine = 2;", StringComparison.Ordinal);
         Assert.That(replacedIndex, Is.GreaterThan(secondIndex),
@@ -2185,7 +2185,7 @@ public class SecondAccuracyTests
         var result = await _memberRefactoringEngine.RemoveMemberAsync("Tests.cs", "Setup", containerName: "SecondAccuracyTests");
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-        var firstIndex = result.UpdatedText!.IndexOf("class FirstAccuracyTests", StringComparison.Ordinal);
+        var firstIndex = result.UpdatedText.IndexOf("class FirstAccuracyTests", StringComparison.Ordinal);
         var secondIndex = result.UpdatedText.IndexOf("class SecondAccuracyTests", StringComparison.Ordinal);
         Assert.That(firstIndex, Is.GreaterThanOrEqualTo(0));
         Assert.That(secondIndex, Is.GreaterThanOrEqualTo(0));
@@ -2227,7 +2227,7 @@ public class Calc
 
         Assert.That(result.UpdatedText, Does.Contain("internal void DoThing"));
 
-        var text = result.UpdatedText!;
+        var text = result.UpdatedText;
         var bareLfCount = 0;
         for (var i = 0; i < text.Length; i++)
         {
@@ -2249,7 +2249,7 @@ public class Calc
 
         Assert.That(result.UpdatedText, Does.Contain("internal void DoThing"));
 
-        var text = result.UpdatedText!;
+        var text = result.UpdatedText;
         Assert.That(text, Does.Not.Contain("\r\n"), "An LF-dominant file must not gain any stray CRLF line endings.");
     }
 
@@ -2301,7 +2301,7 @@ public class Base
 ", "Base.cs");
 
         var result = await _memberRefactoringEngine.AddModifierAsync("Base.cs", "Execute", "virtual");
-        var count = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"\bvirtual\b").Count;
+        var count = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText, @"\bvirtual\b").Count;
 
         Assert.That(count, Is.EqualTo(1), "virtual should appear only once.");
     }
@@ -2435,8 +2435,8 @@ public class Repo
 
         var result = await _memberRefactoringEngine.SortMembersAsync("Repo.cs", "Repo");
 
-        var fieldIdx = result.UpdatedText!.IndexOf("_name", StringComparison.Ordinal);
-        var methodIdx = result.UpdatedText!.IndexOf("Save()", StringComparison.Ordinal);
+        var fieldIdx = result.UpdatedText.IndexOf("_name", StringComparison.Ordinal);
+        var methodIdx = result.UpdatedText.IndexOf("Save()", StringComparison.Ordinal);
         Assert.That(fieldIdx, Is.LessThan(methodIdx), "Fields should appear before methods.");
     }
 
@@ -2454,8 +2454,8 @@ public class Dto
 
         var result = await _memberRefactoringEngine.SortMembersAsync("Dto.cs", "Dto");
 
-        var ctorIdx = result.UpdatedText!.IndexOf("Dto(string name)", StringComparison.Ordinal);
-        var propIdx = result.UpdatedText!.IndexOf("Name", StringComparison.Ordinal);
+        var ctorIdx = result.UpdatedText.IndexOf("Dto(string name)", StringComparison.Ordinal);
+        var propIdx = result.UpdatedText.IndexOf("Name", StringComparison.Ordinal);
         Assert.That(ctorIdx, Is.LessThan(propIdx), "Constructor should appear before properties.");
     }
 
@@ -2472,8 +2472,8 @@ public class Utils
 
         var result = await _memberRefactoringEngine.SortMembersAsync("Utils.cs", "Utils");
 
-        var staticIdx = result.UpdatedText!.IndexOf("StaticMethod()", StringComparison.Ordinal);
-        var instanceIdx = result.UpdatedText!.IndexOf("InstanceMethod()", StringComparison.Ordinal);
+        var staticIdx = result.UpdatedText.IndexOf("StaticMethod()", StringComparison.Ordinal);
+        var instanceIdx = result.UpdatedText.IndexOf("InstanceMethod()", StringComparison.Ordinal);
         Assert.That(staticIdx, Is.LessThan(instanceIdx), "Static methods should come before instance methods.");
     }
 
@@ -2551,7 +2551,7 @@ public class OrderService
             "Colliding fieldName should be disambiguated to _stopwatch, not left as a bare collision.");
         Assert.That(result.UpdatedText, Does.Contain("_stopwatch = stopwatch"),
             "Assignment must target the disambiguated field, never a self-assignment like 'stopwatch = stopwatch;'.");
-        var assignmentStatements = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"\bstopwatch\s*=\s*stopwatch;");
+        var assignmentStatements = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText, @"\bstopwatch\s*=\s*stopwatch;");
         Assert.That(assignmentStatements, Is.Empty,
             "Must not degenerate into a no-op self-assignment of the parameter to itself.");
         Assert.That(result.Message, Does.Contain("paramName='stopwatch'"));
@@ -2590,7 +2590,7 @@ public class OrderService
 
         Assert.That(result.UpdatedText, Does.Contain("private readonly System.Diagnostics.Stopwatch __stopwatch"));
         Assert.That(result.UpdatedText, Does.Contain("__stopwatch = _stopwatch"));
-        var assignmentStatements = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"(?<!_)_stopwatch\s*=\s*_stopwatch;");
+        var assignmentStatements = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText, @"(?<!_)_stopwatch\s*=\s*_stopwatch;");
         Assert.That(assignmentStatements, Is.Empty,
             "Must not degenerate into a no-op self-assignment of the parameter to itself.");
     }
@@ -2606,7 +2606,7 @@ public class OrderService
         var result = await _memberRefactoringEngine.AddMemberAsync("C.cs", "C", member);
 
         // Assert
-        Assert.That(result.UpdatedText!, Contains.Substring("public int NewField;"));
+        Assert.That(result.UpdatedText, Contains.Substring("public int NewField;"));
     }
 
     [Test]
@@ -2619,8 +2619,8 @@ public class OrderService
         var result = await _memberRefactoringEngine.RemoveMemberAsync("C.cs", "Junk");
 
         // Assert
-        Assert.That(result.UpdatedText!, Does.Not.Contain("void Junk()"));
-        Assert.That(result.UpdatedText!, Contains.Substring("void Keep()"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("void Junk()"));
+        Assert.That(result.UpdatedText, Contains.Substring("void Keep()"));
     }
 
     private const string ApplyDiscountLikeSource =
@@ -2654,8 +2654,8 @@ public class OrderService
         var result = await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Old", newSource);
 
         // Assert
-        Assert.That(result.UpdatedText!, Contains.Substring("public void New()"));
-        Assert.That(result.UpdatedText!, Does.Not.Contain("public void Old()"));
+        Assert.That(result.UpdatedText, Contains.Substring("public void New()"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("public void Old()"));
     }
 
     [Test]
@@ -2674,7 +2674,7 @@ public class OrderService
         var result = await _memberRefactoringEngine.ReplaceMemberAsync("Order.cs", "ApplyDiscount", newSource,
             contextSnippet: "this text does not appear anywhere in the file");
 
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, result.Message);
+        Assert.That(result.UpdatedText, Is.Not.Empty, result.Message);
         Assert.That(result.UpdatedText, Does.Contain("DiscountCalculator.ApplyPercentage(CalculateTotal(), percentage)"));
         Assert.That(result.UpdatedText, Does.Not.Contain("ContosoOrders.Core.Discounts.DiscountCalculator"));
     }
@@ -2690,7 +2690,7 @@ public class OrderService
         var result = await _memberRefactoringEngine.ReplaceMemberAsync("Order.cs", "ApplyDiscount", newSource,
             contextSnippet: "this text does not appear anywhere in the file");
 
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, result.Message);
+        Assert.That(result.UpdatedText, Is.Not.Empty, result.Message);
         Assert.That(result.Warnings, Is.Not.Null);
         Assert.That(result.Warnings!, Has.Count.EqualTo(1));
         Assert.That(result.Warnings![0], Does.Contain("ApplyDiscount"));
@@ -2706,7 +2706,7 @@ public class OrderService
         var result = await _memberRefactoringEngine.ReplaceMemberAsync("Order.cs", "ApplyDiscount", newSource,
             contextSnippet: "ContosoOrders.Core.Discounts.DiscountCalculator.ApplyPercentage(CalculateTotal(), percentage)");
 
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, result.Message);
+        Assert.That(result.UpdatedText, Is.Not.Empty, result.Message);
         Assert.That(result.Warnings, Is.Null);
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         Assert.That(result.UpdatedText, Does.Contain("return DiscountCalculator.ApplyPercentage(CalculateTotal(), percentage);"));
@@ -2720,7 +2720,7 @@ public class OrderService
 
         var result = await _memberRefactoringEngine.ReplaceMemberAsync("Order.cs", "ApplyDiscount", newSource, contextSnippet: "   ");
 
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, result.Message);
+        Assert.That(result.UpdatedText, Is.Not.Empty, result.Message);
         Assert.That(result.Warnings, Is.Null);
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         Assert.That(result.UpdatedText, Does.Contain("return DiscountCalculator.ApplyPercentage(CalculateTotal(), percentage);"));
@@ -2813,7 +2813,7 @@ public class C
 }", "C.cs");
 
         var result = await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(bool x) { }");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Empty);
         Assert.That(result.UpdatedText, Does.Contain("Foo(bool x)"));
     }
 
@@ -2854,8 +2854,8 @@ public class C
         var result = await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public Foo(int x) { }");
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-        Assert.That(result.UpdatedText!, Contains.Substring("Foo(int x)"));
-        Assert.That(result.UpdatedText!, Does.Not.Contain("Foo()"));
+        Assert.That(result.UpdatedText, Contains.Substring("Foo(int x)"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("Foo()"));
     }
 
     [Test]
@@ -2904,7 +2904,7 @@ public class C
             containerName,
             "public int Added { get; set; }");
 
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty,
+        Assert.That(result.UpdatedText, Is.Not.Empty,
             $"containerName '{containerName}' should resolve to PairWrapper<TKey, TValue>. {result.Message}");
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         Assert.That(result.UpdatedText, Does.Contain("public int Added"));
@@ -2920,7 +2920,7 @@ public class C
             "PlainType",
             "public int Added { get; set; }");
 
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, result.Message);
+        Assert.That(result.UpdatedText, Is.Not.Empty, result.Message);
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         Assert.That(result.UpdatedText, Does.Contain("public int Added"));
     }
@@ -3035,7 +3035,7 @@ public class Helper
             containerName,
             "public int Added { get; set; }");
 
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty,
+        Assert.That(result.UpdatedText, Is.Not.Empty,
             $"containerName '{containerName}' should resolve to EngineResultWrapper<T>. {result.Message}");
         Assert.That(result.UpdatedText, Does.Contain("public int Added"));
     }
