@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 
 #pragma warning disable CS8618
@@ -424,9 +425,10 @@ public class Svc { public int GetCount() => 0; }", "Svc.cs");
     {
         SetSource(@"public class Svc {}", "Svc.cs");
 
-        await Assert.ThrowsAsync<System.InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
             await _engine.FlagMigrationCandidateAsync(PathOf("Missing.cs"), "Foo", "AsyncBridge"),
             "Should throw when the file is not in the loaded solution.");
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test, CancelAfter(5000)]
@@ -434,9 +436,10 @@ public class Svc { public int GetCount() => 0; }", "Svc.cs");
     {
         SetSource(@"public class Svc { public int GetCount() => 0; }", "Svc.cs");
 
-        await Assert.ThrowsAsync<System.InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
             await _engine.FlagMigrationCandidateAsync(PathOf("Svc.cs"), "NonExistent", "AsyncBridge"),
             "Should throw when the named method does not exist.");
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
 

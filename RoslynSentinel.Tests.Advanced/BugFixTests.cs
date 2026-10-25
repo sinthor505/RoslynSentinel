@@ -2004,7 +2004,7 @@ public class Foo : IFoo
             // The context snippet matches the RHS of an existing var declaration
             var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceVariableAsync("OrderService.cs", contextSnippet: "await _repo.CreateOrderAsync()", newVariableName: "orderId");
             // Should NOT produce duplicate var orderId = orderId;
-            Assert.That(result.UpdatedText, Is.Null.Or.Not.Contain("var orderId = orderId"), "Must not produce a duplicate 'var orderId = orderId' declaration");
+            Assert.That(result.UpdatedText, Does.Not.Contain("var orderId = orderId"), "Must not produce a duplicate 'var orderId = orderId' declaration");
             // Should return no-op indicator
             Assert.That(result.Message, Does.Contain("already"), "Should indicate the variable is already introduced");
         }
