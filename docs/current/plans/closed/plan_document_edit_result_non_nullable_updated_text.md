@@ -1,10 +1,10 @@
 # Plan: UpdatedText becomes a non-nullable member of DocumentEditResult only (S4, option B)
 
-**Status:** IN PROGRESS 2026-10-24. Option B chosen and the 12 steps approved by the user 2026-10-24. Done: prep `db42dc87`, step 1 (probe), step 2 `e08331ea`, step 3 `3dde4347`, step 4a `35bf3db2`, step 4b `071960a2`, step 5 (empty: the probe found no other producer), step 6 `c32774eb`, step 7-pre `b6d3696b`, step 7 (see the deviation note under Step 7). Remaining: steps 8-12.
+**Status:** IMPLEMENTED 2026-10-24 (steps 1-10 and step 12 slice 1; the rest of steps 11 and 12 is deferred to TODO.md). Option B chosen and the 12 steps approved by the user 2026-10-24. Done: prep `db42dc87`, step 1 (probe), step 2 `e08331ea`, step 3 `3dde4347`, step 4a `35bf3db2`, step 4b `071960a2`, step 5 (empty: the probe found no other producer), step 6 `c32774eb`, step 7-pre `b6d3696b`, step 7 `d8e4958b` (see the deviation note under Step 7), step 8a `cc2dc5a5` + `aadf2ffd`, step 8b `64471a93`, steps 8c/8d `9dd07f30`, step 9 `2bf609f9`, step 10 `88636330`, step 12 slice 1 `2b4876ce` (test fixes `7f41263d`). The second 8b slice was dropped: the remaining `string.IsNullOrEmpty(updated.UpdatedText)` checks still guard against empty text, so they are not dead. Deferred: step 11 (235 `UpdatedText!` in 47 test files, cosmetic, no bulk tool) and the rest of step 12 (re-parenting changes the wire shape of about 8 tools).
 
 ## Problem
 `EngineResultBase.UpdatedText` is `string?` (`RoslynSentinel.Common/EngineResultBase.cs:19`). The rule from
-[proposal_throw_typed_exceptions_not_failure_results.md](../proposals/proposal_throw_typed_exceptions_not_failure_results.md)
+[proposal_throw_typed_exceptions_not_failure_results.md](../../proposals/proposal_throw_typed_exceptions_not_failure_results.md)
 is that a `DocumentEditResult` always carries text for `Modified`, `AlreadyInTargetState` and
 `NoCandidatesFound`, and that failures throw. The type does not say so, so consumers defend themselves:
 89 `UpdatedText!` uses and 31 `// TODO S4` markers in production code, 21 `IsNullOrEmpty(...UpdatedText)`
@@ -151,10 +151,14 @@ Slices of <=3 files each, tools first because they hold most uses:
 - Change: remove the ~235 `UpdatedText!` in tests and the meaningless `Is.Not.Null` asserts on `UpdatedText`; rewrite the two null asserts (`AdvancedToolsTests.cs:178`, `BugFixTests.cs:2007`) to assert the unchanged text instead.
 - Done when: `Build` 0 errors with no `UpdatedText` nullability warnings; full test runs match the baseline.
 
+**Outcome 2026-10-24 (step 11):** only the two null asserts were rewritten (`7f41263d`). The 235 `UpdatedText!` in tests compile without a warning and no tool removes a null-forgiving operator in bulk (`SemanticFindReplace` has only `invertBoolean` and `replaceConstruction`), so the rest is a TOOL-GAP entry in TODO.md.
+
 ### Step 12 - Optional: retire Unset
 - Files: `BatchTypes.cs`, `BridgeBatchResult.cs`, `BestInsertionResult.cs`, `GenerateToStringResult.cs`, `CancellationTokenResult.cs` (delete: 0 references), `EngineResultBase.cs`, `EditOutcomeExtensions.cs`.
 - Change: re-parent the four live records off `EngineResultBase` (they use only `ChangeId`/`FilePath`), then remove `Unset` and `GuardEngineResult`'s `default` branch.
 - Done when: `Build` 0 errors; `ResultStatusTests` and `RefactoringToolHelpersTests` (which reference `Unset` at `:100,120` and `:84,188,202,204,210`) updated and passing. Do this step only after checking the serialized shape of `BatchResultSummary` and `BestInsertionResult` (see risks).
+
+**Outcome 2026-10-24 (step 12):** the measurement confirmed the hypothesis. `BatchResultSummary` (about 8 tools) and `BestInsertionResult` inherit `Outcome`, `Message`, `IsCommitted` and `FilePath` from `EngineResultBase`, none `[JsonIgnore]`, so they emit an `outcome` of `Unset` plus empty fields today (string versus number form unverified). Slice 1 (`2b4876ce`) fixed the one real producer that left `Outcome` unset (`LogicOptimizationEngine`, the `InvertBooleanLogic` result) and deleted the unreferenced `CancellationTokenResult`. The rest needs a wire-shape decision and is deferred: re-parent `BatchResultSummary` (keep `ChangeId`), `BridgeBatchResult`, `BestInsertionResult`, `GenerateToStringResult` off `EngineResultBase` (about 30 call sites, no test pins their JSON), mark `Unset` obsolete and move `ResultStatusTests`, `RefactoringToolHelpersTests` and `BugFixTests.cs:3451` off it, then remove it with `GuardEngineResult`'s `default` arm. Decide the default `Outcome` for `EngineResultBase` and `ProjectEditResult` first: removing `Unset = 0` leaves an unnamed 0 that `ToResultStatus` maps to Failed through its `_` arm. The step 10 scan checks only `UpdatedText`, so extending it to `Outcome` is a cheap guard.
 
 ## Out of scope
 - S5 (weak failure assertions in tests), the held `class_to_record`, `convert_property_safe` and `replace_constructor_with_factory` decisions, `GetMemberSourceAsync` tuple removal, `MsAugmentResult.Fail`/`ImpactReport.Error` retirement (the remaining S4 error-field items).
