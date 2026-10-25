@@ -86,4 +86,24 @@ public class NameTargetLookupTests
 
         Assert.Throws<ToolAmbiguousMatchException>(() => NameTargetLookup.RequireSingle(methods, "Method", "M"));
     }
+
+    [Test]
+    public void RequireSingle_PartialDeclarationsOfOneClass_CollapseToOne()
+    {
+        var tree = CSharpSyntaxTree.ParseText("partial class Source {}\npartial class Source {}");
+        var types = tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>().ToList();
+
+        var result = NameTargetLookup.RequireSingle(types, "Type", "Source");
+
+        Assert.That(result, Is.Not.Null);
+    }
+
+    [Test]
+    public void RequireSingle_PartialClassesInDifferentNamespaces_StillThrow()
+    {
+        var tree = CSharpSyntaxTree.ParseText("namespace A { partial class Svc {} }\nnamespace B { partial class Svc {} }");
+        var types = tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>().ToList();
+
+        Assert.Throws<ToolAmbiguousMatchException>(() => NameTargetLookup.RequireSingle(types, "Type", "Svc"));
+    }
 }

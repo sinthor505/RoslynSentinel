@@ -17,7 +17,20 @@ public static class NameTargetLookup
                 && kept.Span.Equals(candidate.Span));
             if (!isCopy) { distinct.Add(candidate); }
         }
-        matches = distinct;
+        // Partial declarations of one type are one candidate; two projects each declaring a same-named partial in the same namespace are a rare accepted miss.
+        var partialKeys = new System.Collections.Generic.HashSet<string>();
+        var collapsed = new System.Collections.Generic.List<T>();
+        foreach (var candidate in distinct)
+        {
+            var isPartialRepeat = candidate is Microsoft.CodeAnalysis.CSharp.Syntax.TypeDeclarationSyntax type
+                && type.Modifiers.Any(m => m.RawKind == (int)Microsoft.CodeAnalysis.CSharp.SyntaxKind.PartialKeyword)
+                && !partialKeys.Add(type.Kind() + "|" + type.Identifier.Text + "|" + (type.TypeParameterList?.Parameters.Count ?? 0) + "|"
+                    + string.Join(".", type.Ancestors().Select(a => a is Microsoft.CodeAnalysis.CSharp.Syntax.BaseNamespaceDeclarationSyntax ns ? ns.Name.ToString()
+                        : a is Microsoft.CodeAnalysis.CSharp.Syntax.TypeDeclarationSyntax outer ? outer.Identifier.Text
+                        : null).Where(s => s != null)));
+            if (!isPartialRepeat) { collapsed.Add(candidate); }
+        }
+        matches = collapsed;
         if (matches.Count == 0) { return null; }
         if (matches.Count == 1) { return matches[0]; }
         // An interface declaration plus its one implementation is one logical member, not ambiguity.
