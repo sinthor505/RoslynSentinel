@@ -167,9 +167,10 @@ public class LogicSimplificationEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.AlreadyInTargetState,
+                Outcome = EditOutcome.NoCandidatesFound,
                 FilePath = filePath,
-                Message = "No if/else-if chain was converted to a switch."
+                Message = "No if/else-if chain was converted to a switch.",
+                UpdatedText = root.ToFullString()
             };
         }
         return new DocumentEditResult

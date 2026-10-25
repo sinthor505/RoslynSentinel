@@ -378,8 +378,8 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.NoCandidatesFound));
+        Assert.That(result.UpdatedText, Is.EqualTo(source));
     }
 
     /// <summary>
@@ -410,8 +410,8 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.NoCandidatesFound));
+        Assert.That(result.UpdatedText, Is.EqualTo(source));
     }
 
     /// <summary>
@@ -442,8 +442,8 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.NoCandidatesFound));
+        Assert.That(result.UpdatedText, Is.EqualTo(source));
     }
 
     /// <summary>
@@ -474,8 +474,8 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.NoCandidatesFound));
+        Assert.That(result.UpdatedText, Is.EqualTo(source));
     }
 
     /// <summary>
@@ -601,8 +601,8 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.NoCandidatesFound));
+        Assert.That(result.UpdatedText, Is.EqualTo(source));
         // The two-branch fixture has no else, so the rewriter leaves it unchanged.
         
     }
