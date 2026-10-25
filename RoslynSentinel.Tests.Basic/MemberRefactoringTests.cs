@@ -3219,3 +3219,173 @@ public class Calc
         Assert.That(ex.Message, Is.Not.Empty);
     }
 }
+
+    [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
+    public async Task FindCallers_OverloadsWithoutSnippet_ThrowsAmbiguousWithBothCandidates()
+    {
+        var source = """
+            public class Holder
+            {
+                public void Do(int x) { }
+                public void Do(string s) { }
+                public void Caller() { Do(1); }
+            }
+            """;
+        SetSource(source, "CallersOverloads.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () =>
+            await _symbolNavigationEngine.FindCallersAsync("CallersOverloads.cs", "Do"));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(ex.Message, Does.Contain("Do(int"));
+        Assert.That(ex.Message, Does.Contain("Do(string"));
+    }
+
+    [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
+    public async Task FindCallers_OverloadsWithSnippetSelectingStringOverload_ReturnsOnlyThatOverloadsCaller()
+    {
+        var source = """
+            public class Holder
+            {
+                public void Do(int x) { }
+                public void Do(string s) { }
+                public void CallDoString() { Do("a"); }
+            }
+            """;
+        SetSource(source, "CallersSnippetString.cs");
+
+        var callers = await _symbolNavigationEngine.FindCallersAsync(
+            "CallersSnippetString.cs", "Do", contextSnippet: "public void Do(string s) { }");
+
+        Assert.That(callers, Has.Count.EqualTo(1));
+        Assert.That(System.Text.Json.JsonSerializer.Serialize(callers), Does.Contain("CallDoString"));
+    }
+
+    [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
+    public async Task FindCallers_OverloadsWithSnippetSelectingUncalledOverload_ReturnsNoCallers()
+    {
+        var source = """
+            public class Holder
+            {
+                public void Do(int x) { }
+                public void Do(string s) { }
+                public void CallDoString() { Do("a"); }
+            }
+            """;
+        SetSource(source, "CallersSnippetInt.cs");
+
+        var callers = await _symbolNavigationEngine.FindCallersAsync(
+            "CallersSnippetInt.cs", "Do", contextSnippet: "public void Do(int x) { }");
+
+        Assert.That(callers, Is.Empty);
+    }
+
+    [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
+    public async Task FindImplementations_InterfaceOverloadsWithoutSnippet_ThrowsAmbiguous()
+    {
+        var source = """
+            public interface IRunner
+            {
+                void Do(int x);
+                void Do(string s);
+            }
+            public class Runner : IRunner
+            {
+                public void Do(int x) { }
+                public void Do(string s) { }
+            }
+            """;
+        SetSource(source, "ImplOverloads.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () =>
+            await _symbolNavigationEngine.FindImplementationsForMemberAsync("ImplOverloads.cs", "Do"));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(ex.Message, Does.Contain("Do(int"));
+        Assert.That(ex.Message, Does.Contain("Do(string"));
+    }
+
+    [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
+    public async Task FindCallers_SingleMemberWithoutSnippet_ReturnsCallerUnchanged()
+    {
+        var source = """
+            public class Holder
+            {
+                public void Only() { }
+                public void Caller() { Only(); }
+            }
+            """;
+        SetSource(source, "CallersSingle.cs");
+
+        var callers = await _symbolNavigationEngine.FindCallersAsync("CallersSingle.cs", "Only");
+
+        Assert.That(callers, Has.Count.EqualTo(1));
+        Assert.That(System.Text.Json.JsonSerializer.Serialize(callers), Does.Contain("Caller"));
+    }
+
+    [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
+    public async Task FindImplementations_InterfaceAndImplementerSameSignatureNoSnippet_DoesNotThrow()
+    {
+        var source = """
+            public interface IRunner
+            {
+                void Do(int x);
+            }
+            public class Runner : IRunner
+            {
+                public void Do(int x) { }
+            }
+            """;
+        SetSource(source, "ImplSameSig.cs");
+
+        var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync("ImplSameSig.cs", "Do");
+
+        Assert.That(implementations, Is.Not.Null);
+    }
+
+    [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
+    public async Task FindCallers_TwoPartialPartsSameFileNoSnippet_DoesNotThrow()
+    {
+        var source = """
+            public partial class Foo
+            {
+                public void A() { }
+            }
+            public partial class Foo
+            {
+                public void B() { A(); }
+            }
+            """;
+        SetSource(source, "PartialFoo.cs");
+
+        var callers = await _symbolNavigationEngine.FindCallersAsync("PartialFoo.cs", "Foo");
+
+        Assert.That(callers, Is.Not.Null);
+    }
+
+    [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
+    public async Task FindCallers_GenericArityOverloadsNoSnippet_ThrowsAmbiguous()
+    {
+        var source = """
+            public class Holder
+            {
+                public void Do<T>(T x) { }
+                public void Do(int x) { }
+                public void Caller() { Do(1); }
+            }
+            """;
+        SetSource(source, "GenericArity.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () =>
+            await _symbolNavigationEngine.FindCallersAsync("GenericArity.cs", "Do"));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+    }

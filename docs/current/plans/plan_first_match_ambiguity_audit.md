@@ -1,6 +1,6 @@
 # Plan: Refuse and report ambiguity instead of silently using the first match
 
-**Status:** IN PROGRESS 2026-10-24. Audit done; steps 1 and 2 built (central null-snippet guard, post-remove check, tests); step 2b and steps 3-8 open.
+**Status:** IN PROGRESS 2026-10-24. Audit done; steps 1, 2 and 2b built (central null-snippet guard, post-remove check, FindCallers/FindImplementations guard, tests); steps 3-8 open.
 
 ## Problem
 
@@ -54,7 +54,9 @@ the old, `[Obsolete("Use X")]` on the old, `// TODO` for remaining callers, fini
 - Change: in the null-snippet branch, when `candidates.Count > 1` throw `ToolAmbiguousMatchException` listing the candidates (reuse the `GetMemberSourceAsync` message shape). Fix the summary comment.
 - Done when: Build 0 errors; new tests: two overloads, no snippet, for `ReplaceMember`, `ConvertExpressionBody`, `RemoveMember` all return the ambiguity error and leave the file unchanged.
 
-### Step 2b - FindCallers / FindImplementations first-pick with filePath
+### Step 2b - FindCallers / FindImplementations first-pick with filePath - DONE 2026-10-24
+- Built: ambiguity is raised only when the preferred set holds more than one distinct overload key (`GetOverloadKey`: parameter types plus generic arity), so an interface member with its same-signature implementer, and partial parts of one type, still resolve as before. Found by `MemberRemoveTests` (Tests.Tools.Advanced); a plain "Count > 1" guard broke them. `GetCallGraphAsync` keeps a `// TODO overloads` marker (no disambiguating parameter).
+- Tool-level tests (Member remove with overloads, with and without `skipPrecheck`) return ErrorCode `Ambiguous` and leave the file unchanged.
 - Files: `SymbolNavigationEngine.cs` (`FindCallersAsync`, `FindImplementationsForMemberAsync` file-path branch).
 - Change: with a file path and a null snippet, throw `ToolAmbiguousMatchException` on more than one declaration instead of `FirstOrDefault`. Check that Member remove's precheck then reports the ambiguity before the engine call.
 - Done when: test with two overloads, null snippet: error; with a snippet: callers of that overload only.

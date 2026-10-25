@@ -361,4 +361,60 @@ public sealed class MemberRemoveTests
         Assert.That(summary.Description, Is.EqualTo("Removed 'Hello' from Greeter.cs."));
         Assert.That(AllText(workspace), Is.EqualTo(before), "A dry run must leave every document text unchanged.");
     }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task RemoveMember_OverloadsNoSnippet_ReturnsAmbiguityError_AndLeavesFileUnchanged()
+    {
+        var source = """
+            namespace TestProj;
+
+            public class Helper
+            {
+                public void Do(int x) { }
+                public void Do(string s) { }
+
+                public void UseIt()
+                {
+                    Do("a");
+                }
+            }
+            """;
+        using var workspace = InMemoryWorkspace.Create(("Helper.cs", source));
+        var before = workspace.ReadText("Helper.cs");
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Helper.cs"), MemberAction.remove, memberName: "Do");
+        Assert.That(result.IsError, Is.True, "Overloaded Do without contextSnippet must not be removed.");
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("Ambiguous"));
+        Assert.That(workspace.ReadText("Helper.cs"), Is.EqualTo(before));
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task RemoveMember_OverloadsNoSnippet_SkipPrecheckTrue_ReturnsAmbiguityError_AndLeavesFileUnchanged()
+    {
+        var source = """
+            namespace TestProj;
+
+            public class Helper
+            {
+                public void Do(int x) { }
+                public void Do(string s) { }
+
+                public void UseIt()
+                {
+                    Do("a");
+                }
+            }
+            """;
+        using var workspace = InMemoryWorkspace.Create(("Helper.cs", source));
+        var before = workspace.ReadText("Helper.cs");
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Helper.cs"), MemberAction.remove, memberName: "Do", skipPrecheck: true);
+        Assert.That(result.IsError, Is.True, "Overloaded Do without contextSnippet must not be removed even with skipPrecheck: true.");
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("Ambiguous"));
+        Assert.That(workspace.ReadText("Helper.cs"), Is.EqualTo(before));
+    }
 }

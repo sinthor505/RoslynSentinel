@@ -1186,6 +1186,7 @@ public class SymbolNavigationEngine
         // Prefer class method over interface method when both exist in the same file
         var methodDecls = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .Where(m => m.Identifier.Text == methodName).ToList();
+        // TODO overloads: first declaration wins and the tool has no contextSnippet/disambiguator parameter
         var methodDecl = methodDecls.FirstOrDefault(m => m.Ancestors().OfType<ClassDeclarationSyntax>().Any())
             ?? methodDecls.FirstOrDefault();
         if (methodDecl == null)
@@ -1449,6 +1450,27 @@ public class SymbolNavigationEngine
         return node;
     }
 
+    // Two declarations share an overload key when they are the same overload: an interface member and its
+    // implementer, or the parts of a partial type, have equal keys and are not ambiguous. Overloads and
+    // generic-arity siblings differ in parameter types or type-parameter count.
+    private static string GetOverloadKey(MemberDeclarationSyntax decl)
+    {
+        return decl switch
+        {
+            MethodDeclarationSyntax method => $"{method.TypeParameterList?.Parameters.Count ?? 0}|{ParameterOverloadKey(method.ParameterList.Parameters)}",
+            BaseMethodDeclarationSyntax baseMethod => $"0|{ParameterOverloadKey(baseMethod.ParameterList.Parameters)}",
+            TypeDeclarationSyntax type => (type.TypeParameterList?.Parameters.Count ?? 0).ToString(),
+            BaseTypeDeclarationSyntax => "0",
+            IndexerDeclarationSyntax indexer => "indexer:" + ParameterOverloadKey(indexer.ParameterList.Parameters),
+            _ => string.Empty,
+        };
+    }
+
+    private static string ParameterOverloadKey(SeparatedSyntaxList<ParameterSyntax> parameters)
+    {
+        return string.Join(",", parameters.Select(p => string.Join(" ", p.Modifiers.Select(m => m.ValueText).Append(p.Type?.ToString().Trim() ?? string.Empty))));
+    }
+
     /// <summary>
     /// Finds all call sites (references) to a symbol in the solution.
     /// symbolName: the member name to search for. contextSnippet: optional verbatim substring
@@ -1506,7 +1528,8 @@ public class SymbolNavigationEngine
             // docs/current/proposal_universal_symbol_resolver.md's Motivation section (the "sixth
             // drifted lookup path").
             var declsSourceText = await document.GetTextAsync(cancellationToken);
-            var decls = SyntaxTargetResolver.ResolveCandidates(root, declsSourceText, symbolName, cancellationToken)
+            var declCandidates = SyntaxTargetResolver.ResolveCandidates(root, declsSourceText, symbolName, cancellationToken);
+            var decls = declCandidates
                 .Select(c => c.Node)
                 .OfType<MemberDeclarationSyntax>()
                 .ToList();
@@ -1530,8 +1553,21 @@ public class SymbolNavigationEngine
             }
             else
             {
-                var decl = decls.FirstOrDefault(m => m.Ancestors().OfType<ClassDeclarationSyntax>().Any())
-                    ?? decls.FirstOrDefault();
+                // Preferred set: class members when any exist, otherwise all declarations. Only a preferred set that
+                // still holds several distinct overloads is ambiguous (see GetOverloadKey); refuse rather than pick the first.
+                var preferredDecls = decls.Where(m => m.Ancestors().OfType<ClassDeclarationSyntax>().Any()).ToList();
+                if (preferredDecls.Count == 0)
+                {
+                    preferredDecls = decls;
+                }
+
+                if (preferredDecls.Select(d => GetOverloadKey(d)).Distinct().Count() > 1)
+                {
+                    var ambiguousCandidates = declCandidates.Where(c => preferredDecls.Any(p => ReferenceEquals(p, c.Node))).ToList();
+                    throw new ToolAmbiguousMatchException(SyntaxTargetResolver.BuildHintForCandidates(ambiguousCandidates, [], "ambiguous"), SyntaxTargetResolver.BuildDeclarationCandidates(ambiguousCandidates, declsSourceText, document.FilePath ?? string.Empty));
+                }
+
+                var decl = preferredDecls.FirstOrDefault();
                 if (decl != null)
                 {
                     // GetDeclaredSymbol returns null directly on a FieldDeclarationSyntax (it can
@@ -1859,12 +1895,27 @@ public class SymbolNavigationEngine
                     // demoted behind any other match: for `class Foo` the name matches both the type
                     // and its constructor, and the type is the intended target.
                     var declsText = await document.GetTextAsync(cancellationToken);
-                    var decls = SyntaxTargetResolver.ResolveCandidates(root, declsText, symbolName, cancellationToken)
+                    var declCandidates = SyntaxTargetResolver.ResolveCandidates(root, declsText, symbolName, cancellationToken);
+                    var decls = declCandidates
                         .Select(c => c.Node)
                         .OfType<MemberDeclarationSyntax>()
                         .ToList();
-                    var decl = decls.FirstOrDefault(m => m is not ConstructorDeclarationSyntax)
-                        ?? decls.FirstOrDefault();
+                    // Preferred set: non-constructor declarations when any exist, otherwise all. Only a preferred set that
+                    // still holds several distinct overloads is ambiguous (see GetOverloadKey). Thrown directly (no try/catch wraps this block), so the
+                    // caller gets ToolAmbiguousMatchException rather than a scopedResolutionFailure NotFound.
+                    var preferredDecls = decls.Where(m => m is not ConstructorDeclarationSyntax).ToList();
+                    if (preferredDecls.Count == 0)
+                    {
+                        preferredDecls = decls;
+                    }
+
+                    if (preferredDecls.Select(d => GetOverloadKey(d)).Distinct().Count() > 1)
+                    {
+                        var ambiguousCandidates = declCandidates.Where(c => preferredDecls.Any(p => ReferenceEquals(p, c.Node))).ToList();
+                        throw new ToolAmbiguousMatchException(SyntaxTargetResolver.BuildHintForCandidates(ambiguousCandidates, [], "ambiguous"), SyntaxTargetResolver.BuildDeclarationCandidates(ambiguousCandidates, declsText, document.FilePath ?? string.Empty));
+                    }
+
+                    var decl = preferredDecls.FirstOrDefault();
                     if (decl != null)
                     {
                         // GetDeclaredSymbol returns null directly on a FieldDeclarationSyntax (it can
