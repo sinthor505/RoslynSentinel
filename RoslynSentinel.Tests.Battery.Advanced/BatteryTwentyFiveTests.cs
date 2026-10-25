@@ -159,13 +159,11 @@ public class Guard {
     }
 
     [Test]
-    public async Task DetectUnreachableCodeAsync_UnknownFile_ReturnsNonNull()
+    public async Task DetectUnreachableCodeAsync_UnknownFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _antiPatternEngine.DetectUnreachableCodeAsync("NoFile.cs", "Foo");
-        // TODO throw-migration: assert the typed exception once AntiPatternEngine throws for an unknown file
-        Assert.That(result, Is.Not.Null);
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _antiPatternEngine.DetectUnreachableCodeAsync("NoFile.cs", "Foo"));
     }
 
     [Test]

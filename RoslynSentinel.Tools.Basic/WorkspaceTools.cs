@@ -368,7 +368,7 @@ public class WorkspaceTools
                     try
                     {
                         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-                        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePathResolved.Absolute || d.FilePathWrapper == filePathResolved.Absolute);
+                        var document = RoslynSentinel.Common.DocumentLookup.FindDocumentOrNull(solution, filePathResolved);
                         if (document == null)
                         {
                             return new SentinelCallToolResult<object>()

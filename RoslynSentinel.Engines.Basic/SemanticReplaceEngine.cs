@@ -1247,22 +1247,7 @@ public class SemanticReplaceEngine
             var filePath = fileGroup.Key;
 
             // Find the document for this file path
-            Document? document = null;
-            foreach (var project in solution.Projects)
-            {
-                foreach (var doc in project.Documents)
-                {
-                    if (doc.FilePath == filePath || doc.Name == filePath)
-                    {
-                        document = doc;
-                        break;
-                    }
-                }
-                if (document is not null)
-                {
-                    break;
-                }
-            }
+            var document = DocumentLookup.FindDocumentOrNull(solution, filePath);
 
             if (document is null)
             {

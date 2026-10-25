@@ -92,7 +92,7 @@ public sealed record DocumentLookupResult(
             throw new ToolAmbiguousMatchException(Describe());
         }
 
-        throw new ToolNotFoundException(Describe());
+        throw new ToolNotFoundException(Describe(), "document", RequestedPath);
     }
 
     /// <summary>
@@ -261,6 +261,15 @@ public static class DocumentLookup
     /// Resolves path or throws ToolNotFoundException / ToolAmbiguousMatchException; the engine-layer replacement for an inline FirstOrDefault + not-found return.
     /// </summary>
     public static Document RequireDocument(Solution solution, FilePathWrapper path) => TryGetDocument(solution, path).GetDocumentOrThrow();
+
+    /// <summary>
+    /// Resolves path like TryGetDocument but returns null when the file is not found (for callers that keep their own not-found handling); throws ToolAmbiguousMatchException when a bare file name matches several different files, never first-wins.
+    /// </summary>
+    public static Document? FindDocumentOrNull(Solution solution, FilePathWrapper path)
+    {
+        var result = TryGetDocument(solution, path);
+        return result.Status == DocumentLookupStatus.NotFound ? null : result.GetDocumentOrThrow();
+    }
 
     /// <summary>
     /// The real paths of documents whose file name matches the file name of <paramref name="requestedPath"/>

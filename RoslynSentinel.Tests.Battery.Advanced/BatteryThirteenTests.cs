@@ -2,6 +2,7 @@
 // CodeGenerationEngine is sync/JSON-only (no workspace needed for its primary methods).
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 
@@ -216,11 +217,10 @@ public class SymbolNavigationEngineTests
     }
 
     [Test]
-    public async Task FindReadonlyFieldCandidates_UnknownFile_ReturnsEmptyList()
+    public async Task FindReadonlyFieldCandidates_UnknownFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Service { }")]);
         _workspaceManager.SetTestSolution(solution);
-        var candidates = await _engine.FindReadonlyFieldCandidatesAsync("DoesNotExist.cs");
-        Assert.That(candidates, Is.Empty, "Unknown file should return empty list, not throw");
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.FindReadonlyFieldCandidatesAsync("DoesNotExist.cs"));
     }
 }

@@ -168,6 +168,35 @@ public class DocumentLookupTests
     }
 
     [Test]
+    public void FindDocumentOrNull_Found_ReturnsDocument()
+    {
+        var solution = BuildSolution(PathOf("A", "Foo.cs"));
+
+        var document = DocumentLookup.FindDocumentOrNull(solution, new FilePathWrapper(PathOf("A", "Foo.cs")));
+
+        Assert.That(document, Is.Not.Null);
+        Assert.That(document!.FilePath, Is.EqualTo(PathOf("A", "Foo.cs")));
+    }
+
+    [Test]
+    public void FindDocumentOrNull_Missing_ReturnsNull()
+    {
+        var solution = BuildSolution(PathOf("A", "Foo.cs"));
+
+        var document = DocumentLookup.FindDocumentOrNull(solution, new FilePathWrapper("Missing.cs"));
+
+        Assert.That(document, Is.Null);
+    }
+
+    [Test]
+    public void FindDocumentOrNull_Ambiguous_ThrowsAmbiguousMatch()
+    {
+        var solution = BuildSolution(PathOf("A", "Foo.cs"), PathOf("B", "Foo.cs"));
+
+        Assert.Throws<ToolAmbiguousMatchException>(() => DocumentLookup.FindDocumentOrNull(solution, new FilePathWrapper("Foo.cs")));
+    }
+
+    [Test]
     public void ProjectScope_SameNameDifferentFilePaths_IsAmbiguous_AndNamesBothPaths()
     {
         var solution = new AdhocWorkspace().CurrentSolution

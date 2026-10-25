@@ -399,13 +399,15 @@ public class MathHelper
 
     [Test]
     [Category("ExtractMethodResult")] // sentinel:auto-category
-    public async Task ExtractMethodAsync_UnknownFile_ReturnsFailureResult()
+    public async Task ExtractMethodAsync_UnknownFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _memberRefactoringEngine.ExtractMethodAsync("NoFile.cs", 1, "x", 1, "x", "NewMethod");
-        Assert.That(result, Is.Not.Null);
-        Assert.That(!result.IsError, Is.False, "Should fail gracefully for unknown file");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.ExtractMethodAsync("NoFile.cs", 1, "x", 1, "x", "NewMethod");
+        });
+        Assert.That(ex.MissingTargetName, Is.EqualTo("NoFile.cs"));
     }
 
     [Test]

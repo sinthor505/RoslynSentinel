@@ -300,7 +300,7 @@ public class CommentingEngine
         Solution baseSolution, FilePathWrapper filePath, IReadOnlyList<MemberSite> fileMembers, int maxTokens, CancellationToken cancellationToken = default)
     {
         var outcomes = new List<MemberCommentOutcome>();
-        var document = baseSolution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        var document = RoslynSentinel.Common.DocumentLookup.FindDocumentOrNull(baseSolution, filePath);
         if (document == null)
         {
             return (null, fileMembers.Select(m => new MemberCommentOutcome(m, false, "Document not found.")).ToList());

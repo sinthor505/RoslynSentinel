@@ -171,14 +171,7 @@ public class TestingEngine
     public async Task<TestScaffoldResult> GenerateTestScaffoldAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects
-            .SelectMany(p => p.Documents)
-            .FirstOrDefault(d => d.FilePath == filePath || d.Name == filePath);
-
-        if (document == null)
-        {
-            return new TestScaffoldResult(className, $"{className}Tests", "Global.Tests", "", $"File not found: {filePath}");
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)

@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Common.SnippetMatching;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Basic;
@@ -313,9 +314,9 @@ public class RegressionTests
     [Test]
     [Category("CallerInfo")] // sentinel:auto-category
     [Category("SymbolNavigationEngine")] // sentinel:auto-category
-    public async Task FindCallersSafe_NoContextSnippet_FindsAllOverloads()
+    public async Task FindCallersSafe_NoContextSnippet_RefusesAmbiguousOverloads()
     {
-        // Without contextSnippet, all overloads' callers are returned.
+        // Without contextSnippet, the call refuses until a contextSnippet is given.
         SetMultipleFiles(
             ("Svc.cs", """
                 public class Svc
@@ -332,10 +333,12 @@ public class RegressionTests
                 }
                 """));
 
-        var callers = await _symbolNavigationEngine.FindCallersAsync("Svc.cs", "Send");
-
-        Assert.That(callers, Is.Not.Empty, "Should find at least one caller");
-        Assert.That(callers.Any(c => c.CallerMethod == "Go"), Is.True, "Go should be listed as a caller");
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () =>
+        {
+            await _symbolNavigationEngine.FindCallersAsync("Svc.cs", "Send");
+        });
+        Assert.That(ex.Message, Does.Contain("Send(string msg)"));
+        Assert.That(ex.Message, Does.Contain("Send(int code)"));
     }
 
     [Test]
