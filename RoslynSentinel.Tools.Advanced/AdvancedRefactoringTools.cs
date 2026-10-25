@@ -384,10 +384,9 @@ public class AdvancedRefactoringTools
             if (!string.IsNullOrWhiteSpace(contextSnippet))
             {
                 var result = await _mappingEngine.InvertAssignmentsAsync(resolvedFilePath, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
-                // TODO S4: UpdatedText becomes non-nullable; drop the ! once it does
                 var changes = new Dictionary<FilePathWrapper, string>
                 {
-                    [resolvedFilePath] = result.UpdatedText!
+                    [resolvedFilePath] = result.UpdatedText
                 };
                 var apply = await ValidateAndApplyAsync(changes, $"Invert assignments in snippet.", "InvertAssignments", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (apply.Error is not null)
@@ -407,7 +406,7 @@ public class AdvancedRefactoringTools
                 var result = await _mappingEngine.InvertAssignmentsAsync(resolvedFilePath, startLine, endLine, cancellationToken: cancellationToken);
                 var changes = new Dictionary<FilePathWrapper, string>
                 {
-                    [resolvedFilePath] = result.UpdatedText!
+                    [resolvedFilePath] = result.UpdatedText
                 };
                 var apply = await ValidateAndApplyAsync(changes, $"Invert assignments in lines {startLine}-{endLine}.", "InvertAssignments", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (apply.Error is not null)
@@ -671,7 +670,7 @@ public class AdvancedRefactoringTools
             // UpdatedText.
             var changes = new Dictionary<FilePathWrapper, string>
             {
-                [resolvedFilePath] = result.UpdatedText! // TODO S4: UpdatedText becomes non-nullable
+                [resolvedFilePath] = result.UpdatedText
             };
             var apply = await ValidateAndApplyAsync(changes, $"Introduce parameter object for '{methodName}'.", "IntroduceParameterObject", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
@@ -765,7 +764,7 @@ public class AdvancedRefactoringTools
             // returning the introduced declaration's text alongside UpdatedText.
             var changes = new Dictionary<FilePathWrapper, string>
             {
-                [resolvedFilePath] = result.UpdatedText! // TODO S4: UpdatedText becomes non-nullable
+                [resolvedFilePath] = result.UpdatedText
             };
             var apply = await ValidateAndApplyAsync(changes, stageDesc, $"Introduce({newType})", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
@@ -1112,7 +1111,7 @@ public class AdvancedRefactoringTools
                 var fieldResult = await _advancedStructuralEngine.InlineFieldAsync(resolvedFilePath, targetName, cancellationToken: cancellationToken);
                 var fieldChanges = new Dictionary<FilePathWrapper, string>
                 {
-                    [resolvedFilePath] = fieldResult.UpdatedText! // TODO S4: UpdatedText becomes non-nullable
+                    [resolvedFilePath] = fieldResult.UpdatedText
                 };
                 var fieldApply = await ValidateAndApplyAsync(fieldChanges, $"Inline field '{targetName}'.", "Inline_field", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (fieldApply.Error is not null)
@@ -1139,7 +1138,7 @@ public class AdvancedRefactoringTools
                 var paramResult = await _advancedStructuralEngine.InlineParameterAsync(resolvedFilePath, methodName, targetName, cancellationToken: cancellationToken);
                 var paramChanges = new Dictionary<FilePathWrapper, string>
                 {
-                    [resolvedFilePath] = paramResult.UpdatedText! // TODO S4: UpdatedText becomes non-nullable
+                    [resolvedFilePath] = paramResult.UpdatedText
                 };
                 var paramApply = await ValidateAndApplyAsync(paramChanges, $"Inline parameter '{targetName}' in '{methodName}'.", "Inline_parameter", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (paramApply.Error is not null)
@@ -1199,7 +1198,7 @@ public class AdvancedRefactoringTools
                     {
                         var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
                         {
-                            [resolvedFilePath] = updated.UpdatedText!
+                            [resolvedFilePath] = updated.UpdatedText
                         };
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
@@ -1210,7 +1209,7 @@ public class AdvancedRefactoringTools
 
                     var changes = new Dictionary<FilePathWrapper, string>
                     {
-                        [resolvedFilePath] = updated.UpdatedText!
+                        [resolvedFilePath] = updated.UpdatedText
                     };
                     var apply = await ValidateAndApplyAsync(changes, $"Wrap snippet in try/catch.", "WrapRange_tryCatch", dryRun, returnDiff, cancellationToken: cancellationToken);
                     if (apply.Error is not null)
@@ -1243,7 +1242,7 @@ public class AdvancedRefactoringTools
                     {
                         var noStageUsingChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
                         {
-                            [resolvedFilePath] = updated.UpdatedText!
+                            [resolvedFilePath] = updated.UpdatedText
                         };
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
@@ -1254,7 +1253,7 @@ public class AdvancedRefactoringTools
 
                     var usingChanges = new Dictionary<FilePathWrapper, string>
                     {
-                        [resolvedFilePath] = updated.UpdatedText!
+                        [resolvedFilePath] = updated.UpdatedText
                     };
                     var usingApply = await ValidateAndApplyAsync(usingChanges, $"Wrap snippet in using ({name}).", "WrapRange_using", dryRun, returnDiff, cancellationToken: cancellationToken);
                     if (usingApply.Error is not null)
@@ -1287,7 +1286,7 @@ public class AdvancedRefactoringTools
                     {
                         var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
                         {
-                            [resolvedFilePath] = updated.UpdatedText!
+                            [resolvedFilePath] = updated.UpdatedText
                         };
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
@@ -1298,7 +1297,7 @@ public class AdvancedRefactoringTools
 
                     var changes = new Dictionary<FilePathWrapper, string>
                     {
-                        [resolvedFilePath] = updated.UpdatedText!
+                        [resolvedFilePath] = updated.UpdatedText
                     };
                     var apply = await ValidateAndApplyAsync(changes, $"Wrap snippet in #region '{name}'.", "WrapRange_region", dryRun, returnDiff, cancellationToken: cancellationToken);
                     if (apply.Error is not null)
@@ -1332,7 +1331,7 @@ public class AdvancedRefactoringTools
                     {
                         var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
                         {
-                            [resolvedFilePath] = updated.UpdatedText!
+                            [resolvedFilePath] = updated.UpdatedText
                         };
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
@@ -1343,7 +1342,7 @@ public class AdvancedRefactoringTools
 
                     var changes = new Dictionary<FilePathWrapper, string>
                     {
-                        [resolvedFilePath] = updated.UpdatedText!
+                        [resolvedFilePath] = updated.UpdatedText
                     };
                     var apply = await ValidateAndApplyAsync(changes, $"Wrap lines {startLine}-{endLine} in try/catch.", "WrapRange_tryCatch", dryRun, returnDiff, cancellationToken: cancellationToken);
                     if (apply.Error is not null)
@@ -1376,7 +1375,7 @@ public class AdvancedRefactoringTools
                     {
                         var noStageUsingChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
                         {
-                            [resolvedFilePath] = updated.UpdatedText!
+                            [resolvedFilePath] = updated.UpdatedText
                         };
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
@@ -1387,7 +1386,7 @@ public class AdvancedRefactoringTools
 
                     var usingChanges = new Dictionary<FilePathWrapper, string>
                     {
-                        [resolvedFilePath] = updated.UpdatedText!
+                        [resolvedFilePath] = updated.UpdatedText
                     };
                     var usingApply = await ValidateAndApplyAsync(usingChanges, $"Wrap lines {startLine}-{endLine} in using ({name}).", "WrapRange_using", dryRun, returnDiff, cancellationToken: cancellationToken);
                     if (usingApply.Error is not null)
@@ -1420,7 +1419,7 @@ public class AdvancedRefactoringTools
                     {
                         var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
                         {
-                            [resolvedFilePath] = updated.UpdatedText!
+                            [resolvedFilePath] = updated.UpdatedText
                         };
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
@@ -1431,7 +1430,7 @@ public class AdvancedRefactoringTools
 
                     var changes = new Dictionary<FilePathWrapper, string>
                     {
-                        [resolvedFilePath] = updated.UpdatedText!
+                        [resolvedFilePath] = updated.UpdatedText
                     };
                     var apply = await ValidateAndApplyAsync(changes, $"Wrap lines {startLine}-{endLine} in #region '{name}'.", "WrapRange_region", dryRun, returnDiff, cancellationToken: cancellationToken);
                     if (apply.Error is not null)
@@ -1524,7 +1523,7 @@ public class AdvancedRefactoringTools
                 {
                     var noStageOuterChanges = string.IsNullOrEmpty(outerResult.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
                     {
-                        [resolvedFilePath] = outerResult.UpdatedText!
+                        [resolvedFilePath] = outerResult.UpdatedText
                     };
                     return new SentinelCallToolResult<AppliedChangeSummary>
                     {
@@ -1535,7 +1534,7 @@ public class AdvancedRefactoringTools
 
                 var outerChanges = new Dictionary<FilePathWrapper, string>
                 {
-                    [resolvedFilePath] = outerResult.UpdatedText! // TODO S4: UpdatedText becomes non-nullable
+                    [resolvedFilePath] = outerResult.UpdatedText
                 };
                 var outerApply = await ValidateAndApplyAsync(outerChanges, $"Move type '{typeName}' to outer scope.", "MoveType_outerScope", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (outerApply.Error is not null)

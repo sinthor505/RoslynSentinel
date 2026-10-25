@@ -1549,7 +1549,7 @@ public class AsyncifyTools
                             if (ctResult.Outcome == EditOutcome.Modified)
                             {
                                 var ctApplyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                                    new Dictionary<FilePathWrapper, string> { { target.FilePath, ctResult.UpdatedText! } }, // TODO S4: UpdatedText becomes non-nullable
+                                    new Dictionary<FilePathWrapper, string> { { target.FilePath, ctResult.UpdatedText } },
                                     validateChanges: true);
                                 if (!ctApplyResult.IsError)
                                 {
@@ -3127,7 +3127,7 @@ public class AsyncifyTools
                         handler.FilePath, handler.MethodName, cancellationToken: state.InnerToken);
 
                 var applyResult3b = await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePathWrapper, string> { { handler.FilePath, handlerResult.UpdatedText! } }, // TODO S4: UpdatedText becomes non-nullable
+                    new Dictionary<FilePathWrapper, string> { { handler.FilePath, handlerResult.UpdatedText } },
                     validateChanges: true, cancellationToken: state.InnerToken);
                 if (applyResult3b.IsError && applyResult3b.ValidationResult != null)
                 {

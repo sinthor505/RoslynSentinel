@@ -167,7 +167,7 @@ public class GenerationTools
         try
         {
             var result = await _codeGenerationEngine.GenerateDefaultConfigJsonAsync(projectName, cancellationToken);
-            return result.UpdatedText!;
+            return result.UpdatedText;
         }
         catch (Exception ex)
         {
@@ -237,7 +237,7 @@ public class GenerationTools
             // The mapping goes into a NEW file ({From}To{To}Mapper.cs beside the source type); the source file is never rewritten.
             var result = await _mappingEngine.GenerateMappingFileAsync(filePathResolved, fromType, toType, cancellationToken);
             FilePathWrapper newFilePath = result.FilePath;
-            var changes = new Dictionary<FilePathWrapper, string> { [newFilePath] = result.UpdatedText! };
+            var changes = new Dictionary<FilePathWrapper, string> { [newFilePath] = result.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"Generate mapping from '{fromType}' to '{toType}'.", "GenerateMapping", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
