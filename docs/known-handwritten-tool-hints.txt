@@ -3,37 +3,3 @@
 # `// hint-ok: <reason>` comment on their statement. This file may only shrink.
 # Refresh after removing hints: set ROSLYNSENTINEL_UPDATE_HINT_BASELINE=1 and run
 # ToolHintRatchetTests.Scan_MatchesBaseline. Line format: <path> | <member> | <tool> | <count>
-RoslynSentinel.Common/ToolParams.cs | ToolParams | GetLargeResult | 2
-RoslynSentinel.Common/ToolParams.cs | ToolParams | Search | 3
-RoslynSentinel.Engines.Basic/SymbolNavigationEngine.cs | GetMemberSourceAsync | ReadFile | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | ActionRefused | GitRemote | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | BuildHunksResult | Git | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | BuildStageHunksResultAsync | Git | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | CheckoutAsync | GitRemote | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | CommitAsync | Git | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | GitErrorDetails | Git | 12
-RoslynSentinel.Tools.Basic/GitImpl.cs | GitErrorDetails | GitRemote | 13
-RoslynSentinel.Tools.Basic/GitImpl.cs | GitImpl | LoadSolution | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | InProgressAdviceAsync | Git | 2
-RoslynSentinel.Tools.Basic/GitImpl.cs | LoadDiffForPathAsync | Git | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | LoadFileDiffAsync | Git | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | NoUnstagedChangesLoad | Git | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | RunGitAsync | Git | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | SelectHunks | Git | 2
-RoslynSentinel.Tools.Basic/GitImpl.cs | StageHunksAsync | Git | 2
-RoslynSentinel.Tools.Basic/GitImpl.cs | StashRestoreAsync | Git | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | StashRestoreAsync | GitRemote | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | StashRollbackConflictAsync | Git | 2
-RoslynSentinel.Tools.Basic/GitImpl.cs | StashRollbackConflictAsync | GitRemote | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | TagCreateAsync | GitRemote | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | TagDeleteAsync | GitRemote | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | TryGetGitRoot | LoadSolution | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | WorktreeAddAsync | GitRemote | 2
-RoslynSentinel.Tools.Basic/GitImpl.cs | WorktreeAddAsync | LoadSolution | 1
-RoslynSentinel.Tools.Basic/GitImpl.cs | WorktreeRemoveAsync | GitRemote | 4
-RoslynSentinel.Tools.Basic/GitImpl.cs | WorktreeRemoveAsync | LoadSolution | 1
-RoslynSentinel.Tools.Basic/GitTools.cs | GitTool | Git | 1
-RoslynSentinel.Tools.Experimental/CodeTransformTools.cs | ApplyMethodCodeTransform | GetFileOutline | 9
-RoslynSentinel.Tools.Experimental/CodeTransformTools.cs | CodeTransformTools | GetFileOutline | 2
-RoslynSentinel.Utilities.PlanStepRunner/Program.cs | RunStepAsync | ListWorkspaceSolutions | 1
-RoslynSentinel.Utilities.PlanStepRunner/Program.cs | RunStepAsync | LoadSolution | 1

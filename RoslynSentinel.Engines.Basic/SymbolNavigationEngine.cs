@@ -2701,7 +2701,7 @@ public class SymbolNavigationEngine
     /// any), attribute lists, signature, and body/initializer/accessors, taken verbatim from the
     /// file (the first line starts at the first doc-comment or declaration token, so it carries no
     /// leading indentation; later lines keep the file's own). Supports class-level members and enum
-    /// members; whole types are refused (TargetIneligible) because ReadFile / GetFileOutline serve
+    /// members; whole types are refused (TargetIneligible) because the file-read tool / GetFileOutline serve
     /// that. Resolution mirrors Member(remove)/Member(replace): by name, narrowed by containerName,
     /// then contextSnippet/lineBefore/lineAfter. With requireContainerMatch a containerName that matches
     /// no candidate is refused (NotFound, listing the types that declare the member) instead of ignored;
@@ -2709,7 +2709,7 @@ public class SymbolNavigationEngine
     /// contextSnippet is reported as Ambiguous rather than silently resolved to the first overload,
     /// since a read that returns the wrong overload is worse than an error. Output is capped at
     /// 200 lines; past the cap Source is the first 200 lines, IsComplete is false, and EndLine is
-    /// still the member's real last line so a follow-up ReadFile is one precise call.
+    /// still the member's real last line so a follow-up file-read call is one precise call.
     /// </summary>
     public async Task<(EditOutcome Outcome, string? Message, string? ErrorCode, MemberSourceInfo? Source)> GetMemberSourceAsync(FilePathWrapper filePath, string memberName, string? containerName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, bool requireContainerMatch = false, CancellationToken cancellationToken = default)
     {
@@ -2736,7 +2736,7 @@ public class SymbolNavigationEngine
             var narrowed = SyntaxTargetResolver.FilterByContainingTypeStrict(memberCandidates, containerName);
             if (narrowed.Count == 0 && (memberCandidates.Count > 0 || allNameCandidates.Count == 0))
             {
-                var (message, candidates) = SyntaxTargetResolver.BuildContainerMissDetail(root, sourceText, memberName, containerName, document.FilePath ?? string.Empty, "ReadFile(filePath: '{file}', memberName: '{member}', containerName: '{container}')", methodsOnly: false);
+                var (message, candidates) = SyntaxTargetResolver.BuildContainerMissDetail(root, sourceText, memberName, containerName, document.FilePath ?? string.Empty, "ReadFile(filePath: '{file}', memberName: '{member}', containerName: '{container}')", methodsOnly: false); // hint-ok: retry template is string-replaced and regex-matched on the quoted '{container}' form; ToolCallHint would drop those quotes
                 throw new ToolNotFoundException(message, "member", memberName, candidates: candidates);
             }
 

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Client;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Common.AgentLoop;
 using RoslynSentinel.Common.GitWorktree;
 
@@ -237,7 +238,7 @@ public static class Program
         // and with it any chance of substitution, regardless of how ProjectDoc resolves names.
         // step.Body already has any frontmatter stripped, so the model sees only the step itself.
         var userPrompt =
-            "The solution is already loaded - do not call LoadSolution or ListWorkspaceSolutions, " +
+            $"The solution is already loaded - do not call {ToolCallHint.Call("LoadSolution")} or {ToolCallHint.Call("ListWorkspaceSolutions")}, " +
             "go straight to reading/editing.\n" +
             "Implement the plan step below. It is reproduced here in full - do not look for it on " +
             "disk, and do not read any other plan step file.\n\n" +

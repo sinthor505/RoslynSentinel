@@ -57,7 +57,7 @@ public class GitTools
         [Description("A git ref (branch, tag, hash, HEAD~1). log: start ref. show: the commit. diff: working|unstaged|staged, a ref to diff the working tree against, or refA..refB (default: working tree). reset: ref to move HEAD to. revert: commit to revert.")]
         string? @ref = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: hunkIds needs hunkFingerprint and exactly one path in paths; alternative to lineRange; refused for every operation except stage/add.
-        [Description("stage: hunk ids from Git(operation: hunks), e.g. \"1,3\". Needs hunkFingerprint and exactly one path.")]
+        [Description("stage: hunk ids from Git(operation: hunks), e.g. \"1,3\". Needs hunkFingerprint and exactly one path.")] // hint-ok: [Description] attribute text, cannot hold a call
         string? hunkIds = null,
         [Description("stage: fingerprint from the hunk list (GitHunkStale if the file changed since).")]
         string? hunkFingerprint = null,
@@ -120,7 +120,7 @@ public class GitTools
 
         if (!string.IsNullOrWhiteSpace(hunkFingerprint) && string.IsNullOrWhiteSpace(hunkIds))
         {
-            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: "hunkFingerprint only goes with hunkIds. Pass hunkIds (from Git(operation: hunks)) with it, or use lineRange without a fingerprint.", Detail: null) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"hunkFingerprint only goes with hunkIds. Pass hunkIds (from {ToolCallHint.Call("Git", ("operation", "hunks"))}) with it, or use lineRange without a fingerprint.", Detail: null) };
         }
 
         if (hasHunkParams && scope != null && scope != GitStageScope.listed)

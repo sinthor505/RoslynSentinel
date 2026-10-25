@@ -1731,7 +1731,8 @@ public class GitToolsSmokeTests
 
         AssertCoded(result, "GitPathNotFound");
         Assert.That(result.ErrorData?.Message, Does.Contain("missing.txt"));
-        Assert.That(result.ErrorData?.Detail, Does.Contain("Git(operation: status)"));
+        Assert.That(result.ErrorData?.Detail, Does.Contain("Git("));
+        Assert.That(result.ErrorData?.Detail, Does.Contain("operation: status"));
     }
 
     [Test]
@@ -1774,7 +1775,8 @@ public class GitToolsSmokeTests
         var result = await _gitTools.GitTool(reason: "commit with empty index", GitOperation.commit, message: "empty");
 
         AssertCoded(result, "GitNothingToCommit");
-        Assert.That(result.ErrorData?.Detail, Does.Contain("Git(operation: stage"));
+        Assert.That(result.ErrorData?.Detail, Does.Contain("Git("));
+        Assert.That(result.ErrorData?.Detail, Does.Contain("operation: stage"));
         Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(headBefore));
     }
 
@@ -2279,7 +2281,8 @@ public class GitToolsSmokeTests
         var result = await _gitRemote.GitRemoteTool(reason: "stash and read the note", GitRemoteOperation.stash, action: GitAction.push);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
-        Assert.That(((GitStashResult)result.SuccessData!).Note, Does.Contain("LoadSolution(forceReload: true)"));
+        Assert.That(((GitStashResult)result.SuccessData!).Note, Does.Contain("LoadSolution("));
+        Assert.That(((GitStashResult)result.SuccessData!).Note, Does.Contain("forceReload: true"));
     }
 
     [Test]

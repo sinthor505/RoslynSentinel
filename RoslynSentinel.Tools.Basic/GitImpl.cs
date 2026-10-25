@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tools.Basic;
 
@@ -99,27 +100,27 @@ public static class GitErrorCodes
 /// <summary>Next-step text paired with <see cref="GitErrorCodes"/> in ResultError.Detail.</summary>
 internal static class GitErrorDetails
 {
-    internal const string PathNotFound = "Paths must be repo-relative and inside the repository root. Call Git(operation: status) to list changed and untracked paths, then retry with exact names.";
+    internal static string PathNotFound => $"Paths must be repo-relative and inside the repository root. Call {ToolCallHint.Call("Git", ("operation", "status"))} to list changed and untracked paths, then retry with exact names.";
     internal const string IgnoredPath = "Remove the ignored entries from paths, or un-ignore them in .gitignore, then retry. This tool never force-adds ignored files.";
-    internal const string NothingToCommit = "Stage changes first with Git(operation: stage, paths: \"...\"), or pass paths/scope on the commit call. Call Git(operation: status) to see what changed.";
-    internal const string OperationInProgress = "Call Git(operation: abort) to back out of the in-progress operation, or resolve the conflicts in the working tree and commit.";
-    internal const string RefRequiredReset = "Pass ref, e.g. ref: \"HEAD~1\" to undo the last commit with the working tree kept, or call Git(operation: unstage) to unstage without moving HEAD.";
-    internal const string RefRequiredRevert = "Pass ref, e.g. a hash taken from Git(operation: log).";
-    internal const string RefRequiredCheckout = "Pass branchName, with createBranch=true if it does not exist yet. GitRemote(operation: branch) lists existing branches.";
-    internal const string RefRequiredStash = "Pass stashIndex (0 = newest). GitRemote(operation: stash, action: list) shows every entry.";
-    internal const string RefRequiredTag = "Pass tagName, e.g. GitRemote(operation: tag, action: create, tagName: 'v1.0.0').";
+    internal static string NothingToCommit => $"Stage changes first with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "..."))}, or pass paths/scope on the commit call. Call {ToolCallHint.Call("Git", ("operation", "status"))} to see what changed.";
+    internal static string OperationInProgress => $"Call {ToolCallHint.Call("Git", ("operation", "abort"))} to back out of the in-progress operation, or resolve the conflicts in the working tree and commit.";
+    internal static string RefRequiredReset => $"Pass ref, e.g. ref: \"HEAD~1\" to undo the last commit with the working tree kept, or call {ToolCallHint.Call("Git", ("operation", "unstage"))} to unstage without moving HEAD.";
+    internal static string RefRequiredRevert => $"Pass ref, e.g. a hash taken from {ToolCallHint.Call("Git", ("operation", "log"))}.";
+    internal static string RefRequiredCheckout => $"Pass branchName, with createBranch=true if it does not exist yet. {ToolCallHint.Call("GitRemote", ("operation", "branch"))} lists existing branches.";
+    internal static string RefRequiredStash => $"Pass stashIndex (0 = newest). {ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "list"))} shows every entry.";
+    internal static string RefRequiredTag => $"Pass tagName, e.g. {ToolCallHint.Call("GitRemote", ("operation", "tag"), ("action", "create"), ("tagName", "v1.0.0"))}.";
     internal const string RefRequiredWorktree = "Pass worktreePath (absolute, outside the repo) and, for add, branchName.";
     internal const string ActionRequired = "Pass action with one of the values named in the message. Each operation documents its own actions.";
-    internal const string AlreadyExists = "Use a different name or path, or inspect the existing entry first with GitRemote(operation: tag, action: list), GitRemote(operation: worktree, action: list) or GitRemote(operation: branch). This tool never overwrites an existing tag, branch or worktree.";
-    internal const string TargetNotFound = "Check the exact name with GitRemote(operation: tag, action: list), GitRemote(operation: stash, action: list), GitRemote(operation: worktree, action: list) or GitRemote(operation: branch), then retry.";
+    internal static string AlreadyExists => $"Use a different name or path, or inspect the existing entry first with {ToolCallHint.Call("GitRemote", ("operation", "tag"), ("action", "list"))}, {ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "list"))} or {ToolCallHint.Call("GitRemote", ("operation", "branch"))}. This tool never overwrites an existing tag, branch or worktree.";
+    internal static string TargetNotFound => $"Check the exact name with {ToolCallHint.Call("GitRemote", ("operation", "tag"), ("action", "list"))}, {ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "list"))}, {ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "list"))} or {ToolCallHint.Call("GitRemote", ("operation", "branch"))}, then retry.";
     internal const string InvalidName = "Use a name that git accepts: no spaces, no '..', '~', '^', ':' or trailing '.lock'. Then retry.";
-    internal const string WorkingTreeDirty = "Commit them (Git(operation: commit)) or stash them (GitRemote(operation: stash, action: push)) first; applying onto a dirty tree can mix the two sets of changes. Git(operation: status) lists the changed paths.";
-    internal const string NoChanges = "Nothing to act on. Call Git(operation: status) to see what changed, then retry with the paths that have changes.";
-    internal const string StashConflict = "Check out the commit or branch the stash was created on (GitRemote(operation: checkout)), then apply again; GitRemote(operation: stash, action: list) shows where each entry was made.";
+    internal static string WorkingTreeDirty => $"Commit them ({ToolCallHint.Call("Git", ("operation", "commit"))}) or stash them ({ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "push"))}) first; applying onto a dirty tree can mix the two sets of changes. {ToolCallHint.Call("Git", ("operation", "status"))} lists the changed paths.";
+    internal static string NoChanges => $"Nothing to act on. Call {ToolCallHint.Call("Git", ("operation", "status"))} to see what changed, then retry with the paths that have changes.";
+    internal static string StashConflict => $"Check out the commit or branch the stash was created on ({ToolCallHint.Call("GitRemote", ("operation", "checkout"))}), then apply again; {ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "list"))} shows where each entry was made.";
     internal const string Refused = "Take the safe alternative the message names, then retry. Nothing was changed.";
-    internal const string HunkUnsupported = "Stage the whole file with Git(operation: stage, paths: '<path>') instead, or use a file kind that has text hunks.";
-    internal const string HunkSelection = "Call Git(operation: hunks, paths: '<path>') and pass hunkIds or lineRange exactly as it lists them.";
-    internal const string HunkStale = "Re-run Git(operation: hunks, paths: '<path>') and pick again with the new hunkFingerprint. Nothing was staged.";
+    internal static string HunkUnsupported => $"Stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "<path>"))} instead, or use a file kind that has text hunks.";
+    internal static string HunkSelection => $"Call {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", "<path>"))} and pass hunkIds or lineRange exactly as it lists them.";
+    internal static string HunkStale => $"Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", "<path>"))} and pick again with the new hunkFingerprint. Nothing was staged.";
 }
 
 public record GitRawResult
@@ -604,7 +605,7 @@ public class GitImpl : IGitOperations
         {
             IsError = true,
             ErrorKind = GitErrorCodes.ActionRequired,
-            ErrorDetail = $"Pass action, e.g. GitRemote(operation: {operation}, action: list).",
+            ErrorDetail = $"Pass action, e.g. {ToolCallHint.Call("GitRemote", ("operation", operation), ("action", "list"))}.",
             Error = $"operation={operation} needs action to be one of: {validList} (got {got}). Nothing was changed."
         };
     }
@@ -723,7 +724,7 @@ public class GitImpl : IGitOperations
             var existingShort = await RunGitAsync(gitRoot, ["rev-parse", "--short", "--verify", "--quiet", $"refs/tags/{name}^{{commit}}"], cancellationToken);
             var existingHash = existingShort.ExitCode == 0 ? existingShort.Stdout.Trim() : existing.Stdout.Trim();
             return TagFailure("create", GitErrorCodes.AlreadyExists,
-                $"Tag '{name}' already exists (points at {existingHash}). This tool never overwrites or moves a tag. Use a new name, or delete it first (GitRemote(operation: tag, action: delete, tagName: '{name}')) and recreate. Nothing was changed.",
+                $"Tag '{name}' already exists (points at {existingHash}). This tool never overwrites or moves a tag. Use a new name, or delete it first ({ToolCallHint.Call("GitRemote", ("operation", "tag"), ("action", "delete"), ("tagName", name))}) and recreate. Nothing was changed.",
                 GitErrorDetails.AlreadyExists);
         }
 
@@ -798,7 +799,7 @@ public class GitImpl : IGitOperations
                 Error = $"git tag -d failed: {CleanGitStderr(deleted.Stderr)}. Nothing was changed."
             };
 
-        var note = $"Deleted locally only. To undo: GitRemote(operation: tag, action: create, tagName: '{name}', ref: '{previous}').";
+        var note = $"Deleted locally only. To undo: {ToolCallHint.Call("GitRemote", ("operation", "tag"), ("action", "create"), ("tagName", name), ("ref", previous))}.";
         if (wasAnnotated)
             note += " The tag was annotated; its message and tagger are not restored by that call (pass message to make the recreated tag annotated).";
         return new GitTagResult
@@ -885,7 +886,7 @@ public class GitImpl : IGitOperations
             note += entriesAfter == expected
                 ? (pop ? $" stash@{{{index}}} was applied and dropped; {entriesAfter} stash {(entriesAfter == 1 ? "entry" : "entries")} left."
                        : $" stash@{{{index}}} was applied and kept; {entriesAfter} stash {(entriesAfter == 1 ? "entry" : "entries")} total.")
-                : $" Expected {expected} stash entries afterwards but found {entriesAfter}; check GitRemote(operation: stash, action: list).";
+                : $" Expected {expected} stash entries afterwards but found {entriesAfter}; check {ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "list"))}.";
             return new GitStashResult
             {
                 Action = action,
@@ -920,7 +921,7 @@ public class GitImpl : IGitOperations
                 IsError = true,
                 Error = $"git stash {action} failed: {stderr}. The tree could not be verified clean afterwards" +
                         (trackedNow is { Count: > 0 } ? $" (tracked changes in: {FormatPathSample(trackedNow)})" : "") +
-                        $"; stash entries: {entriesNow} (was {entriesBefore}). The stash entry was kept. Run Git(operation: status) before editing."
+                        $"; stash entries: {entriesNow} (was {entriesBefore}). The stash entry was kept. Run {ToolCallHint.Call("Git", ("operation", "status"))} before editing."
             };
         return await AppendInProgressAsync(failure, gitRoot, cancellationToken);
     }
@@ -963,8 +964,8 @@ public class GitImpl : IGitOperations
 
         return StashFailure(action, GitErrorCodes.StashConflict,
             $"Applying stash@{{{stashIndex}}} conflicts, and the rollback could not be verified ({string.Join("; ", failed)}). " +
-            "The stash entry was kept. Run Git(operation: status) before editing.",
-            "Call Git(operation: status) to see the tree; GitRemote(operation: stash, action: list) shows the stash entries.");
+            $"The stash entry was kept. Run {ToolCallHint.Call("Git", ("operation", "status"))} before editing.",
+            $"Call {ToolCallHint.Call("Git", ("operation", "status"))} to see the tree; {ToolCallHint.Call("GitRemote", ("operation", "stash"), ("action", "list"))} shows the stash entries.");
     }
 
     private async Task<GitStashResult> StashPushAsync(
@@ -1048,7 +1049,7 @@ public class GitImpl : IGitOperations
         };
     }
 
-    private const string StashDiskNote = "Tracked files changed on disk; call LoadSolution(forceReload: true) before editing C#.";
+    private static string StashDiskNote => $"Tracked files changed on disk; call {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))} before editing C#.";
 
     private async Task<GitStashResult> StashListAsync(string gitRoot, int count, CancellationToken cancellationToken)
     {
@@ -1365,7 +1366,7 @@ public class GitImpl : IGitOperations
         if (!createBranch && !exists)
             return WorktreeFailure("add", GitErrorCodes.TargetNotFound,
                 $"Branch '{branch}' does not exist. Nothing was changed.",
-                "Pass createBranch=true to create it (optionally with startPoint), or list the existing branches with GitRemote(operation: branch).");
+                $"Pass createBranch=true to create it (optionally with startPoint), or list the existing branches with {ToolCallHint.Call("GitRemote", ("operation", "branch"))}.");
         if (createBranch && exists)
             return WorktreeFailure("add", GitErrorCodes.AlreadyExists,
                 $"Branch '{branch}' already exists, and this tool does not silently reuse it for a new worktree. " +
@@ -1413,7 +1414,7 @@ public class GitImpl : IGitOperations
                 Action = "add",
                 IsError = true,
                 Error = $"git worktree add failed: {CleanGitStderr(added.Stderr)}. " +
-                        (registered ? "The worktree may have been partly created; check GitRemote(operation: worktree, action: list)." : "Nothing was changed.")
+                        (registered ? $"The worktree may have been partly created; check {ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "list"))}." : "Nothing was changed.")
             };
         }
 
@@ -1423,7 +1424,7 @@ public class GitImpl : IGitOperations
             IsError = false,
             Added = path,
             Branch = branch,
-            Note = $"Use LoadSolution on a .slnx inside {path} to work in it; mutating Git operations always target the loaded solution's repo.",
+            Note = $"Use {ToolCallHint.Call("LoadSolution", ("solutionPath", "<path to .slnx>"))} on a .slnx inside {path} to work in it; mutating Git operations always target the loaded solution's repo.",
         };
     }
 
@@ -1464,11 +1465,11 @@ public class GitImpl : IGitOperations
         if (entry.IsMain)
             return WorktreeFailure("remove", GitErrorCodes.Refused,
                 $"Worktree '{path}' is the main worktree; this tool never removes it. Nothing was removed.",
-                "Only linked worktrees can be removed; GitRemote(operation: worktree, action: list) shows which entry has IsMain false.");
+                $"Only linked worktrees can be removed; {ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "list"))} shows which entry has IsMain false.");
         if (entry.IsCurrent)
             return WorktreeFailure("remove", GitErrorCodes.Refused,
                 $"Worktree '{path}' is the worktree this Git tool is operating in (the loaded solution's repository); removing it would delete the directory the server is working in. Nothing was removed.",
-                "Call LoadSolution on a solution in a different worktree, then remove this one from there.");
+                $"Call {ToolCallHint.Call("LoadSolution", ("solutionPath", "<path to .slnx>"))} on a solution in a different worktree, then remove this one from there.");
         if (entry.IsLocked)
             return WorktreeFailure("remove", GitErrorCodes.Refused,
                 $"Worktree '{path}' is locked. Nothing was removed.",
@@ -1497,7 +1498,7 @@ public class GitImpl : IGitOperations
         if (changed.Count > 0 && !discardUncommittedChanges)
             return WorktreeFailure("remove", GitErrorCodes.WorkingTreeDirty,
                 $"Worktree '{path}' has uncommitted changes ({changed.Count} path(s): {FormatWorktreePaths(changed)}). Nothing was removed. " +
-                $"To delete it anyway and permanently lose those changes, call GitRemote(operation: worktree, action: remove, worktreePath: '{path}', discardUncommittedChanges: true). " +
+                $"To delete it anyway and permanently lose those changes, call {ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "remove"), ("worktreePath", path), ("discardUncommittedChanges", "true"))}. " +
                 "To keep them, commit or stash inside that worktree first.",
                 "discardUncommittedChanges: true deletes modified and untracked files in that worktree; they cannot be recovered. Committed work and the branch are not affected.");
 
@@ -1517,13 +1518,13 @@ public class GitImpl : IGitOperations
                 Action = "remove",
                 IsError = true,
                 Error = $"git worktree remove failed: {CleanGitStderr(removed.Stderr)}. " +
-                        (stillThere ? "The worktree was not removed." : "Check its state with GitRemote(operation: worktree, action: list).")
+                        (stillThere ? "The worktree was not removed." : $"Check its state with {ToolCallHint.Call("GitRemote", ("operation", "worktree"), ("action", "list"))}.")
             };
         }
 
         var kept = entry.Branch is null
             ? "The worktree was on a detached HEAD, so there is no branch to delete."
-            : $"The branch '{entry.Branch}' was kept; delete it with GitRemote(operation: branch, deleteBranch: true) once merged.";
+            : $"The branch '{entry.Branch}' was kept; delete it with {ToolCallHint.Call("GitRemote", ("operation", "branch"), ("deleteBranch", "true"))} once merged.";
         return new GitWorktreeResult
         {
             Action = "remove",
@@ -1542,9 +1543,9 @@ public class GitImpl : IGitOperations
     /// compilation, so this deliberately does NOT require a loaded solution: it falls back to
     /// walking up from the server's own base/working directory when nothing is loaded. When a
     /// solution IS loaded, its directory is tried FIRST -> a loaded solution reflects the
-    /// worktree/repo the caller most recently pointed the server at via LoadSolutionTool, whereas the
+    /// worktree/repo the caller most recently pointed the server at via LoadSolutionTool, whereas the // hint-ok: prose names the LoadSolutionTool class, not a callable tool form
     /// server's base directory and process working directory are fixed at process launch and
-    /// never change afterward. Trying those first meant that once LoadSolutionTool pointed the
+    /// never change afterward. Trying those first meant that once LoadSolutionTool pointed the // hint-ok: prose names the LoadSolutionTool class, not a callable tool form
     /// workspace at a git worktree, status/diff/commit still silently resolved against whatever
     /// repo the server binary happened to be launched from/inside (almost always the primary
     /// checkout) instead of the worktree -> a plausible, well-formed, wrong answer with no error.
@@ -1569,7 +1570,7 @@ public class GitImpl : IGitOperations
         }
 
         // 1. The loaded solution's directory, if there is one. This is the caller's most recent
-        //    explicit signal of which repo/worktree they mean, via LoadSolutionTool.
+        //    explicit signal of which repo/worktree they mean, via LoadSolutionTool. // hint-ok: prose names the LoadSolutionTool class, not a callable tool form
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         if (solutionRoot is not null)
         {
@@ -1605,7 +1606,7 @@ public class GitImpl : IGitOperations
             return null;
         }
 
-        error = "No git repository found. Searched upward from the server's base directory and working directory without finding a .git entry, and no solution is loaded to search from either. If the repository is elsewhere, call LoadSolution with a solution inside it first.";
+        error = $"No git repository found. Searched upward from the server's base directory and working directory without finding a .git entry, and no solution is loaded to search from either. If the repository is elsewhere, call {ToolCallHint.Call("LoadSolution", ("solutionPath", "<path to .slnx>"))} with a solution inside it first.";
         return null;
     }
        /// <summary>
@@ -1720,7 +1721,7 @@ public class GitImpl : IGitOperations
                 _logger.LogError(
                     "git {Args} did not exit within {TimeoutSeconds}s and was killed. Not a normal git " +
                     "failure - see docs/TODO.md's 'Git(operation: status) hung indefinitely' entry.",
-                    string.Join(' ', args), GitProcessTimeout.TotalSeconds);
+                    string.Join(' ', args), GitProcessTimeout.TotalSeconds); // hint-ok: logger message text, not a callable tool response
             }
             throw new TimeoutException($"Git operation timed out after {GitProcessTimeout.TotalSeconds:0}s and was cancelled.");
         }
@@ -1798,7 +1799,7 @@ public class GitImpl : IGitOperations
     }
 
     private static FileDiffLoad NoUnstagedChangesLoad(string path) => new(path, null, GitErrorCodes.NoChanges,
-    $"No unstaged changes in '{path}'. Already staged? Git(operation: diff, ref: staged, paths: ...). Nothing was changed.",
+    $"No unstaged changes in '{path}'. Already staged? {ToolCallHint.Call("Git", ("operation", "diff"), ("ref", "staged"), ("paths", "..."))}. Nothing was changed.",
     GitErrorDetails.NoChanges);
 
     /// <summary>Outcome of loading one file's unstaged diff: Diff is set on success; otherwise ErrorKind, Error and
@@ -1817,7 +1818,7 @@ public class GitImpl : IGitOperations
         if (raw.ExitCode != 0)
         {
             return new FileDiffLoad(path, null, GitErrorCodes.Fallback,
-                $"git diff failed: {CleanGitStderr(raw.Stderr)}. Nothing was changed.", "Call Git(operation: status) to check the repository state, then retry.");
+                $"git diff failed: {CleanGitStderr(raw.Stderr)}. Nothing was changed.", $"Call {ToolCallHint.Call("Git", ("operation", "status"))} to check the repository state, then retry.");
         }
         if (raw.Stdout.Length == 0)
             return NoUnstagedChangesLoad(path);
@@ -1875,7 +1876,7 @@ public class GitImpl : IGitOperations
                 return new FileDiffLoad(path, null, GitErrorCodes.HunkUnsupported,
                     isDirectory
                         ? $"'{path}' is a directory; hunks works on one tracked file at a time. Nothing was changed."
-                        : $"'{path}' is untracked: untracked files have no hunks to choose from; stage the whole file with Git(operation: stage, paths: ...). Nothing was changed.",
+                        : $"'{path}' is untracked: untracked files have no hunks to choose from; stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "..."))}. Nothing was changed.",
                     GitErrorDetails.HunkUnsupported);
             case PathClassification.Missing:
                 return new FileDiffLoad(path, null, GitErrorCodes.PathNotFound,
@@ -1912,7 +1913,7 @@ public class GitImpl : IGitOperations
             TotalHunks = diff.Hunks.Count,
             IsTruncated = diff.Hunks.Count > limit,
             Hunks = diff.Hunks.Take(limit).Select(ToHunkEntry).ToList(),
-            Note = $"Pass hunkIds with this hunkFingerprint to Git(operation: stage, paths: '{path}'), or lineRange. " +
+            Note = $"Pass hunkIds with this hunkFingerprint to {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", path))}, or lineRange. " +
                    "Hunks are zero-context: adjacent edits are separate hunks."
         };
     }
@@ -1944,14 +1945,14 @@ public class GitImpl : IGitOperations
             if (string.IsNullOrWhiteSpace(hunkFingerprint))
             {
                 return (GitErrorCodes.HunkSelection,
-                    "hunkIds needs the hunkFingerprint returned by Git(operation: hunks). Nothing was staged.", GitErrorDetails.HunkSelection);
+                    $"hunkIds needs the hunkFingerprint returned by {ToolCallHint.Call("Git", ("operation", "hunks"))}. Nothing was staged.", GitErrorDetails.HunkSelection);
             }
             var given = hunkFingerprint.Trim();
             if (!string.Equals(given, diff.Fingerprint, StringComparison.OrdinalIgnoreCase))
             {
                 return (GitErrorCodes.HunkStale,
                     $"'{path}' changed since the hunks were listed (fingerprint {given} vs {diff.Fingerprint}). " +
-                    $"Re-run Git(operation: hunks, paths: '{path}') and pick again. Nothing was staged.", GitErrorDetails.HunkStale);
+                    $"Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", path))} and pick again. Nothing was staged.", GitErrorDetails.HunkStale);
             }
             if (!GitHunkParser.TryParseHunkIds(hunkIds, diff.Hunks.Count, out selected, out var idError))
                 return (GitErrorCodes.HunkSelection, $"{idError} {DescribeHunkSpans(diff)} Nothing was staged.", GitErrorDetails.HunkSelection);
@@ -2009,7 +2010,7 @@ public class GitImpl : IGitOperations
         if (remaining != expected)
         {
             warnings.Add($"Staged {selected.Count} hunk(s) but the remaining count is {remaining?.ToString() ?? "unknown"} " +
-                         $"(expected {expected}); verify with Git(operation: diff, ref: staged).");
+                         $"(expected {expected}); verify with {ToolCallHint.Call("Git", ("operation", "diff"), ("ref", "staged"))}.");
         }
 
         var status = await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
@@ -2075,7 +2076,7 @@ public class GitImpl : IGitOperations
             {
                 return StageHunksFailure(load.Path, GitErrorCodes.Fallback,
                     $"git apply rejected the selected hunks: {CleanGitStderr(apply.Stderr)}. Nothing was staged.",
-                    "Re-run Git(operation: hunks, paths: '<path>') and pick again, or stage the whole file with Git(operation: stage, paths: '<path>').");
+                    $"Re-run {ToolCallHint.Call("Git", ("operation", "hunks"), ("paths", "<path>"))} and pick again, or stage the whole file with {ToolCallHint.Call("Git", ("operation", "stage"), ("paths", "<path>"))}.");
             }
 
             return await BuildStageHunksResultAsync(gitRoot, paths, load.Path, load.Diff, selected, cancellationToken);
@@ -2263,8 +2264,8 @@ public class GitImpl : IGitOperations
         return op switch
         {
             null => "",
-            "rebase" or "am" => $" Repository is mid-{op}. This tool cannot continue it; call Git(operation: abort) to back out (the branch returns to its pre-{op} state), or finish it in the shell.",
-            _ => $" Repository is mid-{op}. Resolve the conflicts and commit, or call Git(operation: abort) to back out.",
+            "rebase" or "am" => $" Repository is mid-{op}. This tool cannot continue it; call {ToolCallHint.Call("Git", ("operation", "abort"))} to back out (the branch returns to its pre-{op} state), or finish it in the shell.",
+            _ => $" Repository is mid-{op}. Resolve the conflicts and commit, or call {ToolCallHint.Call("Git", ("operation", "abort"))} to back out.",
         };
     }
 
@@ -3371,7 +3372,7 @@ public class GitImpl : IGitOperations
                 {
                     var countRaw = await RunGitAsync(gitRoot, new[] { "-c", "core.quotePath=false", "diff", "--cached", "--name-only" }, cancellationToken);
                     var stagedCount = countRaw.ExitCode == 0 ? countRaw.Stdout.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries).Length : 0;
-                    failureNote = $" Staging already ran; the index now holds {stagedCount} staged paths. Call Git(operation: unstage) to undo.";
+                    failureNote = $" Staging already ran; the index now holds {stagedCount} staged paths. Call {ToolCallHint.Call("Git", ("operation", "unstage"))} to undo.";
                 }
 
                 var failed = new GitCommitResult { IsError = true, Error = $"git commit failed: {errorText}{failureNote}" };
@@ -3656,7 +3657,7 @@ public class GitImpl : IGitOperations
                 IsError = true,
                 ErrorKind = GitErrorCodes.RefRequired,
                 ErrorDetail = GitErrorDetails.RefRequiredCheckout,
-                Error = "branchName is required for GitRemote operation=checkout. Pass the branch to switch to, and createBranch=true if it doesn't exist yet."
+                Error = $"branchName is required for {ToolCallHint.Call("GitRemote", ("operation", "checkout"))}. Pass the branch to switch to, and createBranch=true if it doesn't exist yet."
             };
         }
 

@@ -2,6 +2,7 @@ using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 
@@ -475,7 +476,7 @@ public class CodeTransformTools
                         }
 
                         var r = await _advancedStructuralEngine.ConvertExpressionBodyAsync(resolvedFilePath, methodName, direction, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                        if (RefactoringToolHelpers.GuardEngineResult(r, "convert_expression_body", $"method '{methodName}' in '{resolvedFilePath}'", "Possible causes: member not found (verify name and file are correct), member already has the target body style, or contextSnippet did not uniquely match. Use GetFileOutline to confirm the member exists.", NoOpHandling.Error($"convert_expression_body ({direction}) found nothing to convert for '{methodName}' in '{resolvedFilePath}'.")) is { } outcomeGuard)
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "convert_expression_body", $"method '{methodName}' in '{resolvedFilePath}'", $"Possible causes: member not found (verify name and file are correct), member already has the target body style, or contextSnippet did not uniquely match. Use {ToolCallHint.Call("GetFileOutline", ("filePath", resolvedFilePath))} to confirm the member exists.", NoOpHandling.Error($"convert_expression_body ({direction}) found nothing to convert for '{methodName}' in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
                             return outcomeGuard;
                         }
@@ -506,7 +507,7 @@ public class CodeTransformTools
                 case "convert_method_to_indexer":
                     {
                         var r = await _advancedStructuralEngine.ConvertMethodToIndexerAsync(resolvedFilePath, methodName, cancellationToken);
-                        if (RefactoringToolHelpers.GuardEngineResult(r, "convert_method_to_indexer", $"method '{methodName}' in '{resolvedFilePath}'", "The method must have exactly one parameter and return a value. Use GetFileOutline to verify the method exists.", NoOpHandling.Error($"convert_method_to_indexer: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "convert_method_to_indexer", $"method '{methodName}' in '{resolvedFilePath}'", $"The method must have exactly one parameter and return a value. Use {ToolCallHint.Call("GetFileOutline", ("filePath", resolvedFilePath))} to verify the method exists.", NoOpHandling.Error($"convert_method_to_indexer: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
                             return outcomeGuard;
                         }
@@ -539,7 +540,7 @@ public class CodeTransformTools
                         try
                         {
                             var r = await _logicOptimizationEngine.ConvertStaticToExtensionAsync(resolvedFilePath, methodName, cancellationToken);
-                            if (RefactoringToolHelpers.GuardEngineResult(r, "convert_static_to_extension", $"method '{methodName}' in '{resolvedFilePath}'", "The method must be static and have at least one parameter to become the 'this' parameter. Use GetFileOutline to verify.", NoOpHandling.Error($"convert_static_to_extension: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
+                            if (RefactoringToolHelpers.GuardEngineResult(r, "convert_static_to_extension", $"method '{methodName}' in '{resolvedFilePath}'", $"The method must be static and have at least one parameter to become the 'this' parameter. Use {ToolCallHint.Call("GetFileOutline", ("filePath", resolvedFilePath))} to verify.", NoOpHandling.Error($"convert_static_to_extension: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
                             {
                                 return outcomeGuard;
                             }
@@ -579,7 +580,7 @@ public class CodeTransformTools
                 case "convert_to_async_enumerable":
                     {
                         var r = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync(resolvedFilePath, methodName, cancellationToken: cancellationToken);
-                        if (RefactoringToolHelpers.GuardEngineResult(r, "convert_to_async_enumerable", $"method '{methodName}' in '{resolvedFilePath}'", "The method must return Task<List<T>> or Task<IEnumerable<T>>. Use GetFileOutline to verify the method signature.", NoOpHandling.Error($"convert_to_async_enumerable: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "convert_to_async_enumerable", $"method '{methodName}' in '{resolvedFilePath}'", $"The method must return Task<List<T>> or Task<IEnumerable<T>>. Use {ToolCallHint.Call("GetFileOutline", ("filePath", resolvedFilePath))} to verify the method signature.", NoOpHandling.Error($"convert_to_async_enumerable: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
                             return outcomeGuard;
                         }
@@ -594,7 +595,7 @@ public class CodeTransformTools
                 case "extension_to_static":
                     {
                         var r = await _logicOptimizationEngine.ExtensionToStaticAsync(resolvedFilePath, methodName, cancellationToken);
-                        if (RefactoringToolHelpers.GuardEngineResult(r, "extension_to_static", $"method '{methodName}' in '{resolvedFilePath}'", "The method must be in a static class and have a 'this' parameter. Use GetFileOutline to verify.", NoOpHandling.Error($"extension_to_static: method '{methodName}' not found or not an extension method in '{resolvedFilePath}'.")) is { } outcomeGuard)
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "extension_to_static", $"method '{methodName}' in '{resolvedFilePath}'", $"The method must be in a static class and have a 'this' parameter. Use {ToolCallHint.Call("GetFileOutline", ("filePath", resolvedFilePath))} to verify.", NoOpHandling.Error($"extension_to_static: method '{methodName}' not found or not an extension method in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
                             return outcomeGuard;
                         }
@@ -611,7 +612,7 @@ public class CodeTransformTools
                         try
                         {
                             var r = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync(resolvedFilePath, methodName, cancellationToken);
-                            if (RefactoringToolHelpers.GuardEngineResult(r, "generate_async_overload", $"method '{methodName}' in '{resolvedFilePath}'", "The method must be synchronous and non-void. Use GetFileOutline to verify the method exists and its signature.", NoOpHandling.Error($"generate_async_overload: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
+                            if (RefactoringToolHelpers.GuardEngineResult(r, "generate_async_overload", $"method '{methodName}' in '{resolvedFilePath}'", $"The method must be synchronous and non-void. Use {ToolCallHint.Call("GetFileOutline", ("filePath", resolvedFilePath))} to verify the method exists and its signature.", NoOpHandling.Error($"generate_async_overload: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
                             {
                                 return outcomeGuard;
                             }
@@ -636,7 +637,7 @@ public class CodeTransformTools
                 case "make_method_static":
                     {
                         var r = await _memberRefactoringEngine.MakeMethodStaticAsync(resolvedFilePath, methodName, cancellationToken);
-                        if (RefactoringToolHelpers.GuardEngineResult(r, "make_method_static", $"method '{methodName}' in '{resolvedFilePath}'", "The method must not access instance members. Use GetFileOutline to verify the method exists.", NoOpHandling.Error($"make_method_static: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "make_method_static", $"method '{methodName}' in '{resolvedFilePath}'", $"The method must not access instance members. Use {ToolCallHint.Call("GetFileOutline", ("filePath", resolvedFilePath))} to verify the method exists.", NoOpHandling.Error($"make_method_static: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
                             return outcomeGuard;
                         }
@@ -651,7 +652,7 @@ public class CodeTransformTools
                 case "make_method_thread_safe":
                     {
                         var r = await _threadSafetyEngine.MakeMethodThreadSafeAsync(resolvedFilePath, methodName, lockFieldName, cancellationToken);
-                        if (RefactoringToolHelpers.GuardEngineResult(r, "make_method_thread_safe", $"method '{methodName}' in '{resolvedFilePath}'", "Use GetFileOutline to verify the method name (case-sensitive).", NoOpHandling.Error($"make_method_thread_safe: method '{methodName}' not found in '{resolvedFilePath}'.")) is { } outcomeGuard)
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "make_method_thread_safe", $"method '{methodName}' in '{resolvedFilePath}'", $"Use {ToolCallHint.Call("GetFileOutline", ("filePath", resolvedFilePath))} to verify the method name (case-sensitive).", NoOpHandling.Error($"make_method_thread_safe: method '{methodName}' not found in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
                             return outcomeGuard;
                         }
@@ -681,7 +682,7 @@ public class CodeTransformTools
                 case "optimize_to_value_task":
                     {
                         var r = await _asyncOptimizationEngine.OptimizeToValueTaskAsync(resolvedFilePath, methodName, cancellationToken);
-                        if (RefactoringToolHelpers.GuardEngineResult(r, "optimize_to_value_task", $"method '{methodName}' in '{resolvedFilePath}'", "The method must return Task or Task<T> and be async. Use GetFileOutline to verify.", NoOpHandling.Error($"optimize_to_value_task: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "optimize_to_value_task", $"method '{methodName}' in '{resolvedFilePath}'", $"The method must return Task or Task<T> and be async. Use {ToolCallHint.Call("GetFileOutline", ("filePath", resolvedFilePath))} to verify.", NoOpHandling.Error($"optimize_to_value_task: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
                             return outcomeGuard;
                         }
@@ -759,8 +760,8 @@ public class CodeTransformTools
 
     // Appended to a method-scope transform's failure when the engine itself failed (as opposed to finding nothing to
     // do). The guidance belongs to the tool layer; engines only report the outcome and a short reason.
-    private const string MethodLookupHint = "Use GetFileOutline to verify the method exists in the file and that the solution is loaded.";
-    private const string ClassLookupHint = "Use GetFileOutline to verify the class exists in the file and that the solution is loaded.";
+    private static string MethodLookupHint => $"Use {ToolCallHint.Call("GetFileOutline", ("filePath", "<file path>"))} to verify the method exists in the file and that the solution is loaded.";
+    private static string ClassLookupHint => $"Use {ToolCallHint.Call("GetFileOutline", ("filePath", "<file path>"))} to verify the class exists in the file and that the solution is loaded.";
 
     /// <summary>
     /// Builds the "filePath is required for {kind}" error for a codetransform switch case, distinguishing
