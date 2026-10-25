@@ -1007,7 +1007,7 @@ public class AsyncOptimizationEngine
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
-        var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException("Could not get syntax root.");
+        var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new ToolInvalidArgumentException("Could not get syntax root.");
         var awaitExprs = root.DescendantNodes().OfType<AwaitExpressionSyntax>()
             .Where(a => !(a.Expression is InvocationExpressionSyntax inv &&
                           inv.Expression is MemberAccessExpressionSyntax ma &&
@@ -1046,9 +1046,9 @@ public class AsyncOptimizationEngine
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new InvalidOperationException("File not found.");
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException("File not found.", "file", filePath);
 
-        var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException("Could not get syntax root.");
+        var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new ToolInvalidArgumentException("Could not get syntax root.");
         var configureAwaitInvocations = root.DescendantNodes().OfType<InvocationExpressionSyntax>()
             .Where(inv => inv.Expression is MemberAccessExpressionSyntax ma &&
                           ma.Name.Identifier.Text == "ConfigureAwait")
@@ -1805,16 +1805,16 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
                                .Select(solution.GetDocument)
-                               .FirstOrDefault() ?? throw new InvalidOperationException(
-                $"File '{filePath}' not found in the loaded solution. Ensure LoadSolution has been called.");
+                               .FirstOrDefault() ?? throw new ToolNotFoundException(
+                $"File '{filePath}' not found in the loaded solution. Ensure LoadSolution has been called.", "file", filePath);
 
-        var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException($"Could not get syntax root for '{filePath}'.");
+        var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new ToolInvalidArgumentException($"Could not get syntax root for '{filePath}'.");
 
         // ── Find the target method ───────────────────────────────────────────
         var methodNode = root.DescendantNodes()
                              .OfType<MethodDeclarationSyntax>()
-                             .FirstOrDefault(m => m.Identifier.Text == methodName) ?? throw new InvalidOperationException(
-                $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.");
+                             .FirstOrDefault(m => m.Identifier.Text == methodName) ?? throw new ToolNotFoundException(
+                $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.", "method", methodName);
         var methodLine = methodNode.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
 
         // Find any pre-existing MigrationCandidate for the audit trail.
@@ -2375,8 +2375,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
             if (!projects.Any())
             {
-                throw new InvalidOperationException(
-                    $"Project '{projectName}' not found in the loaded solution.");
+                throw new ToolNotFoundException(
+                    $"Project '{projectName}' not found in the loaded solution.", "project", projectName);
             }
         }
 
