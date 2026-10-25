@@ -75,7 +75,7 @@ public sealed record SolutionLoadState(DateTime ServerStartedUtc, DateTime? Last
 public static class SolutionNotLoadedMessage
 {
     /// <summary>The message when the process has loaded a solution before, or when no state is available.</summary>
-    public const string Plain = "No solution is loaded. Call LoadSolution with a .sln, .slnx, or .csproj path.";
+    public static string Plain => $"No solution is loaded. Call {LoadSolutionCall()} with a .sln, .slnx, or .csproj path.";
 
     /// <summary>Builds the message for the given state; adds the fresh-start explanation when nothing has loaded yet.</summary>
     public static string Build(SolutionLoadState? state, DateTime? nowUtc = null)
@@ -99,7 +99,7 @@ public static class SolutionNotLoadedMessage
         var started = state.ServerStartedUtc.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
         var message = $"No solution is loaded. This server process was freshly (re)started at {started} UTC ({age} ago) "
             + "and no solution has been loaded since, so a solution loaded earlier in this chat was lost with the previous process. "
-            + "Files on disk are unaffected. Call LoadSolution with a .sln, .slnx, or .csproj path.";
+            + $"Files on disk are unaffected. Call {LoadSolutionCall()} with a .sln, .slnx, or .csproj path.";
 
         if (state.LastLoadFailure is not null)
         {
@@ -120,12 +120,14 @@ public static class SolutionNotLoadedMessage
     public static string LoadCancelledAfterTimeout(TimeSpan limit)
     {
         var seconds = (int)Math.Ceiling(limit.TotalSeconds);
-        return $"The solution load did not finish within {seconds} s and was cancelled; no solution was loaded. Retry LoadSolution with a larger timeoutSeconds (for example {seconds * 2}), or check the server log for MSBuild errors.";
+        return $"The solution load did not finish within {seconds} s and was cancelled; no solution was loaded. Retry {ToolCallHint.Call("LoadSolution", ("timeoutSeconds", (seconds * 2).ToString(CultureInfo.InvariantCulture)))} (timeoutSeconds is doubled here), or check the server log for MSBuild errors.";
     }
 
     /// <summary>The message for a tool whose <c>filePath</c> could not be resolved because no solution is loaded.</summary>
     public static string ForFilePath(string toolName, SolutionLoadState? state)
         => $"{toolName}: 'filePath' could not be resolved. {Build(state)} Then retry with the same filePath.";
+
+    private static string LoadSolutionCall() => ToolCallHint.Call("LoadSolution");
 
     private static string FormatAge(TimeSpan age)
     {

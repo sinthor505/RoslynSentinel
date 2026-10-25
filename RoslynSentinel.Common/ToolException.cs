@@ -36,8 +36,8 @@ public sealed class SolutionNotLoadedException : ToolException
 {
     public override string ErrorCode => ToolErrorCode.SolutionNotLoaded;
 
-    public SolutionNotLoadedException(string message = SolutionNotLoadedMessage.Plain)
-        : base(message)
+    public SolutionNotLoadedException(string? message = null)
+        : base(message ?? SolutionNotLoadedMessage.Plain)
     {
     }
 }
