@@ -77,6 +77,7 @@ public class StructuralRefinementEngine
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
                 Changes = new Dictionary<FilePathWrapper, string> { [newPath] = sourceText.ToString() },
+                UpdatedText = sourceText.ToString(),
                 Message = $"Renaming '{currentName}' to '{expectedName}' to match primary type '{primaryType.Identifier.Text}'."
             };
         }

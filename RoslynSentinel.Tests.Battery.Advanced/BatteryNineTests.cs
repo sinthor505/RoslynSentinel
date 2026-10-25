@@ -271,6 +271,7 @@ public class StructuralRefinementEngineTests
         var changeKey = result.Changes?.Keys.FirstOrDefault(k => k.Contains("MyService.cs"));
         Assert.That(changeKey?.Absolute, Is.Not.Null.And.Not.Empty, "Target filename should be the type name");
         Assert.That(result.Message, Does.Contain("MyService.cs"), "Message should describe the rename target");
+        Assert.That(result.UpdatedText, Is.EqualTo(result.Changes?.Values.Single()), "UpdatedText should equal the single Changes value");
     }
 
     [Test]
