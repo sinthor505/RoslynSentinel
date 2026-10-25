@@ -56,4 +56,34 @@ public class NameTargetLookupTests
 
         Assert.Throws<ToolAmbiguousMatchException>(() => NameTargetLookup.RequireSingle(methods, "Method", "M"));
     }
+
+    [Test]
+    public void RequireSingle_SameSourceSamePath_CollapsesCopiesToOne()
+    {
+        var first = CSharpSyntaxTree.ParseText("class C { void M() { } }", path: "C.cs");
+        var second = CSharpSyntaxTree.ParseText("class C { void M() { } }", path: "C.cs");
+        var methods = new System.Collections.Generic.List<MethodDeclarationSyntax>
+        {
+            first.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Single(),
+            second.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Single(),
+        };
+
+        var result = NameTargetLookup.RequireSingle(methods, "Method", "M");
+
+        Assert.That(result, Is.SameAs(methods[0]));
+    }
+
+    [Test]
+    public void RequireSingle_SameSourceDifferentPaths_StillThrows()
+    {
+        var first = CSharpSyntaxTree.ParseText("class C { void M() { } }", path: "A.cs");
+        var second = CSharpSyntaxTree.ParseText("class C { void M() { } }", path: "B.cs");
+        var methods = new System.Collections.Generic.List<MethodDeclarationSyntax>
+        {
+            first.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Single(),
+            second.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Single(),
+        };
+
+        Assert.Throws<ToolAmbiguousMatchException>(() => NameTargetLookup.RequireSingle(methods, "Method", "M"));
+    }
 }

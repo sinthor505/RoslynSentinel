@@ -7,6 +7,17 @@ public static class NameTargetLookup
     /// </summary>
     public static T? RequireSingle<T>(System.Collections.Generic.IReadOnlyList<T> matches, string kind, string name) where T : Microsoft.CodeAnalysis.SyntaxNode
     {
+        // A multi-target build loads one file into several projects, so one declaration can appear once per project; keep one copy of each.
+        var distinct = new System.Collections.Generic.List<T>();
+        foreach (var candidate in matches)
+        {
+            var isCopy = distinct.Any(kept =>
+                !string.IsNullOrEmpty(kept.SyntaxTree.FilePath)
+                && string.Equals(kept.SyntaxTree.FilePath, candidate.SyntaxTree.FilePath, System.StringComparison.OrdinalIgnoreCase)
+                && kept.Span.Equals(candidate.Span));
+            if (!isCopy) { distinct.Add(candidate); }
+        }
+        matches = distinct;
         if (matches.Count == 0) { return null; }
         if (matches.Count == 1) { return matches[0]; }
         // An interface declaration plus its one implementation is one logical member, not ambiguity.

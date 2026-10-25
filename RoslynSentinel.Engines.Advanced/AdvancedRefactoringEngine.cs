@@ -239,7 +239,8 @@ public class AdvancedRefactoringEngine
             throw new ToolInvalidArgumentException($"Could not parse '{filePath}' into a syntax tree, so the interface cannot be synced.");
         }
 
-        var classNode = classRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        var classMatches = classRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList();
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className);
         if (classNode == null)
         {
             throw new ToolNotFoundException($"Class '{className}' was not found in '{System.IO.Path.GetFileName(filePath)}'. Searched: class declarations in this file. Next: Search(mode: class, query: \"{className}\")", "class", className);
@@ -252,16 +253,18 @@ public class AdvancedRefactoringEngine
         Document? interfaceDocument = null;
         InterfaceDeclarationSyntax? interfaceNode = null;
         SyntaxNode? interfaceRoot = null;
-        // Search same file first
-        interfaceNode = classRoot.DescendantNodes().OfType<InterfaceDeclarationSyntax>().FirstOrDefault(i => i.Identifier.Text == interfaceName);
-        if (interfaceNode != null)
+        // Search same file first; only when it has none, collect across all documents. Each stage is resolved with RequireSingle.
+        var sameFileInterfaces = classRoot.DescendantNodes().OfType<InterfaceDeclarationSyntax>().Where(i => i.Identifier.Text == interfaceName).ToList();
+        if (sameFileInterfaces.Count > 0)
         {
+            interfaceNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(sameFileInterfaces, "Interface", interfaceName);
             interfaceDocument = classDocument;
             interfaceRoot = classRoot;
         }
         else
         {
             // Search all documents
+            var otherInterfaces = new List<InterfaceDeclarationSyntax>();
             foreach (var doc in solution.Projects.SelectMany(p => p.Documents))
             {
                 if (doc == classDocument)
@@ -275,14 +278,14 @@ public class AdvancedRefactoringEngine
                     continue;
                 }
 
-                var iface = r.DescendantNodes().OfType<InterfaceDeclarationSyntax>().FirstOrDefault(i => i.Identifier.Text == interfaceName);
-                if (iface != null)
-                {
-                    interfaceDocument = doc;
-                    interfaceRoot = r;
-                    interfaceNode = iface;
-                    break;
-                }
+                otherInterfaces.AddRange(r.DescendantNodes().OfType<InterfaceDeclarationSyntax>().Where(i => i.Identifier.Text == interfaceName));
+            }
+
+            interfaceNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(otherInterfaces, "Interface", interfaceName);
+            if (interfaceNode != null)
+            {
+                interfaceRoot = interfaceNode.SyntaxTree.GetRoot();
+                interfaceDocument = solution.GetDocument(interfaceNode.SyntaxTree);
             }
         }
 

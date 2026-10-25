@@ -41,8 +41,9 @@ public class SemanticRefactoringEngine
         }
 
         // Find the variable declaration
-        var variable = root.DescendantNodes().OfType<VariableDeclaratorSyntax>()
-            .FirstOrDefault(v => v.Identifier.Text == variableName);
+        var variableMatches = root.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+            .Where(v => v.Identifier.Text == variableName).ToList();
+        var variable = RoslynSentinel.Common.NameTargetLookup.RequireSingle(variableMatches, "Variable", variableName);
 
         if (variable?.Initializer?.Value == null)
         {

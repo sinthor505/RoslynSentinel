@@ -2775,6 +2775,7 @@ public class MemberRefactoringEngine
         if (!targetIsBaseType)
         {
             var targetSearchDocs = targetFilePath.HasValue ? solution.GetDocumentIdsWithFilePath(targetFilePath.Value).Select(solution.GetDocument).Where(d => d != null) : solution.Projects.SelectMany(p => p.Documents);
+            var targetClassMatches = new List<ClassDeclarationSyntax>();
             foreach (var doc in targetSearchDocs)
             {
                 if (doc?.FilePath == null)
@@ -2783,15 +2784,15 @@ public class MemberRefactoringEngine
                 }
 
                 var docRoot = await doc.GetSyntaxRootAsync(cancellationToken);
-                var candidateNode = docRoot?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == targetClassName);
-                if (candidateNode == null)
-                {
-                    continue;
-                }
+                targetClassMatches.AddRange(docRoot?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == targetClassName) ?? Enumerable.Empty<ClassDeclarationSyntax>());
+            }
 
-                var candidateModel = await doc.GetSemanticModelAsync(cancellationToken);
-                targetClassSymbol = candidateModel?.GetDeclaredSymbol(candidateNode, cancellationToken) as INamedTypeSymbol;
-                break;
+            var matchedTargetNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(targetClassMatches, "Class", targetClassName);
+            if (matchedTargetNode != null)
+            {
+                var matchedTargetDoc = solution.GetDocument(matchedTargetNode.SyntaxTree);
+                var candidateModel = matchedTargetDoc == null ? null : await matchedTargetDoc.GetSemanticModelAsync(cancellationToken);
+                targetClassSymbol = candidateModel?.GetDeclaredSymbol(matchedTargetNode, cancellationToken) as INamedTypeSymbol;
             }
         }
 
@@ -2850,8 +2851,7 @@ public class MemberRefactoringEngine
         }).ToList();
         // Look for an existing (non-base) class named targetClassName, optionally narrowed by targetFilePath.
         var candidateDocs = targetFilePath.HasValue ? solution.GetDocumentIdsWithFilePath(targetFilePath.Value).Select(solution.GetDocument).Where(d => d != null) : solution.Projects.SelectMany(p => p.Documents);
-        Document? targetDoc = null;
-        ClassDeclarationSyntax? targetClassNode = null;
+        var candidateClassMatches = new List<ClassDeclarationSyntax>();
         foreach (var doc in candidateDocs)
         {
             if (doc?.FilePath == null)
@@ -2860,14 +2860,11 @@ public class MemberRefactoringEngine
             }
 
             var docRoot = await doc.GetSyntaxRootAsync(cancellationToken);
-            var candidate = docRoot?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == targetClassName);
-            if (candidate != null)
-            {
-                targetDoc = doc;
-                targetClassNode = candidate;
-                break;
-            }
+            candidateClassMatches.AddRange(docRoot?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == targetClassName) ?? Enumerable.Empty<ClassDeclarationSyntax>());
         }
+
+        ClassDeclarationSyntax? targetClassNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(candidateClassMatches, "Class", targetClassName);
+        Document? targetDoc = targetClassNode == null ? null : solution.GetDocument(targetClassNode.SyntaxTree);
 
         if (nonStaticMembers.Count > 0 && targetClassSymbol is { IsStatic: true } && targetDoc?.FilePath != null && targetClassNode != null)
         {
@@ -4405,23 +4402,19 @@ public class MemberRefactoringEngine
         INamedTypeSymbol? destinationType = null;
         Document? destinationDoc = null;
         ClassDeclarationSyntax? destinationClassNode = null;
+        var destinationClassMatches = new List<ClassDeclarationSyntax>();
         foreach (var doc in solution.Projects.SelectMany(p => p.Documents))
         {
             var docRoot = await doc.GetSyntaxRootAsync(cancellationToken);
-            var candidate = docRoot?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == targetClassName);
-            if (candidate == null)
-            {
-                continue;
-            }
+            destinationClassMatches.AddRange(docRoot?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == targetClassName) ?? Enumerable.Empty<ClassDeclarationSyntax>());
+        }
 
-            var candidateModel = await doc.GetSemanticModelAsync(cancellationToken);
-            destinationType = candidateModel?.GetDeclaredSymbol(candidate, cancellationToken) as INamedTypeSymbol;
-            if (destinationType != null)
-            {
-                destinationDoc = doc;
-                destinationClassNode = candidate;
-                break;
-            }
+        destinationClassNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(destinationClassMatches, "Class", targetClassName);
+        if (destinationClassNode != null)
+        {
+            destinationDoc = solution.GetDocument(destinationClassNode.SyntaxTree);
+            var candidateModel = destinationDoc == null ? null : await destinationDoc.GetSemanticModelAsync(cancellationToken);
+            destinationType = candidateModel?.GetDeclaredSymbol(destinationClassNode, cancellationToken) as INamedTypeSymbol;
         }
 
         // previewChanges must reflect the COMPLETE post-move state (member removed from the source
