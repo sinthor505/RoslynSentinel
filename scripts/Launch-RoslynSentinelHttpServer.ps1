@@ -16,8 +16,8 @@
     copy (bin-vscode\Advanced.Http) is managed by roslynsentinel-vscode-control.ps1, not here.
 
     This script is for humans (manual testing, curl). Agent sessions use
-    McpServerControl(operation: LaunchTestInstance) instead. The server binds loopback only (the
-    --bind=loopback default) and has no authentication.
+    McpServerControl(operation: LaunchTestInstance) instead. The server binds loopback only by
+    default (--bind=loopback; pass -Bind any to listen on all interfaces) and has no authentication.
 
 .PARAMETER Mode
     Server --mode value. Default: all.
@@ -30,6 +30,10 @@
 
 .PARAMETER Port
     HTTP port. Default: 5100 (the server default). The script refuses to start if the port is taken.
+
+.PARAMETER Bind
+    loopback | any. Maps to --bind=<value>. Default: loopback (127.0.0.1 only). `any` listens on all
+    interfaces (0.0.0.0 and [::]) so remote agents can connect; the server has no authentication.
 
 .PARAMETER Solution
     Optional solution path, maps to --solution=<value>.
@@ -54,6 +58,8 @@ param(
     [string]$Tools,
     [string]$ExcludeTools,
     [int]$Port = 5100,
+    [ValidateSet('loopback', 'any')]
+    [string]$Bind = 'loopback',
     [string]$Solution,
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Debug',
@@ -77,12 +83,17 @@ $outDir   = Join-Path $binRoot ("http-{0}-{1:yyyyMMddHHmmss}" -f $Port, (Get-Dat
 $project  = Join-Path $repoRoot 'RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj'
 $exe      = Join-Path $outDir 'RoslynSentinel.Server.Advanced.exe'
 
-$serverArgs = @('--transport=http', "--port=$Port", "--mode=$Mode")
+$serverArgs = @('--transport=http', "--port=$Port", "--bind=$Bind", "--mode=$Mode")
 if ($Tools)        { $serverArgs += "--include-tools=$Tools" }
 if ($ExcludeTools) { $serverArgs += "--exclude-tools=$ExcludeTools" }
 if ($Solution)     { $serverArgs += "--solution=$Solution" }
 
-Write-Host "Note: the server binds loopback only (127.0.0.1) with no authentication." -ForegroundColor Yellow
+if ($Bind -eq 'any') {
+    Write-Host "Note: the server listens on ALL interfaces (--bind=any) with no authentication." -ForegroundColor Yellow
+}
+else {
+    Write-Host "Note: the server binds loopback only (127.0.0.1) with no authentication. Pass -Bind any for remote access." -ForegroundColor Yellow
+}
 
 if ($DryRun) {
     Write-Host "DryRun: nothing built or started."

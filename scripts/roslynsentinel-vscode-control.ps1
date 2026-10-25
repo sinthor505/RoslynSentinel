@@ -55,6 +55,11 @@
     Port for the dedicated VS Code Advanced binary's HTTP-transport instance. Default: 5150.
     Must match the "url" in .vscode/mcp.json - if you change one, change the other.
 
+.PARAMETER Bind
+    loopback | any. Maps to the HTTP copy's --bind. Default: loopback (127.0.0.1 only). Use `any` so
+    remote agents can reach the shared HTTP copy; the server has no authentication. Applies to
+    start/restart/build.
+
 .PARAMETER Force
     For build: passed through to build.ps1's solution build to stop locking processes without prompting.
 
@@ -78,6 +83,9 @@ param(
     [string]$Action = 'status',
 
     [int]$VSCodePort = 5150,
+
+    [ValidateSet('loopback', 'any')]
+    [string]$Bind = 'loopback',
 
     [switch]$Force
 )
@@ -328,7 +336,7 @@ function Start-HttpCopy {
     $launchStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $launchStdout = Join-Path $launchLogDir "launch-stdout-$launchStamp.log"
     $launchStderr = Join-Path $launchLogDir "launch-stderr-$launchStamp.log"
-    Start-Process -FilePath $httpExe -ArgumentList "--transport=http", "--port=$VSCodePort", "--mode=all", "--replace-snippet-max-old-lines=200", "--replace-snippet-max-new-lines=200", "--replace-snippet-max-old-chars=3000", "--replace-snippet-max-new-chars=3000" -WindowStyle Hidden -RedirectStandardOutput $launchStdout -RedirectStandardError $launchStderr
+    Start-Process -FilePath $httpExe -ArgumentList "--transport=http", "--port=$VSCodePort", "--bind=$Bind", "--mode=all", "--replace-snippet-max-old-lines=200", "--replace-snippet-max-new-lines=200", "--replace-snippet-max-old-chars=3000", "--replace-snippet-max-new-chars=3000" -WindowStyle Hidden -RedirectStandardOutput $launchStdout -RedirectStandardError $launchStderr
 
     $started = $null
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
