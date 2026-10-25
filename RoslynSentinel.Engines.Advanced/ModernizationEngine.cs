@@ -32,6 +32,17 @@ public class SyntaxModernizationEngine
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
+            if (root?.DescendantNodes().OfType<RecordDeclarationSyntax>().Any(r => r.Identifier.Text == className) == true)
+            {
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.AlreadyInTargetState,
+                    FilePath = filePath,
+                    Message = $"Class '{className}' is already a record.",
+                    UpdatedText = root!.ToFullString()
+                };
+            }
+
             throw new ToolNotFoundException($"Class '{className}' not found.", "class", className);
         }
 
@@ -109,6 +120,17 @@ public class SyntaxModernizationEngine
         var recordNode = root?.DescendantNodes().OfType<RecordDeclarationSyntax>().FirstOrDefault(r => r.Identifier.Text == recordName);
         if (recordNode == null)
         {
+            if (root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Any(c => c.Identifier.Text == recordName) == true)
+            {
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.AlreadyInTargetState,
+                    FilePath = filePath,
+                    Message = $"Record '{recordName}' is already a class.",
+                    UpdatedText = root!.ToFullString()
+                };
+            }
+
             throw new ToolNotFoundException($"Record '{recordName}' not found.", "record", recordName);
         }
 
@@ -619,13 +641,14 @@ public class SyntaxModernizationEngine
         var classNode = (root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className)) ?? throw new ToolNotFoundException("Class not found.");
         // Identify logging calls
         var invocations = classNode.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(inv => inv.Expression is MemberAccessExpressionSyntax ma && ma.Name.Identifier.Text.StartsWith("Log") && (ma.Name.Identifier.Text == "LogInformation" || ma.Name.Identifier.Text == "LogError" || ma.Name.Identifier.Text == "LogWarning")).ToList();
+        var noLogCallsMessage = $"No LogInformation, LogWarning or LogError calls found in class '{className}'. Searched: invocations in the class body only. Next: Search(mode: text, query: 'LogInformation|LogWarning|LogError') to locate the logging calls, or GetFileOutline to confirm the class name.";
         if (invocations.Count == 0)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.NoCandidatesFound,
                 FilePath = filePath,
-                Message = $"No LogInformation, LogWarning or LogError calls found in class '{className}'. Searched: invocations in the class body only. Next: Search(mode: text, query: 'LogInformation|LogWarning|LogError') to locate the logging calls, or GetFileOutline to confirm the class name.",
+                Message = noLogCallsMessage,
                 UpdatedText = root!.ToFullString()
             };
         }
@@ -677,6 +700,17 @@ public class SyntaxModernizationEngine
                 replaceMap[inv] = newInv.WithTriviaFrom(inv).WithAdditionalAnnotations(Formatter.Annotation);
                 eventId++;
             }
+        }
+
+        if (generatedMethods.Count == 0)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.NoCandidatesFound,
+                FilePath = filePath,
+                Message = noLogCallsMessage,
+                UpdatedText = root!.ToFullString()
+            };
         }
 
         // Replace invocations first on the original classNode (before any AddModifiers mutation

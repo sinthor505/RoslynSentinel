@@ -50,6 +50,36 @@ public class ModernizationTests
     }
 
     [Test]
+    public async Task ClassToRecord_AlreadyRecord_ReturnsAlreadyInTargetState()
+    {
+        var source = "public record Person(string Name);";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Person.cs"));
+        var result = await _modernEngine.ClassToRecordAsync("Person.cs", "Person");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
+        Assert.That(result.UpdatedText, Is.EqualTo(source));
+    }
+
+    [Test]
+    public async Task RecordToClass_AlreadyClass_ReturnsAlreadyInTargetState()
+    {
+        var source = "public class Person { public string Name { get; set; } }";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Person.cs"));
+        var result = await _modernEngine.RecordToClassAsync("Person.cs", "Person");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
+        Assert.That(result.UpdatedText, Is.EqualTo(source));
+    }
+
+    [Test]
+    public async Task ConvertToSourceGeneratedLogging_NoConvertibleLogCall_ReturnsNoCandidatesFound()
+    {
+        var source = "public class Svc { private object _logger; public void Run(string msg) { _logger.LogInformation(msg); } }";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Svc.cs"));
+        var result = await _modernEngine.ConvertToSourceGeneratedLoggingAsync("Svc.cs", "Svc");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.NoCandidatesFound));
+        Assert.That(result.UpdatedText, Is.EqualTo(source), "no partial keyword or generated methods may be added");
+    }
+
+    [Test]
     public async Task ClassToRecord_Message_DescribesClassBecomingRecord()
     {
         var source = "public class Person { public string Name { get; set; } }";
