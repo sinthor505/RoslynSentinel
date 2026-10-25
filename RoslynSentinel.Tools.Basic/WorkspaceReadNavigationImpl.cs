@@ -364,7 +364,7 @@ public class WorkspaceReadNavigationImpl
                 return new SentinelCallToolResult<MethodSourceResult, ResultError>
                 {
                     IsError = false,
-                    LargeResult = new LargeResultInfo(resultType: "MethodSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: methodBytes, totalRecords: 1, message: $"Result is {methodBytes} bytes (threshold: {thresholdBytes}). " + $"Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results."),
+                    LargeResult = new LargeResultInfo(resultType: "MethodSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: methodBytes, totalRecords: 1, message: $"Result is {methodBytes} bytes (threshold: {thresholdBytes}). " + $"Use {RoslynSentinel.Common.LargeResultHints.FetchCall(stored.resultId!)} to page through results."),
                     SuccessData = new MethodSourceResult { Envelope = envelope, Signature = signature, Attributes = attributes },
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
                 };
@@ -1640,7 +1640,7 @@ public class WorkspaceReadNavigationImpl
                     HasMoreData = hasMoreRaw,
                     NextOffset = hasMoreRaw ? nextOffset : null,
                     WarningDetails = hasMoreRaw
-                        ? $"Raw result truncated to a {length}-char window. Call GetLargeResult(resultId, offset: {nextOffset}, charLimit: <N>) to continue reading."
+                        ? $"Raw result truncated to a {length}-char window. Call {(!string.IsNullOrEmpty(resultId) ? RoslynSentinel.Common.LargeResultHints.FetchCall(resultId, offset: nextOffset) : RoslynSentinel.Common.LargeResultHints.FetchCallForFile(filePath!, offset: nextOffset))} to continue reading."
                         : null
                 };
             }

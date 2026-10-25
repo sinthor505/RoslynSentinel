@@ -1089,7 +1089,7 @@ public class ScanTools
                         IsError = false,
                         TotalRecords = apiResult.Count,
                         HasMoreData = false,
-                        LargeResult = new LargeResultInfo(resultType: typeof(ApiSurfaceEntry).Name, writtenToFile: true, filePath: summaryResults.filePath.Absolute.ToString(), resultId: summaryResults.resultId!, sizeBytes: summaryResults.jsonBytes.Length, totalRecords: apiResult.Count, message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " + $"Use GetLargeResult(resultId: \"{summaryResults.resultId}\") to page through results. " + "Pass limit and offset to control page size (default limit: 50).")
+                        LargeResult = new LargeResultInfo(resultType: typeof(ApiSurfaceEntry).Name, writtenToFile: true, filePath: summaryResults.filePath.Absolute.ToString(), resultId: summaryResults.resultId!, sizeBytes: summaryResults.jsonBytes.Length, totalRecords: apiResult.Count, message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " + $"Use {RoslynSentinel.Common.LargeResultHints.FetchCall(summaryResults.resultId!)} to page through results. " + "Pass limit and offset to control page size (default limit: 50).")
                     };
                 }
                 else
@@ -1123,7 +1123,7 @@ public class ScanTools
                         IsError = false,
                         TotalRecords = apiResult.Count,
                         HasMoreData = false,
-                        LargeResult = new LargeResultInfo(resultType: typeof(ApiSurfaceEntry).Name, writtenToFile: true, filePath: summaryResults.filePath.Absolute.ToString(), resultId: summaryResults.resultId!, sizeBytes: summaryResults.jsonBytes.Length, totalRecords: apiResult.Count, message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " + $"Use GetLargeResult(resultId: \"{summaryResults.resultId}\") to page through results. " + "Pass limit and offset to control page size (default limit: 50).")
+                        LargeResult = new LargeResultInfo(resultType: typeof(ApiSurfaceEntry).Name, writtenToFile: true, filePath: summaryResults.filePath.Absolute.ToString(), resultId: summaryResults.resultId!, sizeBytes: summaryResults.jsonBytes.Length, totalRecords: apiResult.Count, message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " + $"Use {RoslynSentinel.Common.LargeResultHints.FetchCall(summaryResults.resultId!)} to page through results. " + "Pass limit and offset to control page size (default limit: 50).")
                     };
                 }
                 else

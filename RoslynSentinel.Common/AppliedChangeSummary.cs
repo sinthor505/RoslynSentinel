@@ -106,7 +106,7 @@ public record AppliedChangeSummary(
 
         if (!string.IsNullOrEmpty(ChangedContentResultId))
         {
-            return $" The updated content is not echoed; fetch it with GetLargeResult(resultId: \"{ChangedContentResultId}\"), or read the file with ReadFile, GetMethodSource or Member(operation: view).";
+            return $" The updated content is not echoed; fetch it with {LargeResultHints.FetchCall(ChangedContentResultId)}, or read the file with ReadFile, GetMethodSource or Member(operation: view).";
         }
 
         return Validated ? " The updated content is not echoed; read it with ReadFile, GetMethodSource or Member(operation: view)." : "";

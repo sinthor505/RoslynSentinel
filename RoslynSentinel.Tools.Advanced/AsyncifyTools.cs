@@ -292,7 +292,7 @@ public class AsyncifyTools
                         sizeBytes: allBytes.Length,
                         totalRecords: totalCount,
                         message: $"Result written to file ({allBytes.Length} bytes, {totalCount} records). " +
-                                       $"Use GetLargeResult(resultId: \"{resultId}\") to page through results. " +
+                                       $"Use {RoslynSentinel.Common.LargeResultHints.FetchCall(resultId!)} to page through results. " +
                                        "Pass limit and offset to control page size (default limit: 50).")
                 };
             }
