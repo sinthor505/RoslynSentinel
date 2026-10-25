@@ -109,9 +109,13 @@ public class DocumentationEngine
             throw new ToolNotFoundException("Class '" + className + "' not found in '" + filePath + "'.", "class", className);
         }
 
+        var originalText = (await document.GetTextAsync(cancellationToken)).ToString();
+        var addedUsing = false;
+        var addedAttribute = false;
         if (!root.Usings.Any(u => u.Name?.ToString() == "System.ComponentModel"))
         {
             root = AnnotatedInsertionHelper.AddUsingDirective(root, "System.ComponentModel");
+            addedUsing = true;
             classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         }
 
@@ -124,8 +128,25 @@ public class DocumentationEngine
                 SyntaxFactory.Attribute(SyntaxFactory.ParseName("Description"))
                     .WithArgumentList(SyntaxFactory.AttributeArgumentList(SyntaxFactory.SingletonSeparatedList(
                         SyntaxFactory.AttributeArgument(SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal($"Gets or sets the {newProp.Identifier.Text}."))))))));
+            if (newProp.AttributeLists.SelectMany(al => al.Attributes).Any(a => a.Name.ToString() is "Description" or "DescriptionAttribute" or "System.ComponentModel.Description" or "System.ComponentModel.DescriptionAttribute"))
+            {
+                return newProp;
+            }
+
+            addedAttribute = true;
             return AnnotatedInsertionHelper.AppendAttributeLists(newProp, [attr]);
         });
+
+        if (!addedUsing && !addedAttribute)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.AlreadyInTargetState,
+                FilePath = filePath,
+                UpdatedText = originalText,
+                Message = "Every property already has a [Description] - nothing to add."
+            };
+        }
 
         var newRoot = root.ReplaceNode(classNode, newClassNode);
         return new DocumentEditResult

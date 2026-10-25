@@ -103,10 +103,14 @@ public class ApiGenerationEngine
             throw new ToolInvalidArgumentException($"Syntax root of '{filePath}' is unavailable or not a compilation unit. Next: confirm the file is a plain .cs source file with GetFileOutline.");
         }
 
+        var originalText = (await document.GetTextAsync(cancellationToken)).ToString();
+        var addedUsing = false;
+        var addedAttributes = false;
         // First add the using directive if not present
         if (!root.Usings.Any(u => u.Name?.ToString() == "System.ComponentModel.DataAnnotations"))
         {
             root = AnnotatedInsertionHelper.AddUsingDirective(root, "System.ComponentModel.DataAnnotations");
+            addedUsing = true;
         }
 
         // Now get the classNode from the updated root
@@ -146,8 +150,20 @@ public class ApiGenerationEngine
                 attributes.Add(SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Attribute(SyntaxFactory.ParseName("Range")).WithArgumentList(SyntaxFactory.AttributeArgumentList(SyntaxFactory.SeparatedList(new[] { SyntaxFactory.AttributeArgument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(0))), SyntaxFactory.AttributeArgument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(int.MaxValue))) }))))));
             }
 
+            addedAttributes |= attributes.Count > 0;
             return AnnotatedInsertionHelper.AppendAttributeLists(newProp, attributes);
         });
+        if (!addedUsing && !addedAttributes)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.AlreadyInTargetState,
+                FilePath = filePath,
+                UpdatedText = originalText,
+                Message = "Every property already has its validation attributes - nothing to add."
+            };
+        }
+
         var newRoot = root.ReplaceNode(classNode, newClassNode);
         return new DocumentEditResult
         {

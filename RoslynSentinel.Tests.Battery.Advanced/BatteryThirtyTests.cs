@@ -105,6 +105,7 @@ public class Measurement {
 }";
         SetSource(code, "Measurement.cs");
         var result = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Measurement.cs", "Measurement");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
         var count = CountOccurrences(result.UpdatedText!, "[Range(");
         Assert.That(count, Is.EqualTo(1), "Should not duplicate [Range]");
     }
@@ -126,6 +127,24 @@ public class Customer {
         var req1 = CountOccurrences(first.UpdatedText!, "[Required]");
         var req2 = CountOccurrences(second.UpdatedText!, "[Required]");
         Assert.That(req2, Is.EqualTo(req1), "Second run must not add duplicate attributes");
+        Assert.That(second.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
+    }
+
+    [Test]
+    [Category("DocumentationEngine")] // sentinel:auto-category
+    public async Task DocumentPocoFields_RunTwice_SecondRunIsAlreadyInTargetState_NoDuplicateDescription()
+    {
+        const string code = @"
+public class Ticket {
+    public string Title { get; set; }
+}";
+        SetSource(code, "Ticket.cs");
+        var first = await new DocumentationEngine(_ws).DocumentPocoFieldsAsync("Ticket.cs", "Ticket");
+        SetSource(first.UpdatedText!, "Ticket.cs");
+        var second = await new DocumentationEngine(_ws).DocumentPocoFieldsAsync("Ticket.cs", "Ticket");
+        Assert.That(second.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
+        Assert.That(second.UpdatedText, Is.EqualTo(first.UpdatedText));
+        Assert.That(CountOccurrences(second.UpdatedText!, "[Description("), Is.EqualTo(1), "Second run must not add a duplicate [Description]");
     }
 
     // =========================================================================
