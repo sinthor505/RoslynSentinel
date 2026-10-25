@@ -312,6 +312,32 @@ public class Counter
         Assert.That(result.ErrorData.Message, Does.Not.Contain("   at "), "no stack trace in the tool result");
     }
 
+    // An already-sorted class is a no-op: the tool must report it as a non-error AlreadyInTargetState message.
+    [Test]
+    public async Task SortMembers_AlreadySorted_ToolResultIsNonErrorAlreadyInStateMessage()
+    {
+        var path = SetSource("S.cs", "public class S\r\n{\r\n    public void A() { }\r\n    public void B() { }\r\n}");
+
+        var result = await _tools.ApplyClassCodeTransform("outcome test", path, "S", "sort_members");
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.SuccessData, Is.TypeOf<string>());
+        Assert.That(result.StatusMessage, Is.Not.Empty);
+    }
+
+    // A class whose properties already carry validation attributes is a no-op for add_validation_to_poco.
+    [Test]
+    public async Task AddValidationToPoco_AlreadyValidated_ToolResultIsNonErrorAlreadyInStateMessage()
+    {
+        var path = SetSource("P.cs", "using System.ComponentModel.DataAnnotations;\r\npublic class P\r\n{\r\n    [Required]\r\n    [StringLength(256)]\r\n    public string Name { get; set; } = \"\";\r\n}");
+
+        var result = await _tools.ApplyClassCodeTransform("outcome test", path, "P", "add_validation_to_poco");
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.SuccessData, Is.TypeOf<string>());
+        Assert.That(result.StatusMessage, Is.Not.Empty);
+    }
+
     // A class with no ILogger.Log calls makes the engine return NoCandidatesFound with the unchanged, non-empty file
     // text. The tool must report that as its own success message, not as a transformed source.
     [Test]

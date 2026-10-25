@@ -760,6 +760,7 @@ public class CodeTransformTools
     // Appended to a method-scope transform's failure when the engine itself failed (as opposed to finding nothing to
     // do). The guidance belongs to the tool layer; engines only report the outcome and a short reason.
     private const string MethodLookupHint = "Use GetFileOutline to verify the method exists in the file and that the solution is loaded.";
+    private const string ClassLookupHint = "Use GetFileOutline to verify the class exists in the file and that the solution is loaded.";
 
     /// <summary>
     /// Builds the "filePath is required for {kind}" error for a codetransform switch case, distinguishing
@@ -789,6 +790,10 @@ public class CodeTransformTools
                         try
                         {
                             var r = await _apiGenerationEngine.AddValidationToPocoAsync(resolvedFilePath, className, cancellationToken);
+                            if (RefactoringToolHelpers.GuardEngineResult(r, "add_validation_to_poco", $"class '{className}' in '{resolvedFilePath}'", ClassLookupHint, NoOpHandling.Success($"All properties of '{className}' in '{resolvedFilePath}' already have validation attributes; nothing to add.")) is { } outcomeGuard)
+                            {
+                                return outcomeGuard;
+                            }
                             return new SentinelCallToolResult<object>
                             {
                                 IsError = false,
@@ -909,6 +914,10 @@ public class CodeTransformTools
                 case "document_poco_fields":
                     {
                         var r = await _documentationEngine.DocumentPocoFieldsAsync(resolvedFilePath, className, cancellationToken);
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "document_poco_fields", $"class '{className}' in '{resolvedFilePath}'", ClassLookupHint, NoOpHandling.Success($"All properties of '{className}' in '{resolvedFilePath}' already have a [Description]; nothing to add.")) is { } outcomeGuard)
+                        {
+                            return outcomeGuard;
+                        }
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
@@ -919,6 +928,10 @@ public class CodeTransformTools
                 case "make_class_immutable":
                     {
                         var r = await _modernizationEngine.MakeClassImmutableAsync(resolvedFilePath, className, cancellationToken);
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "make_class_immutable", $"class '{className}' in '{resolvedFilePath}'", ClassLookupHint, NoOpHandling.Success($"Class '{className}' in '{resolvedFilePath}' is already immutable; nothing to change.")) is { } outcomeGuard)
+                        {
+                            return outcomeGuard;
+                        }
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
@@ -949,6 +962,10 @@ public class CodeTransformTools
                 case "sort_members":
                     {
                         var r = await _memberRefactoringEngine.SortMembersAsync(resolvedFilePath, className, cancellationToken: cancellationToken);
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "sort_members", $"class '{className}' in '{resolvedFilePath}'", ClassLookupHint, NoOpHandling.Success($"Members of '{className}' in '{resolvedFilePath}' are already sorted; nothing to change.")) is { } outcomeGuard)
+                        {
+                            return outcomeGuard;
+                        }
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
