@@ -338,6 +338,22 @@ public class Counter
         Assert.That(result.StatusMessage, Is.Not.Empty);
     }
 
+    // A synchronous Task.Wait() is rewritten to await. The tool must return the rewritten text in a SourceTransformResult,
+    // not the bare outcome name.
+    [Test]
+    public async Task OptimizeTaskWait_TaskWait_ToolResultIsRewrittenSourceTransformResult()
+    {
+        const string source = "using System.Threading.Tasks;\npublic class W\n{\n    public void M(Task t)\n    {\n        t.Wait();\n    }\n}";
+        var path = SetSource("W.cs", source);
+
+        var result = await _tools.ApplyFileCodeTransform("outcome test", path, "optimize_task_wait");
+
+        Assert.That(result.IsError, Is.False);
+        var transform = result.SuccessData as SourceTransformResult;
+        Assert.That(transform, Is.Not.Null);
+        Assert.That(transform!.UpdatedSource, Is.Not.EqualTo(source));
+    }
+
     // A class with no ILogger.Log calls makes the engine return NoCandidatesFound with the unchanged, non-empty file
     // text. The tool must report that as its own success message, not as a transformed source.
     [Test]

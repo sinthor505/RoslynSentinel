@@ -230,7 +230,8 @@ public class CodeTransformTools
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
-                            SuccessData = result3.Outcome
+                            // TODO S4: UpdatedText becomes non-nullable
+                            SuccessData = new SourceTransformResult(result3.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
