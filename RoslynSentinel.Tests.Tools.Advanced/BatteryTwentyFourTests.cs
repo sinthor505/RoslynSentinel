@@ -510,10 +510,11 @@ public class BatteryTwentyFourTests
     [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ConvertToPattern_ValidFile_ReturnsString()
     {
-        SetSource(@"namespace TestProj; public class C { public bool Check(object o) { var s = o as string; return s != null && s.Length > 0; } }", "Order.cs");
+        const string source = @"namespace TestProj; public class C { public bool Check(object o) { var s = o as string; return s != null && s.Length > 0; } }";
+        SetSource(source, "Order.cs");
         var result = await _modernizationEngine.ConvertToPatternAsync("Order.cs");
-        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.NoCandidatesFound));
+        Assert.That(result.UpdatedText, Is.EqualTo(source));
     }
 
     [Test]

@@ -202,9 +202,10 @@ public class SyntaxModernizationEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.AlreadyInTargetState,
+                Outcome = EditOutcome.NoCandidatesFound,
                 FilePath = filePath,
-                Message = "No null check or comparison was converted to a pattern."
+                Message = "No null check or comparison was converted to a pattern.",
+                UpdatedText = root.ToFullString()
             };
         }
         return new DocumentEditResult

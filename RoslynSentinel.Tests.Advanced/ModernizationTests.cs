@@ -307,8 +307,8 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "No conversion, so no updated text");
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.NoCandidatesFound));
+        Assert.That(result.UpdatedText, Is.EqualTo(source), "No conversion, so the text is returned unchanged");
     }
 
     /// <summary>
@@ -359,8 +359,8 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "x != null is not rewritten to a pattern, so no updated text");
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.NoCandidatesFound));
+        Assert.That(result.UpdatedText, Is.EqualTo(source), "x != null is not rewritten to a pattern, so the text is returned unchanged");
     }
 
     /// <summary>
