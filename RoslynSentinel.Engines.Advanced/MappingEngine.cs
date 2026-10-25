@@ -118,7 +118,7 @@ public class MappingEngine
     /// (never an edit of an existing one): a <c>static class {From}To{To}Mapper</c> holding the method
     /// <see cref="GenerateMappingAsync"/> produces, in the source type's namespace (file-scoped when the source file uses
     /// one) and in the same folder as the source type's file. <see cref="EngineResultBase.FilePath"/> is the new file's path
-    /// and <see cref="EngineResultBase.UpdatedText"/> its whole text. The class is public only when both types are public
+    /// and <see cref="DocumentEditResult.UpdatedText"/> its whole text. The class is public only when both types are public
     /// (otherwise the public mapping method would expose a less accessible type). Refuses with
     /// <see cref="ToolErrorCode.InvalidArgument"/> when a document or file already exists at that path.
     /// </summary>
