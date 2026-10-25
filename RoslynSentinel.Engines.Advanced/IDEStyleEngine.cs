@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
+using RoslynSentinel.Common;
 namespace RoslynSentinel.Engines.Advanced;
 
 public class IDEStyleEngine
@@ -62,7 +63,7 @@ public class IDEStyleEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            throw new ToolInvalidArgumentException($"Syntax root of '{filePath}' is unavailable. Next: confirm the file parses with GetFileOutline.");
+            throw new ToolInvalidArgumentException($"Syntax root of '{filePath}' is unavailable. Next: confirm the file parses with {ToolCallHint.Call("GetFileOutline")}.");
         }
 
         var newRoot = RewriteBlocksWithObjectInitializers(root);
@@ -181,7 +182,7 @@ public class IDEStyleEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            throw new ToolInvalidArgumentException($"Syntax root of '{filePath}' is unavailable. Next: confirm the file parses with GetFileOutline.");
+            throw new ToolInvalidArgumentException($"Syntax root of '{filePath}' is unavailable. Next: confirm the file parses with {ToolCallHint.Call("GetFileOutline")}.");
         }
 
         var rewriter = new NullPropagationRewriter();

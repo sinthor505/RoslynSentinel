@@ -2830,18 +2830,18 @@ public class AntiPatternEngine
         var methodNode = candidateMethods.FirstOrDefault();
         if (methodNode == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations named '{actualMethodName}' with class filter '{className}'. Next: Search(mode: method, query: '{actualMethodName}') to locate it.", "method", actualMethodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations named '{actualMethodName}' with class filter '{className}'. Next: {ToolCallHint.Call("Search", ("mode", "method"), ("query", actualMethodName))} to locate it.", "method", actualMethodName);
         }
 
         if (semanticModel == null)
         {
-            throw new ToolInvalidArgumentException($"Semantic model is unavailable for '{filePath}'. Next: Build to check the file compiles, then retry.");
+            throw new ToolInvalidArgumentException($"Semantic model is unavailable for '{filePath}'. Next: {ToolCallHint.Call("Build")} to check the file compiles, then retry.");
         }
 
         var methodSymbol = semanticModel.GetDeclaredSymbol(methodNode, cancellationToken);
         if (methodSymbol == null)
         {
-            throw new ToolNotFoundException($"Symbol for method '{methodName}' could not be resolved in '{filePath}'. Searched: declared symbols for the method declaration. Next: Build to check the file for compile errors.", "method", actualMethodName);
+            throw new ToolNotFoundException($"Symbol for method '{methodName}' could not be resolved in '{filePath}'. Searched: declared symbols for the method declaration. Next: {ToolCallHint.Call("Build")} to check the file for compile errors.", "method", actualMethodName);
         }
 
         var sb = new StringBuilder();
@@ -2899,12 +2899,12 @@ public class AntiPatternEngine
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
         if (root == null)
         {
-            throw new ToolInvalidArgumentException($"Syntax root is unavailable for '{filePath}'. Next: confirm the file parses with GetFileOutline.");
+            throw new ToolInvalidArgumentException($"Syntax root is unavailable for '{filePath}'. Next: confirm the file parses with {ToolCallHint.Call("GetFileOutline")}.");
         }
 
         if (classNode == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. Searched: class declarations in the file. Next: Search(mode: class, query: '{className}') to confirm the name.", "class", className);
+            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. Searched: class declarations in the file. Next: {ToolCallHint.Call("Search", ("mode", "class"), ("query", className))} to confirm the name.", "class", className);
         }
 
         // Gather fields with their types (private instance fields only -> skip const, static, backing fields)

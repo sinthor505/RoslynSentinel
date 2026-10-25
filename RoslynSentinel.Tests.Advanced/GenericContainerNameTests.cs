@@ -518,7 +518,10 @@ public class SyntaxTargetResolverTests
         Assert.That(message, Does.Contain("Type 'B' declares no member named 'Run'"));
         Assert.That(message, Does.Contain("'Run' is declared in: 1. A."));
         Assert.That(message, Does.Contain("Retry ReadFile(filePath: 'Sample.cs', memberName: 'Run', containerName: 'A')."));
-        Assert.That(message, Does.Contain("To read exact lines: ReadFile(filePath: 'Sample.cs', startLine: 3, endLine: 5)."));
+        Assert.That(message, Does.Contain("To read exact lines: ReadFile("));
+        Assert.That(message, Does.Contain("filePath: \"Sample.cs\""));
+        Assert.That(message, Does.Contain("startLine: 3"));
+        Assert.That(message, Does.Contain("endLine: 5"));
         Assert.That(candidates, Has.Count.EqualTo(1));
     }
 
@@ -536,7 +539,8 @@ public class SyntaxTargetResolverTests
             "ReadFile(filePath: '{file}', memberName: '{member}', containerName: '{container}')", methodsOnly: false);
 
         Assert.That(message, Does.Contain("No type in this file declares 'Nope'"));
-        Assert.That(message, Does.Contain("GetFileOutline(filePath: 'Sample.cs')"));
+        Assert.That(message, Does.Contain("GetFileOutline("));
+        Assert.That(message, Does.Contain("filePath: \"Sample.cs\""));
         Assert.That(candidates, Is.Empty);
         Assert.That(message, Does.Not.Contain("To read exact lines"));
     }
@@ -601,7 +605,10 @@ public class SyntaxTargetResolverTests
 
         Assert.That(message, Does.Contain("lines 3-5"));
         Assert.That(message, Does.Contain("lines 6-8"));
-        Assert.That(message, Does.Contain("To read exact lines: ReadFile(filePath: 'Sample.cs', startLine: 3, endLine: 5)."));
+        Assert.That(message, Does.Contain("To read exact lines: ReadFile("));
+        Assert.That(message, Does.Contain("filePath: \"Sample.cs\""));
+        Assert.That(message, Does.Contain("startLine: 3"));
+        Assert.That(message, Does.Contain("endLine: 5"));
     }
 
     [Test]

@@ -645,7 +645,7 @@ public class SyntaxModernizationEngine
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className) ?? throw new ToolNotFoundException("Class not found.");
         // Identify logging calls
         var invocations = classNode.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(inv => inv.Expression is MemberAccessExpressionSyntax ma && ma.Name.Identifier.Text.StartsWith("Log") && (ma.Name.Identifier.Text == "LogInformation" || ma.Name.Identifier.Text == "LogError" || ma.Name.Identifier.Text == "LogWarning")).ToList();
-        var noLogCallsMessage = $"No LogInformation, LogWarning or LogError calls found in class '{className}'. Searched: invocations in the class body only. Next: Search(mode: text, query: 'LogInformation|LogWarning|LogError') to locate the logging calls, or GetFileOutline to confirm the class name.";
+        var noLogCallsMessage = $"No LogInformation, LogWarning or LogError calls found in class '{className}'. Searched: invocations in the class body only. Next: {ToolCallHint.Call("Search", ("mode", "text"), ("query", "LogInformation|LogWarning|LogError"))} to locate the logging calls, or {ToolCallHint.Call("GetFileOutline")} to confirm the class name.";
         if (invocations.Count == 0)
         {
             return new DocumentEditResult

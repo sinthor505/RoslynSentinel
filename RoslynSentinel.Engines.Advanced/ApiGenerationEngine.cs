@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using RoslynSentinel.Common;
 namespace RoslynSentinel.Engines.Advanced;
 public class ApiGenerationEngine
 {
@@ -23,7 +24,7 @@ public class ApiGenerationEngine
         var controller = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == controllerName).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", controllerName);
         if (controller == null)
         {
-            throw new ToolNotFoundException($"Controller class '{controllerName}' not found in '{filePath}'. Searched: class declarations in the file. Next: Search(mode: class, query: '{controllerName}') to locate it, or GetFileOutline on the file.", "class", controllerName);
+            throw new ToolNotFoundException($"Controller class '{controllerName}' not found in '{filePath}'. Searched: class declarations in the file. Next: {ToolCallHint.Call("Search", ("mode", "class"), ("query", controllerName))} to locate it, or {ToolCallHint.Call("GetFileOutline")} on the file.", "class", controllerName);
         }
 
         var sb = new System.Text.StringBuilder();
@@ -100,7 +101,7 @@ public class ApiGenerationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
         {
-            throw new ToolInvalidArgumentException($"Syntax root of '{filePath}' is unavailable or not a compilation unit. Next: confirm the file is a plain .cs source file with GetFileOutline.");
+            throw new ToolInvalidArgumentException($"Syntax root of '{filePath}' is unavailable or not a compilation unit. Next: confirm the file is a plain .cs source file with {ToolCallHint.Call("GetFileOutline")}.");
         }
 
         var originalText = (await document.GetTextAsync(cancellationToken)).ToString();
@@ -117,7 +118,7 @@ public class ApiGenerationEngine
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         if (classNode == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. Searched: class declarations in the file after adding the using directive. Next: Search(mode: class, query: '{className}') to confirm the name. Use GetFileOutline to verify the class name (case-sensitive).", "class", className);
+            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. Searched: class declarations in the file after adding the using directive. Next: {ToolCallHint.Call("Search", ("mode", "class"), ("query", className))} to confirm the name. Use {ToolCallHint.Call("GetFileOutline")} to verify the class name (case-sensitive).", "class", className);
         }
 
         // Helper: check whether a property already carries an attribute (avoids duplicates)

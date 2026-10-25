@@ -5,25 +5,6 @@
 # ToolHintRatchetTests.Scan_MatchesBaseline. Line format: <path> | <member> | <tool> | <count>
 RoslynSentinel.Common/ToolParams.cs | ToolParams | GetLargeResult | 2
 RoslynSentinel.Common/ToolParams.cs | ToolParams | Search | 3
-RoslynSentinel.Engines.Advanced/AdvancedRefactoringEngine.cs | SyncInterfaceToImplementationAsync | Search | 2
-RoslynSentinel.Engines.Advanced/AntiPatternEngine.cs | GenerateCallTreeAsync | Build | 2
-RoslynSentinel.Engines.Advanced/AntiPatternEngine.cs | GenerateCallTreeAsync | Search | 1
-RoslynSentinel.Engines.Advanced/AntiPatternEngine.cs | GenerateEqualityOverridesAsync | GetFileOutline | 1
-RoslynSentinel.Engines.Advanced/AntiPatternEngine.cs | GenerateEqualityOverridesAsync | Search | 1
-RoslynSentinel.Engines.Advanced/ApiGenerationEngine.cs | AddValidationToPocoAsync | GetFileOutline | 2
-RoslynSentinel.Engines.Advanced/ApiGenerationEngine.cs | AddValidationToPocoAsync | Search | 1
-RoslynSentinel.Engines.Advanced/ApiGenerationEngine.cs | GenerateHttpClientForControllerAsync | GetFileOutline | 1
-RoslynSentinel.Engines.Advanced/ApiGenerationEngine.cs | GenerateHttpClientForControllerAsync | Search | 1
-RoslynSentinel.Engines.Advanced/CodeGenerationEngine.cs | GenerateDecoratorClassAsync | Search | 1
-RoslynSentinel.Engines.Advanced/CodeGenerationEngine.cs | GenerateFluentBuilderAsync | Build | 1
-RoslynSentinel.Engines.Advanced/IDEStyleEngine.cs | UseNullPropagationAsync | GetFileOutline | 1
-RoslynSentinel.Engines.Advanced/IDEStyleEngine.cs | UseObjectInitializersAsync | GetFileOutline | 1
-RoslynSentinel.Engines.Advanced/MappingEngine.cs | GenerateMappingFileAsync | Search | 2
-RoslynSentinel.Engines.Advanced/MappingEngine.cs | InvertAssignmentsAsync | GetFileOutline | 1
-RoslynSentinel.Engines.Advanced/ModernizationEngine.cs | ConvertToSourceGeneratedLoggingAsync | GetFileOutline | 1
-RoslynSentinel.Engines.Advanced/ModernizationEngine.cs | ConvertToSourceGeneratedLoggingAsync | Search | 1
-RoslynSentinel.Engines.Advanced/TestingEngine.cs | AddBenchmarkStubAsync | ListAll | 1
-RoslynSentinel.Engines.Advanced/TestingEngine.cs | AddBenchmarkStubAsync | Search | 1
 RoslynSentinel.Engines.Basic/SymbolNavigationEngine.cs | GetMemberSourceAsync | ReadFile | 1
 RoslynSentinel.Server.Basic/ServiceRegistrationExtensionsBasic.cs | AddOrientationBreakerFilter | ListAll | 1
 RoslynSentinel.Server.Basic/ServiceRegistrationExtensionsBasic.cs | AddOrientationBreakerFilter | ListSolutionItems | 1

@@ -695,7 +695,7 @@ public class CodeGenerationEngine
             sb.AppendLine();
         }
 
-        sb.AppendLine($"    public {className} Build()");
+        sb.AppendLine($"    public {className} Build()"); // hint-ok: generated code text, not a tool call
         sb.AppendLine("    {");
         sb.AppendLine($"        return new {className}");
         sb.AppendLine("        {");
@@ -714,7 +714,7 @@ public class CodeGenerationEngine
             return $".With{p.Name}({paramName})";
         });
         var instanceName = char.ToLower(className[0]) + className.Substring(1);
-        var usageExample = $"var {instanceName} = new {builderClassName}(){string.Join("", chainParts)}.Build();";
+        var usageExample = $"var {instanceName} = new {builderClassName}(){string.Join("", chainParts)}.Build();"; // hint-ok: generated code text, not a tool call
 
         return new FluentBuilderResult(
             BuilderClassName: builderClassName,
@@ -760,7 +760,7 @@ public class CodeGenerationEngine
         {
             var scope = projectName != null ? $"project '{projectName}'" : "all loaded projects";
             throw new ToolNotFoundException(
-                $"Interface '{interfaceName}' not found in {scope}. Searched: interface type declarations named '{interfaceName}' in {scope}. Ensure the interface name matches exactly (including leading 'I') and is part of the loaded solution. Next: Search(mode: interface, query: '{interfaceName}') to confirm the name.",
+                $"Interface '{interfaceName}' not found in {scope}. Searched: interface type declarations named '{interfaceName}' in {scope}. Ensure the interface name matches exactly (including leading 'I') and is part of the loaded solution. Next: {ToolCallHint.Call("Search", ("mode", "interface"), ("query", interfaceName))} to confirm the name.",
                 "interface",
                 interfaceName);
         }

@@ -298,14 +298,14 @@ public class TestingEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            throw new ToolNotFoundException($"Syntax root could not be read for '{filePath}'. Searched: the document's syntax tree. Next: confirm the file is in the loaded solution with ListAll, then retry.");
+            throw new ToolNotFoundException($"Syntax root could not be read for '{filePath}'. Searched: the document's syntax tree. Next: confirm the file is in the loaded solution with {ToolCallHint.Call("ListAll")}, then retry.");
         }
 
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
         if (classNode == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. Searched: class declarations in the file. Next: Search(mode: class, query: '{className}') to confirm the name.", "class", className);
+            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. Searched: class declarations in the file. Next: {ToolCallHint.Call("Search", ("mode", "class"), ("query", className))} to confirm the name.", "class", className);
         }
         bool isStaticClass = classNode.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
 

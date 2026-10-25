@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Common.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Advanced;
@@ -141,7 +142,7 @@ public class MappingEngine
         var toSymbol = ResolveType(compilation, toType, cancellationToken);
         if (document == null || fromSymbol == null || toSymbol == null)
         {
-            throw new ToolNotFoundException($"Could not find the document or the types '{fromType}' and '{toType}' for '{filePath}'. Searched: the document in the loaded solution and both type symbols. Next: Search(mode: class, query: '{fromType}') and Search(mode: class, query: '{toType}') to confirm the names, and confirm the file is in the loaded solution.");
+            throw new ToolNotFoundException($"Could not find the document or the types '{fromType}' and '{toType}' for '{filePath}'. Searched: the document in the loaded solution and both type symbols. Next: {ToolCallHint.Call("Search", ("mode", "class"), ("query", fromType))} and {ToolCallHint.Call("Search", ("mode", "class"), ("query", toType))} to confirm the names, and confirm the file is in the loaded solution.");
         }
 
         var sourceTree = fromSymbol.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree;
@@ -240,7 +241,7 @@ public class MappingEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            throw new ToolInvalidArgumentException($"Syntax root or source text is unavailable for '{filePath}'. Next: confirm the file parses with GetFileOutline.");
+            throw new ToolInvalidArgumentException($"Syntax root or source text is unavailable for '{filePath}'. Next: confirm the file parses with {ToolCallHint.Call("GetFileOutline")}.");
         }
 
         // Find the snippet position
