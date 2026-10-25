@@ -1327,7 +1327,7 @@ public class BasicRefactoringEngine
             }
         }
 
-        method ??= root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        method ??= RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations in the file by name. Next: GetFileOutline on '{filePath}' to list its methods, or Search(mode: method, query: '{methodName}').", "method", methodName);
@@ -1369,7 +1369,7 @@ public class BasicRefactoringEngine
             }
         }
 
-        method ??= root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        method ??= RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations in the file by name. Next: GetFileOutline on '{filePath}' to list its methods, or Search(mode: method, query: '{methodName}').", "method", methodName);
@@ -2029,7 +2029,7 @@ public class BasicRefactoringEngine
             throw new ToolInvalidArgumentException("Could not parse document.");
         }
 
-        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
             throw new ToolNotFoundException("Method not found.", "method", methodName);

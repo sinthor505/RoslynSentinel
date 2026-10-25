@@ -29,7 +29,7 @@ public class ThreadSafetyEngine
             throw new ToolInvalidArgumentException("Failed to get syntax root for '" + filePath + "'.");
         }
 
-        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null || method.Body == null)
         {
             throw new ToolNotFoundException("Method '" + methodName + "' not found or has no body.", "method", methodName);
@@ -103,8 +103,8 @@ public class ThreadSafetyEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
-        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-        .FirstOrDefault(m => m.Identifier.Text == methodName);
+        var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+        .Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null || method.Body == null)
         {
             throw new ToolNotFoundException($"Method or body not found: {methodName} in file: {filePath}");

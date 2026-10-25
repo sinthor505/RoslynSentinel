@@ -2193,7 +2193,7 @@ public class MemberRefactoringEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? [], "Method", methodName);
         if (method == null || !method.ParameterList.Parameters.Any())
         {
             throw new ToolNotFoundException("Method not found or has no parameters.", "method", methodName);
@@ -4011,7 +4011,7 @@ public class MemberRefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? [], "Method", methodName);
 
         if (methodNode != null && !methodNode.ParameterList.Parameters.Any())
         {
@@ -4068,7 +4068,7 @@ public class MemberRefactoringEngine
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? [], "Method", methodName);
 
         if (methodNode == null)
         {

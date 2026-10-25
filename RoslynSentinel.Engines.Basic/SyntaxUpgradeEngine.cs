@@ -149,7 +149,7 @@ public class SyntaxUpgradeEngine
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
 
-        var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? [], "Method", methodName);
         if (method == null)
         {
             throw new ToolNotFoundException("Method not found.");
@@ -625,8 +625,8 @@ public class SyntaxUpgradeEngine
             throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
         }
 
-        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == methodName);
+        var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' not found in file.");
