@@ -140,7 +140,7 @@ public static class RefactoringToolHelpers
     /// <param name="subject">What was targeted, already quoted, e.g. <c>method 'Foo' in 'C:\x.cs'</c>.</param>
     /// <param name="hint">The tool's guidance for the agent (what to verify or do next), appended to failures.</param>
     /// <param name="noOp">What this tool says when the engine found nothing to do.</param>
-    public static SentinelCallToolResult<object>? GuardEngineResult(EngineResultBase result, string operationName, string subject, string hint, NoOpHandling noOp)
+    public static SentinelCallToolResult<object>? GuardEngineResult(DocumentEditResult result, string operationName, string subject, string hint, NoOpHandling noOp)
     {
         var hasText = !string.IsNullOrEmpty(result.UpdatedText);
         switch (result.Outcome)
@@ -158,7 +158,7 @@ public static class RefactoringToolHelpers
         }
     }
 
-    private static SentinelCallToolResult<object>? GuardNothingToDo(EngineResultBase result, string hint, NoOpHandling noOp, bool hasText)
+    private static SentinelCallToolResult<object>? GuardNothingToDo(DocumentEditResult result, string hint, NoOpHandling noOp, bool hasText)
     {
         if (noOp.ProceedWhenTextPresent && hasText)
         {
@@ -179,7 +179,7 @@ public static class RefactoringToolHelpers
         };
     }
 
-    private static SentinelCallToolResult<object> GuardEngineFailure(EngineResultBase result, string operationName, string subject, string hint)
+    private static SentinelCallToolResult<object> GuardEngineFailure(DocumentEditResult result, string operationName, string subject, string hint)
     {
         var reason = EngineReason(result);
         var head = $"{operationName} failed for {subject} ({result.Outcome})";
@@ -227,7 +227,8 @@ public static class RefactoringToolHelpers
 
     // The engine's reason: its Message, or - for the engines that report the reason as a "// WARNING: ..." first
     // line of UpdatedText instead (OptimizeToValueTask) - that line. A plain source file in UpdatedText never matches.
-    private static string EngineReason(EngineResultBase result)
+    // Keep this UpdatedText read until OptimizeToValueTask moves its reason to Message; dropping it first loses the reason.
+    private static string EngineReason(DocumentEditResult result)
     {
         var reason = SummarizeEngineMessage(result.Message);
         if (reason.Length > 0)
@@ -248,7 +249,7 @@ public static class RefactoringToolHelpers
 
 /// <summary>
 /// What a tool says when its engine reports "nothing to do / not found / not eligible" (see
-/// <see cref="RefactoringToolHelpers.GuardEngineResult(EngineResultBase, string, string, string, NoOpHandling)"/>).
+/// <see cref="RefactoringToolHelpers.GuardEngineResult(DocumentEditResult, string, string, string, NoOpHandling)"/>).
 /// The wording is the tool's, never the engine's.
 /// </summary>
 /// <param name="Message">For a success: the whole message returned. For an error: the lead sentence; the guard appends the hint and a sanitised engine detail.</param>
