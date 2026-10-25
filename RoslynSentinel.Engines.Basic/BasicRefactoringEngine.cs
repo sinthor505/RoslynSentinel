@@ -161,13 +161,15 @@ public class BasicRefactoringEngine
         // constructor target (matched by its class name, same as GetMethodSource/LocateSymbol
         // already do for ctors) is found here too instead of silently falling through to
         // emptyResult - see blocking_error_changesignature_silent_noop_on_valid_constructor.md.
-        var methodDecl = root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>()
-            .FirstOrDefault(m => m switch
+        var methodMatches = root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>()
+            .Where(m => m switch
             {
                 MethodDeclarationSyntax method => method.Identifier.Text == methodName,
                 ConstructorDeclarationSyntax ctor => ctor.Identifier.Text == methodName,
                 _ => false
-            });
+            })
+            .ToList();
+        var methodDecl = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
         if (methodDecl == null)
         {
             return Refuse($"Method or constructor '{methodName}' was not found in '{filePath}' (a constructor is matched by its class name). Nothing was changed.");

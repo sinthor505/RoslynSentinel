@@ -176,7 +176,7 @@ public class FirstMatchRatchetTests
         ["RoslynSentinel.Engines.Advanced/StackOverflowEngine.cs::AnalyzeStackOverflowRisksAsync"] = 1,
         ["RoslynSentinel.Engines.Advanced/StackOverflowEngine.cs::DetectCrossFileInheritanceCyclesAsync"] = 1,
         ["RoslynSentinel.Engines.Advanced/StackOverflowEngine.cs::DetectInFileInheritanceCycles"] = 2,
-        ["RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs::ChangeSignatureAsync"] = 2,
+        ["RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs::ChangeSignatureAsync"] = 1,
         ["RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs::MoveAllTypesToFilesForDocumentAsync"] = 1,
         ["RoslynSentinel.Engines.Basic/CompilerErrorLookupHelper.cs::DescribeDuplicateDefinitionAsync"] = 1,
         ["RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs::GetConstructorParametersAsync"] = 1,
