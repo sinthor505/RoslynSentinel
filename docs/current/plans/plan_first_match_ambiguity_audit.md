@@ -1,6 +1,6 @@
 # Plan: Refuse and report ambiguity instead of silently using the first match
 
-**Status:** IN PROGRESS 2026-10-24. Audit done; steps 1-4 built and step 5 partly built (all but `FilterByContainingType`); steps 6-8 open.
+**Status:** IN PROGRESS 2026-10-24. Audit done; steps 1-4 built, step 5 partly built (all but `FilterByContainingType`) and step 6 built; steps 7-8 open.
 
 ## Problem
 
@@ -80,9 +80,10 @@ the old, `[Obsolete("Use X")]` on the old, `// TODO` for remaining callers, fini
 - Done when: a test per item.
 
 ### Step 6 - Shared project lookup helper
-- Files: `Common` (new helper beside `DocumentLookup`), then the project-name call sites listed in Problem.
-- Change: one `RequireProject(solution, name)` that throws on zero or several; migrate callers in slices.
-- Done when: no `Projects.FirstOrDefault(p => p.Name == ...)` remains in Engines/Tools.
+- DONE 2026-10-24 (commits 892f67cb, d80bed18, 00d2b4c0): `ProjectLookup.FindProject(solution, name, ignoreCase)` in `Common` returns null on none (callers keep their own not-found message), throws `ToolAmbiguousMatchException` on same-named projects with different file paths, and treats same-FilePath multi-target loads as one project. 27 name-keyed sites migrated across 14 files (measured 28-30 sites, not the ~12 first assumed).
+- Left on purpose: `WorkspaceReadNavigationImpl.BuildRecoveryHintAsync` (advice text only; throwing would turn a zero-hit search into an error) and `TestCategoryTaggingImpl` (plan projects, not solution projects). `DependencyEngine` `Projects.First(p => p.Id == ...)` is id-keyed.
+- Open follow-up: `AntiPatternEngine`, `AsyncOptimizationEngine`, `ControlFlowEngine`, `CodeStyleEngine`, `DiscoveryEngine`, `ProjectStructureEngine.DetectLayerViolationsAsync` return an empty document set when the named project does not exist (silent miss, not first-match); out of scope here.
+- Original text: one `RequireProject(solution, name)` that throws on zero or several; migrate callers in slices. Done when no `Projects.FirstOrDefault(p => p.Name == ...)` remains in Engines/Tools (met except the two exceptions above).
 
 ### Step 7 - Engines.Advanced name-keyed picks
 - Files: engines listed in Problem.
