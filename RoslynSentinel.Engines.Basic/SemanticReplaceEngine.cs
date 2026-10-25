@@ -1311,4 +1311,18 @@ public class SemanticReplaceEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         return await ConstructionReplacer.PlanAsync(solution, symbolId, factoryId, projectFilter, cancellationToken);
     }
+
+    /// <summary>
+    /// Plans the <c>removeNullForgiving</c> operation: deletes the redundant postfix null-forgiving operator (!) from every use of the
+    /// non-nullable property or field named by <paramref name="symbol"/>. Zero sites is a valid outcome; a nullable, non-member or unknown symbol returns Error.
+    /// </summary>
+    /// <param name="symbol">docCommentId of the property or field.</param>
+    /// <param name="projectFilter">Optional project names (comma or semicolon separated); null or empty means all projects.</param>
+    /// <param name="fileFilter">Optional glob on the solution-relative path ('*', '**', '?'); null or empty means all files.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task<SemanticReplaceOutcome> RemoveNullForgivingAsync(string symbol, string? projectFilter, string? fileFilter, CancellationToken cancellationToken)
+    {
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        return await NullForgivingRemover.PlanAsync(solution, symbol, projectFilter, fileFilter, cancellationToken);
+    }
 }

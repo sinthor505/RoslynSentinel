@@ -403,7 +403,10 @@ public enum SemanticReplaceOperation
     invertBoolean,
 
     /// <summary>Rewrite object-creation expressions of a type (or constructor) into calls to a static factory method.</summary>
-    replaceConstruction
+    replaceConstruction,
+
+    /// <summary>Delete the redundant postfix null-forgiving operator (!) from every use of a non-nullable property or field.</summary>
+    removeNullForgiving
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

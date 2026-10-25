@@ -7,9 +7,10 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>
-/// Semantic find-replace with two operations. invertBoolean renames a bool property or field and
+/// Semantic find-replace with three operations. invertBoolean renames a bool property or field and
 /// inverts its polarity at every site. replaceConstruction rewrites object-creation expressions of a
-/// type into calls to a static factory method. Both resolve symbols by docCommentId and rewrite with
+/// type into calls to a static factory method. removeNullForgiving deletes the redundant postfix ! on a
+/// non-nullable property or field. All resolve symbols by docCommentId and rewrite with
 /// fixed rules (not free-form templates). Edits go through the compile gate before applying.
 /// Supports preview mode (list sites without writing) or apply mode (write the changes).
 /// </summary>
@@ -35,7 +36,7 @@ public class SemanticFindReplaceTools
 
     [McpServerTool(Name = "SemanticFindReplace")]
     [Produces(DataTag.ChangeId)]
-    [Description("Semantic (compiler-aware, not text) find-replace with two operations. " +
+    [Description("Semantic (compiler-aware, not text) find-replace with three operations. " +
         "operation: invertBoolean renames a bool property or field and inverts its polarity at every site (true<->false, Read gets !, NegatedRead loses !); " +
         "required: symbol (docCommentId of the bool member), newName, mode. " +
         "operation: replaceConstruction rewrites object-creation expressions of a type into calls to a static factory method, " +
@@ -46,6 +47,8 @@ public class SemanticFindReplaceTools
         "sites with an object or collection initializer, sites whose argument shape does not match the factory, and sites inside the factory's own containing type. " +
         "Each skipped site is returned with file, line and unsupportedReason. The result carries rewritten and skipped counts. " +
         "If the factory's return type is not assignable to the constructed type the whole operation is refused. " +
+        "operation: removeNullForgiving deletes the postfix ! from every expression bound to a property/field whose type is non-nullable (symbol = its docCommentId), across the solution or narrowed by projectFilter/fileFilter; preview first. " +
+        "required: symbol, mode; optional: projectFilter, fileFilter; newName and factory are rejected. " +
         "mode: preview lists the sites (before/after text) without writing anything; apply performs the changes and returns a changeId for UndoLastApply. " +
         "Mode is mandatory - use preview first to review. " +
         "invertBoolean alias retarget: a computed inverse alias (a bool property with getter `!X` and setter/init `X = !value`, e.g. SentinelCallToolResult.IsSuccess over IsError) " +
@@ -57,12 +60,13 @@ public class SemanticFindReplaceTools
         "Returns sites and changeId on success, or a structured error naming the parameter and a correct value.")]
     public async Task<SentinelCallToolResult<object>> SemanticFindReplaceTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("The operation to perform: invertBoolean or replaceConstruction.")] SemanticReplaceOperation operation,
-        [Description("A docCommentId. invertBoolean: the bool property or field to rename and invert. replaceConstruction: the constructed type (T:Ns.Type) or one constructor (M:Ns.Type.#ctor(System.Int32)); a constructor id restricts matching to that overload. From Search(mode: symbol), pass exactly as returned, do not construct.")] string symbol,
+        [Description("The operation to perform: invertBoolean, replaceConstruction or removeNullForgiving.")] SemanticReplaceOperation operation,
+        [Description("A docCommentId. invertBoolean: the bool property or field to rename and invert. replaceConstruction: the constructed type (T:Ns.Type) or one constructor (M:Ns.Type.#ctor(System.Int32)); a constructor id restricts matching to that overload. removeNullForgiving: the property (P:Ns.Type.Name) or field (F:Ns.Type.name) whose declared type is non-nullable. From Search(mode: symbol), pass exactly as returned, do not construct.")] string symbol,
         [Description("preview: list the sites (before/after text) without writing. apply: perform the changes.")] SemanticReplaceMode mode,
-        [Description("invertBoolean only, and required there: the new name for the symbol. Must be a valid C# identifier and not collide with other members, except for an alias retarget where it must be the existing sibling member the computed inverse alias negates. Ignored by replaceConstruction.")] string? newName = null,
-        [Description("replaceConstruction only, and required there: docCommentId of the static, non-generic factory method that replaces each construction, e.g. M:Ns.Factories.Create(System.Int32). Its return type must be the constructed type or a subtype. Ignored by invertBoolean. From Search(mode: symbol), pass exactly as returned, do not construct.")] string? factory = null,
-        [Description("replaceConstruction only, optional: project name or names separated by commas; only creation sites in those projects are rewritten. Omit to rewrite in every project. Ignored by invertBoolean.")] string? projectFilter = null,
+        [Description("invertBoolean only, and required there: the new name for the symbol. Must be a valid C# identifier and not collide with other members, except for an alias retarget where it must be the existing sibling member the computed inverse alias negates. Ignored by replaceConstruction. Rejected by removeNullForgiving.")] string? newName = null,
+        [Description("replaceConstruction only, and required there: docCommentId of the static, non-generic factory method that replaces each construction, e.g. M:Ns.Factories.Create(System.Int32). Its return type must be the constructed type or a subtype. Ignored by invertBoolean. Rejected by removeNullForgiving. From Search(mode: symbol), pass exactly as returned, do not construct.")] string? factory = null,
+        [Description("Optional: project name or names separated by commas; only sites in those projects are changed. Used by replaceConstruction and removeNullForgiving; ignored by invertBoolean. Omit to cover every project.")] string? projectFilter = null,
+        [Description("removeNullForgiving only, optional: glob on the solution-relative path ('*' within a folder, '**' across folders, '?' one character), e.g. 'RoslynSentinel.Tests.Basic/BasicRefactoringTests.cs'; a glob without '/' matches the bare file name. Omit to cover every file. Ignored by invertBoolean and replaceConstruction.")] string? fileFilter = null,
         CancellationToken cancellationToken = default)
     {
         // Validate required parameters
@@ -71,26 +75,47 @@ public class SemanticFindReplaceTools
             return InvalidArgument("symbol cannot be empty.");
         }
 
-        var isConstruction = operation == SemanticReplaceOperation.replaceConstruction;
-        if (isConstruction)
+        switch (operation)
         {
-            if (string.IsNullOrWhiteSpace(factory))
-            {
-                return InvalidArgument("factory cannot be empty for operation replaceConstruction. Pass the docCommentId of a static factory method, for example 'M:Ns.Factories.CreateType(System.Int32)'.");
-            }
-        }
-        else if (string.IsNullOrWhiteSpace(newName))
-        {
-            return InvalidArgument("newName cannot be empty (required for operation invertBoolean).");
+            case SemanticReplaceOperation.replaceConstruction:
+                if (string.IsNullOrWhiteSpace(factory))
+                {
+                    return InvalidArgument("factory cannot be empty for operation replaceConstruction. Pass the docCommentId of a static factory method, for example 'M:Ns.Factories.CreateType(System.Int32)'.");
+                }
+
+                break;
+            case SemanticReplaceOperation.removeNullForgiving:
+                if (!string.IsNullOrWhiteSpace(newName))
+                {
+                    return InvalidArgument("newName is not accepted for operation removeNullForgiving; it is used only by invertBoolean. Omit it.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(factory))
+                {
+                    return InvalidArgument("factory is not accepted for operation removeNullForgiving; it is used only by replaceConstruction. Omit it.");
+                }
+
+                break;
+            case SemanticReplaceOperation.invertBoolean:
+                if (string.IsNullOrWhiteSpace(newName))
+                {
+                    return InvalidArgument("newName cannot be empty (required for operation invertBoolean).");
+                }
+
+                break;
+            default:
+                return InvalidArgument($"operation '{operation}' is not supported. Use invertBoolean, replaceConstruction or removeNullForgiving.");
         }
 
         // Call the engine
         SemanticReplaceOutcome outcome;
-        if (isConstruction)
+        if (operation != SemanticReplaceOperation.invertBoolean)
         {
             try
             {
-                outcome = await _engine.ReplaceConstructionAsync(symbol, factory!, projectFilter, cancellationToken);
+                outcome = operation == SemanticReplaceOperation.replaceConstruction
+                    ? await _engine.ReplaceConstructionAsync(symbol, factory!, projectFilter, cancellationToken)
+                    : await _engine.RemoveNullForgivingAsync(symbol, projectFilter, fileFilter, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -98,7 +123,7 @@ public class SemanticFindReplaceTools
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "SemanticFindReplace replaceConstruction failed");
+                _logger.LogError(ex, "SemanticFindReplace {Operation} failed", operation);
                 return new SentinelCallToolResult<object>
                 {
                     IsError = true,
@@ -130,24 +155,32 @@ public class SemanticFindReplaceTools
             return new SentinelCallToolResult<object>
             {
                 IsError = false,
-                SuccessData = isConstruction
-                    ? new
+                SuccessData = operation switch
+                {
+                    SemanticReplaceOperation.replaceConstruction => new
                     {
                         mode = "preview",
                         rewritten,
                         skipped,
                         sites = outcome.Sites
-                    }
-                    : new
+                    },
+                    SemanticReplaceOperation.removeNullForgiving => new
+                    {
+                        mode = "preview",
+                        sites = outcome.Sites,
+                        filesChanged = outcome.Changes.Count
+                    },
+                    _ => new
                     {
                         mode = "preview",
                         sites = outcome.Sites
                     }
+                }
             };
         }
 
         // A replaceConstruction apply with nothing to rewrite writes nothing and issues no changeId.
-        if (isConstruction && outcome.Changes.Count == 0)
+        if (operation == SemanticReplaceOperation.replaceConstruction && outcome.Changes.Count == 0)
         {
             return new SentinelCallToolResult<object>
             {
@@ -159,6 +192,22 @@ public class SemanticFindReplaceTools
                     skipped,
                     filesChanged = 0,
                     message = "No creation site could be rewritten, so nothing was written. See sites for the construction sites that were found and why each was skipped.",
+                    sites = outcome.Sites
+                }
+            };
+        }
+
+        // A removeNullForgiving apply with no matching expression writes nothing and issues no changeId.
+        if (operation == SemanticReplaceOperation.removeNullForgiving && outcome.Changes.Count == 0)
+        {
+            return new SentinelCallToolResult<object>
+            {
+                IsError = false,
+                SuccessData = new
+                {
+                    mode = "apply",
+                    filesChanged = 0,
+                    message = "No redundant null-forgiving '!' on this member was found in the selected projects and files, so nothing was written.",
                     sites = outcome.Sites
                 }
             };
@@ -187,7 +236,7 @@ public class SemanticFindReplaceTools
         return new SentinelCallToolResult<object>
         {
             IsError = false,
-            SuccessData = isConstruction
+            SuccessData = operation == SemanticReplaceOperation.replaceConstruction
                 ? new
                 {
                     mode = "apply",

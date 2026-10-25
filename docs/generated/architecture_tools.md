@@ -86,7 +86,7 @@
 | RefactoringStructuralTools | ModifyEnum | Claude, claude-lean (on demand), Refactor, RefactoringStructural | - | Replaces an enum's complete member list in one operation. |
 | RefactoringStructuralTools | ModifyModifier | Claude, Refactor, RefactoringStructural | - | Adds or removes a non-accessibility modifier keyword (use ChangeAccessibility for private/public/etc.,... |
 | RefactoringStructuralTools | SyncTypeAndFilename | Claude, claude-lean (on demand), Refactor, RefactoringStructural | - | Synchronizes the filename to match a type declared in the file. |
-| SemanticFindReplaceTools | SemanticFindReplace | claude-lean (on demand) | - | Semantic (compiler-aware, not text) find-replace with two operations. operation: invertBoolean renames a bool... |
+| SemanticFindReplaceTools | SemanticFindReplace | claude-lean (on demand) | - | Semantic (compiler-aware, not text) find-replace with three operations. operation: invertBoolean renames a bool... |
 | SymbolNavigationTools | GetTypeInfo | Claude, claude-lean (on demand), SymbolNavigation, Workspace | - | Returns type information for a type you already know the name of - hierarchy, members, or both. |
 | SymbolNavigationTools | InspectSymbol | Claude, claude-lean (on demand), SymbolNavigation, Workspace | - | Inspects a symbol in depth. |
 | SymbolNavigationTools | LocateSymbol | Claude, SymbolNavigation, Workspace | - | Locates declaration sites for a symbol by name. |

@@ -25,7 +25,10 @@ public enum SemanticReplaceRole
     Unsupported,
 
     /// <summary>Object-creation expression rewritten into a factory call (replaceConstruction). Skipped creation sites use Unsupported with an UnsupportedReason.</summary>
-    Construction
+    Construction,
+
+    /// <summary>Postfix null-forgiving operator (!) deleted from a use of a non-nullable member (removeNullForgiving).</summary>
+    NullForgiving
 }
 
 /// <summary>Describes one reference site that will be or was rewritten by a semantic find-replace operation.</summary>
