@@ -376,7 +376,7 @@ public class CodeGenerationEngine
     public async Task<DocumentEditResult> GenerateDefaultConfigJsonAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var project = solution.Projects.FirstOrDefault(p => p.Name == projectName) ?? throw new InvalidOperationException("Project not found.");
+        var project = ProjectLookup.FindProject(solution, projectName) ?? throw new InvalidOperationException("Project not found.");
         var collectedKeys = new SortedSet<string>(StringComparer.Ordinal);
 
         // IConfiguration type names to recognise the receiver

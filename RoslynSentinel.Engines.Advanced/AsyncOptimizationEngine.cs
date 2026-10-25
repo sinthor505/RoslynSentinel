@@ -3618,8 +3618,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
-            var proj = solution.Projects.FirstOrDefault(p =>
-                string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            var proj = ProjectLookup.FindProject(solution, projectName, ignoreCase: true);
             documents = proj?.Documents ?? [];
         }
         else
