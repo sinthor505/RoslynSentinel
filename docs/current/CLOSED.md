@@ -10,7 +10,7 @@ Entries moved here from TODO.md on 2026-10-17 carry their original text plus an 
 
 ## Failed respawn build was invisible to the agent - resolved (2026-10-24)
 
-The launcher fell back to the newest complete build when the new HEAD failed to build, visible only in `launch.log`. It now writes `instances\<id>\launch-outcome.json`; `McpServerStatus.lastLaunch` and a one-shot `launchWarning` report it, and StopServer warns about uncommitted server source. Evidence: e592a4e2; [plan](plans/plan_surface_failed_launch_build.md); [blocker](blockers/resolved/blocking_error_restart_reuses_stale_commit_keyed_build.md). Live check: respawn reported `lastLaunch.buildFailed:false` and StopServer returned the warning; the failed-build path is unit-tested only.
+The launcher fell back to the newest complete build when the new HEAD failed to build, visible only in `launch.log`. It now writes `instances\<id>\launch-outcome.json`; `McpServerStatus.lastLaunch` and a one-shot `launchWarning` report it, and StopServer warns about uncommitted server source. Evidence: e592a4e2; [plan](plans/closed/plan_surface_failed_launch_build.md); [blocker](blockers/resolved/blocking_error_restart_reuses_stale_commit_keyed_build.md). Live check: respawn reported `lastLaunch.buildFailed:false` and StopServer returned the warning; the failed-build path is unit-tested only.
 
 ## `Search(text)` recovery hint duplicated, and positional-record snippets did not resolve - resolved (2026-10-24)
 

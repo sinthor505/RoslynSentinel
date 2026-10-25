@@ -10,7 +10,7 @@ stderr only). The agent sees a successful `StopServer`, "already loaded" from `L
 "Unknown parameter" error from the old binary. `McpServerStatus` shows `binaryStaleness.isStale` but not that
 a newer build was attempted and failed, nor why. The working-tree `Build(fullBuild)` can be green while the
 committed HEAD is red (uncommitted fix), which is exactly how the original incident arose. Evidence:
-[blocking_error_restart_reuses_stale_commit_keyed_build.md](../blockers/resolved/blocking_error_restart_reuses_stale_commit_keyed_build.md);
+[blocking_error_restart_reuses_stale_commit_keyed_build.md](../../blockers/resolved/blocking_error_restart_reuses_stale_commit_keyed_build.md);
 TODO.md open item "Surface a failed respawn build".
 
 ## Decision

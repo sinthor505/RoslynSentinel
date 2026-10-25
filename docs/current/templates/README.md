@@ -36,7 +36,8 @@ Create the folder if it does not exist yet.
 6. **ASCII-only punctuation** (CLAUDE.md): `-`/`--`, straight quotes, `<=`/`>=`.
 7. **Too small for a file?** A one-line open item belongs in `docs/current/TODO.md`.
 8. **Lifecycle:** a fixed blocker moves to `blockers/resolved/` with a resolution note citing the
-   commit hash. A finished plan stays in `plans/` with status IMPLEMENTED and its commit hashes.
+   commit hash. A plan whose status becomes IMPLEMENTED moves to `plans/closed/` with its commit hashes
+   in the Status line (fix relative links when it moves).
 9. **Legacy docs** (anything at the `docs/current/` root, `specs/`, or hyphenated/`-v1` names)
    predate these rules. Leave them in place; do not copy their layout.
 10. **Maintaining this folder:** if the house style changes, change the template first.
