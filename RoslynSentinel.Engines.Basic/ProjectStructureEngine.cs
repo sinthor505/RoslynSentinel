@@ -531,7 +531,7 @@ public class SolutionStructureEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax ?? throw new InvalidOperationException("Could not parse syntax root.");
-        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className) ?? throw new ToolNotFoundException("Class not found.");
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className) ?? throw new ToolNotFoundException("Class not found.");
         // Existing interfaces must survive the conversion. A base class cannot be told apart from an interface
         // by syntax alone, so classify through the semantic model of the original (unmodified) tree.
         var keptInterfaces = new List<BaseTypeSyntax>();
@@ -561,7 +561,7 @@ public class SolutionStructureEngine
         {
             root = root.AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("Microsoft.Extensions.Hosting")).WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed).WithAdditionalAnnotations(Formatter.Annotation));
             // Re-find class node after root modification (stale reference otherwise)
-            classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className) ?? throw new InvalidOperationException("Class not found after root modification.");
+            classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className) ?? throw new InvalidOperationException("Class not found after root modification.");
         }
 
         // 2. Change base class

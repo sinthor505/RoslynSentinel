@@ -398,8 +398,8 @@ public class SyntaxUpgradeEngine
             throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
         }
 
-        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault(c => c.Identifier.Text == className);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         if (classNode == null)
         {
             throw new ToolNotFoundException("Class '" + className + "' not found in file.", "class", className);

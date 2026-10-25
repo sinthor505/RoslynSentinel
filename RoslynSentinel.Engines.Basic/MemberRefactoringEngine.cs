@@ -3669,7 +3669,7 @@ public class MemberRefactoringEngine
             var sameClassRoot = (CompilationUnitSyntax)(await sameClassDocument.GetSyntaxRootAsync(cancellationToken))!;
             var sameClassText = await sameClassDocument.GetTextAsync(cancellationToken);
             var sameClassModel = await sameClassDocument.GetSemanticModelAsync(cancellationToken);
-            var sameClassNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(sameClassRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className) ?? throw new InvalidOperationException("Sequence contains no matching element");
+            var sameClassNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(sameClassRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className) ?? throw new RoslynSentinel.Common.ToolNotFoundException($"Class '{className}' was not found in the file.", "class", className);
             var receiverCandidates = sameClassModel?.GetDeclaredSymbol(sameClassNode, cancellationToken) is { } sameClassSymbol
                 ? sameClassSymbol.GetMembers().Where(m => !m.IsStatic && !m.IsImplicitlyDeclared && (m is IFieldSymbol || m is IPropertySymbol) && (m is IFieldSymbol f ? f.Type : ((IPropertySymbol)m).Type).Name == targetClassName).Select(m => m.Name).ToList()
                 : new List<string>();
@@ -3718,7 +3718,7 @@ public class MemberRefactoringEngine
 
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).First()!;
         var root = (CompilationUnitSyntax)(await document.GetSyntaxRootAsync(cancellationToken))!;
-        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className) ?? throw new InvalidOperationException("Sequence contains no matching element");
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className) ?? throw new RoslynSentinel.Common.ToolNotFoundException($"Class '{className}' was not found in the file.", "class", className);
 
         // Receiver rewrites (`oldReceiver.Member` -> `resolvedReceiver.Member`) are minimal edits: only the receiver
         // expression's own span is replaced, against each document's ORIGINAL text, so the rest of every caller file

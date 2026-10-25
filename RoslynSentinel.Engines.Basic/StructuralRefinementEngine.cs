@@ -47,7 +47,7 @@ public class StructuralRefinementEngine
         BaseTypeDeclarationSyntax? primaryType;
         if (targetTypeName != null)
         {
-            primaryType = topLevelTypes.FirstOrDefault(t => t.Identifier.Text == targetTypeName);
+            primaryType = RoslynSentinel.Common.NameTargetLookup.RequireSingle(topLevelTypes.Where(t => t.Identifier.Text == targetTypeName).ToList(), "Type", targetTypeName);
             if (primaryType == null)
             {
                 var available = topLevelTypes.Count == 0 ? "none" : string.Join(", ", topLevelTypes.Select(t => t.Identifier.Text));

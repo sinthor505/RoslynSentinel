@@ -175,8 +175,8 @@ public class SemanticRefactoringEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        var propNode = classNode?.Members.OfType<PropertyDeclarationSyntax>().FirstOrDefault(p => p.Identifier.Text == propertyName);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
+        var propNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classNode?.Members.OfType<PropertyDeclarationSyntax>().Where(p => p.Identifier.Text == propertyName).ToList() ?? new System.Collections.Generic.List<PropertyDeclarationSyntax>(), "Property", propertyName);
 
         if (classNode == null)
         {
