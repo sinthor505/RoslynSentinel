@@ -1,6 +1,6 @@
 # Plan: SemanticFindReplace operation removeNullForgiving, then strip the 235 redundant UpdatedText! in tests
 
-**Status:** APPROVED 2026-10-25. Closes the step 11 TOOL-GAP in TODO.md (plan_document_edit_result_non_nullable_updated_text); not started.
+**Status:** IN PROGRESS 2026-10-25. Steps 1-5 done in `1934c0f3`; step 6 applied in `600251b0` to 46 files (205 sites); the 36 sites in `MemberRefactoringTests.cs` and step 7 remain (TODO.md).
 
 ## Problem
 `DocumentEditResult.UpdatedText` is now a non-nullable `string` (`RoslynSentinel.Common/DocumentEditResult.cs:21`), so the
