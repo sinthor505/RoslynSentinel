@@ -72,8 +72,8 @@ public class MemberSingleDeclarationTests
             Assert.That(message, Does.Contain("Method 'Gamma'"));
             Assert.That(message, Does.Contain("Field '_delta'"));
             Assert.That(message, Does.Contain("replace takes exactly one member"));
-            Assert.That(message, Does.Contain("Member(operation: replace) once per existing member"));
-            Assert.That(message, Does.Contain("Member(operation: addMember"));
+            Assert.That(message, Does.Contain("operation: replace").And.Contain("once per existing member"));
+            Assert.That(message, Does.Contain("operation: addMember"));
             Assert.That(message, Does.Not.Contain("not a valid member declaration"),
                 "The multi-member case must not be misreported as a malformed declaration.");
         });
@@ -127,7 +127,7 @@ public class MemberSingleDeclarationTests
             Assert.That(message, Does.Contain("Method 'Gamma'"));
             Assert.That(message, Does.Contain("Property 'Name'"));
             Assert.That(message, Does.Contain("addMember takes exactly one member per call"));
-            Assert.That(message, Does.Contain("Member(operation: addMember) once per member"));
+            Assert.That(message, Does.Contain("operation: addMember").And.Contain("once per member"));
         });
     }
 }

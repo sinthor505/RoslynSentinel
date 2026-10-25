@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Engines.Basic;
 
@@ -545,7 +546,7 @@ public class MemberRefactoringEngine
 
         if (classNode == null || classNode is not ClassDeclarationSyntax classDecl)
         {
-            throw new ToolNotFoundException($"Class '{className}' was not found in '{filePath}'. Searched: class, interface, struct, record and enum declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. Next: GetFileOutline to confirm the type name.", "class", className);
+            throw new ToolNotFoundException($"Class '{className}' was not found in '{filePath}'. Searched: class, interface, struct, record and enum declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to confirm the type name.", "class", className);
         }
 
         // TODO tuple outcome slot is always Modified; return only the list
@@ -1135,7 +1136,7 @@ public class MemberRefactoringEngine
 
         if (memberNode is not MethodDeclarationSyntax methodDecl)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' was not found in '{filePath}'. Searched: method declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. Next: Search(mode: text, query: '{methodName}') or GetFileOutline to confirm the method name.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' was not found in '{filePath}'. Searched: method declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. Next: {ToolCallHint.Call("Search", ("mode", "text"), ("query", methodName))} or {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to confirm the method name.", "method", methodName);
         }
         // TODO tuple outcome slot is always Modified; return only the list
 
@@ -1258,7 +1259,7 @@ public class MemberRefactoringEngine
         var lastParam = parameters[^1];
         if (lastParam.Identifier.Text != paramName)
         {
-            throw new ToolTargetIneligibleException($"Cannot remove '{paramName}': MethodSignature(remove) only supports the last parameter (currently '{lastParam.Identifier.Text}') - removing an earlier parameter would require reordering every call site's remaining positional arguments, which cannot always be done safely.");
+            throw new ToolTargetIneligibleException($"Cannot remove '{paramName}': MethodSignature(remove) only supports the last parameter (currently '{lastParam.Identifier.Text}') - removing an earlier parameter would require reordering every call site's remaining positional arguments, which cannot always be done safely."); // hint-ok: prose naming the MethodSignature(remove) capability, not a call to make
         }
 
         var targetParamCount = parameters.Count;
@@ -2094,12 +2095,12 @@ public class MemberRefactoringEngine
         {
             var target = string.IsNullOrEmpty(targetMemberName) ? "the target member" : $"'{targetMemberName}'";
             return $"newMemberSource contains {members.Count} member declarations ({described}), but replace takes exactly one member - the single declaration that replaces {target}. " +
-                "Recovery: call Member(operation: replace) once per existing member you want to replace, passing just that member's full declaration, " +
-                "and call Member(operation: addMember, containerName: ..., position: \"after:<MemberName>\") once for each member that is new.";
+                $"Recovery: call {ToolCallHint.Call("Member", ("operation", "replace"))} once per existing member you want to replace, passing just that member's full declaration, " +
+                $"and call {ToolCallHint.Call("Member", ("operation", "addMember"), ("containerName", "<ContainerName>"), ("position", "after:<MemberName>"))} once for each member that is new.";
         }
 
         return $"newMemberSource contains {members.Count} member declarations ({described}), but {operation} takes exactly one member per call. " +
-            $"Recovery: call Member(operation: {operation}) once per member, passing one full declaration each time; to keep them in order, give each call after the first position: \"after:<previous member's name>\".";
+            $"Recovery: call {ToolCallHint.Call("Member", ("operation", operation))} once per member, passing one full declaration each time; to keep them in order, give each call after the first position: \"after:<previous member's name>\".";
     }
 
     public async Task<DocumentEditResult> AddFieldAsync(FilePathWrapper filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
@@ -2272,7 +2273,7 @@ public class MemberRefactoringEngine
         // A type declaration written over a non-type target (e.g. a same-named constructor) would produce CS0542; refuse it.
         if (newMember is BaseTypeDeclarationSyntax && member is not BaseTypeDeclarationSyntax)
         {
-            throw new ToolInvalidArgumentException("newMemberSource declares a type, but Member(replace) replaces members, not types. To replace a type use ReplaceSnippet or ApplyDiff.");
+            throw new ToolInvalidArgumentException($"newMemberSource declares a type, but Member(replace) replaces members, not types. To replace a type use {ToolCallHint.Call("ReplaceSnippet")} or {ToolCallHint.Call("ApplyDiff")}."); // hint-ok: Member(replace) here is prose describing the operation, not a call to make
         }
 
         var replacedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, member, newMember, cancellationToken);
@@ -2520,8 +2521,8 @@ public class MemberRefactoringEngine
                     "Member(remove) only removes class-level members (methods, properties, fields, constructors, " +
                     "events, indexers) -- it does not support removing type declarations (classes, interfaces, " +
                     "structs, records, enums, or enum members), and skipPrecheck does not change this. " +
-                    "To remove an unreferenced type declaration, use DeleteUnusedSymbol. If it still has callers, update or remove those callers first and then use DeleteUnusedSymbol; " +
-                    "edit the file's raw text with ReplaceSnippet or ApplyDiff only as a last resort.", "member", memberName);
+                    $"To remove an unreferenced type declaration, use {ToolCallHint.Call("DeleteUnusedSymbol")}. If it still has callers, update or remove those callers first and then use {ToolCallHint.Call("DeleteUnusedSymbol")}; " +
+                    $"edit the file's raw text with {ToolCallHint.Call("ReplaceSnippet")} or {ToolCallHint.Call("ApplyDiff")} only as a last resort.", "member", memberName); // hint-ok: Member(remove) in the message above is prose describing the operation, not a call to make
             }
 
             throw new ToolNotFoundException("Member not found.", "member", memberName);
@@ -4702,7 +4703,7 @@ public class MemberRefactoringEngine
         var containingType = refNode?.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text ?? "the calling type";
         var receiver = memberAccess?.Expression;
         var initialization = receiver == null || receiver is ThisExpressionSyntax ? "initialize it with the same constructor arguments the current instance was created with" : $"initialize it where the current receiver '{receiver}' is initialized, with the same constructor arguments";
-        return $"Add a field of type {targetClassName} to {containingType} ({initialization}), then retry MoveMember - the call site will then auto-resolve.";
+        return $"Add a field of type {targetClassName} to {containingType} ({initialization}), then retry {ToolCallHint.Call("MoveMember")} - the call site will then auto-resolve.";
     }
 
     /// <summary>

@@ -20,7 +20,7 @@ namespace RoslynSentinel.Engines.Basic;
 /// </remarks>
 internal static class NullForgivingRemover
 {
-    private const string SymbolHint = "Pass a property or field id such as 'P:Ns.Type.Name' or 'F:Ns.Type.name' (from Search(mode: symbol) or Search(mode: property)); its declared type must not be nullable.";
+    private static string SymbolHint => $"Pass a property or field id such as 'P:Ns.Type.Name' or 'F:Ns.Type.name' (from {ToolCallHint.Call("Search", ("mode", "symbol"))} or {ToolCallHint.Call("Search", ("mode", "property"))}); its declared type must not be nullable.";
 
     /// <summary>Plans the removal. Zero matching sites is a valid outcome (empty Sites and Changes, no Error).</summary>
     /// <param name="solution">Solution to walk.</param>

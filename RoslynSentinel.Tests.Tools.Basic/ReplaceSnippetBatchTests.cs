@@ -286,7 +286,7 @@ public class ReplaceSnippetBatchTests
         Assert.Multiple(() =>
         {
             Assert.That(result.ErrorData!.Message, Does.Contain("newContent is required"));
-            Assert.That(result.ErrorData!.Message, Does.Not.Contain("Member(operation: replace)"),
+            Assert.That(result.ErrorData!.Message, Does.Not.Contain("Member(reason:"),
                 "size advice is noise for a non-size rejection");
         });
     }
