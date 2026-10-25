@@ -1,6 +1,6 @@
 # Build server hints that name a tool through a validated ToolCallHint helper, enforced by a ratchet
 
-**Status:** DRAFT 2026-10-25. Approved in principle by the user; slices not started.
+**Status:** IMPLEMENTED 2026-10-25. Foundation and all conversion slices landed (last: 26ee119f); ratchet baseline is empty. Open follow-ups are in TODO.md ("Tool-call hint follow-ups").
 
 ## Motivation
 

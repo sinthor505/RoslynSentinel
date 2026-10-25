@@ -8,6 +8,16 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Tool-call hints omit required parameters - resolved (2026-10-25)
+
+Every server-emitted hint naming a tool lacked `reason` (all 137 tools) and often `filePath`/`query`/`solutionPath`.
+Fixed by `ToolCallHint.Call` (RoslynSentinel.Common), validated against `ToolSignatureCatalog`, with a ratchet scan
+test (`ToolHintRatchetTests`) and an empty baseline (`docs/known-handwritten-tool-hints.txt`). Conversion slices by
+project: Common, Engines.Basic, Engines.Advanced, Server.Basic, Tools.Advanced, Tools.Basic, GitImpl/GitTools (26ee119f),
+CodeTransformTools, PlanStepRunner. Doc: [proposal_tool_hint_builder.md](proposals/proposal_tool_hint_builder.md).
+Evidence: the validator also caught a stale tool name (`flag_migration_candidates`) and an invalid enum value
+(`ListAll(kind: types)`) that no test had flagged. Open follow-ups are in TODO.md.
+
 ## Retire EditOutcome.Unset - resolved (2026-10-24)
 
 Re-parented `BatchResultSummary` (keeps `ChangeId`), `BridgeBatchResult`, `BestInsertionResult` (keeps `FilePath`) and `GenerateToStringResult` off `EngineResultBase` (`743283d6`), made `Outcome` `required` on `EngineResultBase` and `ProjectEditResult` (`1daccad1`), then removed `Unset`; 0 is now unnamed and maps to Failed through `ToResultStatus`'s `_` arm, and `GuardEngineResult`'s `default` arm stays for undefined values (`d120b7b9`). Evidence: full build 0 errors, test failures limited to the known baseline set. Wire change: `outcome`, `message`, `isCommitted` (and `filePath` on the batch types) no longer appear in the output of the batch tools, `GetBestInsertionPoint` and `GenerateToString`.
