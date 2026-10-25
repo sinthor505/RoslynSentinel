@@ -269,4 +269,16 @@ public class RefactoringToolHelpersTests
         Assert.That(RefactoringToolHelpers.SummarizeEngineMessage("abcdefghij", 8), Is.EqualTo("abcde..."));
         Assert.That(RefactoringToolHelpers.SummarizeEngineMessage("abcdefghij", 10), Is.EqualTo("abcdefghij"));
     }
+
+    [Test]
+    public void RequireUpdatedText_ModifiedWithEmptyText_IsAnError()
+    {
+        var result = RefactoringToolHelpers.RequireUpdatedText(
+            new DocumentEditResult(EditOutcome.Modified, "X.cs"),
+            "test",
+            "X.cs");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.IsError, Is.True);
+    }
 }

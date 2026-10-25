@@ -40,7 +40,7 @@ public static class RefactoringToolHelpers
     /// <summary>
     /// Guards against staging an unintended empty-file overwrite: when a document-edit engine
     /// method can't locate its target (wrong name, wrong attribute/modifier, etc.), it returns
-    /// Outcome != Modified and leaves UpdatedText null -> so skipping this check would silently
+    /// Outcome != Modified and leaves UpdatedText empty (a non-nullable string) -> so skipping this check would silently
     /// propose replacing the whole file with nothing.
     /// Returns null when updated.UpdatedText is safe to use as the new file content.
     /// </summary>
