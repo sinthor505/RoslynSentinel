@@ -685,7 +685,7 @@ public class LogicSimplificationEngine
             foreach (var changedDocId in projectChange.GetChangedDocuments())
             {
                 var doc = updatedSolution.GetDocument(changedDocId)!;
-                changes.Add(new DocumentEditResult { FilePath = doc.FilePath ?? doc.Name, UpdatedText = (await doc.GetTextAsync(cancellationToken)).ToString() });
+                changes.Add(new DocumentEditResult { Outcome = EditOutcome.Modified, FilePath = doc.FilePath ?? doc.Name, UpdatedText = (await doc.GetTextAsync(cancellationToken)).ToString() });
             }
         }
 
