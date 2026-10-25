@@ -54,7 +54,7 @@ public class SolutionStructureEngine
         };
     }
 
-    public async Task<DocumentEditResult> PreviewMoveFileToNamespaceFolderAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
+    public async Task<ProjectEditResult> PreviewMoveFileToNamespaceFolderAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
@@ -88,19 +88,18 @@ public class SolutionStructureEngine
         var expectedPath = Path.Combine(expectedDir, Path.GetFileName(filePath));
         if (filePath != expectedPath)
         {
-            return new DocumentEditResult
+            return new ProjectEditResult
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
                 Message = $"MOVE_REQUIRED: {filePath} -> {expectedPath}"};
         }
 
-        return new DocumentEditResult
+        return new ProjectEditResult
         {
             Outcome = EditOutcome.NoCandidatesFound,
             FilePath = filePath,
-            Message = "File is already in the correct folder; nothing to move.",
-            UpdatedText = root?.ToFullString() ?? ""
+            Message = "File is already in the correct folder; nothing to move."
         };
     }
 
