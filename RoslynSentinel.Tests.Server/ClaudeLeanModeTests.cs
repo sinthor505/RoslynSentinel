@@ -276,6 +276,24 @@ public class ClaudeLeanModeTests
     }
 
     [Test]
+    public void SemanticFindReplace_IsInBothModeMaps_SoAllIncludesIt_AndStaysOnDemandInClaudeLean()
+    {
+        // Regression: the class once lived only in the claude-lean lists, so --mode=all (which excludes claude-lean) never listed the tool.
+        Assert.That(ToolClassRegistry.BasicModeToToolClasses["SemanticFindReplace"], Is.EqualTo(new[] { "SemanticFindReplaceTools" }));
+        Assert.That(ToolClassRegistry.AdvancedModeToToolClasses["SemanticFindReplace"], Is.EqualTo(new[] { "SemanticFindReplaceTools" }));
+        Assert.That(ToolClassRegistry.ClaudeLeanOnDemandToolClasses, Does.Contain("SemanticFindReplaceTools"));
+
+        var allModes = new HashSet<string>(ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
+        ServerStartupHelpers.ParseArgs(["--mode=all"], allModes, out _, out var activeModes, out _, out _, out _, out _, out _);
+        var classes = ServerStartupHelpers.ResolveActiveToolClasses(activeModes, ToolClassRegistry.AdvancedModeToToolClasses, [], []);
+        Assert.That(classes, Does.Contain("SemanticFindReplaceTools"));
+
+        // Off by default in claude-lean: the tool is not allow-listed; the moveExtract toolset switches it on.
+        Assert.That(ToolClassRegistry.ClaudeLeanToolNames, Does.Not.Contain("SemanticFindReplace"));
+        Assert.That(ToolsetCatalog.FindSet("SemanticFindReplace"), Is.EqualTo(ToolSetName.moveExtract));
+    }
+
+    [Test]
     public void SubAgent_IsOnDemandOnlyInClaudeLean_ViaTheModelEvalToolset()
     {
         Assert.That(ToolClassRegistry.AdvancedModeToToolClasses["SubAgent"], Is.EqualTo(new[] { "SubAgentTools" }));

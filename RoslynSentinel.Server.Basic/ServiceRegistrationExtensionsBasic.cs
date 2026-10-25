@@ -190,7 +190,6 @@ public static class RoslynSentinelServiceExtensionsBasic
             bool toolsetControlActive = activeToolClasses.Contains("ToolsetControlTools");
             bool declarationActive = activeToolClasses.Contains("DeclarationTools");
             bool parameterEditActive = activeToolClasses.Contains("ParameterEditTools");
-            bool semanticFindReplaceActive = activeToolClasses.Contains("SemanticFindReplaceTools");
             activeToolClasses = new HashSet<string>(activeToolClasses, StringComparer.OrdinalIgnoreCase);
             foreach (var onDemandClass in ToolClassRegistry.ClaudeLeanOnDemandToolClasses.Where(c => !resolvedExcludeTools.Contains(c)))
             {
@@ -226,14 +225,15 @@ public static class RoslynSentinelServiceExtensionsBasic
                 services.AddSingleton<ParameterEditTools>();
                 mcpBuilder.WithSentinelTools<ParameterEditTools>();
             }
+        }
 
-            // The SemanticFindReplaceTool tool: on-demand only, added by the `moveExtract` toolset. Its dependencies
-            // (SemanticReplaceEngine, ValidationEngine, IWorkspaceManager) are registered by AddRoslynSentinelEnginesBasic.
-            if (semanticFindReplaceActive)
-            {
-                services.AddSingleton<SemanticFindReplaceTools>();
-                mcpBuilder.WithSentinelTools<SemanticFindReplaceTools>();
-            }
+        // SemanticFindReplaceTool: part of --mode=all (or --mode=SemanticFindReplace), or on demand in claude-lean (the `moveExtract` toolset;
+        // the lean on-demand class set above puts the class in activeToolClasses, the allow-list hides the tool).
+        // Dependencies (SemanticReplaceEngine, ValidationEngine, IWorkspaceManager) come from AddRoslynSentinelEnginesBasic.
+        if (activeToolClasses.Contains("SemanticFindReplaceTools"))
+        {
+            services.AddSingleton<SemanticFindReplaceTools>();
+            mcpBuilder.WithSentinelTools<SemanticFindReplaceTools>();
         }
 
         // NamedArgumentsTool: opt-in via --mode=NamedArgumentsTool, or on demand in claude-lean (the `moveExtract` toolset;

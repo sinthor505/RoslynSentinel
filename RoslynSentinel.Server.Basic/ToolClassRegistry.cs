@@ -95,6 +95,7 @@ public static class ToolClassRegistry
             ["WholeFileWrite"] = ["WholeFileWriteTools"],
             ["Refactor"] = ["RefactoringExtractionDocsTools", "RefactoringStructuralTools", "TypedMemberTools", "RefactoringSignatureTools"],
             ["Claude"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "GitRemoteTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "TypedMemberTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
+            ["SemanticFindReplace"] = ["SemanticFindReplaceTools"],
             [ClaudeLeanMode] = ClaudeLeanToolClasses,
 
             // Modernize/Quality/Generation/Asyncify register no classes in Basic today (commented
@@ -153,6 +154,7 @@ public static class ToolClassRegistry
             ["TestCategories"] = ["TestCategoryTaggingTools"],
             ["QualifyCrefs"] = ["QualifyCrefsTools"],
             ["Claude"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "GitRemoteTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "TypedMemberTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
+            ["SemanticFindReplace"] = ["SemanticFindReplaceTools"],
             [ClaudeLeanMode] = AdvancedClaudeLeanToolClasses,
             [ExperimentalMode] = ["CodeTransformTools"],
         };
