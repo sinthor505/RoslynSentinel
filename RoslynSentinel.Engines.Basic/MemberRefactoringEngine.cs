@@ -2167,6 +2167,17 @@ public class MemberRefactoringEngine
         };
         static bool IsStatic(MemberDeclarationSyntax m) => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword));
         var sorted = container.Members.OrderBy(CategoryOf).ThenBy(m => IsStatic(m) ? 0 : 1).ThenBy(m => SyntaxTargetResolver.GetMemberName(m) ?? "").ToList();
+        if (sorted.SequenceEqual(container.Members))
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.AlreadyInTargetState,
+                FilePath = filePath,
+                UpdatedText = (await document.GetTextAsync(cancellationToken)).ToString(),
+                Message = "Members are already sorted - nothing to change."
+            };
+        }
+
         var newContainer = container.WithMembers(SyntaxFactory.List(sorted));
         return new DocumentEditResult
         {
