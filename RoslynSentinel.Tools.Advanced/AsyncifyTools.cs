@@ -96,7 +96,7 @@ public class AsyncifyTools
             {
                 IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call LoadSolution first.")
+                              SolutionNotLoadedMessage.Plain)
             };
         }
         catch (OperationCanceledException ex)
@@ -331,7 +331,7 @@ public class AsyncifyTools
             {
                 IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call LoadSolution first.")
+                              SolutionNotLoadedMessage.Plain)
             };
         }
         catch (OperationCanceledException ex)
@@ -393,7 +393,7 @@ public class AsyncifyTools
             {
                 IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call LoadSolution first.")
+                              SolutionNotLoadedMessage.Plain)
             };
         }
         catch (OperationCanceledException ex)
@@ -477,7 +477,7 @@ public class AsyncifyTools
             {
                 IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call LoadSolution first.")
+                              SolutionNotLoadedMessage.Plain)
             };
         }
         catch (OperationCanceledException ex)
@@ -614,7 +614,7 @@ public class AsyncifyTools
             {
                 IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call LoadSolution first.")
+                              SolutionNotLoadedMessage.Plain)
             };
         }
         catch (OperationCanceledException ex)
@@ -696,7 +696,7 @@ public class AsyncifyTools
             {
                 IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call LoadSolution first.")
+                              SolutionNotLoadedMessage.Plain)
             };
         }
         catch (OperationCanceledException ex)
@@ -782,7 +782,7 @@ public class AsyncifyTools
             {
                 IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call LoadSolution first.")
+                              SolutionNotLoadedMessage.Plain)
             };
         }
         catch (OperationCanceledException ex)
@@ -850,7 +850,7 @@ public class AsyncifyTools
             {
                 IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call LoadSolution first.")
+                              SolutionNotLoadedMessage.Plain)
             };
         }
         catch (OperationCanceledException ex)
@@ -915,7 +915,7 @@ public class AsyncifyTools
             {
                 IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call LoadSolution first.")
+                              SolutionNotLoadedMessage.Plain)
             };
         }
         catch (OperationCanceledException ex)
@@ -981,7 +981,7 @@ public class AsyncifyTools
             {
                 IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call LoadSolution first.")
+                              SolutionNotLoadedMessage.Plain)
             };
         }
         catch (OperationCanceledException ex)
@@ -1060,7 +1060,7 @@ public class AsyncifyTools
             {
                 IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call LoadSolution first.")
+                              SolutionNotLoadedMessage.Plain)
             };
         }
         catch (OperationCanceledException ex)
@@ -1149,7 +1149,7 @@ public class AsyncifyTools
             {
                 IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call LoadSolution first.")
+                              SolutionNotLoadedMessage.Plain)
             };
         }
         catch (OperationCanceledException ex)

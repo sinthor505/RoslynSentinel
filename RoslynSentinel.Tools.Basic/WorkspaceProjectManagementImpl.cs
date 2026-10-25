@@ -65,7 +65,7 @@ public class WorkspaceProjectManagementImpl
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.SolutionNotLoaded, "No solution loaded. Call LoadSolution first.")
+                        ErrorData = new ResultError(ToolErrorCode.SolutionNotLoaded, SolutionNotLoadedMessage.Plain)
                     };
                 }
 
