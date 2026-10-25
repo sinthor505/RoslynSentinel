@@ -12,17 +12,53 @@ public static class ToolCallHint
 {
     private const string ReasonPlaceholder = "\"<why you call this>\"";
 
-    private static ToolSignatureCatalog _current = ToolSignatureCatalog.Empty;
+    private static readonly object FallbackLock = new();
+
+    /// <summary>Explicit override set through the Current setter; null means no override.</summary>
+    private static ToolSignatureCatalog? _override;
+
+    /// <summary>Cached fallback. Only a catalog holding at least one tool is cached, so an early call is rebuilt later.</summary>
+    private static ToolSignatureCatalog? _fallback;
 
     /// <summary>
-    /// The catalog used by the overloads that take no catalog argument. Starts as <see cref="ToolSignatureCatalog.Empty"/>,
-    /// so every hint degrades to a bare tool name until a later slice wires the live catalog. Reads and writes are
-    /// volatile; assigning null resets it to Empty.
+    /// The catalog used by the overloads that take no catalog argument. An assigned value is an explicit override;
+    /// assigning null clears it. Without an override the fallback applies: a catalog built from the loaded
+    /// [McpServerTool] methods by <see cref="ToolSignatureCatalogReflection.FromLoadedAssemblies"/>, cached once it
+    /// holds at least one tool. Live catalog wiring comes in a later slice; until then, and in unit tests, the fallback
+    /// applies. Thread-safe; reads on the hot path do not allocate once the fallback is cached.
     /// </summary>
     public static ToolSignatureCatalog Current
     {
-        get => Volatile.Read(ref _current);
-        set => Volatile.Write(ref _current, value ?? ToolSignatureCatalog.Empty);
+        get
+        {
+            var explicitCatalog = Volatile.Read(ref _override);
+            if (explicitCatalog is not null)
+            {
+                return explicitCatalog;
+            }
+
+            return Volatile.Read(ref _fallback) ?? BuildFallback();
+        }
+        set => Volatile.Write(ref _override, value);
+    }
+
+    private static ToolSignatureCatalog BuildFallback()
+    {
+        lock (FallbackLock)
+        {
+            if (_fallback is not null)
+            {
+                return _fallback;
+            }
+
+            var built = ToolSignatureCatalogReflection.FromLoadedAssemblies();
+            if (built.ToolNames.Any())
+            {
+                Volatile.Write(ref _fallback, built);
+            }
+
+            return built;
+        }
     }
 
     /// <summary>

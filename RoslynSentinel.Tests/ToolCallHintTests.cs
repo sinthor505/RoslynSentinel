@@ -123,14 +123,17 @@ public class ToolCallHintTests
     }
 
     [Test]
-    public void Current_DefaultIsEmpty_AndNullResetsToEmpty()
+    public void Current_NoOverride_UsesFallbackAndNullClearsTestCatalog()
     {
-        Assert.That(ToolCallHint.Current, Is.SameAs(ToolSignatureCatalog.Empty));
-
-        ToolCallHint.Current = BuildCatalog();
         ToolCallHint.Current = null!;
+        Assert.That(ToolCallHint.Current, Is.Not.Null);
 
-        Assert.That(ToolCallHint.Current, Is.SameAs(ToolSignatureCatalog.Empty));
+        var testCatalog = BuildCatalog();
+        ToolCallHint.Current = testCatalog;
+        Assert.That(ToolCallHint.Current, Is.SameAs(testCatalog));
+
+        ToolCallHint.Current = null!;
+        Assert.That(ToolCallHint.Current, Is.Not.SameAs(testCatalog));
     }
 
     [Test]
