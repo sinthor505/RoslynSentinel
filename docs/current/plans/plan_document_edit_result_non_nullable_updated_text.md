@@ -138,6 +138,12 @@ Slices of <=3 files each, tools first because they hold most uses:
 ### Step 10 - Helper dead branches
 - Files: `RoslynSentinel.Engines.Basic/RefactoringToolHelpers.cs`, `RoslynSentinel.Tests.Basic/RefactoringToolHelpersTests.cs`.
 - Change: `GuardEngineResult`'s `Modified`-without-text path (`:145`) collapses to the empty-string check; `RequireUpdatedText` keeps one `string.IsNullOrEmpty(UpdatedText)` check as the write-boundary guard (an empty file text on `Modified` is still a bug). The `default` (`Unset`) branch stays until step 12.
+- Because step 7 could not keep `required` (see its deviation note), add the replacement guard here (user chose
+  this option 2026-10-24): a syntax-scan test in `RoslynSentinel.Tests.Basic`, modelled on
+  `RawFormatterCalls_AreOnlyInTheAllowlist`, that parses every `.cs` under `RoslynSentinel.Engines.*` and fails
+  if an object-creation `new DocumentEditResult { ... }` (initializer form) has no `UpdatedText =` assignment;
+  plus unit tests that `RequireUpdatedText` and `GuardEngineResult` treat a `Modified` result with empty text
+  as an error. Files for this step grow to 3: the helpers, their test file, the new scan test file.
 - Done when: both test fixtures pass; `Tests.Basic` in full shows only the known failure.
 
 ### Step 11 - Test cleanup

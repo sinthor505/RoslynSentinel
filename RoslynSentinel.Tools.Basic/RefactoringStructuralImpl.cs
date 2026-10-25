@@ -243,7 +243,7 @@ public class RefactoringStructuralImpl
                 engineErrorCodes.Add(ex.ErrorCode);
                 continue;
             }
-            finalContents[filePathResolved] = updated.UpdatedText!; // TODO S4: UpdatedText becomes non-nullable
+            finalContents[filePathResolved] = updated.UpdatedText;
             touchedFiles.Add(filePathResolved);
         }
 
@@ -391,7 +391,7 @@ public class RefactoringStructuralImpl
                 continue;
             }
 
-            finalContents[filePathResolved] = updated.UpdatedText!; // TODO S4: UpdatedText becomes non-nullable
+            finalContents[filePathResolved] = updated.UpdatedText;
             touchedFiles.Add(filePathResolved);
         }
 
@@ -502,7 +502,7 @@ public class RefactoringStructuralImpl
                 engineErrorCodes.Add(ex.ErrorCode);
                 continue;
             }
-            finalContents[filePathResolved] = updated.UpdatedText!; // TODO S4: UpdatedText becomes non-nullable
+            finalContents[filePathResolved] = updated.UpdatedText;
             touchedFiles.Add(filePathResolved);
         }
 
@@ -588,7 +588,7 @@ public class RefactoringStructuralImpl
                     if (RefactoringToolHelpers.RequireUpdatedText(enumReplaced, "Member", filePathResolved, recoveryHint: enumReplaceHint) is { } enumReplaceError)
                         return enumReplaceError;
 
-                    var enumReplaceChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumReplaced.UpdatedText! };
+                    var enumReplaceChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumReplaced.UpdatedText };
                     var enumReplaceApply = await ValidateAndApplyAsync(enumReplaceChanges, $"Replaced '{memberName}' in enum '{replaceEnumName}'.", "Member", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
                     if (enumReplaceApply.Error is not null)
                         return new SentinelCallToolResult<object> { IsError = true, ErrorData = enumReplaceApply.Error };
@@ -601,7 +601,7 @@ public class RefactoringStructuralImpl
                 var result = await _memberRefactoringEngine.ReplaceMemberAsync(filePathResolved, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
                 if (result.Outcome == EditOutcome.AlreadyInTargetState && RefactoringToolHelpers.RequireUpdatedText(result, "Member", filePathResolved) is { } replaceAlreadyInStateResult)
                     return replaceAlreadyInStateResult;
-                var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText! }; // TODO S4: UpdatedText becomes non-nullable
+                var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
                 var apply = await ValidateAndApplyAsync(changes, $"Replace member '{memberName}'.", "Member", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
                 if (apply.Error is not null)
                     return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
@@ -655,7 +655,7 @@ public class RefactoringStructuralImpl
                     if (RefactoringToolHelpers.RequireUpdatedText(enumRemoved, "Member", filePathResolved, recoveryHint: enumRemoveHint) is { } enumRemoveError)
                         return enumRemoveError;
 
-                    var enumRemoveChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumRemoved.UpdatedText! };
+                    var enumRemoveChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumRemoved.UpdatedText };
                     var enumRemoveApply = await ValidateAndApplyAsync(enumRemoveChanges, $"Removed '{memberName}' from enum '{removeEnumName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
                     if (enumRemoveApply.Error is not null)
                         return new SentinelCallToolResult<object> { IsError = true, ErrorData = enumRemoveApply.Error };
@@ -664,7 +664,7 @@ public class RefactoringStructuralImpl
 
                 var result = await _memberRefactoringEngine.RemoveMemberAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken: cancellationToken);
 
-                var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText! };
+                var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
                 var apply = await ValidateAndApplyAsync(changes, $"Remove member '{memberName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (apply.Error is not null)
                     return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
@@ -709,7 +709,7 @@ public class RefactoringStructuralImpl
                     var topLevelNoStageDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
                     var topLevelNoStageChanges = string.IsNullOrEmpty(topLevelResult.UpdatedText)
                         ? new Dictionary<FilePathWrapper, string>()
-                        : new Dictionary<FilePathWrapper, string> { [filePathResolved] = topLevelResult.UpdatedText! };
+                        : new Dictionary<FilePathWrapper, string> { [filePathResolved] = topLevelResult.UpdatedText };
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = false,
@@ -725,7 +725,7 @@ public class RefactoringStructuralImpl
                 }
                 var topLevelDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
 
-                var topLevelChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = topLevelResult.UpdatedText! };
+                var topLevelChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = topLevelResult.UpdatedText };
                 var topLevelApply = await ValidateAndApplyAsync(topLevelChanges, topLevelDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
                 if (topLevelApply.Error is not null)
                     return new SentinelCallToolResult<object> { IsError = true, ErrorData = topLevelApply.Error };
@@ -770,7 +770,7 @@ public class RefactoringStructuralImpl
                     var enumAddNoStageDescription = $"Added member to enum '{containerName}' in {Path.GetFileName(filePathResolved)}.";
                     var enumAddNoStageChanges = string.IsNullOrEmpty(enumAdded.UpdatedText)
                         ? new Dictionary<FilePathWrapper, string>()
-                        : new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumAdded.UpdatedText! };
+                        : new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumAdded.UpdatedText };
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = false,
@@ -786,7 +786,7 @@ public class RefactoringStructuralImpl
                 }
 
                 var enumAddDescription = $"Added member to enum '{containerName}' in {Path.GetFileName(filePathResolved)}.";
-                var enumAddChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumAdded.UpdatedText! };
+                var enumAddChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumAdded.UpdatedText };
                 var enumAddApply = await ValidateAndApplyAsync(enumAddChanges, enumAddDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
                 if (enumAddApply.Error is not null)
                     return new SentinelCallToolResult<object> { IsError = true, ErrorData = enumAddApply.Error };
@@ -824,7 +824,7 @@ public class RefactoringStructuralImpl
             {
                 var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
                     ? new Dictionary<FilePathWrapper, string>()
-                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
@@ -860,7 +860,7 @@ public class RefactoringStructuralImpl
         bool returnDiff,
         CancellationToken cancellationToken)
     {
-        var addChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+        var addChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
         var addApply = await ValidateAndApplyAsync(addChanges, description, operationName, dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
         if (addApply.Error is not null)
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = addApply.Error };
@@ -956,7 +956,7 @@ public class RefactoringStructuralImpl
                     : $"'{enumName}' in {Path.GetFileName(filePathResolved)}: {updated.Message}.";
                 var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
                     ? new Dictionary<FilePathWrapper, string>()
-                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
                     IsError = false,
@@ -978,7 +978,7 @@ public class RefactoringStructuralImpl
                 ? $"Sets '{enumName}' members in {Path.GetFileName(filePathResolved)} to match the requested list."
                 : $"'{enumName}' in {Path.GetFileName(filePathResolved)}: {updated.Message}.";
 
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, description, "ModifyEnum", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = apply.Error };
@@ -1088,7 +1088,7 @@ public class RefactoringStructuralImpl
             {
                 var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
                     ? new Dictionary<FilePathWrapper, string>()
-                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
                     IsError = false,
@@ -1103,7 +1103,7 @@ public class RefactoringStructuralImpl
                 };
             }
 
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"{action} attribute '{existingAttribute}' on '{targetName}'.", "ModifyAttribute", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = apply.Error };
@@ -1214,7 +1214,7 @@ public class RefactoringStructuralImpl
             {
                 var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
                     ? new Dictionary<FilePathWrapper, string>()
-                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
                     IsError = false,
@@ -1231,7 +1231,7 @@ public class RefactoringStructuralImpl
             if (RefactoringToolHelpers.RequireUpdatedText(updated, "ModifyModifier", filePathResolved) is { } guardResult)
                 return RefactoringToolHelpers.ToSummaryResult(guardResult);
 
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"{action} '{modifierText}' modifier on '{targetName}'.", "ModifyModifier", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = apply.Error };
@@ -1320,7 +1320,7 @@ public class RefactoringStructuralImpl
             {
                 var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
                     ? new Dictionary<FilePathWrapper, string>()
-                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
                     IsError = false,
@@ -1337,7 +1337,7 @@ public class RefactoringStructuralImpl
             if (RefactoringToolHelpers.RequireUpdatedText(updated, "ModifyBaseType", filePathResolved) is { } guardResult)
                 return RefactoringToolHelpers.ToSummaryResult(guardResult);
 
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.", "ModifyBaseType", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = apply.Error };

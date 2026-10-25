@@ -475,7 +475,7 @@ public class WorkspaceProjectManagementImpl
         {
             var changes = new Dictionary<FilePathWrapper, string>
             {
-                [filePathResolved] = result.UpdatedText! // TODO S4: UpdatedText becomes non-nullable
+                [filePathResolved] = result.UpdatedText
             };
             var apply = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount: 3, validateChanges: true, cancellationToken: cancellationToken);
             if (apply.IsError)
