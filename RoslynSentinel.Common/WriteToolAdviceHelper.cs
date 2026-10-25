@@ -148,7 +148,7 @@ public sealed class WriteToolAdviceHelper
         // whole method/property/constructor body, which Member does with no size limit.
         if (IsExposed("Member"))
         {
-            clauses.Add("If you are replacing a whole method/property/constructor, use Member(operation: replace) - it has no size limit.");
+            clauses.Add($"If you are replacing a whole method/property/constructor, use {ToolCallHint.Call("Member", ("operation", "replace"))} - it has no size limit.");
             toolNames.Add("Member");
             primaryRoute = WriteEscapeRoute.StructuredEdit;
         }
@@ -182,7 +182,7 @@ public sealed class WriteToolAdviceHelper
         // 4. Whole-file rewrite, last and explicitly conditional: it is the least surgical option.
         if (IsExposed("WriteFile"))
         {
-            clauses.Add("Only if you are genuinely rewriting most of the file, use WriteFile(operation=ReplaceFile).");
+            clauses.Add($"Only if you are genuinely rewriting most of the file, use {ToolCallHint.Call("WriteFile", ("operation", "ReplaceFile"))}.");
             toolNames.Add("WriteFile");
         }
         else if (primaryRoute == WriteEscapeRoute.SplitIntoSmallerEdits)

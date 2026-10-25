@@ -3,14 +3,8 @@
 # `// hint-ok: <reason>` comment on their statement. This file may only shrink.
 # Refresh after removing hints: set ROSLYNSENTINEL_UPDATE_HINT_BASELINE=1 and run
 # ToolHintRatchetTests.Scan_MatchesBaseline. Line format: <path> | <member> | <tool> | <count>
-RoslynSentinel.Common/PersistentWorkspaceManager.cs | ApplyProposedChangesAsync | LoadSolution | 1
-RoslynSentinel.Common/PersistentWorkspaceManager.cs | ResolveFromWireAsync | Search | 1
-RoslynSentinel.Common/SymbolValidator.cs | IsValidSymbolId | Search | 1
 RoslynSentinel.Common/ToolParams.cs | ToolParams | GetLargeResult | 2
 RoslynSentinel.Common/ToolParams.cs | ToolParams | Search | 3
-RoslynSentinel.Common/WorkspaceReloadFailure.cs | WorkspaceStaleText | LoadSolution | 1
-RoslynSentinel.Common/WriteToolAdviceHelper.cs | AdviseForOversizedEdit | Member | 1
-RoslynSentinel.Common/WriteToolAdviceHelper.cs | AdviseForOversizedEdit | WriteFile | 1
 RoslynSentinel.Engines.Advanced/AdvancedRefactoringEngine.cs | SyncInterfaceToImplementationAsync | Search | 2
 RoslynSentinel.Engines.Advanced/AntiPatternEngine.cs | GenerateCallTreeAsync | Build | 2
 RoslynSentinel.Engines.Advanced/AntiPatternEngine.cs | GenerateCallTreeAsync | Search | 1

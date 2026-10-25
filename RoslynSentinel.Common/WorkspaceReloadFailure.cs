@@ -98,7 +98,7 @@ public static class WorkspaceReloadCause
 public static class WorkspaceStaleText
 {
     /// <summary>How to recover from a stale workspace: fix the cause, then force a reload.</summary>
-    public const string Recovery = "Fix the cause (for example a broken .csproj or .sln file), then call LoadSolution with forceReload: true. Edits to .csproj, .sln and .slnx files are still allowed.";
+    public static string Recovery => $"Fix the cause (for example a broken .csproj or .sln file), then call {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))}. Edits to .csproj, .sln and .slnx files are still allowed.";
 
     /// <summary>One-line reason naming the failed reload trigger, its file (when known) and its cause.</summary>
     public static string Reason(WorkspaceReloadFailure failure)

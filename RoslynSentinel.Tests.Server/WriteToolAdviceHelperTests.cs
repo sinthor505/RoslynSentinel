@@ -39,7 +39,7 @@ public class WriteToolAdviceHelperTests
         {
             Assert.That(advice.Route, Is.EqualTo(WriteEscapeRoute.StructuredEdit));
             Assert.That(advice.ToolNames[0], Is.EqualTo("Member"));
-            Assert.That(advice.Sentence, Does.StartWith("If you are replacing a whole method/property/constructor, use Member(operation: replace)"));
+            Assert.That(advice.Sentence, Does.StartWith("If you are replacing a whole method/property/constructor, use ").And.Contain("Member(reason:").And.Contain("operation: replace"));
             Assert.That(advice.Sentence, Does.Contain("ApplyDiff"));
             Assert.That(advice.Sentence, Does.Contain("smaller ReplaceSnippet calls"));
         });
@@ -58,10 +58,10 @@ public class WriteToolAdviceHelperTests
         {
             Assert.That(advice.Route, Is.Not.EqualTo(WriteEscapeRoute.WholeFileRewrite));
             Assert.That(advice.ToolNames[^1], Is.EqualTo("WriteFile"));
-            Assert.That(writeFileIndex, Is.GreaterThan(sentence.IndexOf("Member(operation: replace)", StringComparison.Ordinal)));
+            Assert.That(writeFileIndex, Is.GreaterThan(sentence.IndexOf("Member(reason:", StringComparison.Ordinal)));
             Assert.That(writeFileIndex, Is.GreaterThan(sentence.IndexOf("ApplyDiff", StringComparison.Ordinal)));
             Assert.That(writeFileIndex, Is.GreaterThan(sentence.IndexOf("smaller ReplaceSnippet calls", StringComparison.Ordinal)));
-            Assert.That(sentence, Does.Contain("Only if you are genuinely rewriting most of the file, use WriteFile(operation=ReplaceFile)."));
+            Assert.That(sentence, Does.Contain("Only if you are genuinely rewriting most of the file, use ").And.Contain("WriteFile(reason:").And.Contain("ReplaceFile"));
         });
     }
 

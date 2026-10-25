@@ -2087,6 +2087,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 {
                     if (_logger.IsEnabled(LogLevel.Warning))
                     {
+                        // hint-ok: log message for operators; never returned to an agent
                         _logger.LogWarning(ex, "Workspace refresh failed after applying changes. Workspace may be stale; call LoadSolution with forceReload: true to resync.");
                     }
                     RecordReloadFailure(WorkspaceReloadTriggerKind.PostWriteSync, null, ex, oldWorkspaceKept: true);
@@ -2591,7 +2592,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 Handle = handle,
                 Error = new EngineError(
                     EngineErrorCode.SymbolNotResolved,
-                    $"Symbol '{docCommentId}' no longer resolves - may have been renamed, moved, or removed. Re-run Search(mode: symbol).",
+                    $"Symbol '{docCommentId}' no longer resolves - may have been renamed, moved, or removed. Re-run {ToolCallHint.Call("Search", ("mode", "symbol"))}.",
                     DataTag.SymbolHandle)
             };
         }
