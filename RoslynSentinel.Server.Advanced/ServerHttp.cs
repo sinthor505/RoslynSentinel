@@ -70,7 +70,7 @@ public class ServerHttp
 
         builder.Logging.ClearProviders();
         ServerStartupHelpers.RegisterSerilogLoggerFactory(builder.Services);
-        // Loopback by default: the host has no authentication. --bind=any is for the control script's shared copy.
+        // Loopback by default: the host has no authentication. --bind=any (script parameter -Bind any) is for remote agents.
         builder.WebHost.ConfigureKestrel(opts => ServerStartupHelpers.ConfigureHttpListener(opts, bind, port));
 
         builder.Services.AddRoslynSentinelHostOptions(operatingMode, HostTransport.Http, respawn);

@@ -252,7 +252,7 @@ public static class ServerStartupHelpers
     /// <summary>
     /// Configures Kestrel's single listener for the HTTP hosts. <see cref="HttpBindScope.Loopback"/> (the default)
     /// listens on 127.0.0.1 only: the host has no authentication, so reaching it from another machine must be an
-    /// explicit <c>--bind=any</c> choice (the control script's shared copy). <paramref name="port"/> 0 lets the OS
+    /// explicit <c>--bind=any</c> choice (the launch scripts' <c>-Bind any</c>). <paramref name="port"/> 0 lets the OS
     /// pick; read the result back with <see cref="StartHttpHostAndAnnounceAsync"/>.
     /// </summary>
     public static void ConfigureHttpListener(
