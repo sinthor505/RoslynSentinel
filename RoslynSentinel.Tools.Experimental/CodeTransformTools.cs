@@ -797,7 +797,7 @@ public class CodeTransformTools
                             return new SentinelCallToolResult<object>
                             {
                                 IsError = false,
-                                SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
+                                SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                             };
                         }
                         catch (Exception ex)
@@ -821,7 +821,7 @@ public class CodeTransformTools
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
+                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
 
@@ -837,7 +837,7 @@ public class CodeTransformTools
                             return new SentinelCallToolResult<object>
                             {
                                 IsError = false,
-                                SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
+                                SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                             };
                         }
                         // TODO dead catch: ConvertAbstractClassToInterfaceAsync throws only ToolException types; confirm its helpers before removing
@@ -880,7 +880,7 @@ public class CodeTransformTools
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
+                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
 
@@ -895,7 +895,7 @@ public class CodeTransformTools
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
+                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
 
@@ -909,7 +909,7 @@ public class CodeTransformTools
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
+                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
 
@@ -942,7 +942,7 @@ public class CodeTransformTools
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
+                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
 
@@ -956,7 +956,7 @@ public class CodeTransformTools
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
+                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
 
@@ -970,7 +970,7 @@ public class CodeTransformTools
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
+                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
 
@@ -984,7 +984,7 @@ public class CodeTransformTools
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
+                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
 
@@ -998,7 +998,7 @@ public class CodeTransformTools
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
+                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
 
@@ -1012,7 +1012,7 @@ public class CodeTransformTools
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
+                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
 
