@@ -64,8 +64,11 @@ decision for the user, not a blocker). Only if the listing is empty, try `Search
   the first dispatch; limits live in `.claude/implementer-tiers.json`; the `enforce-dogfood.ps1` hook
   refuses a non-conforming brief. If about to call `ReplaceSnippet`/`Member`/`ApplyDiff`/`RenameSymbol`/
   `MoveMember` on source, write a brief instead. Why: implementation churn crowds out planning in the main context.
-- **C# edit dispatches are sequential, never parallel**: subagents share one server process, and one
-  plain `Edit`/`Write` on a tracked `.cs` trips `SessionHalted` for all of them and the parent.
+- **C# edit dispatches: at most two subagents at once (trial).** Use disjoint files (a second agent's
+  edits leave the first with a stale view and CS errors); only one may run `Build`/`RunTest`. If an
+  error, stale-view mistake or tool failure looks caused by the second agent, first treat it as a trial
+  finding: report it (`MULTI-AGENT:` plus what collided), drop back to one subagent and continue. Do
+  not write a blocker doc or halt for it.
 - **Exploration and review are dispatched.** The main session does only small reads (one outline,
   method, file or `git status`). Anything broader goes to `explore-haiku` (symbol/usage lookups) or
   `explore-sonnet` (multi-file investigation, reviews). If it needs more than a couple of reads, dispatch.
