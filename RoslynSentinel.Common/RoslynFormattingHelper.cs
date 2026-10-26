@@ -208,6 +208,7 @@ public static class RoslynFormattingHelper
     /// avoids the whole-container/whole-sibling formatting this helper used previously, which
     /// normalized untouched members' internal spacing as a side effect.
     /// </summary>
+    /// <param name="eol">The line ending the whole result text is normalized to.</param>
     /// <param name="removeOptions">
     /// Passed to <c>SyntaxNode.RemoveNode</c>. The default preserves the historical behaviour. Note that the
     /// boundary-token trivia restore runs regardless of this value, so directive-keeping flags
@@ -215,11 +216,8 @@ public static class RoslynFormattingHelper
     /// do not survive it: a directive that sat in the removed node's leading trivia is dropped, which can orphan
     /// its matching <c>#endregion</c>/<c>#endif</c>. Not yet safe for callers that need directives kept (C4 slice C4a finding).
     /// </param>
-    public static async Task<string> RemoveNodePreservingTriviaAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions = SyntaxRemoveOptions.KeepExteriorTrivia, CancellationToken cancellationToken = default, ILogger? logger = null)
+    public static async Task<string> RemoveNodePreservingTriviaAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, string eol, SyntaxRemoveOptions removeOptions = SyntaxRemoveOptions.KeepExteriorTrivia, CancellationToken cancellationToken = default, ILogger? logger = null)
     {
-        var originalSourceText = await document.GetTextAsync(cancellationToken);
-        var dominantEol = EolUtilities.DetectDominantEol(originalSourceText);
-
         var tokenBefore = nodeToRemove.GetFirstToken().GetPreviousToken();
         var tokenAfter = nodeToRemove.GetLastToken().GetNextToken();
         var hasTokenBefore = tokenBefore != default;
@@ -253,7 +251,7 @@ public static class RoslynFormattingHelper
         }
 
         var resultText = (await document.WithSyntaxRoot(newRoot).GetTextAsync(cancellationToken)).ToString();
-        var normalizedText = EolUtilities.NormalizeEol(resultText, dominantEol);
+        var normalizedText = EolUtilities.NormalizeEol(resultText, eol);
 
         // TODO(Phase 3): wire these into the real Finding channel once it exists instead of ILogger.
         if (logger != null)
@@ -266,6 +264,31 @@ public static class RoslynFormattingHelper
         }
 
         return normalizedText;
+    }
+
+    /// <summary>
+    /// Removes <paramref name = "nodeToRemove"/> without reformatting any sibling's interior.
+    /// KeepExteriorTrivia splices the removed node's leading trivia onto the token immediately
+    /// before it (as trailing trivia) and its trailing trivia onto the token immediately after (as
+    /// leading trivia) -> which may belong to a sibling member (e.g. the next method) or to the
+    /// container itself (e.g. its closing brace, when removing the first/last member). Both boundary
+    /// tokens are restored to their exact pre-removal trivia afterwards, since the gap's own
+    /// separation from whatever now precedes/follows it should be unchanged by the removal. This
+    /// avoids the whole-container/whole-sibling formatting this helper used previously, which
+    /// normalized untouched members' internal spacing as a side effect.
+    /// </summary>
+    /// <param name="removeOptions">
+    /// Passed to <c>SyntaxNode.RemoveNode</c>. The default preserves the historical behaviour. Note that the
+    /// boundary-token trivia restore runs regardless of this value, so directive-keeping flags
+    /// (<see cref="SyntaxRemoveOptions.KeepUnbalancedDirectives"/>, <see cref="SyntaxRemoveOptions.KeepDirectives"/>)
+    /// do not survive it: a directive that sat in the removed node's leading trivia is dropped, which can orphan
+    /// its matching <c>#endregion</c>/<c>#endif</c>. Not yet safe for callers that need directives kept (C4 slice C4a finding).
+    /// </param>
+    [Obsolete("Use the eol overload")]
+    public static async Task<string> RemoveNodePreservingTriviaAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions = SyntaxRemoveOptions.KeepExteriorTrivia, CancellationToken cancellationToken = default, ILogger? logger = null)
+    {
+        var eol = EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken));
+        return await RemoveNodePreservingTriviaAsync(document, root, nodeToRemove, eol, removeOptions, cancellationToken, logger);
     }
 
     /// <summary>
@@ -353,8 +376,9 @@ public static class RoslynFormattingHelper
     /// freshly-parsed member's "empty" leading trivia is otherwise indistinguishable from a deliberate
     /// zero-blank-line request, and formatting the whole container to resolve that ambiguity is exactly
     /// what caused both symptoms this helper exists to avoid.
+    /// <paramref name = "eol"/> is the line ending of the separators and of every changed line.
     /// </summary>
-    public static async Task<string> InsertMemberDeclarationAndFormatInsertionAsync(Document document, SyntaxNode root, TypeDeclarationSyntax container, int insertIndex, MemberDeclarationSyntax newMember, CancellationToken cancellationToken = default)
+    public static async Task<string> InsertMemberDeclarationAndFormatInsertionAsync(Document document, SyntaxNode root, TypeDeclarationSyntax container, int insertIndex, MemberDeclarationSyntax newMember, string eol, CancellationToken cancellationToken = default)
     {
         var members = container.Members;
         var precedingMember = insertIndex > 0 ? members[insertIndex - 1] : null;
@@ -363,17 +387,17 @@ public static class RoslynFormattingHelper
         var indentTrivia = (precedingMember ?? followingMember)?.GetLeadingTrivia().LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia)) ?? default;
         var indentText = indentTrivia != default ? indentTrivia.ToFullString() : "    ";
 
-        // Only one CRLF is needed here to produce a single blank line: precedingMember's own
+        // Only one line ending is needed here to produce a single blank line: precedingMember's own
         // trailing trivia (standard Roslyn attachment - a token's trailing trivia runs through the
         // end-of-line that terminates its own line) already supplies the line break that ends
-        // precedingMember's line. Adding a second CRLF here on top of that one is what previously
+        // precedingMember's line. Adding a second line ending here on top of that one is what previously
         // produced two blank lines instead of one - see MemberInsertAfterEolTests.
         var blankLineBefore = precedingMember != null
-            ? new[] { SyntaxFactory.CarriageReturnLineFeed, SyntaxFactory.Whitespace(indentText) }
+            ? new[] { SyntaxFactory.EndOfLine(eol), SyntaxFactory.Whitespace(indentText) }
             : new[] { SyntaxFactory.Whitespace(indentText) };
         var newMemberWithTrivia = newMember
             .WithLeadingTrivia(blankLineBefore.Concat(newMember.GetLeadingTrivia()))
-            .WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed);
+            .WithTrailingTrivia(SyntaxFactory.EndOfLine(eol));
 
         var annotatedNewMember = newMemberWithTrivia.WithAdditionalAnnotations(Formatter.Annotation);
 
@@ -392,11 +416,11 @@ public static class RoslynFormattingHelper
                 var followingIndentTrivia = followingLeadingTrivia.LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia));
                 var followingIndentText = followingIndentTrivia != default ? followingIndentTrivia.ToFullString() : indentText;
                 var nonWhitespaceLeading = followingLeadingTrivia.Where(t => !t.IsKind(SyntaxKind.WhitespaceTrivia) && !t.IsKind(SyntaxKind.EndOfLineTrivia));
-                // Only one CRLF here for the same reason as blankLineBefore above: newMemberWithTrivia's
-                // trailing trivia (set above to a single CarriageReturnLineFeed) already supplies the line
+                // Only one line ending here for the same reason as blankLineBefore above: newMemberWithTrivia's
+                // trailing trivia (set above to a single end-of-line) already supplies the line
                 // break that ends the new member's own line, so this only needs to add the blank line
                 // itself, not a second line-ending on top of it.
-                var newFollowingLeading = new SyntaxTriviaList(SyntaxFactory.CarriageReturnLineFeed)
+                var newFollowingLeading = new SyntaxTriviaList(SyntaxFactory.EndOfLine(eol))
                     .AddRange(nonWhitespaceLeading)
                     .Add(SyntaxFactory.Whitespace(followingIndentText));
                 var updatedFollowingMember = followingMember.WithLeadingTrivia(newFollowingLeading);
@@ -407,8 +431,33 @@ public static class RoslynFormattingHelper
         var newContainer = container.WithMembers(newMembersList);
         var newRoot = root.ReplaceNode(container, newContainer);
 
-        var formattedDoc = await FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formattedDoc = await FormatAnnotatedSpansAsync(document, newRoot, eol, cancellationToken);
         return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+    }
+
+    /// <summary>
+    /// Inserts <paramref name = "newMember"/> into <paramref name = "container"/>'s member list at
+    /// <paramref name = "insertIndex"/> (the position it should occupy in the resulting list -> i.e.
+    /// pass the old index of the following member, or <c>container.Members.Count</c> to append) and
+    /// formats only the newly inserted member, instead of the whole container. Prevents
+    /// AddMember/InsertMemberAfter/InsertMemberBefore from reformatting sibling members' interior
+    /// spacing as a side effect of formatting the whole container span -> see
+    /// docs/current/blockers/blocking_error_member_replace_strips_blank_line_between_adjacent_members.md
+    /// and the earlier 2026-09-07 finding of the same class (unrelated method signatures re-spaced).
+    /// <paramref name = "newMember"/> is given an explicit blank-line separator (matching this repo's
+    /// established one-blank-line-between-members convention) before itself when there is a preceding
+    /// sibling, and before the following sibling (if any) when that sibling didn't already carry one ->
+    /// this is computed explicitly rather than left to <see cref="Formatter"/>, because a
+    /// freshly-parsed member's "empty" leading trivia is otherwise indistinguishable from a deliberate
+    /// zero-blank-line request, and formatting the whole container to resolve that ambiguity is exactly
+    /// what caused both symptoms this helper exists to avoid.
+    /// </summary>
+    [Obsolete("Use the eol overload")]
+    public static async Task<string> InsertMemberDeclarationAndFormatInsertionAsync(Document document, SyntaxNode root, TypeDeclarationSyntax container, int insertIndex, MemberDeclarationSyntax newMember, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var eol = EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken));
+        return await InsertMemberDeclarationAndFormatInsertionAsync(document, root, container, insertIndex, newMember, eol, cancellationToken);
     }
 
     /// <summary>
