@@ -38,6 +38,7 @@ public class ServerStdio
         OrientationBreakerOptions.Configure(args);
         ToolCallEchoOptions.Configure(args);
         SchemaOptions.Configure(args);
+        EolPolicyOptions.Configure(args);
 
         if (ServerStartupHelpers.HandleListTools(
                 args,

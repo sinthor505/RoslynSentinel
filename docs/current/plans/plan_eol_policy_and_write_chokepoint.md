@@ -1,6 +1,6 @@
 # Plan: Configurable EOL policy, single write chokepoint and final-bytes EOL guard
 
-**Status:** IN PROGRESS 2026-10-18. Steps 0-1 done (decisions, sweep, `scripts/Get-EolAudit.ps1`); next is Step 2, normalize.
+**Status:** IN PROGRESS 2026-10-25. Steps 0-3 done (decisions, sweep, `scripts/Get-EolAudit.ps1`, working tree normalized, ratchet in `build.ps1`); next is Step 4, EOL policy option and resolver.
 
 > **Note (2026-10-19):** `NormalizeWholeSubtreeWhitespace` (named in the sweep and Step 2 below) was deleted (D1);
 > the EOL-aware helpers in `RoslynFormattingHelper` replace it. Treat those mentions as historical.
@@ -161,12 +161,20 @@ Step 0 results (2026-10-18):
     (autocrlf writes CRLF). No commit results.
   - Restart the server and run `LoadSolution` afterwards.
 - Done when: `Get-EolAudit.ps1 -FailOn lf,mixed` passes and `Build` is 0 errors.
+- Result (2026-10-25): done. 361 of 793 `.cs` files (LF or mixed) deleted and restored with
+  `git checkout --pathspec-from-file=<list> --` (autocrlf wrote CRLF); no commit, no tracked change.
+  Audit PASS (0 lf, 0 mixed); `dotnet build RoslynSentinel.slnx` 0 errors. Delete first is required: checkout
+  alone skips stat-clean files. The server must be restarted and `LoadSolution` run before use.
 
 ### Step 3 - Ratchet
 - Files: `scripts/build.ps1` or a `Tests.Server` test; this plan.
 - Change: run the Step 1 audit as part of the standard build/test flow so a new LF or mixed `.cs`
   fails it.
 - Done when: a deliberately LF-converted scratch copy of a tracked file fails the check and reverting it passes.
+- Result (2026-10-25): done. `scripts/build.ps1` ends with an "EOL audit" block (every run except
+  `-UpdateBaseline`) that runs `Get-EolAudit.ps1 -FailOn lf,mixed` and folds the result into the script's
+  exit code. Verified: LF-converted `DummyConsole/DummyApp/Program.cs` -> audit FAIL (1 file); restored -> PASS.
+  The audit covers untracked files too (`-c -o`). Not wired into `RunTest`; only the `build.ps1` flow enforces it.
 
 ### Step 4 - EOL policy option, resolver and single dominant-EOL function
 - Files: `RoslynSentinel.Common` (new options type and resolver, `EolUtilities.cs`), the server
@@ -177,6 +185,15 @@ Step 0 results (2026-10-18):
   - Keep one dominant-EOL function; mark the other two `[Obsolete]` and move their callers.
 - Done when: resolver unit tests cover each mode, new file, mixed pre-image and `.editorconfig`
   present/absent; `Build` 0 errors.
+- Progress (2026-10-25), sliced after measurement (five dominant-EOL definitions, not three: also
+  `TestCategoryTextEditor.DetectEol` and `CommentingEngine.DetectMemberEol`):
+  - Decision: `--eol` follows the static-options pattern (`SchemaOptions`), no DI; `EolResolver.Resolve` is pure
+    and takes the mode as a parameter, so tests and engines are not ambient.
+  - Slice A done: `Common/EolPolicyOptions.cs`, `Common/EolResolver.cs`, `Tests.Basic/EolResolverTests.cs` (19 tests).
+    `Resolve(mode, preImageText, editorConfigEndOfLine)`; reading `.editorconfig` from a path is not built yet.
+  - Slice B done: `EolPolicyOptions.Configure(args)` in the four server entry points.
+  - Slice C open: C1 `Common` callers, C2 `Engines.Basic`, C3 tails (`Tools.Basic`, `MappingEngine`,
+    `CommentingEngine`, `TestCategoryTextEditor`), C4 remove the obsolete functions and update 6 test sites.
 
 ### Step 5 - Chokepoint uses the resolver and guards the final bytes
 - Files: `RoslynSentinel.Common/PersistentWorkspaceManager.cs`, `EolChangeGuard.cs`,

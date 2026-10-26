@@ -281,6 +281,15 @@ $ok = $true
 if ($Mode -in @('Build', 'Both')) { $ok = (Invoke-BuildMode) -and $ok }
 if ($Mode -in @('Test', 'Both')) { $ok = (Invoke-TestMode) -and $ok }
 
+# EOL ratchet (plan_eol_policy_and_write_chokepoint.md Step 3): git status/diff compare after LF conversion, so a
+# working-tree LF or mixed .cs never shows as a change; this audit is the only signal. Fails on any LF or mixed file.
+if (-not $UpdateBaseline) {
+    Write-Host ""
+    Write-Host "=== EOL audit ===" -ForegroundColor Cyan
+    & (Join-Path $PSScriptRoot 'Get-EolAudit.ps1') -FailOn lf,mixed
+    $ok = ($LASTEXITCODE -eq 0) -and $ok
+}
+
 if (-not $UpdateBaseline) {
     Write-Host ""
     if ($ok) {
