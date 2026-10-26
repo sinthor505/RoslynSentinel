@@ -73,23 +73,7 @@ public readonly record struct EolCounts(int Crlf, int Lf, int Cr)
     }
 }
 
-/// <summary>One file whose proposed content would change its line-ending style.</summary>
-public record EolChangeViolation(string FilePath, EolCounts Before, EolCounts After)
-{
-    public string BeforeStyle => Before.Describe();
-
-    public string AfterStyle => After.Describe();
-}
-
-// TODO no production caller of CheckAll/Check/BuildMessage after Step 5c5; delete with the EolChangeGuard.Check tests in WriteChokepointGuardrailTests (keep Count/EolCounts, used by EolResolver)
-/// <summary>
-/// Write-path guardrail: refuses a change to an EXISTING C# file that alters that file's line-ending
-/// style. A refactoring should only touch the lines it edits, so a changed EOL style is the
-/// fingerprint of a whole-root normalize/reformat (the MoveMember bug that re-serialized entire
-/// files through NormalizeWhitespace) or of new text spliced in with a different EOL than its
-/// surroundings. No tool converts EOLs on purpose: every writer normalizes new text to the
-/// file's existing dominant EOL (see <see cref="EolUtilities.NormalizeEol"/>).
-/// </summary>
+/// <summary>Counts line-ending styles in text (see EolCounts); the former refusing guard was removed when the chokepoint started converting to the resolved EOL.</summary>
 public static class EolChangeGuard
 {
     public static EolCounts Count(string text)
@@ -117,62 +101,5 @@ public static class EolChangeGuard
         }
 
         return new EolCounts(crlf, lf, cr);
-    }
-
-    /// <summary>
-    /// Returns a violation when <paramref name="after"/> changes the EOL style of
-    /// <paramref name="before"/>, or null when it is acceptable. Rules: a null before (new file) is
-    /// exempt; so is a before or after with no line breaks at all (no style to compare); a file that
-    /// had a single style must still be exactly that style afterwards (this catches CRLF to LF and
-    /// single to mixed); a file that was already mixed must keep the same dominant style (it stays
-    /// mixed - never a violation by itself). Only .cs files are checked.
-    /// </summary>
-    public static EolChangeViolation? Check(string filePath, string? before, string after)
-    {
-        if (before is null || !string.Equals(Path.GetExtension(filePath), ".cs", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        var b = Count(before);
-        var a = Count(after);
-        if (b.Total == 0 || a.Total == 0)
-        {
-            return null;
-        }
-
-        var violated = b.IsSingleStyle
-            ? !(a.IsSingleStyle && a.Dominant == b.Dominant)
-            : a.Dominant != b.Dominant;
-        return violated ? new EolChangeViolation(filePath, b, a) : null;
-    }
-
-    /// <summary>Checks every change against its pre-image; returns the violations (empty when none).</summary>
-    public static List<EolChangeViolation> CheckAll(
-        IEnumerable<KeyValuePair<FilePathWrapper, string>> changes,
-        Func<string, string?> beforeLookup)
-    {
-        var violations = new List<EolChangeViolation>();
-        foreach (var (path, after) in changes)
-        {
-            var violation = Check(path, beforeLookup(path), after);
-            if (violation != null)
-            {
-                violations.Add(violation);
-            }
-        }
-
-        return violations;
-    }
-
-    /// <summary>Actionable message: names each file, before and after styles, the likely cause, and the outcome.</summary>
-    public static string BuildMessage(string operationName, IReadOnlyList<EolChangeViolation> violations)
-    {
-        var files = string.Join("; ", violations.Select(v =>
-            $"'{v.FilePath}' (before: {v.BeforeStyle}, after: {v.AfterStyle})"));
-        return $"{operationName}: refused - the change would alter the line endings of {violations.Count} existing file(s): {files}. " +
-               "No files were written. A change must only touch the lines it edits, so this almost always means the producing " +
-               "tool re-serialized the whole file (a whole-root NormalizeWhitespace/Format) or spliced in text with a different " +
-               "EOL than the file uses. Re-issue the edit with a narrower, text-level change that keeps the file's existing line endings.";
     }
 }

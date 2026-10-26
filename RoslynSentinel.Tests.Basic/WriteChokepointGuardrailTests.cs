@@ -100,27 +100,6 @@ public class WriteChokepointGuardrailTests
         Assert.That((change.LinesAdded, change.LinesRemoved), Is.EqualTo((2, 1)));
     }
 
-    [TestCase("a\r\nb\r\n", "a\r\nb\r\nc\r\n", false)]
-    [TestCase("a\r\nb\r\n", "a\nb\n", true)]
-    [TestCase("a\nb\n", "a\r\nb\r\n", true)]
-    [TestCase("a\nb\n", "a\nb\r\n", true)]
-    [TestCase("a\r\nb\r\nc\n", "a\r\nb\r\nc\r\nd\n", false)]
-    [TestCase("a\r\nb\r\nc\n", "a\nb\nc\n", true)]
-    [TestCase("single line", "a\r\nb\r\n", false)]
-    [TestCase("a\r\nb\r\n", "no breaks", false)]
-    public void Check_ExistingCsFile_FlagsOnlyEolStyleChanges(string before, string after, bool expectViolation)
-    {
-        var violation = EolChangeGuard.Check("C:\\x\\A.cs", before, after);
-
-        Assert.That(violation is not null, Is.EqualTo(expectViolation));
-    }
-
-    [Test]
-    public void Check_NewFile_NullBefore_IsAlwaysExempt()
-    {
-        Assert.That(EolChangeGuard.Check("C:\\x\\A.cs", null, "a\nb\r\n"), Is.Null);
-    }
-
     // Blocker undolastapply_refused_eol_after_apply_normalized_mixed_file: the write path normalizes only the lines a
     // change added or rewrote; untouched lines keep their own terminator even in a mixed-EOL file.
     [TestCase("a\nb\r\nc\n", "a\nX\nb\r\nc\n", "\n", "a\nX\nb\r\nc\n", Description = "inserted LF line, stray CRLF kept")]
