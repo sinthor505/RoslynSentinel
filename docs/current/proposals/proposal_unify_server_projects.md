@@ -103,16 +103,31 @@ a plain name; the Basic/Advanced distinction remains real one layer down, in `En
 
 ### Implementation approach (agreed with the user)
 
-The user moves the 13 files and deletes the Basic project folder by hand, outside the MCP tools, then a
-fresh session does the fix-ups with targeted tools (`RenameSymbol` on the namespace, `ReplaceSnippet`
-for the host deltas and map merge, `Member(operation: remove)` for the duplicates), builds,
-and runs `Tests.Server` + `Tests.Advanced`. Reasons: cross-project `MoveType` has an open defect
-(memory `project_engine_reorg_final_closeout_bugs_1_2_3`, bug 2), and a folder move is one operation
-by hand versus 11 tool calls.
+The user moves the 13 `.cs` files by hand, outside the MCP tools, then a fresh session does the
+fix-ups with targeted tools (`RenameSymbol` on the namespace, `ReplaceSnippet` for the host deltas and
+map merge, `Member(operation: remove)` for the duplicates), builds, and runs `Tests.Server` +
+`Tests.Advanced`. Reasons: cross-project `MoveType` has an open defect (memory
+`project_engine_reorg_final_closeout_bugs_1_2_3`, bug 2), and a file move is one operation by hand
+versus 13 tool calls.
+
+**The hand move (refined 2026-10-25):** only the `.cs` files move, from the root of
+`RoslynSentinel.Server.Basic\` into `RoslynSentinel.Server.Advanced\`. Ten move under their own names.
+Three collide with Advanced files and move renamed: `Program.cs` -> `Program.Basic.cs`, `ServerHttp.cs` ->
+`ServerHttp.Basic.cs`, `ServerStdio.cs` -> `ServerStdio.Basic.cs`; Advanced's copies are not overwritten
+because they carry the deltas to merge. The Basic `.csproj` (with its `.user` and `.Backup.tmp`),
+`Properties/launchSettings.json`, the `slnx` entry, every `ProjectReference` and `obj`/`bin` stay in
+place, so the solution keeps loading for the fresh session (an empty Basic project builds). The namespace
+is still `RoslynSentinel.Server.Basic` after the move, so only CS0017 (two `Program` entry points) is
+expected from the move itself. The fresh session removes the references, the `slnx` entry and the Basic
+folder (`DeleteFile` for tracked files) in slice 1.
 
 Order of slices for the fresh session:
-1. Hand move + csproj/slnx edits + first `Build(fullBuild)`; fix compile errors only (namespaces, usings).
-2. Merge the duplicate hosts (`ServerStdio`, `ServerHttp`, `Program`); delete `WarmupAndAutoLoadAdvanced`.
+1. Confirm the hand move (`Git(status)`: 13 renames, nothing else); `ExternalFileDrift(List)` then
+   `Acknowledge` if halted. Remove the `Server.Basic` project references, the `Tests.Integration` global
+   using and the `slnx` entry; delete the Basic project folder; first `Build(fullBuild)`; fix compile
+   errors only (namespaces, usings, CS0017).
+2. Merge the duplicate hosts (`ServerStdio`, `ServerHttp`, `Program`, from the `*.Basic.cs` copies into
+   Advanced's files); delete `WarmupAndAutoLoadAdvanced`.
 3. Merge the mode maps; fix the tests in item 6; run `Tests.Server`, `Tests.Advanced`, then `Tests.Battery.Basic`.
 4. Scripts, baselines, launchSettings, docs, memory; regenerate `docs/generated/`; commit.
 5. Restart the server (`McpServerControl(StopServer)`, `LoadSolution`) and verify `McpServerStatus` lists the merged modes.
