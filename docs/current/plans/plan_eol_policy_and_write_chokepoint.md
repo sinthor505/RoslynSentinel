@@ -1,6 +1,6 @@
 # Plan: Configurable EOL policy, single write chokepoint and final-bytes EOL guard
 
-**Status:** IN PROGRESS 2026-10-25. Steps 0-4 done (decisions, sweep, `scripts/Get-EolAudit.ps1`, working tree normalized, ratchet in `build.ps1`, `--eol` option, resolver, one dominant-EOL rule); next is Step 5, chokepoint uses the resolver and guards the final bytes.
+**Status:** IN PROGRESS 2026-10-25. Steps 0-5 done (decisions, sweep, `scripts/Get-EolAudit.ps1`, working tree normalized, ratchet in `build.ps1`, `--eol` option, resolver, one dominant-EOL rule, chokepoint converts via the resolver and guards the final bytes; 5a-5c5 committed, flag and old path removed); Step 5 leftovers are listed under "Step 5 result"; next is Step 6, route bare writes through the chokepoint.
 
 > **Note (2026-10-19):** `NormalizeWholeSubtreeWhitespace` (named in the sweep and Step 2 below) was deleted (D1);
 > the EOL-aware helpers in `RoslynFormattingHelper` replace it. Treat those mentions as historical.
@@ -245,6 +245,24 @@ Step 0 results (2026-10-18):
     through `ExtractMethodSafe` under `crlf` leaves uniform CRLF on disk. Then reword the TODO in
     `MsToolAugmentEngineFormatCharacterizationTests.cs` (the `ExtractMethod_MixedEol_StrayCrlfOnBlankLine...` test)
     to say the helper-level placement is superseded by this step.
+
+#### Step 5 result (2026-10-25)
+- Committed: 5a `a4a6e114`, 5b `f4a4579e`, 5c0 `2142a33f`, 5c1 `ad82571e`, 5c2 `92550283`, 5c3 `a3f84328`,
+  5c4 `426d8b83` (default on, four test fixes), cleanup `77b4d801` (flag, old backstop, `_knownFileEolPresence`,
+  dead no-op const removed; whitespace ratchet allowlist 3 -> 1), 5c5 `df0ad2d9` (early guard in
+  `ValidateAndApplyHelper` and its three Fake-based refusal tests removed). Pre-existing unrelated failures seen in
+  full runs: `CheckPackageInconsistencyAsync_InMemorySolution_ReturnsNonNull` (depends on a leftover temp dir),
+  `LaterCommitTouchingServerSource_IsStaleAndListed` and `ExternalTouch_Baselineless...` (flakes in parallel runs).
+- Behaviour change to know: a dry run no longer reports an EOL refusal (nothing refuses a style flip any more).
+- Not done, tracked here:
+  - `ExtractMethodSafe` mixed-EOL end-to-end case and the `MsToolAugmentEngineFormatCharacterizationTests` TODO reword.
+  - Undo and failed-write rollback tests at the chokepoint level (the exemptions exist in code; only the Done-when
+    tests are missing).
+  - `ApplyChangesResult.Findings` (attribution) is not surfaced in tool results yet (`// TODO` in the code; needs
+    `ApplyOutcome.Findings` and the 9 callers).
+  - `EolChangeGuard.Check/CheckAll/BuildMessage` have no production caller (`// TODO` on the class); delete with
+    their tests in `WriteChokepointGuardrailTests`.
+  - The running server binary must be rebuilt and restarted before the new chokepoint is live for editing tools.
 
 ### Step 6 - Route bare writes through the chokepoint
 - Files: per the Step 0 sweep: `MsToolAugmentEngine.FormatDocumentSafeAsync` (:732, and its
