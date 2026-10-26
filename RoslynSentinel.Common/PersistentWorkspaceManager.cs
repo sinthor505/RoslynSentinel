@@ -1647,7 +1647,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         IProgress<EngineProgress>? progress = default,
         CancellationToken cancellationToken = default,
         IReadOnlyCollection<FilePathWrapper>? deletePaths = null,
-        bool exactRestore = false)
+        bool exactRestore = false, string? operationLabel = null) // TODO operationLabel is consumed by the EOL pre-pass in plan_eol_policy_and_write_chokepoint.md step 5 slice 5c1
     {
         deletePaths ??= [];
 

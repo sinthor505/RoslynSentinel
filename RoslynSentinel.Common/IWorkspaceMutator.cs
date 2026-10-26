@@ -9,7 +9,7 @@ public interface IWorkspaceMutator
     /// content is written byte for byte, bypassing the EOL-change guard, EOL normalization and the whitespace-only no-op skip, because
     /// a restore to the captured pre-image is intended by definition. Normal edits must leave it false.
     /// </summary>
-    Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<EngineProgress>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null, bool exactRestore = false);
+    Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<EngineProgress>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null, bool exactRestore = false, string? operationLabel = null); // operationLabel follows exactRestore, not the CancellationToken: the token is already not last here and moving it would break callers.
     /// <summary>Loads a solution from the given path into the workspace.</summary>
     Task LoadSolutionAsync(string solutionPath, CancellationToken cancellationToken = default);
     /// <summary>Loads a solution from the given path, resolving relative paths against baseRepoDir.</summary>
