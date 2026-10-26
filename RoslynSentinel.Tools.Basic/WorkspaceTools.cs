@@ -254,6 +254,7 @@ public class WorkspaceTools
                     double oversizedPercent = 0;
                     foreach (var (changedPath, newContent) in changes)
                     {
+                        // TODO reads existing text from disk, not the workspace document
                         var oldContent = await FileIoHelper.ReadAllTextIfExistsAsync(changedPath, cancellationToken);
                         var percentRemoved = PercentLinesRemoved(oldContent, newContent);
                         if (percentRemoved > LargeShrinkRejectionThreshold)

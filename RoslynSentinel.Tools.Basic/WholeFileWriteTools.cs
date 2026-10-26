@@ -63,6 +63,7 @@ public class WholeFileWriteTools
             var normalizedContent = content;
             if (exists)
             {
+                // TODO reads existing text from disk, not the workspace document
                 var existingText = await FileIoHelper.ReadAllTextIfExistsAsync(filePathResolved, cancellationToken);
                 if (!string.IsNullOrEmpty(existingText))
                 {
@@ -347,8 +348,7 @@ public class WholeFileWriteTools
                     bool oversizedIsCommentCollapse = false;
                     foreach (var (changedPath, newContent) in resolvedChanges)
                     {
-                        // TODO size guard reads old text from disk, not the workspace document; prefer the committed document text (disk only for files outside the solution) so ApplyDiffSizeGuardTests can run in-memory
-                        var oldContent = await FileIoHelper.ReadAllTextIfExistsAsync(changedPath, cancellationToken);
+                        var oldContent = await ExistingTextReader.ReadAsync(_workspaceManager, changedPath, cancellationToken);
                         var percentRemoved = PercentLinesRemoved(oldContent, newContent);
                         var percentActiveRemoved = PercentActiveCodeLinesRemoved(changedPath, oldContent, newContent);
                         if (percentRemoved > LargeShrinkRejectionThreshold || percentActiveRemoved > LargeShrinkRejectionThreshold)
@@ -378,7 +378,7 @@ public class WholeFileWriteTools
                     var normalizedChanges = new Dictionary<FilePathWrapper, string>();
                     foreach (var (changeTargetPath, newContent) in resolvedChanges)
                     {
-                        var existingText = await FileIoHelper.ReadAllTextIfExistsAsync(changeTargetPath, cancellationToken);
+                        var existingText = await ExistingTextReader.ReadAsync(_workspaceManager, changeTargetPath, cancellationToken);
                         var normalizedContent = newContent;
                         if (!string.IsNullOrEmpty(existingText))
                         {
@@ -426,7 +426,7 @@ public class WholeFileWriteTools
                         var normalizedValidateChanges = new Dictionary<FilePathWrapper, string>();
                         foreach (var (valPath, valContent) in resolvedChanges)
                         {
-                            var existingText = await FileIoHelper.ReadAllTextIfExistsAsync(valPath, cancellationToken);
+                            var existingText = await ExistingTextReader.ReadAsync(_workspaceManager, valPath, cancellationToken);
                             var normalizedContent = valContent;
                             if (!string.IsNullOrEmpty(existingText))
                             {

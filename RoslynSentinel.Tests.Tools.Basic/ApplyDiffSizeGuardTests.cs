@@ -18,14 +18,16 @@
 // ApplyDiffWithConfirmationCode in case it's wanted again -> the confirmationCode-specific tests
 // below target that method directly rather than ApplyDiffTool.
 //
-// The percentage check reads "old content" from disk via FileIoHelper.ReadAllTextIfExistsAsync
-// (same helper ApplyProposedChangesAsync uses for pre-image capture), so these tests need a real
-// on-disk file -> TestSolutionFixture + PersistentWorkspaceManager, not the in-memory
-// TestSolutionBuilder path (see UndoLastApplyTests.cs for the same real-revert-path rationale).
+// The percentage check and the EOL normalization read the "old content" through
+// ExistingTextReader.ReadAsync: the committed workspace document's text when the file is a document
+// of the loaded solution, else the file on disk. So these tests run on InMemoryWorkspace (a rejected
+// or applied change is read back with ReadText); only the disk-fallback tests at the bottom use a
+// real temp file, because they are about a file that is NOT in the solution.
 
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tools.Basic;
 
 #pragma warning disable CS8618
@@ -36,6 +38,29 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 [Category("WholeFileWriteTools")] // sentinel:auto-category
 public class ApplyDiffSizeGuardTests
 {
+    private const string TargetRelativePath = "ContosoOrders.Core/Order.cs";
+
+    // CRLF on purpose: the EOL-normalization test needs a dominant EOL that differs from the LF the caller submits.
+    // Built with explicit escapes (not a raw string) so the content does not depend on this source file's line endings.
+    private static readonly string TargetContent = string.Join("\r\n",
+        "namespace ContosoOrders.Core;",
+        "",
+        "public class Order",
+        "{",
+        "    public int Id { get; set; }",
+        "    public string Name { get; set; } = \"\";",
+        "    public decimal Total { get; set; }",
+        "    public int Quantity { get; set; }",
+        "}",
+        "");
+
+    private static WholeFileWriteTools BuildWholeFileWriteTools(IWorkspaceManager workspaceManager)
+    {
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        return new WholeFileWriteTools(workspaceManager, BuildTools(workspaceManager), validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+    }
+
     private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
@@ -62,17 +87,11 @@ public class ApplyDiffSizeGuardTests
     [Test]
     public async Task ApplyDiff_FilesFormatShrinksOver50Percent_RejectsWithConfirmationRequiredAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var workspaceTools = BuildTools(workspaceManager);
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        using var workspace = InMemoryWorkspace.Create((TargetRelativePath, TargetContent));
+        var wholeFileWriteTools = BuildWholeFileWriteTools(workspace.Manager);
 
-        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
-        var originalContent = await File.ReadAllTextAsync(targetFile);
-        Assert.That(originalContent.Split('\n').Length, Is.GreaterThan(4), "fixture file must have enough lines for a >50% shrink to be meaningful");
+        var targetFile = workspace.PathOf(TargetRelativePath);
+        Assert.That(TargetContent.Split('\n').Length, Is.GreaterThan(4), "fixture file must have enough lines for a >50% shrink to be meaningful");
 
         var fragment = "using System;\n";
         var result = await wholeFileWriteTools.ApplyDiffTool(
@@ -82,27 +101,20 @@ public class ApplyDiffSizeGuardTests
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
         Assert.That(result.ErrorData!.Message, Does.Contain("re-submit"));
-        Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent), "rejected apply must not touch disk");
+        Assert.That(workspace.ReadText(TargetRelativePath), Is.EqualTo(TargetContent), "rejected apply must not touch the workspace");
     }
 
     [Test]
     public async Task ApplyDiff_FilesFormatCommentsOutWholeFile_RejectsWithConfirmationRequiredAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var workspaceTools = BuildTools(workspaceManager);
+        using var workspace = InMemoryWorkspace.Create((TargetRelativePath, TargetContent));
+        var wholeFileWriteTools = BuildWholeFileWriteTools(workspace.Manager);
 
-        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
-        var originalContent = await File.ReadAllTextAsync(targetFile);
+        var targetFile = workspace.PathOf(TargetRelativePath);
 
         // Same line count as the original (each line prefixed "// " rather than removed), so the
         // raw line-count guard sees 0% shrink -> only the active-code-line guard should catch this.
-        var commentedOut = string.Join('\n', originalContent.Split('\n').Select(line => "// " + line));
-
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        var commentedOut = string.Join('\n', TargetContent.Split('\n').Select(line => "// " + line));
 
         var result = await wholeFileWriteTools.ApplyDiffTool(
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
@@ -111,7 +123,7 @@ public class ApplyDiffSizeGuardTests
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
         Assert.That(result.ErrorData!.Message, Does.Contain("active code lines"));
-        Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent), "rejected apply must not touch disk");
+        Assert.That(workspace.ReadText(TargetRelativePath), Is.EqualTo(TargetContent), "rejected apply must not touch the workspace");
     }
 
     // The following confirmationCode-replay tests targeted ApplyDiffWithConfirmationCode directly ->
@@ -210,50 +222,90 @@ public class ApplyDiffSizeGuardTests
     [Test]
     public async Task ApplyDiff_FilesFormatSmallEdit_AppliesWithoutConfirmationAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var workspaceTools = BuildTools(workspaceManager);
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        using var workspace = InMemoryWorkspace.Create((TargetRelativePath, TargetContent));
+        var wholeFileWriteTools = BuildWholeFileWriteTools(workspace.Manager);
 
-        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
-        var originalContent = await File.ReadAllTextAsync(targetFile);
-        // Use LF content - it will be normalized to CRLF (the file's dominant EOL)
-        var lfContent = originalContent + "\n// small trailing comment\n";
+        var targetFile = workspace.PathOf(TargetRelativePath);
+        // Use LF content - it will be normalized to CRLF (the dominant EOL of the existing workspace document)
+        var lfContent = TargetContent.Replace("\r\n", "\n") + "\n// small trailing comment\n";
 
         var result = await wholeFileWriteTools.ApplyDiffTool(
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [targetFile] = lfContent });
 
-        Assert.That(!result.IsError, Is.True);
-        // After normalization, LF content should be normalized to CRLF (the file's dominant EOL)
-        var expectedNormalized = originalContent + "\r\n// small trailing comment\r\n";
-        Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(expectedNormalized));
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        // After normalization, LF content should be normalized to CRLF (the existing document's dominant EOL)
+        var expectedNormalized = TargetContent + "\r\n// small trailing comment\r\n";
+        Assert.That(workspace.ReadText(TargetRelativePath), Is.EqualTo(expectedNormalized));
     }
 
     [Test]
     public async Task ApplyDiff_FilesFormatNewFile_ExemptFromSizeGuardAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var workspaceTools = BuildTools(workspaceManager);
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        using var workspace = InMemoryWorkspace.Create((TargetRelativePath, TargetContent));
+        var wholeFileWriteTools = BuildWholeFileWriteTools(workspace.Manager);
 
-        var newFilePath = Path.Combine(fixture.SolutionDirectory, Path.GetDirectoryName(
-            Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First())!, "BrandNewFile.cs");
-        var content = "namespace ContosoOrders;\npublic class BrandNewFile { }\n";
+        // Neither a document of the workspace nor a file on disk: no old text, so nothing to shrink from.
+        const string newRelativePath = "ContosoOrders.Core/BrandNewFile.cs";
+        var content = "namespace ContosoOrders.Core;\npublic class BrandNewFile { }\n";
 
         var result = await wholeFileWriteTools.ApplyDiffTool(
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
-            changes: new Dictionary<string, string> { [newFilePath] = content });
+            changes: new Dictionary<string, string> { [workspace.PathOf(newRelativePath)] = content });
 
-        Assert.That(!result.IsError, Is.True);
-        Assert.That(await File.ReadAllTextAsync(newFilePath), Is.EqualTo(content));
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(workspace.ReadText(newRelativePath), Is.EqualTo(content));
+    }
+
+    // Stays on disk on purpose: the file is NOT a document of the loaded (in-memory) solution, so ExistingTextReader
+    // must fall back to the file on disk -> the only way to prove that fallback is a real temp file.
+    [Test]
+    public async Task ApplyDiff_FilesFormatFileOutsideSolutionShrinksOver50Percent_RejectedViaDiskFallbackAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((TargetRelativePath, TargetContent));
+        var wholeFileWriteTools = BuildWholeFileWriteTools(workspace.Manager);
+
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "RoslynSentinelSizeGuard", Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var outsideFile = Path.Combine(tempDirectory, "OutsideSolution.cs");
+            await File.WriteAllTextAsync(outsideFile, TargetContent);
+
+            var result = await wholeFileWriteTools.ApplyDiffTool(
+                reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
+                changes: new Dictionary<string, string> { [outsideFile] = "using System;\n" });
+
+            Assert.That(!result.IsError, Is.False);
+            Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
+            Assert.That(await File.ReadAllTextAsync(outsideFile), Is.EqualTo(TargetContent), "rejected apply must not touch disk");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    // Stays on disk on purpose, same reason: with no solution loaded at all the helper must read the disk without throwing.
+    [Test]
+    public async Task ExistingTextReader_NoSolutionLoaded_ReadsDiskAndMissingFileIsNullAsync()
+    {
+        using var workspaceManager = new FakeWorkspaceManager(WorkspaceAccess.ReadWrite);
+
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "RoslynSentinelSizeGuard", Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var onDiskFile = Path.Combine(tempDirectory, "NoSolution.cs");
+            await File.WriteAllTextAsync(onDiskFile, TargetContent);
+
+            Assert.That(await ExistingTextReader.ReadAsync(workspaceManager, onDiskFile, CancellationToken.None), Is.EqualTo(TargetContent));
+            Assert.That(await ExistingTextReader.ReadAsync(workspaceManager, Path.Combine(tempDirectory, "Missing.cs"), CancellationToken.None), Is.Null);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
     }
 
     private static string ExtractConfirmationCode(string message)
