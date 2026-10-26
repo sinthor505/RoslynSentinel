@@ -8,6 +8,10 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Tool defects pinned by the Battery tests (#1-#24) - resolved or accepted (2026-10-25)
+
+Fixed: #1-#11 #13-#19 #21 #23 plus the #12 comment part and the #20 disk reads (hashes in the plan's Status line). #12 stray CRLF on a blank line is superseded by `plan_eol_policy_and_write_chokepoint.md` Step 5 (whole-file EOL conversion at the chokepoint in every mode; the pin comment is reworded, 82a8771f). ACCEPTED, marked inline and not to be re-litigated: `FormatDocumentAsync` as dead code kept for its 11 tests; `InlineParameter` and `ExtractSuperclass` refuse with NotImplemented; #22 and #24 ride the throw-migration (see the `throw-migration` TODO). The three remaining #20 feature gaps stay open in TODO.md. Evidence: `plans/closed/plan_pinned_tool_defect_fixes.md`, `findings/closed/finding_pinned_tool_defects_from_battery_reorganisation.md`.
+
 ## No tool removed a redundant null-forgiving `!` across files - resolved (2026-10-25)
 
 `DocumentEditResult.UpdatedText` became non-nullable, leaving 241 redundant `UpdatedText!` in 47 test files and no

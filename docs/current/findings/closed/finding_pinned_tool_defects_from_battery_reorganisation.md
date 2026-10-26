@@ -1,6 +1,6 @@
 # Finding: Tool and engine defects pinned by tests during the Battery reorganisation, triaged
 
-**Status:** IN PROGRESS 2026-10-22. Fixes run under plan_pinned_tool_defect_fixes (status and commit hashes there); fixed: #1-#11 #13-#19 #21 #23, #12 (comment part), #20 (test-only parts and the disk reads). Still open: #12 stray-CRLF part (global EolUtilities change, decision pending), #20 remaining per-tool pins, #22 and #24 (throw-migration). The table and causes below are the 2026-10-21 survey and are not updated. Causes below were read from source by a read-only survey (no tests were run); "unverified" marks what was not traced.
+**Status:** RESOLVED 2026-10-25 (moved to closed/). Fixes ran under plan_pinned_tool_defect_fixes (status and commit hashes there); fixed: #1-#11 #13-#19 #21 #23, #12 (comment part), #20 (test-only parts and the disk reads). #12 stray-CRLF part is superseded by plan_eol_policy_and_write_chokepoint Step 5. Accepted deferrals: #20 remaining per-tool pins (TODO.md), #22 and #24 (throw-migration). The table and causes below are the 2026-10-21 survey and are not updated. Causes below were read from source by a read-only survey (no tests were run); "unverified" marks what was not traced.
 
 ## Context
 Converting the Battery fixtures to in-memory sources (proposal_battery_test_reorganisation_in_memory_and_shared_sources, Part A)

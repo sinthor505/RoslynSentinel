@@ -1,6 +1,6 @@
 # Fix the Battery test file leak with an in-memory tier, an explicit WorkspaceAccess mode, and (optionally) topic classes and shared sources
 
-**Status:** IMPLEMENTED 2026-10-21 (Parts A-D done; verified 2026-10-22: `RoslynSentinel.Tests` 654, `Tests.Basic` 843, `Tests.Advanced` 1409, `Tests.Tools.Basic` 1101/1102 with one flake that passed 10/10, `Tests.Tools.Advanced` 451, all green). The `IWorkspaceManager` and `TestSolutionFixture` doc comments now describe the in-memory tier (91cd7368). Only the pinned tool defects remain, tracked in `findings/finding_pinned_tool_defects_from_battery_reorganisation.md`; nothing is left to build here, so the proposal can move to `closed/`. The classification survey below was reported by a subagent, not spot-checked.
+**Status:** IMPLEMENTED 2026-10-21 (Parts A-D done; verified 2026-10-22: `RoslynSentinel.Tests` 654, `Tests.Basic` 843, `Tests.Advanced` 1409, `Tests.Tools.Basic` 1101/1102 with one flake that passed 10/10, `Tests.Tools.Advanced` 451, all green). The `IWorkspaceManager` and `TestSolutionFixture` doc comments now describe the in-memory tier (91cd7368). Only the pinned tool defects remain, tracked in `findings/closed/finding_pinned_tool_defects_from_battery_reorganisation.md`; nothing is left to build here, so the proposal can move to `closed/`. The classification survey below was reported by a subagent, not spot-checked.
 
 ## Motivation
 
@@ -100,7 +100,7 @@ Proposed (not decided in detail). Part A fixes the leak; B-D are independent and
   uses `SymbolResolver`; the two RenameSymbol tests moved to `RenameSymbolTests` (in-memory, asserts the rewritten text).
   Remaining (updated 2026-10-21): Parts C and D are DONE; only triage of the pinned tool defects (the `// TODO` tests) and
   open question 8 (non-Battery projects) remain. Both are now written up: defects in
-  `findings/finding_pinned_tool_defects_from_battery_reorganisation.md`, leaks in `plans/closed/plan_non_battery_test_leak_fixes.md`
+  `findings/closed/finding_pinned_tool_defects_from_battery_reorganisation.md`, leaks in `plans/closed/plan_non_battery_test_leak_fixes.md`
   (survey: only 2 files and 6 tests in `Tests.Advanced` still leaked; fixed 2026-10-21, and a leak detector now guards eight projects).
 - **Part A progress (2026-10-20, earlier notes).** The fixture is `RoslynSentinel.Tests.Tools.Advanced/BatteryTwentyFourTests.cs`
   (137 tests when re-surveyed: 115 convertible, 19 read-only engine-preview tests, 3 real-disk). Slice order and
