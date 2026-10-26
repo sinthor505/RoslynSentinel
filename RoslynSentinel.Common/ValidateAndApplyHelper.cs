@@ -30,10 +30,8 @@ public static class ValidateAndApplyHelper
         Func<DiagnosticReport, CancellationToken, Task<string>>? describeValidationFailure = null,
         IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits = null)
     {
-        // Write-path guardrail, run before the compile gate so a dry run reports it too: refuse a
-        // change that alters an existing file's line-ending style. No tool converts EOLs on purpose,
-        // so a changed style means the producer re-serialized the whole file (see EolChangeGuard).
-        // The same pre-images feed the per-file changed-line counts reported on the outcome.
+        // The pre-images feed the per-file changed-line counts and the collateral-change tripwire below.
+        // EOL conversion is done by the chokepoint (PersistentWorkspaceManager.ApplyProposedChangesAsync).
         Dictionary<string, string?> beforeTexts;
         try
         {
@@ -45,16 +43,6 @@ public static class ValidateAndApplyHelper
         {
             logger.LogError(ex, "ValidateAndApply pre-image read failed for {OperationName}", operationName);
             return new ApplyOutcome(null, ToolErrorMapper.ToResultError(ex, workspaceManager, $"{operationName} pre-image read"), dryRun);
-        }
-
-        var eolViolations = EolChangeGuard.CheckAll(changes, p => beforeTexts.GetValueOrDefault(p));
-        if (eolViolations.Count > 0)
-        {
-            logger.LogWarning("{OperationName} refused: would change line endings of {Count} file(s)", operationName, eolViolations.Count);
-            return new ApplyOutcome(null, new ResultError(
-                ToolErrorCode.EolChangeRefused,
-                EolChangeGuard.BuildMessage(operationName, eolViolations),
-                StructuredDetail: eolViolations.Cast<object>().ToList()), dryRun);
         }
 
         // Write-path tripwire for post-edit reformatting, run before the compile gate so a dry run

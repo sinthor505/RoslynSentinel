@@ -13,6 +13,7 @@ namespace RoslynSentinel.Tests.Basic;
 // must make a whole-file reformat visible (per-file changed-line counts) or refuse it (a change
 // that alters an existing file's line-ending style). Driven through ValidateAndApplyHelper, the
 // validate-then-write wrapper every tool uses, on an in-memory workspace.
+// The early EOL refusal moved into the chokepoint's conversion; see EolChokepointConversionTests.
 [TestFixture]
 public class WriteChokepointGuardrailTests
 {
@@ -26,51 +27,6 @@ public class WriteChokepointGuardrailTests
         return await ValidateAndApplyHelper.ValidateAndApplyAsync(
             validation, workspace.Manager, NullLogger.Instance, changes, "GuardrailTest", dryRun: dryRun,
             expectedEdits: expectedEdits);
-    }
-
-    [Test]
-    public async Task CrlfFile_RewrittenAsLf_IsRefusedWithDistinctCodeAndNothingWrittenAsync()
-    {
-        using var workspace = InMemoryWorkspace.Create(("A.cs", CrlfSource));
-        var path = workspace.PathOf("A.cs");
-        var allLf = CrlfSource.Replace("\r\n", "\n").Replace("=> 1;", "=> 2;");
-
-        var outcome = await ApplyAsync(workspace, new() { [path] = allLf });
-
-        Assert.That(outcome.Error, Is.Not.Null);
-        Assert.That(outcome.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.EolChangeRefused));
-        Assert.That(outcome.Error.Message, Does.Contain(path).And.Contain("before: CRLF").And.Contain("after: LF"));
-        Assert.That(outcome.Error.Message, Does.Contain("NormalizeWhitespace"), "message must name the likely cause");
-        Assert.That(workspace.ReadText("A.cs"), Is.EqualTo(CrlfSource), "a refused change must not be written");
-    }
-
-    [Test]
-    public async Task CrlfFile_GainingLfLines_IsRefusedAsMixedAsync()
-    {
-        using var workspace = InMemoryWorkspace.Create(("A.cs", CrlfSource));
-        var path = workspace.PathOf("A.cs");
-        // One new method spliced in with LF line breaks, the rest still CRLF.
-        var mixed = CrlfSource.Replace(
-            "    public int X() => 1;\r\n",
-            "    public int X() => 1;\n    public int Y() => 2;\n");
-
-        var outcome = await ApplyAsync(workspace, new() { [path] = mixed });
-
-        Assert.That(outcome.Error, Is.Not.Null);
-        Assert.That(outcome.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.EolChangeRefused));
-        Assert.That(outcome.Error.Message, Does.Contain("before: CRLF").And.Contain("after: mixed"));
-        Assert.That(workspace.ReadText("A.cs"), Is.EqualTo(CrlfSource));
-    }
-
-    [Test]
-    public async Task DryRun_AlsoReportsTheEolRefusalAsync()
-    {
-        using var workspace = InMemoryWorkspace.Create(("A.cs", CrlfSource));
-        var allLf = CrlfSource.Replace("\r\n", "\n");
-
-        var outcome = await ApplyAsync(workspace, new() { [workspace.PathOf("A.cs")] = allLf }, dryRun: true);
-
-        Assert.That(outcome.Error?.ErrorCode, Is.EqualTo(ToolErrorCode.EolChangeRefused));
     }
 
     [Test]
