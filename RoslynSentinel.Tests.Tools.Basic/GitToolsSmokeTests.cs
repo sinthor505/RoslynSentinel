@@ -23,6 +23,9 @@ public class GitToolsSmokeTests
     // itself, just that a normal call on a tiny repo comes back promptly, not near the ceiling.
     private static readonly TimeSpan ResponseBound = TimeSpan.FromSeconds(10);
 
+    // Shared template repo (init, config, README commit) built once per fixture run; each test copies it.
+    private static readonly Lazy<string> TemplateRepo = new(BuildTemplateRepo);
+
     private string _repoDir = null!;
     private GitTools _gitTools = null!;
     private GitRemoteTools _gitRemote = null!;
@@ -30,14 +33,10 @@ public class GitToolsSmokeTests
     [SetUp]
     public void SetUp()
     {
+        // Each test gets its own writable copy of the shared template repo (built once, see
+        // TemplateRepo) instead of spawning init/config/add/commit per test.
         _repoDir = Path.Combine(Path.GetTempPath(), "RoslynSentinelGitSmoke_" + Guid.NewGuid());
-        Directory.CreateDirectory(_repoDir);
-        RunGit(_repoDir, "init");
-        RunGit(_repoDir, "config", "user.email", "test@example.com");
-        RunGit(_repoDir, "config", "user.name", "Test");
-        File.WriteAllText(Path.Combine(_repoDir, "README.md"), "hello");
-        RunGit(_repoDir, "add", "-A");
-        RunGit(_repoDir, "commit", "-m", "initial commit");
+        CopyDirectory(TemplateRepo.Value, _repoDir);
 
         // GitTools only ever calls GetSolutionRoot() to find the git root - it doesn't need a real
         // Roslyn solution loaded, so FakeWorkspaceManager.SolutionPath alone is enough (see its own
@@ -3117,6 +3116,46 @@ public class GitToolsSmokeTests
         Assert.That(again.Hunks[0].Preview, Does.Contain("inserted after 15"), "ids are renumbered from 1.");
         Assert.That(again.Fingerprint, Is.Not.EqualTo(first.Fingerprint));
         AssertCoded(stale, "GitHunkStale");
+    }
+
+    private static string BuildTemplateRepo()
+    {
+        var templateDir = Path.Combine(Path.GetTempPath(), "RoslynSentinelGitTemplate_" + Guid.NewGuid());
+        Directory.CreateDirectory(templateDir);
+        RunGit(templateDir, "init");
+        RunGit(templateDir, "config", "user.email", "test@example.com");
+        RunGit(templateDir, "config", "user.name", "Test");
+        File.WriteAllText(Path.Combine(templateDir, "README.md"), "hello");
+        RunGit(templateDir, "add", "-A");
+        RunGit(templateDir, "commit", "-m", "initial commit");
+        return templateDir;
+    }
+
+    // Removes the shared template after the fixture run. Only deletes it if a test actually built it.
+    [OneTimeTearDown]
+    public static void DeleteTemplateRepo()
+    {
+        if (TemplateRepo.IsValueCreated)
+        {
+            DeleteDirectoryTree(TemplateRepo.Value);
+        }
+    }
+
+    // Recursive copy (including .git). Clears read-only attributes on the copies so each test repo is writable.
+    private static void CopyDirectory(string sourceDir, string destinationDir)
+    {
+        Directory.CreateDirectory(destinationDir);
+        foreach (var file in Directory.EnumerateFiles(sourceDir))
+        {
+            var destinationFile = Path.Combine(destinationDir, Path.GetFileName(file));
+            File.Copy(file, destinationFile);
+            File.SetAttributes(destinationFile, FileAttributes.Normal);
+        }
+
+        foreach (var subDirectory in Directory.EnumerateDirectories(sourceDir))
+        {
+            if (Path.GetFileName(subDirectory) != ".git") CopyDirectory(subDirectory, Path.Combine(destinationDir, Path.GetFileName(subDirectory)));
+        }
     }
 
     // ---- end stage hunks ----
