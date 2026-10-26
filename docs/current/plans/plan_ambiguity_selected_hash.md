@@ -3,7 +3,7 @@
 **Status:** DRAFT 2026-10-25. Approach agreed in chat (hash shown in the ambiguity error, optional `selectedHash` parameter, retry calls via `ToolCallHint`); nothing built yet.
 
 ## Problem
-Step 9 of [plan_first_match_ambiguity_audit.md](plan_first_match_ambiguity_audit.md) made name-keyed lookups refuse an ambiguous name (`NameTargetLookup.RequireSingle` throws `ToolAmbiguousMatchException`). Two tools then have no way to say which candidate is meant:
+Step 9 of [plan_first_match_ambiguity_audit.md](closed/plan_first_match_ambiguity_audit.md) made name-keyed lookups refuse an ambiguous name (`NameTargetLookup.RequireSingle` throws `ToolAmbiguousMatchException`). Two tools then have no way to say which candidate is meant:
 
 - `ChangeSignature` takes only `filePath`, `methodName`, `parameters` (`AdvancedRefactoringTools.ChangeSignatureTool`). Live check on 2026-10-25: a dry run on `AdvancedRefactoringEngine` (four constructors) returned `Ambiguous` listing all four, but the tool cannot select one.
 - `GetCallGraph` still takes the first overload (`SymbolNavigationEngine.GetCallGraphAsync`, `// TODO overloads`); refusing without a selector would make overloaded methods unusable.

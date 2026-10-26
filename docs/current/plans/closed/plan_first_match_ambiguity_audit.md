@@ -1,6 +1,6 @@
 # Plan: Refuse and report ambiguity instead of silently using the first match
 
-**Status:** IN PROGRESS 2026-10-24. Audit done; steps 1-4 built, step 5 partly built (all but `FilterByContainingType`), step 6 built and step 7 built for the six named engines, the file-name group built (70e01602); step 8 open.
+**Status:** IMPLEMENTED 2026-10-25. Steps 1-9 built (see the step 9 status below); closing sweeps committed: A (886610a0, unknown project throws `ToolNotFoundException` in six engines) and B (d95a908956, strict single-file resolution in AntiPatternEngine, ResourceSafetyEngine and `FindStructuralSmellsAsync`). Left alone on purpose: `DeadCodeEngine.GetTargetDocumentsAsync` and `ProjectStructureEngine` ~:1136 (callers pass null) and the fuzzy project-name `Contains` filters. Remaining narrowing gap for `ChangeSignature`/`GetCallGraph` moved to [plan_ambiguity_selected_hash.md](../plan_ambiguity_selected_hash.md).
 
 ## Problem
 

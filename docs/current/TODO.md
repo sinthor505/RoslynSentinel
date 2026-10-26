@@ -50,7 +50,7 @@ Committed, not started.
 
 ## P3 Later
 
-- [OPEN] Name-keyed tools that refuse an ambiguous name but offer no way to narrow it (2026-10-25) - `ChangeSignature` (live-verified: four-constructor class returns `Ambiguous`, whose hint mentions `contextSnippet` the tool lacks) and `GetCallGraph` (`SymbolNavigationEngine.GetCallGraphAsync` still picks the first overload, `// TODO overloads`; converting it to `RequireSingle` would make overloaded methods unusable) need a disambiguator parameter (`contextSnippet`, schema cost) or an overload-selecting hint; the `RequireSingle` message should also name the tool's real narrowing parameter. - [plans/plan_first_match_ambiguity_audit.md](plans/plan_first_match_ambiguity_audit.md)
+- [OPEN] Name-keyed tools that refuse an ambiguous name but offer no way to narrow it (2026-10-25) - `ChangeSignature` (live-verified: four-constructor class returns `Ambiguous`, whose hint mentions `contextSnippet` the tool lacks) and `GetCallGraph` (`SymbolNavigationEngine.GetCallGraphAsync` still picks the first overload, `// TODO overloads`; converting it to `RequireSingle` would make overloaded methods unusable) need a disambiguator parameter (`contextSnippet`, schema cost) or an overload-selecting hint; the `RequireSingle` message should also name the tool's real narrowing parameter. - [plans/plan_first_match_ambiguity_audit.md](plans/closed/plan_first_match_ambiguity_audit.md)
 
 Ideas and low priority.
 
