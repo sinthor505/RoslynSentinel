@@ -767,6 +767,48 @@ public class CreateFileDeleteFileTests
     }
 
     [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
+    public async Task CreateFileTool_EditorConfigCrlf_AutoMode_WritesUniformCrlfAsync()
+    {
+        // Depends on EolPolicyOptions.Mode being Auto (its static default) and on no ROSLYNSENTINEL_EOL variable,
+        // so EolModeOverride is deliberately left unset and the fixture's .editorconfig decides the EOL.
+        // root = true stops the upward walk from picking up any .editorconfig above the fixture directory.
+        using var fixture = new TestSolutionFixture();
+        await File.WriteAllTextAsync(Path.Combine(fixture.SolutionDirectory, ".editorconfig"), "root = true\n\n[*.cs]\nend_of_line = crlf\n");
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "Foo.cs");
+        var result = await workspaceTools.CreateFileTool(reason: "test message", newFile, namespaceName: "MyApp.Eol", typeKind: NewTypeKind.@class, typeName: "Foo");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        var bytes = await File.ReadAllBytesAsync(newFile);
+        Assert.That(bytes.Where((b, i) => b == (byte)'\n' && (i == 0 || bytes[i - 1] != (byte)'\r')).Count(), Is.Zero, "no bare LF byte may survive");
+        Assert.That(bytes.Contains((byte)'\r'), Is.True, "the file must be CRLF");
+    }
+
+    [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
+    public async Task CreateFileTool_EditorConfigLf_AutoMode_WritesNoCrAsync()
+    {
+        // Same dependencies as the crlf variant: EolPolicyOptions.Mode stays Auto and ROSLYNSENTINEL_EOL is unset,
+        // so the fixture's root = true .editorconfig (end_of_line = lf) is what decides the EOL.
+        using var fixture = new TestSolutionFixture();
+        await File.WriteAllTextAsync(Path.Combine(fixture.SolutionDirectory, ".editorconfig"), "root = true\n\n[*.cs]\nend_of_line = lf\n");
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "Foo.cs");
+        var result = await workspaceTools.CreateFileTool(reason: "test message", newFile, namespaceName: "MyApp.Eol", typeKind: NewTypeKind.@class, typeName: "Foo");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        var bytes = await File.ReadAllBytesAsync(newFile);
+        Assert.That(bytes.Contains((byte)'\r'), Is.False, "the file must be LF with no carriage return");
+    }
+
+    [Test]
     [Category("BasicRefactoringEngine")] // sentinel:auto-category
     [Category("MemberRefactoringEngine")] // sentinel:auto-category
     [Category("MsToolAugmentEngine")] // sentinel:auto-category
