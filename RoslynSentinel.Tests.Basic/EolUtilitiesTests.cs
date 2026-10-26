@@ -48,6 +48,55 @@ public class EolUtilitiesTests
     }
 
     [Test]
+    public void DetectDominantEol_String_CrlfLfTie_ReturnsCrlf()
+    {
+        Assert.That(EolUtilities.DetectDominantEol("a\r\nb\nc"), Is.EqualTo("\r\n"));
+    }
+
+    [Test]
+    public void DetectDominantEol_String_MoreLoneCrThanLf_ReturnsCr()
+    {
+        // One LF and three lone CR characters.
+        Assert.That(EolUtilities.DetectDominantEol("a\nb\rc\rd\re"), Is.EqualTo("\r"));
+    }
+
+    [Test]
+    public void DetectDominantEol_String_NoLineBreaks_ReturnsEnvironmentNewLine()
+    {
+        Assert.That(EolUtilities.DetectDominantEol("no line breaks"), Is.EqualTo(Environment.NewLine));
+    }
+
+    [Test]
+    public void DetectDominantEol_SourceText_LfLineFirst_CrlfTie_ReturnsCrlf()
+    {
+        var text = Microsoft.CodeAnalysis.Text.SourceText.From("a\nb\r\n");
+
+        Assert.That(EolUtilities.DetectDominantEol(text), Is.EqualTo("\r\n"));
+    }
+
+    [Test]
+    public void DetectDominantEol_SourceText_CrlfLineFirst_LfTie_ReturnsCrlf()
+    {
+        var text = Microsoft.CodeAnalysis.Text.SourceText.From("a\r\nb\n");
+
+        Assert.That(EolUtilities.DetectDominantEol(text), Is.EqualTo("\r\n"));
+    }
+
+    [Test]
+    public void EolCounts_DominantTerminator_NoLineBreaks_ReturnsEnvironmentNewLine()
+    {
+        Assert.That(new EolCounts(0, 0, 0).DominantTerminator, Is.EqualTo(Environment.NewLine));
+    }
+
+    [TestCase(2, 1, 0, "\r\n", TestName = "EolCounts_DominantTerminator_CrlfDominant_ReturnsCrlf")]
+    [TestCase(0, 3, 1, "\n", TestName = "EolCounts_DominantTerminator_LfDominant_ReturnsLf")]
+    [TestCase(0, 1, 3, "\r", TestName = "EolCounts_DominantTerminator_CrDominant_ReturnsCr")]
+    public void EolCounts_DominantTerminator_FollowsDominantStyle(int crlf, int lf, int cr, string expected)
+    {
+        Assert.That(new EolCounts(crlf, lf, cr).DominantTerminator, Is.EqualTo(expected));
+    }
+
+    [Test]
     public async Task ReplaceNodeFormattedAsync_PreservesLfDominant_ForLfFixture()
     {
         var lfContent = "namespace Scratch;\n\npublic class ScratchCrlf2\n{\n    public void DoWork()\n    {\n    }\n}\n";

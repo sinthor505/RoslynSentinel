@@ -30,6 +30,16 @@ public readonly record struct EolCounts(int Crlf, int Lf, int Cr)
         }
     }
 
+    /// <summary>The line terminator for the dominant style: the platform default when there are no line breaks.</summary>
+    public string DominantTerminator => Total == 0
+        ? Environment.NewLine
+        : Dominant switch
+        {
+            "CRLF" => "\r\n",
+            "LF" => "\n",
+            _ => "\r",
+        };
+
     /// <summary>Human-readable style, e.g. "CRLF" or "mixed (CRLF x 40, LF x 2)".</summary>
     public string Describe()
     {

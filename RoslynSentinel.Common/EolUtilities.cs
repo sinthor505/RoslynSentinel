@@ -7,44 +7,9 @@ public static class EolUtilities
     /// <summary>Detects the dominant line-ending style in a string: CRLF (\r\n), LF (\n), or CR (\r).</summary>
     public static string DetectDominantEol(string content)
     {
-        int crlfCount = 0, lfCount = 0, crCount = 0;
-        for (int i = 0; i < content.Length; i++)
-        {
-            if (content[i] == '\r')
-            {
-                if (i + 1 < content.Length && content[i + 1] == '\n')
-                {
-                    crlfCount++;
-                    i++; // skip the \n
-                }
-                else
-                {
-                    crCount++;
-                }
-            }
-            else if (content[i] == '\n')
-            {
-                lfCount++;
-            }
-        }
-
-        // Tie-break: CRLF, then LF, then CR
-        if (crlfCount > 0 && crlfCount >= lfCount && crlfCount >= crCount)
-        {
-            return "\r\n";
-        }
-
-        if (lfCount > 0)
-        {
-            return "\n";
-        }
-
-        if (crCount > 0)
-        {
-            return "\r";
-        }
-
-        return Environment.NewLine; // no line breaks found
+        // Shares EolChangeGuard.Count and EolCounts.Dominant's tie-break. Intended change: a text with more lone CRs
+        // than lone LFs (and at least one LF) now returns "\r"; the old code returned "\n".
+        return EolChangeGuard.Count(content).DominantTerminator;
     }
 
     public static string DetectDominantEol(SourceText sourceText)
@@ -56,6 +21,8 @@ public static class EolUtilities
             .Where(e => e.Length > 0)
             .GroupBy(e => e)
             .OrderByDescending(g => g.Count())
+            // Ties break CRLF, LF, CR, then other terminators, matching EolCounts.Dominant.
+            .ThenBy(g => g.Key == "\r\n" ? 0 : g.Key == "\n" ? 1 : g.Key == "\r" ? 2 : 3)
             .Select(g => g.Key)
             .FirstOrDefault() ?? Environment.NewLine;
     }
