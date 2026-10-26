@@ -347,6 +347,7 @@ public class WholeFileWriteTools
                     bool oversizedIsCommentCollapse = false;
                     foreach (var (changedPath, newContent) in resolvedChanges)
                     {
+                        // TODO size guard reads old text from disk, not the workspace document; prefer the committed document text (disk only for files outside the solution) so ApplyDiffSizeGuardTests can run in-memory
                         var oldContent = await FileIoHelper.ReadAllTextIfExistsAsync(changedPath, cancellationToken);
                         var percentRemoved = PercentLinesRemoved(oldContent, newContent);
                         var percentActiveRemoved = PercentActiveCodeLinesRemoved(changedPath, oldContent, newContent);

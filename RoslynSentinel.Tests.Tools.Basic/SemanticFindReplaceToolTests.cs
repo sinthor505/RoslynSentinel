@@ -5,6 +5,7 @@ using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Basic;
 using RoslynSentinel.Tests;
+using RoslynSentinel.Tests.Fakes;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Tools.Basic;
@@ -13,39 +14,15 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// Tests for SemanticFindReplaceTools: rename a bool property/field and invert its polarity at every site.
 /// </summary>
 [TestFixture]
+[Parallelizable(ParallelScope.All)]
 [Category("SemanticFindReplaceTools")] // sentinel:auto-category
 public class SemanticFindReplaceToolTests
 {
-    private IWorkspaceManager _workspaceManager;
-    private SemanticReplaceEngine _engine;
-    private ValidationEngine _validationEngine;
-    private SemanticFindReplaceTools _tool;
-
-    [SetUp]
-    public void Setup()
-    {
-        _workspaceManager = new PersistentWorkspaceManager(
-            NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SemanticReplaceEngine(_workspaceManager);
-        _validationEngine = new ValidationEngine(_workspaceManager);
-        _tool = new SemanticFindReplaceTools(
-            _engine,
-            _validationEngine,
-            _workspaceManager,
-            NullLogger<SemanticFindReplaceTools>.Instance);
-    }
-
-    [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
 
     [Test]
     [Description("Preview mode returns sites without writing")]
     public async Task SemanticFindReplace_PreviewMode_ReturnsSitesWithoutWriting()
     {
-        using var fixture = new TestSolutionFixture();
-        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-
-        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = @"public class C
 {
     public bool IsSuccess { get; set; }
@@ -63,13 +40,13 @@ public class Usage
         }
     }
 }";
-        File.WriteAllText(targetFile, originalContent, System.Text.Encoding.UTF8);
-        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, originalContent));
+        var tools = BuildTools(workspace.Manager);
 
         var docCommentId = $"P:C.IsSuccess";
 
         // Call the tool in preview mode
-        var result = await _tool.SemanticFindReplaceTool(
+        var result = await tools.SemanticFindReplaceTool(
             new ToolCallReason("testing preview mode"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
@@ -80,19 +57,22 @@ public class Usage
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         // TODO pin the site count once the SuccessData sites type is confirmed; for now pin preview mode and a non-empty sites list
         Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("\"mode\":\"preview\"").And.Contain("\"sites\":[{\"FilePath\":"));
-        
-        // Verify file is unchanged on disk
-        var diskContent = File.ReadAllText(targetFile);
-        Assert.That(diskContent, Is.EqualTo(originalContent), "File should be unchanged after preview");
-        Assert.That(diskContent.Contains("IsSuccess"), "File should still contain original symbol name");
+
+        // Verify file is unchanged
+        var content = workspace.ReadText(FixtureRelativePath);
+        Assert.That(content, Is.EqualTo(originalContent), "File should be unchanged after preview");
+        Assert.That(content.Contains("IsSuccess"), "File should still contain original symbol name");
     }
 
     [Test]
     [Description("Apply mode rewrites file with renamed symbol and inverted logic")]
     public async Task SemanticFindReplace_ApplyMode_RewritesFileCorrectly()
     {
+        // Kept on disk on purpose: the single end-to-end apply smoke for this tool (real write through
+        // PersistentWorkspaceManager, then read back from disk). Other apply tests use InMemoryWorkspace.
         using var fixture = new TestSolutionFixture();
-        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var tools = BuildTools(workspaceManager);
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = @"public class C
@@ -112,12 +92,12 @@ public class Usage
     }
 }";
         File.WriteAllText(targetFile, originalContent, System.Text.Encoding.UTF8);
-        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
         var docCommentId = $"P:C.IsSuccess";
 
         // Call the tool in apply mode
-        var result = await _tool.SemanticFindReplaceTool(
+        var result = await tools.SemanticFindReplaceTool(
             new ToolCallReason("testing apply mode"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
@@ -132,7 +112,7 @@ public class Usage
 
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);
-        
+
         // Verify file content changed on disk
         var diskContent = File.ReadAllText(targetFile);
         var expected = originalContent
@@ -146,21 +126,17 @@ public class Usage
     [Description("Unknown symbol returns NotFound error")]
     public async Task SemanticFindReplace_UnknownSymbol_ReturnsNotFoundError()
     {
-        using var fixture = new TestSolutionFixture();
-        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-
-        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var source = @"public class C
 {
     public bool IsSuccess { get; set; }
 }";
-        File.WriteAllText(targetFile, source, System.Text.Encoding.UTF8);
-        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, source));
+        var tools = BuildTools(workspace.Manager);
 
         var docCommentId = "P:C.UnknownMember";
 
         // Call with unknown symbol
-        var result = await _tool.SemanticFindReplaceTool(
+        var result = await tools.SemanticFindReplaceTool(
             new ToolCallReason("testing unknown symbol"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
@@ -177,10 +153,6 @@ public class Usage
     [Description("Unsupported site returns TargetIneligible error with location info")]
     public async Task SemanticFindReplace_UnsupportedSite_ReturnsTargetIneligibleWithLocation()
     {
-        using var fixture = new TestSolutionFixture();
-        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-
-        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = @"public class C
 {
     public bool IsSuccess { get; set; }
@@ -194,13 +166,14 @@ public class Usage
         _c.IsSuccess |= true;
     }
 }";
-        File.WriteAllText(targetFile, originalContent, System.Text.Encoding.UTF8);
-        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, originalContent));
+        var tools = BuildTools(workspace.Manager);
+        var targetFile = workspace.PathOf(FixtureRelativePath);
 
         var docCommentId = $"P:C.IsSuccess";
 
         // Call with unsupported site in preview mode
-        var result = await _tool.SemanticFindReplaceTool(
+        var result = await tools.SemanticFindReplaceTool(
             new ToolCallReason("testing unsupported site"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
@@ -211,26 +184,21 @@ public class Usage
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
-        
+
         // Verify error message contains the file name and line number (line 11 is the |= line)
         var message = result.ErrorData.Message;
         var fileName = Path.GetFileName(targetFile);
         Assert.That(message, Does.Contain(fileName), $"Error should mention the file name ({fileName})");
         Assert.That(message, Does.Contain(":11"), "Error should contain the line number (line 11 is the |= line)");
-        
-        // Verify file is unchanged on disk
-        var diskContent = File.ReadAllText(targetFile);
-        Assert.That(diskContent, Is.EqualTo(originalContent), "File should be unchanged after error");
+
+        // Verify file is unchanged
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(originalContent), "File should be unchanged after error");
     }
 
     [Test]
     [Description("Alias retarget: newName = the sibling of a computed inverse alias previews, then applies, leaving the alias declaration untouched")]
     public async Task SemanticFindReplace_AliasRetarget_PreviewThenApplyRewritesUsagesAndKeepsAliasDeclaration()
     {
-        using var fixture = new TestSolutionFixture();
-        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-
-        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = @"public class C
 {
     private bool _isError;
@@ -250,13 +218,13 @@ public class Usage
         }
     }
 }";
-        File.WriteAllText(targetFile, originalContent, System.Text.Encoding.UTF8);
-        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, originalContent));
+        var tools = BuildTools(workspace.Manager);
 
         var docCommentId = "P:C.IsSuccess";
 
         // Renaming in place stays refused, and the message teaches the alias-retarget form.
-        var refused = await _tool.SemanticFindReplaceTool(
+        var refused = await tools.SemanticFindReplaceTool(
             new ToolCallReason("testing alias in-place refusal"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
@@ -267,16 +235,16 @@ public class Usage
         Assert.That(refused.ErrorData.Message, Does.Contain("alias retarget"));
         Assert.That(refused.ErrorData.Message, Does.Contain("'IsError'"));
 
-        var preview = await _tool.SemanticFindReplaceTool(
+        var preview = await tools.SemanticFindReplaceTool(
             new ToolCallReason("testing alias retarget preview"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
             newName: "IsError",
             mode: SemanticReplaceMode.preview);
         Assert.That(!preview.IsError, Is.True, preview.ErrorData?.Message);
-        Assert.That(File.ReadAllText(targetFile), Is.EqualTo(originalContent), "File should be unchanged after preview");
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(originalContent), "File should be unchanged after preview");
 
-        var apply = await _tool.SemanticFindReplaceTool(
+        var apply = await tools.SemanticFindReplaceTool(
             new ToolCallReason("testing alias retarget apply"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
@@ -288,6 +256,14 @@ public class Usage
             .Replace("if (_c.IsSuccess)", "if (!_c.IsError)")
             .Replace("var x = !_c.IsSuccess;", "var x = _c.IsError;")
             .Replace("_c.IsSuccess = false;", "_c.IsError = true;");
-        Assert.That(File.ReadAllText(targetFile), Is.EqualTo(expected));
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(expected));
     }
+
+    private const string FixtureRelativePath = "ContosoOrders.Core/SemanticFindReplaceFixture.cs";
+
+    private static SemanticFindReplaceTools BuildTools(IWorkspaceManager workspaceManager) =>
+    new(new SemanticReplaceEngine(workspaceManager),
+        new ValidationEngine(workspaceManager),
+        workspaceManager,
+        NullLogger<SemanticFindReplaceTools>.Instance);
 }
