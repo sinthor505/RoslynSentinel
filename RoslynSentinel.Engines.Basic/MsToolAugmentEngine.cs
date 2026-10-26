@@ -774,9 +774,16 @@ public class MsToolAugmentEngine
             }
             else
             {
-                // No solution loaded -> the chokepoint requires CurrentSolution, so fall back to a
-                // direct write. Same fallback the previous code silently relied on via its try/catch.
-                try { await File.WriteAllTextAsync(filePath, formatted, cancellationToken); }
+                // No solution loaded -> the chokepoint requires CurrentSolution, so the write goes
+                // through EolFileWriter, which applies the resolved EOL (the chokepoint is unavailable without a solution).
+                try
+                {
+                    var writeRefusal = await EolFileWriter.WriteAllTextResolvedAsync(filePath, formatted, source, cancellationToken);
+                    if (writeRefusal != null)
+                    {
+                        return MsAugmentResult.Fail($"Could not write file '{filePath}': {writeRefusal}");
+                    }
+                }
                 catch (Exception ex) when (ex is not OperationCanceledException) { return MsAugmentResult.Fail($"Could not write file '{filePath}': {ex.Message}"); }
             }
         }
