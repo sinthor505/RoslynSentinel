@@ -802,6 +802,18 @@ else {
     Write-LaunchLog "Auto-load: not adding --solution (passed=$hasSolutionArg, cwd='$cwd', cwdInRepo=$cwdInRepo, slnxExists=$(Test-Path -LiteralPath $defaultSolution))."
 }
 
+# This repo keeps .cs files in uniform CRLF (.editorconfig, .gitattributes), so a window opened inside it pins
+# the EOL policy to crlf instead of relying on the host OS default. Other repos stay on the server default
+# (auto); an explicit --eol / ROSLYNSENTINEL_EOL always wins.
+$hasEolArg = $false
+foreach ($serverArg in $ServerArgs) {
+    if ($serverArg -match '^--eol(=|$)') { $hasEolArg = $true }
+}
+if (-not $hasEolArg -and $cwdInRepo -and -not $env:ROSLYNSENTINEL_EOL) {
+    $launchArgs += '--eol=crlf'
+    Write-LaunchLog "EOL policy: no --eol passed and cwd is inside the repo; adding --eol=crlf"
+}
+
 # Prod layout only: all per-process output goes under the instance folder, and the id is exported so the
 # server's Build/RunTest throwaway output dir (<dev repo>\.roslynsentinel\build\<id>) is keyed by it and
 # can be swept. Legacy launches set neither (unchanged).
