@@ -1,6 +1,6 @@
 # Plan: Configurable EOL policy, single write chokepoint and final-bytes EOL guard
 
-**Status:** IN PROGRESS 2026-10-25. Steps 0-4 done (decisions, sweep, `scripts/Get-EolAudit.ps1`, working tree normalized, ratchet in `build.ps1`, `--eol` option, resolver, one dominant-EOL rule); next is Step 5, chokepoint uses the resolver and guards the final bytes.
+**Status:** IN PROGRESS 2026-10-25. Steps 0-7 done (Steps 6-7 results are under each step; Steps 0-5: decisions, sweep, `scripts/Get-EolAudit.ps1`, working tree normalized, ratchet in `build.ps1`, `--eol` option, resolver, one dominant-EOL rule, chokepoint converts via the resolver and guards the final bytes; 5a-5c5 committed, flag and old path removed); Step 5 leftovers are listed under "Step 5 result"; next is Step 8, retire scattered newline literals (pass the resolved EOL to the formatter and the new-file scaffolds).
 
 > **Note (2026-10-19):** `NormalizeWholeSubtreeWhitespace` (named in the sweep and Step 2 below) was deleted (D1);
 > the EOL-aware helpers in `RoslynFormattingHelper` replace it. Treat those mentions as historical.
@@ -246,6 +246,24 @@ Step 0 results (2026-10-18):
     `MsToolAugmentEngineFormatCharacterizationTests.cs` (the `ExtractMethod_MixedEol_StrayCrlfOnBlankLine...` test)
     to say the helper-level placement is superseded by this step.
 
+#### Step 5 result (2026-10-25)
+- Committed: 5a `a4a6e114`, 5b `f4a4579e`, 5c0 `2142a33f`, 5c1 `ad82571e`, 5c2 `92550283`, 5c3 `a3f84328`,
+  5c4 `426d8b83` (default on, four test fixes), cleanup `77b4d801` (flag, old backstop, `_knownFileEolPresence`,
+  dead no-op const removed; whitespace ratchet allowlist 3 -> 1), 5c5 `df0ad2d9` (early guard in
+  `ValidateAndApplyHelper` and its three Fake-based refusal tests removed). Pre-existing unrelated failures seen in
+  full runs: `CheckPackageInconsistencyAsync_InMemorySolution_ReturnsNonNull` (depends on a leftover temp dir),
+  `LaterCommitTouchingServerSource_IsStaleAndListed` and `ExternalTouch_Baselineless...` (flakes in parallel runs).
+- Behaviour change to know: a dry run no longer reports an EOL refusal (nothing refuses a style flip any more).
+- Not done, tracked here:
+  - `ExtractMethodSafe` mixed-EOL end-to-end case and the `MsToolAugmentEngineFormatCharacterizationTests` TODO reword.
+  - Undo and failed-write rollback tests at the chokepoint level (the exemptions exist in code; only the Done-when
+    tests are missing).
+  - `ApplyChangesResult.Findings` (attribution) is not surfaced in tool results yet (`// TODO` in the code; needs
+    `ApplyOutcome.Findings` and the 9 callers).
+  - `EolChangeGuard.Check/CheckAll/BuildMessage` have no production caller (`// TODO` on the class); delete with
+    their tests in `WriteChokepointGuardrailTests`.
+  - The running server binary must be rebuilt and restarted before the new chokepoint is live for editing tools.
+
 ### Step 6 - Route bare writes through the chokepoint
 - Files: per the Step 0 sweep: `MsToolAugmentEngine.FormatDocumentSafeAsync` (:732, and its
   `AdhocWorkspace` format at :701) and `SolutionManagementEngine.CreateProjectAsync` (normalize the
@@ -256,6 +274,14 @@ Step 0 results (2026-10-18):
     non-test projects, with an allowlist for non-workspace writes. Pattern: the whitespace ratchet
     tests from `c4b7a16d`.
 - Done when: the ratchet test passes and the sweep list is empty or allowlisted with reasons.
+- Result (2026-10-25): done. `Common/EolFileWriter` (resolver EOL + BOM kept, written through `FileIoHelper`) now backs the
+  two workspace writes that cannot use the chokepoint: the no-solution fallback in
+  `MsToolAugmentEngine.FormatDocumentSafeAsync` and the `dotnet new` template files in
+  `SolutionManagementEngine.CreateProjectAsync` (commit `64c5d590`). `Tests.Basic/BareFileWriteRatchetTests`
+  (commit `b1604788`) scans every production project for `File.WriteAll*/AppendAll*/Create/CreateText/Copy` outside
+  `FileIoHelper`, with 18 non-workspace allowlist keys. `FormatDocumentSafe` still returns the formatter's
+  `Environment.NewLine` text (TODO in `FiveStarToolTests`, fixed by Step 8). Open: whether to add a test-run check
+  for the `build.ps1` EOL ratchet (it does not run under `RunTest`).
 
 ### Step 7 - New-file creators use the resolver
 - Files: `Tools.Basic/WorkspaceFileEditImpl.cs` (`CreateFile`),
@@ -263,6 +289,11 @@ Step 0 results (2026-10-18):
   `Engines.Basic/MemberRefactoringEngine.cs` (about 4332, `AddTopLevelTypeAsync`).
 - Change: build scaffolds and split-out files with the resolved EOL, not `\n` or the source file's EOL.
 - Done when: tests create a file from an LF source under `crlf` and get uniform CRLF.
+- Result (2026-10-25): already satisfied by Step 5 (the chokepoint converts new files to the resolved EOL on write); no
+  production change needed. Three tests pin it against a real manager: `CreateFileTool_EolCreatorUnderCrlf_LfSeed_...`,
+  `MemberTool_AddTopLevelType_EolCreatorUnderCrlf_LfSource_...` (`Tests.Tools.Basic/CreateFileDeleteFileTests.cs`) and
+  `MoveAllTypesToFiles_EolCreatorUnderCrlf_LfSource_...` (`Tests.Basic/MoveTypeToFileTests.cs`). The creators'
+  returned/previewed text still follows the source file's EOL until Step 8.
 
 ### Step 8 - Retire scattered newline literals (sliced, one engine per slice)
 - Files: `Common/RoslynFormattingHelper.cs`, `Engines.Basic/MsToolAugmentEngine.cs`,
@@ -279,6 +310,45 @@ Step 0 results (2026-10-18):
 - Done when: no defaulted `eol` callers remain, the obsolete overload is removed, a `Search` for
   `LineFeed`/`"\r\n"`/`"\n"` trivia literals in `Engines.*` and `Common` returns only allowlisted
   sites, and the Step 3 ratchet is green after a model-eval or battery run.
+- Decision (2026-10-26): full sweep (option 2), not a boundary-only normalisation. Measurement (2026-10-25, read-only
+  `explore-sonnet` sweep, non-test projects): about 61 hand-built literals in 17 files (35 trivia/parse sites, 16
+  formatter or `NormalizeWhitespace` calls with no EOL option, 4 scaffold literals, 10 `AppendLine`), about 226
+  generator `AppendLine` calls in 5 files (`CodeGenerationEngine` 77, `TestingEngine` 69, `PathDrivenTestEngine` 46,
+  `ApiGenerationEngine` 14, `ContextHelper` 24), and about 28 sites that already take an EOL but detect it from the
+  source file (`DetectDominantEol(pre-image)`), not the resolver. About 100 sites are detection/split/compare
+  (leave) and about 150 are messages/logs/diff output (leave). Unread by the measurement: `GitImpl`, `GitHunkParser`,
+  `SnippetErrorFormatter`, `CompilerErrorLookupHelper`, `Tools.Experimental`, `Utilities.PlanStepRunner`; whether the
+  generator output is written to a file or only returned; whether each annotated trivia site is normalised by the
+  later format pass.
+  Slices (each compile-green, migration-first: new required-`eol` overload beside the old, old `[Obsolete("Use X")]`,
+  callers moved per slice, old member removed last):
+  - 8a plumbing: a way for engines to get the resolved EOL without ambient state. Proposal: `IWorkspaceMutator`
+    (or `IWorkspaceManager`) gains `string ResolveEol(string filePath, string? preImageText)` implemented by
+    `PersistentWorkspaceManager` as `EolResolver.Resolve(EolModeOverride ?? EolPolicyOptions.Mode, preImageText,
+    EditorConfigEolReader.Read(filePath))`, plus a `FakeWorkspaceManager` implementation; refactor
+    `ComputeEolPrePass` to use it so there is one definition.
+  - 8b `RoslynFormattingHelper`: required `eol` parameter on the `FormatAnnotated*`, `FormatNewSnippetAsync`,
+    `InsertMemberDeclarationAndFormatInsertionAsync` family (obsolete the defaulted overloads); replace the four
+    `DetectDominantEol(pre-image)` sites (about :167, :411, :463, :516) and the three hard-coded
+    `CarriageReturnLineFeed` (about :290, :294, :317). About 36 callers move in the per-engine slices below.
+  - 8c to 8k, one engine or folder per slice, each replacing its A-class sites with the resolved EOL from 8a:
+    `Common/ContextHelper`; `Engines.Advanced` (`AdvancedStructuralEngine`, `AnnotatedInsertionHelper`,
+    `AsyncOptimizationEngine`, `CodeStyleEngine`, `LogicOptimizationEngine`, `ModernizationEngine`,
+    `OutParamRefactoringEngine`, `DocumentationEngine`, `CodeHealingEngine`, `CommentingEngine`, `MappingEngine`);
+    `Engines.Advanced` generators (`CodeGenerationEngine`, `TestingEngine`, `PathDrivenTestEngine`,
+    `ApiGenerationEngine`, via one `AppendLine` -> `Append(text).Append(eol)` helper or `NormalizeEol` on the result,
+    decide in the slice); `Engines.Basic` (`MsToolAugmentEngine`, `BasicRefactoringEngine`, `MemberRefactoringEngine`,
+    `ProjectStructureEngine`, `SyntaxUpgradeEngine`, `RefactoringToolHelpers.PreviewFileContent`);
+    `Tools.Basic` (`WorkspaceFileEditImpl` scaffolds and the `DetectDominantEol(existing)` sites in
+    `WholeFileWriteTools`/`WorkspaceFileEditImpl`). Re-measure each slice with `Search` before briefing; the measurement
+    line numbers drift.
+  - 8z ratchet and cleanup: a `Tests.Basic` ratchet like `BareFileWriteRatchetTests` for `SyntaxFactory.LineFeed`,
+    `CarriageReturnLineFeed`, `EndOfLine("...")` literals and `NormalizeWhitespace()` without an EOL in `Common` and
+    `Engines.*` (allowlist B/C-class sites with reasons), then remove the obsolete overloads and the
+    `FormatDocumentSafe` returned-text TODO in `FiveStarToolTests`.
+  - Risk: tests asserting exact `\n` or platform-EOL strings from these engines will fail as sites move; those tests
+    set `EolModeOverride` or normalise, as in Step 5. Expect the Tests.Advanced battery to need the most fixes.
+  - Run order: 8a, 8b first (everything else depends on them), then per-engine slices smallest first.
 
 ### Step 9 - Per-line EOL reporting (tool gap)
 - Files: `ReadFile` or `Search` tool and engine.

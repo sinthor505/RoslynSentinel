@@ -35,11 +35,31 @@ public class SolutionManagementEngine
         });
 
         await process!.WaitForExitAsync(cancellationToken);
+
+        // The template .cs files dotnet new writes bypass the chokepoint, so they get the resolved EOL here.
+        string? eolRefusal = null;
+        foreach (var templateFile in Directory.EnumerateFiles(projectDir, "*.cs", SearchOption.AllDirectories))
+        {
+            var relativeSegments = Path.GetRelativePath(projectDir, templateFile).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (relativeSegments.Any(segment => segment is "bin" or "obj"))
+            {
+                continue;
+            }
+
+            eolRefusal ??= await EolFileWriter.NormalizeNewFileAsync(templateFile, cancellationToken);
+        }
+
+        var message = $"Project {projectName} created and added to solution.";
+        if (eolRefusal != null)
+        {
+            message += "; EOL normalisation refused: " + eolRefusal;
+        }
+
         return new ProjectEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = default,
-            Message = $"Project {projectName} created and added to solution."
+            Message = message
         };
     }
 

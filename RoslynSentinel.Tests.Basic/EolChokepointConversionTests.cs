@@ -17,14 +17,12 @@ public class EolChokepointConversionTests
     private const string MixedSource = "namespace T;\r\npublic class A\n{\r\n    public int X() => 1;\r\n}\r\n";
     private const string MixedSourceWithAddedLine = "namespace T;\r\npublic class A\n{\r\n    public int X() => 1;\r\n    public int Y() => 2;\r\n}\r\n";
 
-    // Temporary opt-in (ResolverPrePassEnabled + EolModeOverride), removed in plan step 5 slice 5c4/5c6.
-    // Every test goes through this helper so the opt-in lives in one place.
-    // TODO 5c4/5c6: remove this opt-in with ResolverPrePassEnabled once the pre-pass is the only path.
+    // Explicit EOL mode for this manager.
+    // Every test goes through this helper so the EOL mode is set in one place.
     private static async Task<ApplyChangesResult> ApplyAsync(
         string file, string proposed, EolMode mode, bool exactRestore = false, string? operationLabel = null)
     {
         using var manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        manager.ResolverPrePassEnabled = true;
         manager.EolModeOverride = mode;
         manager.SetTestSolution(new AdhocWorkspace().CurrentSolution);
         return await manager.ApplyProposedChangesAsync(
@@ -297,6 +295,46 @@ public class EolChokepointConversionTests
 
             Assert.That(result.IsError, Is.False, result.Summary);
             Assert.That(await File.ReadAllBytesAsync(file), Is.EqualTo(Encoding.UTF8.GetBytes(MixedSourceWithAddedLine)));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task RollbackOfPartialFailure_RestoresMixedPreImageByteIdenticalAsync()
+    {
+        var dir = CreateTree("");
+        try
+        {
+            var fileA = WriteExistingFile(dir, MixedSource);
+            var fileB = Path.Combine(dir, "B.cs");
+            File.WriteAllBytes(fileB, Encoding.UTF8.GetBytes(CrlfSource));
+            // Dictionary order writes A before B, so A is written and then rolled back when B's write is refused.
+            File.SetAttributes(fileB, FileAttributes.ReadOnly);
+            try
+            {
+                using var manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                manager.EolModeOverride = EolMode.Crlf;
+                manager.SetTestSolution(new AdhocWorkspace().CurrentSolution);
+                var changes = new Dictionary<FilePathWrapper, string>
+                {
+                    [fileA] = MixedSourceWithAddedLine,
+                    [fileB] = CrlfSource.Replace("=> 1", "=> 2"),
+                };
+                var result = await manager.ApplyProposedChangesAsync(
+                    changes, retryCount: 0, validateChanges: false, rollbackOnPartialFailure: true);
+
+                Assert.That(result.IsError, Is.True, "B's refused write must fail the batch");
+                Assert.That(result.FailedFiles.Count, Is.EqualTo(1));
+                Assert.That(result.RolledBackFiles, Does.Contain(fileA));
+                Assert.That(await File.ReadAllBytesAsync(fileA), Is.EqualTo(Encoding.UTF8.GetBytes(MixedSource)));
+            }
+            finally
+            {
+                File.SetAttributes(fileB, FileAttributes.Normal);
+            }
         }
         finally
         {

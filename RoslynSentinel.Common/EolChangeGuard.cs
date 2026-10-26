@@ -81,6 +81,7 @@ public record EolChangeViolation(string FilePath, EolCounts Before, EolCounts Af
     public string AfterStyle => After.Describe();
 }
 
+// TODO no production caller of CheckAll/Check/BuildMessage after Step 5c5; delete with the EolChangeGuard.Check tests in WriteChokepointGuardrailTests (keep Count/EolCounts, used by EolResolver)
 /// <summary>
 /// Write-path guardrail: refuses a change to an EXISTING C# file that alters that file's line-ending
 /// style. A refactoring should only touch the lines it edits, so a changed EOL style is the

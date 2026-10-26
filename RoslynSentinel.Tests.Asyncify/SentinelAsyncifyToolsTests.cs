@@ -865,7 +865,7 @@ public static class DataHelper
         var doc = solution.Projects.SelectMany(p => p.Documents)
             .First(d => string.Equals(d.FilePath, PathOf("UpliftPin.cs"), StringComparison.OrdinalIgnoreCase));
         var actual = (await doc.GetTextAsync()).ToString();
-        var expected = WithLineEndings(UpliftPinExpected, style);
+        var expected = WithLineEndings(UpliftPinExpected, style == "mixed" ? "\r\n" : style); // mixed pre-image is converted uniformly to the resolver target (CRLF)
 
         if (actual != expected)
         {

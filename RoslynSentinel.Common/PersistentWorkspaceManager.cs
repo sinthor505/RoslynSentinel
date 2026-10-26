@@ -65,14 +65,6 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // casing, read with the watcher's e.FullPath casing -> a default (ordinal) comparer made a
     // c:\ vs C:\ difference miss the self-write suppression and read as external drift.
     private readonly ConcurrentDictionary<string, (DateTime Timestamp, string Content)> _internalChanges = new(PathComparison.Comparer);
-    // Disabled 2026-09-14: the AST-normalization no-op check below (see its own comment) was
-    // blocking legitimate formatting-only edits -> a model asking to fix indentation/spacing got
-    // silently no-op'd whenever its fix and the original both normalized to the same canonical
-    // form under NormalizeWhitespace(), even though the requested bytes genuinely differed from
-    // what was on disk. Left as a toggle rather than deleted per direct instruction, in case the
-    // original engine-reformatting-regression protection it existed for needs to come back.
-    private const bool EnableAstNormalizationNoOpCheck = false;
-
     // While the workspace is stale, UndoLastApply (the only exactRestore caller) is refused like any other
     // source write. Flip to true to let undo through, since it writes back a pre-image this server captured
     // itself. See docs/current/proposals/proposal_workspace_reload_failure_visibility.md slice 3.
@@ -80,11 +72,6 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
     /// <summary>Per-instance EOL mode override; the effective mode is this, else <see cref="EolPolicyOptions.Mode"/>. Lets tests pick a mode without touching the static.</summary>
     public EolMode? EolModeOverride { get; set; }
-
-    // Temporary opt-in for the resolver-based EOL pre-pass in ApplyProposedChangesAsync; defaults to false so
-    // the old backstop guard and NormalizeEolOfChangedLines path stay in force. Removed once the pre-pass is
-    // the only path (plan_eol_policy_and_write_chokepoint.md step 5 slice 5c4). Public so test assemblies can set it.
-    public bool ResolverPrePassEnabled { get; set; }
 
     // Content-hash baseline: path (normalized via FilePathWrapper's own case-insensitive, separator-
     // canonicalized equality/hashing) -> SHA-256 of the last content RoslynSentinel itself wrote or
@@ -99,11 +86,6 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // ApplyProposedChangesAsync write (checked by reading the file's first bytes after initial load).
     // Used to preserve the original file's encoding when writing changes back.
     private readonly ConcurrentDictionary<FilePathWrapper, bool> _knownFileBomPresence = new();
-    // EOL tracking: path (normalized via FilePathWrapper) -> the dominant line-ending style.
-    // Populated wholesale on LoadSolutionAsync, updated per-file on a successful ApplyProposedChangesAsync
-    // write. Used to normalize incoming newContent to match the file's existing line endings, so
-    // agents that type LF get their edits normalized to the file's native EOL (CRLF for Windows).
-    private readonly ConcurrentDictionary<FilePathWrapper, string> _knownFileEolPresence = new();
 
     /// <summary>
     /// Changesets rejected by <c>ApplyDiff</c>'s whole-file-rewrite size guard, keyed by a
@@ -512,7 +494,6 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     {
         _knownFileHashes.Clear();
         _knownFileBomPresence.Clear();
-        _knownFileEolPresence.Clear();
         if (CurrentSolution is not { } solution)
         {
             return;
@@ -532,8 +513,6 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 _knownFileHashes[filePath] = ComputeContentHash(content);
                 // Detect whether the file has a UTF-8 BOM by checking the first three bytes.
                 _knownFileBomPresence[filePath] = HasUtf8BomAsync(document.FilePath);
-                // Detect the file's dominant line-ending style so we can normalize edits to match.
-                _knownFileEolPresence[filePath] = EolUtilities.DetectDominantEol(content);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -1805,65 +1784,25 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 }
             }
 
-            // TODO 5c4: remove the flag and the old path
-            // Resolver-based EOL pre-pass (temporary opt-in, see ResolverPrePassEnabled): computes the bytes to write per
-            // file and any attribution findings, and refuses (before any delete or write) only on a non-uniform result.
-            Dictionary<string, string>? contentsToWrite = null;
-            List<Finding>? eolFindings = null;
-            if (ResolverPrePassEnabled)
+            // Resolver-based EOL pre-pass: computes the bytes to write per file and any attribution findings, and
+            // refuses (before any delete or write) only on a non-uniform result.
+            var prePass = ComputeEolPrePass(changes, preImages, exactRestore, operationLabel);
+            if (prePass.Refusal is not null)
             {
-                var prePass = ComputeEolPrePass(changes, preImages, exactRestore, operationLabel);
-                if (prePass.Refusal is not null)
-                {
-                    return new ApplyChangesResult(
-                        true,
-                        [],
-                        new Dictionary<FilePathWrapper, string> { [(FilePathWrapper)prePass.RefusalFile!] = prePass.Refusal },
-                        $"{ToolErrorCode.EolChangeRefused}: {prePass.Refusal}",
-                        WorkspaceInSync: true,
-                        WorkspaceVersion: _workspaceVersion,
-                        PreImages: preImages,
-                        ValidationResult: validationReport,
-                        RefusalCode: ToolErrorCode.EolChangeRefused);
-                }
-
-                contentsToWrite = prePass.ContentsToWrite;
-                eolFindings = prePass.Findings;
-            }
-
-            // ── EOL-change guardrail (backstop) ───────────────────────────────
-            // Refuse, before anything is written or deleted, any change that alters an existing
-            // .cs file's line-ending style: that is the signature of a whole-file re-serialize
-            // (see EolChangeGuard). ValidateAndApplyHelper runs the same check earlier so tools get
-            // a structured error; this covers callers that reach the chokepoint directly. New
-            // files (null pre-image) are exempt.
-            //
-            // exactRestore (UndoLastApply) skips the check: it writes back a pre-image this server captured
-            // itself, so the change is intended by definition, and a pre-image that is mixed-EOL must be
-            // restorable even over a file that has since become single-style (see EolUtilities.NormalizeEolOfChangedLines).
-            List<EolChangeViolation> eolViolations = exactRestore || ResolverPrePassEnabled
-                ? []
-                : EolChangeGuard.CheckAll(
-                    changes, p => preImages.TryGetValue(p, out var before) ? before : null);
-            if (eolViolations.Count > 0)
-            {
-                var refusalMessage = EolChangeGuard.BuildMessage("ApplyProposedChanges", eolViolations);
-                if (_logger.IsEnabled(LogLevel.Warning))
-                {
-                    _logger.LogWarning("{Message}", refusalMessage);
-                }
-
                 return new ApplyChangesResult(
                     true,
                     [],
-                    eolViolations.ToDictionary(v => (FilePathWrapper)v.FilePath, v => refusalMessage),
-                    $"{ToolErrorCode.EolChangeRefused}: {refusalMessage}",
+                    new Dictionary<FilePathWrapper, string> { [(FilePathWrapper)prePass.RefusalFile!] = prePass.Refusal },
+                    $"{ToolErrorCode.EolChangeRefused}: {prePass.Refusal}",
                     WorkspaceInSync: true,
                     WorkspaceVersion: _workspaceVersion,
                     PreImages: preImages,
                     ValidationResult: validationReport,
                     RefusalCode: ToolErrorCode.EolChangeRefused);
             }
+
+            var contentsToWrite = prePass.ContentsToWrite;
+            var eolFindings = prePass.Findings;
 
             // ── Deletes ──────────────────────────────────────────────────────
             // Handled as their own pass, before the write loop below, so a delete failure is
@@ -1904,40 +1843,13 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 string lastError = "";
 
                 preImages.TryGetValue(filePath, out var preImage);
-                if (preImage == (contentsToWrite is null ? newContent : contentsToWrite[filePath]))
+                if (preImage == contentsToWrite[filePath])
                 {
                     _logger.LogWarning("Skipping no-op write for {FilePathWrapper}: proposed content is identical to existing content.", filePath);
                     Debug.WriteLine($"[WarningDetails] Skipping no-op write for {filePath}: proposed content is identical to existing content.");
                     succeeded.Add(filePath);
                     noOp.Add(filePath);
                     continue;
-                }
-
-                // For C# files, suppress writes where the only difference is whitespace
-                // normalization -> e.g. NormalizeWhitespace() adding blank lines between methods
-                // that were already present in the original. Parsing both sides and comparing
-                // their normalized forms catches any engine that forgot to preserve formatting.
-                // Skipped for exactRestore: a restore that differs from the file only in line endings is exactly
-                // the change that must be written, not a whitespace-only no-op.
-                if (EnableAstNormalizationNoOpCheck && !exactRestore && preImage != null &&
-                    string.Equals(Path.GetExtension(filePath), ".cs", StringComparison.OrdinalIgnoreCase))
-                {
-                    try
-                    {
-                        var normalizedNew = CSharpSyntaxTree.ParseText(newContent).GetRoot().NormalizeWhitespace().ToFullString();
-                        var normalizedExisting = CSharpSyntaxTree.ParseText(preImage).GetRoot().NormalizeWhitespace().ToFullString();
-                        if (normalizedNew == normalizedExisting)
-                        {
-                            _logger.LogInformation("Skipping whitespace-only write for {FilePathWrapper}: content is semantically identical after normalization.", filePath);
-                            succeeded.Add(filePath);
-                            noOp.Add(filePath);
-                            continue;
-                        }
-                    }
-                    catch
-                    {
-                        // Parse failure (e.g. malformed generated code) -> fall through to normal write.
-                    }
                 }
 
                 // Dev diagnostic only: measure how far this write's content diverges from what
@@ -1965,16 +1877,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     }
                 }
 
-                // Normalize line endings: if this is an existing file, lines this change added or rewrote take its
-                // dominant EOL, while every untouched line keeps its own original terminator (a whole-content
-                // NormalizeEol here used to turn the stray CRLF lines of a mixed-EOL file into the dominant style
-                // after EolChangeGuard had already passed it, and UndoLastApply then refused to restore them).
-                // If it's a new file (preImage is null), or an exactRestore, keep the content as-is.
-                var contentToWrite = contentsToWrite is null ? newContent : contentsToWrite[filePath];
-                if (contentsToWrite is null && !exactRestore && preImage != null && _knownFileEolPresence.TryGetValue(filePath, out var targetEol))
-                {
-                    contentToWrite = EolUtilities.NormalizeEolOfChangedLines(preImage, newContent, targetEol);
-                }
+                // The EOL pre-pass above already computed the bytes to write for this file.
+                var contentToWrite = contentsToWrite[filePath];
 
                 // Mark as internal change before writing to avoid FileSystemWatcher loop.
                 // Content is recorded alongside the timestamp so the watcher handler can verify
@@ -2002,9 +1906,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         succeeded.Add(filePath);
                         // Update the hash baseline with what we just wrote -> no extra I/O, contentToWrite
                         // is already in memory. See _knownFileHashes's declaration-site comment.
-                        // Also update the EOL tracking with the normalized content's EOL.
                         _knownFileHashes[filePath] = ComputeContentHash(contentToWrite);
-                        _knownFileEolPresence[filePath] = EolUtilities.DetectDominantEol(contentToWrite);
                         if (_logger.IsEnabled(LogLevel.Information))
                         {
                             _logger.LogInformation("Wrote changes to {FilePathWrapper} (Attempt {Attempt})", filePath, attempt + 1);
@@ -2173,7 +2075,6 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // attribution finding when the pre-image was itself not in the resolved style (it was written outside the
     // chokepoint). The finding is a record, never a refusal. Refusal is non-null only when the converted content is not
     // a single line-ending style; RefusalFile names the offending file. Nothing is written here.
-    // TODO 5c4: remove with ResolverPrePassEnabled once the pre-pass is the only path
     private (Dictionary<string, string> ContentsToWrite, List<Finding> Findings, string? Refusal, string? RefusalFile) ComputeEolPrePass(
         Dictionary<FilePathWrapper, string> changes,
         IReadOnlyDictionary<string, string?> preImages,

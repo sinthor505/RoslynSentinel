@@ -211,4 +211,31 @@ public class WidgetB { public string Label { get; set; } }
                 $"File '{path}' content seems too short to be valid C#");
         }
     }
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    public async Task MoveAllTypesToFiles_EolCreatorUnderCrlf_LfSource_IsUniformCrlfAsync()
+    {
+        // The split-out files are new documents. Under Crlf they must reach disk as uniform CRLF through the chokepoint.
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        workspaceManager.EolModeOverride = EolMode.Crlf;
+        var projectDir = Path.GetDirectoryName(Directory.EnumerateFiles(fixture.SolutionDirectory, "*.csproj", SearchOption.AllDirectories).First())!;
+        var bundle = Path.Combine(projectDir, "Bundle.cs");
+        await File.WriteAllTextAsync(bundle, "namespace MyApp;\npublic class Alpha { }\npublic class Beta { }\npublic class Gamma { }\n");
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var engine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, new SentinelConfiguration());
+
+        var changes = await engine.MoveAllTypesToFilesAsync(bundle);
+        var applied = await workspaceManager.ApplyProposedChangesAsync(changes, retryCount: 0, validateChanges: false);
+
+        Assert.That(applied.IsError, Is.False, applied.Summary);
+        foreach (var splitFile in new[] { Path.Combine(projectDir, "Beta.cs"), Path.Combine(projectDir, "Gamma.cs") })
+        {
+            Assert.That(File.Exists(splitFile), Is.True, $"{splitFile} should be written");
+            var bytes = await File.ReadAllBytesAsync(splitFile);
+            Assert.That(bytes.Where((b, i) => b == (byte)'\n' && (i == 0 || bytes[i - 1] != (byte)'\r')).Count(), Is.Zero, $"{splitFile}: no bare LF byte may survive");
+            Assert.That(bytes.Contains((byte)'\r'), Is.True, $"{splitFile}: the file must be CRLF");
+        }
+    }
 }

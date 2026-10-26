@@ -748,10 +748,8 @@ public class CreateFileDeleteFileTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        // Temporary opt-in (ResolverPrePassEnabled + EolModeOverride), removed in plan step 5 slice 5c4/5c6.
+        // Explicit EOL mode for this manager.
         // The new file is expected as LF, so the mode is pinned to Lf rather than the platform default.
-        // TODO 5c4/5c6: remove this opt-in with ResolverPrePassEnabled once the pre-pass is the only path.
-        workspaceManager.ResolverPrePassEnabled = true;
         workspaceManager.EolModeOverride = EolMode.Lf;
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
@@ -881,5 +879,66 @@ public class CreateFileDeleteFileTests
         {
             // Best-effort temp cleanup.
         }
+    }
+
+    [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
+    public async Task CreateFileTool_EolCreatorUnderCrlf_LfSeed_IsUniformCrlfAsync()
+    {
+        // Creators emit LF text. Under Crlf the write chokepoint must convert the new file to uniform CRLF.
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        workspaceManager.EolModeOverride = EolMode.Crlf;
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "EolCreatorCrlf.cs");
+        var result = await workspaceTools.CreateFileTool(reason: "test message", newFile, namespaceName: "MyApp.Eol", typeKind: NewTypeKind.@class, typeName: "Foo");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        var bytes = await File.ReadAllBytesAsync(newFile);
+        Assert.That(bytes.Where((b, i) => b == (byte)'\n' && (i == 0 || bytes[i - 1] != (byte)'\r')).Count(), Is.Zero, "no bare LF byte may survive");
+        Assert.That(bytes.Contains((byte)'\r'), Is.True, "the file must be CRLF");
+    }
+
+    [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task MemberTool_AddTopLevelType_EolCreatorUnderCrlf_LfSource_IsUniformCrlfAsync()
+    {
+        // The LF source file is written before the solution loads. addTopLevelType must leave the file uniform CRLF.
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        workspaceManager.EolModeOverride = EolMode.Crlf;
+        var existingProjectDir = Path.GetDirectoryName(Directory.EnumerateFiles(fixture.SolutionDirectory, "*.csproj", SearchOption.AllDirectories).First())!;
+        var sourceFile = Path.Combine(existingProjectDir, "EolMemberSource.cs");
+        await File.WriteAllTextAsync(sourceFile, "namespace MyApp.Eol;\npublic class Foo\n{\n}\n");
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var config = new SentinelConfiguration();
+        var refactoringEngine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
+        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
+        var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validationEngine = new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var memberRefactoringEngine = new MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine);
+        var refactoringStructuralTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(
+            refactoringEngine,
+            memberRefactoringEngine,
+            structuralRefinementEngine,
+            symbolNavigationEngine,
+            workspaceManager,
+            validationEngine,
+            NullLogger<RefactoringStructuralImpl>.Instance));
+
+        var result = await refactoringStructuralTools.MemberTool(
+            reason: "test message",
+            operation: MemberAction.addTopLevelType,
+            filePath: sourceFile,
+            newMemberSource: "public class Bar { }");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        var bytes = await File.ReadAllBytesAsync(sourceFile);
+        Assert.That(bytes.Where((b, i) => b == (byte)'\n' && (i == 0 || bytes[i - 1] != (byte)'\r')).Count(), Is.Zero, "no bare LF byte may survive");
+        Assert.That(bytes.Contains((byte)'\r'), Is.True, "the file must be CRLF");
     }
 }

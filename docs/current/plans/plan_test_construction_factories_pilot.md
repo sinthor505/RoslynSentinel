@@ -1,6 +1,17 @@
 # Plan: Pilot shared engine/tool construction factories in Tests.Tools.Basic
 
-**Status:** DRAFT 2026-10-18. Pilot one per-project factory (`TestEngines` / `TestTools`) in `Tests.Tools.Basic` (719 construction sites) and measure before rolling out; blocked on a tool gap (Step 0).
+**Status:** DRAFT 2026-10-18, re-sequenced 2026-10-25. Step 0 (tool gap) and Step 1 (survey) are done and committed; Steps 2-5 wait on the server fold and registration move-down below.
+
+## Re-sequencing (2026-10-25)
+Test DI was reconsidered: it needs no `Server.*` reference once the engine and tool-dependency
+registration lists live in `Engines.*` / `Tools.*`. The factories stay (needed by `replaceConstruction`)
+but are implemented through a per-test DI container, so they track production wiring. Order:
+1. Fold `Server.Basic` into `Server.Advanced` (`docs/current/proposals/proposal_unify_server_projects.md`, approved).
+2. Move `AddRoslynSentinelEngines*` into `Engines.*` and add a flat `AddRoslynSentinelToolDependencies*`
+   in `Tools.*` (own proposal, not yet written).
+3. Steps 2-3 below, with the factory methods built on `ServiceCollection` and Step 3's drift guard
+   mostly unnecessary (the container resolves the real constructors).
+4. Steps 4-5 unchanged.
 
 ## Problem
 Test projects hand-construct engines and tool classes with `new X(...)` at roughly 1,800-2,000 sites
@@ -14,8 +25,8 @@ constructor change cascades to all of them (open as Bug 1 in
 
 Parameterless constructors were rejected (each engine needs a workspace manager; they would create
 invalid-state objects and add DI constructor-selection ambiguity, see `TODO.md:102`). Full DI in tests
-was set aside because most test projects cannot reference `Server.*` and tool registration is coupled
-to `IMcpServerBuilder`.
+was not adopted in the first pass because most test projects cannot reference `Server.*` and tool
+registration is coupled to `IMcpServerBuilder`; see Re-sequencing for the revised route.
 
 ## Decision
 Per-test-project static factories that mirror the constructor shapes tests actually use, building the
@@ -41,7 +52,7 @@ Field renames can follow later purely for readability (`RenameSymbol`, one call 
 
 ## Steps
 
-### Step 0 - Close the tool gap (TOOL-GAP) - DONE 2026-10-18 (uncommitted)
+### Step 0 - Close the tool gap (TOOL-GAP) - DONE 2026-10-18 (committed f9be549a, 39a968cd)
 - Files: `Tools.Basic/SemanticFindReplaceTools.cs`, `Engines.Basic/ConstructionReplacer.cs` (new),
   `SemanticReplaceEngine.cs`, `SemanticReplaceTypes.cs`, `Common/ToolEnums.cs`.
 - Change: `SemanticFindReplace(operation: replaceConstruction, symbol, factory, mode, projectFilter?)`.
@@ -82,7 +93,8 @@ Field renames can follow later purely for readability (`RenameSymbol`, one call 
 - Done when: Build 0 errors; factory used by one hand-migrated test class.
 
 ### Step 3 - Drift guard test
-- Files: new test in `Tests.Tools.Basic` (needs a `Server.Basic` reference, or put it in `Tests.Server`).
+- Files: new test in `Tests.Tools.Basic` (needs a `Server.Basic` reference, or put it in `Tests.Server`;
+  after the fold and registration move-down it needs neither, and may reduce to a factory-resolves test).
 - Change: for each factory method, resolve the class from `AddRoslynSentinelEnginesBasic` and assert the
   constructor parameter types match what the factory passes.
 - Done when: test passes and fails when a constructor parameter is added without updating the factory.

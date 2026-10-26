@@ -802,7 +802,8 @@ public class FormatDocumentSafeTests
             var diskContent = await File.ReadAllTextAsync(tempFile);
             Assert.That(diskContent, Is.Not.EqualTo(ugly),
                 "FormatDocumentSafe(preview=false) MUST write to disk");
-            Assert.That(diskContent, Is.EqualTo(result.UpdatedContent),
+            // TODO UpdatedContent still carries the formatter's Environment.NewLine; plan_eol_policy_and_write_chokepoint.md Step 8 passes the resolved EOL to the formatter, then compare bytes exactly.
+            Assert.That(diskContent.Replace("\r\n", "\n"), Is.EqualTo(result.UpdatedContent.Replace("\r\n", "\n")),
                 "Disk content must match the UpdatedContent returned by the engine");
         }
         finally { SafeDelete(tempFile); }

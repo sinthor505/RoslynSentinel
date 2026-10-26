@@ -3154,7 +3154,7 @@ public class GitToolsSmokeTests
 
         foreach (var subDirectory in Directory.EnumerateDirectories(sourceDir))
         {
-            if (Path.GetFileName(subDirectory) != ".git") CopyDirectory(subDirectory, Path.Combine(destinationDir, Path.GetFileName(subDirectory)));
+            CopyDirectory(subDirectory, Path.Combine(destinationDir, Path.GetFileName(subDirectory)));
         }
     }
 

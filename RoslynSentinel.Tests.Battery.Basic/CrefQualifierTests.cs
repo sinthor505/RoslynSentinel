@@ -541,13 +541,14 @@ public class A
     public async Task CrlfAndLfInput_DifferOnlyByInsertedPrefixesAsync()
     {
         var crlfSource = BareNameSource.Replace("\r\n", "\n").Replace("\n", "\r\n");
-        var (lfResult, lfText) = await QualifyAsync(BareNameSource, null);
+        var lfSource = BareNameSource.Replace("\r\n", "\n");
+        var (lfResult, lfText) = await QualifyAsync(lfSource, null);
         var (crlfResult, crlfText) = await QualifyAsync(crlfSource, null);
 
         Assert.That(lfResult.Qualified, Is.EqualTo(1));
         Assert.That(crlfResult.Qualified, Is.EqualTo(1));
         Assert.That(crlfResult.SkippedUnresolved, Is.EqualTo(0));
-        Assert.That(lfText, Is.EqualTo(BareNameExpected));
+        Assert.That(lfText, Is.EqualTo(BareNameExpected.Replace("\r\n", "\n")));
         Assert.That(crlfText, Is.EqualTo(crlfSource.Replace("<see cref=\"Count\"/>", "<see cref=\"A.Count\"/>")));
         Assert.That(CountOccurrences(crlfText, "\r\n"), Is.EqualTo(CountOccurrences(crlfSource, "\r\n")));
         Assert.That(CountOccurrences(crlfText, "\n") - CountOccurrences(crlfText, "\r\n"), Is.EqualTo(0));

@@ -355,8 +355,6 @@ public class UndoLastApplyTests
 
         // EOL tracking is captured at load, so the file must exist on disk before LoadSolutionAsync.
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        // TODO 5c4/5c6: remove this opt-in with ResolverPrePassEnabled once the pre-pass is the only path.
-        workspaceManager.ResolverPrePassEnabled = true;
         workspaceManager.EolModeOverride = EolMode.Crlf;
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
