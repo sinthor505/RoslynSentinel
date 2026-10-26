@@ -3639,8 +3639,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
-            var proj = ProjectLookup.FindProject(solution, projectName, ignoreCase: true);
-            documents = proj?.Documents ?? [];
+            var proj = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw new ToolNotFoundException($"Project '{projectName}' not found in the loaded solution.", "project", projectName);
+            documents = proj.Documents;
         }
         else
         {
