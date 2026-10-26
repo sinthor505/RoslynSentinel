@@ -81,10 +81,10 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     /// <summary>Per-instance EOL mode override; the effective mode is this, else <see cref="EolPolicyOptions.Mode"/>. Lets tests pick a mode without touching the static.</summary>
     public EolMode? EolModeOverride { get; set; }
 
-    // Temporary opt-in for the resolver-based EOL pre-pass in ApplyProposedChangesAsync; defaults to false so
-    // the old backstop guard and NormalizeEolOfChangedLines path stay in force. Removed once the pre-pass is
-    // the only path (plan_eol_policy_and_write_chokepoint.md step 5 slice 5c4). Public so test assemblies can set it.
-    public bool ResolverPrePassEnabled { get; set; }
+    // Temporary opt-in for the resolver-based EOL pre-pass in ApplyProposedChangesAsync; default ON since plan
+    // step 5 slice 5c4. The flag and the old path (backstop guard and NormalizeEolOfChangedLines) are removed in
+    // the cleanup slice (plan_eol_policy_and_write_chokepoint.md). Public so test assemblies can set it.
+    public bool ResolverPrePassEnabled { get; set; } = true;
 
     // Content-hash baseline: path (normalized via FilePathWrapper's own case-insensitive, separator-
     // canonicalized equality/hashing) -> SHA-256 of the last content RoslynSentinel itself wrote or

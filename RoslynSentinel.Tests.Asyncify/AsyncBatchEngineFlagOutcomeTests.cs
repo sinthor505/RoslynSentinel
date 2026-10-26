@@ -88,17 +88,27 @@ public class AsyncBatchEngineFlagOutcomeTests
         var lf = BrokenBridgeSource.Replace("\r\n", "\n");
         SetSource(workspaceText: lf.Replace("\n", "\r\n"), diskText: lf);
 
-        var result = await _batchEngine.RunBridgeBatchAsync(maxBridges: 1);
+        // A read-only target makes the disk write fail, so the write chokepoint rolls back and the flag is refused.
+        var path = Path.Combine(_tempDir, "TripService.cs");
+        File.SetAttributes(path, FileAttributes.ReadOnly);
+        try
+        {
+            var result = await _batchEngine.RunBridgeBatchAsync(maxBridges: 1);
 
-        Assert.That(result.Applied, Is.Empty, "A bridge that fails validation must not be applied.");
-        Assert.That(result.Skipped, Has.Count.EqualTo(1));
-        var message = result.Skipped[0].Reason;
-        Assert.That(message, Does.StartWith("Validation produced"));
-        Assert.That(message, Does.Not.Contain("flagged NeedsManualReview"),
-            "The flag write was refused, so the message must not claim the flag was written.");
-        Assert.That(message, Does.Contain("flag could not be written"));
-        Assert.That(message, Does.Contain("EolChangeRefused"),
-            "The structured refusal code is the only refusal detail that may be surfaced.");
+            Assert.That(result.Applied, Is.Empty, "A bridge that fails validation must not be applied.");
+            Assert.That(result.Skipped, Has.Count.EqualTo(1));
+            var message = result.Skipped[0].Reason;
+            Assert.That(message, Does.StartWith("Validation produced"));
+            Assert.That(message, Does.Not.Contain("flagged NeedsManualReview"),
+                "The flag write was refused, so the message must not claim the flag was written.");
+            Assert.That(message, Does.Contain("flag could not be written"));
+            Assert.That(File.ReadAllText(path), Does.Not.Contain("NeedsManualReview"),
+                "The read-only write was refused, so the file on disk must not carry the NeedsManualReview flag.");
+        }
+        finally
+        {
+            File.SetAttributes(path, FileAttributes.Normal);
+        }
     }
 
     [Test, CancelAfter(60000)]

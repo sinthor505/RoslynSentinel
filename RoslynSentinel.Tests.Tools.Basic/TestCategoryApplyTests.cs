@@ -156,7 +156,7 @@ namespace FixturesBad
         Assert.That(project.AffectedFiles, Has.Count.EqualTo(1));
         Assert.That(project.ChangeId, Is.Not.Null);
 
-        var text = await TextAsync(GoodPath);
+        var text = (await TextAsync(GoodPath)).Replace("\r\n", "\n"); // the write is CRLF; this test asserts placement, not EOL
         Assert.That(text, Does.Contain($"    [TestFixture]\n    [Category(\"Alpha\")] {Marker}\n    public class DrawerGood"),
             "the class-level attribute sits directly above the class, after [TestFixture], with the class's indent");
         Assert.That(text, Does.Contain($"        [Test]\n        [Category(\"Hand\")]\n        [Category(\"Beta\")] {Marker}\n        public void T3()"),
