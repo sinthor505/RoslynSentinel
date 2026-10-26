@@ -211,8 +211,17 @@ Step 0 results (2026-10-18):
     `_knownFileEolPresence` cache for normalization.
   - Run the guard on `contentToWrite`, the post-normalization text.
   - `crlf`/`lf`: convert the whole file, then assert it is uniform.
-  - `auto`: refuse a write that leaves the file more mixed than its pre-image (fewer minority-EOL
-    lines is allowed).
+  - `auto` (decided 2026-10-25, after review: a majority-based "more mixed" guard contradicts the resolver, which
+    gives a mixed file its `.editorconfig`/platform target, not its majority): always convert the whole file, then
+    assert the final bytes are uniform.
+    - Single-style pre-image (CRLF-only or LF-only): the target is that style, so a write that changes it is refused.
+    - Mixed, CR-only, no-newline pre-image or new file: the target is the resolver's value; the file converges
+      on first touch.
+    - No "minority" or "flip" counting remains; `NormalizeEolOfChangedLines` leaves the write path.
+  - New files get the resolved EOL under every mode (decided 2026-10-25), so the existing LF new-file tests set
+    the mode explicitly.
+  - The chokepoint reads the mode from an overridable property (default: `EolPolicyOptions.Mode`) so tests do
+    not touch the static (decided 2026-10-25).
   - Make the whitespace-only no-op skip (`EnableAstNormalizationNoOpCheck`) not drop an EOL-only change.
   - Keep `UndoLastApply` `exactRestore` exempt.
   - The refusal names the tool and file (structured `EolChangeRefused`, no raw exception).
@@ -277,8 +286,8 @@ Step 0 results (2026-10-18):
 - BOM handling (stays in `plan_file_normalization_tool.md`).
 - Non-`.cs` files and writes outside the workspace (logs, reports, temp files).
 - PlanStepRunner `*/Worktree/` clones.
-- Fixing the LCS mis-assignment in `NormalizeEolOfChangedLines` (TODO.md:54). Under `crlf`/`lf`
-  whole-file conversion it no longer matters; under `auto` it remains.
+- Fixing the LCS mis-assignment in `NormalizeEolOfChangedLines` (TODO.md:54). Whole-file conversion under
+  every mode (Step 5) removes it from the write path; the function can be deleted afterwards.
 
 ## Risks and open decisions
 
