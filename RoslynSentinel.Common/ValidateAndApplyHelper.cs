@@ -138,7 +138,8 @@ public static class ValidateAndApplyHelper
 
         var applyResult = await workspaceManager.ApplyProposedChangesAsync(
             changes, retryCount: 3, validateChanges: false, rollbackOnPartialFailure: true,
-            progress: progress, cancellationToken: cancellationToken, deletePaths: deletePaths);
+            progress: progress, cancellationToken: cancellationToken, deletePaths: deletePaths,
+            operationLabel: operationName);
 
         if (applyResult.IsError)
         {

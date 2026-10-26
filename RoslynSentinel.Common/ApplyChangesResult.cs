@@ -15,6 +15,8 @@ namespace RoslynSentinel.Common;
 /// proposed, so skipping the physical write avoids no-op churn/watcher noise without changing
 /// the outcome. <see cref="Summary"/> reports this the same way -> as a success, not a failure or
 /// partial write -> to avoid misleading callers into thinking their change didn't take effect.</para>
+/// <para><see cref="Findings"/> carries non-fatal observations from the write chokepoint (for example a
+/// pre-image that was written outside the chokepoint with the wrong line endings). Null when there are none.</para>
 /// </summary>
 public record ApplyChangesResult(
     bool IsError,
@@ -27,7 +29,9 @@ public record ApplyChangesResult(
     DiagnosticReport? ValidationResult = null,
     List<string>? RolledBackFiles = null,
     List<string>? NoOpFiles = null,
-    string? RefusalCode = null
+    string? RefusalCode = null,
+    // TODO not yet surfaced in the tool result's findings array: ApplyOutcome and its 9 ValidateAndApplyHelper callers need a Findings member (plan step 5)
+    List<Finding>? Findings = null
 ) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
