@@ -42,9 +42,6 @@ public class BareFileWriteRatchetTests
         ["RoslynSentinel.Server.Basic/ServerStartupHelpers.cs::AttachCrashHandlers"] = 1,
         // Debug dumps (two sites).
         ["RoslynSentinel.Tools.Advanced/AsyncifyTools.cs::AsyncifyLoopTool"] = 2,
-        // Docs and project state; DocPathGuard limits extensions to .md .yaml .yml .json .txt, so never a .cs file.
-        ["RoslynSentinel.Tools.Basic/DocumentationTools.cs::ProjectDocTool"] = 1,
-        ["RoslynSentinel.Tools.Basic/DocumentationTools.cs::WriteFile"] = 2,
         // Temp patch file for hunk staging, deleted after use.
         ["RoslynSentinel.Tools.Basic/GitImpl.cs::StageHunksAsync"] = 1,
         // Blocker .md document written by the PlanStepRunner utility.

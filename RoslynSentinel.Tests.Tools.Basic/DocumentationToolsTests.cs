@@ -274,4 +274,28 @@ public class DocumentationToolsTests
         Assert.That(result.Found, Is.True, result.Error);
         Assert.That(result.Content, Is.EqualTo("PRODUCTION plan"));
     }
+
+    [Test]
+    public void Write_MarkdownContent_UsesResolvedLineEndings()
+    {
+        var result = (DocWriteResult)_tools.ProjectDocTool("test", DocAction.write, DocType.documentation,
+            name: "eol-write.md", content: "a\nb\n");
+
+        Assert.That(result.IsError, Is.False, result.Error);
+        Assert.That(File.ReadAllText(result.FullPath!), Is.EqualTo("a" + Environment.NewLine + "b" + Environment.NewLine));
+    }
+
+    [Test]
+    public void Append_MarkdownContent_HasNoMixedLineEndings()
+    {
+        var first = (DocWriteResult)_tools.ProjectDocTool("test", DocAction.write, DocType.completed_work,
+            name: "eol-append.md", content: "a\n");
+        Assert.That(first.IsError, Is.False, first.Error);
+
+        var second = (DocWriteResult)_tools.ProjectDocTool("test", DocAction.append, DocType.completed_work,
+            name: "eol-append.md", content: "b\n");
+
+        Assert.That(second.IsError, Is.False, second.Error);
+        Assert.That(File.ReadAllText(second.FullPath!), Is.EqualTo("a" + Environment.NewLine + "b" + Environment.NewLine));
+    }
 }

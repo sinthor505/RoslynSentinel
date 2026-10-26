@@ -355,13 +355,13 @@ public class DocumentationTools
 
         Directory.CreateDirectory(subdir);
 
-        if (append)
+        // Sync MCP tool signature is kept; the payload is capped by MaxDocBytes, so blocking on the async writer is cheap.
+        string? existing = File.Exists(fullPath) ? File.ReadAllText(fullPath) : null;
+        string text = append ? (existing ?? string.Empty) + content : content;
+        string? refusal = EolFileWriter.WriteAllTextResolvedAsync(fullPath, text, existing).GetAwaiter().GetResult();
+        if (refusal is not null)
         {
-            File.AppendAllText(fullPath, content);
-        }
-        else
-        {
-            File.WriteAllText(fullPath, content);
+            return new DocWriteResult { IsError = true, Filename = filename, Error = refusal };
         }
 
         return new DocWriteResult
@@ -455,7 +455,13 @@ public class DocumentationTools
                     var stateDir = Path.Combine(docsRoot);
                     var statePath = Path.Combine(stateDir, "migration-state.yaml");
                     Directory.CreateDirectory(stateDir);
-                    File.WriteAllText(statePath, content);
+                    string? stateExisting = File.Exists(statePath) ? File.ReadAllText(statePath) : null;
+                    // Sync MCP tool signature is kept; the payload is capped by MaxDocBytes, so blocking on the async writer is cheap.
+                    string? stateRefusal = EolFileWriter.WriteAllTextResolvedAsync(statePath, content, stateExisting, cancellationToken).GetAwaiter().GetResult();
+                    if (stateRefusal is not null)
+                    {
+                        return new DocWriteResult { IsError = true, Filename = "migration-state.yaml", Error = stateRefusal };
+                    }
                     return new DocWriteResult { IsError = false, Filename = "migration-state.yaml", FullPath = statePath, BytesWritten = bytes };
                 }
                 return new DocWriteResult { IsError = true, Filename = "migration-state.yaml", Error = $"action='{action}' is not valid for docType=state. Valid: read, write." };
