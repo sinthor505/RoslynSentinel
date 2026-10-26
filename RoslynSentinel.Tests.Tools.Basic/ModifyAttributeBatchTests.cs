@@ -289,6 +289,20 @@ public class ModifyAttributeBatchTests
     }
     """;
 
+    private const string TypeRemoveFixtureRelativePath = "ContosoOrders.Core/AttributeTypeRemoveFixture.cs";
+
+    private const string TypeRemoveFixtureSource = """
+    namespace ContosoOrders.Core;
+
+    [Serializable]
+    public class AttributeRemoveTypeTarget
+    {
+        public void Method()
+        {
+        }
+    }
+    """;
+
     private const string WeirdFormattingRelativePath = "ContosoOrders.Core/AttributeFormattingFixture.cs";
 
     // Deliberately non-canonical whitespace in members the batchEdits never target: a Roslyn Formatter pass
@@ -414,6 +428,26 @@ public class ModifyAttributeBatchTests
     }
 
     [Test]
+    public async Task ModifyAttribute_SingleRemoveOnTypeLevelAttribute_RemovesItAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((TypeRemoveFixtureRelativePath, TypeRemoveFixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var before = workspace.ReadText(TypeRemoveFixtureRelativePath);
+        var eol = EolOf(before);
+
+        var result = await tools.ModifyAttributeTool(
+            reason: "regression: single-edit remove whose target is a type-level declaration",
+            filePath: workspace.PathOf(TypeRemoveFixtureRelativePath),
+            targetName: "AttributeRemoveTypeTarget",
+            existingAttribute: "Serializable",
+            action: AttributeModifyAction.remove,
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(workspace.ReadText(TypeRemoveFixtureRelativePath), Is.EqualTo(before.Replace("[Serializable]" + eol, "")));
+    }
+
+    [Test]
     public async Task ModifyAttribute_BatchMethodLevelAddOnly_LeavesEverythingElseByteIdenticalAsync()
     {
         using var workspace = InMemoryWorkspace.Create((WeirdFormattingRelativePath, WeirdFormattingSource));
@@ -505,6 +539,8 @@ public class ModifyAttributeBatchTests
     {
         using var workspace = InMemoryWorkspace.Create((SecondFixtureRelativePath, SecondFixtureSource));
         var tools = BuildTools(workspace.Manager);
+        var before = workspace.ReadText(SecondFixtureRelativePath);
+        var eol = EolOf(before);
 
         var result = await tools.ModifyAttributeTool(
             reason: "alias: singular add using 'attribute' instead of 'existingAttribute'",
@@ -515,7 +551,7 @@ public class ModifyAttributeBatchTests
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-        Assert.That(workspace.ReadText(SecondFixtureRelativePath), Does.Match(@"\[Serializable\]\s*public class AttributeBatchTargetC"));
+        Assert.That(workspace.ReadText(SecondFixtureRelativePath), Is.EqualTo(before.Replace("public class AttributeBatchTargetC", "[Serializable]" + eol + "public class AttributeBatchTargetC")));
     }
 
     [Test]
@@ -523,6 +559,8 @@ public class ModifyAttributeBatchTests
     {
         using var workspace = InMemoryWorkspace.Create((NestedFixtureRelativePath, NestedFixtureSource));
         var tools = BuildTools(workspace.Manager);
+        var before = workspace.ReadText(NestedFixtureRelativePath);
+        var eol = EolOf(before);
 
         var result = await tools.ModifyAttributeTool(
             reason: "alias: singular remove using 'attribute'",
@@ -533,7 +571,71 @@ public class ModifyAttributeBatchTests
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-        Assert.That(workspace.ReadText(NestedFixtureRelativePath), Does.Not.Match(@"\[Obsolete\]\s*public void Second"));
+        Assert.That(workspace.ReadText(NestedFixtureRelativePath), Is.EqualTo(before.Replace("    [Obsolete]" + eol, "")));
+    }
+
+    [Test]
+    public async Task ModifyAttribute_SingleReplaceWithAttributeAlias_ReplacesTheAttributeAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((NestedFixtureRelativePath, NestedFixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var before = workspace.ReadText(NestedFixtureRelativePath);
+
+        var result = await tools.ModifyAttributeTool(
+            reason: "alias: singular replace using 'attribute' as the existing attribute",
+            filePath: workspace.PathOf(NestedFixtureRelativePath),
+            targetName: "Second",
+            attribute: "Obsolete",
+            newAttribute: "Obsolete(\"v2\")",
+            action: AttributeModifyAction.replace,
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(workspace.ReadText(NestedFixtureRelativePath), Is.EqualTo(before.Replace("[Obsolete]", "[Obsolete(\"v2\")]")));
+    }
+
+    [Test]
+    public async Task ModifyAttribute_BatchReplaceWithAttributeAlias_ReplacesTheAttributeAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((NestedFixtureRelativePath, NestedFixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var before = workspace.ReadText(NestedFixtureRelativePath);
+
+        var result = await tools.ModifyAttributeTool(
+            reason: "alias: batch item replace using 'attribute' as the existing attribute",
+            batchEdits:
+            [
+                new AttributeEdit { FilePath = workspace.PathOf(NestedFixtureRelativePath), TargetName = "Second", Action = AttributeModifyAction.replace, Attribute = "Obsolete", NewAttribute = "Obsolete(\"v2\")" },
+            ],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(workspace.ReadText(NestedFixtureRelativePath), Is.EqualTo(before.Replace("[Obsolete]", "[Obsolete(\"v2\")]")));
+    }
+
+    [Test]
+    public async Task ModifyAttribute_SingleRemoveBothParamsDifferentValues_RejectsNamingBothParametersAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((NestedFixtureRelativePath, NestedFixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var before = workspace.ReadText(NestedFixtureRelativePath);
+
+        var result = await tools.ModifyAttributeTool(
+            reason: "alias: conflicting values on remove must be rejected before anything is written",
+            filePath: workspace.PathOf(NestedFixtureRelativePath),
+            targetName: "Second",
+            existingAttribute: "Obsolete",
+            attribute: "Serializable",
+            action: AttributeModifyAction.remove,
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData!.Message, Does.Contain("'attribute'"));
+            Assert.That(result.ErrorData!.Message, Does.Contain("'existingAttribute'"));
+            Assert.That(workspace.ReadText(NestedFixtureRelativePath), Is.EqualTo(before));
+        });
     }
 
     [Test]

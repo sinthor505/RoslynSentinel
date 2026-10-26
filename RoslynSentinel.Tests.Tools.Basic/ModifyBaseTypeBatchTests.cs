@@ -244,6 +244,24 @@ public class ModifyBaseTypeBatchTests
     }
     """;
 
+    private const string OverlapFixtureRelativePath = "ContosoOrders.Core/BaseTypeOverlapFixture.cs";
+
+    private const string OverlapFixtureSource = """
+    namespace ContosoOrders.Core;
+
+    public interface IOverlapA
+    {
+    }
+
+    public interface IOverlapB
+    {
+    }
+
+    public class OverlapHost : IOverlapA, IOverlapB
+    {
+    }
+    """;
+
     [TestCase(true)]
     [TestCase(false)]
     public async Task ModifyBaseType_BatchNestedTypeAndContainingType_BothEditsApplyAsync(bool outerFirst)
@@ -349,6 +367,31 @@ public class ModifyBaseTypeBatchTests
             Assert.That(result.ErrorData!.Message, Does.Contain("batchEdits[1]"));
             Assert.That(result.ErrorData!.Message, Does.Contain("INotThere"));
             Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before));
+        });
+    }
+
+    [Test]
+    public async Task ModifyBaseType_BatchRemoveTwoBaseTypesOfSameList_RejectsNamingBothEditsAndWritesNothingAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((OverlapFixtureRelativePath, OverlapFixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var path = workspace.PathOf(OverlapFixtureRelativePath);
+        var before = workspace.ReadText(OverlapFixtureRelativePath);
+
+        var result = await tools.ModifyBaseTypeTool(
+            reason: "overlapping edits: two removes rewrite the same base list and must be rejected as a whole",
+            batchEdits:
+            [
+                new BaseTypeEdit { FilePath = path, TypeName = "OverlapHost", BaseTypeName = "IOverlapA", Action = AddRemoveAction.remove },
+                new BaseTypeEdit { FilePath = path, TypeName = "OverlapHost", BaseTypeName = "IOverlapB", Action = AddRemoveAction.remove },
+            ],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData!.Message, Does.Contain("batchEdits[0]").And.Contain("batchEdits[1]"));
+            Assert.That(workspace.ReadText(OverlapFixtureRelativePath), Is.EqualTo(before));
         });
     }
 

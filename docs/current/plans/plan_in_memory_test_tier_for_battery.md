@@ -1,6 +1,6 @@
 # Plan: Move engine-correctness Battery tests onto an in-memory workspace tier
 
-**Status:** IN PROGRESS 2026-10-02. Step 0 landed: commit 5bc79a1 (fakes, `DiskWriteRoundTripTests`, `ModifyModifierBatchTests`) plus a second commit for the batch-edit fixes and the converted `ModifyAttributeBatchTests`/`ModifyBaseTypeBatchTests` (Build 0 errors, 48/48 batch tests pass). Step 1 mostly done; Step 2 measured once (see below). 2026-10-17: PreviewInstanceMoveCallSitesTests is no longer parked - its tests were already in-memory and the shared disk `SetUp` was removed (23.8 s -> 11.2 s filtered). Next: scan the other slow fixtures for shared `[SetUp]` disk cost before converting them, then re-measure Battery.Basic (Step 2).
+**Status:** IN PROGRESS 2026-10-02. Step 0 complete 2026-10-25 (leftovers closed, full suite triaged; see Step 0). Step 0 landed: commit 5bc79a1 (fakes, `DiskWriteRoundTripTests`, `ModifyModifierBatchTests`) plus a second commit for the batch-edit fixes and the converted `ModifyAttributeBatchTests`/`ModifyBaseTypeBatchTests` (Build 0 errors, 48/48 batch tests pass). Step 1 mostly done; Step 2 measured once (see below). 2026-10-17: PreviewInstanceMoveCallSitesTests is no longer parked - its tests were already in-memory and the shared disk `SetUp` was removed (23.8 s -> 11.2 s filtered). Next: scan the other slow fixtures for shared `[SetUp]` disk cost before converting them, then re-measure Battery.Basic (Step 2).
 
 ## Problem
 Battery.Basic was the slowest project. Test-level parallelism (commit 3037e5b) fixed serialization, leaving it CPU-bound:
@@ -40,18 +40,23 @@ Two tiers:
   (overlap -> `CannotEdit` naming both edits), `ReplaceNodesFormattedAsync` returns `ReplaceNodesResult` with
   `UnlocatedNodes` (modifier batch refuses to write when a node is unlocated), and `attribute` is an alias for
   `existingAttribute` (add/replace/remove, singular and batch; conflicting values rejected naming both).
-- Known leftovers from that work: the modifier-batch unlocated-node error path is covered only by a helper-level test
-  (no tool-level test possible); single-edit `ModifyAttribute(action: remove)` on a type-level target fails with "target
-  not found" (`RemoveAttributeAsync` excludes type candidates, the batch path supports them) - not fixed; only the
-  base-type fold change got no mutation check beyond the helper test; the alias tests have no mutation check.
-- Verified at commit time: Build 0 errors; `ModifyAttributeBatchTests|ModifyBaseTypeBatchTests|ModifyModifierBatchTests` 48/48.
-  The full solution suite was not run.
-- Change: a background subagent was dispatched to (1) make `ApplyBaseTypeBatchAsync` safe for nested type + container
-  (apply as spans against the original snapshot, like ModifyAttribute commit 44ecdc0), (2) make
-  `ReplaceNodesFormattedAsync` stop silently skipping a replacement it cannot locate (surface it; update all callers),
-  (3) accept `attribute` as an alias for `existingAttribute` on ModifyAttribute `action: add` (singular and batch;
-  update descriptions; reject conflicting values). It was told to add in-memory regression tests to the two batch fixtures.
-  Its result had not arrived when this doc was written - check `git status`/`Git diff` and re-run its tests before trusting it.
+- Leftovers closed 2026-10-25: the modifier-batch unlocated-node error path is covered only by a helper-level test
+  (no tool-level test possible). The single-edit `ModifyAttribute(action: remove)` on a type-level target works:
+  `RemoveAttributeAsync` has a type-candidate fallback and a new in-memory test passes, so the earlier "target not
+  found" report was stale. Added tests: exact-text assertions for the `attribute` alias (add/replace/remove, singular
+  and batch), a conflicting `attribute` vs `existingAttribute` rejection, and a tool-level overlapping base-type
+  batch test (both edits named, file unchanged). Mutation checks for these were by reasoning from the asserted text
+  (guarded points: type-candidate fallback in `RemoveAttributeAsync`, alias mapping and conflict check in
+  `ModifyAttributeTool`, overlap rejection in `AttributeTextEditBuilder.TryApply`); no real mutation run.
+- Verified 2026-10-25: Build 0 errors; `ModifyAttributeBatchTests|ModifyBaseTypeBatchTests` 47/47. Full solution suite:
+  6246 tests, 6209 passed, 29 skipped, 8 failed, none caused by this work (triage: EOL working-tree normalization 83c817c8
+  for `CrlfAndLfInput_DifferOnlyByInsertedPrefixesAsync` and `Apply_AddsClassAndMethodLevel_RemovesStaleMarked_KeepsHandWritten`;
+  c33aeec8 for `RawFormatterCalls_AreOnlyInTheAllowlist` (two `NormalizeWhitespace` calls in `AlignPartialDeclaration`);
+  36e51f0c for the two `CoreSurface_TotalSchemaSize_IsWithinBudget` cases (29229 vs 29000); flaky/env for
+  `CheckPackageInconsistencyAsync_InMemorySolution_ReturnsNonNull` and `LaterCommitTouchingOnlyDocs_IsNotStale`; unknown,
+  likely pre-existing, for `RealRun_FilenameCollisionWithGeneratorHelper_...`). Hypotheses, not re-run on an earlier checkout.
+- Change (landed in 830337cf, verified above): `ApplyBaseTypeBatchAsync` applies spans against the original snapshot,
+  `ReplaceNodesFormattedAsync` surfaces unlocated nodes, and `attribute` aliases `existingAttribute`.
 - Done when: Build 0 errors; `RunTest` Battery.Basic filtered to `ModifyAttributeBatchTests|ModifyModifierBatchTests|ModifyBaseTypeBatchTests`
   and `RoslynSentinel.Tests` filtered to `DiskWriteRoundTripTests` pass; then commit the listed files.
 
@@ -90,7 +95,6 @@ Two tiers:
 ## Risks and open decisions
 - The remaining Battery.Basic cost being per-test workspace setup is a hypothesis; never timed in isolation.
 - Header comment in `InMemoryWorkspace.cs` references `DiskWriteRoundTrip`; that helper now exists in `RoslynSentinel.Tests/DiskWriteRoundTripTests.cs` (verify the comment's wording still fits).
-- The subagent result (Step 0) is unverified at the time of writing.
 
 ## See also
 
