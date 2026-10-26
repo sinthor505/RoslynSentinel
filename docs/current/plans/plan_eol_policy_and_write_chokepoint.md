@@ -310,6 +310,45 @@ Step 0 results (2026-10-18):
 - Done when: no defaulted `eol` callers remain, the obsolete overload is removed, a `Search` for
   `LineFeed`/`"\r\n"`/`"\n"` trivia literals in `Engines.*` and `Common` returns only allowlisted
   sites, and the Step 3 ratchet is green after a model-eval or battery run.
+- Decision (2026-10-26): full sweep (option 2), not a boundary-only normalisation. Measurement (2026-10-25, read-only
+  `explore-sonnet` sweep, non-test projects): about 61 hand-built literals in 17 files (35 trivia/parse sites, 16
+  formatter or `NormalizeWhitespace` calls with no EOL option, 4 scaffold literals, 10 `AppendLine`), about 226
+  generator `AppendLine` calls in 5 files (`CodeGenerationEngine` 77, `TestingEngine` 69, `PathDrivenTestEngine` 46,
+  `ApiGenerationEngine` 14, `ContextHelper` 24), and about 28 sites that already take an EOL but detect it from the
+  source file (`DetectDominantEol(pre-image)`), not the resolver. About 100 sites are detection/split/compare
+  (leave) and about 150 are messages/logs/diff output (leave). Unread by the measurement: `GitImpl`, `GitHunkParser`,
+  `SnippetErrorFormatter`, `CompilerErrorLookupHelper`, `Tools.Experimental`, `Utilities.PlanStepRunner`; whether the
+  generator output is written to a file or only returned; whether each annotated trivia site is normalised by the
+  later format pass.
+  Slices (each compile-green, migration-first: new required-`eol` overload beside the old, old `[Obsolete("Use X")]`,
+  callers moved per slice, old member removed last):
+  - 8a plumbing: a way for engines to get the resolved EOL without ambient state. Proposal: `IWorkspaceMutator`
+    (or `IWorkspaceManager`) gains `string ResolveEol(string filePath, string? preImageText)` implemented by
+    `PersistentWorkspaceManager` as `EolResolver.Resolve(EolModeOverride ?? EolPolicyOptions.Mode, preImageText,
+    EditorConfigEolReader.Read(filePath))`, plus a `FakeWorkspaceManager` implementation; refactor
+    `ComputeEolPrePass` to use it so there is one definition.
+  - 8b `RoslynFormattingHelper`: required `eol` parameter on the `FormatAnnotated*`, `FormatNewSnippetAsync`,
+    `InsertMemberDeclarationAndFormatInsertionAsync` family (obsolete the defaulted overloads); replace the four
+    `DetectDominantEol(pre-image)` sites (about :167, :411, :463, :516) and the three hard-coded
+    `CarriageReturnLineFeed` (about :290, :294, :317). About 36 callers move in the per-engine slices below.
+  - 8c to 8k, one engine or folder per slice, each replacing its A-class sites with the resolved EOL from 8a:
+    `Common/ContextHelper`; `Engines.Advanced` (`AdvancedStructuralEngine`, `AnnotatedInsertionHelper`,
+    `AsyncOptimizationEngine`, `CodeStyleEngine`, `LogicOptimizationEngine`, `ModernizationEngine`,
+    `OutParamRefactoringEngine`, `DocumentationEngine`, `CodeHealingEngine`, `CommentingEngine`, `MappingEngine`);
+    `Engines.Advanced` generators (`CodeGenerationEngine`, `TestingEngine`, `PathDrivenTestEngine`,
+    `ApiGenerationEngine`, via one `AppendLine` -> `Append(text).Append(eol)` helper or `NormalizeEol` on the result,
+    decide in the slice); `Engines.Basic` (`MsToolAugmentEngine`, `BasicRefactoringEngine`, `MemberRefactoringEngine`,
+    `ProjectStructureEngine`, `SyntaxUpgradeEngine`, `RefactoringToolHelpers.PreviewFileContent`);
+    `Tools.Basic` (`WorkspaceFileEditImpl` scaffolds and the `DetectDominantEol(existing)` sites in
+    `WholeFileWriteTools`/`WorkspaceFileEditImpl`). Re-measure each slice with `Search` before briefing; the measurement
+    line numbers drift.
+  - 8z ratchet and cleanup: a `Tests.Basic` ratchet like `BareFileWriteRatchetTests` for `SyntaxFactory.LineFeed`,
+    `CarriageReturnLineFeed`, `EndOfLine("...")` literals and `NormalizeWhitespace()` without an EOL in `Common` and
+    `Engines.*` (allowlist B/C-class sites with reasons), then remove the obsolete overloads and the
+    `FormatDocumentSafe` returned-text TODO in `FiveStarToolTests`.
+  - Risk: tests asserting exact `\n` or platform-EOL strings from these engines will fail as sites move; those tests
+    set `EolModeOverride` or normalise, as in Step 5. Expect the Tests.Advanced battery to need the most fixes.
+  - Run order: 8a, 8b first (everything else depends on them), then per-engine slices smallest first.
 
 ### Step 9 - Per-line EOL reporting (tool gap)
 - Files: `ReadFile` or `Search` tool and engine.
