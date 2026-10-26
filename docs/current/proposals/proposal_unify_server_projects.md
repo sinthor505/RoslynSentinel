@@ -46,7 +46,11 @@ a plain name; the Basic/Advanced distinction remains real one layer down, in `En
 
 ### Decided
 
-1. **Files.** The 11 `Server.Basic/*.cs` files move into `Server.Advanced/`. The four duplicate pairs
+1. **Files.** The `Server.Basic/*.cs` files (13 found by namespace search 2026-10-25: `CallToolFailureHandler`,
+   `ConsoleMode`, `HaltStamp`, `Program`, `ServerHttp`, `ServerStartupHelpers`, `ServerStdio`,
+   `ServiceRegistrationExtensionsBasic`, `ToolArgumentRewrites`, `ToolArgumentValidator`, `ToolCallEcho`,
+   `ToolClassRegistry`, `WorkspaceStaleStamp`; a file with no namespace line would not show) move into
+   `Server.Advanced/`. The four duplicate pairs
    are merged by keeping Basic's body and folding in Advanced's deltas:
    - `Program.cs`: keep Basic's (it has `isFreshStartup`, read by `ToolCallEcho.cs:110,123`).
    - `ServerStdio.cs`, `ServerHttp.cs`: Basic's body plus `LlmOptions.Configure(args)`,
@@ -69,8 +73,10 @@ a plain name; the Basic/Advanced distinction remains real one layer down, in `En
    way (the Advanced list is the Basic list plus `SubAgentTools`). `BuildClassToModes` reads one map.
    `ServerStartupHelpers.ResolveActiveToolClasses` is unchanged.
 4. **Project removal.** `RoslynSentinel.Server.Basic.csproj` and its folder are deleted; the entry
-   leaves `RoslynSentinel.slnx`; the `<ProjectReference>` to it leaves `Server.Advanced.csproj`,
-   `Tests.Server.csproj` and every other test csproj that lists it. `Server.Advanced.csproj` gains
+   leaves `RoslynSentinel.slnx`; the `<ProjectReference>` to it leaves `Server.Advanced.csproj` and the
+   test csproj files `Tests.Asyncify`, `Tests.Server`, `Tests.Advanced`, `Tests.ModelEval`,
+   `Tests.Integration` and `Tests.SubAgent`. `Tests.Integration.csproj:31` also has
+   `<Using Include="RoslynSentinel.Server.Basic" />` (a global using; remove it). `Server.Advanced.csproj` gains
    Basic's package references that it does not already have (`ModelContextProtocol.AspNetCore`,
    `Serilog`, `Serilog.AspNetCore`) and a direct `<ProjectReference>` to `Engines.Basic` if any moved
    file needs it directly.
@@ -88,13 +94,16 @@ a plain name; the Basic/Advanced distinction remains real one layer down, in `En
 7. **Docs.** CLAUDE.md Architecture bullets that name `Server.Basic/ToolClassRegistry.cs` and
    `Server.Basic/ServiceRegistrationExtensionsBasic.cs` (and the `Tools.Experimental is hosted by
    Server.Advanced only` aside) are updated; `docs/current/references/reference_architecture_map.md`
-   and `reference_changing_claude_lean_tools.md` likewise; `docs/generated/` regenerated with
+   and `reference_changing_claude_lean_tools.md` likewise; comments that name `Server.Basic` are
+   reworded (`Common/ActiveToolSurface.cs:7,32`, `Common/ServerInstancePaths.cs:68`,
+   `Common/WirePathRewriter.cs:11`, `CallToolFailureHandler.cs:16`, the comment at line 10 of
+   `Utilities.PlanStepRunner.csproj`); `docs/generated/` regenerated with
    `scripts/Generate-ArchitectureMap.ps1`. Memory `project_server_flavors_and_build_configs` gets a
    superseding note.
 
 ### Implementation approach (agreed with the user)
 
-The user moves the 11 files and deletes the Basic project folder by hand, outside the MCP tools, then a
+The user moves the 13 files and deletes the Basic project folder by hand, outside the MCP tools, then a
 fresh session does the fix-ups with targeted tools (`RenameSymbol` on the namespace, `ReplaceSnippet`
 for the host deltas and map merge, `Member(operation: remove)` for the duplicates), builds,
 and runs `Tests.Server` + `Tests.Advanced`. Reasons: cross-project `MoveType` has an open defect
@@ -124,8 +133,9 @@ Order of slices for the fresh session:
 
 ## Open questions
 
-- Whether any `Server.Basic` type is referenced by name from a non-test project other than
-  `Server.Advanced` (expected: none; `Tools.*` and `Engines.*` do not reference `Server.*`).
+- Resolved 2026-10-25: no non-test project other than `Server.Advanced` references a `Server.Basic` type
+  (text search of non-test projects: `Common` mentions it in four comments only; no csproj outside
+  `Server.Advanced` and the six test projects references it).
 - Whether `Tests.Battery.Basic` should stay a separate `build.ps1` target or fold into `Solution`.
 - Whether to keep the `Server.Advanced/Properties/launchSettings.json` profiles or rewrite them with
   current argument names while touching the file.
@@ -135,7 +145,7 @@ Order of slices for the fresh session:
 
 ## Cost / risk
 
-- Touches: 15 `.cs` files in two server projects, 1 slnx, 2-8 csproj, `build.ps1`,
+- Touches: about 17 `.cs` files in two server projects (13 + 4), 1 slnx, 7 csproj, `build.ps1`,
   `Measure-ToolSchemaCost.ps1`, 2 baseline files, 2 launchSettings, CLAUDE.md, 2 reference docs,
   generated docs, 1 memory, roughly 6 test files for `using` lines plus `ClaudeLeanModeTests`.
 - A hand move of tracked `.cs` files trips `ExternalFileDrift` and halts mutating tools. Do the move
