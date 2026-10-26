@@ -7,13 +7,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tools.Basic;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
-// Runs exclusively: Setup wipes top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard), which would delete files parallel fixtures are using.
+// Not parallel: the [SetUp] fields (_workspaceManager, _workspaceTools, ...) are shared by every test in this fixture instance.
 [NonParallelizable]
 [Category("WorkspaceTools")] // sentinel:auto-category
 public class BatteryTwentyTests
@@ -35,8 +36,6 @@ public class BatteryTwentyTests
     [SetUp]
     public void Setup()
     {
-        // The DeleteUnusedSymbol_* tests write a bare Test.cs into the working directory.
-        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _diffEngine = new DiffEngine();
@@ -61,13 +60,34 @@ public class BatteryTwentyTests
     public void TearDown()
     {
         _workspaceManager?.Dispose();
-        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
     }
 
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
         _workspaceManager.SetTestSolution(solution);
+    }
+
+    // Same wiring as Setup, but on a caller-supplied manager (InMemoryWorkspace.Manager) for tests that need no fixture state.
+    private static WorkspaceTools BuildInMemoryTools(IWorkspaceManager workspaceManager)
+    {
+        var config = new SentinelConfiguration();
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var diagnosticEngine = new DiagnosticEngine(workspaceManager);
+        var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
+        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
+        var dependencyEngine = new DependencyEngine(workspaceManager);
+        var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
+        return new WorkspaceTools(
+            workspaceManager, validationEngine, diffEngine, diagnosticEngine,
+            solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
+            projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
+            new BuildEngine(workspaceManager, diagnosticEngine),
+            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            new TestRunEngine(workspaceManager),
+            new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            WriteToolAdviceHelper.WithAllToolsExposed());
     }
 
 
@@ -960,33 +980,39 @@ public class Order
                  + "error before falling back to RemoveMember(skipPrecheck: true) instead.")]
     public async Task DeleteUnusedSymbol_SymbolNameOnly_DeletesZeroUsageMethod()
     {
-        SetSource(DeadMethodSource, "Test.cs");
+        using var workspace = InMemoryWorkspace.Create(("TestProj/Test.cs", DeadMethodSource));
+        var tools = BuildInMemoryTools(workspace.Manager);
 
-        var result = await _workspaceTools.DeleteUnusedSymbolTool(reason: "test message", "Test.cs", symbolName: "BuildInternalDebugLabel");
+        var result = await tools.DeleteUnusedSymbolTool(reason: "test message", workspace.PathOf("TestProj/Test.cs"), symbolName: "BuildInternalDebugLabel");
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(workspace.ReadText("TestProj/Test.cs"), Does.Not.Contain("BuildInternalDebugLabel"));
     }
 
     [Test]
     public async Task DeleteUnusedSymbol_SymbolNameWithContextSnippet_DisambiguatesAndDeletes()
     {
-        SetSource(DeadMethodSource, "Test.cs");
+        using var workspace = InMemoryWorkspace.Create(("TestProj/Test.cs", DeadMethodSource));
+        var tools = BuildInMemoryTools(workspace.Manager);
 
-        var result = await _workspaceTools.DeleteUnusedSymbolTool(reason: "test message", "Test.cs", symbolName: "BuildInternalDebugLabel",
+        var result = await tools.DeleteUnusedSymbolTool(reason: "test message", workspace.PathOf("TestProj/Test.cs"), symbolName: "BuildInternalDebugLabel",
             contextSnippet: "private string BuildInternalDebugLabel()");
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(workspace.ReadText("TestProj/Test.cs"), Does.Not.Contain("BuildInternalDebugLabel"));
     }
 
     [Test]
     public async Task DeleteUnusedSymbol_SymbolNameNotFound_ReturnsActionableError()
     {
-        SetSource(DeadMethodSource, "Test.cs");
+        using var workspace = InMemoryWorkspace.Create(("TestProj/Test.cs", DeadMethodSource));
+        var tools = BuildInMemoryTools(workspace.Manager);
 
-        var result = await _workspaceTools.DeleteUnusedSymbolTool(reason: "test message", "Test.cs", symbolName: "NoSuchMethod");
+        var result = await tools.DeleteUnusedSymbolTool(reason: "test message", workspace.PathOf("TestProj/Test.cs"), symbolName: "NoSuchMethod");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("NoSuchMethod"));
+        Assert.That(workspace.ReadText("TestProj/Test.cs"), Does.Contain("BuildInternalDebugLabel"));
     }
 
     [Test]
@@ -995,12 +1021,14 @@ public class Order
                  + "ever surfaces a sessionId for a caller to pass back in.")]
     public async Task DeleteUnusedSymbol_DocCommentIdAndProjectNameOnly_NoLongerRequiresSessionId()
     {
-        SetSource(DeadMethodSource, "Test.cs");
+        using var workspace = InMemoryWorkspace.Create(("TestProj/Test.cs", DeadMethodSource));
+        var tools = BuildInMemoryTools(workspace.Manager);
 
         var docCommentId = "M:TestProj.Order.BuildInternalDebugLabel";
-        var result = await _workspaceTools.DeleteUnusedSymbolTool(reason: "test message", "Test.cs", projectName: "TestProj", docCommentId: docCommentId);
+        var result = await tools.DeleteUnusedSymbolTool(reason: "test message", workspace.PathOf("TestProj/Test.cs"), projectName: "InMemoryProject", docCommentId: docCommentId);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(workspace.ReadText("TestProj/Test.cs"), Does.Not.Contain("BuildInternalDebugLabel"));
     }
 
     // --- CreateProjectTool ---
