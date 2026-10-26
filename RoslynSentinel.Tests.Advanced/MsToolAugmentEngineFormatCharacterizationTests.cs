@@ -356,9 +356,10 @@ public class MsToolAugmentEngineFormatCharacterizationTests
 
     // ================================================================ Stray CRLF on a blank line inside the selection
 
-    // Pinned as-is (known limitation): a stray CRLF on the blank line between two selected statements is moved out of the
-    // selection: the blank line ends up before the appended method, and the selected statements move into it.
-    // TODO ExtractMethodSafe moves a selected blank line's CRLF out of the extracted block; check the intended placement.
+    // Pinned as-is (helper-level behaviour, accepted 2026-10-25, finding #12): the formatter helper pairs blank lines by
+    // text, so a stray CRLF on the blank line between two selected statements can land on a different blank line. This
+    // only matters for a mixed-EOL input; under plan_eol_policy_and_write_chokepoint Step 5 the chokepoint converts the
+    // whole file to the resolved EOL before writing, so the placement never reaches disk. Do not re-investigate.
     [Test]
     public async Task ExtractMethod_MixedEol_StrayCrlfOnBlankLineInsideSelection_MovesWithAppendedMethod()
     {
