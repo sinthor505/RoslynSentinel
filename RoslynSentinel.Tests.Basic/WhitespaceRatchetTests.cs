@@ -38,6 +38,11 @@ public class WhitespaceRatchetTests
         // so there is no Document for the annotation formatter; every trivia is checked (comments rejected) and stripped
         // first, so NormalizeWhitespace discards no user formatting. Replaced a deleted whole-subtree whitespace helper site there.
         ["RoslynSentinel.Engines.Basic/AttributeTextEditBuilder.cs::NormalizeAttributeText"] = 1,
+        // ExtractMembers newType=partial: aligns the generated partial part's type-parameter list and constraint clauses
+        // with the original declaration. Two NormalizeWhitespace calls on detached header nodes (no Document exists for the
+        // annotation formatter; the generated trivia around them is kept and no document text is rewritten).
+        // Owner approval pending: added 2026-10-25 for commit c33aeec8.
+        ["RoslynSentinel.Engines.Advanced/AdvancedStructuralEngine.cs::AlignPartialDeclaration"] = 2,
     };
 
     // Test 2 names: the NormalizeWhitespace-family helpers deleted in slice D1 (plus a planned variant that was never
