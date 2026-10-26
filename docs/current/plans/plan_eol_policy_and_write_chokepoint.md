@@ -1,6 +1,6 @@
 # Plan: Configurable EOL policy, single write chokepoint and final-bytes EOL guard
 
-**Status:** IN PROGRESS 2026-10-25. Steps 0-5 done (decisions, sweep, `scripts/Get-EolAudit.ps1`, working tree normalized, ratchet in `build.ps1`, `--eol` option, resolver, one dominant-EOL rule, chokepoint converts via the resolver and guards the final bytes; 5a-5c5 committed, flag and old path removed); Step 5 leftovers are listed under "Step 5 result"; next is Step 6, route bare writes through the chokepoint.
+**Status:** IN PROGRESS 2026-10-25. Steps 0-7 done (Steps 6-7 results are under each step; Steps 0-5: decisions, sweep, `scripts/Get-EolAudit.ps1`, working tree normalized, ratchet in `build.ps1`, `--eol` option, resolver, one dominant-EOL rule, chokepoint converts via the resolver and guards the final bytes; 5a-5c5 committed, flag and old path removed); Step 5 leftovers are listed under "Step 5 result"; next is Step 8, retire scattered newline literals (pass the resolved EOL to the formatter and the new-file scaffolds).
 
 > **Note (2026-10-19):** `NormalizeWholeSubtreeWhitespace` (named in the sweep and Step 2 below) was deleted (D1);
 > the EOL-aware helpers in `RoslynFormattingHelper` replace it. Treat those mentions as historical.
@@ -274,6 +274,14 @@ Step 0 results (2026-10-18):
     non-test projects, with an allowlist for non-workspace writes. Pattern: the whitespace ratchet
     tests from `c4b7a16d`.
 - Done when: the ratchet test passes and the sweep list is empty or allowlisted with reasons.
+- Result (2026-10-25): done. `Common/EolFileWriter` (resolver EOL + BOM kept, written through `FileIoHelper`) now backs the
+  two workspace writes that cannot use the chokepoint: the no-solution fallback in
+  `MsToolAugmentEngine.FormatDocumentSafeAsync` and the `dotnet new` template files in
+  `SolutionManagementEngine.CreateProjectAsync` (commit `64c5d590`). `Tests.Basic/BareFileWriteRatchetTests`
+  (commit `b1604788`) scans every production project for `File.WriteAll*/AppendAll*/Create/CreateText/Copy` outside
+  `FileIoHelper`, with 18 non-workspace allowlist keys. `FormatDocumentSafe` still returns the formatter's
+  `Environment.NewLine` text (TODO in `FiveStarToolTests`, fixed by Step 8). Open: whether to add a test-run check
+  for the `build.ps1` EOL ratchet (it does not run under `RunTest`).
 
 ### Step 7 - New-file creators use the resolver
 - Files: `Tools.Basic/WorkspaceFileEditImpl.cs` (`CreateFile`),
@@ -281,6 +289,11 @@ Step 0 results (2026-10-18):
   `Engines.Basic/MemberRefactoringEngine.cs` (about 4332, `AddTopLevelTypeAsync`).
 - Change: build scaffolds and split-out files with the resolved EOL, not `\n` or the source file's EOL.
 - Done when: tests create a file from an LF source under `crlf` and get uniform CRLF.
+- Result (2026-10-25): already satisfied by Step 5 (the chokepoint converts new files to the resolved EOL on write); no
+  production change needed. Three tests pin it against a real manager: `CreateFileTool_EolCreatorUnderCrlf_LfSeed_...`,
+  `MemberTool_AddTopLevelType_EolCreatorUnderCrlf_LfSource_...` (`Tests.Tools.Basic/CreateFileDeleteFileTests.cs`) and
+  `MoveAllTypesToFiles_EolCreatorUnderCrlf_LfSource_...` (`Tests.Basic/MoveTypeToFileTests.cs`). The creators'
+  returned/previewed text still follows the source file's EOL until Step 8.
 
 ### Step 8 - Retire scattered newline literals (sliced, one engine per slice)
 - Files: `Common/RoslynFormattingHelper.cs`, `Engines.Basic/MsToolAugmentEngine.cs`,
