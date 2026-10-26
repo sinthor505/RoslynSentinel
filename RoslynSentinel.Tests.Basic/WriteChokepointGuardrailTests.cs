@@ -199,11 +199,11 @@ public class WriteChokepointGuardrailTests
     }
 
     [Test]
-    public async Task Chokepoint_RefusesEolChangeBeforeTouchingDiskAsync()
+    public async Task Chokepoint_ConvertsLfTextIntoCrlfFileAsync()
     {
-        // Backstop for callers that reach ApplyProposedChangesAsync directly instead of going
-        // through ValidateAndApplyHelper. Real manager + real file: the guard compares against the
-        // on-disk pre-image and must refuse before the first write.
+        // Real manager + real file. Temporary opt-in (ResolverPrePassEnabled + EolModeOverride), removed in plan step
+        // 5 slice 5c4/5c6. Under Auto a CRLF-only pre-image keeps its style, so LF text is converted to CRLF on write
+        // instead of being refused.
         var dir = Path.Combine(Path.GetTempPath(), "GuardrailChokepoint", Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(dir);
         var file = Path.Combine(dir, "A.cs");
@@ -211,15 +211,20 @@ public class WriteChokepointGuardrailTests
         try
         {
             using var manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            // TODO 5c4/5c6: remove this opt-in with ResolverPrePassEnabled once the pre-pass is the only path.
+            manager.ResolverPrePassEnabled = true;
+            manager.EolModeOverride = EolMode.Auto;
             manager.SetTestSolution(new AdhocWorkspace().CurrentSolution);
 
             var result = await manager.ApplyProposedChangesAsync(
-                new() { [file] = CrlfSource.Replace("\r\n", "\n") }, retryCount: 0, validateChanges: false);
+                new()
+                {
+                    [file] = CrlfSource.Replace("\r\n", "\n")
+                }, retryCount: 0, validateChanges: false);
 
-            Assert.That(!result.IsError, Is.False);
-            Assert.That(result.RefusalCode, Is.EqualTo(ToolErrorCode.EolChangeRefused));
-            Assert.That(result.SucceededFiles, Is.Empty);
-            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(CrlfSource), "disk must be untouched");
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(result.RefusalCode, Is.Null);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(CrlfSource), "the LF text must be written as uniform CRLF");
         }
         finally
         {

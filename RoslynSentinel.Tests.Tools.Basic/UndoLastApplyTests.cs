@@ -345,7 +345,7 @@ public class UndoLastApplyTests
     }
 
     [Test]
-    [Description("Apply on a mixed-EOL file keeps the untouched stray CRLF lines, and UndoLastApply then restores the exact pre-image bytes")]
+    [Description("Apply on a mixed-EOL file converges the whole file to CRLF, and UndoLastApply then restores the exact pre-image bytes")]
     public async Task UndoLastApply_AfterApplyOnMixedEolFile_RestoresByteIdenticalPreImageAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -355,16 +355,20 @@ public class UndoLastApplyTests
 
         // EOL tracking is captured at load, so the file must exist on disk before LoadSolutionAsync.
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        // TODO 5c4/5c6: remove this opt-in with ResolverPrePassEnabled once the pre-pass is the only path.
+        workspaceManager.ResolverPrePassEnabled = true;
+        workspaceManager.EolModeOverride = EolMode.Crlf;
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
         var apply = await workspaceManager.ApplyProposedChangesAsync(
             new Dictionary<FilePathWrapper, string> { [new FilePathWrapper(targetFile)] = MixedEolWithInsertedLine });
         Assert.That(!apply.IsError, Is.True, apply.Summary);
+        var uniformCrlf = MixedEolWithInsertedLine.Replace("\r\n", "\n").Replace("\n", "\r\n");
         Assert.That(
             await File.ReadAllBytesAsync(targetFile),
-            Is.EqualTo(System.Text.Encoding.UTF8.GetBytes(MixedEolWithInsertedLine)),
-            "the apply must leave the untouched stray CRLF lines as CRLF");
+            Is.EqualTo(System.Text.Encoding.UTF8.GetBytes(uniformCrlf)),
+            "the apply must converge the whole file to uniform CRLF, stray lines included");
 
         var changeId = "change-mixed-eol-roundtrip";
         await WriteUndoBlobAsync(fixture, changeId, targetFile, apply.PreImages![targetFile]!);

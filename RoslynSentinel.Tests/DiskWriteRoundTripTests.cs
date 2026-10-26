@@ -178,76 +178,79 @@ public class DiskWriteRoundTripTests
     }
 
     [Test]
-    public async Task ApplyProposedChanges_CrlfDominantFile_NormalizesSplicedLfToCrlfOnDiskAsync()
+    public async Task ApplyProposedChanges_CrlfDominantFile_ConvertsWholeFileToCrlfOnDiskAsync()
     {
-        // On disk: CRLF-dominant with one stray bare LF (mixed, so EolChangeGuard does not refuse an edit that
-        // keeps CRLF dominant). The proposed edit splices in a new line terminated by a bare LF, as an agent
-        // typing LF would. The tracked dominant EOL (captured at LoadSolutionAsync) must be applied to the SPLICED
-        // line only; the untouched stray LF line keeps its own terminator (see ..._KeepsUntouchedStrayCrlfLines...).
+        // Temporary opt-in (ResolverPrePassEnabled + EolModeOverride), removed in plan step 5 slice 5c4/5c6.
+        // On disk: CRLF-dominant with one stray bare LF. The proposed edit splices in a line terminated by a bare LF.
+        // With the pre-pass on and mode Crlf, the whole file converges: the spliced line AND the stray line end in CRLF.
         const string original = "class Sample\r\n{\r\n    void Method() { }\r\n\r\n    void Other() { }\n}\r\n";
         const string proposed = "class Sample\r\n{\r\n    // Added comment\n    void Method() { }\r\n\r\n    void Other() { }\n}\r\n";
 
-        var (result, diskBytes, tracked) = await ApplyToTrackedFileAsync("CrlfDominant.cs", Encoding.UTF8.GetBytes(original), proposed);
+        var (result, diskBytes, tracked) = await ApplyToTrackedFileAsync("CrlfDominant.cs", Encoding.UTF8.GetBytes(original), proposed, EolMode.Crlf);
 
         Assert.That(tracked, Is.True, "Fixture file must be a loaded document, otherwise EOL tracking was never captured.");
         Assert.That(!result.IsError, Is.True, result.Summary);
         Assert.That(Encoding.UTF8.GetString(diskBytes), Does.Contain("// Added comment"), "Content should be updated");
-        // Only the spliced line is normalized (LF -> CRLF); the pre-existing stray LF after "Other() { }" is untouched.
-        const string expectedText = "class Sample\r\n{\r\n    // Added comment\r\n    void Method() { }\r\n\r\n    void Other() { }\n}\r\n";
-        Assert.That(diskBytes, Is.EqualTo(Encoding.UTF8.GetBytes(expectedText)));
+        const string expectedText = "class Sample\r\n{\r\n    // Added comment\r\n    void Method() { }\r\n\r\n    void Other() { }\r\n}\r\n";
+        Assert.That(diskBytes, Is.EqualTo(Encoding.UTF8.GetBytes(expectedText)), "Every line must be CRLF, including the previously stray one.");
     }
 
     [Test]
-    public async Task ApplyProposedChanges_LfDominantFile_NormalizesSplicedCrlfToLfOnDiskAsync()
+    public async Task ApplyProposedChanges_LfDominantFile_ConvertsWholeFileToLfOnDiskAsync()
     {
-        // On disk: LF-dominant with one stray CRLF (mixed). The edit splices in a CRLF-terminated line; the
-        // tracked dominant EOL (LF) must be applied to the SPLICED line only, so exactly one 0x0D remains on disk:
-        // the untouched stray CRLF.
+        // Temporary opt-in (ResolverPrePassEnabled + EolModeOverride), removed in plan step 5 slice 5c4/5c6.
+        // On disk: LF-dominant with one stray CRLF. The proposed edit splices in a CRLF-terminated line. With the
+        // pre-pass on and mode Lf, the whole file converges: no 0x0D may remain on disk.
         const string original = "class Sample\n{\n    void Method() { }\n\n    void Other() { }\r\n}\n";
         const string proposed = "class Sample\n{\n    // Added comment\r\n    void Method() { }\n\n    void Other() { }\r\n}\n";
 
-        var (result, diskBytes, tracked) = await ApplyToTrackedFileAsync("LfDominant.cs", Encoding.UTF8.GetBytes(original), proposed);
+        var (result, diskBytes, tracked) = await ApplyToTrackedFileAsync("LfDominant.cs", Encoding.UTF8.GetBytes(original), proposed, EolMode.Lf);
 
         Assert.That(tracked, Is.True, "Fixture file must be a loaded document, otherwise EOL tracking was never captured.");
         Assert.That(!result.IsError, Is.True, result.Summary);
         Assert.That(Encoding.UTF8.GetString(diskBytes), Does.Contain("// Added comment"), "Content should be updated");
-        Assert.That(diskBytes.Count(b => b == 0x0D), Is.EqualTo(1), "Only the untouched stray CRLF may keep its CR.");
+        Assert.That(diskBytes.Count(b => b == 0x0D), Is.EqualTo(0), "Every line must be LF, including the previously stray CRLF.");
 
-        const string expectedText = "class Sample\n{\n    // Added comment\n    void Method() { }\n\n    void Other() { }\r\n}\n";
+        const string expectedText = "class Sample\n{\n    // Added comment\n    void Method() { }\n\n    void Other() { }\n}\n";
         Assert.That(diskBytes, Is.EqualTo(Encoding.UTF8.GetBytes(expectedText)));
     }
 
     [Test]
-    [Description("Blocker undolastapply_refused_eol_after_apply_normalized_mixed_file: the write path must only normalize the lines a change touched, never rewrite untouched stray terminators")]
-    public async Task ApplyProposedChanges_LfDominantFile_KeepsUntouchedStrayCrlfLinesOnDiskAsync()
+    [Description("The resolver pre-pass converts the whole file to the resolved mode, so untouched stray terminators converge too")]
+    public async Task ApplyProposedChanges_LfDominantFileWithStrayCrlf_ConvergesStrayLinesToCrlfOnDiskAsync()
     {
+        // Temporary opt-in (ResolverPrePassEnabled + EolModeOverride), removed in plan step 5 slice 5c4/5c6.
         // LF-dominant with two stray CRLF lines, one before and one after the inserted line. The proposal is what a
         // line-level editor (TestCategoryTextEditor) produces: the stray lines unchanged, one LF line spliced in.
+        // With mode Crlf the whole file converges, so the stray LF lines are converted to CRLF as well.
         const string original = "class Sample\r\n{\n    void Method() { }\n\n    void Other() { }\r\n}\n";
         const string proposed = "class Sample\r\n{\n    // Added comment\n    void Method() { }\n\n    void Other() { }\r\n}\n";
 
-        var (result, diskBytes, tracked) = await ApplyToTrackedFileAsync("LfDominantStray.cs", Encoding.UTF8.GetBytes(original), proposed);
+        var (result, diskBytes, tracked) = await ApplyToTrackedFileAsync("LfDominantStray.cs", Encoding.UTF8.GetBytes(original), proposed, EolMode.Crlf);
 
         Assert.That(tracked, Is.True, "Fixture file must be a loaded document, otherwise EOL tracking was never captured.");
         Assert.That(!result.IsError, Is.True, result.Summary);
-        Assert.That(diskBytes, Is.EqualTo(Encoding.UTF8.GetBytes(proposed)), "untouched stray CRLF lines must stay CRLF");
+
+        const string expectedText = "class Sample\r\n{\r\n    // Added comment\r\n    void Method() { }\r\n\r\n    void Other() { }\r\n}\r\n";
+        Assert.That(diskBytes, Is.EqualTo(Encoding.UTF8.GetBytes(expectedText)), "Every line must be CRLF, including the stray lines.");
     }
 
     [Test]
-    public async Task ApplyProposedChanges_SingleStyleCrlfFileProposedWithLf_IsRefusedByEolGuardAndLeavesDiskUntouchedAsync()
+    public async Task ApplyProposedChanges_SingleStyleCrlfFileProposedWithLf_IsConvertedToCrlfOnDiskAsync()
     {
-        // Documents the layering: for a single-style .cs file, EolChangeGuard refuses a style change before the
-        // write loop's EOL normalization is ever reached, so that normalization only matters for mixed-EOL files.
+        // Temporary opt-in (ResolverPrePassEnabled + EolModeOverride), removed in plan step 5 slice 5c4/5c6.
+        // Under Auto, a single-style CRLF pre-image keeps its style, so LF text arriving in it is converted to CRLF
+        // on write. The style flip is no longer refused.
         const string original = "class Sample\r\n{\r\n    void Method() { }\r\n}\r\n";
         const string proposed = "class Sample\n{\n    // Added comment\n    void Method() { }\n}\n";
-        var originalBytes = Encoding.UTF8.GetBytes(original);
+        const string expectedText = "class Sample\r\n{\r\n    // Added comment\r\n    void Method() { }\r\n}\r\n";
 
-        var (result, diskBytes, tracked) = await ApplyToTrackedFileAsync("CrlfSingleStyle.cs", originalBytes, proposed);
+        var (result, diskBytes, tracked) = await ApplyToTrackedFileAsync("CrlfSingleStyle.cs", Encoding.UTF8.GetBytes(original), proposed, EolMode.Auto);
 
         Assert.That(tracked, Is.True);
-        Assert.That(!result.IsError, Is.False);
-        Assert.That(result.RefusalCode, Is.EqualTo(ToolErrorCode.EolChangeRefused));
-        Assert.That(diskBytes, Is.EqualTo(originalBytes), "A refused change must not touch the file.");
+        Assert.That(!result.IsError, Is.True, result.Summary);
+        Assert.That(result.RefusalCode, Is.Null);
+        Assert.That(diskBytes, Is.EqualTo(Encoding.UTF8.GetBytes(expectedText)), "The whole file must be uniform CRLF.");
     }
 
     [Test]
@@ -285,10 +288,14 @@ public class DiskWriteRoundTripTests
     public async Task ApplyProposedChanges_NewFileNoTracking_CreatesWithoutThrowAsync()
     {
         // Test that a new file (not previously tracked) can be created through ApplyProposedChangesAsync.
+        // Temporary opt-in (ResolverPrePassEnabled + EolModeOverride), removed in plan step 5 slice 5c4/5c6.
+        // Mode Lf: the new file takes LF, so the LF content is written unchanged.
         var fixture = new TestSolutionFixture();
         try
         {
             var workspaceManager = new PersistentWorkspaceManager(new Microsoft.Extensions.Logging.Abstractions.NullLogger<IWorkspaceManager>());
+            workspaceManager.ResolverPrePassEnabled = true;
+            workspaceManager.EolModeOverride = EolMode.Lf;
             await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
             const string newContent = "namespace NewNamespace;\n\npublic class NewClass\n{\n}\n";
@@ -319,7 +326,7 @@ public class DiskWriteRoundTripTests
     /// chokepoint, and returns the result, the raw bytes now on disk, and whether the file was a loaded document.
     /// </summary>
     private static async Task<(ApplyChangesResult Result, byte[] DiskBytes, bool Tracked)> ApplyToTrackedFileAsync(
-        string fileName, byte[] initialDiskBytes, string proposedContent)
+        string fileName, byte[] initialDiskBytes, string proposedContent, EolMode? eolMode = null)
     {
         var fixture = new TestSolutionFixture();
         try
@@ -328,6 +335,13 @@ public class DiskWriteRoundTripTests
             await File.WriteAllBytesAsync(filePath, initialDiskBytes);
 
             var workspaceManager = new PersistentWorkspaceManager(new Microsoft.Extensions.Logging.Abstractions.NullLogger<IWorkspaceManager>());
+            // TODO 5c4/5c6: remove this opt-in with ResolverPrePassEnabled once the pre-pass is the only path.
+            if (eolMode is { } mode)
+            {
+                workspaceManager.ResolverPrePassEnabled = true;
+                workspaceManager.EolModeOverride = mode;
+            }
+
             try
             {
                 await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
