@@ -22,13 +22,22 @@ public class ResourceSafetyEngine
             projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase) || p.Name.Contains(projectName, StringComparison.OrdinalIgnoreCase));
         }
 
+        // Strict lookup: the file is resolved once, before the project loop. A multi-targeted file
+        // belongs to several projects, hence the id set rather than a single DocumentId.
+        HashSet<DocumentId>? fileIds = null;
+        if (!string.IsNullOrEmpty(filePath))
+        {
+            var target = DocumentLookup.RequireDocument(solution, filePath);
+            fileIds = solution.GetDocumentIdsWithFilePath(target.FilePath!).ToHashSet();
+        }
+
         var documentList = new List<(Document, SyntaxNode, SemanticModel?)>();
         foreach (var project in projects)
         {
             var docs = project.Documents.AsEnumerable();
-            if (!string.IsNullOrEmpty(filePath))
+            if (fileIds is not null)
             {
-                docs = docs.Where(d => d.Name == filePath || d.FilePath == filePath || (d.FilePath != null && d.FilePath.EndsWith(filePath, StringComparison.OrdinalIgnoreCase)));
+                docs = docs.Where(d => fileIds.Contains(d.Id));
             }
 
             foreach (var doc in docs)

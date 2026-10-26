@@ -132,12 +132,21 @@ public class SolutionStructureEngine
             projects = projects.Where(p => !p.Name.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase) && !p.Name.EndsWith(".Benchmarks", StringComparison.OrdinalIgnoreCase));
         }
 
+        // Strict lookup: the file is resolved once per call, before the project loop. A multi-targeted
+        // file belongs to several projects, hence the id set rather than a single DocumentId.
+        HashSet<DocumentId>? fileIds = null;
+        if (!string.IsNullOrEmpty(filePath))
+        {
+            var target = DocumentLookup.RequireDocument(solution, filePath);
+            fileIds = solution.GetDocumentIdsWithFilePath(target.FilePath!).ToHashSet();
+        }
+
         foreach (var project in projects)
         {
-            var documents = project.Documents;
-            if (!string.IsNullOrEmpty(filePath))
+            var documents = project.Documents.AsEnumerable();
+            if (fileIds is not null)
             {
-                documents = documents.Where(d => d.Name == filePath || d.FilePath == filePath || (d.FilePath != null && d.FilePath.EndsWith(filePath, StringComparison.OrdinalIgnoreCase)));
+                documents = documents.Where(d => fileIds.Contains(d.Id));
             }
 
             foreach (var document in documents)

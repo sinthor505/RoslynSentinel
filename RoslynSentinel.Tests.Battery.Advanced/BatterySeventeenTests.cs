@@ -151,10 +151,9 @@ public class SolutionStructureEngineTests2
     }
 
     [Test]
-    public async Task FindStructuralSmells_UnknownFile_ReturnsEmptyList()
+    public async Task FindStructuralSmells_UnknownFile_Throws_ToolNotFound()
     {
-        var smells = await _engine.FindStructuralSmellsAsync(filePath: "NoSuchFile.cs");
-        Assert.That(smells, Is.Empty, "unknown file should return empty smells list");
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.FindStructuralSmellsAsync(filePath: "NoSuchFile.cs"));
     }
 
     [Test]
