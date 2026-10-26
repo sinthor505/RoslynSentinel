@@ -7,6 +7,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
@@ -39,16 +40,15 @@ public class ListSolutionItemsAllTests
     [Test]
     public async Task ListSolutionItems_KindAll_DoesNotRequireProjectNameAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var workspaceTools = BuildTools(workspaceManager);
+        using var workspace = InMemoryWorkspace.Create(("ContosoOrders.Core/Helper.cs", "namespace TestProj;\n\npublic static class Helper\n{\n}\n"));
+        var workspaceTools = BuildTools(workspace.Manager);
 
         var result = await workspaceTools.ListSolutionItemsTool(reason: "test message", SolutionItemsKind.all);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
     }
 
+    // Stays on disk: InMemoryWorkspace holds one project, and this test asserts the two-project ContosoOrders layout.
     [Test]
     public async Task ListSolutionItems_KindAll_ReturnsEveryProjectWithFilesAndDependenciesAsync()
     {
@@ -78,10 +78,10 @@ public class ListSolutionItemsAllTests
     [Test]
     public async Task ListSolutionItems_KindAll_MatchesUnionOfIndividualKindsAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var workspaceTools = BuildTools(workspaceManager);
+        using var workspace = InMemoryWorkspace.Create(
+            ("ContosoOrders.Core/Helper.cs", "namespace TestProj;\n\npublic static class Helper\n{\n}\n"),
+            ("ContosoOrders.Core/Caller.cs", "namespace TestProj;\n\npublic class Caller\n{\n}\n"));
+        var workspaceTools = BuildTools(workspace.Manager);
 
         var allResult = await workspaceTools.ListSolutionItemsTool(reason: "test message", SolutionItemsKind.all);
         var combined = (SolutionItemsAllResult)allResult.SuccessData!;

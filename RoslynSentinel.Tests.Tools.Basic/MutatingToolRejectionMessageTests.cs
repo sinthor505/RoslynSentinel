@@ -11,6 +11,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tools.Basic;
 
 #pragma warning disable CS8618
@@ -86,17 +87,13 @@ public class MutatingToolRejectionMessageTests
     [Test]
     public async Task WriteFile_IntroducesCompileError_RejectsWithLookupHelperGuidanceNotRawJson()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        await fixture.AddFileToSolution(workspaceManager, "ContosoOrders.Core/Helper.cs", HelperFileContent);
-        await fixture.AddFileToSolution(workspaceManager, "ContosoOrders.Core/Caller.cs", CallerFileContent);
-        var workspaceTools = BuildTools(workspaceManager);
+        using var workspace = InMemoryWorkspace.Create(("ContosoOrders.Core/Helper.cs", HelperFileContent), ("ContosoOrders.Core/Caller.cs", CallerFileContent));
+        var workspaceTools = BuildTools(workspace.Manager);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        var validationEngine = new ValidationEngine(workspace.Manager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspace.Manager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspace.Manager, NullLogger<SymbolNavigationEngine>.Instance));
 
-        var helperPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Helper.cs");
+        var helperPath = workspace.PathOf("ContosoOrders.Core/Helper.cs");
         var result = await wholeFileWriteTools.WriteFileTool(reason: "test message", WriteFileOperation.ReplaceFile, helperPath, HelperFileContentRenamed);
 
         AssertRoutedThroughLookupHelper(result);
@@ -105,17 +102,13 @@ public class MutatingToolRejectionMessageTests
     [Test]
     public async Task ApplyDiff_FilesFormat_IntroducesCompileError_RejectsWithLookupHelperGuidanceNotRawJson()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        await fixture.AddFileToSolution(workspaceManager, "ContosoOrders.Core/Helper.cs", HelperFileContent);
-        await fixture.AddFileToSolution(workspaceManager, "ContosoOrders.Core/Caller.cs", CallerFileContent);
-        var workspaceTools = BuildTools(workspaceManager);
+        using var workspace = InMemoryWorkspace.Create(("ContosoOrders.Core/Helper.cs", HelperFileContent), ("ContosoOrders.Core/Caller.cs", CallerFileContent));
+        var workspaceTools = BuildTools(workspace.Manager);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        var validationEngine = new ValidationEngine(workspace.Manager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspace.Manager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspace.Manager, NullLogger<SymbolNavigationEngine>.Instance));
 
-        var helperPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Helper.cs");
+        var helperPath = workspace.PathOf("ContosoOrders.Core/Helper.cs");
         var changes = new Dictionary<string, string>
         {
             [helperPath] = HelperFileContentRenamed
@@ -128,17 +121,13 @@ public class MutatingToolRejectionMessageTests
     [Test]
     public async Task ApplyUnifiedDiff_IntroducesCompileError_RejectsWithLookupHelperGuidanceNotRawJson()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        await fixture.AddFileToSolution(workspaceManager, "ContosoOrders.Core/Helper.cs", HelperFileContent);
-        await fixture.AddFileToSolution(workspaceManager, "ContosoOrders.Core/Caller.cs", CallerFileContent);
-        var workspaceTools = BuildTools(workspaceManager);
+        using var workspace = InMemoryWorkspace.Create(("ContosoOrders.Core/Helper.cs", HelperFileContent), ("ContosoOrders.Core/Caller.cs", CallerFileContent));
+        var workspaceTools = BuildTools(workspace.Manager);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        var validationEngine = new ValidationEngine(workspace.Manager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspace.Manager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspace.Manager, NullLogger<SymbolNavigationEngine>.Instance));
 
-        var helperPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Helper.cs");
+        var helperPath = workspace.PathOf("ContosoOrders.Core/Helper.cs");
         var unifiedDiff =
             "--- Helper.cs\n+++ Helper.cs\n" +
             "@@ -1,5 +1,5 @@\n" +
