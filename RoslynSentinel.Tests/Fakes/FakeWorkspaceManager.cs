@@ -37,6 +37,12 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
 
     public void SetTestSolution(Solution solution) => CurrentSolution = solution;
 
+    /// <summary>Per-instance EOL mode override, mirroring PersistentWorkspaceManager; the effective mode is this, else EolPolicyOptions.Mode.</summary>
+    public EolMode? EolModeOverride { get; set; }
+
+    public string ResolveEol(string filePath, string? preImageText) =>
+        EolResolver.Resolve(EolModeOverride ?? EolPolicyOptions.Mode, preImageText, EditorConfigEolReader.Read(filePath));
+
     // When set, ApplyProposedChangesAsync throws it, so a test can simulate e.g. SessionHaltedException from the chokepoint.
     public Exception? ApplyException
     {

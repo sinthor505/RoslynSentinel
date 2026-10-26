@@ -2070,6 +2070,12 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         }
     }
 
+    /// <inheritdoc/>
+    public string ResolveEol(string filePath, string? preImageText)
+    {
+        return EolResolver.Resolve(EolModeOverride ?? EolPolicyOptions.Mode, preImageText, EditorConfigEolReader.Read(filePath));
+    }
+
     // Resolver-based EOL pre-pass for ApplyProposedChangesAsync (plan_eol_policy_and_write_chokepoint.md step 5).
     // For every change: computes the bytes to write (whole-file conversion to the resolved target), and records an
     // attribution finding when the pre-image was itself not in the resolved style (it was written outside the
@@ -2109,7 +2115,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             }
 
             var preCounts = EolChangeGuard.Count(pre);
-            if (preCounts.Total > 0 && (!preCounts.IsSingleStyle || preCounts.DominantTerminator != EolResolver.Resolve(mode, pre, editorConfigEol)))
+            if (preCounts.Total > 0 && (!preCounts.IsSingleStyle || preCounts.DominantTerminator != ResolveEol(filePath, pre)))
             {
                 var message = $"pre-image of '{filePath}' was written outside the chokepoint (line endings: {preCounts.Describe()}); caller: {operationLabel ?? "unknown caller"}";
                 findings.Add(new Finding("WriteChokepoint", message, FindingSeverity.Caution));
