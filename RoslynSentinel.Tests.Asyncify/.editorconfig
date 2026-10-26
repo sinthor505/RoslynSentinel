@@ -20,6 +20,8 @@ dotnet_diagnostic.IDE0300.severity = none
 dotnet_diagnostic.IDE0301.severity = none
 dotnet_diagnostic.IDE0305.severity = none
 dotnet_diagnostic.UseNamedArgs.severity = none
+dotnet_diagnostic.CA1050.severity = none
+dotnet_diagnostic.CA1861.severity = none
 
 #### Core EditorConfig Options ####
 

@@ -285,7 +285,7 @@ public class AdvancedRefactoringEngine
             interfaceNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(otherInterfaces, "Interface", interfaceName);
             if (interfaceNode != null)
             {
-                interfaceRoot = interfaceNode.SyntaxTree.GetRoot();
+                interfaceRoot = interfaceNode.SyntaxTree.GetRoot(cancellationToken);
                 interfaceDocument = solution.GetDocument(interfaceNode.SyntaxTree);
             }
         }

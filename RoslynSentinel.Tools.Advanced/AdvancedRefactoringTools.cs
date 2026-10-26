@@ -1491,7 +1491,11 @@ public class AdvancedRefactoringTools
         {
             if (destination == "ownFile")
             {
-                string? resolvedTargetFolder = string.IsNullOrEmpty(targetFolder) ? null : _workspaceManager.ResolveFromWire(targetFolder);
+                string? resolvedTargetFolder = null;
+                if (!string.IsNullOrEmpty(targetFolder))
+                {
+                    resolvedTargetFolder = _workspaceManager.ResolveFromWire(targetFolder);
+                }
                 var changes = await _refactoringEngine.MoveTypeToFileAsync(resolvedFilePath, typeName, targetFolder: resolvedTargetFolder, cancellationToken: cancellationToken);
                 if (!autoStage)
                 {

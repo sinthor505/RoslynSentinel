@@ -691,7 +691,7 @@ public static class DataHelper
 
             Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
             Assert.That(result.SuccessData, Is.Not.Null);
-            Assert.That(result.SuccessData!.PhaseBreakdown.Handler.Skipped, Is.EqualTo(1),
+            Assert.That(result.SuccessData!.PhaseBreakdown!.Handler.Skipped, Is.EqualTo(1),
                 "The handler phase must reach the stale-flag branch for OnClick.");
 
             var blobPath = OperationBlobWriter.FindBlobPath(result.SuccessData.ChangeId, _tempDir);

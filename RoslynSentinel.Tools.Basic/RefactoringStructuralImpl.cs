@@ -744,18 +744,18 @@ public class RefactoringStructuralImpl
                     return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: newMemberSource is required for operation 'addMember'. {RequiredParamsHint(operation)}") };
             }
 
-            if (await _symbolNavigationEngine.IsEnumContainerAsync(filePathResolved, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken))
+            if (await _symbolNavigationEngine.IsEnumContainerAsync(filePathResolved, containerName!, contextSnippet, lineBefore, lineAfter, cancellationToken))
             {
                 string? afterName = position != null && position.StartsWith("after:", StringComparison.OrdinalIgnoreCase) ? position.Substring("after:".Length) : null;
                 string? beforeName = position != null && position.StartsWith("before:", StringComparison.OrdinalIgnoreCase) ? position.Substring("before:".Length) : null;
                 if (position != null && afterName == null && beforeName == null && position != "end")
                     return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
 
-                var enumAddHint = $"Retry using {ToolCallHint.Call("ModifyEnum", ("enumName", containerName))} directly with the full desired member list if this keeps failing.";
+                var enumAddHint = $"Retry using {ToolCallHint.Call("ModifyEnum", ("enumName", containerName!))} directly with the full desired member list if this keeps failing.";
                 DocumentEditResult enumAdded;
                 try
                 {
-                    enumAdded = await _memberRefactoringEngine.AddEnumMemberAsync(filePathResolved, containerName, newMemberSource!, afterName, beforeName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                    enumAdded = await _memberRefactoringEngine.AddEnumMemberAsync(filePathResolved, containerName!, newMemberSource!, afterName, beforeName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 }
                 catch (ToolException toolEx)
                 {
@@ -801,19 +801,19 @@ public class RefactoringStructuralImpl
             string description;
             if (string.IsNullOrEmpty(position) || position == "end")
             {
-                updated = await _memberRefactoringEngine.AddMemberAsync(filePathResolved, containerName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                updated = await _memberRefactoringEngine.AddMemberAsync(filePathResolved, containerName!, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 description = $"{DescribeMemberOutcome(updated, "Added new member")} to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
             }
             else if (position.StartsWith("after:", StringComparison.OrdinalIgnoreCase))
             {
                 var afterMemberName = position.Substring("after:".Length);
-                updated = await _memberRefactoringEngine.InsertMemberAfterAsync(filePathResolved, containerName, afterMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                updated = await _memberRefactoringEngine.InsertMemberAfterAsync(filePathResolved, containerName!, afterMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 description = $"{DescribeMemberOutcome(updated, "Inserted new member")} after '{afterMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
             }
             else if (position.StartsWith("before:", StringComparison.OrdinalIgnoreCase))
             {
                 var beforeMemberName = position.Substring("before:".Length);
-                updated = await _memberRefactoringEngine.InsertMemberBeforeAsync(filePathResolved, containerName, beforeMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                updated = await _memberRefactoringEngine.InsertMemberBeforeAsync(filePathResolved, containerName!, beforeMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 description = $"{DescribeMemberOutcome(updated, "Inserted new member")} before '{beforeMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
             }
             else

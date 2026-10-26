@@ -694,7 +694,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                                     isError,
                                     statusMessage,
                                     listSummary,
-                                    message = $"Result is {text.Length} bytes (threshold: {LargeResultHelper.OffloadThresholdBytes}).{hint} Use {RoslynSentinel.Common.LargeResultHints.FetchCall(stored.resultId)} to page through results."
+                                    message = $"Result is {text.Length} bytes (threshold: {LargeResultHelper.OffloadThresholdBytes}).{hint} Use {RoslynSentinel.Common.LargeResultHints.FetchCall(stored.resultId!)} to page through results."
                                 }, RoslynSentinel.Common.SharedJsonOptions.Compact)
                             }];
                         break;

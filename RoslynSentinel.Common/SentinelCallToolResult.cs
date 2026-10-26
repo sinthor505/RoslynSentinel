@@ -363,7 +363,7 @@ public record SentinelCallToolResult<T> : SentinelCallToolResult<T, ResultError>
                 sizeBytes: stored.jsonBytes.Length,
                 totalRecords: totalRecords ?? 1,
                 message: $"Result is {stored.jsonBytes.Length} bytes (threshold: {LargeResultHelper.OffloadThresholdBytes}). " +
-                         $"Use {LargeResultHints.FetchCall(stored.resultId)} to page through results.")
+                         $"Use {LargeResultHints.FetchCall(stored.resultId!)} to page through results.")
         };
     }
 }
@@ -420,7 +420,7 @@ public record ResultError(
             sizeBytes: stored.jsonBytes.Length,
             totalRecords: structuredDetail.Count,
             message: $"structuredDetail is {stored.jsonBytes.Length} bytes ({structuredDetail.Count} entries), over the inline threshold. " +
-                     $"Use {LargeResultHints.FetchCall(stored.resultId)} to page through the full structured list."));
+                     $"Use {LargeResultHints.FetchCall(stored.resultId!)} to page through the full structured list."));
     }
 }
 

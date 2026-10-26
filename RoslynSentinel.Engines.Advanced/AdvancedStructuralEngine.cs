@@ -518,7 +518,7 @@ public class StructuralRefactoringEngine
         var fieldMatches = root?.DescendantNodes().OfType<FieldDeclarationSyntax>()
             .Where(f => f.Declaration.Variables.Any(v => v.Identifier.Text == fieldName))
             .ToList();
-        var field = RoslynSentinel.Common.NameTargetLookup.RequireSingle(fieldMatches, "Field", fieldName);
+        var field = RoslynSentinel.Common.NameTargetLookup.RequireSingle(fieldMatches ?? new List<FieldDeclarationSyntax>(), "Field", fieldName);
         // If field not found or has no initializer, return error
         if (field == null)
         {
@@ -2024,7 +2024,7 @@ public class StructuralRefactoringEngine
     /// </summary>
     private static string AnonymousMemberPropertyName(AnonymousObjectMemberDeclaratorSyntax member, int index)
     {
-        var name = member.NameEquals?.Name.Identifier.ValueText ?? InferredName(member.Expression) ?? "Prop" + (index + 1);
+        var name = member.NameEquals?.Name.Identifier.ValueText ?? InferredName(member.Expression) ?? ("Prop" + (index + 1));
         return char.ToUpperInvariant(name[0]) + name.Substring(1);
 
         static string? InferredName(ExpressionSyntax expression) => expression switch

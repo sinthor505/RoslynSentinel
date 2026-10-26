@@ -2550,7 +2550,7 @@ public class MyClass
                     Assert.Fail("Document not found in test solution");
                 }
 
-                var result = await _codeGenerationEngine.InterpolateStringAsync(document.FilePath, "string.Format(CacheKeyFmt", lineBefore: null, lineAfter: null);
+                var result = await _codeGenerationEngine.InterpolateStringAsync(document!.FilePath!, "string.Format(CacheKeyFmt", lineBefore: null, lineAfter: null);
                 // Should not crash and must convert the named const format string
                 Assert.That(result, Is.Not.Null, "Should handle named const without crashing");
                 Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), "Should convert the named const format string");
@@ -2667,7 +2667,7 @@ public class Processor
                         Assert.Fail("Document not found");
                     }
 
-                    var result = await new LogicSimplificationEngine(_workspaceManager).ReduceBlockDepthAsync(document.FilePath!, "Process");
+                    var result = await new LogicSimplificationEngine(_workspaceManager).ReduceBlockDepthAsync(document!.FilePath!, "Process");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
                     Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), "Should reduce the nested if to an early return");
                     Assert.That(result.UpdatedText, Does.Contain("if (input.Length > 5)"), "Should keep the nested condition in the reduced method");
@@ -2718,7 +2718,7 @@ public class Counter
                         Assert.Fail("Document not found");
                     }
 
-                    var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync(document.FilePath!, "Increment");
+                    var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync(document!.FilePath!, "Increment");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
                     Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
                     Assert.That(result.UpdatedText, Does.Contain("lock"), "Should contain lock statement");
@@ -2775,7 +2775,7 @@ public class ItemProvider
                         Assert.Fail("Document not found");
                     }
 
-                    var result = await _asyncOptEngine.ConvertToAsyncEnumerableAsync(document.FilePath!, "GetItemsAsync");
+                    var result = await _asyncOptEngine.ConvertToAsyncEnumerableAsync(document!.FilePath!, "GetItemsAsync");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
                     Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
                     Assert.That(result.UpdatedText, Does.Contain("IAsyncEnumerable"), "Should contain IAsyncEnumerable");
@@ -2819,7 +2819,7 @@ public class MathUtil
                         Assert.Fail("Document not found");
                     }
 
-                    var result = await new StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync(document.FilePath!, "Double");
+                    var result = await new StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync(document!.FilePath!, "Double");
                     Assert.That(result, Has.Count.EqualTo(1), "Only the defining file should be updated when there are no call sites");
                     Assert.That(result.Values.Single(), Does.Contain("public class MathUtil"), "Defining class should remain after inlining");
                     Assert.That(result.Values.Single(), Does.Not.Contain("Double("), "Method declaration should be removed");
@@ -2845,7 +2845,7 @@ public class Math
                         Assert.Fail("Document not found");
                     }
 
-                    await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync(document.FilePath!, "Add"), "Multi-statement method should fail gracefully via a typed exception, not crash");
+                    await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync(document!.FilePath!, "Add"), "Multi-statement method should fail gracefully via a typed exception, not crash");
                 }
             }
 
@@ -2889,7 +2889,7 @@ public class Calculator
                         Assert.Fail("Document not found");
                     }
 
-                    var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync(document.FilePath!, "x * 2", "multiplier");
+                    var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync(document!.FilePath!, "x * 2", "multiplier");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
                     Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), "Should add the multiplier parameter");
                     Assert.That(result.UpdatedText, Does.Contain("int multiplier"), "Should declare the multiplier parameter");
@@ -2916,7 +2916,7 @@ public class Processor
                         Assert.Fail("Document not found");
                     }
 
-                    var documentPath = document.FilePath!;
+                    var documentPath = document!.FilePath!;
                     var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync(documentPath, "input", "text"));
                     Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.NotFound));
                     Assert.That(ex.Message, Does.Contain("ambiguous"), "The snippet matches two places, so the engine should ask for a disambiguating line");
