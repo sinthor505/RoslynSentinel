@@ -201,8 +201,8 @@ public class WriteChokepointGuardrailTests
     [Test]
     public async Task Chokepoint_ConvertsLfTextIntoCrlfFileAsync()
     {
-        // Real manager + real file. Temporary opt-in (ResolverPrePassEnabled + EolModeOverride), removed in plan step
-        // 5 slice 5c4/5c6. Under Auto a CRLF-only pre-image keeps its style, so LF text is converted to CRLF on write
+        // Real manager + real file. Explicit EOL mode for this manager. Under Auto a CRLF-only pre-image keeps its style,
+        // so LF text is converted to CRLF on write
         // instead of being refused.
         var dir = Path.Combine(Path.GetTempPath(), "GuardrailChokepoint", Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(dir);
@@ -211,8 +211,6 @@ public class WriteChokepointGuardrailTests
         try
         {
             using var manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            // TODO 5c4/5c6: remove this opt-in with ResolverPrePassEnabled once the pre-pass is the only path.
-            manager.ResolverPrePassEnabled = true;
             manager.EolModeOverride = EolMode.Auto;
             manager.SetTestSolution(new AdhocWorkspace().CurrentSolution);
 

@@ -17,14 +17,12 @@ public class EolChokepointConversionTests
     private const string MixedSource = "namespace T;\r\npublic class A\n{\r\n    public int X() => 1;\r\n}\r\n";
     private const string MixedSourceWithAddedLine = "namespace T;\r\npublic class A\n{\r\n    public int X() => 1;\r\n    public int Y() => 2;\r\n}\r\n";
 
-    // Temporary opt-in (ResolverPrePassEnabled + EolModeOverride), removed in plan step 5 slice 5c4/5c6.
-    // Every test goes through this helper so the opt-in lives in one place.
-    // TODO 5c4/5c6: remove this opt-in with ResolverPrePassEnabled once the pre-pass is the only path.
+    // Explicit EOL mode for this manager.
+    // Every test goes through this helper so the EOL mode is set in one place.
     private static async Task<ApplyChangesResult> ApplyAsync(
         string file, string proposed, EolMode mode, bool exactRestore = false, string? operationLabel = null)
     {
         using var manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        manager.ResolverPrePassEnabled = true;
         manager.EolModeOverride = mode;
         manager.SetTestSolution(new AdhocWorkspace().CurrentSolution);
         return await manager.ApplyProposedChangesAsync(

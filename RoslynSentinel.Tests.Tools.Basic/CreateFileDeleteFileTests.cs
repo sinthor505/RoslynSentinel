@@ -748,10 +748,8 @@ public class CreateFileDeleteFileTests
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        // Temporary opt-in (ResolverPrePassEnabled + EolModeOverride), removed in plan step 5 slice 5c4/5c6.
+        // Explicit EOL mode for this manager.
         // The new file is expected as LF, so the mode is pinned to Lf rather than the platform default.
-        // TODO 5c4/5c6: remove this opt-in with ResolverPrePassEnabled once the pre-pass is the only path.
-        workspaceManager.ResolverPrePassEnabled = true;
         workspaceManager.EolModeOverride = EolMode.Lf;
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);

@@ -180,7 +180,7 @@ public class DiskWriteRoundTripTests
     [Test]
     public async Task ApplyProposedChanges_CrlfDominantFile_ConvertsWholeFileToCrlfOnDiskAsync()
     {
-        // Temporary opt-in (ResolverPrePassEnabled + EolModeOverride), removed in plan step 5 slice 5c4/5c6.
+        // Explicit EOL mode for this manager.
         // On disk: CRLF-dominant with one stray bare LF. The proposed edit splices in a line terminated by a bare LF.
         // With the pre-pass on and mode Crlf, the whole file converges: the spliced line AND the stray line end in CRLF.
         const string original = "class Sample\r\n{\r\n    void Method() { }\r\n\r\n    void Other() { }\n}\r\n";
@@ -198,7 +198,7 @@ public class DiskWriteRoundTripTests
     [Test]
     public async Task ApplyProposedChanges_LfDominantFile_ConvertsWholeFileToLfOnDiskAsync()
     {
-        // Temporary opt-in (ResolverPrePassEnabled + EolModeOverride), removed in plan step 5 slice 5c4/5c6.
+        // Explicit EOL mode for this manager.
         // On disk: LF-dominant with one stray CRLF. The proposed edit splices in a CRLF-terminated line. With the
         // pre-pass on and mode Lf, the whole file converges: no 0x0D may remain on disk.
         const string original = "class Sample\n{\n    void Method() { }\n\n    void Other() { }\r\n}\n";
@@ -219,7 +219,7 @@ public class DiskWriteRoundTripTests
     [Description("The resolver pre-pass converts the whole file to the resolved mode, so untouched stray terminators converge too")]
     public async Task ApplyProposedChanges_LfDominantFileWithStrayCrlf_ConvergesStrayLinesToCrlfOnDiskAsync()
     {
-        // Temporary opt-in (ResolverPrePassEnabled + EolModeOverride), removed in plan step 5 slice 5c4/5c6.
+        // Explicit EOL mode for this manager.
         // LF-dominant with two stray CRLF lines, one before and one after the inserted line. The proposal is what a
         // line-level editor (TestCategoryTextEditor) produces: the stray lines unchanged, one LF line spliced in.
         // With mode Crlf the whole file converges, so the stray LF lines are converted to CRLF as well.
@@ -238,7 +238,7 @@ public class DiskWriteRoundTripTests
     [Test]
     public async Task ApplyProposedChanges_SingleStyleCrlfFileProposedWithLf_IsConvertedToCrlfOnDiskAsync()
     {
-        // Temporary opt-in (ResolverPrePassEnabled + EolModeOverride), removed in plan step 5 slice 5c4/5c6.
+        // Explicit EOL mode for this manager.
         // Under Auto, a single-style CRLF pre-image keeps its style, so LF text arriving in it is converted to CRLF
         // on write. The style flip is no longer refused.
         const string original = "class Sample\r\n{\r\n    void Method() { }\r\n}\r\n";
@@ -288,13 +288,12 @@ public class DiskWriteRoundTripTests
     public async Task ApplyProposedChanges_NewFileNoTracking_CreatesWithoutThrowAsync()
     {
         // Test that a new file (not previously tracked) can be created through ApplyProposedChangesAsync.
-        // Temporary opt-in (ResolverPrePassEnabled + EolModeOverride), removed in plan step 5 slice 5c4/5c6.
+        // Explicit EOL mode for this manager.
         // Mode Lf: the new file takes LF, so the LF content is written unchanged.
         var fixture = new TestSolutionFixture();
         try
         {
             var workspaceManager = new PersistentWorkspaceManager(new Microsoft.Extensions.Logging.Abstractions.NullLogger<IWorkspaceManager>());
-            workspaceManager.ResolverPrePassEnabled = true;
             workspaceManager.EolModeOverride = EolMode.Lf;
             await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
@@ -335,10 +334,8 @@ public class DiskWriteRoundTripTests
             await File.WriteAllBytesAsync(filePath, initialDiskBytes);
 
             var workspaceManager = new PersistentWorkspaceManager(new Microsoft.Extensions.Logging.Abstractions.NullLogger<IWorkspaceManager>());
-            // TODO 5c4/5c6: remove this opt-in with ResolverPrePassEnabled once the pre-pass is the only path.
             if (eolMode is { } mode)
             {
-                workspaceManager.ResolverPrePassEnabled = true;
                 workspaceManager.EolModeOverride = mode;
             }
 
