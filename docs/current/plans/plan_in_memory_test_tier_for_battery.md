@@ -1,6 +1,6 @@
 # Plan: Move engine-correctness Battery tests onto an in-memory workspace tier
 
-**Status:** IN PROGRESS 2026-10-02. Step 0 complete 2026-10-25 (leftovers closed, full suite triaged; see Step 0). Step 0 landed: commit 5bc79a1 (fakes, `DiskWriteRoundTripTests`, `ModifyModifierBatchTests`) plus a second commit for the batch-edit fixes and the converted `ModifyAttributeBatchTests`/`ModifyBaseTypeBatchTests` (Build 0 errors, 48/48 batch tests pass). Step 1 mostly done; Step 2 measured once (see below). 2026-10-17: PreviewInstanceMoveCallSitesTests is no longer parked - its tests were already in-memory and the shared disk `SetUp` was removed (23.8 s -> 11.2 s filtered). Next: scan the other slow fixtures for shared `[SetUp]` disk cost before converting them, then re-measure Battery.Basic (Step 2).
+**Status:** IN PROGRESS 2026-10-02. Step 0 complete 2026-10-25 (leftovers closed, full suite triaged; see Step 0). Step 1 slices A-D and the Step 2 re-measure done 2026-10-25 (see Step 2); remaining candidates are listed there. Step 0 landed: commit 5bc79a1 (fakes, `DiskWriteRoundTripTests`, `ModifyModifierBatchTests`) plus a second commit for the batch-edit fixes and the converted `ModifyAttributeBatchTests`/`ModifyBaseTypeBatchTests` (Build 0 errors, 48/48 batch tests pass). Step 1 mostly done; Step 2 measured once (see below). 2026-10-17: PreviewInstanceMoveCallSitesTests is no longer parked - its tests were already in-memory and the shared disk `SetUp` was removed (23.8 s -> 11.2 s filtered). Next: scan the other slow fixtures for shared `[SetUp]` disk cost before converting them, then re-measure Battery.Basic (Step 2).
 
 ## Problem
 Battery.Basic was the slowest project. Test-level parallelism (commit 3037e5b) fixed serialization, leaving it CPU-bound:
@@ -78,7 +78,27 @@ Two tiers:
   Parked: ApplyDiffSizeGuardTests (guard reads old content from real disk), PreviewInstanceMoveCallSitesTests (897 lines,
   shared SetUp, ledger and cross-project tests). Check for flakiness (several runs); `NonParallelizable`
   global-exclusion semantics are unverified.
-- Done when: wall time and test-seconds recorded in this doc.
+- Slices 2026-10-25 (scan: ranked fixtures; commits eabdf209, fb502ddd, e8b9356d, e1ff22da, 708e0265):
+  MutatingToolRejectionMessageTests 40.7 s -> 9.6 s (3 tests); ListSolutionItemsAllTests 11.3 -> 9.3 s (2 of 3; the
+  two-project test stays on disk, InMemoryWorkspace holds one project); SemanticFindReplace + NamedArguments tool
+  tests 32.1 -> 11.7 s (11 tests, one Apply smoke per tool on disk, redundant first LoadSolution removed);
+  ApplyDiffSizeGuardTests in-memory (6 tests incl. two disk-fallback, 9.7 s project run) after ApplyDiffTool began
+  reading the committed workspace document via `ExistingTextReader` (disk only outside the solution; stale
+  workspace and drift still refuse the write; `ExistingTextReader.cs` is LF-only, see plan_eol_policy step 7);
+  GitToolsSmokeTests 158 tests 23.2 -> 16.3 s (shared template repo copied per test); BatteryTwentyTests 77 tests
+  15.4 -> ~11.4 s (4 DeleteUnusedSymbol tests in-memory, leak guard removed; stays [NonParallelizable] because
+  `[SetUp]` fields are shared - ~70 tests would need per-test locals).
+- Measured 2026-10-25 after those slices (each project alone): RoslynSentinel.Tests.Battery.Basic 179 tests, 17.6 s;
+  RoslynSentinel.Tests.Tools.Basic 1245 tests, 2m42 (2m46 before slice D). Not comparable with the 1m04 figure above:
+  the Battery fixtures have since moved between projects. Only failure in each is the known EOL one
+  (CrlfAndLfInput_DifferOnlyByInsertedPrefixesAsync / Apply_AddsClassAndMethodLevel_...). The wall time is now
+  dominated by fixtures that need disk: PathCaseLookupRegressionTests (18 tests, ~95 s in the old trx), RunTestTests
+  (spawns dotnet test), GitToolsSmokeTests (git subprocesses), CreateFileDeleteFileTests (32 tests, mixed), the
+  Server-project filter fixtures. Flakiness: slices were each run twice or more with no flake seen.
+- Remaining candidates (not done): CreateFileDeleteFileTests basics (M/L), RunTestTests 4-5 tests (S), BuildEngineTests
+  zero-project tests, Server LargeResultOffload/OrientationBreaker filter fixtures (M/L, different project),
+  BatteryTwentyTests per-test locals to allow parallel scope, redundant first LoadSolution in EolInheritanceTests.
+- Done when: wall time and test-seconds recorded in this doc (done 2026-10-25).
 
 ### Step 3 - Optional follow-ups
 - `scripts/Get-TestSlowest.ps1` to list slowest tests from the trx.
