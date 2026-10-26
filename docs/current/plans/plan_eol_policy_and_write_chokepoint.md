@@ -260,9 +260,28 @@ Step 0 results (2026-10-18):
     tests are missing).
   - `ApplyChangesResult.Findings` (attribution) is not surfaced in tool results yet (`// TODO` in the code; needs
     `ApplyOutcome.Findings` and the 9 callers).
-  - `EolChangeGuard.Check/CheckAll/BuildMessage` have no production caller (`// TODO` on the class); delete with
-    their tests in `WriteChokepointGuardrailTests`.
+  - Done 2026-10-26 (`f01e6648`): `EolChangeGuard.Check/CheckAll/BuildMessage` and `EolChangeViolation` deleted with their
+    two tests; `Count` and `EolCounts` stay (used by the resolver and chokepoint).
   - The running server binary must be rebuilt and restarted before the new chokepoint is live for editing tools.
+
+#### Decisions and follow-ups (2026-10-26)
+- `ResolveEol(string filePath, string? preImageText)` goes on `IWorkspaceMutator` (`IWorkspaceManager` and
+  `FakeWorkspaceManager` both implement it), so 8a needs no constructor changes.
+- Generators (about 226 `AppendLine` calls): `NormalizeEol` on the finished string at the engine boundary, not a per-call helper;
+  first confirm whether the output is written to a file or only returned (the chokepoint already converts a written file).
+- Before 8c-8k: one spike test on whether the later format pass already normalises the annotated trivia sites; if so most of the
+  35 trivia sites are allowlisted rather than changed. Before 8z: one `explore-haiku` sweep of the unread areas.
+- Add a `Tests.Basic` test that runs the `build.ps1` EOL audit logic so an agent-only session gets a signal under `RunTest`.
+- Defer surfacing `ApplyChangesResult.Findings` until after Step 8. Add a BOM-prefixed rollback test (the BOM-drop hypothesis).
+  The Step 0 formatter hypotheses are moot (the resolver reads `.editorconfig` itself and the chokepoint converts the final bytes).
+- Tests that assert exact `\n` strings set `EolModeOverride` in the same slice as the engine change; they are not loosened.
+- `CreateFile` LF report, investigated 2026-10-26: no LF path found for `.cs` on the current build. Two new tests pin `auto`
+  with `.editorconfig` crlf and lf (`86c3e070`). Confirmed bug fixed: `DocumentationTools` doc writes (`.md`/`.json`/`.yaml`)
+  used bare `File.Write*` and kept LF (`92fbac4e`). The launch script now passes `--eol=crlf` inside this repo (`f804ed6f`);
+  the server had been running in `auto`. Unconfirmed: a session on a pre-`426d8b83` server, or a host/repo without a matching
+  `.editorconfig`. Open: `CreateFile` still has no EOL parameter, description note or result field (needs Findings surfacing).
+- Still stale: five comments say the write path "refuses" an EOL change (`EolUtilities`, `BasicRefactoringEngine` x3,
+  `CommentingEngine`, two tests); reword in the 8c-8k engine slices that touch those files.
 
 ### Step 6 - Route bare writes through the chokepoint
 - Files: per the Step 0 sweep: `MsToolAugmentEngine.FormatDocumentSafeAsync` (:732, and its
