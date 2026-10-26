@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Engines.Basic;
 
@@ -127,40 +128,8 @@ public static class TestCategoryTextEditor
     /// <summary>The dominant line ending of <paramref name="text"/>; the platform default when it has none.</summary>
     public static string DetectEol(string text)
     {
-        var crlf = 0;
-        var lf = 0;
-        var cr = 0;
-        for (var i = 0; i < text.Length; i++)
-        {
-            if (text[i] == '\r')
-            {
-                if (i + 1 < text.Length && text[i + 1] == '\n')
-                {
-                    crlf++;
-                    i++;
-                }
-                else
-                {
-                    cr++;
-                }
-            }
-            else if (text[i] == '\n')
-            {
-                lf++;
-            }
-        }
-
-        if (crlf == 0 && lf == 0 && cr == 0)
-        {
-            return Environment.NewLine;
-        }
-
-        if (crlf >= lf && crlf >= cr)
-        {
-            return "\r\n";
-        }
-
-        return lf >= cr ? "\n" : "\r";
+        // Delegates to the shared rule in EolUtilities (plan_eol_policy_and_write_chokepoint.md Step 4 slice C).
+        return EolUtilities.DetectDominantEol(text);
     }
 
     private static int? FindInsertionLine(SyntaxNode root, PlannedCategoryEdit edit)

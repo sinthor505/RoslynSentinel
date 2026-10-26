@@ -1,6 +1,6 @@
 # Plan: Configurable EOL policy, single write chokepoint and final-bytes EOL guard
 
-**Status:** IN PROGRESS 2026-10-25. Steps 0-3 done (decisions, sweep, `scripts/Get-EolAudit.ps1`, working tree normalized, ratchet in `build.ps1`); next is Step 4, EOL policy option and resolver.
+**Status:** IN PROGRESS 2026-10-25. Steps 0-4 done (decisions, sweep, `scripts/Get-EolAudit.ps1`, working tree normalized, ratchet in `build.ps1`, `--eol` option, resolver, one dominant-EOL rule); next is Step 5, chokepoint uses the resolver and guards the final bytes.
 
 > **Note (2026-10-19):** `NormalizeWholeSubtreeWhitespace` (named in the sweep and Step 2 below) was deleted (D1);
 > the EOL-aware helpers in `RoslynFormattingHelper` replace it. Treat those mentions as historical.
@@ -192,8 +192,16 @@ Step 0 results (2026-10-18):
   - Slice A done: `Common/EolPolicyOptions.cs`, `Common/EolResolver.cs`, `Tests.Basic/EolResolverTests.cs` (19 tests).
     `Resolve(mode, preImageText, editorConfigEndOfLine)`; reading `.editorconfig` from a path is not built yet.
   - Slice B done: `EolPolicyOptions.Configure(args)` in the four server entry points.
-  - Slice C open: C1 `Common` callers, C2 `Engines.Basic`, C3 tails (`Tools.Basic`, `MappingEngine`,
-    `CommentingEngine`, `TestCategoryTextEditor`), C4 remove the obsolete functions and update 6 test sites.
+  - Slice C replaced by a smaller design (measurement showed the `SourceText` overload deliberately returns
+    unusual terminators for `DetectNormalizableEol`, so migrating ~19 callers would change behaviour for no gain):
+    one tie-break rule instead of caller migration, no `[Obsolete]`.
+    - C1 done: `EolCounts.DominantTerminator`; `DetectDominantEol(string)` delegates to it;
+      `DetectDominantEol(SourceText)` ties break CRLF, LF, CR, then others. 9 tests. Only behaviour change: more
+      lone CRs than LFs (with at least one LF) now gives CR.
+    - C2 done: `TestCategoryTextEditor.DetectEol` delegates to `EolUtilities.DetectDominantEol`.
+    - `CommentingEngine.DetectMemberEol` left alone on purpose: it copies the member's first end-of-line trivia
+      (not a counting function); Step 5's resolver and final-bytes guard make the per-engine choice moot.
+  - Step 4 done. `EolPolicyOptions.Mode` has no production reader until Step 5.
 
 ### Step 5 - Chokepoint uses the resolver and guards the final bytes
 - Files: `RoslynSentinel.Common/PersistentWorkspaceManager.cs`, `EolChangeGuard.cs`,
