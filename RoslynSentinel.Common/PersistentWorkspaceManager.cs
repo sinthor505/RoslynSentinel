@@ -1966,7 +1966,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         }
                         else
                         {
-                            await FileIoHelper.WriteAllTextAsync(filePath, original, CancellationToken.None);
+                            await FileIoHelper.WriteAllTextAsync(filePath, original, _knownFileBomPresence.TryGetValue(filePath, out var hadBomOnRestore) && hadBomOnRestore ? new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true) : null, CancellationToken.None);
                             _knownFileHashes[filePath] = ComputeContentHash(original);
                         }
                         rolledBack.Add(filePath);

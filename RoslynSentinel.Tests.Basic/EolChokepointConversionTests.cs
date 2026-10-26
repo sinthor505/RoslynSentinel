@@ -341,4 +341,42 @@ public class EolChokepointConversionTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Test]
+    public async Task RollbackOfPartialFailure_BomPreImage_RestoresBomAsync()
+    {
+        // Real-disk solution so LoadSolutionAsync records the BOM presence of A before the apply.
+        using var fixture = new TestSolutionFixture();
+        var fileA = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "BomRollbackA.cs");
+        var fileB = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "BomRollbackB.cs");
+        var originalBytes = new byte[] { 0xEF, 0xBB, 0xBF }.Concat(Encoding.UTF8.GetBytes(CrlfSource)).ToArray();
+        await File.WriteAllBytesAsync(fileA, originalBytes);
+        await File.WriteAllBytesAsync(fileB, Encoding.UTF8.GetBytes(CrlfSource));
+
+        using var manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        manager.EolModeOverride = EolMode.Crlf;
+        await manager.LoadSolutionAsync(fixture.SolutionPath);
+
+        // Dictionary order writes A before B, so A is written and then rolled back when B's write is refused.
+        File.SetAttributes(fileB, FileAttributes.ReadOnly);
+        try
+        {
+            var changes = new Dictionary<FilePathWrapper, string>
+            {
+                [fileA] = CrlfSource.Replace("=> 1", "=> 2"),
+                [fileB] = CrlfSource.Replace("=> 1", "=> 2"),
+            };
+            var result = await manager.ApplyProposedChangesAsync(
+                changes, retryCount: 0, validateChanges: false, rollbackOnPartialFailure: true);
+
+            Assert.That(result.IsError, Is.True, "B's refused write must fail the batch");
+            Assert.That(result.FailedFiles.Count, Is.EqualTo(1));
+            Assert.That(result.RolledBackFiles, Does.Contain(fileA));
+            Assert.That(await File.ReadAllBytesAsync(fileA), Is.EqualTo(originalBytes), "rollback must restore the UTF-8 BOM");
+        }
+        finally
+        {
+            File.SetAttributes(fileB, FileAttributes.Normal);
+        }
+    }
 }

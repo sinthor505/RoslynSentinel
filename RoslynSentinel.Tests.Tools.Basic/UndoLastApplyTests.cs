@@ -378,4 +378,34 @@ public class UndoLastApplyTests
         Assert.That((string)result.SuccessData!, Does.Contain("Reverted 1 files").And.Not.Contain("Failures"));
         Assert.That(await File.ReadAllBytesAsync(targetFile), Is.EqualTo(originalBytes), "undo must restore the exact pre-image bytes");
     }
+
+    [Test]
+    [Description("Apply on a BOM-prefixed mixed-EOL file converges to CRLF and keeps the BOM, and UndoLastApply then restores the exact BOM-prefixed pre-image bytes")]
+    public async Task UndoLastApply_AfterApplyOnBomMixedEolFile_RestoresBomBytesAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        var targetFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "BomMixedEol.cs");
+        var originalBytes = new byte[] { 0xEF, 0xBB, 0xBF }.Concat(System.Text.Encoding.UTF8.GetBytes(MixedEolSource)).ToArray();
+        await File.WriteAllBytesAsync(targetFile, originalBytes);
+
+        // EOL and BOM tracking is captured at load, so the file must exist on disk before LoadSolutionAsync.
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        workspaceManager.EolModeOverride = EolMode.Crlf;
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var apply = await workspaceManager.ApplyProposedChangesAsync(
+            new Dictionary<FilePathWrapper, string> { [new FilePathWrapper(targetFile)] = MixedEolWithInsertedLine });
+        Assert.That(!apply.IsError, Is.True, apply.Summary);
+
+        var changeId = "change-bom-mixed-eol-roundtrip";
+        await WriteUndoBlobAsync(fixture, changeId, targetFile, apply.PreImages![targetFile]!);
+        workspaceManager.ClearExternalFileChanges();
+
+        var result = await workspaceTools.UndoLastApplyTool(reason: "test message", changeId: changeId);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That((string)result.SuccessData!, Does.Contain("Reverted 1 files").And.Not.Contain("Failures"));
+        Assert.That(await File.ReadAllBytesAsync(targetFile), Is.EqualTo(originalBytes), "undo must restore the exact BOM-prefixed pre-image bytes");
+    }
 }
