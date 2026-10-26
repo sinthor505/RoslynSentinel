@@ -355,14 +355,27 @@ public static class RoslynFormattingHelper
     /// </summary>
     /// <param name="document">The document before the rewrite. Supplies the dominant line ending, the encoding and the pre-image for line matching.</param>
     /// <param name="rewrittenRoot">The root after the rewrite, with <see cref="Formatter.Annotation"/> on the changed nodes.</param>
+    [Obsolete("Use the eol overload")]
     public static async Task<Document> FormatAnnotatedSpansAsync(Document document, SyntaxNode rewrittenRoot, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(rewrittenRoot);
 
         var originalSourceText = await document.GetTextAsync(cancellationToken);
+        return await FormatAnnotatedSpansAsync(document, rewrittenRoot, EolUtilities.DetectDominantEol(originalSourceText), cancellationToken);
+    }
+
+    /// <summary>
+    /// Eol-explicit form of <see cref="FormatAnnotatedSpansAsync(Document, SyntaxNode, CancellationToken)"/>: <paramref name="eol"/> is the line ending every changed line takes, instead of the dominant ending of <paramref name="document"/>.
+    /// </summary>
+    public static async Task<Document> FormatAnnotatedSpansAsync(Document document, SyntaxNode rewrittenRoot, string eol, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(rewrittenRoot);
+
+        var originalSourceText = await document.GetTextAsync(cancellationToken);
         var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(rewrittenRoot), Formatter.Annotation, cancellationToken: cancellationToken);
-        return await WithChangedLinesInDominantEolAsync(formattedDoc, originalSourceText, cancellationToken);
+        return await WithChangedLinesInDominantEolAsync(formattedDoc, originalSourceText, eol, cancellationToken);
     }
 
     /// <summary>
@@ -373,9 +386,22 @@ public static class RoslynFormattingHelper
     /// </summary>
     /// <param name="document">The document before the rewrite.</param>
     /// <param name="rewrittenRoot">The root after the rewrite, with <see cref="Formatter.Annotation"/> on the changed nodes.</param>
+    [Obsolete("Use the eol overload")]
     public static async Task<string> FormatAnnotatedTextAsync(Document document, SyntaxNode rewrittenRoot, CancellationToken cancellationToken = default)
     {
-        var formattedDoc = await FormatAnnotatedSpansAsync(document, rewrittenRoot, cancellationToken);
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(rewrittenRoot);
+
+        var eol = EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken));
+        return await FormatAnnotatedTextAsync(document, rewrittenRoot, eol, cancellationToken);
+    }
+
+    /// <summary>
+    /// Eol-explicit form of the <see cref="Document"/> overload of <c>FormatAnnotatedTextAsync</c>: <paramref name="eol"/> is the line ending every changed line takes.
+    /// </summary>
+    public static async Task<string> FormatAnnotatedTextAsync(Document document, SyntaxNode rewrittenRoot, string eol, CancellationToken cancellationToken = default)
+    {
+        var formattedDoc = await FormatAnnotatedSpansAsync(document, rewrittenRoot, eol, cancellationToken);
         return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
@@ -388,12 +414,23 @@ public static class RoslynFormattingHelper
     /// </summary>
     /// <param name="originalText">The file text before the rewrite.</param>
     /// <param name="rewrittenRoot">The root after the rewrite, with <see cref="Formatter.Annotation"/> on the changed nodes.</param>
+    [Obsolete("Use the eol overload")]
     public static async Task<string> FormatAnnotatedTextAsync(Microsoft.CodeAnalysis.Text.SourceText originalText, SyntaxNode rewrittenRoot, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(originalText);
+
+        return await FormatAnnotatedTextAsync(originalText, rewrittenRoot, EolUtilities.DetectDominantEol(originalText), cancellationToken);
+    }
+
+    /// <summary>
+    /// Eol-explicit form of the <see cref="Microsoft.CodeAnalysis.Text.SourceText"/> overload of <c>FormatAnnotatedTextAsync</c>: <paramref name="eol"/> is the line ending every changed line takes.
+    /// </summary>
+    public static async Task<string> FormatAnnotatedTextAsync(Microsoft.CodeAnalysis.Text.SourceText originalText, SyntaxNode rewrittenRoot, string eol, CancellationToken cancellationToken = default)
     {
         using var workspace = new AdhocWorkspace();
         var project = workspace.AddProject("AnnotatedTextFormat", LanguageNames.CSharp);
         var document = workspace.AddDocument(project.Id, "Source.cs", originalText);
-        return await FormatAnnotatedTextAsync(document, rewrittenRoot, cancellationToken);
+        return await FormatAnnotatedTextAsync(document, rewrittenRoot, eol, cancellationToken);
     }
 
     /// <summary>
@@ -443,13 +480,25 @@ public static class RoslynFormattingHelper
     /// </summary>
     /// <param name="document">The document to format (possibly already carrying an edited root).</param>
     /// <param name="eolReference">Optional pre-edit text of the document. When given it supplies the dominant line ending, the pre-image for the changed-lines comparison, the encoding and the checksum algorithm, so lines the edit or the formatter changed take the original document's ending even if the edited text is dominated by another one. Null means <paramref name="document"/>'s own text.</param>
+    [Obsolete("Use the eol overload")]
     public static async Task<Document> FormatWholeDocumentAsync(Document document, Microsoft.CodeAnalysis.Text.SourceText? eolReference = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(document);
 
         var originalSourceText = eolReference ?? await document.GetTextAsync(cancellationToken);
+        return await FormatWholeDocumentAsync(document, EolUtilities.DetectDominantEol(originalSourceText), eolReference, cancellationToken);
+    }
+
+    /// <summary>
+    /// Eol-explicit form of <see cref="FormatWholeDocumentAsync(Document, Microsoft.CodeAnalysis.Text.SourceText?, CancellationToken)"/>: <paramref name="eol"/> is the line ending every changed line takes, instead of the dominant ending of <paramref name="eolReference"/> (or of <paramref name="document"/>).
+    /// </summary>
+    public static async Task<Document> FormatWholeDocumentAsync(Document document, string eol, Microsoft.CodeAnalysis.Text.SourceText? eolReference = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var originalSourceText = eolReference ?? await document.GetTextAsync(cancellationToken);
         var formattedDoc = await Formatter.FormatAsync(document, cancellationToken: cancellationToken);
-        return await WithChangedLinesInDominantEolAsync(formattedDoc, originalSourceText, cancellationToken);
+        return await WithChangedLinesInDominantEolAsync(formattedDoc, originalSourceText, eol, cancellationToken);
     }
 
     /// <summary>
@@ -458,11 +507,10 @@ public static class RoslynFormattingHelper
     /// terminator of any line that survived unchanged (<see cref="EolUtilities.NormalizeEolOfChangedLines"/>), and keeps
     /// the original encoding and checksum algorithm. Returns <paramref name="formattedDoc"/> itself when nothing changed.
     /// </summary>
-    private static async Task<Document> WithChangedLinesInDominantEolAsync(Document formattedDoc, Microsoft.CodeAnalysis.Text.SourceText originalSourceText, CancellationToken cancellationToken)
+    private static async Task<Document> WithChangedLinesInDominantEolAsync(Document formattedDoc, Microsoft.CodeAnalysis.Text.SourceText originalSourceText, string eol, CancellationToken cancellationToken)
     {
-        var dominantEol = EolUtilities.DetectDominantEol(originalSourceText);
         var formattedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
-        var normalizedText = EolUtilities.NormalizeEolOfChangedLines(originalSourceText.ToString(), formattedText, dominantEol);
+        var normalizedText = EolUtilities.NormalizeEolOfChangedLines(originalSourceText.ToString(), formattedText, eol);
         if (normalizedText == formattedText)
         {
             return formattedDoc;
