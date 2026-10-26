@@ -214,7 +214,10 @@ Step 0 results (2026-10-18):
   - `auto` (decided 2026-10-25, after review: a majority-based "more mixed" guard contradicts the resolver, which
     gives a mixed file its `.editorconfig`/platform target, not its majority): always convert the whole file, then
     assert the final bytes are uniform.
-    - Single-style pre-image (CRLF-only or LF-only): the target is that style, so a write that changes it is refused.
+    - Single-style pre-image (CRLF-only or LF-only): the target is that style, so text arriving in the other style
+      is converted to it (not refused; the early `ValidateAndApplyHelper` guard goes away in 5c and the tests that
+      assert `EolChangeRefused` for a style flip change to assert conversion). The only refusal left is a
+      defensive "final bytes not uniform" check.
     - Mixed, CR-only, no-newline pre-image or new file: the target is the resolver's value; the file converges
       on first touch.
     - No "minority" or "flip" counting remains; `NormalizeEolOfChangedLines` leaves the write path.
@@ -223,11 +226,25 @@ Step 0 results (2026-10-18):
   - The chokepoint reads the mode from an overridable property (default: `EolPolicyOptions.Mode`) so tests do
     not touch the static (decided 2026-10-25).
   - Make the whitespace-only no-op skip (`EnableAstNormalizationNoOpCheck`) not drop an EOL-only change.
-  - Keep `UndoLastApply` `exactRestore` exempt.
-  - The refusal names the tool and file (structured `EolChangeRefused`, no raw exception).
+  - Keep `UndoLastApply` `exactRestore` exempt, and exempt the failed-write rollback restore the same way (it
+    writes the pre-image back unchanged). Consequence, accepted: in a foreign `auto` repo an undo or rollback can
+    restore a file that was mixed before the change, so it is mixed again until the next touch.
+  - Attribution (decided 2026-10-25): whole-file conversion silently hides which tool produced wrong-EOL text, and
+    the chokepoint cannot see writes that bypass it (shell, IDE, raw `Write`, `dotnet new`). So when the pre-image
+    read from disk is not uniform, or is uniform in a style other than the resolved target, the chokepoint records a
+    finding naming the file and the calling tool ("pre-image written outside the chokepoint") and still converts.
+    This is a record, not a refusal. The `build.ps1` ratchet (Step 3) is the other signal and does not run under
+    `RunTest`; decide in Step 6 whether to add a test-run check.
+  - The refusal names the tool and file (structured `EolChangeRefused`, no raw exception). Its only remaining
+    trigger is the defensive "final bytes not uniform" check.
 - Done when: chokepoint tests cover new LF file under `crlf`, mixed pre-image converging, LF
-  injection into a CRLF file under `auto`, the EOL-only change surviving the no-op skip, and undo;
-  `Build` 0 errors; baselines unchanged.
+  text injected into a CRLF file under `auto` (written as uniform CRLF, not refused), the EOL-only change surviving
+  the no-op skip, undo and failed-write rollback leaving the pre-image unchanged, and the attribution finding for a
+  mixed pre-image; `Build` 0 errors; baselines unchanged.
+  - End-to-end case (replaces the finding #12 pin, see `plan_pinned_tool_defect_fixes.md`): a mixed pre-image
+    through `ExtractMethodSafe` under `crlf` leaves uniform CRLF on disk. Then reword the TODO in
+    `MsToolAugmentEngineFormatCharacterizationTests.cs` (the `ExtractMethod_MixedEol_StrayCrlfOnBlankLine...` test)
+    to say the helper-level placement is superseded by this step.
 
 ### Step 6 - Route bare writes through the chokepoint
 - Files: per the Step 0 sweep: `MsToolAugmentEngine.FormatDocumentSafeAsync` (:732, and its
