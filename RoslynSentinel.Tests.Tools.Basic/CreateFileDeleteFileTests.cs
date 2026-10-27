@@ -983,4 +983,49 @@ public class CreateFileDeleteFileTests
         Assert.That(bytes.Where((b, i) => b == (byte)'\n' && (i == 0 || bytes[i - 1] != (byte)'\r')).Count(), Is.Zero, "no bare LF byte may survive");
         Assert.That(bytes.Contains((byte)'\r'), Is.True, "the file must be CRLF");
     }
+
+    [Test]
+    public async Task ReplaceFile_MixedPreImage_UnderCrlf_RecordsOneWriteChokepointFindingAsync()
+    {
+        // The pre-image on disk mixes CRLF and LF. The chokepoint must still apply the write and attribute the mixed pre-image in one envelope finding.
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        workspaceManager.EolModeOverride = EolMode.Crlf;
+        var targetFile = Path.Combine(fixture.SolutionDirectory, "EolMixedPreImage.cs");
+        await File.WriteAllTextAsync(targetFile, "namespace MyApp.Eol;\r\npublic class Foo\n{\r\n}\n");
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+
+        // validateOnApply: false -> the replacement is not a valid compilation unit for this fixture; this test only checks the EOL finding.
+        var result = await wholeFileWriteTools.WriteFileTool(reason: "test message", WriteFileOperation.ReplaceFile, targetFile, "public class Replaced { }\n", validateOnApply: false);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(result.Findings?.Count ?? 0, Is.EqualTo(1));
+        Assert.That(result.Findings![0].Source, Is.EqualTo("WriteChokepoint"));
+    }
+
+    [Test]
+    public async Task ReplaceFile_UniformCrlfPreImage_UnderCrlf_RecordsNoFindingsAsync()
+    {
+        // A uniform CRLF pre-image already matches the resolved target, so the chokepoint has nothing to attribute.
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        workspaceManager.EolModeOverride = EolMode.Crlf;
+        var targetFile = Path.Combine(fixture.SolutionDirectory, "EolUniformCrlfPreImage.cs");
+        await File.WriteAllTextAsync(targetFile, "namespace MyApp.Eol;\r\npublic class Foo\r\n{\r\n}\r\n");
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+
+        // validateOnApply: false -> the replacement is not a valid compilation unit for this fixture; this test only checks the EOL finding.
+        var result = await wholeFileWriteTools.WriteFileTool(reason: "test message", WriteFileOperation.ReplaceFile, targetFile, "public class Replaced { }\n", validateOnApply: false);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(result.Findings?.Count ?? 0, Is.Zero);
+    }
 }

@@ -99,7 +99,9 @@ public class WholeFileWriteTools
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
-                SuccessData = strippedResult
+                SuccessData = strippedResult,
+                // chokepoint findings (EOL attribution) are lifted to the envelope
+                Findings = result.Findings ?? []
             };
         }
         catch (Exception ex)
@@ -150,7 +152,8 @@ public class WholeFileWriteTools
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
-                SuccessData = strippedResult
+                SuccessData = strippedResult,
+                Findings = result.Findings ?? []
             };
         }
         catch (Exception ex)
@@ -412,7 +415,8 @@ public class WholeFileWriteTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = false,
-                        SuccessData = responseData
+                        SuccessData = responseData,
+                        Findings = result.Findings ?? []
                     };
                 }
 

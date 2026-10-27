@@ -708,7 +708,8 @@ public class WorkspaceFileEditImpl
                     return new SentinelCallToolResult<ReplaceSnippetResult>()
                     {
                         IsError = false,
-                        SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent)
+                        SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent),
+                        Findings = result.Findings ?? []
                     };
                 }
                 catch (Exception ex)
@@ -948,7 +949,8 @@ public class WorkspaceFileEditImpl
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
                 IsError = false,
-                SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent)
+                SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent),
+                Findings = result.Findings ?? []
             };
         }
         catch (Exception ex)
@@ -1052,15 +1054,19 @@ public class WorkspaceFileEditImpl
 
             await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "create_file", result, cancellationToken: cancellationToken);
             var strippedResult = result with { PreImages = null };
+            var createFileFindings = new List<Finding>();
+            if (_writeAdvice.IsExposed("WriteFile"))
+            {
+                createFileFindings.Add(new Finding("CreateFile",
+                    $"{ToolCallHint.Call("WriteFile")} is also available on this server and can create a file with its full body " +
+                    $"in one call, instead of populating it afterward via {ToolCallHint.Call("Member", ("operation", "addMember"))}."));
+            }
+            createFileFindings.AddRange(result.Findings ?? []);
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
                 SuccessData = strippedResult,
-                Findings = _writeAdvice.IsExposed("WriteFile")
-                    ? [new Finding("CreateFile",
-                        $"{ToolCallHint.Call("WriteFile")} is also available on this server and can create a file with its full body " +
-                        $"in one call, instead of populating it afterward via {ToolCallHint.Call("Member", ("operation", "addMember"))}.")]
-                    : []
+                Findings = createFileFindings
             };
         }
         catch (Exception ex)
