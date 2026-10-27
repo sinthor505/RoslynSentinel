@@ -2826,7 +2826,7 @@ public class MemberRefactoringEngine
 
         if (targetIsBaseType)
         {
-            return await MoveMembersToBaseTypeAsync(solution, filePath, root, classNode, membersToMove, baseType!, cancellationToken);
+            return await MoveMembersToBaseTypeAsync(solution, filePath, root, classNode, membersToMove, baseType!, _workspaceManager, cancellationToken);
         }
 
         // Moving an INSTANCE member to anywhere other than an existing base class requires rewriting
@@ -2880,7 +2880,7 @@ public class MemberRefactoringEngine
             }
 
             var conversionNotes = new List<string>();
-            var moved = await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, staticTargetMemberSymbols, instanceMembersToConvert, conversionNotes, oldMember, cancellationToken);
+            var moved = await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, staticTargetMemberSymbols, instanceMembersToConvert, conversionNotes, oldMember, _workspaceManager, cancellationToken);
             return moved with { Notes = conversionNotes };
         }
 
@@ -2909,11 +2909,11 @@ public class MemberRefactoringEngine
         if (targetDoc?.FilePath != null && targetClassNode != null)
         {
             var existingClassMemberSymbols = membersToMove.Select(m => semanticModel?.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m)).Where(s => s != null).Cast<ISymbol>().ToList();
-            return await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, existingClassMemberSymbols, null, null, oldMember, cancellationToken);
+            return await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, existingClassMemberSymbols, null, null, oldMember, _workspaceManager, cancellationToken);
         }
 
         var newClassMemberSymbols = membersToMove.Select(m => semanticModel?.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m)).Where(s => s != null).Cast<ISymbol>().ToList();
-        return await MoveMembersToNewClassAsync(solution, filePath, root, classNode, membersToMove, targetClassName, newClassMemberSymbols, oldMember, cancellationToken);
+        return await MoveMembersToNewClassAsync(solution, filePath, root, classNode, membersToMove, targetClassName, newClassMemberSymbols, oldMember, _workspaceManager, cancellationToken);
     }
 
     /// <summary>
@@ -3186,7 +3186,7 @@ public class MemberRefactoringEngine
         }
     }
 
-    private static async Task<MoveMemberResult> MoveMembersToBaseTypeAsync(Solution solution, FilePathWrapper filePath, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, INamedTypeSymbol baseType, CancellationToken cancellationToken)
+    private static async Task<MoveMemberResult> MoveMembersToBaseTypeAsync(Solution solution, FilePathWrapper filePath, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, INamedTypeSymbol baseType, IEolResolver eolResolver, CancellationToken cancellationToken)
     {
         if (baseType.DeclaringSyntaxReferences.Length == 0)
         {
@@ -3226,7 +3226,7 @@ public class MemberRefactoringEngine
 
         var sourceEdits = MoveMemberTextEdits.BuildSourceEdits(sourceText, membersToMove, Array.Empty<TextChange>(), out _);
 
-        var baseEol = EolUtilities.DetectDominantEol(baseText);
+        var baseEol = eolResolver.ResolveEol(baseFile, baseText.ToString());
         var baseIndent = MoveMemberTextEdits.GetTargetMemberIndentation(baseText, baseClassNode);
         var blocks = membersToMove.Select(m => MoveMemberTextEdits.BuildMovedMemberText(sourceText, m, MoveMemberTextEdits.BuildPullUpModifierEdits(m), MoveMemberTextEdits.GetMemberIndentation(sourceText, m), baseIndent, baseEol)).ToList();
         var insertion = MoveMemberTextEdits.BuildInsertion(baseText, baseClassNode, MoveMemberTextEdits.JoinMovedMembers(membersToMove, blocks, baseEol), baseEol);
@@ -3332,7 +3332,7 @@ public class MemberRefactoringEngine
     /// rewrite is then unambiguous everywhere (ClassA.Foo() -> TargetClassName.Foo(), no receiver
     /// instance involved) -> MoveMemberAsync's caller already guarantees every member here is static.
     /// </summary>
-    private static async Task<MoveMemberResult> MoveMembersToExistingClassAsync(Solution solution, FilePathWrapper filePath, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, FilePathWrapper targetFilePath, ClassDeclarationSyntax targetClassNode, string targetClassName, List<ISymbol> memberSymbols, List<MemberDeclarationSyntax>? convertToStatic, List<string>? notesSink, MoveMemberOldMember oldMember, CancellationToken cancellationToken)
+    private static async Task<MoveMemberResult> MoveMembersToExistingClassAsync(Solution solution, FilePathWrapper filePath, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, FilePathWrapper targetFilePath, ClassDeclarationSyntax targetClassNode, string targetClassName, List<ISymbol> memberSymbols, List<MemberDeclarationSyntax>? convertToStatic, List<string>? notesSink, MoveMemberOldMember oldMember, IEolResolver eolResolver, CancellationToken cancellationToken)
     {
         var sourceDocument = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).First()!;
         var targetDocument = solution.GetDocumentIdsWithFilePath(targetFilePath).Select(solution.GetDocument).First()!;
@@ -3371,14 +3371,14 @@ public class MemberRefactoringEngine
         else
         {
             var deprecated = oldMember == MoveMemberOldMember.keepAsDeprecatedWrapper;
-            var eol = EolUtilities.DetectDominantEol(sourceText);
+            var eol = eolResolver.ResolveEol(sourceDocument.FilePath ?? string.Empty, sourceText.ToString());
             var targetSymbol = (await targetDocument.GetSemanticModelAsync(cancellationToken))?.GetDeclaredSymbol(targetClassNode, cancellationToken) as INamedTypeSymbol;
             var qualifiedReceiver = targetSymbol?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ?? $"global::{targetClassName}";
             sourceEdits = MoveMemberTextEdits.BuildSourceEdits(sourceText, membersToMove, sourceReferenceEdits, membersToMove.ToHashSet(), m => MoveMemberTextEdits.BuildForwarder((MethodDeclarationSyntax)m, qualifiedReceiver, deprecated, targetClassName, eol), out insideMovedMemberEdits);
         }
 
         // Target document: append the moved members, re-indented to the target class and in its EOL.
-        var targetEol = EolUtilities.DetectDominantEol(targetText);
+        var targetEol = eolResolver.ResolveEol(targetDocument.FilePath ?? string.Empty, targetText.ToString());
         var targetIndent = MoveMemberTextEdits.GetTargetMemberIndentation(targetText, targetClassNode);
         var blocks = membersToMove.Select(m => MoveMemberTextEdits.BuildMovedMemberText(sourceText, m, insideMovedMemberEdits.Where(e => m.FullSpan.Contains(e.Span)).ToList(), MoveMemberTextEdits.GetMemberIndentation(sourceText, m), targetIndent, targetEol)).ToList();
         var insertion = MoveMemberTextEdits.BuildInsertion(targetText, targetClassNode, MoveMemberTextEdits.JoinMovedMembers(membersToMove, blocks, targetEol), targetEol);
@@ -3418,13 +3418,13 @@ public class MemberRefactoringEngine
         return new MoveMemberResult(result, new List<SkippedCallSite>(), AppliedEdits: appliedEdits);
     }
 
-    private static async Task<MoveMemberResult> MoveMembersToNewClassAsync(Solution solution, FilePathWrapper filePath, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, string newClassName, List<ISymbol> memberSymbols, MoveMemberOldMember oldMember, CancellationToken cancellationToken)
+    private static async Task<MoveMemberResult> MoveMembersToNewClassAsync(Solution solution, FilePathWrapper filePath, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, string newClassName, List<ISymbol> memberSymbols, MoveMemberOldMember oldMember, IEolResolver eolResolver, CancellationToken cancellationToken)
     {
         // Static members only (guaranteed by MoveMemberAsync's caller) -> no `this.Member()` case to
         // rewrite, and no accessor property needed; bare Member() becomes NewClassName.Member() directly.
         var sourceDocument = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).First()!;
         var sourceText = await sourceDocument.GetTextAsync(cancellationToken);
-        var eol = EolUtilities.DetectDominantEol(sourceText);
+        var eol = eolResolver.ResolveEol(sourceDocument.FilePath ?? string.Empty, sourceText.ToString());
 
         var editsByDocument = await CollectStaticMoveReferenceEditsAsync(solution, sourceDocument.Id, membersToMove, memberSymbols, newClassName, cancellationToken);
         var movedBodyEdits = editsByDocument.TryGetValue(sourceDocument.Id, out var existingSourceEdits) ? existingSourceEdits : new List<TextChange>();
@@ -3489,7 +3489,7 @@ public class MemberRefactoringEngine
     /// written into an existing target (empty for a brand-new class file): the data MovePositionMap needs to map
     /// source positions into the trial text.
     /// </summary>
-    public static async Task<(Dictionary<DocumentId, SourceText> Texts, Dictionary<FilePathWrapper, string> NewFiles, List<MovedMemberRegion> MovedRegions)> AddInstanceMoveStructuralEditsAsync(Dictionary<DocumentId, List<TextChange>> editsByDocument, Document sourceDocument, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, string targetClassName, Document? targetDocument, ClassDeclarationSyntax? targetClassNode, bool createNewClassFile, CancellationToken cancellationToken,
+    public static async Task<(Dictionary<DocumentId, SourceText> Texts, Dictionary<FilePathWrapper, string> NewFiles, List<MovedMemberRegion> MovedRegions)> AddInstanceMoveStructuralEditsAsync(Dictionary<DocumentId, List<TextChange>> editsByDocument, Document sourceDocument, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, string targetClassName, Document? targetDocument, ClassDeclarationSyntax? targetClassNode, bool createNewClassFile, IEolResolver eolResolver, CancellationToken cancellationToken,
         // Deliberate deviation from the token-last rule: an existing test caller passes the token positionally, so the keep-mode parameters were appended after it instead of before.
         ISet<MemberDeclarationSyntax>? keptMembers = null, Func<MemberDeclarationSyntax, string>? forwarderText = null)
     {
@@ -3504,7 +3504,7 @@ public class MemberRefactoringEngine
             bool sameFile = targetDocument.Id == sourceDocument.Id;
             var targetText = sameFile ? sourceText : await targetDocument.GetTextAsync(cancellationToken);
             texts[targetDocument.Id] = targetText;
-            var targetEol = EolUtilities.DetectDominantEol(targetText);
+            var targetEol = eolResolver.ResolveEol(targetDocument.FilePath ?? string.Empty, targetText.ToString());
             var targetIndent = MoveMemberTextEdits.GetTargetMemberIndentation(targetText, targetClassNode);
             var blocks = membersToMove.Select(m => MoveMemberTextEdits.BuildMovedMemberText(sourceText, m, insideMovedMemberEdits.Where(e => m.FullSpan.Contains(e.Span)).ToList(), MoveMemberTextEdits.GetMemberIndentation(sourceText, m), targetIndent, targetEol)).ToList();
             var insertion = MoveMemberTextEdits.BuildInsertion(targetText, targetClassNode, MoveMemberTextEdits.JoinMovedMembers(membersToMove, blocks, targetEol), targetEol);
@@ -3538,7 +3538,7 @@ public class MemberRefactoringEngine
         {
             var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
             var newFilePath = Path.Combine(Path.GetDirectoryName(sourceDocument.FilePath)!, $"{targetClassName}.cs");
-            newFiles[newFilePath] = MoveMemberTextEdits.BuildNewClassFileText(root.Usings.Select(u => u.ToString()).ToList(), ns?.Name.ToString(), ns is FileScopedNamespaceDeclarationSyntax, targetClassName, sourceText, membersToMove, insideMovedMemberEdits, EolUtilities.DetectDominantEol(sourceText));
+            newFiles[newFilePath] = MoveMemberTextEdits.BuildNewClassFileText(root.Usings.Select(u => u.ToString()).ToList(), ns?.Name.ToString(), ns is FileScopedNamespaceDeclarationSyntax, targetClassName, sourceText, membersToMove, insideMovedMemberEdits, eolResolver.ResolveEol(newFilePath, string.Empty));
         }
 
         return (texts, newFiles, movedRegions);
@@ -3956,7 +3956,7 @@ public class MemberRefactoringEngine
             forwarderText = m => MoveMemberTextEdits.BuildForwarder((MethodDeclarationSyntax)m, receiver, deprecated, targetClassName, eol);
         }
 
-        var (texts, newFiles, _) = await AddInstanceMoveStructuralEditsAsync(editsByDocument, document, root, classNode, membersToMove, targetClassName, existingTargetDoc, existingTargetClassNode, true, cancellationToken, keptMembers, forwarderText);
+        var (texts, newFiles, _) = await AddInstanceMoveStructuralEditsAsync(editsByDocument, document, root, classNode, membersToMove, targetClassName, existingTargetDoc, existingTargetClassNode, true, _workspaceManager, cancellationToken, keptMembers, forwarderText);
         // AppliedEdits covers every existing file the move touches (source, target and caller documents); the brand-new
         // class file in newFiles has no original text, so it is added to the result below but gets no edit entry.
         var (result, appliedEdits) = await MaterializeDocumentEditsWithAppliedEditsAsync(solution, editsByDocument, texts, cancellationToken);
@@ -4428,7 +4428,7 @@ public class MemberRefactoringEngine
         // Built from the same text-edit definition the apply path uses (no new class file is previewed), so the
         // trial compile sees exactly the structural edits a real move would write.
         var previewEdits = new Dictionary<DocumentId, List<TextChange>>();
-        var (previewTexts, _, movedRegions) = await AddInstanceMoveStructuralEditsAsync(previewEdits, document, root, classNode, membersToMove, targetClassName, destinationDoc, destinationClassNode, false, cancellationToken);
+        var (previewTexts, _, movedRegions) = await AddInstanceMoveStructuralEditsAsync(previewEdits, document, root, classNode, membersToMove, targetClassName, destinationDoc, destinationClassNode, false, _workspaceManager, cancellationToken);
         var (previewChanges, previewAppliedEdits) = await MaterializeDocumentEditsWithAppliedEditsAsync(solution, previewEdits, previewTexts, cancellationToken);
         var validationOutcome = await _validationEngine.ValidateChangesWithCandidateAsync(previewChanges, cancellationToken: cancellationToken);
         // The candidate Solution the trial diagnostics were computed from: its text for each previewChanges path is exactly the

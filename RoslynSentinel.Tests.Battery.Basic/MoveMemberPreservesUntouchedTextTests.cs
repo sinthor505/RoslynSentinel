@@ -829,7 +829,7 @@ public class MoveMemberPreservesUntouchedTextTests
         {
             previewEdits[crefDocId] = crefDocEdits.ToList();
         }
-        var (previewTexts, previewNewFiles, _) = await MemberRefactoringEngine.AddInstanceMoveStructuralEditsAsync(previewEdits, sourceDocument, root, classNode, membersToMove, "B", targetDocument, targetClassNode, false, CancellationToken.None);
+        var (previewTexts, previewNewFiles, _) = await MemberRefactoringEngine.AddInstanceMoveStructuralEditsAsync(previewEdits, sourceDocument, root, classNode, membersToMove, "B", targetDocument, targetClassNode, false, workspace.Manager, CancellationToken.None);
         var preview = await MemberRefactoringEngine.MaterializeDocumentEditsAsync(solution, previewEdits, previewTexts, CancellationToken.None);
 
         var applied = await engine.MoveMemberAsync(workspace.PathOf("Source.cs"), "A", new[] { "Count" }, "B", null, CancellationToken.None);
