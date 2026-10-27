@@ -2171,7 +2171,7 @@ public class MemberRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, container, newContainer, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, container, newContainer, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -2209,7 +2209,7 @@ public class MemberRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Params keyword toggled.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, lastParam, newParam, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, lastParam, newParam, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -2276,7 +2276,7 @@ public class MemberRefactoringEngine
             throw new ToolInvalidArgumentException($"newMemberSource declares a type, but Member(replace) replaces members, not types. To replace a type use {ToolCallHint.Call("ReplaceSnippet")} or {ToolCallHint.Call("ApplyDiff")}."); // hint-ok: Member(replace) here is prose describing the operation, not a call to make
         }
 
-        var replacedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, member, newMember, cancellationToken);
+        var replacedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, member, newMember, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         if (string.Equals(replacedText, root.ToFullString(), StringComparison.Ordinal))
         {
             return new DocumentEditResult
@@ -2358,7 +2358,7 @@ public class MemberRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = $"// Added {addedDescription}.",
-            UpdatedText = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(document, root!, typeContainer, typeContainer.Members.Count, newMember, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(document, root!, typeContainer, typeContainer.Members.Count, newMember, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -2424,7 +2424,7 @@ public class MemberRefactoringEngine
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
                 Message = $"// Added {DescribeParsedMember(newType)}.",
-                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, targetNamespace, newNamespace, cancellationToken)
+                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, targetNamespace, newNamespace, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
             };
         }
 
@@ -2432,7 +2432,7 @@ public class MemberRefactoringEngine
         // ReplaceNodeAndFormatReplacementAsync needs oldNode to be a strict descendant of the tracked root,
         // which the root itself never is, so format the freshly-built root directly instead.
         var newRoot = root.AddMembers(newType.WithAdditionalAnnotations(Formatter.Annotation));
-        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -2549,7 +2549,7 @@ public class MemberRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member removed.",
-            UpdatedText = await RoslynFormattingHelper.RemoveNodePreservingTriviaAsync(document, root, member, cancellationToken: cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.RemoveNodePreservingTriviaAsync(document, root, member, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken: cancellationToken)
         };
     }
 
@@ -4037,7 +4037,7 @@ public class MemberRefactoringEngine
                 {
                     Outcome = EditOutcome.Modified,
                     FilePath = filePath,
-                    UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, methodNode, propertyNode, cancellationToken)
+                    UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, methodNode, propertyNode, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
                 };
             }
         }
@@ -4100,7 +4100,7 @@ public class MemberRefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, methodNode, newMethodNode, cancellationToken)
+                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, methodNode, newMethodNode, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
             };
         }
 
@@ -4317,14 +4317,14 @@ public class MemberRefactoringEngine
         // Annotate only the two nodes this edit created or rewrote; the rest of the type keeps its spacing and line endings.
         var newParent = parentType.ReplaceNode(containingMethod, updatedMethod.WithAdditionalAnnotations(Formatter.Annotation)).AddMembers(extractedMethod.WithAdditionalAnnotations(Formatter.Annotation));
         var newRoot = root.ReplaceNode(parentType, newParent);
-        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         var updatedContent = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
         var beforeSnippet = string.Concat(selectedStatements.Select(s => s.ToFullString())).Trim();
         // callStatement carries the original statement's leading trivia (the user's indentation, and any comment
         // above it) for the in-place edit above. The standalone snippet is a new node, so drop that copied trivia
         // before formatting it, so the snippet is only the statement.
-        var callSiteText = await RoslynFormattingHelper.FormatNewSnippetAsync(document, SyntaxFactory.GlobalStatement(callStatement.WithoutLeadingTrivia()), cancellationToken);
-        var extractedMethodText = await RoslynFormattingHelper.FormatNewSnippetAsync(document, extractedMethod, cancellationToken);
+        var callSiteText = await RoslynFormattingHelper.FormatNewSnippetAsync(document, SyntaxFactory.GlobalStatement(callStatement.WithoutLeadingTrivia()), await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
+        var extractedMethodText = await RoslynFormattingHelper.FormatNewSnippetAsync(document, extractedMethod, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         return new ExtractMethodResult(false, null, beforeSnippet, callSiteText, extractedMethodText, updatedContent);
     }
 
@@ -4820,7 +4820,7 @@ public class MemberRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, container, newContainer, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, container, newContainer, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -4866,7 +4866,7 @@ public class MemberRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, container, newContainer, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, container, newContainer, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
