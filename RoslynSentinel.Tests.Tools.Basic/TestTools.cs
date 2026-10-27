@@ -1,0 +1,47 @@
+// Construction factories for the Tools.Basic classes that Tests.Tools.Basic builds by hand; the engine counterpart is
+// TestEngines (see its header for the ActivatorUtilities + fresh-container design). The workspace manager is always a
+// parameter, never created here, so several constructions in one test keep sharing the manager the test owns.
+
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tools.Basic;
+
+namespace RoslynSentinel.Tests.Battery.Basic;
+
+public static class TestTools
+{
+    // TODO WholeFileWriteTools (25 survey sites, shape [wm, workspaceTools, validation, diff, logger, nav]) and the other
+    // tool classes (DocumentationTools, ...) have no factory yet; add them when their slice is migrated.
+
+    public static WorkspaceReadNavigationImpl WorkspaceReadNavigationImpl(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<WorkspaceReadNavigationImpl>(TestEngines.CreateProvider(workspaceManager), workspaceManager);
+
+    public static WorkspaceReadNavigationImpl WorkspaceReadNavigationImpl(IWorkspaceManager workspaceManager, ILogger<WorkspaceReadNavigationImpl> logger) =>
+        ActivatorUtilities.CreateInstance<WorkspaceReadNavigationImpl>(TestEngines.CreateProvider(workspaceManager), workspaceManager, logger);
+
+    /// <summary>
+    /// Short form: only the workspace manager is explicit; the engines and helpers the 15-parameter constructor needs
+    /// resolve from the fresh container, which shares the caller's manager (see TestEngines.CreateProvider).
+    /// </summary>
+    public static WorkspaceTools WorkspaceTools(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<WorkspaceTools>(TestEngines.CreateProvider(workspaceManager), workspaceManager);
+
+    /// <summary>
+    /// The shape the BuildTools-style helpers use: all 15 constructor arguments explicit, so the test's own engines are
+    /// the ones the tool class holds.
+    /// </summary>
+    public static WorkspaceTools WorkspaceTools(
+        IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine,
+        DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine,
+        StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine,
+        ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<WorkspaceTools> logger,
+        BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine, TestRunEngine testRunEngine,
+        WorkspaceReadNavigationImpl readNav, WriteToolAdviceHelper writeAdvice) =>
+        ActivatorUtilities.CreateInstance<WorkspaceTools>(
+            TestEngines.CreateProvider(workspaceManager),
+            workspaceManager, validationEngine, diffEngine, diagnosticEngine, solutionManagementEngine,
+            structuralRefinementEngine, dependencyEngine, projectConsistencyEngine, config, logger, buildEngine,
+            symbolNavigationEngine, testRunEngine, readNav, writeAdvice);
+}
