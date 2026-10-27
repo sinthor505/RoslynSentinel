@@ -11,14 +11,14 @@ namespace RoslynSentinel.Tests.Basic;
 /// (slice C3-G3a of docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md): the
 /// interface file root is built from scratch and formatted by RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync
 /// (slice C8): the copied using directives stay byte-exact (header, trailing comments, own line endings) and the new
-/// interface structure takes the document's dominant line ending, ending with a line break.
+/// interface structure takes the resolved line ending (IWorkspaceMutator.ResolveEol), ending with a line break.
 /// Sources use explicit "\n" / "\r\n" so the tests do not depend on this file's own line endings.
 /// </summary>
 [TestFixture]
 [Category("BasicRefactoringEngine")]
 public class ExtractInterfaceNewRootTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private BasicRefactoringEngine _engine;
 
     [SetUp]
@@ -106,14 +106,15 @@ public class ExtractInterfaceNewRootTests
     [Test]
     public async Task ExtractInterface_CrOnlyDocumentWithHeader_DoesNotThrowAndKeepsHeader()
     {
-        // A CR-only document: the copied usings keep their CR terminators and the new interface structure takes the
-        // document's dominant ending, so the whole interface file is CR-only.
+        // A CR-only document: the copied usings keep their CR terminators byte-exact and the new interface structure takes the
+        // resolved line ending (CRLF here); the chokepoint converts the whole file on write.
         const string source = "// Copyright (c) Acme\r#nullable enable\rusing System;\r\rnamespace MyApp;\r\rpublic class Svc\r{\r    public string? Name { get; set; }\r}\r";
 
+        _workspaceManager.EolModeOverride = EolMode.Crlf;
         var content = await ExtractInterfaceFileAsync(source, "Svc", "ISvc");
 
         Assert.That(content, Is.EqualTo(
-            "// Copyright (c) Acme\r#nullable enable\rusing System;\r\rnamespace MyApp;\r\rpublic interface ISvc\r{\r    string? Name { get; set; }\r}\r"));
+            "// Copyright (c) Acme\r#nullable enable\rusing System;\r\rnamespace MyApp;\r\rpublic interface ISvc\r\n{\r    string? Name { get; set; }\r\n}\r\n"));
     }
 
     [Test]
@@ -149,6 +150,7 @@ public class ExtractInterfaceNewRootTests
         // The CRLF header line, the using's trailing comment and its inner spacing are kept; the new lines are LF.
         const string source = "// Copyright (c) Acme\r\nusing System; // for Console\nusing  System.Linq;\n\nnamespace MyApp;\n\npublic class Svc\n{\n    public int Total(int a) => a;\r\n    public string Name { get; set; }\n}\n";
 
+        _workspaceManager.EolModeOverride = EolMode.Lf;
         var content = await ExtractInterfaceFileAsync(source, "Svc", "ISvc");
 
         Assert.That(content, Is.EqualTo(

@@ -507,8 +507,8 @@ public class BasicRefactoringEngine
                 _ => rewritten
             });
             // Only the rewritten parameter list and call sites are formatted (C5c-3); the rest of the file keeps its text and
-            // line endings, and every line the rewrite changed takes the document's dominant ending.
-            var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(documentByPath[path], newRoot, cancellationToken);
+            // line endings, and every line the rewrite changed takes the resolved line ending (IWorkspaceMutator.ResolveEol).
+            var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(documentByPath[path], newRoot, await _workspaceManager.ResolveEolAsync(documentByPath[path], cancellationToken), cancellationToken);
             var formattedText = (await formatted.GetTextAsync(cancellationToken)).ToString();
             result[path.Equals(declPath) ? filePath : path] = formattedText;
         }
@@ -557,18 +557,19 @@ public class BasicRefactoringEngine
 
         var updatedOrig = RemoveOrphanedRegionDirectives(root!.RemoveNode(typeNode, SyntaxRemoveOptions.KeepNoTrivia)!);
         var newDoc = await RemoveUnusedUsingsAsync(document.Project.AddDocument($"{typeName}.cs", newRoot), cancellationToken);
-        // The new file and the trimmed original are both fully owned by this tool, so both are formatted whole; the source
-        // document's text supplies the line ending (C5c-3), so an LF source no longer gets a CRLF scaffolded file.
+        // The new file and the trimmed original are both fully owned by this tool, so both are formatted whole; both take the
+        // resolved line ending (IWorkspaceMutator.ResolveEol).
         var sourceText = await document.GetTextAsync(cancellationToken);
-        var formattedNewDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(newDoc, sourceText, cancellationToken);
+        var eol = await _workspaceManager.ResolveEolAsync(document, cancellationToken);
+        var formattedNewDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(newDoc, eol, sourceText, cancellationToken);
         var newContent = (await formattedNewDoc.GetTextAsync(cancellationToken)).ToString();
-        // The scaffolded file must end with exactly one EOL, in the source document's EOL kind (the formatter drops it).
+        // The scaffolded file must end with exactly one EOL, in the resolved line ending (the formatter drops it).
         if (!newContent.EndsWith('\n'))
         {
-            newContent += EolUtilities.DetectNormalizableEol(sourceText);
+            newContent += eol;
         }
         var updatedOrigDoc = document.WithSyntaxRoot(updatedOrig);
-        var formattedOrigDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(updatedOrigDoc, sourceText, cancellationToken);
+        var formattedOrigDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(updatedOrigDoc, eol, sourceText, cancellationToken);
         var updatedOrigContent = (await formattedOrigDoc.GetTextAsync(cancellationToken)).ToString();
         return new Dictionary<FilePathWrapper, string>
         {
@@ -607,6 +608,7 @@ public class BasicRefactoringEngine
 
         var changes = new Dictionary<FilePathWrapper, string>();
         var sourceText = await document.GetTextAsync(cancellationToken);
+        var eol = await _workspaceManager.ResolveEolAsync(document, cancellationToken);
         var sourceDirectory = Path.GetDirectoryName(document.FilePath) ?? "";
         foreach (var typeNode in typesToMove)
         {
@@ -626,15 +628,15 @@ public class BasicRefactoringEngine
             var typeName = typeNode.Identifier.Text;
             var newPath = string.IsNullOrEmpty(sourceDirectory) ? $"{typeName}.cs" : Path.Combine(sourceDirectory, $"{typeName}.cs");
             var newDoc = await RemoveUnusedUsingsAsync(document.Project.AddDocument($"{typeName}.cs", newRoot), cancellationToken);
-            var formattedNewDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(newDoc, sourceText, cancellationToken);
+            var formattedNewDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(newDoc, eol, sourceText, cancellationToken);
             var newText = (await formattedNewDoc.GetTextAsync(cancellationToken)).ToString();
-            // The scaffolded file must end with exactly one EOL, in the source document's EOL kind (the formatter drops it).
-            changes[newPath] = newText.EndsWith('\n') ? newText : newText + EolUtilities.DetectNormalizableEol(sourceText);
+            // The scaffolded file must end with exactly one EOL, in the resolved line ending (the formatter drops it).
+            changes[newPath] = newText.EndsWith('\n') ? newText : newText + eol;
         }
 
         var updatedRoot = RemoveOrphanedRegionDirectives(root.RemoveNodes(typesToMove, SyntaxRemoveOptions.KeepNoTrivia)!);
         var updatedOrigDoc = document.WithSyntaxRoot(updatedRoot);
-        var formattedOrigDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(updatedOrigDoc, sourceText, cancellationToken);
+        var formattedOrigDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(updatedOrigDoc, eol, sourceText, cancellationToken);
         changes[document.FilePath ?? document.Name] = (await formattedOrigDoc.GetTextAsync(cancellationToken)).ToString();
         return changes;
     }
@@ -819,11 +821,12 @@ public class BasicRefactoringEngine
         }
         var updatedOrig = root.ReplaceNode(classNode, newClass);
         var ifacePath = Path.Combine(Path.GetDirectoryName(filePath) ?? "", $"{interfaceName}.cs");
+        var eol = await _workspaceManager.ResolveEolAsync(document, cancellationToken);
         // Only the synthesized interface structure is formatted; the embedded using directives stay byte-exact.
-        var ifaceContent = await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, ifaceCompUnit, static n => n is not UsingDirectiveSyntax, cancellationToken);
+        var ifaceContent = await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, ifaceCompUnit, static n => n is not UsingDirectiveSyntax, eol, cancellationToken);
         // Format the original file
         var origDoc = document.WithSyntaxRoot(updatedOrig);
-        var formattedOrigDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(origDoc, await document.GetTextAsync(cancellationToken), cancellationToken);
+        var formattedOrigDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(origDoc, eol, await document.GetTextAsync(cancellationToken), cancellationToken);
         var origContent = (await formattedOrigDoc.GetTextAsync(cancellationToken)).ToString();
         return new Dictionary<FilePathWrapper, string>
         {
@@ -1027,7 +1030,7 @@ public class BasicRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Indexer converted to method.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, indexer, getter, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, indexer, getter, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -1098,7 +1101,7 @@ public class BasicRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, trackedRoot, currentType, newType, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, trackedRoot, currentType, newType, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -1247,7 +1250,7 @@ public class BasicRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, newRoot, currentBlock, newBlock, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, newRoot, currentBlock, newBlock, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -1467,10 +1470,9 @@ public class BasicRefactoringEngine
             };
         }
 
-        // The document's own line ending, not a hard-coded CRLF: a fixed CRLF mixed endings into LF
-        // files, which the write path's EolChangeGuard now refuses.
+        // The resolved line ending (IWorkspaceMutator.ResolveEol), not a hard-coded CRLF.
         var originalText = await document.GetTextAsync(cancellationToken);
-        var eol = EolUtilities.DetectDominantEol(originalText);
+        var eol = await _workspaceManager.ResolveEolAsync(document, cancellationToken);
         UsingDirectiveSyntax newUsing;
         if (namespaceName.StartsWith("static "))
         {
@@ -1482,7 +1484,7 @@ public class BasicRefactoringEngine
         }
 
         var newRoot = root.AddUsings(newUsing.WithAdditionalAnnotations(Formatter.Annotation));
-        var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, eol, cancellationToken);
         if (simplifyExisting)
         {
             // Semantic-safe shortening of now-redundant fully-qualified names. Names resolving into the added
@@ -1492,7 +1494,7 @@ public class BasicRefactoringEngine
             formattedDoc = await AnnotateNamesInAddedNamespaceAsync(formattedDoc, namespaceName, cancellationToken);
             formattedDoc = await Simplifier.ReduceAsync(formattedDoc, Simplifier.Annotation, cancellationToken: cancellationToken);
             var simplifiedRoot = await formattedDoc.GetSyntaxRootAsync(cancellationToken);
-            formattedDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(formattedDoc.WithSyntaxRoot(simplifiedRoot!.WithAdditionalAnnotations(Simplifier.Annotation)), originalText, cancellationToken);
+            formattedDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(formattedDoc.WithSyntaxRoot(simplifiedRoot!.WithAdditionalAnnotations(Simplifier.Annotation)), eol, originalText, cancellationToken);
         }
 
         // Roslyn's Formatter emits the platform newline for any line break it creates or re-flows, so
@@ -1537,7 +1539,7 @@ public class BasicRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.RemoveNodePreservingTriviaAsync(document, root, existing, cancellationToken: cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.RemoveNodePreservingTriviaAsync(document, root, existing, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken: cancellationToken)
         };
     }
 
@@ -1598,7 +1600,7 @@ public class BasicRefactoringEngine
         var baseIndent = target.GetLeadingTrivia().LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia));
         var indentText = baseIndent != default ? baseIndent.ToFullString() : "";
         var normalizedSummary = NormalizeSummaryText(summaryText);
-        var docText = BuildDocCommentText(target, indentText, normalizedSummary, EolUtilities.DetectDominantEol(sourceText));
+        var docText = BuildDocCommentText(target, indentText, normalizedSummary, await _workspaceManager.ResolveEolAsync(document, cancellationToken));
         var parsedMember = SyntaxFactory.ParseMemberDeclaration(docText);
         var docTrivia = parsedMember!.GetLeadingTrivia().Where(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)).ToList();
 
@@ -1679,8 +1681,7 @@ public class BasicRefactoringEngine
         }
 
         lines.Add($"{indentText}void __Dummy__() {{}}");
-        // eol is the document's own dominant line ending: a hard-coded "\n" here put LF doc-comment
-        // lines into CRLF files (mixed endings), which the write path's EolChangeGuard now refuses.
+        // eol is the resolved line ending (IWorkspaceMutator.ResolveEol), not a hard-coded "\n".
         return string.Join(eol, lines);
     }
 
@@ -1754,7 +1755,7 @@ public class BasicRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, target, target.WithLeadingTrivia(SyntaxFactory.TriviaList(stripped)), cancellationToken, RoslynFormattingHelper.TriviaEditIntent.ReplaceLeading)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, target, target.WithLeadingTrivia(SyntaxFactory.TriviaList(stripped)), await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken, RoslynFormattingHelper.TriviaEditIntent.ReplaceLeading)
         };
     }
 
@@ -1854,7 +1855,7 @@ public class BasicRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, block, newBlock, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, block, newBlock, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -1941,7 +1942,7 @@ public class BasicRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, block, newBlock, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, block, newBlock, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
