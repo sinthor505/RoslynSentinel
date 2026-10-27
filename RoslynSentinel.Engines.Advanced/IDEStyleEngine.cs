@@ -42,7 +42,7 @@ public class IDEStyleEngine
         var newRoot = root!.ReplaceNodes(thisAccesses, (oldNode, _) => oldNode.Name
             .WithLeadingTrivia(oldNode.GetLeadingTrivia().AddRange(oldNode.Name.GetLeadingTrivia()))
             .WithAdditionalAnnotations(Formatter.Annotation));
-        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -67,7 +67,7 @@ public class IDEStyleEngine
         }
 
         var newRoot = RewriteBlocksWithObjectInitializers(root);
-        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -187,7 +187,7 @@ public class IDEStyleEngine
 
         var rewriter = new NullPropagationRewriter();
         var newRoot = rewriter.Visit(root);
-        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,

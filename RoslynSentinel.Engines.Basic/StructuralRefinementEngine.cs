@@ -140,7 +140,7 @@ public class StructuralRefinementEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root!, node!, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root!, node!, SyntaxRemoveOptions.KeepUnbalancedDirectives, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -295,7 +295,7 @@ public class StructuralRefinementEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, node, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, node, SyntaxRemoveOptions.KeepUnbalancedDirectives, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 }

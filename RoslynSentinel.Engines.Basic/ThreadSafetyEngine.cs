@@ -89,7 +89,7 @@ public class ThreadSafetyEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Lock statement converted to SemaphoreSlim pattern.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, typeNode, newTypeNode, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, typeNode, newTypeNode, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -235,7 +235,7 @@ public class ThreadSafetyEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Lock statement converted to SemaphoreSlim pattern.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, typeNode, newTypeNode, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, typeNode, newTypeNode, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 

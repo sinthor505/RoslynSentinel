@@ -1656,7 +1656,7 @@ public class AsyncBatchEngine
         var newRoot = (SyntaxNode)annotatedRoot.ReplaceNode(annotatedMethod, rewrittenMethod);
         newRoot = new AsyncOptimizationEngine.AsyncifyAnonymousFunctionsRewriter().Visit(newRoot)!;
 
-        return await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, cancellationToken);
+        return await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
     }
 
     // ──────────────────────────────────────────────────────────────────────────

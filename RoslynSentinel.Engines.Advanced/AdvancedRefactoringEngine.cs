@@ -221,7 +221,7 @@ public class AdvancedRefactoringEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = (await (await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken)).GetTextAsync(cancellationToken)).ToString(),
+            UpdatedText = (await (await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)).GetTextAsync(cancellationToken)).ToString(),
             FilePath = filePath
         };
     }
@@ -358,7 +358,7 @@ public class AdvancedRefactoringEngine
         var newInterfaceNode = interfaceNode.AddMembers(newMembers.ToArray());
         // Only the new members carry Formatter.Annotation, so only they are re-spaced; untouched interface members keep their text.
         var newRoot = interfaceRoot.ReplaceNode(interfaceNode, newInterfaceNode);
-        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(interfaceDocument, newRoot, cancellationToken);
+        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(interfaceDocument, newRoot, await _workspaceManager.ResolveEolAsync(interfaceDocument, cancellationToken), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,

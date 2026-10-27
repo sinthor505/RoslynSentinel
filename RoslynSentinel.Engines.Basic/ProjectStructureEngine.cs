@@ -41,7 +41,7 @@ public class SolutionStructureEngine
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
                 Message = "// Namespace updated.",
-                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, nsNode, newNsNode, cancellationToken)
+                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, nsNode, newNsNode, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
             };
         }
 
@@ -598,7 +598,7 @@ public class SolutionStructureEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
             FilePath = filePath
         };
     }
