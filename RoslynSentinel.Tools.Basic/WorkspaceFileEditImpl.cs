@@ -667,9 +667,9 @@ public class WorkspaceFileEditImpl
                         oldText, oldContent, lineBefore, lineAfter, memberNameAt: MemberNameResolverFor(root),
                         withinMember: withinMember, matchLine: matchLine);
                     var newFileContent = oldText.ToString().Remove(match.Start, match.Length).Insert(match.Start, newContent);
-                    var dominantEol = EolUtilities.DetectDominantEol(oldText);
-                    var normalizedContent = EolUtilities.NormalizeEol(newFileContent, dominantEol);
                     var targetPath = document.FilePath ?? filePathResolved;
+                    var targetEol = _workspaceManager.ResolveEol((string)targetPath, oldText.ToString());
+                    var normalizedContent = EolUtilities.NormalizeEol(newFileContent, targetEol);
                     var snippetChanges = new Dictionary<FilePathWrapper, string>
                     {
                         [targetPath] = normalizedContent
@@ -896,8 +896,8 @@ public class WorkspaceFileEditImpl
                 spliced = spliced.Remove(match.Start, match.Length).Insert(match.Start, newContent);
             }
 
-            var dominantEol = EolUtilities.DetectDominantEol(originalText);
-            var normalizedSpliced = EolUtilities.NormalizeEol(spliced, dominantEol);
+            var targetEol = _workspaceManager.ResolveEol((string)canonicalPath, originalString);
+            var normalizedSpliced = EolUtilities.NormalizeEol(spliced, targetEol);
             finalContents[canonicalPath] = normalizedSpliced;
         }
 

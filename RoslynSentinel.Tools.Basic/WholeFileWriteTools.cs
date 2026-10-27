@@ -58,7 +58,7 @@ public class WholeFileWriteTools
                 Directory.CreateDirectory(directory);
             }
 
-            // For ReplaceFile, normalize the new content to the existing file's dominant EOL.
+            // For ReplaceFile, normalize the new content to the policy EOL (resolver).
             // For CreateFileTool, leave the content as-is (new files use their provided EOL).
             var normalizedContent = content;
             if (exists)
@@ -67,9 +67,8 @@ public class WholeFileWriteTools
                 var existingText = await FileIoHelper.ReadAllTextIfExistsAsync(filePathResolved, cancellationToken);
                 if (!string.IsNullOrEmpty(existingText))
                 {
-                    var existingSourceText = Microsoft.CodeAnalysis.Text.SourceText.From(existingText);
-                    var dominantEol = EolUtilities.DetectDominantEol(existingSourceText);
-                    normalizedContent = EolUtilities.NormalizeEol(content, dominantEol);
+                    var targetEol = _workspaceManager.ResolveEol((string)filePathResolved, existingText);
+                    normalizedContent = EolUtilities.NormalizeEol(content, targetEol);
                 }
             }
 
@@ -374,7 +373,7 @@ public class WholeFileWriteTools
                         };
                     }
 
-                    // Normalize each file's content to its existing dominant EOL.
+                    // Normalize each file's content to the policy EOL (resolver).
                     var normalizedChanges = new Dictionary<FilePathWrapper, string>();
                     foreach (var (changeTargetPath, newContent) in resolvedChanges)
                     {
@@ -382,9 +381,8 @@ public class WholeFileWriteTools
                         var normalizedContent = newContent;
                         if (!string.IsNullOrEmpty(existingText))
                         {
-                            var existingSourceText = Microsoft.CodeAnalysis.Text.SourceText.From(existingText);
-                            var dominantEol = EolUtilities.DetectDominantEol(existingSourceText);
-                            normalizedContent = EolUtilities.NormalizeEol(newContent, dominantEol);
+                            var targetEol = _workspaceManager.ResolveEol((string)changeTargetPath, existingText);
+                            normalizedContent = EolUtilities.NormalizeEol(newContent, targetEol);
                         }
                         normalizedChanges[changeTargetPath] = normalizedContent;
                     }
@@ -422,7 +420,7 @@ public class WholeFileWriteTools
                 {
                     try
                     {
-                        // Normalize each file's content to its existing dominant EOL before validation.
+                        // Normalize each file's content to the policy EOL (resolver) before validation.
                         var normalizedValidateChanges = new Dictionary<FilePathWrapper, string>();
                         foreach (var (valPath, valContent) in resolvedChanges)
                         {
@@ -430,9 +428,8 @@ public class WholeFileWriteTools
                             var normalizedContent = valContent;
                             if (!string.IsNullOrEmpty(existingText))
                             {
-                                var existingSourceText = Microsoft.CodeAnalysis.Text.SourceText.From(existingText);
-                                var dominantEol = EolUtilities.DetectDominantEol(existingSourceText);
-                                normalizedContent = EolUtilities.NormalizeEol(valContent, dominantEol);
+                                var targetEol = _workspaceManager.ResolveEol((string)valPath, existingText);
+                                normalizedContent = EolUtilities.NormalizeEol(valContent, targetEol);
                             }
                             normalizedValidateChanges[valPath] = normalizedContent;
                         }
