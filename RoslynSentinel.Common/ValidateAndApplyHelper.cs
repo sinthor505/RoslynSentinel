@@ -162,7 +162,7 @@ public static class ValidateAndApplyHelper
             ((IUnrecoverableBreaker)workspaceManager).Trip(operationName, changeId, reason);
 
             // No changeId: one UndoLastApply cannot resolve is worse than none.
-            return new ApplyOutcome(null, null, false, appliedDiff, reason, LineChanges: lineChanges, ChangedContentResultId: contentResultId);
+            return new ApplyOutcome(null, null, false, appliedDiff, reason, LineChanges: lineChanges, ChangedContentResultId: contentResultId, Findings: applyResult.Findings);
         }
 
         // Nothing was written, so no changeId should be issued either. Previously one was minted
@@ -181,10 +181,10 @@ public static class ValidateAndApplyHelper
                 $"{operationName} produced no file changes, so nothing was written and there is " +
                 "nothing to undo. If you expected a change, the operation matched no target - or " +
                 "its refactoring feature is disabled on this server (see the Features tool).",
-                LineChanges: lineChanges);
+                LineChanges: lineChanges, Findings: applyResult.Findings);
         }
 
-        return new ApplyOutcome(changeId, null, false, appliedDiff, LineChanges: lineChanges, ChangedContentResultId: contentResultId);
+        return new ApplyOutcome(changeId, null, false, appliedDiff, LineChanges: lineChanges, ChangedContentResultId: contentResultId, Findings: applyResult.Findings);
     }
 
     public static async Task<string?> StoreChangedContentAsync(IReadOnlyDictionary<FilePathWrapper, string> changes, string? solutionRoot, ILogger logger, CancellationToken cancellationToken)

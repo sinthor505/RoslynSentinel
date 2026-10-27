@@ -30,7 +30,7 @@ public record ApplyChangesResult(
     List<string>? RolledBackFiles = null,
     List<string>? NoOpFiles = null,
     string? RefusalCode = null,
-    // TODO not yet surfaced in the tool result's findings array: ApplyOutcome and its 9 ValidateAndApplyHelper callers need a Findings member (plan step 5)
+    // TODO ApplyOutcome now carries Findings from ValidateAndApplyHelper; the remaining gap is the tools that copy ApplyOutcome into AppliedChangeSummary by hand (about 55 sites, TODO.md EOL follow-ups item 1)
     List<Finding>? Findings = null
 ) : IOperationResult
 {

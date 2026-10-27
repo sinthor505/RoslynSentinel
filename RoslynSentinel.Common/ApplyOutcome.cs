@@ -32,6 +32,9 @@ namespace RoslynSentinel.Common;
 /// <param name="ChangedContentResultId">
 /// Id of the large-result file holding the updated text of every written file (fetch with GetLargeResult); null on dry runs, errors, no-write results, when ChangedContentOptions.InlineOnApply is on, or when the store failed (fail-closed).
 /// </param>
+/// <param name="Findings">
+/// Non-fatal observations from the write chokepoint, copied from <c>ApplyChangesResult.Findings</c> on a successful apply. Null on error, on a dry run, and when there are none.
+/// </param>
 public record ApplyOutcome(
     string? ChangeId,
     ResultError? Error,
@@ -40,5 +43,6 @@ public record ApplyOutcome(
     string? NotReversibleReason = null,
     DiagnosticReport? Validation = null,
     List<FileLineChange>? LineChanges = null,
-    string? ChangedContentResultId = null
+    string? ChangedContentResultId = null,
+    List<Finding>? Findings = null
 );
