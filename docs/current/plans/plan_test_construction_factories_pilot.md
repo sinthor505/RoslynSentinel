@@ -19,6 +19,22 @@ container, so a new constructor parameter is absorbed in one place. Order:
    becomes a resolve test (every factory overload returns an instance), not a signature-drift guard.
 4. Steps 4-5 unchanged.
 
+## Progress (2026-10-27)
+- Steps 2-3 DONE (6eace8f3): `Tests.Tools.Basic/TestEngines.cs` (15 overloads, 11 classes), `TestTools.cs`
+  (`WorkspaceTools` short and 15-argument forms, `WorkspaceReadNavigationImpl`), `TestFactoryResolveTests.cs` (20 tests).
+  A passed workspace manager overrides `IWorkspaceManager` / `ISolutionProvider` / `IWorkspaceReader` in the per-call
+  provider, otherwise defaulted engines would each get a second `PersistentWorkspaceManager`. Not yet factored:
+  `WholeFileWriteTools` (25 sites) and the other tool classes (`// TODO` in `TestTools.cs`).
+- Step 4 BLOCKED, not started: `replaceConstruction` could not be called. `McpToolsetControl(moveExtract)` reports the
+  toolset enabled, but `SemanticFindReplace` never reaches the calling session's tool list, and two subagents
+  (one enabling the toolset itself, one spawned afterwards) saw the same, so a subagent inherits the parent's tool list. Resume in
+  a FRESH chat session started after `moveExtract` is enabled (or with it enabled at startup), then run the slices in
+  descending site count: PersistentWorkspaceManager (103), SymbolNavigationEngine (77), ValidationEngine (75), DiffEngine (64),
+  SentinelConfiguration (43), StructuralRefinementEngine (35), DiagnosticEngine (32), BuildEngine (27), then the 23-site engines,
+  WorkspaceReadNavigationImpl (26) and WorkspaceTools (22). Per slice: preview, apply, Build, RunTest `Tests.Tools.Basic`.
+- `Tests.Tools.Basic` full run: one flaky failure, `ServerBinaryStalenessGitTests.LaterCommitTouchingOnlyDocs_IsNotStale`
+  ("git failed to run: init --quiet"), passes alone.
+
 ## Problem
 Test projects hand-construct engines and tool classes with `new X(...)` at roughly 1,800-2,000 sites
 over about 99 classes (two counts from a survey, not reconciled). Biggest: `Tests.Tools.Basic` 719,
