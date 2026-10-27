@@ -26,6 +26,11 @@ public class DependencyInjectionTests
         // 1. Mock Logger
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
 
+        // The plain-ILogger registration in AddRoslynSentinelToolsBasic resolves ILoggerFactory. This test used to get
+        // it as a side effect of AddHttpClient (which AddRoslynSentinelEnginesAdvanced called until the LLM client
+        // registration moved to AddRoslynSentinelLlmClient in the Server project); a real host always has logging.
+        services.AddLogging();
+
         // 2. Register all engines via the real production registration path, not a hand-copied
         // list -> a hand-copied list is exactly what silently drifted out of sync with the actual
         // engine set three times (see docs/TODO.md's "Registration duplication" entry / the

@@ -103,6 +103,7 @@ namespace RoslynSentinel.Server.Advanced
             {
                 builder.Services.AddRoslynSentinelHostOptions(operatingMode, HostTransport.Stdio, ServerStartupHelpers.ParseRespawn(args, "stdio"));
                 builder.Services.AddRoslynSentinelEnginesAdvanced();
+                builder.Services.AddRoslynSentinelLlmClient();
                 builder.Services.AddSingleton(new StoppedByScriptMarker(
                     WasFound: stoppedByScriptDetails is not null, Details: stoppedByScriptDetails));
 

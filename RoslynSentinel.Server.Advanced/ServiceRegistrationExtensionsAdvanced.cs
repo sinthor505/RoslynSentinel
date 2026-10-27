@@ -1,5 +1,3 @@
-using System.Reflection;
-
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -18,52 +16,12 @@ namespace RoslynSentinel.Server.Advanced;
 public static class RoslynSentinelServiceExtensionsAdvanced
 {
     /// <summary>
-    /// Registers all Roslyn analysis engine singletons into the DI container: every engine
-    /// Basic registers (via <see cref="RoslynSentinelServiceExtensionsBasic.AddRoslynSentinelEnginesBasic"/>,
-    /// the shared base -> Advanced does not maintain its own separate copy of that list) plus the
-    /// additional engines only Advanced's tool classes need.
+    /// Registers the LM Studio-backed <see cref="ILlmClient"/>. Kept in the Server project because
+    /// <c>AddHttpClient</c> needs Microsoft.Extensions.Http, which no lower layer references. Hosts call it
+    /// after <c>AddRoslynSentinelEnginesAdvanced</c>; a test that needs <see cref="ILlmClient"/> registers a fake instead.
     /// </summary>
-    public static IServiceCollection AddRoslynSentinelEnginesAdvanced(this IServiceCollection services)
+    public static IServiceCollection AddRoslynSentinelLlmClient(this IServiceCollection services)
     {
-        services.AddRoslynSentinelEnginesBasic();
-
-        // Advanced-only engines: not registered by Basic (either because Basic's tool classes
-        // don't use them, or because they're deliberately gated to the fuller Advanced tool set).
-        services.AddSingleton<AdvancedRefactoringEngine>();
-        services.AddSingleton<StructuralRefactoringEngine>();
-        services.AddSingleton<AntiPatternEngine>();
-        services.AddSingleton<ApiGenerationEngine>();
-        services.AddSingleton<AsyncBatchEngine>();
-        services.AddSingleton<AsyncOptimizationEngine>();
-        services.AddSingleton<AsyncAnalysisEngine>();
-        services.AddSingleton<CloneDetectionEngine>();
-        services.AddSingleton<CodeGenerationEngine>();
-        services.AddSingleton<CodeHealingEngine>();
-        services.AddSingleton<CodeStyleAnalysisEngine>();
-        services.AddSingleton<CodeStyleEngine>();
-        services.AddSingleton<CommentingEngine>();
-        services.AddSingleton<ControlFlowEngine>();
-        services.AddSingleton<DeadCodeEngine>();
-        services.AddSingleton<DependencyInjectionEngine>();
-        services.AddSingleton<DocumentationEngine>();
-        services.AddSingleton<HealthOrchestrationEngine>();
-        services.AddSingleton<IDEStyleEngine>();
-        services.AddSingleton<InstrumentationEngine>();
-        services.AddSingleton<LogicSimplificationEngine>();
-        services.AddSingleton<MappingEngine>();
-        services.AddSingleton<MetricsEngine>();
-        services.AddSingleton<MigrationLedger>();
-        services.AddSingleton<SyntaxModernizationEngine>();
-        services.AddSingleton<OutParamRefactoringEngine>();
-        services.AddSingleton<PathDrivenTestEngine>();
-        services.AddSingleton<PerformanceEngine>();
-        services.AddSingleton<ResourceSafetyEngine>();
-        services.AddSingleton<ScopedOperationLedgerEngine>();
-        services.AddSingleton<SecurityAndSafetyEngine>();
-        services.AddSingleton<SecurityEngine>();
-        services.AddSingleton<StackOverflowEngine>();
-        services.AddSingleton<TestingEngine>();
-
         // LmStudioClient talks to a locally-hosted LM Studio server (OpenAI-compatible
         // /v1/chat/completions). AddHttpClient<LmStudioClient> registers the concrete type keyed
         // to its own HttpClient; the extra AddSingleton<ILlmClient> below forwards to that same
@@ -75,71 +33,7 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         });
         services.AddSingleton<ILlmClient>(sp => sp.GetRequiredService<LmStudioClient>());
 
-        // ToolGraph + FailureRouter -> pilot: scans AsyncifyTools for [Produces] attributes.
-        ToolGraph toolGraph = BuildToolGraph(new[] { typeof(AsyncifyTools) });
-        services.AddSingleton(toolGraph);
-        services.AddSingleton<FailureRouter>();
-
         return services;
-    }
-
-    // ── ToolGraph builder ──────────────────────────────────────────────────────
-
-    private static ToolGraph BuildToolGraph(IEnumerable<Type> toolTypes)
-    {
-        List<(DataTag Tag, ToolDescriptor Descriptor)> registrations = new List<(DataTag, ToolDescriptor)>();
-
-        foreach (Type toolType in toolTypes)
-        {
-            foreach (MethodInfo method in toolType.GetMethods(BindingFlags.Public | BindingFlags.Instance))
-            {
-                McpServerToolAttribute? toolAttr = method.GetCustomAttribute<McpServerToolAttribute>();
-                if (toolAttr == null)
-                {
-                    continue;
-                }
-
-                string toolName = toolAttr.Name ?? method.Name;
-
-                List<string> allParams = new List<string>();
-                List<string> requiredParams = new List<string>();
-
-                foreach (ParameterInfo p in method.GetParameters())
-                {
-                    Type pt = p.ParameterType;
-                    if (pt == typeof(CancellationToken))
-                    {
-                        continue;
-                    }
-                    if (pt.IsGenericType && (pt.GetGenericTypeDefinition().Name.StartsWith("RequestContext", StringComparison.Ordinal)
-                                          || pt.GetGenericTypeDefinition().FullName?.Contains("RequestContext", StringComparison.Ordinal) == true))
-                    {
-                        continue;
-                    }
-
-                    string paramName = p.Name ?? "";
-                    allParams.Add(paramName);
-                    if (!p.HasDefaultValue)
-                    {
-                        requiredParams.Add(paramName);
-                    }
-                }
-
-                foreach (ProducesAttribute produces in method.GetCustomAttributes<ProducesAttribute>())
-                {
-                    ToolDescriptor descriptor = new ToolDescriptor
-                    {
-                        Name = toolName,
-                        AllParameterNames = allParams,
-                        RequiredParameterNames = requiredParams,
-                        PreferenceWeight = produces.Preference,
-                    };
-                    registrations.Add((produces.Tag, descriptor));
-                }
-            }
-        }
-
-        return ToolGraph.Build(registrations);
     }
 
     /// <summary>
@@ -169,6 +63,9 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         // Advanced-only --include-tools name (e.g. AsyncifyTools) is inert there -> it's
         // handled below against the same map instead.
         mcpBuilder.AddRoslynSentinelToolsBasic(services, activeModes, resolvedIncludeTools, resolvedExcludeTools);
+
+        // Unconditional, mode-independent dependencies of the Advanced tool classes (ToolGraph, FailureRouter).
+        services.AddRoslynSentinelToolImplsAdvanced();
 
         var activeToolClasses = ServerStartupHelpers.ResolveActiveToolClasses(
             activeModes,

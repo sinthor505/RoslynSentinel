@@ -18,7 +18,7 @@ public static class RoslynSentinelServiceExtensionsBasic
 {
     /// <summary>
     /// Registers process-wide host settings (<see cref="OperatingMode"/>, <see cref="HostTransport"/>, <see cref="RespawnPolicy"/>). Call
-    /// this <em>before</em> <see cref="AddRoslynSentinelEnginesBasic"/>, which TryAdds a
+    /// this <em>before</em> <c>AddRoslynSentinelEnginesBasic</c> (Engines.Basic), which TryAdds a
     /// Production-mode default for callers (chiefly the test assemblies) that never set one.
     /// </summary>
     public static IServiceCollection AddRoslynSentinelHostOptions(
@@ -28,60 +28,6 @@ public static class RoslynSentinelServiceExtensionsBasic
         RespawnPolicy respawn = RespawnPolicy.Auto)
     {
         services.AddSingleton(new SentinelHostOptions { OperatingMode = operatingMode, Transport = transport, Respawn = respawn });
-        return services;
-    }
-
-    /// <summary>
-    /// Registers all Roslyn analysis engine singletons into the DI container.
-    /// </summary>
-    /// <remarks>
-    /// The commented-out lines below are engines Advanced registers instead (see
-    /// <see cref="RoslynSentinel.Server.Advanced.RoslynSentinelServiceExtensionsAdvanced.AddRoslynSentinelEnginesAdvanced"/>).
-    /// Don't uncomment one here without checking whether Advanced already live-registers it ->
-    /// doing so would register the same engine type in both, not just in Basic.
-    /// </remarks>
-    public static IServiceCollection AddRoslynSentinelEnginesBasic(this IServiceCollection services)
-    {
-        services.AddSingleton<SentinelConfiguration>();
-        // Defaults to Production. TryAdd (not Add) so a host that called
-        // AddRoslynSentinelHostOptions first keeps its own value -> registering unconditionally
-        // here would make the last-wins order depend on which extension the host called last.
-        services.TryAddSingleton(new SentinelHostOptions());
-        // TryAdd only so a caller that already registered StoppedByScriptMarker (e.g., ServerStdio.cs
-        // or ServerHttp.cs from a real host) is not overwritten. Test fixtures without that context
-        // get this default stub.
-        services.AddSingleton<BreakingChangeEngine>();
-        services.AddSingleton<BuildEngine>();
-        services.AddSingleton<DependencyEngine>();
-        services.AddSingleton<DiagnosticEngine>();
-        services.AddSingleton<DiffEngine>();
-        services.AddSingleton<DiscoveryEngine>();
-        services.AddSingleton<ImpactAnalyzer>();
-        services.AddSingleton<InventoryEngine>();
-        services.AddSingleton<ISolutionProvider>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
-        services.AddSingleton<IWorkspaceManager>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
-        services.AddSingleton<IWorkspaceReader>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
-        services.AddSingleton<MsToolAugmentEngine>();
-        services.AddSingleton<PersistentWorkspaceManager>();
-        services.AddSingleton<ProjectConsistencyEngine>();
-        services.AddSingleton<SolutionStructureEngine>();
-        services.AddSingleton<BasicRefactoringEngine>();
-        services.AddSingleton<SemanticRefactoringEngine>();
-        services.AddSingleton<SemanticReplaceEngine>();
-        services.AddSingleton<NamedArgumentsEngine>();
-        services.AddSingleton<TestCategoryTaggingEngine>();
-        services.AddSingleton<TestCategoryApplyEngine>();
-        services.AddSingleton<SolutionManagementEngine>();
-        services.AddSingleton<MemberRefactoringEngine>();
-        services.AddSingleton<StructuralRefinementEngine>();
-        services.AddSingleton<SymbolNavigationEngine>();
-        services.AddSingleton<SyntaxUpgradeEngine>();
-        services.AddSingleton<TestRunEngine>();
-        services.AddSingleton<TestInstanceLauncher>();
-        services.AddSingleton<ThreadSafetyEngine>();
-        services.AddSingleton<ValidationEngine>();
-        services.TryAddSingleton(new StoppedByScriptMarker(WasFound: false, Details: null));
-
         return services;
     }
 
@@ -145,6 +91,11 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton(toolAllowList);
         }
 
+        // Unconditional, mode-independent dependencies of the tool classes below (the *Impl helpers, the plain ILogger,
+        // and a default WriteToolAdviceHelper). TryAdd-only, so the gated WriteToolAdviceHelper registered right after
+        // (plain AddSingleton, last wins) overrides the default. See Tools.Basic's ToolServiceCollectionExtensionsBasic.
+        services.AddRoslynSentinelToolImplsBasic();
+
         services.AddSingleton(new WriteToolAdviceHelper(activeToolClasses, toolAllowList?.ToolNames));
 
         // Captured once here (the same values ResolveActiveToolClasses/DescribeNoActiveToolsFailure
@@ -168,21 +119,9 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton<ServerStatusTools>();
         mcpBuilder.WithSentinelTools<ServerStatusTools>();
 
-        // Decision 7 step 4: the *Tools/*Impl split classes take a plain (non-generic) ILogger,
-        // not ILogger<T> - previously this only worked because each was constructed with `new`
-        // inside a facade's constructor (e.g. WorkspaceTools), which passes down its own
-        // ILogger<TFacade> by implicit reference conversion, never asking DI to resolve a plain
-        // ILogger directly. Registering these classes as DI singletons in their own right (the
-        // fine-grained mode-string blocks below) is the first thing that ever asks the container
-        // to resolve ILogger itself - nothing in this solution (including AddLogging()) registers
-        // it, so without this line every one of those registrations throws
-        // InvalidOperationException at first resolution. Resolved once here from ILoggerFactory,
-        // same category name pattern the rest of the server already uses implicitly.
-        services.TryAddSingleton(sp => sp.GetRequiredService<ILoggerFactory>().CreateLogger("RoslynSentinel"));
-
         // claude-lean only: McpToolsetControlTool can add any on-demand tool at runtime, and a tool's class is
         // constructed by ActivatorUtilities from the container - so the DEPENDENCIES of those classes (the Impl
-        // singletons registered in the blocks below) must exist even though their tools are not exposed at
+        // singletons registered by AddRoslynSentinelToolImplsBasic above) must exist even though their tools are not exposed at
         // startup. The per-tool allow-list already makes WithSentinelTools register none of the non-Core
         // tools, so widening the set here registers dependencies only. Rebinding (not mutating) keeps the
         // ActiveToolSurface/WriteToolAdviceHelper sets above - what McpServerStatusTool and advice report - exact.
@@ -251,7 +190,6 @@ public static class RoslynSentinelServiceExtensionsBasic
         // TestCategoryTaggingEngine, TestCategoryApplyEngine and ValidationEngine come from AddRoslynSentinelEnginesBasic; the Impl takes the plain ILogger registered above.
         if (activeToolClasses.Contains("TestCategoryTaggingTools"))
         {
-            services.AddSingleton<TestCategoryTaggingImpl>();
             services.AddSingleton<TestCategoryTaggingTools>();
             mcpBuilder.WithSentinelTools<TestCategoryTaggingTools>();
         }
@@ -259,16 +197,12 @@ public static class RoslynSentinelServiceExtensionsBasic
         // QualifyCrefsTool: opt-in via --mode=QualifyCrefsTool, or on demand in claude-lean (the QualifyCrefsTools class is in the lean lists in ToolClassRegistry).
         if (activeToolClasses.Contains("QualifyCrefsTools"))
         {
-            services.AddSingleton<QualifyCrefsImpl>();
             services.AddSingleton<QualifyCrefsTools>();
             mcpBuilder.WithSentinelTools<QualifyCrefsTools>();
         }
 
         if (activeToolClasses.Contains("WorkspaceTools"))
         {
-            services.AddSingleton<WorkspaceReadNavigationImpl>();
-            services.TryAddSingleton<SymbolNavigationImpl>();
-            services.TryAddSingleton<SymbolRelationshipImpl>();
             services.AddSingleton<WorkspaceReadNavigationTools>();
             services.AddSingleton<WorkspaceTools>();
             mcpBuilder.WithSentinelTools<WorkspaceTools>();
@@ -279,35 +213,27 @@ public static class RoslynSentinelServiceExtensionsBasic
         // TryAddSingleton since the block above may already have registered them.
         if (activeToolClasses.Contains("WorkspaceFileEditTools"))
         {
-            services.TryAddSingleton<WorkspaceReadNavigationImpl>();
             services.TryAddSingleton<WorkspaceReadNavigationTools>();
-            services.AddSingleton<WorkspaceFileEditImpl>();
             services.AddSingleton<WorkspaceFileEditTools>();
             mcpBuilder.WithSentinelTools<WorkspaceFileEditTools>();
         }
         if (activeToolClasses.Contains("WorkspaceBuildTestTools"))
         {
-            services.AddSingleton<WorkspaceBuildTestImpl>();
             services.AddSingleton<WorkspaceBuildTestTools>();
             mcpBuilder.WithSentinelTools<WorkspaceBuildTestTools>();
         }
         if (activeToolClasses.Contains("WorkspaceProjectManagementTools"))
         {
-            services.AddSingleton<WorkspaceProjectManagementImpl>();
             services.AddSingleton<WorkspaceProjectManagementTools>();
             mcpBuilder.WithSentinelTools<WorkspaceProjectManagementTools>();
         }
         if (activeToolClasses.Contains("WorkspaceReadNavigationTools"))
         {
-            services.TryAddSingleton<WorkspaceReadNavigationImpl>();
-            services.TryAddSingleton<SymbolNavigationImpl>();
-            services.TryAddSingleton<SymbolRelationshipImpl>();
             services.TryAddSingleton<WorkspaceReadNavigationTools>();
             mcpBuilder.WithSentinelTools<WorkspaceReadNavigationTools>();
         }
         if (activeToolClasses.Contains("WorkspaceHealthMiscTools"))
         {
-            services.AddSingleton<WorkspaceHealthMiscImpl>();
             services.AddSingleton<WorkspaceHealthMiscTools>();
             mcpBuilder.WithSentinelTools<WorkspaceHealthMiscTools>();
         }
@@ -320,13 +246,11 @@ public static class RoslynSentinelServiceExtensionsBasic
         // opt-in-able, neither requires "SymbolNavigationTools"/"Workspace" itself.
         if (activeToolClasses.Contains("SymbolNavigationTools"))
         {
-            services.AddSingleton<SymbolNavigationImpl>();
             services.AddSingleton<SymbolNavigationTools>();
             mcpBuilder.WithSentinelTools<SymbolNavigationTools>();
         }
         if (activeToolClasses.Contains("SymbolRelationshipTools"))
         {
-            services.AddSingleton<SymbolRelationshipImpl>();
             services.AddSingleton<SymbolRelationshipTools>();
             mcpBuilder.WithSentinelTools<SymbolRelationshipTools>();
         }
@@ -359,13 +283,10 @@ public static class RoslynSentinelServiceExtensionsBasic
         }
         if (activeToolClasses.Contains("RefactoringTools"))
         {
-            services.AddSingleton<RefactoringSignatureImpl>();
             services.AddSingleton<RefactoringSignatureTools>();
             mcpBuilder.WithSentinelTools<RefactoringSignatureTools>();
-            services.AddSingleton<RefactoringStructuralImpl>();
             services.AddSingleton<RefactoringStructuralTools>();
             mcpBuilder.WithSentinelTools<RefactoringStructuralTools>();
-            services.AddSingleton<RefactoringExtractionDocsImpl>();
             services.AddSingleton<RefactoringExtractionDocsTools>();
             mcpBuilder.WithSentinelTools<RefactoringExtractionDocsTools>();
         }
@@ -377,26 +298,21 @@ public static class RoslynSentinelServiceExtensionsBasic
         // registration (last one wins for GetRequiredService<T>, per DI container semantics).
         if (activeToolClasses.Contains("RefactoringSignatureTools"))
         {
-            services.TryAddSingleton<RefactoringSignatureImpl>();
             services.AddSingleton<RefactoringSignatureTools>();
             mcpBuilder.WithSentinelTools<RefactoringSignatureTools>();
         }
         if (activeToolClasses.Contains("RefactoringStructuralTools"))
         {
-            services.TryAddSingleton<RefactoringStructuralImpl>();
             services.AddSingleton<RefactoringStructuralTools>();
             mcpBuilder.WithSentinelTools<RefactoringStructuralTools>();
         }
         if (activeToolClasses.Contains("TypedMemberTools"))
         {
-            // Shares RefactoringStructuralImpl with RefactoringStructuralTools; TryAdd so either order works.
-            services.TryAddSingleton<RefactoringStructuralImpl>();
             services.AddSingleton<TypedMemberTools>();
             mcpBuilder.WithSentinelTools<TypedMemberTools>();
         }
         if (activeToolClasses.Contains("RefactoringExtractionDocsTools"))
         {
-            services.TryAddSingleton<RefactoringExtractionDocsImpl>();
             services.AddSingleton<RefactoringExtractionDocsTools>();
             mcpBuilder.WithSentinelTools<RefactoringExtractionDocsTools>();
         }

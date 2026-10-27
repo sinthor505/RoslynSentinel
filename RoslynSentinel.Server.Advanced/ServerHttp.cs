@@ -75,6 +75,7 @@ public class ServerHttp
 
         builder.Services.AddRoslynSentinelHostOptions(operatingMode, HostTransport.Http, respawn);
         builder.Services.AddRoslynSentinelEnginesAdvanced();
+        builder.Services.AddRoslynSentinelLlmClient();
         builder.Services.AddSingleton(new StoppedByScriptMarker(
             WasFound: stoppedByScriptDetails is not null, Details: stoppedByScriptDetails));
 
