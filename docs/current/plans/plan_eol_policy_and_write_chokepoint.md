@@ -1,6 +1,6 @@
 # Plan: Configurable EOL policy, single write chokepoint and final-bytes EOL guard
 
-**Status:** IN PROGRESS 2026-10-25. Steps 0-7 done (Steps 6-7 results are under each step; Steps 0-5: decisions, sweep, `scripts/Get-EolAudit.ps1`, working tree normalized, ratchet in `build.ps1`, `--eol` option, resolver, one dominant-EOL rule, chokepoint converts via the resolver and guards the final bytes; 5a-5c5 committed, flag and old path removed); Step 5 leftovers are listed under "Step 5 result"; next is Step 8, retire scattered newline literals (pass the resolved EOL to the formatter and the new-file scaffolds).
+**Status:** IN PROGRESS 2026-10-25. Steps 0-7 done (Steps 6-7 results are under each step; Steps 0-5: decisions, sweep, `scripts/Get-EolAudit.ps1`, working tree normalized, ratchet in `build.ps1`, `--eol` option, resolver, one dominant-EOL rule, chokepoint converts via the resolver and guards the final bytes; 5a-5c5 committed, flag and old path removed); Step 5 leftovers are listed under "Step 5 result"; Step 5 leftovers closed 2026-10-26 (see Decisions and follow-ups); Step 8a and 8b committed, next is the per-engine caller moves (8c-8k) onto the eol overloads, then 8z.
 
 > **Note (2026-10-19):** `NormalizeWholeSubtreeWhitespace` (named in the sweep and Step 2 below) was deleted (D1);
 > the EOL-aware helpers in `RoslynFormattingHelper` replace it. Treat those mentions as historical.
@@ -368,6 +368,14 @@ Step 0 results (2026-10-18):
   - Risk: tests asserting exact `\n` or platform-EOL strings from these engines will fail as sites move; those tests
     set `EolModeOverride` or normalise, as in Step 5. Expect the Tests.Advanced battery to need the most fixes.
   - Run order: 8a, 8b first (everything else depends on them), then per-engine slices smallest first.
+
+#### Step 8 progress (2026-10-26)
+- 8a done (`f9bed9f9`, tests `ab0efb65`): `IWorkspaceMutator.ResolveEol(filePath, preImageText)` on `PersistentWorkspaceManager` and `FakeWorkspaceManager`; `ComputeEolPrePass` uses it.
+- 8b done (`86996fe0`, `74abe66c`, `bdd06d1a`): every `RoslynFormattingHelper` method that derived or hard-coded an EOL has a new overload with a required `eol`; the old ones are `[Obsolete("Use the eol overload")]` wrappers with the previous detection and the original argument guards. No CS0618 is left inside the file.
+  - Old overload callers (not moved yet): about 36 `FormatAnnotatedSpansAsync`, 55 `FormatAnnotatedTextAsync`, 44 `ReplaceNodeAndFormatReplacementAsync` across 13 engine files, `ReplaceNodesAndFormatReplacementsAsync` 1, `RemoveNodePreservingTriviaAsync` 2, `RemoveNodeAndFormatContainerAsync` 5, `InsertMemberDeclarationAndFormatInsertionAsync` 3, `FormatNewSnippetAsync` 4, `FormatWholeDocumentAsync` 6, `FormatNewRootKeepingTriviaAsync` 5. Move them per engine (sweep lane, or an `implementer` per engine) to `workspaceManager.ResolveEol(path, preImageText)`; `AnnotatedInsertionHelper` and `ConstructorCallSiteFinder` are static with no manager in scope (pass `eol` down from their callers).
+  - 8z must move the XML doc comments from the old `[Obsolete]` wrappers onto the new eol overloads BEFORE the wrappers are removed (the docs currently sit on the wrappers; the new overloads have none).
+  - Mixed-EOL difference to expect when engines move: `DetectDominantEol` takes the majority style of a mixed document, `ResolveEol` takes the `.editorconfig`/platform value. Final bytes do not change (the chokepoint converts the whole file); characterization tests that pin stray CRLF/LF (`InsertMemberFormatCharacterizationTests`, `ReplaceNodesFormatCharacterizationTests`, `RoslynFormattingHelperFormatSpansTests`, Advanced `*FormatCharacterizationTests`) set `EolModeOverride` in the same slice.
+- Brief hygiene learned: a dispatch brief's labels must start the line (`Symbols:` with no parenthetical); wrappers must keep the original guard clauses; ReplaceSnippet calls need `reason` and non-empty `newContent`.
 
 ### Step 9 - Per-line EOL reporting (tool gap)
 - Files: `ReadFile` or `Search` tool and engine.
