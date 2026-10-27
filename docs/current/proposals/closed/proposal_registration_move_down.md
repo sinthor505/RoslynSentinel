@@ -1,6 +1,12 @@
 # Move engine and tool-dependency DI registration down into Engines.* / Tools.*
 
-**Status:** DRAFT 2026-10-27. Design decided in outline; five questions below are open; nothing built.
+**Status:** DONE 2026-10-27 (8417587a), slices 1-5; slice 6 is the pilot plan. Open questions resolved: Q1 recommendation
+taken (server registers classes per active class, calls only the Impls methods unconditionally); Q2 LLM client stays in Server
+(`AddRoslynSentinelLlmClient`); Q3 no shared fake (private `StubLlmClient` in `ToolClassRegistrationAdvancedTests`, `// TODO`
+to share); Q4 `AddRoslynSentinelHostOptions` stays; Q5 transitive DI packages sufficed. Deviations: old methods removed in
+the same edit as the new ones (identical extension signatures are ambiguous, CS0121); the plain `ILogger` registration moved
+into `AddRoslynSentinelToolImplsBasic`; `DependencyInjectionTests` needed an explicit `AddLogging()`. Server tool surface
+verified identical after restart (18 classes under claude-lean,subagenttools; 120 declared).
 
 Audience: the repo owner and implementer agents.
 

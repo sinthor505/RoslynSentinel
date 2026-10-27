@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Server.Basic folded into Server.Advanced; engine and tool-dependency registration moved to Engines.*/Tools.* - resolved (2026-10-27)
+
+Evidence: commits 4b9d998d, b875d27a, 9f6860d5 (fold; [proposal](proposals/closed/proposal_unify_server_projects.md)) and 8417587a
+(registration move-down; [proposal](proposals/closed/proposal_registration_move_down.md)). Build 0 errors, Tests.Server 472, Tests.Advanced 1500,
+Tests.Battery.Basic 179/179, new tool-class resolve tests 4/4 and 3/3; tool surface identical after restart.
+
 ## `.cs` files kept acquiring LF and mixed line endings; no EOL policy, guard checked pre-normalization text - resolved (2026-10-26)
 
 All 693 tracked files were `i/lf` and the working tree held 233 LF and 80 mixed files, invisible to `git diff`. Fixed by

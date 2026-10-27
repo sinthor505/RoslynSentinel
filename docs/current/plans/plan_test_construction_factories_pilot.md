@@ -1,16 +1,22 @@
 # Plan: Pilot shared engine/tool construction factories in Tests.Tools.Basic
 
-**Status:** DRAFT 2026-10-18, re-sequenced 2026-10-25. Step 0 (tool gap) and Step 1 (survey) are done and committed; Steps 2-5 wait on the server fold and registration move-down below.
+**Status:** IN-PROGRESS 2026-10-27. Steps 0 (tool gap) and 1 (survey) done; the prerequisites below are done (8417587a); Steps 2-5 are open.
 
-## Re-sequencing (2026-10-25)
+## Re-sequencing (2026-10-25, updated 2026-10-27)
 Test DI was reconsidered: it needs no `Server.*` reference once the engine and tool-dependency
-registration lists live in `Engines.*` / `Tools.*`. The factories stay (needed by `replaceConstruction`)
-but are implemented through a per-test DI container, so they track production wiring. Order:
+registration lists live in `Engines.*` / `Tools.*`. The factories stay (needed by `replaceConstruction`,
+which keeps the call's arguments verbatim) but resolve whatever the call site does not pass from a
+container, so a new constructor parameter is absorbed in one place. Order:
 1. DONE 2026-10-27: Fold `Server.Basic` into `Server.Advanced` (`docs/current/proposals/closed/proposal_unify_server_projects.md`).
-2. Move `AddRoslynSentinelEngines*` into `Engines.*` and add a flat `AddRoslynSentinelToolDependencies*`
-   in `Tools.*` (own proposal, not yet written).
-3. Steps 2-3 below, with the factory methods built on `ServiceCollection` and Step 3's drift guard
-   mostly unnecessary (the container resolves the real constructors).
+2. DONE 2026-10-27: registration move-down (`docs/current/proposals/closed/proposal_registration_move_down.md`):
+   `AddRoslynSentinelEngines{Basic,Advanced}` in `Engines.*`; `AddRoslynSentinelToolImpls*` /
+   `AddRoslynSentinelToolClasses*` in `Tools.*`; `Tests.Tools.Basic` and `Tests.Tools.Advanced` already
+   resolve every tool class from a plain `ServiceCollection`.
+3. Steps 2-3 below. Design (2026-10-27): each factory is `ActivatorUtilities.CreateInstance<T>(provider, args...)`
+   with explicit arguments from the call site (matched by type) and every other constructor parameter
+   resolved from a container built from the flat registration methods. Use a fresh provider per call, so no
+   state is shared between tests (the process-global `Common` option classes are out of scope). Step 3
+   becomes a resolve test (every factory overload returns an instance), not a signature-drift guard.
 4. Steps 4-5 unchanged.
 
 ## Problem
