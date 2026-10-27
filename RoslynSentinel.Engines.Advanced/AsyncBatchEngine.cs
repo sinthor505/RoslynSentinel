@@ -1271,6 +1271,7 @@ public class AsyncBatchEngine
         string source,
         string callerAsyncMethodName,
         string bridgedMethodName,
+        string eol,
         CancellationToken cancellationToken)
     {
         var preImage = baseDocument.WithText(SourceText.From(source));
@@ -1303,7 +1304,7 @@ public class AsyncBatchEngine
         newMethod = (MethodDeclarationSyntax)new AsyncOptimizationEngine.AsyncifyAnonymousFunctionsRewriter().Visit(newMethod)!;
         var newRoot = root.ReplaceNode(callerAsyncMethod, newMethod);
 
-        return await RoslynFormattingHelper.FormatAnnotatedTextAsync(preImage, newRoot, cancellationToken);
+        return await RoslynFormattingHelper.FormatAnnotatedTextAsync(preImage, newRoot, eol, cancellationToken);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1485,7 +1486,8 @@ public class AsyncBatchEngine
                 }
 
                 rewrittenSource = await RewriteCallerAsyncBodyAsync(
-                    callerDocument, bridgedCallerSource, rewriteTarget, bridgedMethodName, cancellationToken);
+                    callerDocument, bridgedCallerSource, rewriteTarget, bridgedMethodName,
+                    await _workspaceManager.ResolveEolAsync(callerDocument, cancellationToken), cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

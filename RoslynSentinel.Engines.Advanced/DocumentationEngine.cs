@@ -37,7 +37,7 @@ public class DocumentationEngine
                             t.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia)));
 
         // The stub is built with explicit trivia at the method's own indentation instead of re-spacing the whole file;
-        // FormatAnnotatedTextAsync then gives the inserted lines the document's dominant line ending.
+        // FormatAnnotatedTextAsync then gives the inserted lines the resolved line ending.
         var text = await document.GetTextAsync(cancellationToken);
         var newRoot = root.ReplaceNodes(methods, (oldMethod, newMethod) =>
         {
@@ -88,7 +88,7 @@ public class DocumentationEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -153,7 +153,7 @@ public class DocumentationEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 }

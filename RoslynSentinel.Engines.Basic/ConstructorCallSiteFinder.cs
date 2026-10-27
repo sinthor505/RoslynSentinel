@@ -296,7 +296,7 @@ internal static class ConstructorCallSiteFinder
     /// (<c>new X(new X())</c>) and several sites in one file cannot invalidate each other. Returns the edited,
     /// formatted documents keyed by id.
     /// </summary>
-    public static async Task<Dictionary<DocumentId, Document>> ApplyAsync(IReadOnlyList<(ConstructorCallSite Site, string Expression)> edits, string paramName, CancellationToken cancellationToken)
+    public static async Task<Dictionary<DocumentId, Document>> ApplyAsync(IReadOnlyList<(ConstructorCallSite Site, string Expression)> edits, string paramName, string eol, CancellationToken cancellationToken)
     {
         var result = new Dictionary<DocumentId, Document>();
         foreach (var group in edits.GroupBy(e => e.Site.Document.Id))
@@ -310,7 +310,7 @@ internal static class ConstructorCallSiteFinder
 
             var byNode = group.ToDictionary(e => e.Site.Node, e => e);
             var newRoot = root.ReplaceNodes(byNode.Keys, (originalNode, rewritten) => Rewrite(rewritten, byNode[originalNode].Site, byNode[originalNode].Expression, paramName));
-            result[document.Id] = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+            result[document.Id] = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, eol, cancellationToken);
         }
 
         return result;

@@ -131,12 +131,13 @@ public class MappingNormalizeCharacterizationTests
     }
 
     [Test]
-    public async Task GenerateMapping_CrOnlyDocument_SnippetTakesTheDocumentsCrEnding()
+    public async Task GenerateMapping_CrOnlyDocument_SnippetTakesTheResolvedEol()
     {
-        // Accepted change of the C6-3 migration: the former new-child whitespace helper only accepted LF or CRLF, so the snippet of a
-        // legacy CR-only document used to be LF. Every formatted line now takes the document's dominant ending.
+        // A CR-only pre-image is not single-style, so changed lines take the resolved EOL, not the document's CR; Crlf pins it here.
+        _workspaceManager.EolModeOverride = EolMode.Crlf;
+
         var text = await GenerateAsync(Join(SourceLines, "\r"));
 
-        Assert.That(text, Is.EqualTo(Join(ExpectedLines, "\r")));
+        Assert.That(text, Is.EqualTo(Join(ExpectedLines, "\r\n")));
     }
 }

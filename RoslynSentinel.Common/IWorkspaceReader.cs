@@ -28,7 +28,7 @@ public enum ReadSource
 /// loaded", this answers "what does the content say, as of which state". <see cref="ReadSource"/>
 /// is mandatory on every method here so callers say explicitly which state they want.
 /// </summary>
-public interface IWorkspaceReader
+public interface IWorkspaceReader : IEolResolver
 {
     /// <summary>
     /// Returns a document's current text, or null if no document at that path is tracked in the

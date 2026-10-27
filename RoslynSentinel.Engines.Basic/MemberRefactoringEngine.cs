@@ -387,7 +387,8 @@ public class MemberRefactoringEngine
             throw new UnresolvedCallSitesException($"{unresolved.Count} call site(s) of the '{className}' constructor have no callSiteFixups entry and no defaultValue/nullDefault, so nothing was changed. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) holding the argument expression for '{paramName}' at each site, or \"FilePath:*\" / \"*\" to apply one expression to every unresolved site in a file / everywhere, or pass defaultValue/nullDefault to leave these sites on the default.", unresolved);
         }
 
-        var editedDocuments = await ConstructorCallSiteFinder.ApplyAsync(edits, paramName, cancellationToken);
+        var eol = await _workspaceManager.ResolveEolAsync(document, cancellationToken);
+        var editedDocuments = await ConstructorCallSiteFinder.ApplyAsync(edits, paramName, eol, cancellationToken);
 
         // The class's own file may itself hold call sites (a this(...) initializer, or a new X() in another type
         // declared there): run the class edit on the already-rewritten document so both land in one text.
@@ -1441,7 +1442,7 @@ public class MemberRefactoringEngine
             throw new ToolBatchEditException(string.Join("\n", failures.Select(f => f.Message)), failures);
         }
 
-        var eol = EolUtilities.DetectNormalizableEol(sourceText);
+        var eol = _workspaceManager.ResolveEol(filePath.ToString(), sourceText.ToString());
         var textEdits = new List<AttributeTextEditBuilder.TextEdit>();
         var appliedIndexes = new List<int>();
         foreach (var edit in edits)
@@ -1756,7 +1757,8 @@ public class MemberRefactoringEngine
 
         // Insert only the attribute list as a text edit: replacing the target node and formatting it would re-format
         // every member of a type that merely needed one attribute line (see AttributeTextEditBuilder).
-        var addEdit = AttributeTextEditBuilder.BuildAddEdit(0, targetNode, attrList, sourceText, EolUtilities.DetectNormalizableEol(sourceText));
+        var eol = _workspaceManager.ResolveEol(filePath.ToString(), sourceText.ToString());
+        var addEdit = AttributeTextEditBuilder.BuildAddEdit(0, targetNode, attrList, sourceText, eol);
 
         var updatedText = AttributeTextEditBuilder.TryApply(sourceText, [addEdit], out var applyError);
         if (updatedText == null)
@@ -3949,7 +3951,7 @@ public class MemberRefactoringEngine
             }
 
             var deprecated = oldMember == MoveMemberOldMember.keepAsDeprecatedWrapper;
-            var eol = EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken));
+            var eol = await _workspaceManager.ResolveEolAsync(document, cancellationToken);
             keptMembers = membersToMove.ToHashSet();
             forwarderText = m => MoveMemberTextEdits.BuildForwarder((MethodDeclarationSyntax)m, receiver, deprecated, targetClassName, eol);
         }

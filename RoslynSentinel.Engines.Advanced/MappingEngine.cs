@@ -110,7 +110,7 @@ public class MappingEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = $"// Mapping method generated for {fromSymbol.Name} to {toSymbol.Name}",
-            UpdatedText = await RoslynFormattingHelper.FormatNewSnippetAsync(document, mappingMethod, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.FormatNewSnippetAsync(document, mappingMethod, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -185,8 +185,8 @@ public class MappingEngine
                 : SyntaxFactory.NamespaceDeclaration(namespaceName).AddMembers(topLevel);
         }
 
-        var body = await RoslynFormattingHelper.FormatNewSnippetAsync(document, topLevel, cancellationToken);
-        var eol = EolUtilities.DetectDominantEol((await document.GetTextAsync(cancellationToken)).ToString());
+        var eol = await _workspaceManager.ResolveEolAsync(document, cancellationToken);
+        var body = await RoslynFormattingHelper.FormatNewSnippetAsync(document, topLevel, eol, cancellationToken);
         var header = usings.Count == 0 ? string.Empty : string.Concat(usings.Select(u => $"using {u};{eol}")) + eol;
 
         return new DocumentEditResult
@@ -219,7 +219,7 @@ public class MappingEngine
         var newRoot = root!.ReplaceNodes(nodes, (oldNode, newNode) =>
             SwapAssignmentOperands(oldNode, newNode, annotation));
 
-        var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -277,7 +277,7 @@ public class MappingEngine
         var newRoot = root.ReplaceNodes(nodes, (oldNode, newNode) =>
             SwapAssignmentOperands(oldNode, newNode, annotation));
 
-        var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,

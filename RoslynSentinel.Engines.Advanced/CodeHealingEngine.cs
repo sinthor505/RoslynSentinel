@@ -34,7 +34,7 @@ public class CodeHealingEngine
 
         var rewriter = new ThreadSleepRewriter();
         var newRoot = rewriter.Visit(root);
-        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -126,7 +126,7 @@ public class CodeHealingEngine
         var newBody = SyntaxFactory.Block(retryDecl, whileStmt).WithTriviaFrom(method.Body).WithAdditionalAnnotations(Formatter.Annotation);
         var newMethod = method.WithBody(newBody);
         var newRoot = root.ReplaceNode(method, newMethod);
-        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -164,7 +164,7 @@ public class CodeHealingEngine
                 var newExceptionName = target.NewExceptionName;
                 var newOce = oce.WithType(SyntaxFactory.ParseTypeName(newExceptionName).WithTriviaFrom(oce.Type).WithAdditionalAnnotations(Formatter.Annotation));
                 var newRoot = root!.ReplaceNode(oce, newOce);
-                var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+                var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
                 changes[target.FilePath] = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
 
                 // Generate the new exception class

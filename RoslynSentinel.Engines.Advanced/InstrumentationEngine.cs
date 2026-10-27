@@ -49,7 +49,7 @@ public class InstrumentationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Try/catch added to method.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, methodNode, newMethodNode, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, methodNode, newMethodNode, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -84,7 +84,7 @@ public class InstrumentationEngine
             return newMethod.WithBody(SyntaxFactory.Block(tryStatement)).WithAdditionalAnnotations(annotation);
         });
 
-        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -141,7 +141,7 @@ public class InstrumentationEngine
         var newMethodNode = methodNode.WithBody(newBody).WithAdditionalAnnotations(annotation);
 
         var newRoot = root.ReplaceNode(methodNode, newMethodNode);
-        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,

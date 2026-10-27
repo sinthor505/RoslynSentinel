@@ -225,7 +225,7 @@ public class SemanticRefactoringEngine
             throw new ToolNotFoundException($"No statements found in lines {startLine}-{endLine} of '{filePath}'. Searched: statements inside a block body whose span falls within that line range. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use {ToolCallHint.Call("GetFileOutline")} to find the lines.", "statements");
         }
 
-        return await WrapStatementsInUsingAsync(filePath, document, root!, nodes, disposalName, cancellationToken);
+        return await WrapStatementsInUsingAsync(filePath, document, root!, nodes, disposalName, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
     }
 
     /// <summary>
@@ -269,7 +269,7 @@ public class SemanticRefactoringEngine
         }
 
         // TODO this snippet form selects only the statement(s) containing the snippet, so it cannot cover a multi-statement range (the using block would be empty); WrapRange using is meant for startLine/endLine
-        return await WrapStatementsInUsingAsync(filePath, document, root, nodes, disposalName, cancellationToken);
+        return await WrapStatementsInUsingAsync(filePath, document, root, nodes, disposalName, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
     }
 
     /// <summary>
@@ -280,7 +280,7 @@ public class SemanticRefactoringEngine
     /// <see cref="ToolInvalidArgumentException"/>), because a using header without an initializer is never valid C#.
     /// Shared by both <c>WrapInUsingAsync</c> overloads.
     /// </summary>
-    private static async Task<DocumentEditResult> WrapStatementsInUsingAsync(FilePathWrapper filePath, Document document, SyntaxNode root, IReadOnlyList<StatementSyntax> selected, string disposalName, CancellationToken cancellationToken)
+    private static async Task<DocumentEditResult> WrapStatementsInUsingAsync(FilePathWrapper filePath, Document document, SyntaxNode root, IReadOnlyList<StatementSyntax> selected, string disposalName, string eol, CancellationToken cancellationToken)
     {
         const string Requirement = "WrapRange wrapper=using requires the range to start with a local declaration of an IDisposable (for example `var s = new MemoryStream();`), and name must be that variable's name";
 
@@ -339,6 +339,6 @@ public class SemanticRefactoringEngine
 
         var newBlock = parentBlock.WithStatements(SyntaxFactory.List(newStatements));
 
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, parentBlock, newBlock, cancellationToken), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, parentBlock, newBlock, eol, cancellationToken), FilePath = filePath };
     }
 }
