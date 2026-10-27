@@ -220,7 +220,7 @@ public class MsToolAugmentEngine
             property.WithAdditionalAnnotations(annotation)
         };
         var finalRoot = renamedRoot.ReplaceNode(currentField, annotatedReplacements);
-        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(doc, finalRoot, cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(doc, finalRoot, await _workspaceManager.ResolveEolAsync(doc, cancellationToken), cancellationToken);
         return MsAugmentResult.Ok((await formattedDoc.GetTextAsync(cancellationToken)).ToString());
     }
 
@@ -422,7 +422,7 @@ public class MsToolAugmentEngine
             return MsAugmentResult.Fail("Could not determine replacement form (return/assignment). Manual conversion required.");
         }
 
-        return MsAugmentResult.Ok(await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(doc, root, sw, replacement, cancellationToken));
+        return MsAugmentResult.Ok(await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(doc, root, sw, replacement, await _workspaceManager.ResolveEolAsync(doc, cancellationToken), cancellationToken));
     }
 
     // ── 4. ConvertStringFormatToInterpolatedSmart ─────────────────────────────
@@ -563,7 +563,7 @@ public class MsToolAugmentEngine
             SyntaxFactory.Token(SyntaxKind.InterpolatedStringEndToken))
             .WithTriviaFrom(invocation);
 
-        return MsAugmentResult.Ok(await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(doc, root, invocation, interpolated, cancellationToken));
+        return MsAugmentResult.Ok(await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(doc, root, invocation, interpolated, await _workspaceManager.ResolveEolAsync(doc, cancellationToken), cancellationToken));
     }
 
     // ── 5. SortAndDeduplicateUsings ───────────────────────────────────────────
@@ -614,7 +614,7 @@ public class MsToolAugmentEngine
         }));
 
         var newRoot = root.WithUsings(newUsings);
-        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(doc, newRoot, cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(doc, newRoot, await _workspaceManager.ResolveEolAsync(doc, cancellationToken), cancellationToken);
         var updatedContent = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
 
         if (writeToFile)
@@ -1198,7 +1198,7 @@ public class MsToolAugmentEngine
             newContainingType.Members.Insert(0, constDecl));
 
         var finalRoot = replacedRoot.ReplaceNode(newContainingType, updatedType);
-        return MsAugmentResult.Ok(await RoslynFormattingHelper.FormatAnnotatedTextAsync(sourceText, finalRoot, cancellationToken));
+        return MsAugmentResult.Ok(await RoslynFormattingHelper.FormatAnnotatedTextAsync(sourceText, finalRoot, _workspaceManager.ResolveEol(filePath, source), cancellationToken));
     }
 
     private static string DetermineNumericType(SyntaxToken token)
@@ -1347,7 +1347,7 @@ public class MsToolAugmentEngine
 
         var newTypeDecl = typeDecl.AddMembers(method);
         var newRoot = root.ReplaceNode(typeDecl, newTypeDecl);
-        return MsAugmentResult.Ok(await RoslynFormattingHelper.FormatAnnotatedTextAsync(SourceText.From(source), newRoot, cancellationToken));
+        return MsAugmentResult.Ok(await RoslynFormattingHelper.FormatAnnotatedTextAsync(SourceText.From(source), newRoot, _workspaceManager.ResolveEol(filePath, source), cancellationToken));
     }
 
     // ── 12. ExtractMethod ─────────────────────────────────────────────────
@@ -1842,7 +1842,7 @@ public class MsToolAugmentEngine
         var updatedType = newContainingType.AddMembers(methodWithTrivia);
         var finalRoot = newRoot1.ReplaceNode(newContainingType, updatedType);
 
-        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(doc, finalRoot, cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(doc, finalRoot, await _workspaceManager.ResolveEolAsync(doc, cancellationToken), cancellationToken);
         return MsAugmentResult.Ok((await formattedDoc.GetTextAsync(cancellationToken)).ToString());
     }
 
