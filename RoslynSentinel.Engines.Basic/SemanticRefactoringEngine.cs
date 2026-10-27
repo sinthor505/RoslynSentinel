@@ -88,7 +88,7 @@ public class SemanticRefactoringEngine
         {
             try
             {
-                return await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, declarationStatement, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken);
+                return await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, declarationStatement, SyntaxRemoveOptions.KeepUnbalancedDirectives, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -141,7 +141,7 @@ public class SemanticRefactoringEngine
         // is annotated and Formatter.FormatAsync(document, annotation) would find no matching spans.
         if (modifiedRoot.GetAnnotatedNodes(editAnnotation).Any())
         {
-            var scopedFormattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, modifiedRoot, cancellationToken);
+            var scopedFormattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, modifiedRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
             return (await scopedFormattedDoc.GetTextAsync(cancellationToken)).ToString();
         }
 
@@ -149,7 +149,7 @@ public class SemanticRefactoringEngine
         // with container-scoped formatting instead of reflowing the whole file.
         try
         {
-            return await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, declarationStatement, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken);
+            return await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, declarationStatement, SyntaxRemoveOptions.KeepUnbalancedDirectives, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -204,7 +204,7 @@ public class SemanticRefactoringEngine
             .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
 
         var newClass = classNode.ReplaceNode(propNode, new MemberDeclarationSyntax[] { field, getter, setter });
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, classNode, newClass, cancellationToken), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, classNode, newClass, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken), FilePath = filePath };
     }
 
     /// <summary>

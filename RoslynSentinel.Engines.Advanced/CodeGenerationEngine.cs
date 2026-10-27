@@ -270,7 +270,7 @@ public class CodeGenerationEngine
 
         var updatedClass = classNode.AddMembers(ctor);
         var updatedRoot = root!.ReplaceNode(classNode, updatedClass);
-        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, updatedRoot, cancellationToken);
+        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, updatedRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         var updatedText = (await formatted.GetTextAsync(cancellationToken)).ToString();
         return new DocumentEditResult
         {
@@ -357,7 +357,7 @@ public class CodeGenerationEngine
 
         var updatedClass = classNode.AddMembers(method);
         var updatedRoot = root!.ReplaceNode(classNode, updatedClass);
-        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, updatedRoot, cancellationToken);
+        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, updatedRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         var updatedContent = (await formatted.GetTextAsync(cancellationToken)).ToString();
 
         string? warning = allExcluded.Count > 0
@@ -972,7 +972,7 @@ public class CodeGenerationEngine
 
         var newClass = classDecl.AddMembers(newMembers.ToArray());
         var newRoot = root.ReplaceNode(classDecl, newClass);
-        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -1043,7 +1043,7 @@ public class CodeGenerationEngine
             _ => throw new ToolInvalidArgumentException($"Unknown direction '{direction}'. Use 'ToFullProperty' or 'ToAutoProperty'.")
         };
 
-        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -1271,7 +1271,7 @@ public class CodeGenerationEngine
             .WithAdditionalAnnotations(Formatter.Annotation);
         var newRoot = root.ReplaceNode(invocation, replacement);
 
-        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,

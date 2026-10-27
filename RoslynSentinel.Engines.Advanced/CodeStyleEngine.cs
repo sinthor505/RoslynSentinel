@@ -81,7 +81,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot is null ? root.ToFullString() : await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
+            UpdatedText = newRoot is null ? root.ToFullString() : await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -132,7 +132,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, classNode, newClass, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, classNode, newClass, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -158,7 +158,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot is null ? root.ToFullString() : await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
+            UpdatedText = newRoot is null ? root.ToFullString() : await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -184,7 +184,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot is null ? root.ToFullString() : await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
+            UpdatedText = newRoot is null ? root.ToFullString() : await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -229,7 +229,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormatAnnotatedTextAsync(document, cu, cancellationToken)
+            UpdatedText = await FormatAnnotatedTextAsync(document, cu, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -255,7 +255,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -281,7 +281,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
