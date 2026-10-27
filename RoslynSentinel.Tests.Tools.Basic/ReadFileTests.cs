@@ -592,4 +592,66 @@ public class ReadFileTests
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
     }
+
+    private static string WriteOnDiskTextFile(string content)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "ReadFileEol_" + Guid.NewGuid().ToString("N") + ".txt");
+        File.WriteAllText(path, content);
+        return path;
+    }
+
+    [Test]
+    public async Task ReadFile_MixedLineEndingsOnDisk_ReturnsOneReadFileFindingAsync()
+    {
+        // Lines: CRLF, LF, CRLF, CRLF -> CRLF dominant, line 2 is the only mismatch.
+        var path = WriteOnDiskTextFile("a\r\nb\nc\r\nd\r\n");
+        try
+        {
+            var result = await _tools.ReadFileTool(reason: "test message", path);
+
+            Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+            Assert.That(result.Findings?.Count ?? 0, Is.EqualTo(1));
+            Assert.That(result.Findings![0].Source, Is.EqualTo("ReadFile"));
+            Assert.That(result.Findings![0].Message, Does.Contain("(CRLF): 2"));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Test]
+    public async Task ReadFile_UniformLineEndingsOnDisk_ReturnsNoFindingsAsync()
+    {
+        var path = WriteOnDiskTextFile("a\r\nb\r\nc\r\n");
+        try
+        {
+            var result = await _tools.ReadFileTool(reason: "test message", path);
+
+            Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+            Assert.That(result.Findings?.Count ?? 0, Is.Zero);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Test]
+    public async Task ReadFile_MixedLineEndingsOnDiskWithLineRange_StillReturnsReadFileFindingAsync()
+    {
+        var path = WriteOnDiskTextFile("a\r\nb\nc\r\nd\r\n");
+        try
+        {
+            var result = await _tools.ReadFileTool(reason: "test message", path, startLine: 1, endLine: 2);
+
+            Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+            Assert.That(result.Findings?.Count ?? 0, Is.EqualTo(1));
+            Assert.That(result.Findings![0].Source, Is.EqualTo("ReadFile"));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }

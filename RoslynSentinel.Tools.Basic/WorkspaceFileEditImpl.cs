@@ -378,6 +378,7 @@ public class WorkspaceFileEditImpl
                 var start = sourceText.Lines[from - 1].Start;
                 var end = sourceText.Lines[to - 1].EndIncludingLineBreak;
                 var slice = sourceText.ToString(TextSpan.FromBounds(start, end));
+                var sliceMixedEol = EolUtilities.DescribeMixedLineEndings(sourceText.ToString());
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
@@ -389,6 +390,7 @@ public class WorkspaceFileEditImpl
                         totalLines,
                         source = slice
                     },
+                    Findings = sliceMixedEol is null ? [] : [new Finding("ReadFile", sliceMixedEol)],
                     HasMoreData = to < totalLines,
                     StatusMessage = shortened
                         ? $"Range shortened to lines {from}-{to} of {totalLines} to stay under the {LargeResultHelper.OffloadThresholdBytes}-byte inline limit. Call {ToolCallHint.Call("ReadFile", ("startLine", (to + 1).ToString()))} for the rest."
@@ -398,6 +400,7 @@ public class WorkspaceFileEditImpl
             }
 
             var fullText = sourceText.ToString();
+            var mixedEol = EolUtilities.DescribeMixedLineEndings(fullText);
             var textBytes = System.Text.Encoding.UTF8.GetByteCount(fullText);
             const int thresholdBytes = LargeResultHelper.OffloadThresholdBytes;
             var solutionRoot = _workspaceManager.GetSolutionRoot();
@@ -420,6 +423,7 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsError = false,
+                    Findings = mixedEol is null ? [] : [new Finding("ReadFile", mixedEol)],
                     // Paging here goes through LargeResult/GetLargeResultTool, not HasMoreData -> leaving it
                     // false avoids signalling a second, redundant continuation mechanism.
                     HasMoreData = false,
@@ -444,6 +448,7 @@ public class WorkspaceFileEditImpl
                     totalLines,
                     source = fullText
                 },
+                Findings = mixedEol is null ? [] : [new Finding("ReadFile", mixedEol)],
                 HasMoreData = false,
                 WorkspaceVersion = _workspaceManager.WorkspaceVersion,
             };

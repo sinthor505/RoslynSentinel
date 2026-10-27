@@ -49,6 +49,67 @@ public static class EolUtilities
     }
 
     /// <summary>
+    /// Describes mixed line endings for a read-side finding: null when the text uses at most one line-ending style,
+    /// otherwise the per-style counts, the dominant style and the 1-based numbers of up to 20 lines whose terminator
+    /// differs from it (followed by "(+N more)" when truncated).
+    /// </summary>
+    public static string? DescribeMixedLineEndings(string text)
+    {
+        var counts = EolChangeGuard.Count(text);
+        if (counts.Total == 0 || counts.IsSingleStyle)
+        {
+            return null;
+        }
+
+        const int maxListed = 20;
+        var dominant = counts.Dominant;
+        var listed = new List<int>();
+        int mismatched = 0;
+        int line = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            string? style = null;
+            if (c == '\r')
+            {
+                if (i + 1 < text.Length && text[i + 1] == '\n')
+                {
+                    style = "CRLF";
+                    i++;
+                }
+                else
+                {
+                    style = "CR";
+                }
+            }
+            else if (c == '\n')
+            {
+                style = "LF";
+            }
+
+            if (style is null)
+            {
+                continue;
+            }
+
+            line++;
+            if (style != dominant)
+            {
+                mismatched++;
+                if (listed.Count < maxListed)
+                {
+                    listed.Add(line);
+                }
+            }
+        }
+
+        var more = mismatched > listed.Count ? $" (+{mismatched - listed.Count} more)" : string.Empty;
+        return $"Line endings are mixed: {counts.Crlf} CRLF, {counts.Lf} LF, {counts.Cr} CR. " +
+            $"Lines not ending in the dominant style ({dominant}): {string.Join(", ", listed)}{more}. " +
+            "The next write through the server converts the whole file to the configured EOL policy.";
+    }
+
+    /// <summary>
     /// Normalizes line endings the way a write to an EXISTING file should: only the lines the change added or
     /// rewrote take <paramref name="dominantEol"/>; every line that survives from <paramref name="before"/> keeps its
     /// own original terminator, and a removed line takes its terminator with it. This differs from

@@ -160,4 +160,46 @@ public class EolUtilitiesTests
         var bareLfCount = System.Text.RegularExpressions.Regex.Matches(result, "(?<!\r)\n").Count;
         Assert.That(bareLfCount, Is.Zero, $"Expected 0 bare LF but found {bareLfCount}. CRLF count: {crlfCount}. Result: {result}");
     }
+
+    [TestCase("a\r\nb\r\nc\r\n", TestName = "DescribeMixedLineEndings_UniformCrlf_ReturnsNull")]
+    [TestCase("a\nb\nc\n", TestName = "DescribeMixedLineEndings_UniformLf_ReturnsNull")]
+    [TestCase("", TestName = "DescribeMixedLineEndings_EmptyText_ReturnsNull")]
+    [TestCase("no line break", TestName = "DescribeMixedLineEndings_NoLineBreaks_ReturnsNull")]
+    public void DescribeMixedLineEndings_SingleStyleOrNoBreaks_ReturnsNull(string text)
+    {
+        Assert.That(EolUtilities.DescribeMixedLineEndings(text), Is.Null);
+    }
+
+    [Test]
+    public void DescribeMixedLineEndings_TwoCrlfThenLf_ReportsCountsAndMismatchedLine()
+    {
+        var message = EolUtilities.DescribeMixedLineEndings("a\r\nb\r\nc\nd\r\n");
+
+        Assert.That(message, Is.Not.Null);
+        Assert.That(message!, Does.Contain("3 CRLF, 1 LF"));
+        Assert.That(message!, Does.Contain("(CRLF): 3"));
+    }
+
+    [Test]
+    public void DescribeMixedLineEndings_MoreThanTwentyMismatches_TruncatesListWithMoreSuffix()
+    {
+        // 30 CRLF lines then 25 LF lines: CRLF dominates, so LF lines 31-55 are the mismatches.
+        var text = new System.Text.StringBuilder();
+        for (int i = 0; i < 30; i++)
+        {
+            text.Append("crlf line\r\n");
+        }
+
+        for (int i = 0; i < 25; i++)
+        {
+            text.Append("lf line\n");
+        }
+
+        var message = EolUtilities.DescribeMixedLineEndings(text.ToString());
+
+        Assert.That(message, Is.Not.Null);
+        Assert.That(
+            message!,
+            Does.Contain("(CRLF): 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50 (+5 more)."));
+    }
 }
