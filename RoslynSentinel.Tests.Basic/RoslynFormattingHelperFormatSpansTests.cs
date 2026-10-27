@@ -9,8 +9,8 @@ namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
 /// Slice C5a of docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md:
-/// <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync"/> (annotated-container sites) and
-/// <see cref="RoslynFormattingHelper.FormatWholeDocumentAsync"/> (the one named whole-document chokepoint).
+/// <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync(Document, SyntaxNode, string, CancellationToken)"/> (annotated-container sites) and
+/// <see cref="RoslynFormattingHelper.FormatWholeDocumentAsync(Document, string, Microsoft.CodeAnalysis.Text.SourceText?, CancellationToken)"/> (the one named whole-document chokepoint).
 /// Both must leave code the edit did not touch alone (apart from the whitespace and line break the formatter owns
 /// directly in front of an annotated node) and keep the document's own line-ending style.
 /// </summary>
@@ -112,7 +112,7 @@ public class RoslynFormattingHelperFormatSpansTests
         var target = Method(root, "Target");
         var rewritten = root.ReplaceNode(target, target.WithAdditionalAnnotations(Formatter.Annotation));
 
-        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten));
+        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten, "\n"));
 
         var expected = Src(false,
             "public class C",
@@ -139,7 +139,7 @@ public class RoslynFormattingHelperFormatSpansTests
         var target = Method(root, "Target");
         var rewritten = root.ReplaceNode(target, target.WithAdditionalAnnotations(Formatter.Annotation));
 
-        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten));
+        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten, "\n"));
 
         // Pins the boundary: the un-annotated field line is untouched, while the annotated method's indentation
         // (the whitespace directly in front of it) is re-spaced and the blank line before it is kept.
@@ -161,7 +161,7 @@ public class RoslynFormattingHelperFormatSpansTests
         var first = Method(root, "First");
         var rewritten = root.ReplaceNode(first, first.WithAdditionalAnnotations(Formatter.Annotation));
 
-        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten));
+        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten, "\n"));
 
         Assert.That(result, Does.Contain("var a = 1;"));
         Assert.That(result, Does.Contain("var   b=2;"), "The un-annotated method must stay unformatted.");
@@ -180,7 +180,7 @@ public class RoslynFormattingHelperFormatSpansTests
         var raw = await TextOf(await Formatter.FormatAsync(document.WithSyntaxRoot(rewritten), Formatter.Annotation));
         Assert.That(raw, Does.Contain("\r"), "Raw formatter output has no CR, so the test would not exercise the leak (is the pinned NewLine option being honoured?).");
 
-        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten));
+        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten, "\n"));
 
         Assert.That(result, Does.Not.Contain("\r"));
         Assert.That(result, Does.Contain("public void Added()"));
@@ -210,7 +210,7 @@ public class RoslynFormattingHelperFormatSpansTests
             .WithAdditionalAnnotations(Formatter.Annotation);
         var rewritten = root.ReplaceNode(cls, cls.AddMembers(lfMember));
 
-        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten));
+        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten, "\r\n"));
 
         Assert.That(result.Replace("\r\n", ""), Does.Not.Contain("\n"));
         Assert.That(result, Does.Contain("public void Added()"));
@@ -225,7 +225,7 @@ public class RoslynFormattingHelperFormatSpansTests
         var root = (await document.GetSyntaxRootAsync())!;
         var rewritten = root.ReplaceNode(Method(root, "First"), Method(root, "First").WithIdentifier(SyntaxFactory.Identifier("Renamed")));
 
-        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten));
+        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten, EolUtilities.DetectDominantEol(await document.GetTextAsync())));
 
         Assert.That(result, Is.EqualTo(source.Replace("First", "Renamed")));
     }
@@ -238,7 +238,7 @@ public class RoslynFormattingHelperFormatSpansTests
         var document = MakeDocument(source);
         var root = (await document.GetSyntaxRootAsync())!;
 
-        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, root));
+        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, root, EolUtilities.DetectDominantEol(await document.GetTextAsync())));
 
         Assert.That(result, Is.EqualTo(source));
     }
@@ -251,7 +251,7 @@ public class RoslynFormattingHelperFormatSpansTests
         var root = (await document.GetSyntaxRootAsync())!;
         var rewritten = AddAnnotatedMethod(root);
 
-        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten));
+        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten, EolUtilities.DetectDominantEol(await document.GetTextAsync())));
 
         Assert.That(result, Does.StartWith("public class C\r\n{\n"));
         Assert.That(result.Count(c => c == '\r'), Is.EqualTo(1), "Only the pre-existing stray CRLF may remain.");
@@ -263,8 +263,8 @@ public class RoslynFormattingHelperFormatSpansTests
         var document = MakeDocument(TwoMethodSource(false));
         var root = (await document.GetSyntaxRootAsync())!;
 
-        await Assert.ThatAsync(async () => await RoslynFormattingHelper.FormatAnnotatedSpansAsync(null!, root), Throws.TypeOf<ArgumentNullException>());
-        await Assert.ThatAsync(async () => await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, null!), Throws.TypeOf<ArgumentNullException>());
+        await Assert.ThatAsync(async () => await RoslynFormattingHelper.FormatAnnotatedSpansAsync(null!, root, "\n"), Throws.TypeOf<ArgumentNullException>());
+        await Assert.ThatAsync(async () => await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, null!, "\n"), Throws.TypeOf<ArgumentNullException>());
     }
 
     // ---- FormatWholeDocumentAsync ----
@@ -286,7 +286,7 @@ public class RoslynFormattingHelperFormatSpansTests
             "    }",
             "}"));
 
-        var result = await TextOf(await RoslynFormattingHelper.FormatWholeDocumentAsync(document));
+        var result = await TextOf(await RoslynFormattingHelper.FormatWholeDocumentAsync(document, "\n"));
 
         Assert.That(result, Does.Contain("First()"));
         Assert.That(result, Does.Contain("Second()"));
@@ -304,7 +304,7 @@ public class RoslynFormattingHelperFormatSpansTests
         var raw = await TextOf(await Formatter.FormatAsync(document));
         Assert.That(raw, Does.Contain("\r"), "Raw formatter output has no CR, so the test would not exercise the leak.");
 
-        var result = await TextOf(await RoslynFormattingHelper.FormatWholeDocumentAsync(document));
+        var result = await TextOf(await RoslynFormattingHelper.FormatWholeDocumentAsync(document, "\n"));
 
         Assert.That(result, Does.Not.Contain("\r"));
         Assert.That(result, Does.Contain("var a = 1;"));
@@ -326,10 +326,10 @@ public class RoslynFormattingHelperFormatSpansTests
         var edited = document.WithSyntaxRoot(root.ReplaceNode(cls, cls.AddMembers(crlfMember)));
 
         // Precondition: without a reference the edited text decides, so the synthesized CRLF block wins.
-        var withoutReference = await TextOf(await RoslynFormattingHelper.FormatWholeDocumentAsync(edited));
+        var withoutReference = await TextOf(await RoslynFormattingHelper.FormatWholeDocumentAsync(edited, EolUtilities.DetectDominantEol(await edited.GetTextAsync())));
         Assert.That(withoutReference, Does.Contain("Go29();\r\n"), "Without eolReference the edited text is CRLF-dominant and keeps the synthesized CRLF.");
 
-        var result = await TextOf(await RoslynFormattingHelper.FormatWholeDocumentAsync(edited, originalText));
+        var result = await TextOf(await RoslynFormattingHelper.FormatWholeDocumentAsync(edited, EolUtilities.DetectDominantEol(originalText), originalText));
 
         Assert.That(result, Does.Not.Contain("\r"));
         Assert.That(result, Does.Contain("public void Added()"));
@@ -345,7 +345,7 @@ public class RoslynFormattingHelperFormatSpansTests
         var raw = await TextOf(await Formatter.FormatAsync(document));
         Assert.That(raw.Replace("\r\n", ""), Does.Contain("\n"), "Raw formatter output has no bare LF, so the test would not exercise the leak.");
 
-        var result = await TextOf(await RoslynFormattingHelper.FormatWholeDocumentAsync(document));
+        var result = await TextOf(await RoslynFormattingHelper.FormatWholeDocumentAsync(document, "\r\n"));
 
         Assert.That(result.Replace("\r\n", ""), Does.Not.Contain("\n"));
         Assert.That(result, Does.Contain("var a = 1;"));
@@ -365,7 +365,7 @@ public class RoslynFormattingHelperFormatSpansTests
             "}");
         var document = MakeDocument(source);
 
-        var result = await TextOf(await RoslynFormattingHelper.FormatWholeDocumentAsync(document));
+        var result = await TextOf(await RoslynFormattingHelper.FormatWholeDocumentAsync(document, EolUtilities.DetectDominantEol(await document.GetTextAsync())));
 
         Assert.That(result, Is.EqualTo(source));
     }
@@ -373,7 +373,7 @@ public class RoslynFormattingHelperFormatSpansTests
     [Test]
     public async Task FormatWholeDocument_NullDocument_Throws()
     {
-        await Assert.ThatAsync(async () => await RoslynFormattingHelper.FormatWholeDocumentAsync(null!), Throws.TypeOf<ArgumentNullException>());
+        await Assert.ThatAsync(async () => await RoslynFormattingHelper.FormatWholeDocumentAsync(null!, "\n"), Throws.TypeOf<ArgumentNullException>());
     }
 
     // ---- RemoveNodeAndFormatContainerAsync ----
@@ -418,7 +418,7 @@ public class RoslynFormattingHelperFormatSpansTests
         var before = await OldRemoveNodeFormattedAsync(document, root, second, SyntaxRemoveOptions.KeepUnbalancedDirectives);
         Assert.That(before.Replace("\r\n", ""), Does.Contain("\n"), "Scenario no longer reproduces the mixed-EOL leak; adjust it.");
 
-        var result = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, second, SyntaxRemoveOptions.KeepUnbalancedDirectives);
+        var result = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, second, SyntaxRemoveOptions.KeepUnbalancedDirectives, "\r\n");
 
         Assert.That(result.Replace("\r\n", ""), Does.Not.Contain("\n"));
         Assert.That(result, Does.Contain("public void First()"));
@@ -452,7 +452,7 @@ public class RoslynFormattingHelperFormatSpansTests
         var second = Method(root, "Second");
 
         var old = await OldRemoveNodeFormattedAsync(document, root, second, SyntaxRemoveOptions.KeepUnbalancedDirectives);
-        var result = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, second, SyntaxRemoveOptions.KeepUnbalancedDirectives);
+        var result = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, second, SyntaxRemoveOptions.KeepUnbalancedDirectives, EolUtilities.DetectDominantEol(await document.GetTextAsync()));
 
         // The remove and the formatted span are identical to the old copy; only the line ending may differ (here the
         // formatter pin equals the document ending, so the texts are expected to be equal outright).

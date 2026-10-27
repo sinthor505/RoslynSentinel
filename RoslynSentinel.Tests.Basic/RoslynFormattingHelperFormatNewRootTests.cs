@@ -9,7 +9,7 @@ namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
 /// Slice C6 of docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md:
-/// <see cref="RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync"/>, the comment-keeping way to format a newly built
+/// <see cref="RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(Document, CompilationUnitSyntax, System.Func{SyntaxNode, bool}, string, System.Threading.CancellationToken)"/>, the comment-keeping way to format a newly built
 /// file root that embeds existing code. The three fixtures mirror how AdvancedStructuralEngine builds its roots
 /// (ExtractSuperclass, ExtractMembersToPartial, ConvertTupleToClass), which use this helper since slices C7a/C7b
 /// (engine pins: AdvancedStructuralNormalizeCharacterizationTests). Every test compares the whole result byte for byte
@@ -78,7 +78,7 @@ public class RoslynFormattingHelperFormatNewRootTests
         var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().First();
         var baseUnit = CompilationUnit().WithUsings(root.Usings).AddMembers(NewNamespaceLike(ns, baseClassNode));
 
-        return await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, baseUnit, n => n is not (UsingDirectiveSyntax or PropertyDeclarationSyntax));
+        return await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, baseUnit, n => n is not (UsingDirectiveSyntax or PropertyDeclarationSyntax), EolUtilities.DetectDominantEol(await document.GetTextAsync()));
     }
 
     // ExtractMembersToPartial: the named members are embedded in a new partial class (block namespace) in a new file.
@@ -91,7 +91,7 @@ public class RoslynFormattingHelperFormatNewRootTests
         var namespaceDecl = NamespaceDeclaration(ParseName("Demo")).WithMembers(SingletonList<MemberDeclarationSyntax>(newClassNode));
         var newCompilationUnit = CompilationUnit().WithUsings(root.Usings).WithMembers(SingletonList<MemberDeclarationSyntax>(namespaceDecl));
 
-        return await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, newCompilationUnit, n => n is not (UsingDirectiveSyntax or MemberDeclarationSyntax { Parent: ClassDeclarationSyntax }));
+        return await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, newCompilationUnit, n => n is not (UsingDirectiveSyntax or MemberDeclarationSyntax { Parent: ClassDeclarationSyntax }), EolUtilities.DetectDominantEol(await document.GetTextAsync()));
     }
 
     // ConvertTupleToClass: the tuple elements' types and the file's usings are embedded in a new class in a new file.
@@ -114,7 +114,7 @@ public class RoslynFormattingHelperFormatNewRootTests
         var ns = tupleType.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().First();
         var classRoot = CompilationUnit().WithUsings(root.Usings).AddMembers(NewNamespaceLike(ns, newClass));
 
-        return await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, classRoot, n => n is not (UsingDirectiveSyntax or TypeSyntax { Parent: PropertyDeclarationSyntax }));
+        return await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, classRoot, n => n is not (UsingDirectiveSyntax or TypeSyntax { Parent: PropertyDeclarationSyntax }), EolUtilities.DetectDominantEol(await document.GetTextAsync()));
     }
 
     // The four endings under test: (dominant, odd). The odd ending applies to each "~"-marked embedded line.
@@ -243,9 +243,9 @@ public class RoslynFormattingHelperFormatNewRootTests
         var document = MakeDocument("public class C\n{\n}\n", "\n");
         var root = await RootOf(document);
 
-        await Assert.ThatAsync(async () => await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(null!, root, _ => true), Throws.TypeOf<ArgumentNullException>());
-        await Assert.ThatAsync(async () => await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, null!, _ => true), Throws.TypeOf<ArgumentNullException>());
-        await Assert.ThatAsync(async () => await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, root, null!), Throws.TypeOf<ArgumentNullException>());
+        await Assert.ThatAsync(async () => await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(null!, root, _ => true, "\n"), Throws.TypeOf<ArgumentNullException>());
+        await Assert.ThatAsync(async () => await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, null!, _ => true, "\n"), Throws.TypeOf<ArgumentNullException>());
+        await Assert.ThatAsync(async () => await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, root, null!, "\n"), Throws.TypeOf<ArgumentNullException>());
     }
 
 

@@ -11,7 +11,7 @@ using static RoslynSentinel.Tests.Support.Sources;
 namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
-/// C5c-7 characterization tests for <see cref="RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync"/>.
+/// C5c-7 characterization tests for <see cref="RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(Document, SyntaxNode, TypeDeclarationSyntax, int, MemberDeclarationSyntax, string, System.Threading.CancellationToken)"/>.
 /// Byte-exact pins for the single-member insert-and-format helper, called directly on an in-memory document.
 /// The helper is migrated from a whole-text format plus whole-text NormalizeEol onto annotated-span formatting;
 /// the pins that change with that migration are marked where they are defined.
@@ -64,7 +64,7 @@ public class InsertMemberFormatCharacterizationTests
         var container = ClassC(root);
 
         var result = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(
-            document, root, container, insertIndex, NewMember(crlf));
+            document, root, container, insertIndex, NewMember(crlf), EolUtilities.DetectDominantEol(await document.GetTextAsync()));
 
         Assert.That(result, Is.EqualTo(Doc(crlf, Expected(insertIndex))));
     }
@@ -79,7 +79,7 @@ public class InsertMemberFormatCharacterizationTests
         var container = ClassC(root);
 
         var result = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(
-            document, root, container, 1, NewMember(crlf: false));
+            document, root, container, 1, NewMember(crlf: false), EolUtilities.DetectDominantEol(await document.GetTextAsync()));
 
         Assert.That(result, Is.EqualTo(Expected(1).Replace("public class C\n", "public class C\r\n")));
     }
@@ -94,7 +94,7 @@ public class InsertMemberFormatCharacterizationTests
         var container = ClassC(root);
 
         var result = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(
-            document, root, container, 1, NewMember(crlf: true));
+            document, root, container, 1, NewMember(crlf: true), EolUtilities.DetectDominantEol(await document.GetTextAsync()));
 
         Assert.That(result, Is.EqualTo(Crlf(Expected(1)).Replace("public class C\r\n", "public class C\n")));
     }

@@ -12,7 +12,7 @@ using static RoslynSentinel.Tests.Support.Sources;
 namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
-/// C5c-6 characterization tests for <see cref="RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync"/>.
+/// C5c-6 characterization tests for <see cref="RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync(Document, SyntaxNode, Dictionary{SyntaxNode, SyntaxNode}, string, System.Threading.CancellationToken, TriviaEditIntent)"/>.
 /// Byte-exact pins for the batch replace-and-format helper, called directly on an in-memory document.
 /// The helper is migrated from a whole-text format plus whole-text NormalizeEol onto annotated-span formatting;
 /// the pins that change with that migration are marked where they are defined.
@@ -52,7 +52,7 @@ public class ReplaceNodesFormatCharacterizationTests
         var methodA = Method(root, "A");
         var replacements = new Dictionary<SyntaxNode, SyntaxNode> { [methodA] = Privatized(methodA) };
 
-        var result = await RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync(document, root, replacements);
+        var result = await RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync(document, root, replacements, EolUtilities.DetectDominantEol(await document.GetTextAsync()));
 
         var expected = PrivateA(LfText);
         Assert.That(result.Text, Is.EqualTo(crlf ? Crlf(expected) : expected));
@@ -71,7 +71,7 @@ public class ReplaceNodesFormatCharacterizationTests
             [methodB] = Privatized(methodB),
         };
 
-        var result = await RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync(document, root, replacements);
+        var result = await RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync(document, root, replacements, EolUtilities.DetectDominantEol(await document.GetTextAsync()));
 
         var expected = PrivateB(PrivateA(LfText));
         Assert.That(result.Text, Is.EqualTo(crlf ? Crlf(expected) : expected));
@@ -91,7 +91,7 @@ public class ReplaceNodesFormatCharacterizationTests
             [methodA] = Privatized(methodA),
         };
 
-        var result = await RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync(document, root, replacements);
+        var result = await RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync(document, root, replacements, EolUtilities.DetectDominantEol(await document.GetTextAsync()));
 
         Assert.That(result.UnlocatedNodes, Has.Count.EqualTo(1));
         Assert.That(result.UnlocatedNodes[0], Is.SameAs(methodA));
@@ -109,7 +109,7 @@ public class ReplaceNodesFormatCharacterizationTests
         var methodA = Method(root, "A");
         var replacements = new Dictionary<SyntaxNode, SyntaxNode> { [methodA] = Privatized(methodA) };
 
-        var result = await RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync(document, root, replacements);
+        var result = await RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync(document, root, replacements, EolUtilities.DetectDominantEol(await document.GetTextAsync()));
 
         Assert.That(result.Text, Is.EqualTo(PrivateA(mixed)));
         Assert.That(result.UnlocatedNodes, Is.Empty);

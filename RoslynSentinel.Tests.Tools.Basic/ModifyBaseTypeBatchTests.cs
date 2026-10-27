@@ -441,7 +441,7 @@ public class ModifyBaseTypeBatchTests
             {
                 [outer] = outer.WithIdentifier(SyntaxFactory.Identifier("OuterRenamed")),
                 [inner] = inner.WithIdentifier(SyntaxFactory.Identifier("InnerRenamed")),
-            });
+            }, EolUtilities.DetectDominantEol(await document.GetTextAsync()));
 
         Assert.Multiple(() =>
         {
@@ -466,7 +466,7 @@ public class ModifyBaseTypeBatchTests
             {
                 [first] = first.WithIdentifier(SyntaxFactory.Identifier("FirstRenamed")),
                 [second] = second.WithIdentifier(SyntaxFactory.Identifier("SecondRenamed")),
-            });
+            }, EolUtilities.DetectDominantEol(await document.GetTextAsync()));
 
         Assert.Multiple(() =>
         {

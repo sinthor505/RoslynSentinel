@@ -104,7 +104,7 @@ public class RoslynFormattingHelperFormatAnnotatedTextTests
         var document = MakeDocument(Text(eol, oddEol, SourceLines), eol);
         var root = AnnotateFirstDeclaration((await document.GetSyntaxRootAsync())!);
 
-        var result = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, root);
+        var result = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, root, EolUtilities.DetectDominantEol(await document.GetTextAsync()));
 
         Assert.That(result, Is.EqualTo(Text(eol, oddEol, ExpectedLines)));
     }
@@ -115,7 +115,7 @@ public class RoslynFormattingHelperFormatAnnotatedTextTests
         var originalText = SourceText.From(Text(eol, oddEol, SourceLines));
         var root = AnnotateFirstDeclaration(CSharpSyntaxTree.ParseText(originalText).GetRoot());
 
-        var result = await RoslynFormattingHelper.FormatAnnotatedTextAsync(originalText, root);
+        var result = await RoslynFormattingHelper.FormatAnnotatedTextAsync(originalText, root, EolUtilities.DetectDominantEol(originalText));
 
         Assert.That(result, Is.EqualTo(Text(eol, oddEol, ExpectedLines)));
     }
@@ -126,7 +126,7 @@ public class RoslynFormattingHelperFormatAnnotatedTextTests
         var document = MakeDocument(Text(eol, oddEol, SourceLines), eol);
         var member = SyntaxFactory.ParseMemberDeclaration("void B()\n{\nint  z=3;\n}")!;
 
-        var result = await RoslynFormattingHelper.FormatNewSnippetAsync(document, member);
+        var result = await RoslynFormattingHelper.FormatNewSnippetAsync(document, member, EolUtilities.DetectDominantEol(await document.GetTextAsync()));
 
         Assert.That(result, Is.EqualTo(string.Join(eol, "void B()", "{", "    int z = 3;", "}")));
     }
