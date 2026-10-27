@@ -20,7 +20,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [Category("StructuralRefactoringEngine")]
 public class ConvertToClassNewNodeTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private StructuralRefactoringEngine _engine;
 
     [SetUp]
@@ -113,12 +113,14 @@ public class ConvertToClassNewNodeTests
     }
 
     [Test]
-    public async Task ConvertAnonymousToNamed_CrOnlyDocument_DoesNotThrowAndUsesCr()
+    public async Task ConvertAnonymousToNamed_CrOnlyDocument_DoesNotThrowAndUsesResolvedEol()
     {
-        // The new file takes the document's dominant line ending, a lone CR included.
+        _workspaceManager.EolModeOverride = EolMode.Crlf;
+        // A CR-only source: the new file's changed lines take the resolved line ending (CRLF here).
         var content = await AnonymousClassFileAsync(AnonymousLfSource.Replace("\n", "\r"));
 
-        Assert.That(content, Is.EqualTo(AnonymousLfExpected.Replace("\n", "\r")));
+        Assert.That(content.Replace("\r\n", "\r"), Is.EqualTo(AnonymousLfExpected.Replace("\n", "\r")), "content unchanged apart from the terminators of the changed lines");
+        Assert.That(content, Does.Contain("\r\n"), "changed lines take the resolved line ending");
     }
 
     // ---- ConvertTupleToClass ----
@@ -209,8 +211,10 @@ public class ConvertToClassNewNodeTests
     [Test]
     public async Task ConvertTupleToClass_CrOnlyDocumentWithHeader_DoesNotThrowAndKeepsHeader()
     {
+        _workspaceManager.EolModeOverride = EolMode.Crlf;
         var content = await TupleClassFileAsync("// Copyright (c) Acme\r#nullable enable\rusing System;\r\rnamespace Demo;\r\rpublic class Svc\r{\r    public (int Id, string? Name) GetData() => default;\r}\r");
 
-        Assert.That(content, Is.EqualTo(TupleHeaderExpected.Replace("\n", "\r")));
+        Assert.That(content.Replace("\r\n", "\r"), Is.EqualTo(TupleHeaderExpected.Replace("\n", "\r")), "content unchanged apart from the terminators of the changed lines");
+        Assert.That(content, Does.Contain("\r\n"), "changed lines take the resolved line ending");
     }
 }

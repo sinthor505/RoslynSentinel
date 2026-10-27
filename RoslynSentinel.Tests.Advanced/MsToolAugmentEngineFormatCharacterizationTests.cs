@@ -431,12 +431,13 @@ public class MsToolAugmentEngineFormatCharacterizationTests
     // Separator name "CR" = carriage return only; anything else = U+2028 LINE SEPARATOR.
     private static string Separator(string name) => name == "CR" ? ((char)0x0D).ToString() : ((char)0x2028).ToString();
 
-    // Pinned as-is (known limitation): CR-only and U+2028 separators are reused verbatim for the whole output; no
-    // normalisation to LF or CRLF happens.
+    // CR-only and U+2028 separators: untouched lines keep their separator, changed lines take the resolved line ending
+    // (CRLF here); the chokepoint converts the whole file on write.
     [TestCase("CR")]
     [TestCase("LS")]
-    public async Task SortUsings_NonLfSeparator_ReusedVerbatim(string separator)
+    public async Task SortUsings_NonLfSeparator_ChangedLinesTakeResolvedEol(string separator)
     {
+        _workspaceManager.EolModeOverride = EolMode.Crlf;
         SetFiles(("Test.cs", string.Join(Separator(separator), UsingsInput())));
 
         var expected = new[]
@@ -452,15 +453,18 @@ public class MsToolAugmentEngineFormatCharacterizationTests
             "}",
             "",
         };
-        Assert.That(await SortUsingsAsync(), Is.EqualTo(string.Join(Separator(separator), expected)));
+        var actual = await SortUsingsAsync();
+        Assert.That(actual.Replace("\r\n", Separator(separator)), Is.EqualTo(string.Join(Separator(separator), expected)), "content unchanged apart from the terminators of the changed lines");
+        Assert.That(actual, Does.Contain("\r\n"), "changed lines take the resolved line ending");
     }
 
-    // Pinned as-is (known limitation): CR-only and U+2028 separators are reused verbatim for the whole output, including
-    // the appended method; no normalisation to LF or CRLF happens.
+    // CR-only and U+2028 separators: untouched lines keep their separator, changed lines take the resolved line ending
+    // (CRLF here, including the appended method); the chokepoint converts the whole file on write.
     [TestCase("CR")]
     [TestCase("LS")]
-    public async Task ExtractMethod_NonLfSeparator_ReusedVerbatim(string separator)
+    public async Task ExtractMethod_NonLfSeparator_ChangedLinesTakeResolvedEol(string separator)
     {
+        _workspaceManager.EolModeOverride = EolMode.Crlf;
         SetFiles(("Test.cs", string.Join(Separator(separator), ExtractInput())));
 
         var expected = new[]
@@ -487,7 +491,9 @@ public class MsToolAugmentEngineFormatCharacterizationTests
             "}",
             "",
         };
-        Assert.That(await ExtractAsync(), Is.EqualTo(string.Join(Separator(separator), expected)));
+        var actual = await ExtractAsync();
+        Assert.That(actual.Replace("\r\n", Separator(separator)), Is.EqualTo(string.Join(Separator(separator), expected)), "content unchanged apart from the terminators of the changed lines");
+        Assert.That(actual, Does.Contain("\r\n"), "changed lines take the resolved line ending");
     }
 
     // ================================================================ Known trivia loss
