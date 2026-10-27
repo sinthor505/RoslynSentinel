@@ -16,7 +16,7 @@ namespace RoslynSentinel.Tests.Basic;
 [Category("MemberRefactoringEngine")] // sentinel:auto-category
 public class ExtractMethodNormalizeCharacterizationTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private MemberRefactoringEngine _engine;
 
     [SetUp]
@@ -180,6 +180,9 @@ public class ExtractMethodNormalizeCharacterizationTests
     [Test]
     public async Task ExtractMethod_ComplexSelection_MixedDocument_StrayCrlfLineKeepsItsTerminator()
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         var lf = await ExtractComplexAsync(Build("\n", Input));
 
         var mixed = await ExtractComplexAsync(Build("\n", Input, stray: true));

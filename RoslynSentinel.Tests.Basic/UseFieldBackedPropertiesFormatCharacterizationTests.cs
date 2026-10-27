@@ -18,7 +18,7 @@ namespace RoslynSentinel.Tests.Basic;
 [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
 public class UseFieldBackedPropertiesFormatCharacterizationTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private SyntaxUpgradeEngine _engine;
 
     [SetUp]
@@ -150,6 +150,9 @@ public class UseFieldBackedPropertiesFormatCharacterizationTests
     [Test]
     public async Task UseFieldBackedProperties_MixedEol_StrayCrlfLineOutsideTheEditKeepsItsTerminator()
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetSource(WithStrayCrlf(Src(false, WellFormedInput())));
 
         var result = await _engine.UseFieldBackedPropertiesAsync("Entity.cs");

@@ -47,7 +47,7 @@ public class SyntaxUpgradeEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = (await (await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken)).GetTextAsync(cancellationToken)).ToString()
+            UpdatedText = (await (await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)).GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -73,7 +73,7 @@ public class SyntaxUpgradeEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = (await (await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken)).GetTextAsync(cancellationToken)).ToString()
+            UpdatedText = (await (await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)).GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -99,7 +99,7 @@ public class SyntaxUpgradeEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = (await (await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken)).GetTextAsync(cancellationToken)).ToString()
+            UpdatedText = (await (await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)).GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -131,7 +131,7 @@ public class SyntaxUpgradeEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, node, nameofExpr, cancellationToken)
+                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, node, nameofExpr, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
             };
         }
         throw new ToolTargetIneligibleException("No string literal found at the matched context snippet.");
@@ -176,7 +176,7 @@ public class SyntaxUpgradeEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, switchStmt, newReturn, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, switchStmt, newReturn, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -216,7 +216,7 @@ public class SyntaxUpgradeEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = (await (await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken)).GetTextAsync(cancellationToken)).ToString()
+            UpdatedText = (await (await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)).GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -374,7 +374,7 @@ public class SyntaxUpgradeEngine
         }
 
         var newRoot = root.ReplaceNodes(replaceMap.Keys, (orig, _) => replaceMap[orig]);
-        var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -565,7 +565,7 @@ public class SyntaxUpgradeEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Class converted to primary constructor.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, classNode, newClassNode, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, classNode, newClassNode, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -610,7 +610,7 @@ public class SyntaxUpgradeEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Converted to file-scoped namespace.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, nsDecl, fileScopedNs, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, nsDecl, fileScopedNs, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 

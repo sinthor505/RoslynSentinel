@@ -21,7 +21,7 @@ public class SyntaxUpgradeNormalizeCharacterizationTests
 {
     private const string UntouchedLine = "    public void  Untouched( )  { }";
 
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private SyntaxUpgradeEngine _engine;
 
     [SetUp]
@@ -183,6 +183,12 @@ public class SyntaxUpgradeNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task UpgradeToModernGuards_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol, GuardInput()));
 
         var result = await _engine.UpgradeToModernGuardsAsync("Entity.cs");
@@ -196,6 +202,12 @@ public class SyntaxUpgradeNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task AddBraces_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol, BracesInput()));
 
         var result = await _engine.AddBracesAsync("Entity.cs");
@@ -209,6 +221,12 @@ public class SyntaxUpgradeNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task UpgradePatternMatching_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol, PatternInput()));
 
         var result = await _engine.UpgradePatternMatchingAsync("Entity.cs");
@@ -222,6 +240,12 @@ public class SyntaxUpgradeNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task CleanupImplicitSpans_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol, SpanInput()));
 
         var result = await _engine.CleanupImplicitSpansAsync("Entity.cs");

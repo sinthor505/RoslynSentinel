@@ -23,7 +23,7 @@ public class MsToolAugmentNormalizeCharacterizationTests
 {
     private const string UntouchedLine = "    public void  Untouched( )  { }";
 
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private MsToolAugmentEngine _engine;
     private string _tempDir;
 
@@ -131,6 +131,12 @@ public class MsToolAugmentNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ExtractConstantSafe_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         var path = WriteDiskFile(Build(eol, ConstantInput()));
 
         var result = await _engine.ExtractConstantSafeAsync(path, "\"hello\"", "Greeting");
@@ -144,6 +150,12 @@ public class MsToolAugmentNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task GenerateToStringSafe_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol, ToStringInput()));
 
         var result = await _engine.GenerateToStringSafeAsync("Entity.cs", "Entity");

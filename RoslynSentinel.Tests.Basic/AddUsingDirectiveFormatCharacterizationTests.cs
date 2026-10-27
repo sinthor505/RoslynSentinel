@@ -20,7 +20,7 @@ namespace RoslynSentinel.Tests.Basic;
 [Category("BasicRefactoringEngine")] // sentinel:auto-category
 public class AddUsingDirectiveFormatCharacterizationTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private BasicRefactoringEngine _engine;
 
     [SetUp]
@@ -185,6 +185,9 @@ public class AddUsingDirectiveFormatCharacterizationTests
         // An LF document with one CRLF terminator, on the `using System;` line directly above the inserted using
         // (the line the edit sits next to, but does not change). Mixed documents are the only case whose bytes can
         // differ across the routing: the old tail normalized only single-style documents.
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         var source = WithStrayCrlf(Src(false, WithUsingsInput()));
         SetSource(source);
 
