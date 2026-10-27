@@ -24,7 +24,7 @@ public class AsyncOptimizationNormalizeCharacterizationTests
 {
     private const string UntouchedLine = "    public void  Untouched( )  { }";
 
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private AsyncOptimizationEngine _engine;
 
     [SetUp]
@@ -70,6 +70,12 @@ public class AsyncOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task OptimizeIndependentAwaits_WhenAll_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class C",
             "{",
@@ -104,6 +110,12 @@ public class AsyncOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task OptimizeIndependentAwaits_Hoisted_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class C",
             "{",
@@ -141,6 +153,12 @@ public class AsyncOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task GenerateAsyncOverload_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class C",
             "{",
@@ -180,6 +198,12 @@ public class AsyncOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ConvertToAsyncBridge_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class C",
             "{",
@@ -221,6 +245,12 @@ public class AsyncOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task GenerateAsyncOverload_LeadingComment_StaysOnOriginal(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class C",
             "{",
@@ -262,6 +292,12 @@ public class AsyncOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ConvertToAsyncBridge_LeadingComment_StaysOnOriginal(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class C",
             "{",
@@ -303,6 +339,12 @@ public class AsyncOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ConvertToAsyncBridge_ExpressionBodiedWithLeadingComment_StaysOnOriginal(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class C",
             "{",
@@ -340,6 +382,12 @@ public class AsyncOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ConvertEventHandlerCallerToAsyncVoid_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "using System;",
             "",
@@ -385,6 +433,12 @@ public class AsyncOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task RewriteObsoleteCallsInAsyncMethod_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "using System;",
             "using System.Threading;",
@@ -434,6 +488,12 @@ public class AsyncOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task AddConfigureAwaitFalse_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class C",
             "{",
@@ -465,6 +525,12 @@ public class AsyncOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task RemoveConfigureAwaitFalse_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class C",
             "{",
@@ -496,6 +562,12 @@ public class AsyncOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ConvertToAsyncEnumerable_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class C",
             "{",
@@ -529,6 +601,12 @@ public class AsyncOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task AddCancellationTokenToMethod_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class C",
             "{",
@@ -561,6 +639,12 @@ public class AsyncOptimizationNormalizeCharacterizationTests
     public async Task FlagMigrationCandidate_ByteExact(string eol)
     {
         // Re-flagging keeps the existing FlaggedDate, which keeps the pin independent of today's date.
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class C",
             "{",
@@ -594,6 +678,12 @@ public class AsyncOptimizationNormalizeCharacterizationTests
     public async Task FlagMultipleMigrationCandidates_ByteExact(string eol)
     {
         // Re-flagging keeps the existing FlaggedDate, which keeps the pin independent of today's date.
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class C",
             "{",

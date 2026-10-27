@@ -19,7 +19,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [Category("StructuralRefactoringEngine")] // sentinel:auto-category
 public class AdvancedStructuralFormatCharacterizationTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private StructuralRefactoringEngine _engine;
 
     [SetUp]
@@ -146,6 +146,9 @@ public class AdvancedStructuralFormatCharacterizationTests
     [TestCase(PreMethodLineAnchor)]
     public async Task IntroduceParameterObject_MainPath_MixedEol_StrayCrlfLineKeepsItsTerminator(string anchor)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetSource(WithStrayCrlf(Src(false, MainInput()), anchor));
 
         var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run");
@@ -299,6 +302,9 @@ public class AdvancedStructuralFormatCharacterizationTests
     [TestCase(PreMethodLineAnchor)]
     public async Task IntroduceParameterObject_WarningPath_MixedEol_StrayCrlfLineKeepsItsTerminator(string anchor)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetSource(WithStrayCrlf(Src(false, WarnInput()), anchor));
 
         var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run");

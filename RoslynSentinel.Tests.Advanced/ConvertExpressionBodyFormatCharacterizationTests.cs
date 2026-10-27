@@ -23,7 +23,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [Category("StructuralRefactoringEngine")]
 public class ConvertExpressionBodyFormatCharacterizationTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private StructuralRefactoringEngine _engine;
 
     [SetUp]
@@ -180,6 +180,9 @@ public class ConvertExpressionBodyFormatCharacterizationTests
     public async Task MixedEol_StrayCrlfLineKeepsItsTerminator(string site, string anchor)
     {
         var (input, expected) = Lines(site);
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetFiles(("Test.cs", WithStrayCrlf(Src(false, input), anchor)));
 
         Assert.That(await RunAsync(site), Is.EqualTo(WithStrayCrlf(Src(false, expected), anchor)));

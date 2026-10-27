@@ -17,7 +17,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [Category("BasicRefactoringEngine")] // sentinel:auto-category
 public class BasicRefactoringEngineFormatCharacterizationTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private BasicRefactoringEngine _engine;
 
     [SetUp]
@@ -127,6 +127,9 @@ public class BasicRefactoringEngineFormatCharacterizationTests
     [Test]
     public async Task ChangeSignature_StrayCrlfOnUntouchedLine_KeepsItsTerminator()
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetSource(WithStrayCrlf(Src(false, CalcInput()), CalcStray));
 
         var content = await SwapAddParametersAsync();
@@ -284,6 +287,9 @@ public class BasicRefactoringEngineFormatCharacterizationTests
     [Test]
     public async Task MoveTypeToFile_StrayCrlfOnUntouchedLine_KeepsItsTerminatorAndNewFileTakesDominantEol()
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetSource(WithStrayCrlf(Src(false, SplitInput()), KeepStray));
 
         var result = await _engine.MoveTypeToFileAsync("Test.cs", "Moved");
@@ -307,6 +313,9 @@ public class BasicRefactoringEngineFormatCharacterizationTests
     [Test]
     public async Task MoveAllTypesToFiles_StrayCrlfOnUntouchedLine_KeepsItsTerminatorAndNewFileTakesDominantEol()
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetSource(WithStrayCrlf(Src(false, SplitInput()), KeepStray));
 
         var result = await _engine.MoveAllTypesToFilesAsync("Test.cs");
@@ -373,6 +382,9 @@ public class BasicRefactoringEngineFormatCharacterizationTests
     [Test]
     public async Task ExtractInterface_StrayCrlfOnUntouchedLine_KeepsItsTerminator()
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetSource(WithStrayCrlf(Src(false, SvcInput()), SvcStray));
 
         var result = await _engine.ExtractInterfaceAsync("Test.cs", "Svc", "ISvc");
@@ -387,6 +399,9 @@ public class BasicRefactoringEngineFormatCharacterizationTests
     {
         const string anchor = "        private int _other;";
         var source = WithStrayCrlf(Src(false, SvcInput()), anchor);
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetSource(source);
 
         var result = await _engine.AddUsingDirectiveAsync("Test.cs", "System.Linq", simplifyExisting: true);

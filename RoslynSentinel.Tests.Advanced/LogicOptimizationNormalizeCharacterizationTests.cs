@@ -23,7 +23,7 @@ public class LogicOptimizationNormalizeCharacterizationTests
 {
     private const string UntouchedLine = "    public void  Untouched( )  { }";
 
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private LogicSimplificationEngine _engine;
 
     [SetUp]
@@ -69,6 +69,12 @@ public class LogicOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task SimplifyBooleanExpressions_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class Sample",
             "{",
@@ -102,6 +108,12 @@ public class LogicOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task AddGuardClauses_Modified_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class Sample",
             "{",
@@ -134,6 +146,12 @@ public class LogicOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task AddGuardClauses_NoCandidates_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class Sample",
             "{",
@@ -165,6 +183,12 @@ public class LogicOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ConvertToNullCoalescing_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class Sample",
             "{",
@@ -201,6 +225,12 @@ public class LogicOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ConvertToSwitch_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class Sample",
             "{",
@@ -254,6 +284,12 @@ public class LogicOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ConvertIfToSwitchExpression_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol, IfChainSource(UntouchedLine)));
 
         var result = await _engine.ConvertIfToSwitchExpressionAsync("Test.cs", "Name");
@@ -281,6 +317,12 @@ public class LogicOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ConvertIfToSwitchStatement_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol, IfChainSource(UntouchedLine)));
 
         var result = await _engine.ConvertIfToSwitchStatementAsync("Test.cs", "Name");
@@ -329,6 +371,12 @@ public class LogicOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ExtensionToStatic_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public static class Ext",
             "{",
@@ -360,6 +408,12 @@ public class LogicOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ConvertStaticToExtension_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class Ext",
             "{",
@@ -391,6 +445,12 @@ public class LogicOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ConvertForEachToFor_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class Sample",
             "{",
@@ -429,6 +489,12 @@ public class LogicOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ConvertForToForEach_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class Sample",
             "{",
@@ -466,6 +532,12 @@ public class LogicOptimizationNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ConvertWhileToFor_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class Sample",
             "{",

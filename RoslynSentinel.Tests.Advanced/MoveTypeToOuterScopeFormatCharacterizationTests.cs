@@ -21,7 +21,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [Category("StructuralRefactoringEngine")] // sentinel:auto-category
 public class MoveTypeToOuterScopeFormatCharacterizationTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private StructuralRefactoringEngine _engine;
 
     [SetUp]
@@ -249,6 +249,9 @@ public class MoveTypeToOuterScopeFormatCharacterizationTests
     [TestCaseSource(nameof(LfCases))]
     public async Task MoveTypeToOuterScope_MixedEol_StrayCrlfLineKeepsItsTerminator(string[] input, string[] expected, bool crlf)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetSource(WithStrayCrlf(Src(false, input)));
 
         Assert.That(await MoveAsync(), Is.EqualTo(WithStrayCrlf(Src(false, expected))));

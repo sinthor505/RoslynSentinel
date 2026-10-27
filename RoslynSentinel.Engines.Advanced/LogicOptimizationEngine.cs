@@ -41,7 +41,7 @@ public class LogicSimplificationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Boolean expressions simplified.",
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -97,7 +97,7 @@ public class LogicSimplificationEngine
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
                 Message = "// Guard clauses added.",
-                UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
+                UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
             };
         }
 
@@ -133,7 +133,7 @@ public class LogicSimplificationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Null coalescing operators applied.",
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -178,7 +178,7 @@ public class LogicSimplificationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Switch statements converted.",
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -732,7 +732,7 @@ public class LogicSimplificationEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
             FilePath = filePath
         };
     }
@@ -782,7 +782,7 @@ public class LogicSimplificationEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
             FilePath = filePath
         };
     }
@@ -813,7 +813,7 @@ public class LogicSimplificationEngine
                 return new DocumentEditResult
                 {
                     Outcome = EditOutcome.Modified,
-                    UpdatedText = await FormatAnnotatedTextAsync(document, root!.ReplaceNode(methodNode, newMethod), cancellationToken),
+                    UpdatedText = await FormatAnnotatedTextAsync(document, root!.ReplaceNode(methodNode, newMethod), await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
                     FilePath = filePath
                 };
             }
@@ -871,7 +871,7 @@ public class LogicSimplificationEngine
                 return new DocumentEditResult
                 {
                     Outcome = EditOutcome.Modified,
-                    UpdatedText = await FormatAnnotatedTextAsync(document, updatedRoot, cancellationToken),
+                    UpdatedText = await FormatAnnotatedTextAsync(document, updatedRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
                     FilePath = filePath
                 };
             }
@@ -956,7 +956,7 @@ public class LogicSimplificationEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
             FilePath = filePath
         };
     }
@@ -1000,7 +1000,7 @@ public class LogicSimplificationEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
             FilePath = filePath
         };
     }
@@ -1086,7 +1086,7 @@ public class LogicSimplificationEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
             FilePath = filePath
         };
     }
@@ -1234,7 +1234,7 @@ public class LogicSimplificationEngine
                 return new DocumentEditResult
                 {
                     Outcome = EditOutcome.Modified,
-                    UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, methodNode, newMethodNode, cancellationToken),
+                    UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, methodNode, newMethodNode, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
                     FilePath = filePath
                 };
             }

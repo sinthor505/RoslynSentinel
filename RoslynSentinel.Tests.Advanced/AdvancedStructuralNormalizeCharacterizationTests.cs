@@ -35,7 +35,7 @@ public class AdvancedStructuralNormalizeCharacterizationTests
 {
     private const string UntouchedLine = "    public void  Untouched( )  { }~";
 
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private StructuralRefactoringEngine _engine;
 
     [SetUp]
@@ -90,6 +90,12 @@ public class AdvancedStructuralNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ConvertAbstractClassToInterface_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSources(("Test.cs", Build(eol,
             "public abstract class Animal",
             "{",
@@ -127,6 +133,12 @@ public class AdvancedStructuralNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ReplaceConstructorWithFactory_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSources(("Test.cs", Build(eol,
             "public class Widget",
             "{",
@@ -169,6 +181,12 @@ public class AdvancedStructuralNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ExtractSuperclass_NewFile_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSources(("Test.cs", Build(eol,
             "using System;",
             "",
@@ -204,6 +222,12 @@ public class AdvancedStructuralNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task InlineClass_SameFile_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSources(("Test.cs", Build(eol,
             "public class Owner",
             "{",
@@ -246,6 +270,12 @@ public class AdvancedStructuralNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task InlineClass_CrossFile_WithTypeReferenceUpdate_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSources(
             ("Source.cs", Build(eol,
                 "namespace App;",
@@ -379,6 +409,12 @@ public class AdvancedStructuralNormalizeCharacterizationTests
     [TestCase("type-to-var", 2, "Mixed")]
     public async Task RunMicroRefactoring_ByteExact(string refactoringId, int line, string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSources(("Test.cs", Build(eol, MicroInput())));
 
         var result = await _engine.RunMicroRefactoringAsync("Test.cs", refactoringId, line);
@@ -423,6 +459,12 @@ public class AdvancedStructuralNormalizeCharacterizationTests
             "    }",
         ];
         string[] header = ["using System; // for Console", "using System.Linq;", ""];
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSources(("Test.cs", Build(eol, InNamespace(fileScoped, header, "public partial class Customer", [.. moved, "", UntouchedLine]))));
 
         var result = await _engine.ExtractMembersToPartialAsync("Test.cs", "Customer", ["Name", "Total"]);
@@ -438,6 +480,12 @@ public class AdvancedStructuralNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task InlineMethod_WithCallers_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSources(
             ("Calc.cs", Build(eol,
                 "using System;",
@@ -506,6 +554,12 @@ public class AdvancedStructuralNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task InlineMethod_NoCallers_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSources(("Calc.cs", Build(eol,
             "namespace Demo;",
             "",
@@ -541,6 +595,12 @@ public class AdvancedStructuralNormalizeCharacterizationTests
     public async Task ConvertTupleToClass_ByteExact(string eol, bool fileScoped)
     {
         string[] header = ["using System; // for Console", ""];
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSources(("Repo.cs", Build(eol, InNamespace(fileScoped, header, "public class Repo",
         [
             "    // returns a pair~",
@@ -577,6 +637,12 @@ public class AdvancedStructuralNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ConvertAnonymousToNamed_NewFile_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSources(("Maker.cs", Build(eol,
             "namespace Demo;",
             "",

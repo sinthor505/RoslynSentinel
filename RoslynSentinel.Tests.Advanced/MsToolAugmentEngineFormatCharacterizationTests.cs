@@ -26,7 +26,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [Category("MsToolAugmentEngine")] // sentinel:auto-category
 public class MsToolAugmentEngineFormatCharacterizationTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private MsToolAugmentEngine _engine;
 
     [SetUp]
@@ -140,6 +140,9 @@ public class MsToolAugmentEngineFormatCharacterizationTests
     [TestCase("    private int   Helper( ) { return  1; }\n")]
     public async Task EncapsulateField_MixedEol_StrayCrlfLineKeepsItsTerminator(string anchor)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetFiles(("Test.cs", WithStrayCrlf(Src(false, EncapsulateInput()), anchor)));
 
         Assert.That(await EncapsulateAsync(), Is.EqualTo(WithStrayCrlf(Src(false, EncapsulateExpected()), anchor)));
@@ -216,6 +219,9 @@ public class MsToolAugmentEngineFormatCharacterizationTests
     [TestCase("    public class   C { }\n", "    public class   C { }\n")]
     public async Task SortUsings_MixedEol_StrayCrlfLineKeepsItsTerminator(string inputAnchor, string expectedAnchor)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetFiles(("Test.cs", WithStrayCrlf(Src(false, UsingsInput()), inputAnchor)));
 
         Assert.That(await SortUsingsAsync(), Is.EqualTo(WithStrayCrlf(Src(false, UsingsExpected()), expectedAnchor)));
@@ -309,6 +315,9 @@ public class MsToolAugmentEngineFormatCharacterizationTests
     [TestCase("    private int   Helper( ) { return  1; }\n")]
     public async Task ExtractMethod_MixedEol_StrayCrlfLineKeepsItsTerminator(string anchor)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetFiles(("Test.cs", WithStrayCrlf(Src(false, ExtractInput()), anchor)));
 
         Assert.That(await ExtractAsync(), Is.EqualTo(WithStrayCrlf(Src(false, ExtractExpected()), anchor)));
@@ -329,6 +338,9 @@ public class MsToolAugmentEngineFormatCharacterizationTests
     [Test]
     public async Task EncapsulateField_CrlfDocument_StrayBareLf_LineKeepsItsTerminator()
     {
+        // Changed lines take the resolved EOL, not the majority one; Crlf keeps this CRLF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Crlf;
+
         SetFiles(("Test.cs", WithStrayBareLf(Src(true, EncapsulateInput()), "    // keep   this   comment")));
 
         Assert.That(await EncapsulateAsync(), Is.EqualTo(WithStrayBareLf(Src(true, EncapsulateExpected()), "    // keep   this   comment")));
@@ -339,6 +351,9 @@ public class MsToolAugmentEngineFormatCharacterizationTests
     [Test]
     public async Task SortUsings_CrlfDocument_StrayBareLf_LineKeepsItsTerminator()
     {
+        // Changed lines take the resolved EOL, not the majority one; Crlf keeps this CRLF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Crlf;
+
         SetFiles(("Test.cs", WithStrayBareLf(Src(true, UsingsInput()), "// header   comment")));
 
         Assert.That(await SortUsingsAsync(), Is.EqualTo(WithStrayBareLf(Src(true, UsingsExpected()), "// header   comment")));
@@ -349,6 +364,9 @@ public class MsToolAugmentEngineFormatCharacterizationTests
     [Test]
     public async Task ExtractMethod_CrlfDocument_StrayBareLf_LineKeepsItsTerminator()
     {
+        // Changed lines take the resolved EOL, not the majority one; Crlf keeps this CRLF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Crlf;
+
         SetFiles(("Test.cs", WithStrayBareLf(Src(true, ExtractInput()), "    private   int _n;")));
 
         Assert.That(await ExtractAsync(), Is.EqualTo(WithStrayBareLf(Src(true, ExtractExpected()), "    private   int _n;")));
@@ -363,6 +381,9 @@ public class MsToolAugmentEngineFormatCharacterizationTests
     [Test]
     public async Task ExtractMethod_MixedEol_StrayCrlfOnBlankLineInsideSelection_MovesWithAppendedMethod()
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         var lines = new[]
         {
             "public class C",

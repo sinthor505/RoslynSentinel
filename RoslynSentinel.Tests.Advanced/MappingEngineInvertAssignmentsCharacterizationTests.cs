@@ -18,7 +18,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [Category("MappingEngine")] // sentinel:auto-category
 public class MappingEngineInvertAssignmentsCharacterizationTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private MappingEngine _engine;
 
     [SetUp]
@@ -138,6 +138,9 @@ public class MappingEngineInvertAssignmentsCharacterizationTests
     [Test]
     public async Task InvertAssignments_MixedEol_StrayCrlfLineOutsideTheEditKeepsItsTerminator()
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetSource(WithStrayCrlf(Src(false, Input())));
 
         var result = await _engine.InvertAssignmentsAsync("Test.cs", 15, 16);
@@ -196,6 +199,9 @@ public class MappingEngineInvertAssignmentsCharacterizationTests
     [Test]
     public async Task InvertAssignmentsBySnippet_MixedEol_StrayCrlfLineOutsideTheEditKeepsItsTerminator()
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetSource(WithStrayCrlf(Src(false, Input())));
 
         var result = await _engine.InvertAssignmentsAsync("Test.cs", "a  =  x;", null, null);

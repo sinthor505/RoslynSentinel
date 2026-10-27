@@ -18,7 +18,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [Category("InstrumentationEngine")] // sentinel:auto-category
 public class InstrumentationEngineFormatCharacterizationTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private InstrumentationEngine _engine;
 
     [SetUp]
@@ -174,6 +174,9 @@ public class InstrumentationEngineFormatCharacterizationTests
     [Test]
     public async Task AddTryCatchToClass_MixedEol_StrayCrlfLineOutsideTheEditKeepsItsTerminator()
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetSource(WithStrayCrlf(Src(false, Input())));
 
         var result = await _engine.AddTryCatchToClassAsync("Test.cs", "Worker");
@@ -218,6 +221,9 @@ public class InstrumentationEngineFormatCharacterizationTests
     [Test]
     public async Task AddStopwatchDiagnostics_MixedEol_StrayCrlfLineOutsideTheEditKeepsItsTerminator()
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         SetSource(WithStrayCrlf(Src(false, Input())));
 
         var result = await _engine.AddStopwatchDiagnosticsAsync("Test.cs", "Run");

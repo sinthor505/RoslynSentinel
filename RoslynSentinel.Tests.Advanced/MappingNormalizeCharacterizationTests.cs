@@ -18,7 +18,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [Category("MappingEngine")] // sentinel:auto-category
 public class MappingNormalizeCharacterizationTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private MappingEngine _engine;
 
     [SetUp]
@@ -101,6 +101,9 @@ public class MappingNormalizeCharacterizationTests
     public async Task GenerateMapping_LfDominantMixedDocument_StrayCrlfLineDoesNotLeakIntoSnippet()
     {
         // Line index 2 (a property line) ends in a stray CRLF; the dominant ending is still LF.
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
+
         var text = await GenerateAsync(Join(SourceLines, "\n", strayAt: 2, strayEol: "\r\n"));
 
         Assert.That(text, Is.EqualTo(Join(ExpectedLines, "\n")));
@@ -109,6 +112,9 @@ public class MappingNormalizeCharacterizationTests
     [Test]
     public async Task GenerateMapping_CrlfDominantMixedDocument_StrayLfLineDoesNotLeakIntoSnippet()
     {
+        // Changed lines take the resolved EOL, not the majority one; Crlf keeps this CRLF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Crlf;
+
         var text = await GenerateAsync(Join(SourceLines, "\r\n", strayAt: 2, strayEol: "\n"));
 
         Assert.That(text, Is.EqualTo(Join(ExpectedLines, "\r\n")));
