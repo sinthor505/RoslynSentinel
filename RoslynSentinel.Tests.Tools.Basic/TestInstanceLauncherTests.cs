@@ -289,7 +289,7 @@ public class TestInstanceLauncherTests
 
     private static (AdminTools Tools, PersistentWorkspaceManager Workspace) NewTools()
     {
-        var workspace = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var workspace = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         return (new AdminTools(workspace), workspace);
     }
 
@@ -385,7 +385,7 @@ public class TestInstanceLauncherTests
 
         TestContext.Out.WriteLine($"server output: {outputDirectory}");
         var solutionPath = Path.Combine(repoRoot, "RoslynSentinel.slnx");
-        var workspace = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var workspace = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var launcher = new TestInstanceLauncher(workspace, new BuildEngine(workspace));
         var buildSource = new TestInstanceBuildSource(outputDirectory, File.GetLastWriteTimeUtc(Path.Combine(outputDirectory, "RoslynSentinel.Server.Advanced.dll")), null, null, false);
         int? pid = null;

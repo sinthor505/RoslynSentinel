@@ -46,7 +46,7 @@ public class PathCaseLookupRegressionTests
     private static async Task<Harness> CreateHarnessAsync()
     {
         var fixture = new TestSolutionFixture();
-        var workspace = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var workspace = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
 
         // Windows paths are case-insensitive, so loading through the lowercased spelling is the
         // blocker's exact repro (workspace document paths are lowercased). Elsewhere a lowercased

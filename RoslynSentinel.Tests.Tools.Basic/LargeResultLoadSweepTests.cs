@@ -29,7 +29,7 @@ public class LargeResultLoadSweepTests
         Assert.That(File.Exists(oldFilePath), Is.True, "Old file should exist before load");
         Assert.That(File.Exists(newFilePath), Is.True, "New file should exist before load");
 
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
         // Poll for up to 10 seconds for the sweep to complete
@@ -60,7 +60,7 @@ public class LargeResultLoadSweepTests
         using var fixture = new TestSolutionFixture();
         // Do NOT create .roslynsentinel folder
 
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
         Assert.That(workspaceManager.CurrentSolution, Is.Not.Null, "Solution should load successfully");

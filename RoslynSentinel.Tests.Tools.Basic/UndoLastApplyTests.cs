@@ -154,7 +154,7 @@ public class UndoLastApplyTests
     public async Task UndoLastApply_RealRevert_RestoresFileToPreApplyContentAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -206,7 +206,7 @@ public class UndoLastApplyTests
         // files"), which is exactly the confusion observed this session -> a file believed
         // reverted was provably unchanged.
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -261,7 +261,7 @@ public class UndoLastApplyTests
     public async Task UndoLastApply_RealRevert_RestoresRenamedFileFromSyncTypeAndFilenameAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -326,7 +326,7 @@ public class UndoLastApplyTests
         // The state the blocker left on disk: pure LF (stray CRLFs already rewritten) plus the inserted line.
         await File.WriteAllTextAsync(targetFile, MixedEolWithInsertedLine.Replace("\r\n", "\n"));
 
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -354,7 +354,7 @@ public class UndoLastApplyTests
         await File.WriteAllBytesAsync(targetFile, originalBytes);
 
         // EOL tracking is captured at load, so the file must exist on disk before LoadSolutionAsync.
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         workspaceManager.EolModeOverride = EolMode.Crlf;
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
@@ -389,7 +389,7 @@ public class UndoLastApplyTests
         await File.WriteAllBytesAsync(targetFile, originalBytes);
 
         // EOL and BOM tracking is captured at load, so the file must exist on disk before LoadSolutionAsync.
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         workspaceManager.EolModeOverride = EolMode.Crlf;
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);

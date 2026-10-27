@@ -23,7 +23,7 @@ public class LoadSolutionWaitTests
     public async Task LoadSolution_WhileSameSolutionLoading_WaitsThenReportsAlreadyLoaded()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var tool = CreateImpl(workspaceManager);
 
         var load = workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
@@ -41,7 +41,7 @@ public class LoadSolutionWaitTests
     public async Task LoadSolution_ForceReloadMidLoad_WaitsThenReloads()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var tool = CreateImpl(workspaceManager);
 
         var load = workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
@@ -61,7 +61,7 @@ public class LoadSolutionWaitTests
     [TestCase(3601)]
     public async Task LoadSolution_TimeoutSecondsOutOfRange_ReturnsInvalidArgumentNamingTheRange(int timeoutSeconds)
     {
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var tool = CreateImpl(workspaceManager);
 
         var result = await tool.LoadSolution(new ToolCallReason("checks timeoutSeconds range"), "fake.sln", timeoutSeconds: timeoutSeconds);

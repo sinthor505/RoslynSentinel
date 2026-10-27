@@ -28,7 +28,7 @@ public class BuildToolResultShapeTests
         _tempDir = Path.Combine(Path.GetTempPath(), "BuildToolResultShapeTests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
 
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _workspaceManager.SolutionPath = Path.Combine(_tempDir, "Test.sln");
 
         var config = new SentinelConfiguration();

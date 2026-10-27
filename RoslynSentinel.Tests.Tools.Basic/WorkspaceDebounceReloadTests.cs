@@ -14,7 +14,7 @@ public class WorkspaceDebounceReloadTests
     public async Task DebounceReload_OpenThrows_RecordsFailureAndKeepsOldSolution()
     {
         using var fixture = new TestSolutionFixture();
-        using var manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var manager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await manager.LoadSolutionAsync(fixture.SolutionPath);
 
         var projectFile = FindFixtureProjectFile(manager, fixture);
@@ -42,7 +42,7 @@ public class WorkspaceDebounceReloadTests
     public async Task DebounceReload_SucceedsAfterFailure_ClearsFailureAndBumpsVersion()
     {
         using var fixture = new TestSolutionFixture();
-        using var manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var manager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await manager.LoadSolutionAsync(fixture.SolutionPath);
 
         var projectFile = FindFixtureProjectFile(manager, fixture);
@@ -76,7 +76,7 @@ public class WorkspaceDebounceReloadTests
     public async Task ReloadFromDisk_OpenThrows_RecordsPostWriteReloadAndKeepsOldSolution()
     {
         using var fixture = new TestSolutionFixture();
-        using var manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var manager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await manager.LoadSolutionAsync(fixture.SolutionPath);
 
         var before = manager.CurrentSolution;
@@ -101,7 +101,7 @@ public class WorkspaceDebounceReloadTests
     public async Task ReloadFromDisk_SucceedsAfterFailure_ClearsFailureAndBumpsVersion()
     {
         using var fixture = new TestSolutionFixture();
-        using var manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var manager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await manager.LoadSolutionAsync(fixture.SolutionPath);
 
         var before = manager.CurrentSolution;

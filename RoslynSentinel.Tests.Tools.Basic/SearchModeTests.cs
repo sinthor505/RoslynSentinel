@@ -74,7 +74,7 @@ public class SearchModeTests
             await fixture.AddFileToSolution(seedWorkspaceManager, TestProjectFile, TestProjectSource, reloadSolution: false);
         }
 
-        var workspace = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var workspace = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspace.LoadSolutionAsync(fixture.SolutionPath);
 
         var config = new SentinelConfiguration();

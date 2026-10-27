@@ -93,7 +93,7 @@ public class SemanticFindReplaceConstructionTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _validationEngine = new ValidationEngine(_workspaceManager);
         _tool = new SemanticFindReplaceTools(
             new SemanticReplaceEngine(_workspaceManager),

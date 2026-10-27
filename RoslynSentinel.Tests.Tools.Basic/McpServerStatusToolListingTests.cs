@@ -14,7 +14,7 @@ public class McpServerStatusToolListingTests
 
     [SetUp]
     public void SetUp() =>
-        _manager = new PersistentWorkspaceManager(
+        _manager = Battery.Basic.TestEngines.PersistentWorkspaceManager(
             Microsoft.Extensions.Logging.Abstractions.NullLogger<IWorkspaceManager>.Instance);
 
     [TearDown]

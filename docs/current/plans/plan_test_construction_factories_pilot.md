@@ -1,6 +1,6 @@
 # Plan: Pilot shared engine/tool construction factories in Tests.Tools.Basic
 
-**Status:** IN-PROGRESS 2026-10-27. Steps 0 (tool gap) and 1 (survey) done; the prerequisites below are done (8417587a); Steps 2-5 are open.
+**Status:** IN-PROGRESS 2026-10-27. Steps 0 (tool gap), 1 (survey), 2 and 3 done; the prerequisites below are done (8417587a); Steps 4-5 are open.
 
 ## Re-sequencing (2026-10-25, updated 2026-10-27)
 Test DI was reconsidered: it needs no `Server.*` reference once the engine and tool-dependency
@@ -25,7 +25,9 @@ container, so a new constructor parameter is absorbed in one place. Order:
   A passed workspace manager overrides `IWorkspaceManager` / `ISolutionProvider` / `IWorkspaceReader` in the per-call
   provider, otherwise defaulted engines would each get a second `PersistentWorkspaceManager`. Not yet factored:
   `WholeFileWriteTools` (25 sites) and the other tool classes (`// TODO` in `TestTools.cs`).
-- Step 4 BLOCKED, not started: `replaceConstruction` could not be called. `McpToolsetControl(moveExtract)` reports the
+- 2026-10-27: in a fresh session, `McpToolsetControl(moveExtract)` made `SemanticFindReplace` visible to the main session
+  (schema loadable). Subagent visibility is still unverified: do the Step 4 pre-step first.
+- Step 4 was BLOCKED (see 2026-10-27 note above): `replaceConstruction` could not be called. `McpToolsetControl(moveExtract)` reports the
   toolset enabled, but `SemanticFindReplace` never reaches the calling session's tool list, and two subagents
   (one enabling the toolset itself, one spawned afterwards) saw the same, so a subagent inherits the parent's tool list. Resume in
   a FRESH chat session started after `moveExtract` is enabled (or with it enabled at startup), then run the slices in
@@ -107,29 +109,38 @@ Field renames can follow later purely for readability (`RenameSymbol`, one call 
   classes whose sites need a shared `PersistentWorkspaceManager` instance across several constructions.
 - Done when: CSV exists; the top 10 classes and their shape counts are reported.
 
-### Step 2 - Factory skeleton
+### Step 2 - Factory skeleton - DONE 2026-10-27 (6eace8f3)
 - Files: new `Tests.Tools.Basic/TestEngines.cs` and `TestTools.cs`.
 - Change: one static method per class, named after it. Overloads only for shapes found in Step 1 plus a
   short form taking just the workspace manager. Start with the top 10 engine classes and `WorkspaceTools`.
   Methods take the manager as a parameter rather than creating it, so sharing is preserved.
 - Done when: Build 0 errors; factory used by one hand-migrated test class.
 
-### Step 3 - Drift guard test
-- Files: new test in `Tests.Tools.Basic` (needs a `Server.Basic` reference, or put it in `Tests.Server`;
-  after the fold and registration move-down it needs neither, and may reduce to a factory-resolves test).
-- Change: for each factory method, resolve the class from `AddRoslynSentinelEnginesBasic` and assert the
-  constructor parameter types match what the factory passes.
-- Done when: test passes and fails when a constructor parameter is added without updating the factory.
+### Step 3 - Factory resolve test - DONE 2026-10-27 (6eace8f3)
+- Files: `Tests.Tools.Basic/TestFactoryResolveTests.cs` (20 tests). Replaced the original drift guard: factories
+  resolve unpassed constructor parameters from the container, so a new parameter is absorbed there.
+- Change: every factory overload returns an instance.
+- Done when: test passes and fails if a registration a factory depends on is removed.
 
 ### Step 4 - Migrate in slices
+- Pre-step (visibility): dispatch `implementer-sweep` for the first slice's `replaceConstruction` preview
+  (PersistentWorkspaceManager). If the subagent cannot see `SemanticFindReplace`, report `TOOL-GAP:` and write a
+  blocker doc; do not fall back to manual edits. This is also the first live exercise of the Step 0 tool, and the
+  server binary may be stale (`isServerBinaryStale`): read the preview's skip reasons before applying.
 - Per class, in descending site count: `replaceConstruction` preview, review, apply; Build; RunTest on
   `Tests.Tools.Basic`; commit with an explicit file list.
 - Then replace the `BuildTools` helpers with `TestTools` calls.
 - Done when: every site whose shape the factory covers is migrated; remaining sites are listed.
 
 ### Step 5 - Measure and decide
-- Report: sites migrated vs remaining, number of overloads, tool skips by reason, and the edit count a
-  trial constructor change now needs. Decide whether to roll out to `Tests.Advanced`,
+- Baseline (record before slice 1): files/sites a trial constructor change touches today, e.g. adding a
+  parameter to `ValidationEngine` (75 sites in `Tests.Tools.Basic`).
+- Report: sites migrated vs remaining, number of overloads, tool skips by reason, the edit count a
+  trial constructor change now needs, the `Tests.Tools.Basic` run time before/after (a `ServiceProvider` is
+  built per factory call and never disposed; check tests that dispose their manager in `TearDown`), and the
+  tool classes with no factory yet (`WholeFileWriteTools`, 25 sites; `// TODO` in `TestTools.cs`).
+- Reconcile the 719 vs 766 site counts, and confirm `ServerBinaryStalenessGitTests.LaterCommitTouchingOnlyDocs_IsNotStale`
+  carries a flaky-on-full-run comment. Decide whether to roll out to `Tests.Advanced`,
   `Tests.Battery.Advanced` and `Tests.Tools.Advanced`.
 
 ## Out of scope
@@ -144,5 +155,5 @@ Field renames can follow later purely for readability (`RenameSymbol`, one call 
   `RoslynSentinel.Tests` references only `Common` and `Engines.Basic`, so it cannot host tool or Advanced
   factories.
 - Overload growth could recreate the constructor surface in the factory; cap by migrating odd shapes by hand.
-- Whether `Server.*` can be referenced from `Tests.Tools.Basic` without a cycle was not checked (Step 3).
-- Factory graph can drift from production; Step 3 is the mitigation.
+- Factory graph can drift from production; factories resolve unpassed parameters from the real registration
+  lists and Step 3 checks every overload resolves.

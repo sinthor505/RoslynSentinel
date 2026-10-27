@@ -49,7 +49,7 @@ public class CreateFileDeleteFileTests
     public async Task CreateFile_NewPath_WritesContentAndReturnsSuccessAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
@@ -70,7 +70,7 @@ public class CreateFileDeleteFileTests
     public async Task CreateFile_AlreadyExists_FailsWithoutOverwritingAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
@@ -91,7 +91,7 @@ public class CreateFileDeleteFileTests
     public async Task ReplaceFile_ExistingFile_OverwritesContentAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
@@ -114,7 +114,7 @@ public class CreateFileDeleteFileTests
     public async Task Create_AliasOfCreateFile_NewPathCreatesExistingPathFailsAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
@@ -137,7 +137,7 @@ public class CreateFileDeleteFileTests
     public async Task Replace_AliasOfReplaceFile_OverwritesExistingAndCreatesMissingAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
@@ -159,7 +159,7 @@ public class CreateFileDeleteFileTests
     public async Task ReplaceFile_DoesNotExist_CreatesFileAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
@@ -179,7 +179,7 @@ public class CreateFileDeleteFileTests
     public async Task CreateFile_ParentDirectoryMissing_CreatesDirectoryAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
@@ -203,7 +203,7 @@ public class CreateFileDeleteFileTests
         // ApplyInMemoryDocumentUpdatesAsync). Before the ReadFileTool disk-fallback fix, this left
         // CreateFileTool able to write files that ReadFileTool could never see again.
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
@@ -228,7 +228,7 @@ public class CreateFileDeleteFileTests
     public async Task DeleteFile_ExistingFile_RemovesFromDiskAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
@@ -248,7 +248,7 @@ public class CreateFileDeleteFileTests
     public async Task DeleteFile_NonExistentFile_FailsWithInvalidArgumentAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
@@ -268,7 +268,7 @@ public class CreateFileDeleteFileTests
     public async Task DeleteFile_ThenUndoLastApply_RestoresFileAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
@@ -300,7 +300,7 @@ public class CreateFileDeleteFileTests
     public async Task DeleteFile_DriftedFile_RefusesDeleteAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
@@ -343,7 +343,7 @@ public class CreateFileDeleteFileTests
     public async Task ExternalTouch_BaselinelessDocumentWithIdenticalContent_IsNotFlaggedAsDriftAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
         var document = workspaceManager.CurrentSolution!.Projects
@@ -384,7 +384,7 @@ public class CreateFileDeleteFileTests
     public async Task ExternalTouch_ProjectAndSolutionFileWithIdenticalContent_IsNotFlaggedAsDriftAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
         var projectFile = workspaceManager.CurrentSolution!.Projects
@@ -407,7 +407,7 @@ public class CreateFileDeleteFileTests
     public async Task ExternalEdit_ProjectFileWithChangedContent_IsFlaggedAsDriftAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
         var projectFile = workspaceManager.CurrentSolution!.Projects
@@ -441,7 +441,7 @@ public class CreateFileDeleteFileTests
     public async Task ExternalTouch_ProjectFileAfterDebounceReload_IsNotFlaggedAsDriftAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
         var projectFile = workspaceManager.CurrentSolution!.Projects
@@ -499,7 +499,7 @@ public class CreateFileDeleteFileTests
         try
         {
             var slnxPath = WriteSlnxFixture(root);
-            using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             await workspaceManager.LoadSolutionAsync(slnxPath);
 
             File.SetLastWriteTimeUtc(slnxPath, DateTime.UtcNow.AddMinutes(-5));
@@ -526,7 +526,7 @@ public class CreateFileDeleteFileTests
         try
         {
             var slnxPath = WriteSlnxFixture(root);
-            using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             await workspaceManager.LoadSolutionAsync(slnxPath);
             var hashes = (System.Collections.IDictionary)typeof(PersistentWorkspaceManager)
                 .GetField("_knownFileHashes", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
@@ -587,7 +587,7 @@ public class CreateFileDeleteFileTests
     public async Task ExternalEdit_FoldedDocument_GetsBaselineHashThenTouchIgnoredAndEditFlaggedAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
         var targetFile = workspaceManager.CurrentSolution!.Projects
@@ -649,7 +649,7 @@ public class CreateFileDeleteFileTests
     public async Task CreateFileTool_NoNamespaceForCsFile_CreatesGlobalNamespaceTypeAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -670,7 +670,7 @@ public class CreateFileDeleteFileTests
     public async Task CreateFileTool_MissingTypeKindOrTypeNameForCsFile_FailsAsync(NewTypeKind? typeKind, string? typeName)
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -688,7 +688,7 @@ public class CreateFileDeleteFileTests
     public async Task CreateFileTool_AlreadyExists_FailsWithoutOverwritingAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -707,7 +707,7 @@ public class CreateFileDeleteFileTests
     public async Task CreateFileTool_ParentDirectoryMissing_CreatesDirectoryAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -724,7 +724,7 @@ public class CreateFileDeleteFileTests
     public async Task CreateFileTool_NonCsFile_SeedsEmptyContentIgnoringNamespaceAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -747,7 +747,7 @@ public class CreateFileDeleteFileTests
     public async Task CreateFileTool_WithTypeKindAndName_SeedsTypeSkeletonAsync(NewTypeKind typeKind, string expectedTypeSource)
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         // Explicit EOL mode for this manager.
         // The new file is expected as LF, so the mode is pinned to Lf rather than the platform default.
         workspaceManager.EolModeOverride = EolMode.Lf;
@@ -775,7 +775,7 @@ public class CreateFileDeleteFileTests
         // root = true stops the upward walk from picking up any .editorconfig above the fixture directory.
         using var fixture = new TestSolutionFixture();
         await File.WriteAllTextAsync(Path.Combine(fixture.SolutionDirectory, ".editorconfig"), "root = true\n\n[*.cs]\nend_of_line = crlf\n");
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -796,7 +796,7 @@ public class CreateFileDeleteFileTests
         // so the fixture's root = true .editorconfig (end_of_line = lf) is what decides the EOL.
         using var fixture = new TestSolutionFixture();
         await File.WriteAllTextAsync(Path.Combine(fixture.SolutionDirectory, ".editorconfig"), "root = true\n\n[*.cs]\nend_of_line = lf\n");
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -826,7 +826,7 @@ public class CreateFileDeleteFileTests
         // MemberTool(add, containerName: null, ...) -> the mandatory-typeKind design only seeds the
         // FIRST type; anything beyond that is deliberately a follow-up MemberTool(add) call.
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var config = new SentinelConfiguration();
@@ -929,7 +929,7 @@ public class CreateFileDeleteFileTests
     {
         // Creators emit LF text. Under Crlf the write chokepoint must convert the new file to uniform CRLF.
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         workspaceManager.EolModeOverride = EolMode.Crlf;
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
@@ -950,7 +950,7 @@ public class CreateFileDeleteFileTests
     {
         // The LF source file is written before the solution loads. addTopLevelType must leave the file uniform CRLF.
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         workspaceManager.EolModeOverride = EolMode.Crlf;
         var existingProjectDir = Path.GetDirectoryName(Directory.EnumerateFiles(fixture.SolutionDirectory, "*.csproj", SearchOption.AllDirectories).First())!;
         var sourceFile = Path.Combine(existingProjectDir, "EolMemberSource.cs");
@@ -989,7 +989,7 @@ public class CreateFileDeleteFileTests
     {
         // The pre-image on disk mixes CRLF and LF. The chokepoint must still apply the write and attribute the mixed pre-image in one envelope finding.
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         workspaceManager.EolModeOverride = EolMode.Crlf;
         var targetFile = Path.Combine(fixture.SolutionDirectory, "EolMixedPreImage.cs");
         await File.WriteAllTextAsync(targetFile, "namespace MyApp.Eol;\r\npublic class Foo\n{\r\n}\n");
@@ -1012,7 +1012,7 @@ public class CreateFileDeleteFileTests
     {
         // A uniform CRLF pre-image already matches the resolved target, so the chokepoint has nothing to attribute.
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         workspaceManager.EolModeOverride = EolMode.Crlf;
         var targetFile = Path.Combine(fixture.SolutionDirectory, "EolUniformCrlfPreImage.cs");
         await File.WriteAllTextAsync(targetFile, "namespace MyApp.Eol;\r\npublic class Foo\r\n{\r\n}\r\n");

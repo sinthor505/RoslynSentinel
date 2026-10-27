@@ -47,7 +47,7 @@ public class BuildIsolationTests
     public async Task RunFullBuildAsync_FullBuildThrowaway_WritesOutputUnderInstanceDirNotProjectBinAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var buildEngine = new BuildEngine(workspaceManager, new DiagnosticEngine(workspaceManager));
         var solutionDirectory = Path.GetDirectoryName(fixture.SolutionPath)!;
@@ -86,7 +86,7 @@ public class BuildIsolationTests
     public async Task RunFullBuildAsync_FullBuild_WritesProjectBinAndReportsFullBuildLevelAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var buildEngine = new BuildEngine(workspaceManager, new DiagnosticEngine(workspaceManager));
         var solutionDirectory = Path.GetDirectoryName(fixture.SolutionPath)!;

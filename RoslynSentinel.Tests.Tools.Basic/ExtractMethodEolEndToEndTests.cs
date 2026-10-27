@@ -46,7 +46,7 @@ public class ExtractMethodEolEndToEndTests
             "}\r\n";
         await File.WriteAllBytesAsync(target, System.Text.Encoding.UTF8.GetBytes(mixedSource));
 
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         workspaceManager.EolModeOverride = EolMode.Crlf;
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 

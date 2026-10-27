@@ -13,7 +13,7 @@ public class BuildEngineTests
     [Test]
     public async Task RunQuickBuildAsync_ZeroProjectScope_ReturnsInvalidInputWithBuildNotRunAsync()
     {
-        var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         workspaceManager.SetTestSolution(TestSolutionBuilder.CreateEmptySolution());
         var diagnosticEngine = new DiagnosticEngine(workspaceManager);
         var buildEngine = new BuildEngine(workspaceManager, diagnosticEngine);
@@ -29,7 +29,7 @@ public class BuildEngineTests
     [Test]
     public async Task RunFullBuildAsync_ZeroProjectSolution_ReturnsInvalidInputWithBuildNotRunAsync()
     {
-        var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         workspaceManager.SetTestSolution(TestSolutionBuilder.CreateEmptySolution());
         workspaceManager.SolutionPath = "C:/fake/EmptySolution.slnx";
         var diagnosticEngine = new DiagnosticEngine(workspaceManager);
@@ -73,7 +73,7 @@ public class BuildEngineTests
             """;
 
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Core", "LegacyPricingHelper.cs"), obsoleteSource);
         var diagnosticEngine = new DiagnosticEngine(workspaceManager);

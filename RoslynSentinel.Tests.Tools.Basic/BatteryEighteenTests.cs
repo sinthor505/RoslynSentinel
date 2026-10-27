@@ -28,7 +28,7 @@ public class BatteryEighteenTests
     {
         // Eight tests read bare names such as Test.cs from the working directory, so a stale file from another fixture would be their input.
         WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _msEngine = new MsToolAugmentEngine(_workspaceManager);
         _workspaceHealthMisc = new WorkspaceHealthMiscImpl(_workspaceManager);
     }

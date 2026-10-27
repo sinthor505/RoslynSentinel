@@ -21,7 +21,7 @@ public class SolutionLoadStatusTests
     [Test]
     public void SolutionLoadStatus_BeforeAnyLoad_IsNotLoaded()
     {
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
 
         Assert.That(workspaceManager.SolutionLoadStatus, Is.EqualTo(SolutionLoadStatus.NotLoaded));
     }
@@ -30,7 +30,7 @@ public class SolutionLoadStatusTests
     public async Task SolutionLoadStatus_WhileLoadRunning_IsLoadingThenLoaded()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
 
         var load = workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
@@ -43,7 +43,7 @@ public class SolutionLoadStatusTests
     public async Task GetCurrentSolutionAsync_MidLoad_WaitsAndReturnsSolution()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
 
         var load = workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var solution = await workspaceManager.GetCurrentSolutionAsync(CancellationToken.None);
@@ -56,7 +56,7 @@ public class SolutionLoadStatusTests
     [Test]
     public async Task WaitForLoadAsync_NoLoad_ReturnsCurrentStatusImmediately()
     {
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
 
         var stopwatch = Stopwatch.StartNew();
         var status = await workspaceManager.WaitForLoadAsync(TimeSpan.FromSeconds(30), CancellationToken.None);
@@ -70,7 +70,7 @@ public class SolutionLoadStatusTests
     public async Task WaitForLoadAsync_ShortTimeoutMidLoad_ReturnsLoadingAndLoadStillFinishes()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
 
         var load = workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var status = await workspaceManager.WaitForLoadAsync(TimeSpan.FromMilliseconds(1), CancellationToken.None);
@@ -84,7 +84,7 @@ public class SolutionLoadStatusTests
     public async Task ResolveFromWire_MidLoad_WaitsAndResolves()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var relativePath = Path.GetRelativePath(fixture.SolutionDirectory, targetFile);
 
@@ -101,7 +101,7 @@ public class SolutionLoadStatusTests
     public async Task LoadSolutionAsync_TimeoutElapsed_CancelsAndThrowsSolutionLoadTimeoutException()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
 
         await Assert.ThrowsAsync<SolutionLoadTimeoutException>(
             async () => await workspaceManager.LoadSolutionAsync(fixture.SolutionPath, null, TimeSpan.FromMilliseconds(1), CancellationToken.None));
@@ -120,7 +120,7 @@ public class SolutionLoadStatusTests
     public async Task LoadSolutionAsync_TimeoutOnReloadOfLoadedSolution_KeepsLoadedStatus()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
         await Assert.ThrowsAsync<SolutionLoadTimeoutException>(
@@ -135,7 +135,7 @@ public class SolutionLoadStatusTests
     public async Task LoadSolutionAsync_BadPath_StatusFailedWithFailureText()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var missingPath = Path.Combine(fixture.SolutionDirectory, "DoesNotExist", "Missing.sln");
 
         var thrown = await Assert.CatchAsync(async () => await workspaceManager.LoadSolutionAsync(missingPath));

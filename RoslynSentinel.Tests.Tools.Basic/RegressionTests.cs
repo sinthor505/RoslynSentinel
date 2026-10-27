@@ -41,7 +41,7 @@ public class RegressionTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
@@ -1164,7 +1164,7 @@ public class RegressionTests
     public async Task GetWorkspaceHealth_NoSolutionLoaded_IsOperationalTrue_HasLoadedSolutionFalse()
     {
         // Create a fresh workspace manager with NO solution loaded
-        using var freshManager = new PersistentWorkspaceManager(
+        using var freshManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(
             NullLogger<IWorkspaceManager>.Instance);
         var engine = new WorkspaceHealthMiscImpl(freshManager);
 
@@ -1203,7 +1203,7 @@ public class RegressionTests
     [Category("AddUsingsPreview")] // sentinel:auto-category
     public async Task PreviewAddMissingUsings_NoSolutionLoaded_ReturnsSolutionRequired()
     {
-        using var freshManager = new PersistentWorkspaceManager(
+        using var freshManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(
             NullLogger<IWorkspaceManager>.Instance);
         var engine = new MsToolAugmentEngine(freshManager);
 

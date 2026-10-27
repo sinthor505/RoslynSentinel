@@ -71,7 +71,7 @@ public class Usage
         // Kept on disk on purpose: the single end-to-end apply smoke for this tool (real write through
         // PersistentWorkspaceManager, then read back from disk). Other apply tests use InMemoryWorkspace.
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var tools = BuildTools(workspaceManager);
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();

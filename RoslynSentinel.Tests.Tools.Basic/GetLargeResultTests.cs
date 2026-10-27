@@ -39,7 +39,7 @@ public class GetLargeResultTests
     [SetUp]
     public void SetUp()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
 
         _tempDir = Path.Combine(Path.GetTempPath(), "GetLargeResultTests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
@@ -148,7 +148,7 @@ public class GetLargeResultTests
 
     private WorkspaceTools CreateWorkspaceToolsWithoutSolution()
     {
-        var unloadedWorkspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var unloadedWorkspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         // Do NOT call SetTestSolution or set SolutionPath, so solution root remains empty
         
         var config = new SentinelConfiguration();

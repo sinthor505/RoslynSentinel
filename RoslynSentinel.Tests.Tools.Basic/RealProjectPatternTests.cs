@@ -42,7 +42,7 @@ public class RealProjectPatternTests
         // Real manager required: SortAndDeduplicateUsingsAsync(writeToFile: true) tests in this
         // file go through ApplyProposedChangesAsync, which FakeWorkspaceManager intentionally
         // leaves unimplemented (real disk writes + drift detection, not worth faking faithfully).
-        _workspaceManager = new PersistentWorkspaceManager(
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(
             NullLogger<IWorkspaceManager>.Instance);
         _engine = new MsToolAugmentEngine(_workspaceManager);
         _workspaceHealthMisc = new WorkspaceHealthMiscImpl(_workspaceManager, new SentinelConfiguration());
@@ -663,7 +663,7 @@ public class InventoryRepository { }";
     {
         // Fresh workspace manager with no solution set -> workspace itself is operational,
         // but no solution is loaded yet. The health check correctly distinguishes these.
-        using var fresh = new PersistentWorkspaceManager(
+        using var fresh = Battery.Basic.TestEngines.PersistentWorkspaceManager(
             NullLogger<IWorkspaceManager>.Instance);
         var freshEngine = new WorkspaceHealthMiscImpl(fresh, new SentinelConfiguration());
 

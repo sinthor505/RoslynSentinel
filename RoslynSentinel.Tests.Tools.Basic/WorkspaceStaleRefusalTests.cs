@@ -23,7 +23,7 @@ public class WorkspaceStaleRefusalTests
 
     [SetUp]
     public void SetUp() =>
-        _manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _manager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
 
     [TearDown]
     public void TearDown() => _manager.Dispose();
