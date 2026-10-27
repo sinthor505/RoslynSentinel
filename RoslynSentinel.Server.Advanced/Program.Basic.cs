@@ -5,7 +5,7 @@ public class Program
 {
     public static bool isFreshStartup = true;
 
-    public static async Task Main(string[] args)
+    public static async Task MainBasic(string[] args)
     {
         var transport = ServerStartupHelpers.ParseTransport(args);
 
