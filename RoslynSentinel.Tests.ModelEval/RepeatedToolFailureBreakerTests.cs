@@ -32,11 +32,11 @@ namespace RoslynSentinel.Tests.ModelEval;
 public class RepeatedToolFailureBreakerTests
 {
     // "Workspace" is where LocateSymbolTool/GetFileOutlineTool live (SentinelWorkspaceTools /
-    // SymbolNavigationTools) -> see ToolClassRegistry.AdvancedModeToToolClasses. Not the project
+    // SymbolNavigationTools) -> see ToolClassRegistry.ModeToToolClasses. Not the project
     // names "Basic"/"Advanced", which aren't mode names at all and silently resolve to nothing.
     // "Workspace" alone no longer covers LocateSymbolTool: the DI split moved it onto
     // SymbolNavigationTools, gated by the fine-grained "SymbolNavigation" sub-mode (see
-    // ToolClassRegistry.BasicModeToToolClasses), not "Workspace" itself.
+    // ToolClassRegistry.ModeToToolClasses), not "Workspace" itself.
     private static readonly HashSet<string> ActiveModes =
         new(StringComparer.OrdinalIgnoreCase) { "Workspace", "SymbolNavigation" };
 

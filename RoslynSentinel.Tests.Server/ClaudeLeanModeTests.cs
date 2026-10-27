@@ -17,7 +17,6 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
 using RoslynSentinel.Server.Advanced;
-using RoslynSentinel.Server.Basic;
 using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Basic;
 
@@ -61,32 +60,18 @@ public class ClaudeLeanModeTests
         "UsingDirective", "WrapRange", "WriteFile",
     ];
 
-    private static async Task<string[]> ListToolNamesAsync(bool advanced, string mode)
+    private static async Task<string[]> ListToolNamesAsync(string mode)
     {
         var activeModes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { mode };
         var clientToServer = new Pipe();
         var serverToClient = new Pipe();
 
         var services = new ServiceCollection();
-        if (advanced)
-        {
-            services.AddRoslynSentinelEnginesAdvanced();
-        }
-        else
-        {
-            services.AddRoslynSentinelEnginesBasic();
-        }
+        services.AddRoslynSentinelEnginesAdvanced();
 
         var mcpBuilder = services.AddMcpServer();
         mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
-        if (advanced)
-        {
-            mcpBuilder.AddRoslynSentinelToolsAdvanced(services, activeModes);
-        }
-        else
-        {
-            mcpBuilder.AddRoslynSentinelToolsBasic(services, activeModes);
-        }
+        mcpBuilder.AddRoslynSentinelToolsAdvanced(services, activeModes);
 
         var hostBuilder = Host.CreateApplicationBuilder();
         foreach (var descriptor in services)
@@ -112,53 +97,31 @@ public class ClaudeLeanModeTests
 
     // ---- exposed tool set ----
 
-    [TestCase(true)]
-    [TestCase(false)]
-    public async Task ClaudeLean_ExposesExactlyTheCoreToolsForItsFlavor(bool advanced)
+    [Test]
+    public async Task ClaudeLean_ExposesExactlyTheCoreTools()
     {
-        // Both flavours expose the same core surface; SubAgent (Advanced only) is on demand via the modelEval toolset.
+        // SubAgent is on demand via the modelEval toolset.
         var expected = CoreTools;
-        var names = await ListToolNamesAsync(advanced, "claude-lean");
+        var names = await ListToolNamesAsync("claude-lean");
 
         Assert.That(names, Has.Length.EqualTo(expected.Length), "ToolClassRegistry.ClaudeLeanToolNames and ClaudeLeanModeTests.CoreTools must agree; edit both");
         Assert.That(names, Is.EquivalentTo(expected), "ToolClassRegistry.ClaudeLeanToolNames and ClaudeLeanModeTests.CoreTools must agree; edit both");
     }
 
     [Test]
-    public async Task Claude_AdvancedServer_StillExposesItsPreExistingToolSet()
+    public async Task Claude_Mode_StillExposesItsPreExistingToolSet()
     {
-        var names = await ListToolNamesAsync(advanced: true, "claude");
+        var names = await ListToolNamesAsync("claude");
 
         Assert.That(names, Is.EquivalentTo(ClaudeAdvancedBaseline));
-    }
-
-    [Test]
-    public async Task Claude_BasicServer_IsTheAdvancedBaselineMinusAdvancedOnlyClasses()
-    {
-        // AdvancedRefactoringTools is the only Claude class Basic does not register; its tools drop out.
-        var advancedOnlyTools = McpToolSchemaPatcher
-            .DiscoverAllDeclaredTools(typeof(AdvancedRefactoringTools).Assembly)
-            .Where(t => t.ClassName == nameof(AdvancedRefactoringTools))
-            .Select(t => t.ToolName)
-            .Distinct()
-            .ToArray();
-        var names = await ListToolNamesAsync(advanced: false, "claude");
-
-        Assert.That(advancedOnlyTools, Is.Not.Empty);
-        Assert.That(names, Has.Length.EqualTo(ClaudeAdvancedBaseline.Length - advancedOnlyTools.Length));
-        Assert.That(names.Intersect(advancedOnlyTools), Is.Empty);
-        Assert.That(names, Is.SubsetOf(ClaudeAdvancedBaseline));
-        Assert.That(names, Is.SupersetOf(CoreTools.Where(t => t != "McpToolsetControl")));
-        Assert.That(names, Does.Not.Contain("McpToolsetControl"));
     }
 
     // ---- registry and startup parsing ----
 
     [Test]
-    public void Registry_ListsClaudeLean_InBothServersMaps_AndCoreSetMatches()
+    public void Registry_ListsClaudeLean_AndCoreSetMatches()
     {
-        Assert.That(ToolClassRegistry.BasicModeToToolClasses.ContainsKey("claude-lean"), Is.True);
-        Assert.That(ToolClassRegistry.AdvancedModeToToolClasses.ContainsKey("claude-lean"), Is.True);
+        Assert.That(ToolClassRegistry.ModeToToolClasses.ContainsKey("claude-lean"), Is.True);
         Assert.That(ToolClassRegistry.ClaudeLeanToolNames, Is.EquivalentTo(CoreTools), "ToolClassRegistry.ClaudeLeanToolNames and ClaudeLeanModeTests.CoreTools must agree; edit both");
     }
 
@@ -180,7 +143,7 @@ public class ClaudeLeanModeTests
     [Category("ServerStartupHelpers")] // sentinel:auto-category
     public void ParseArgs_All_DoesNotExpandToClaudeLean(string all)
     {
-        var allModes = new HashSet<string>(ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
+        var allModes = new HashSet<string>(ToolClassRegistry.ModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
 
         ServerStartupHelpers.ParseArgs([$"--mode={all}"], allModes, out _, out var activeModes, out _, out _, out _, out _, out _);
 
@@ -193,7 +156,7 @@ public class ClaudeLeanModeTests
     [Category("ServerStartupHelpers")] // sentinel:auto-category
     public void ParseArgs_NamedExplicitly_ActivatesClaudeLean(string modeArg)
     {
-        var allModes = new HashSet<string>(ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
+        var allModes = new HashSet<string>(ToolClassRegistry.ModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
 
         ServerStartupHelpers.ParseArgs([$"--mode={modeArg}"], allModes, out _, out var activeModes, out _, out _, out _, out _, out _);
 
@@ -206,12 +169,12 @@ public class ClaudeLeanModeTests
     {
         var classes = ServerStartupHelpers.ResolveActiveToolClasses(
             new HashSet<string>(["claude-lean"], StringComparer.OrdinalIgnoreCase),
-            ToolClassRegistry.BasicModeToToolClasses,
+            ToolClassRegistry.ModeToToolClasses,
             new HashSet<string>(),
             new HashSet<string>());
 
-        var registered = ToolClassRegistry.BasicModeToToolClasses["claude-lean"];
-        Assert.That(classes, Has.Count.EqualTo(registered.Length), "claude-lean alone must resolve to exactly ToolClassRegistry.BasicModeToToolClasses[claude-lean]; edit ClaudeLeanToolClasses");
+        var registered = ToolClassRegistry.ModeToToolClasses["claude-lean"];
+        Assert.That(classes, Has.Count.EqualTo(registered.Length), "claude-lean alone must resolve to exactly ToolClassRegistry.ModeToToolClasses[claude-lean]; edit ClaudeLeanToolClasses");
         Assert.That(classes, Is.EquivalentTo(registered));
         Assert.That(classes, Does.Contain("ToolsetControlTools"));
         Assert.That(classes, Does.Contain("DeclarationTools"));
@@ -219,41 +182,16 @@ public class ClaudeLeanModeTests
         Assert.That(classes, Does.Contain("SemanticFindReplaceTools"));
         Assert.That(classes, Does.Contain("NamedArgumentsTools"));
         Assert.That(classes, Does.Contain("TestCategoryTaggingTools"));
-        Assert.That(classes, Does.Not.Contain("SubAgentTools")); // Basic does not register it; Advanced adds it via AdvancedClaudeLeanToolClasses
+        Assert.That(classes, Does.Contain("SubAgentTools")); // on demand via the modelEval toolset
+        Assert.That(classes.Count(name => name == "SubAgentTools"), Is.EqualTo(1), "SubAgentTools must appear exactly once in the claude-lean resolution");
         Assert.That(classes, Does.Not.Contain("AdvancedRefactoringTools"));
         Assert.That(classes, Does.Not.Contain("DocumentationTools"));
     }
 
     [Test]
-    [Category("ServerStartupHelpers")] // sentinel:auto-category
-    public void ResolveActiveToolClasses_ClaudeLeanAdvanced_IsSupersetOfBasicClaudeLeanAndAddsSubAgentToolsOnce()
+    public void TagTestCategories_IsRegisteredInModeMap_AndOnDemandOnlyInClaudeLean()
     {
-        var classes = ServerStartupHelpers.ResolveActiveToolClasses(
-            new HashSet<string>(["claude-lean"], StringComparer.OrdinalIgnoreCase),
-            ToolClassRegistry.AdvancedModeToToolClasses,
-            new HashSet<string>(),
-            new HashSet<string>());
-
-        var basicClaudeLean = ToolClassRegistry.BasicModeToToolClasses["claude-lean"];
-        Assert.That(classes, Is.SupersetOf(basicClaudeLean), "Advanced claude-lean must include every Basic claude-lean class");
-        Assert.That(classes, Does.Contain("SubAgentTools"));
-
-        int subAgentCount = 0;
-        foreach (var name in classes)
-        {
-            if (name == "SubAgentTools")
-            {
-                subAgentCount++;
-            }
-        }
-        Assert.That(subAgentCount, Is.EqualTo(1), "SubAgentTools must appear exactly once in the Advanced claude-lean resolution");
-    }
-
-    [Test]
-    public void TagTestCategories_IsRegisteredInBothModeMaps_AndOnDemandOnlyInClaudeLean()
-    {
-        Assert.That(ToolClassRegistry.BasicModeToToolClasses["TestCategories"], Is.EqualTo(new[] { "TestCategoryTaggingTools" }));
-        Assert.That(ToolClassRegistry.AdvancedModeToToolClasses["TestCategories"], Is.EqualTo(new[] { "TestCategoryTaggingTools" }));
+        Assert.That(ToolClassRegistry.ModeToToolClasses["TestCategories"], Is.EqualTo(new[] { "TestCategoryTaggingTools" }));
         Assert.That(ToolClassRegistry.ClaudeLeanOnDemandToolClasses, Does.Contain("TestCategoryTaggingTools"));
 
         // Off by default in claude-lean: the class is active but the tool is not allow-listed; the toolset switches it on.
@@ -263,10 +201,9 @@ public class ClaudeLeanModeTests
     }
 
     [Test]
-    public void QualifyCrefs_IsRegisteredInBothModeMaps_AndOnDemandOnlyInClaudeLean()
+    public void QualifyCrefs_IsRegisteredInModeMap_AndOnDemandOnlyInClaudeLean()
     {
-        Assert.That(ToolClassRegistry.BasicModeToToolClasses["QualifyCrefs"], Is.EqualTo(new[] { "QualifyCrefsTools" }));
-        Assert.That(ToolClassRegistry.AdvancedModeToToolClasses["QualifyCrefs"], Is.EqualTo(new[] { "QualifyCrefsTools" }));
+        Assert.That(ToolClassRegistry.ModeToToolClasses["QualifyCrefs"], Is.EqualTo(new[] { "QualifyCrefsTools" }));
         Assert.That(ToolClassRegistry.ClaudeLeanOnDemandToolClasses, Does.Contain("QualifyCrefsTools"));
 
         // Off by default in claude-lean: the class is active but the tool is not allow-listed; the toolset switches it on.
@@ -276,16 +213,15 @@ public class ClaudeLeanModeTests
     }
 
     [Test]
-    public void SemanticFindReplace_IsInBothModeMaps_SoAllIncludesIt_AndStaysOnDemandInClaudeLean()
+    public void SemanticFindReplace_IsInModeMap_SoAllIncludesIt_AndStaysOnDemandInClaudeLean()
     {
         // Regression: the class once lived only in the claude-lean lists, so --mode=all (which excludes claude-lean) never listed the tool.
-        Assert.That(ToolClassRegistry.BasicModeToToolClasses["SemanticFindReplace"], Is.EqualTo(new[] { "SemanticFindReplaceTools" }));
-        Assert.That(ToolClassRegistry.AdvancedModeToToolClasses["SemanticFindReplace"], Is.EqualTo(new[] { "SemanticFindReplaceTools" }));
+        Assert.That(ToolClassRegistry.ModeToToolClasses["SemanticFindReplace"], Is.EqualTo(new[] { "SemanticFindReplaceTools" }));
         Assert.That(ToolClassRegistry.ClaudeLeanOnDemandToolClasses, Does.Contain("SemanticFindReplaceTools"));
 
-        var allModes = new HashSet<string>(ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
+        var allModes = new HashSet<string>(ToolClassRegistry.ModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
         ServerStartupHelpers.ParseArgs(["--mode=all"], allModes, out _, out var activeModes, out _, out _, out _, out _, out _);
-        var classes = ServerStartupHelpers.ResolveActiveToolClasses(activeModes, ToolClassRegistry.AdvancedModeToToolClasses, [], []);
+        var classes = ServerStartupHelpers.ResolveActiveToolClasses(activeModes, ToolClassRegistry.ModeToToolClasses, [], []);
         Assert.That(classes, Does.Contain("SemanticFindReplaceTools"));
 
         // Off by default in claude-lean: the tool is not allow-listed; the moveExtract toolset switches it on.
@@ -296,8 +232,8 @@ public class ClaudeLeanModeTests
     [Test]
     public void SubAgent_IsOnDemandOnlyInClaudeLean_ViaTheModelEvalToolset()
     {
-        Assert.That(ToolClassRegistry.AdvancedModeToToolClasses["SubAgent"], Is.EqualTo(new[] { "SubAgentTools" }));
-        Assert.That(ToolClassRegistry.AdvancedModeToToolClasses["claude-lean"], Does.Contain("SubAgentTools"), "the class must stay hosted in Advanced claude-lean so enabling modelEval works");
+        Assert.That(ToolClassRegistry.ModeToToolClasses["SubAgent"], Is.EqualTo(new[] { "SubAgentTools" }));
+        Assert.That(ToolClassRegistry.ModeToToolClasses["claude-lean"], Does.Contain("SubAgentTools"), "the class must stay hosted in Advanced claude-lean so enabling modelEval works");
         Assert.That(ToolClassRegistry.ClaudeLeanOnDemandToolClasses, Does.Contain("SubAgentTools"));
         Assert.That(ToolClassRegistry.ClaudeLeanToolNames, Does.Not.Contain("SubAgent"));
         Assert.That(ToolsetCatalog.FindSet("SubAgent"), Is.EqualTo(ToolSetName.modelEval));
@@ -308,7 +244,7 @@ public class ClaudeLeanModeTests
     [Test]
     public void WriteToolAdvice_UnderAllowList_NamesOnlyAllowedTools()
     {
-        var classes = ToolClassRegistry.BasicModeToToolClasses["claude-lean"];
+        var classes = ToolClassRegistry.ModeToToolClasses["claude-lean"];
         var helper = new WriteToolAdviceHelper(classes, ToolClassRegistry.ClaudeLeanToolNames);
 
         // WriteFile is an on-demand moveExtract tool, not core, so claude-lean advice must not name it.
@@ -321,7 +257,7 @@ public class ClaudeLeanModeTests
     [Test]
     public void WriteToolAdvice_WithoutAllowList_StillNamesWholeClass()
     {
-        var helper = new WriteToolAdviceHelper(ToolClassRegistry.BasicModeToToolClasses["Claude"]);
+        var helper = new WriteToolAdviceHelper(ToolClassRegistry.ModeToToolClasses["Claude"]);
 
         Assert.That(helper.IsExposed("ApplyDiff"), Is.True);
     }

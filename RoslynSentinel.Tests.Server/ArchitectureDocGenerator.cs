@@ -6,7 +6,7 @@ using System.Xml.Linq;
 using ModelContextProtocol.Server;
 
 using RoslynSentinel;
-using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Server;
@@ -242,15 +242,7 @@ public static class ArchitectureDocGenerator
         var registeredClasses = new HashSet<string>(StringComparer.Ordinal);
         
         // Collect all registered class names
-        foreach (var classes in ToolClassRegistry.BasicModeToToolClasses.Values)
-        {
-            foreach (var className in classes)
-            {
-                registeredClasses.Add(className);
-            }
-        }
-        
-        foreach (var classes in ToolClassRegistry.AdvancedModeToToolClasses.Values)
+        foreach (var classes in ToolClassRegistry.ModeToToolClasses.Values)
         {
             foreach (var className in classes)
             {

@@ -7,19 +7,18 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Extensions.Tasks;
 
-using RoslynSentinel.Server.Basic;
 using RoslynSentinel.Tools.Advanced;
 
 namespace RoslynSentinel.Server.Advanced;
 
 public class ServerHttp
 {
-    // All modes available in the Advanced variant, derived from ToolClassRegistry's own map so
-    // "--mode=all" can never drift from what AdvancedModeToToolClasses actually registers (it
+    // All modes, derived from ToolClassRegistry's own map so
+    // "--mode=all" can never drift from what ModeToToolClasses actually registers (it
     // previously omitted Admin/WholeFileWrite because this was a separately hand-maintained
     // literal list).
     private static readonly HashSet<string> AllModes =
-        new(ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
+        new(ToolClassRegistry.ModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
 
     public static async Task Startup(string[] args)
     {
@@ -48,7 +47,7 @@ public class ServerHttp
         // Before binding a port: a server with no tools can't serve anything, and saying so here
         // names the missing flag instead of accepting connections that expose nothing.
         if (ServerStartupHelpers.HandleNoActiveTools(
-                modeArg, ToolClassRegistry.AdvancedModeToToolClasses, activeModes, includeTools, excludeTools))
+                modeArg, ToolClassRegistry.ModeToToolClasses, activeModes, includeTools, excludeTools))
         {
             return;
         }
@@ -91,7 +90,7 @@ public class ServerHttp
         var logger = app.Services.GetRequiredService<ILoggerFactory>()
                         .CreateLogger("RoslynSentinel.HttpHost.Advanced");
 
-        app.Services.WarmupAndAutoLoadAdvanced(solutionPath, logger, baseRepoDirectory);
+        app.Services.WarmupAndAutoLoadBasic(solutionPath, logger, baseRepoDirectory);
         ConsoleMode.WriteStartupDump(app.Services, modeArg);
 
         if (logger.IsEnabled(LogLevel.Information))

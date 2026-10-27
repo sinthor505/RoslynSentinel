@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 
 using ModelContextProtocol.Protocol;
 
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Server.Advanced;
 
 /// <summary>
 /// Builds and stamps the <c>toolCall</c> echo (call id, tool name, truncated arguments) that the

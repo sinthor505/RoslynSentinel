@@ -12,7 +12,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 
-using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Server;
@@ -30,7 +30,7 @@ public class NoActiveToolsStartupTests
         IEnumerable<string>? excludeTools = null) =>
         ServerStartupHelpers.DescribeNoActiveToolsFailure(
             modeArg,
-            ToolClassRegistry.AdvancedModeToToolClasses,
+            ToolClassRegistry.ModeToToolClasses,
             new HashSet<string>(activeModes ?? [], StringComparer.OrdinalIgnoreCase),
             new HashSet<string>(includeTools ?? [], StringComparer.OrdinalIgnoreCase),
             new HashSet<string>(excludeTools ?? [], StringComparer.OrdinalIgnoreCase));
@@ -124,7 +124,7 @@ public class NoActiveToolsStartupTests
     [Category("ToolClassRegistry")] // sentinel:auto-category
     public void ModeAll_IsNotReported()
     {
-        var allModes = new HashSet<string>(ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
+        var allModes = new HashSet<string>(ToolClassRegistry.ModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
         var failure = Describe(modeArg: "all", activeModes: allModes);
 
         Assert.That(failure, Is.Null);
@@ -139,25 +139,17 @@ public class NoActiveToolsStartupTests
         // "WholeFileWrite" even though both are real modes in ToolClassRegistry. Since the fix
         // makes each entry point's AllModes field *equal to* ToolClassRegistry's own Keys, the
         // meaningful regression check is that "all" (i.e. every key in the registry) resolves to
-        // a tool-class set containing AdminTools/WholeFileWriteTools for both
-        // variants -> this fails again if either map ever grows a mode a hardcoded list wouldn't
-        // have picked up.
-        var basicAllModes = new HashSet<string>(
-            ToolClassRegistry.BasicModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
-        var basicResolved = ServerStartupHelpers.ResolveActiveToolClasses(
-            basicAllModes, ToolClassRegistry.BasicModeToToolClasses, Names(), Names());
-
-        var advancedAllModes = new HashSet<string>(
-            ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
-        var advancedResolved = ServerStartupHelpers.ResolveActiveToolClasses(
-            advancedAllModes, ToolClassRegistry.AdvancedModeToToolClasses, Names(), Names());
+        // a tool-class set containing AdminTools/WholeFileWriteTools -> this fails again if the
+        // map ever grows a mode a hardcoded list wouldn't have picked up.
+        var allModes = new HashSet<string>(
+            ToolClassRegistry.ModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
+        var resolved = ServerStartupHelpers.ResolveActiveToolClasses(
+            allModes, ToolClassRegistry.ModeToToolClasses, Names(), Names());
 
         Assert.Multiple(() =>
         {
-            Assert.That(basicResolved, Does.Contain("AdminTools"));
-            Assert.That(basicResolved, Does.Contain("WholeFileWriteTools"));
-            Assert.That(advancedResolved, Does.Contain("AdminTools"));
-            Assert.That(advancedResolved, Does.Contain("WholeFileWriteTools"));
+            Assert.That(resolved, Does.Contain("AdminTools"));
+            Assert.That(resolved, Does.Contain("WholeFileWriteTools"));
         });
     }
 

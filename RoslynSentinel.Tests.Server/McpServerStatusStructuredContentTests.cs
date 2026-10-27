@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
-using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Server;

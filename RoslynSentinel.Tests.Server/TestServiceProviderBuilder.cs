@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tests.Fakes;
 
 namespace RoslynSentinel.Tests.Server;

@@ -31,7 +31,6 @@
   <ItemGroup>
     <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj" />
-    <ProjectReference Include="..\RoslynSentinel.Server.Basic\RoslynSentinel.Server.Basic.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Tools.Advanced\RoslynSentinel.Tools.Advanced.csproj" />
   </ItemGroup>

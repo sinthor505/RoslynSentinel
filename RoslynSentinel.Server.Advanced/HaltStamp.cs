@@ -2,7 +2,7 @@ using System.Text.Json.Nodes;
 
 using ModelContextProtocol.Protocol;
 
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Server.Advanced;
 
 /// <summary>
 /// Stamps the four <c>isSessionHalted</c> / <c>sessionHaltKind</c> / <c>sessionHaltReason</c> /

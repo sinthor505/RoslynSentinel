@@ -1,6 +1,6 @@
 using ModelContextProtocol.Protocol;
 
-using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tools.Advanced;
 
 namespace RoslynSentinel.Tests.SubAgent;
@@ -134,13 +134,13 @@ public class SubAgentLaunchTests
             .Where(a => !(overridesMode && a.StartsWith("--mode=", StringComparison.Ordinal)))
             .Concat(extraArgs)
             .ToArray();
-        var allModes = new HashSet<string>(ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
+        var allModes = new HashSet<string>(ToolClassRegistry.ModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
         ServerStartupHelpers.ParseArgs(
             args, allModes,
             out _, out var activeModes, out _, out _, out var includeTools, out var excludeTools, out _);
 
         return ServerStartupHelpers.ResolveActiveToolClasses(
-            activeModes, ToolClassRegistry.AdvancedModeToToolClasses, includeTools, excludeTools);
+            activeModes, ToolClassRegistry.ModeToToolClasses, includeTools, excludeTools);
     }
 
     [Test]

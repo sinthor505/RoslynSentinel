@@ -2,7 +2,7 @@ using System.Text.Json.Nodes;
 
 using ModelContextProtocol.Protocol;
 
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Server.Advanced;
 
 /// <summary>
 /// Stamps the <c>workspaceStale</c> / <c>workspaceStaleReason</c> / <c>workspaceStaleRecovery</c> properties

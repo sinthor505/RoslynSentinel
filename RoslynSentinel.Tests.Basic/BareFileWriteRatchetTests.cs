@@ -36,10 +36,10 @@ public class BareFileWriteRatchetTests
         // .gitignore inside the test instance directory.
         ["RoslynSentinel.Engines.Basic/TestInstanceLauncher.cs::CreateInstanceWorkingDirectory"] = 1,
         // Tool-list JSON dumps (WriteStartupDump writes two).
-        ["RoslynSentinel.Server.Basic/ConsoleMode.cs::ListTools"] = 1,
-        ["RoslynSentinel.Server.Basic/ConsoleMode.cs::WriteStartupDump"] = 2,
+        ["RoslynSentinel.Server.Advanced/ConsoleMode.cs::ListTools"] = 1,
+        ["RoslynSentinel.Server.Advanced/ConsoleMode.cs::WriteStartupDump"] = 2,
         // Crash log written at process start-up.
-        ["RoslynSentinel.Server.Basic/ServerStartupHelpers.cs::AttachCrashHandlers"] = 1,
+        ["RoslynSentinel.Server.Advanced/ServerStartupHelpers.cs::AttachCrashHandlers"] = 1,
         // Debug dumps (two sites).
         ["RoslynSentinel.Tools.Advanced/AsyncifyTools.cs::AsyncifyLoopTool"] = 2,
         // Temp patch file for hunk staging, deleted after use.

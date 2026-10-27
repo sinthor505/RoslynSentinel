@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Server.Advanced;
 
 /// <summary>
 /// Canonical mode-name -> tool-class-name mapping, one entry per <c>[McpServerToolType]</c>
@@ -51,7 +51,7 @@ public static class ToolClassRegistry
         StringComparer.Ordinal);
 
     /// <summary>
-    /// Tool classes that declare at least one <see cref="ClaudeLeanToolNames"/> tool. This is the Basic claude-lean set; Advanced adds the Advanced-only SubAgentTools (see AdvancedClaudeLeanToolClasses), plus
+    /// Tool classes that declare at least one <see cref="ClaudeLeanToolNames"/> tool, including SubAgentTools (its SubAgent tool is on demand via the modelEval toolset),
     /// DeclarationTools, ParameterEditTools and SemanticFindReplaceTools, whose single tools (DeclarationTool, ParameterEditTool, SemanticFindReplaceTool) are on-demand only: the allow-list keeps
     /// them out of the startup surface and the <c>declarations</c> toolset adds them. Listed here so the class exists in claude-lean and McpServerStatusTool can name its mode.
     /// </summary>
@@ -61,13 +61,8 @@ public static class ToolClassRegistry
         "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
         "AdminTools", "WholeFileWriteTools", "ToolsetControlTools", "DeclarationTools", "ParameterEditTools",
         "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools", "QualifyCrefsTools",
+        "SubAgentTools",
     ];
-
-    /// <summary>
-    /// The Advanced claude-lean set: <see cref="ClaudeLeanToolClasses"/> plus the Advanced-only SubAgentTools (Basic never registers SubAgentTools); its SubAgent tool is on demand via the modelEval toolset.
-    /// Must textually follow ClaudeLeanToolClasses, since static initializers run in textual order.
-    /// </summary>
-    private static readonly string[] AdvancedClaudeLeanToolClasses = [.. ClaudeLeanToolClasses, "SubAgentTools"];
 
     /// <summary>
     /// Tool classes whose dependencies claude-lean registers WITHOUT registering their tools (the per-tool
@@ -86,56 +81,19 @@ public static class ToolClassRegistry
         ],
         StringComparer.Ordinal);
 
-    /// <summary>Modes registered by Basic's <c>AddRoslynSentinelToolsBasic</c>.</summary>
-    public static readonly IReadOnlyDictionary<string, string[]> BasicModeToToolClasses =
+    /// <summary>
+    /// The one mode-name -> tool-class-name map, registered by <c>AddRoslynSentinelToolsAdvanced</c>
+    /// (which delegates the Basic tool classes to <c>AddRoslynSentinelToolsBasic</c>). It is the union of
+    /// the former separate Basic and Advanced maps: the Basic-only sub-modes (WorkspaceFileIO,
+    /// WorkspaceReadNav, ...) are kept, "Workspace" includes SymbolRelationshipTools, and "Refactor"
+    /// includes the Advanced-only AdvancedRefactoringTools. A class name whose tool class a given
+    /// registration method does not register is inert there (each registration block is guarded by
+    /// <c>activeToolClasses.Contains(...)</c>).
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string[]> ModeToToolClasses =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
             ["Workspace"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "GitRemoteTools"],
-            ["Admin"] = ["AdminTools"],
-            ["WholeFileWrite"] = ["WholeFileWriteTools"],
-            ["Refactor"] = ["RefactoringExtractionDocsTools", "RefactoringStructuralTools", "TypedMemberTools", "RefactoringSignatureTools"],
-            ["Claude"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "GitRemoteTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "TypedMemberTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
-            ["SemanticFindReplace"] = ["SemanticFindReplaceTools"],
-            [ClaudeLeanMode] = ClaudeLeanToolClasses,
-
-            // Modernize/Quality/Generation/Asyncify register no classes in Basic today (commented
-            // out pending Advanced-only tool classes) -> omitted here since an empty array would
-            // be indistinguishable from "mode not recognized" for expansion purposes.
-
-            // Fine-grained sub-modes added by Decision 7 step 4 (docs/current/plans/
-            // plan_split_workspace_refactoring_tools_for_di.md, Decision 4 + Addendum A/B):
-            // independently opt-in-able, none require "Workspace"/"Refactor". "Workspace" itself
-            // already only ever mapped to the 4 facade classes above (never the 5 split classes
-            // directly), so Addendum B's narrowing requires no change here -> the one genuinely
-            // new umbrella is "WorkspaceFileContent" below.
-            ["WorkspaceFileIO"] = ["WorkspaceFileEditTools"],
-            ["WorkspaceBuildTest"] = ["WorkspaceBuildTestTools"],
-            ["WorkspaceProjectManagement"] = ["WorkspaceProjectManagementTools"],
-            ["WorkspaceReadNav"] = ["WorkspaceReadNavigationTools"],
-            ["WorkspaceHealthMisc"] = ["WorkspaceHealthMiscTools"],
-            // New umbrella (Addendum B): file read/navigate/edit as its own coherent concern,
-            // independent of solution/workspace lifecycle ("Workspace" above).
-            ["WorkspaceFileContent"] = ["WorkspaceFileEditTools", "WorkspaceReadNavigationTools"],
-            ["RefactorSignature"] = ["RefactoringSignatureTools"],
-            ["RefactoringStructural"] = ["RefactoringStructuralTools", "TypedMemberTools"],
-            ["RefactorExtractionDocs"] = ["RefactoringExtractionDocsTools"],
-            ["SymbolNavigation"] = ["SymbolNavigationTools"],
-            ["SymbolRelationship"] = ["SymbolRelationshipTools"],
-            ["NamedArguments"] = ["NamedArgumentsTools"],
-            ["TestCategories"] = ["TestCategoryTaggingTools"],
-            ["QualifyCrefs"] = ["QualifyCrefsTools"],
-        };
-
-    /// <summary>
-    /// Modes registered by Advanced's <c>AddRoslynSentinelToolsAdvanced</c>, which include
-    /// everything in <see cref="BasicModeToToolClasses"/> (Workspace/Admin/WholeFileWrite/Refactor
-    /// carry over verbatim, with Refactor gaining one Advanced-only extra class) plus the
-    /// Advanced-only modes below.
-    /// </summary>
-    public static readonly IReadOnlyDictionary<string, string[]> AdvancedModeToToolClasses =
-        new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Workspace"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "GitTools", "GitRemoteTools"],
             ["Admin"] = ["AdminTools"],
             ["WholeFileWrite"] = ["WholeFileWriteTools"],
             ["Refactor"] = ["RefactoringExtractionDocsTools", "RefactoringStructuralTools", "TypedMemberTools", "RefactoringSignatureTools", "AdvancedRefactoringTools"],
@@ -155,34 +113,51 @@ public static class ToolClassRegistry
             ["QualifyCrefs"] = ["QualifyCrefsTools"],
             ["Claude"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "GitRemoteTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "TypedMemberTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
             ["SemanticFindReplace"] = ["SemanticFindReplaceTools"],
-            [ClaudeLeanMode] = AdvancedClaudeLeanToolClasses,
+            [ClaudeLeanMode] = ClaudeLeanToolClasses,
             [ExperimentalMode] = ["CodeTransformTools"],
+
+            // Fine-grained sub-modes added by Decision 7 step 4 (docs/current/plans/
+            // plan_split_workspace_refactoring_tools_for_di.md, Decision 4 + Addendum A/B):
+            // independently opt-in-able, none require "Workspace"/"Refactor". "Workspace" itself
+            // already only ever mapped to the facade classes above (never the split classes
+            // directly), so Addendum B's narrowing requires no change here -> the one genuinely
+            // new umbrella is "WorkspaceFileContent" below.
+            ["WorkspaceFileIO"] = ["WorkspaceFileEditTools"],
+            ["WorkspaceBuildTest"] = ["WorkspaceBuildTestTools"],
+            ["WorkspaceProjectManagement"] = ["WorkspaceProjectManagementTools"],
+            ["WorkspaceReadNav"] = ["WorkspaceReadNavigationTools"],
+            ["WorkspaceHealthMisc"] = ["WorkspaceHealthMiscTools"],
+            // New umbrella (Addendum B): file read/navigate/edit as its own coherent concern,
+            // independent of solution/workspace lifecycle ("Workspace" above).
+            ["WorkspaceFileContent"] = ["WorkspaceFileEditTools", "WorkspaceReadNavigationTools"],
+            ["RefactorSignature"] = ["RefactoringSignatureTools"],
+            ["RefactoringStructural"] = ["RefactoringStructuralTools", "TypedMemberTools"],
+            ["RefactorExtractionDocs"] = ["RefactoringExtractionDocsTools"],
+            ["SymbolNavigation"] = ["SymbolNavigationTools"],
+            ["SymbolRelationship"] = ["SymbolRelationshipTools"],
         };
 
     /// <summary>
-    /// Inverts both mode maps into tool class name -> the mode names that enable it (Basic modes
-    /// first, then Advanced-only ones, no duplicates). Feeds McpServerStatusTool's per-tool
+    /// Inverts the mode map into tool class name -> the mode names that enable it (no duplicates).
+    /// Feeds McpServerStatusTool's per-tool
     /// <c>enabledBy</c> hint; "Claude"/"all"-style umbrella modes are listed like any other.
     /// </summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildClassToModes()
     {
         var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        foreach (var map in new[] { BasicModeToToolClasses, AdvancedModeToToolClasses })
+        foreach (var (mode, classes) in ModeToToolClasses)
         {
-            foreach (var (mode, classes) in map)
+            foreach (var className in classes)
             {
-                foreach (var className in classes)
+                if (!result.TryGetValue(className, out var modes))
                 {
-                    if (!result.TryGetValue(className, out var modes))
-                    {
-                        modes = [];
-                        result[className] = modes;
-                    }
+                    modes = [];
+                    result[className] = modes;
+                }
 
-                    if (!modes.Contains(mode, StringComparer.OrdinalIgnoreCase))
-                    {
-                        modes.Add(mode);
-                    }
+                if (!modes.Contains(mode, StringComparer.OrdinalIgnoreCase))
+                {
+                    modes.Add(mode);
                 }
             }
         }

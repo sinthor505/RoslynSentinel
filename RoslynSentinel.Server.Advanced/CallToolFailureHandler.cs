@@ -4,7 +4,7 @@ using System.Text.Json;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Server.Advanced;
 
 /// <summary>
 /// Turns an exception that escaped a tool call into the same structured failure a tool returns on its

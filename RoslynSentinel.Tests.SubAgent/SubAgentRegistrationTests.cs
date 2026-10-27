@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Server;
 
 using RoslynSentinel.Server.Advanced;
-using RoslynSentinel.Server.Basic;
 using RoslynSentinel.Tools.Advanced;
 
 namespace RoslynSentinel.Tests.SubAgent;
@@ -78,8 +77,8 @@ public class SubAgentRegistrationTests
     {
         Assert.Multiple(() =>
         {
-            Assert.That(ToolClassRegistry.AdvancedModeToToolClasses["SubAgentEval"], Is.EqualTo(new[] { "SubAgentEvalTools" }));
-            Assert.That(ToolClassRegistry.AdvancedModeToToolClasses["SubAgent"], Is.EqualTo(new[] { "SubAgentTools" }));
+            Assert.That(ToolClassRegistry.ModeToToolClasses["SubAgentEval"], Is.EqualTo(new[] { "SubAgentEvalTools" }));
+            Assert.That(ToolClassRegistry.ModeToToolClasses["SubAgent"], Is.EqualTo(new[] { "SubAgentTools" }));
         });
     }
 

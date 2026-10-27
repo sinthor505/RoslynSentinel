@@ -189,7 +189,7 @@ public static class Program
         // host directly, so stdio's built-in per-worktree child-process ownership is exactly
         // what's wanted here; no port to coordinate or collide with the user's own separately
         // running server. --solution is likewise omitted -> Server.Advanced's own auto-load on
-        // --solution is fire-and-forget/unawaited (see WarmupAndAutoLoadAdvanced), so it can't
+        // --solution is fire-and-forget/unawaited (see WarmupAndAutoLoadBasic), so it can't
         // be trusted to have finished before the first tool call arrives. LoadSolution is called
         // explicitly below instead, which blocks until the real load completes.
         var transport = new StdioClientTransport(new StdioClientTransportOptions

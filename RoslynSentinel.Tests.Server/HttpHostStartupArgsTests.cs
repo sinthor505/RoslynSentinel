@@ -3,7 +3,7 @@
 // readback is verified by running the built server (see the step's manual check).
 using Microsoft.Extensions.DependencyInjection;
 
-using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Server.Advanced;
 
 namespace RoslynSentinel.Tests.Server;
 

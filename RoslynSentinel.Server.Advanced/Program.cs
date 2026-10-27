@@ -1,10 +1,11 @@
 // Program.cs v1
-using RoslynSentinel.Server.Basic;
-
 namespace RoslynSentinel.Server.Advanced;
 
 public class Program
 {
+    // Read by ToolCallEcho (first tool call after a fresh process start).
+    public static bool isFreshStartup = true;
+
     public static async Task Main(string[] args)
     {
         var transport = ServerStartupHelpers.ParseTransport(args);

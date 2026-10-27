@@ -6,7 +6,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Server.Advanced;
-using RoslynSentinel.Server.Basic;
 using RoslynSentinel.Tools.Experimental;
 
 namespace RoslynSentinel.Tests.Server;
@@ -20,7 +19,7 @@ public class ExperimentalModeTests
     [Category("ServerStartupHelpers")] // sentinel:auto-category
     public void ParseArgs_All_DoesNotExpandToExperimental(string all)
     {
-        var allModes = new HashSet<string>(ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
+        var allModes = new HashSet<string>(ToolClassRegistry.ModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
 
         ServerStartupHelpers.ParseArgs([$"--mode={all}"], allModes, out _, out var activeModes, out _, out _, out _, out _, out _);
 
@@ -34,7 +33,7 @@ public class ExperimentalModeTests
     [Category("ServerStartupHelpers")] // sentinel:auto-category
     public void ParseArgs_NamedExplicitly_ActivatesExperimental(string modeArg)
     {
-        var allModes = new HashSet<string>(ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
+        var allModes = new HashSet<string>(ToolClassRegistry.ModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
 
         ServerStartupHelpers.ParseArgs([$"--mode={modeArg}"], allModes, out _, out var activeModes, out _, out _, out _, out _, out _);
 
@@ -47,7 +46,7 @@ public class ExperimentalModeTests
     {
         var classes = ServerStartupHelpers.ResolveActiveToolClasses(
             new HashSet<string>(["Experimental"], StringComparer.OrdinalIgnoreCase),
-            ToolClassRegistry.AdvancedModeToToolClasses,
+            ToolClassRegistry.ModeToToolClasses,
             new HashSet<string>(),
             new HashSet<string>());
 
@@ -60,7 +59,7 @@ public class ExperimentalModeTests
     {
         var classes = ServerStartupHelpers.ResolveActiveToolClasses(
             new HashSet<string>(["Claude"], StringComparer.OrdinalIgnoreCase),
-            ToolClassRegistry.AdvancedModeToToolClasses,
+            ToolClassRegistry.ModeToToolClasses,
             new HashSet<string>(),
             new HashSet<string>());
 
@@ -71,13 +70,13 @@ public class ExperimentalModeTests
     [Category("ServerStartupHelpers")] // sentinel:auto-category
     public void IncludeTools_CodeTransformTools_IsNormalizedToTheRegisteredName()
     {
-        var allModes = new HashSet<string>(ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
+        var allModes = new HashSet<string>(ToolClassRegistry.ModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
 
         ServerStartupHelpers.ParseArgs(
             ["--mode=Claude", "--include-tools=codetransformtools"], allModes,
             out _, out var activeModes, out _, out _, out var includeTools, out var excludeTools, out _);
         var classes = ServerStartupHelpers.ResolveActiveToolClasses(
-            activeModes, ToolClassRegistry.AdvancedModeToToolClasses, includeTools, excludeTools);
+            activeModes, ToolClassRegistry.ModeToToolClasses, includeTools, excludeTools);
 
         Assert.That(classes, Does.Contain("CodeTransformTools").IgnoreCase);
     }

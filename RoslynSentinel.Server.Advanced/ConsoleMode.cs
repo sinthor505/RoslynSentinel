@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 using ModelContextProtocol.Server;
 
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Server.Advanced;
 
 /// <summary>
 /// Handles the --list-tools and --interactive console modes.

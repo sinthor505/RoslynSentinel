@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Server;
 
 using RoslynSentinel.Server.Advanced;
-using RoslynSentinel.Server.Basic;
 using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Advanced;
@@ -38,12 +37,11 @@ public class DependencyInjectionTests
         // via the real mode-conditional registration path, all modes enabled, so
         // DynamicDiscovery_AllClassesWithToolAttribute_ShouldBeResolvable exercises the full set
         // rather than whatever subset happened to be hand-copied here. Derived from
-        // ToolClassRegistry itself (Basic's map plus Advanced's) rather than a hand-copied string
+        // ToolClassRegistry itself (its single mode map) rather than a hand-copied string
         // list -> a hand-copied list silently drifted out of sync when SentinelWholeFileWriteTools'
         // "WholeFileWrite" mode was added, since AddRoslynSentinelToolsAdvanced also registers
         // Basic's modes via AddRoslynSentinelToolsBasic.
-        var allModes = new HashSet<string>(ToolClassRegistry.BasicModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
-        allModes.UnionWith(ToolClassRegistry.AdvancedModeToToolClasses.Keys);
+        var allModes = new HashSet<string>(ToolClassRegistry.ModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
         var mcpBuilder = services.AddMcpServer();
         mcpBuilder.AddRoslynSentinelToolsAdvanced(services, allModes);
 

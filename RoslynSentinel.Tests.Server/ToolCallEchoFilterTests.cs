@@ -10,7 +10,7 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
 using RoslynSentinel.Common;
-using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Server.Advanced;
 
 namespace RoslynSentinel.Tests.Server;
 

@@ -6,7 +6,6 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 
 using RoslynSentinel.Engines.Advanced;
-using RoslynSentinel.Server.Basic;
 using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Experimental;
 
@@ -38,7 +37,6 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         services.AddSingleton<AsyncOptimizationEngine>();
         services.AddSingleton<AsyncAnalysisEngine>();
         services.AddSingleton<CloneDetectionEngine>();
-        services.AddSingleton<CodeGenerationEngine>();
         services.AddSingleton<CodeGenerationEngine>();
         services.AddSingleton<CodeHealingEngine>();
         services.AddSingleton<CodeStyleAnalysisEngine>();
@@ -167,14 +165,14 @@ public static class RoslynSentinelServiceExtensionsAdvanced
 
         // Registers Workspace-mode tools, Refactor-mode's RefactoringStructuralTools, and both
         // request filters (including the drift-check filter).
-        // Basic's own resolution only sees classes in BasicModeToToolClasses, so an
+        // Basic's registration only acts on the Basic tool classes in ModeToToolClasses, so an
         // Advanced-only --include-tools name (e.g. AsyncifyTools) is inert there -> it's
-        // handled below against AdvancedModeToToolClasses instead.
+        // handled below against the same map instead.
         mcpBuilder.AddRoslynSentinelToolsBasic(services, activeModes, resolvedIncludeTools, resolvedExcludeTools);
 
         var activeToolClasses = ServerStartupHelpers.ResolveActiveToolClasses(
             activeModes,
-            ToolClassRegistry.AdvancedModeToToolClasses,
+            ToolClassRegistry.ModeToToolClasses,
             resolvedIncludeTools,
             resolvedExcludeTools);
 
@@ -247,32 +245,5 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         }
 
         return mcpBuilder;
-    }
-
-    /// <summary>
-    /// Pre-warms MSBuildLocator (which takes ~5–8 s on first call) and optionally auto-loads a solution.
-    /// Should be called after <see cref="Microsoft.Extensions.Hosting.IHost.Build"/> / <see cref="Microsoft.AspNetCore.Builder.WebApplication.Build"/>.
-    /// </summary>
-    public static void WarmupAndAutoLoadAdvanced(this IServiceProvider services, string? solutionPath, ILogger? logger = null, string? baseRepoDirectory = null)
-    {
-        logger?.LogInformation("Pre-warming MSBuildLocator and workspace manager...");
-        var warmupStart = System.Diagnostics.Stopwatch.StartNew();
-        var workspaceManager = services.GetRequiredService<PersistentWorkspaceManager>();
-        warmupStart.Stop();
-        logger?.LogInformation("MSBuildLocator pre-warm complete in {Ms}ms", warmupStart.ElapsedMilliseconds);
-
-        if (!string.IsNullOrEmpty(baseRepoDirectory))
-        {
-            workspaceManager.BaseRepoDirectory = baseRepoDirectory;
-        }
-
-        if (!string.IsNullOrEmpty(solutionPath))
-        {
-            logger?.LogInformation("Auto-loading solution: {Path}", solutionPath);
-            _ = workspaceManager.LoadSolutionAsync(solutionPath)
-                .ContinueWith(
-                    t => logger?.LogError(t.Exception!.GetBaseException(), "Auto-load solution failed: {Path}", solutionPath),
-                    TaskContinuationOptions.OnlyOnFaulted);
-        }
     }
 }

@@ -2,7 +2,7 @@ using System.Text.Json;
 
 using RoslynSentinel.Common;
 
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Server.Advanced;
 
 public static class ToolArgumentRewrites
 {

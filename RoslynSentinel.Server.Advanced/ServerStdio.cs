@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Extensions.Tasks;
 
-using RoslynSentinel.Server.Basic;
 using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Basic;
 
@@ -15,12 +14,12 @@ namespace RoslynSentinel.Server.Advanced
 {
     public class ServerStdio
     {
-        // All modes available in the Advanced variant, derived from ToolClassRegistry's own map
-        // so "--mode=all" can never drift from what AdvancedModeToToolClasses actually registers
+        // All modes, derived from ToolClassRegistry's own map
+        // so "--mode=all" can never drift from what ModeToToolClasses actually registers
         // (it previously omitted Admin/WholeFileWrite because this was a separately
         // hand-maintained literal list).
         private static readonly HashSet<string> AllModes =
-            new(ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
+            new(ToolClassRegistry.ModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
 
         // Advanced tool types eligible for the DEBUG smoke-resolve check.
         // Extend this list as new tool classes are activated in AddRoslynSentinelToolsAdvanced.
@@ -60,7 +59,7 @@ namespace RoslynSentinel.Server.Advanced
             // Before any host is built: a server with no tools can't serve anything, and saying so
             // here names the missing flag instead of failing later inside DI.
             if (ServerStartupHelpers.HandleNoActiveTools(
-                    modeArg, ToolClassRegistry.AdvancedModeToToolClasses, activeModes, includeTools, excludeTools))
+                    modeArg, ToolClassRegistry.ModeToToolClasses, activeModes, includeTools, excludeTools))
             {
                 return;
             }
@@ -130,9 +129,9 @@ namespace RoslynSentinel.Server.Advanced
                     host.Services,
                     ActiveToolTypes,
                     ServerStartupHelpers.ResolveActiveToolClasses(
-                        activeModes, ToolClassRegistry.AdvancedModeToToolClasses, includeTools, excludeTools));
+                        activeModes, ToolClassRegistry.ModeToToolClasses, includeTools, excludeTools));
 
-                host.Services.WarmupAndAutoLoadAdvanced(solutionPath, logger, baseRepoDirectory);
+                host.Services.WarmupAndAutoLoadBasic(solutionPath, logger, baseRepoDirectory);
                 ConsoleMode.WriteStartupDump(host.Services, modeArg);
                 ServerStartupHelpers.LogStartup<ServerStdio>(logger, logPath, activeModes, modeArg, includeTools, excludeTools, operatingMode);
 

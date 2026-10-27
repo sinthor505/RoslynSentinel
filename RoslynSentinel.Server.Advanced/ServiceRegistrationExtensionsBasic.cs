@@ -8,7 +8,7 @@ using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Basic;
 
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Server.Advanced;
 
 /// <summary>
 /// Shared service registration helpers used by both the stdio server (Program.cs)
@@ -124,7 +124,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         var resolvedExcludeTools = excludeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var activeToolClasses = ServerStartupHelpers.ResolveActiveToolClasses(
             activeModes,
-            ToolClassRegistry.BasicModeToToolClasses,
+            ToolClassRegistry.ModeToToolClasses,
             resolvedIncludeTools,
             resolvedExcludeTools);
 
@@ -132,7 +132,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         // name a tool this server actually exposes, and so tests can construct one with an
         // arbitrary tool set. Registering here (rather than in Advanced too) is sufficient because
         // every class declaring a tool WriteToolAdviceHelper may name is in
-        // BasicModeToToolClasses, so this resolution already sees all of them -> Advanced adds no
+        // ModeToToolClasses, so this resolution already sees all of them -> Advanced adds no
         // whole-file-write tools. See WriteToolAdviceHelper's remarks.
         // The exclusive claude-lean mode also restricts WHICH tools of its classes are registered.
         // Registered here, before any WithSentinelTools call, because WithSentinelTools reads it from

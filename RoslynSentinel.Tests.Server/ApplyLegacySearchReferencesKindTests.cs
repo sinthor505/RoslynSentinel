@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text.Json;
 
-using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Server.Advanced;
 
 namespace RoslynSentinel.Tests.Server;
 

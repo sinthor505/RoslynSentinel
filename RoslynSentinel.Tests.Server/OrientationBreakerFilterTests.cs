@@ -21,7 +21,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
-using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Server.Advanced;
 
 namespace RoslynSentinel.Tests.Server;
 

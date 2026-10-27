@@ -9,7 +9,7 @@
 // Plain unit tests: ParseArgs and ResolveActiveToolClasses are static and take raw args, so no host
 // or server process is needed.
 
-using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Server.Advanced;
 
 namespace RoslynSentinel.Tests.Server;
 
@@ -18,13 +18,13 @@ public class ToolClassNameResolutionTests
 {
     private static HashSet<string> ResolveFor(params string[] args)
     {
-        var allModes = new HashSet<string>(ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
+        var allModes = new HashSet<string>(ToolClassRegistry.ModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
         ServerStartupHelpers.ParseArgs(
             args, allModes,
             out _, out var activeModes, out _, out _, out var includeTools, out var excludeTools, out _);
 
         return ServerStartupHelpers.ResolveActiveToolClasses(
-            activeModes, ToolClassRegistry.AdvancedModeToToolClasses, includeTools, excludeTools);
+            activeModes, ToolClassRegistry.ModeToToolClasses, includeTools, excludeTools);
     }
 
     [Test]

@@ -26,13 +26,17 @@
 		<!-- HTTP transport for MCP -->
 		<!-- MCP Tasks extension: lets long-running tools return a taskId handle instead of blocking -->
 		<PackageReference Include="ModelContextProtocol.Extensions.Tasks" Version="2.2.0" />
+		<PackageReference Include="ModelContextProtocol" Version="2.2.0" />
+		<PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
 		<!-- IHttpClientFactory (AddHttpClient<T>) for LmStudioClient -->
 		<!-- Logging -->
+		<PackageReference Include="Serilog" Version="4.4.0" />
+		<PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
 	</ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
-    <ProjectReference Include="..\RoslynSentinel.Server.Basic\RoslynSentinel.Server.Basic.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Engines.Basic\RoslynSentinel.Engines.Basic.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Tools.Advanced\RoslynSentinel.Tools.Advanced.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Tools.Basic\RoslynSentinel.Tools.Basic.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Tools.Experimental\RoslynSentinel.Tools.Experimental.csproj" />

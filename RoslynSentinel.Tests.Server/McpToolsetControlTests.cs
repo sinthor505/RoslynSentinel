@@ -19,7 +19,6 @@ using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 using RoslynSentinel.Server.Advanced;
-using RoslynSentinel.Server.Basic;
 using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Basic;
 

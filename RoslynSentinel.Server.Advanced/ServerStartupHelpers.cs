@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Extensions.Logging;
 
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Server.Advanced;
 
 /// <summary>
 /// Shared startup utilities used by all four server entry points
@@ -103,13 +103,12 @@ public static class ServerStartupHelpers
             : value.Split(',').Select(n => n.Trim()).Where(n => n.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Every tool-class name the registry knows about (both servers' mode maps), used to resolve a
+    /// Every tool-class name the registry knows about (the single mode map), used to resolve a
     /// user-typed --include-tools/--exclude-tools name to the exact registered spelling.
     /// </summary>
     private static readonly HashSet<string> KnownToolClassNames =
         new(
-            ToolClassRegistry.BasicModeToToolClasses.Values
-                .Concat(ToolClassRegistry.AdvancedModeToToolClasses.Values)
+            ToolClassRegistry.ModeToToolClasses.Values
                 .SelectMany(classes => classes),
             StringComparer.OrdinalIgnoreCase);
 

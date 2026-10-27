@@ -10,7 +10,7 @@ using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 
 using RoslynSentinel.Common.AgentLoop;
-using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
 using RoslynSentinel.Tools.Advanced;
 
