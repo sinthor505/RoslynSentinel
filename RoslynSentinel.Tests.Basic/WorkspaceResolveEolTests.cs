@@ -126,4 +126,28 @@ public class WorkspaceResolveEolTests
             Directory.Delete(dir, true);
         }
     }
+
+    [Test]
+    public async Task ResolveEolAsync_Document_UsesFilePathAndTextAsync()
+    {
+        var dir = CreateTempTree("[*.cs]\nend_of_line = lf\n");
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            using var workspace = new Microsoft.CodeAnalysis.AdhocWorkspace();
+            var project = workspace.AddProject("P", Microsoft.CodeAnalysis.LanguageNames.CSharp);
+            var document = workspace.AddDocument(Microsoft.CodeAnalysis.DocumentInfo.Create(Microsoft.CodeAnalysis.DocumentId.CreateNewId(project.Id), "A.cs", loader: Microsoft.CodeAnalysis.TextLoader.From(Microsoft.CodeAnalysis.TextAndVersion.Create(Microsoft.CodeAnalysis.Text.SourceText.From("a\r\nb\r\n"), Microsoft.CodeAnalysis.VersionStamp.Create())), filePath: file));
+
+            using var fake = new FakeWorkspaceManager(WorkspaceAccess.ReadWrite);
+            fake.EolModeOverride = EolMode.Auto;
+            Assert.That(await fake.ResolveEolAsync(document), Is.EqualTo("\r\n"));
+
+            var mixed = document.WithText(Microsoft.CodeAnalysis.Text.SourceText.From("a\r\nb\nc\r\n"));
+            Assert.That(await fake.ResolveEolAsync(mixed), Is.EqualTo("\n"));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
 }
