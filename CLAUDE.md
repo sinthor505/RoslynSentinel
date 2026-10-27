@@ -190,10 +190,9 @@ and fix the map.
 - **Advanced is additive, not a fork.** A Basic fix suffices; verify with `scripts/build.ps1 -Flavor Solution`.
 - **A new MCP tool needs three things**, or it is silently dead with no startup error: (1) the
   `[McpServerToolType]`/`[McpServerTool(Name = ...)]` class in a `Tools.*` project; (2) an entry in a mode
-  dictionary in `Server.Basic/ToolClassRegistry.cs`; (3) an explicit `if (activeToolClasses.Contains("..."))`
-  DI block in `Server.Basic/ServiceRegistrationExtensionsBasic.cs` or `Server.Advanced/ServiceRegistrationExtensionsAdvanced.cs`.
-  A new `Tools.*` project also needs a `<ProjectReference>` from its hosting `Server.*` project
-  (`Tools.Experimental` is hosted by `Server.Advanced` only).
+  dictionary in `Server.Advanced/ToolClassRegistry.cs`; (3) an explicit `if (activeToolClasses.Contains("..."))`
+  DI block in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` or `ServiceRegistrationExtensionsAdvanced.cs`.
+  A new `Tools.*` project also needs a `<ProjectReference>` from `Server.Advanced`, the only server project.
 - The `*Tools` suffix is reserved for classes declaring `[McpServerTool]` methods; helpers use another (e.g. `TaskEnabledToolsHelper`).
 
 ## Commits

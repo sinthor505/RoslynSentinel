@@ -71,8 +71,8 @@ them, and don't recurse into them unless asked.
 
 ## Server-side artifacts — identifying the right instance
 
-Configured in `RoslynSentinel.Server.Basic/ServerStartupHelpers.cs:302` (`ConfigureStdioLogging`)
-and `:317` (`ConfigureHttpLogging`). Both write to:
+Configured in `RoslynSentinel.Server.Advanced/ServerStartupHelpers.cs:457` (`ConfigureStdioLogging`)
+and `:480` (`ConfigureHttpLogging`). Both write to:
 
 ```
 <server binary directory>\logs\server-<yyyyMMdd-HHmmss>.log     # stdio, Information level

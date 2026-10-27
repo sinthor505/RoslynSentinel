@@ -11,9 +11,6 @@
 .PARAMETER Mode
   Server mode (default claude-lean).
 
-.PARAMETER Flavor
-  Advanced (default) or Basic.
-
 .PARAMETER CharsPerToken
   Calibration. 2.57 reproduces the client-reported Git figure (7205 chars = ~2800 tokens).
 
@@ -29,7 +26,6 @@
 [CmdletBinding()]
 param(
     [string]$Mode = 'claude-lean',
-    [ValidateSet('Advanced', 'Basic')][string]$Flavor = 'Advanced',
     [string]$Configuration = 'Debug',
     [double]$CharsPerToken = 2.57,
     [int]$TopParams = 0,
@@ -38,7 +34,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
-$exe = Join-Path $repoRoot "RoslynSentinel.Server.$Flavor\bin\$Configuration\net10.0\RoslynSentinel.Server.$Flavor.exe"
+$exe = Join-Path $repoRoot "RoslynSentinel.Server.Advanced\bin\$Configuration\net10.0\RoslynSentinel.Server.Advanced.exe"
 if (-not (Test-Path $exe)) { throw "Not built: $exe (run Build first)" }
 
 $psi = New-Object Diagnostics.ProcessStartInfo $exe
@@ -75,7 +71,7 @@ $rows = $tools | ForEach-Object {
 
 $total = ($rows | Measure-Object Chars -Sum).Sum
 $rows | ForEach-Object { '{0,-26} {1,6} ch  ~{2,5} tok  {3,3} params' -f $_.Name, $_.Chars, [int]($_.Chars / $CharsPerToken), $_.Params }
-'{0,-26} {1,6} ch  ~{2,5} tok  ({3} tools, {4}/{5})' -f 'TOTAL', $total, [int]($total / $CharsPerToken), $rows.Count, $Flavor, $Mode
+'{0,-26} {1,6} ch  ~{2,5} tok  ({3} tools, {4}/{5})' -f 'TOTAL', $total, [int]($total / $CharsPerToken), $rows.Count, 'Advanced', $Mode
 
 if ($TopParams -gt 0) {
     foreach ($r in ($rows | Select-Object -First $TopParams)) {

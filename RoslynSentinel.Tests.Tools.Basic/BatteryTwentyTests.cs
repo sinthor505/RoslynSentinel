@@ -831,7 +831,7 @@ public class BatteryTwentyTests
 
     // GetExternalChanges/AcknowledgeSync tests moved to AdminToolsTests.cs ->
     // ListExternalDiskChanges/AcknowledgeExternalFileChanges moved to AdminTools
-    // (RoslynSentinel.Server.Basic/AdminTools.cs), gated behind the "Admin" mode. See
+    // (RoslynSentinel.Tools.Basic/AdminTools.cs), gated behind the "Admin" mode. See
     // docs/current/ideas/external-drift-hard-blocker.md.
 
     // --- ApplyDiffTool (consolidated: format × action; formerly named ProposedChange) ---

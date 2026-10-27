@@ -18,7 +18,7 @@ pointers: open the cited file for detail, and trust the source over this doc if 
 | Common | `RoslynSentinel.Common` | Workspace manager, result types, filters' helpers, schema patcher, toolset catalog |
 | Engines | `Engines.Basic`, `Engines.Advanced` | Roslyn analysis/refactoring logic. No MCP types |
 | Tools | `Tools.Basic`, `Tools.Advanced`, `Tools.Experimental` | `[McpServerToolType]` classes plus the `*Impl` classes behind the Basic tools |
-| Server | `Server.Basic`, `Server.Advanced` | Entry points, arg parsing, mode resolution, DI + request filters. No tool/engine logic |
+| Server | `Server.Advanced` (the only server project; the former `Server.Basic` was folded in) | Entry points, arg parsing, mode resolution, DI + request filters. No tool/engine logic |
 | Harness | `Utilities.PlanStepRunner` | Plan-step runner exe; references only `Common` |
 
 Sibling projects cannot see each other (`Tools.Advanced` cannot reach `Tools.Basic`; `Engines.Basic`
@@ -52,11 +52,11 @@ selects the `StopServer` text), `--log-dir`, and `--working-dir=<path>` (`Common
 ### Tool registration: three places, none sufficient alone
 
 1. The class: `[McpServerToolType]` with `[McpServerTool(Name = ...)]` methods, in a `Tools.*` project.
-2. `Server.Basic/ToolClassRegistry.cs`: add the class name to the right mode in
-   `BasicModeToToolClasses` / `AdvancedModeToToolClasses`. `ResolveActiveToolClasses`
-   (`Server.Basic/ServerStartupHelpers.cs`) turns modes + `--include-tools/--exclude-tools` into the
+2. `Server.Advanced/ToolClassRegistry.cs`: add the class name to the right mode in
+   `ModeToToolClasses` (the one union map). `ResolveActiveToolClasses`
+   (`Server.Advanced/ServerStartupHelpers.cs`) turns modes + `--include-tools/--exclude-tools` into the
    active class set.
-3. A DI block in `Server.Basic/ServiceRegistrationExtensionsBasic.cs` (`AddRoslynSentinelToolsBasic`)
+3. A DI block in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (`AddRoslynSentinelToolsBasic`)
    or `Server.Advanced/ServiceRegistrationExtensionsAdvanced.cs` (`AddRoslynSentinelToolsAdvanced`):
    `if (activeToolClasses.Contains("X")) { AddSingleton<XImpl>(); AddSingleton<X>(); mcpBuilder.WithSentinelTools<X>(); }`.
    `WithSentinelTools` is `Common/McpToolSchemaPatcher.cs` (patches emitted schemas).
@@ -78,9 +78,9 @@ Ground truth for "does this tool exist / is it gated": `McpServerStatus(toolList
 First added is outermost. In registration order:
 
 1. `AddToolCallEchoFilter`: stamps call id/tool/args onto the first text block (outermost, sees final content).
-2. `AddArgumentValidationFilter` (`Server.Basic/ToolArgumentValidator.cs`): repairs parameter-name case,
+2. `AddArgumentValidationFilter` (`Server.Advanced/ToolArgumentValidator.cs`): repairs parameter-name case,
    rejects unknown/missing parameters before the SDK binder runs.
-3. `AddHaltStampFilter` (`Server.Basic/HaltStamp.cs`): while any breaker is tripped or the drift latch is set, inserts
+3. `AddHaltStampFilter` (`Server.Advanced/HaltStamp.cs`): while any breaker is tripped or the drift latch is set, inserts
    four top-level properties into the first text block of the response: `isSessionHalted`, `sessionHaltKind`,
    `sessionHaltReason`, `sessionHaltRecovery`, so the model learns the recovery call without a discovery call. The
    single source of truth is `HaltInfo.From(...)` in `Common/HaltInfo.cs`. Four kinds, first match wins (the others

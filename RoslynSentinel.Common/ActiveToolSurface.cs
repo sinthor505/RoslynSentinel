@@ -4,7 +4,7 @@ public record ActiveToolSurface
 {
     /// <summary>Snapshot of what --mode/--include-tools/--exclude-tools resolved to at startup,
     /// captured once so an always-active tool (see SentinelServerStatusTools.McpServerStatus in
-    /// RoslynSentinel.Server.Basic) can report the same values the startup guidance message in
+    /// RoslynSentinel.Tools.Basic) can report the same values the startup guidance message in
     /// ServerStartupHelpers.DescribeNoActiveToolsFailure is built from, without needing a restart
     /// or a second implementation.</summary>
     public string ModeArg
@@ -29,7 +29,7 @@ public record ActiveToolSurface
     }
     /// <summary>Tool class name -> the --mode values that enable it (empty when unknown). Lets
     /// McpServerStatus tell a caller how to enable a gated tool; the registry itself lives in
-    /// Server.Basic, which Tools.Basic cannot reference.</summary>
+    /// Server.Advanced, which Tools.Basic cannot reference.</summary>
     public IReadOnlyDictionary<string, IReadOnlyList<string>> ClassModes
     {
         get;

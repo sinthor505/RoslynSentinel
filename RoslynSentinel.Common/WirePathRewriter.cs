@@ -8,7 +8,7 @@ namespace RoslynSentinel.Common;
 /// <summary>
 /// Pure helpers that rewrite absolute file paths under the solution root to root-relative
 /// forward-slash form inside a tool response (JSON text), to cut the per-row path prefix from
-/// every response. No MCP types: the response filter that calls this lives in Server.Basic.
+/// every response. No MCP types: the response filter that calls this lives in Server.Advanced.
 /// See docs/current/plans/plan_wire_relative_paths_backstop_filter.md for the rules.
 /// </summary>
 public static class WirePathRewriter

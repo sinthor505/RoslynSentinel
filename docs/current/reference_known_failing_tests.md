@@ -17,15 +17,15 @@ Before blaming a change for a red test or a new warning, diff against the record
 only NEW failures/warnings.
 
 ## How it works
-`scripts/build.ps1` records and diffs two baselines per flavor (`Basic`, `Advanced`, `Solution`):
+`scripts/build.ps1` records and diffs two baselines per flavor (`Advanced`, `Solution`; the `Basic` flavor and its baseline files were removed when Server.Basic was folded into Server.Advanced):
 
 - `docs/known-failing-tests.<Flavor>.txt` (tests)
 - `docs/known-build-warnings.<Flavor>.txt` (warnings)
 
 `build.ps1 -UpdateBaseline` regenerates them (header line records the date and the
-`dotnet build|test <Flavor> <Config>` command). As of 2026-10-17: `known-failing-tests.Basic.txt` lists
-21 tests, `.Advanced.txt` 10, `.Solution.txt` none; `known-build-warnings.Advanced.txt` lists 2 warnings,
-`.Basic.txt` and `.Solution.txt` none. Note the Solution test baseline header is dated 2026-08-26, so
+`dotnet build|test <Flavor> <Config>` command). As of 2026-10-17 (before the Basic flavor was removed): `known-failing-tests.Advanced.txt` listed
+10 tests, `.Solution.txt` none; `known-build-warnings.Advanced.txt` listed 2 warnings,
+`.Solution.txt` none. Note the Solution test baseline header is dated 2026-08-26, so
 treat an empty solution list as "not regenerated recently" before treating it as proof of a clean suite.
 
 The single `docs/known-failing-tests.txt` / `docs/known-build-warnings.txt` named in older notes and in

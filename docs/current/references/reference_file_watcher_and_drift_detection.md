@@ -51,7 +51,7 @@ again (open small bug).
 - `LoadSolutionAsync` (forced reload) calls `ClearExternalFileChanges()` and `PopulateKnownFileHashes()`
   but NOT `ClearSessionHalt`, so a reload empties the list and the latch stays set.
 - `GetContentExternalFileChangesAsync` (in-memory vs disk comparison) feeds only the post-call log line
-  in `AddDriftFilter` (`Server.Basic/ServiceRegistrationExtensionsBasic.cs`), not the latch.
+  in `AddDriftFilter` (`Server.Advanced/ServiceRegistrationExtensionsBasic.cs`), not the latch.
 
 **5. Recovery** (`Tools.Basic/AdminTools.cs`, tool `ExternalFileDrift`)
 `Status`, `List`, `Acknowledge`. `Acknowledge` with `ConfirmAll` drains the list and clears the halt;

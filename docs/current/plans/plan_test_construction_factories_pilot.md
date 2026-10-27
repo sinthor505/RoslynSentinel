@@ -6,7 +6,7 @@
 Test DI was reconsidered: it needs no `Server.*` reference once the engine and tool-dependency
 registration lists live in `Engines.*` / `Tools.*`. The factories stay (needed by `replaceConstruction`)
 but are implemented through a per-test DI container, so they track production wiring. Order:
-1. Fold `Server.Basic` into `Server.Advanced` (`docs/current/proposals/proposal_unify_server_projects.md`, approved).
+1. DONE 2026-10-27: Fold `Server.Basic` into `Server.Advanced` (`docs/current/proposals/closed/proposal_unify_server_projects.md`).
 2. Move `AddRoslynSentinelEngines*` into `Engines.*` and add a flat `AddRoslynSentinelToolDependencies*`
    in `Tools.*` (own proposal, not yet written).
 3. Steps 2-3 below, with the factory methods built on `ServiceCollection` and Step 3's drift guard

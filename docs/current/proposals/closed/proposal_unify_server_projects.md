@@ -1,6 +1,6 @@
 # Fold RoslynSentinel.Server.Basic into RoslynSentinel.Server.Advanced
 
-**Status:** APPROVED 2026-10-24. Direction decided by the user; implementation in a fresh session (user moves the files by hand, an agent fixes up namespaces, duplicates, scripts and docs).
+**Status:** DONE 2026-10-27. Slices 1-3 committed as b875d27a; slice 4 (scripts, baselines, comments, docs, regenerated docs/generated) done in the working tree on 2026-10-27. The open questions were resolved by using the proposal's defaults. Originally APPROVED 2026-10-24.
 
 ## Motivation
 

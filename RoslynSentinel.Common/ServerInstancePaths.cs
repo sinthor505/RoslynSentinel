@@ -65,7 +65,7 @@ public sealed class ServerInstancePaths
         return new ServerInstancePaths(binaryDir, false, legacyMarker);
     }
 
-    // Mirrors ServerStartupHelpers.GetArgValue (Common cannot reference Server.Basic): accepts
+    // Mirrors ServerStartupHelpers.GetArgValue (Common cannot reference Server.Advanced): accepts
     // "--flag=value" and "--flag value"; null when absent or the two-token form lacks its value.
     private static string? GetArgValue(string[] args, string flag)
     {

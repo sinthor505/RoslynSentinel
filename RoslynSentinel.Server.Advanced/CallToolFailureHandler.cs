@@ -13,7 +13,7 @@ namespace RoslynSentinel.Server.Advanced;
 /// <see cref="ToolErrorMapper.ToResultError"/>, so a typed throw (<see cref="ToolException"/>) keeps its
 /// code and payload on the wire instead of collapsing to plain text. Used by the central call-tool filter
 /// (<c>AddWorkspaceNotLoadedFilter</c> in <see cref="RoslynSentinelServiceExtensionsBasic"/>).
-/// Public rather than internal because Server.Basic has no InternalsVisibleTo for its tests.
+/// Public rather than internal because Server.Advanced has no InternalsVisibleTo for its tests.
 /// </summary>
 public static class CallToolFailureHandler
 {

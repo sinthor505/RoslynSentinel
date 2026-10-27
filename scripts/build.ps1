@@ -17,10 +17,11 @@
     (throwaway instance) or scripts/roslynsentinel-vscode-control.ps1 restart (shared copy).
 
 .PARAMETER Flavor
-    Basic | Advanced | Solution
-    Both Basic and Advanced cover both transports (stdio and HTTP are the same
-    RoslynSentinel.Server.Basic / RoslynSentinel.Server.Advanced binary, chosen at runtime via
-    --transport) - there is no separate Basic.Http or Advanced.Http flavor to build/test.
+    Advanced | Solution
+    Advanced covers both transports (stdio and HTTP are the same RoslynSentinel.Server.Advanced
+    binary, chosen at runtime via --transport) and runs Tests.Battery.Advanced only. There is no
+    Basic flavor: the former Server.Basic project was folded into Server.Advanced, and
+    Tests.Battery.Basic is run by "Solution" (all RoslynSentinel.Tests* projects).
     "Solution" builds RoslynSentinel.slnx as a whole and is not associated with any one running
     server process (no lock-check, since nothing runs directly from the .slnx). Its test mode
     runs all RoslynSentinel.Tests* projects concurrently via scripts\Test-Parallel.ps1 rather
@@ -53,7 +54,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('Basic', 'Advanced', 'Solution')]
+    [ValidateSet('Advanced', 'Solution')]
     [string]$Flavor,
 
     [ValidateSet('Debug', 'Release')]
@@ -76,7 +77,6 @@ $warningsBaseline = Join-Path $docsDir "known-build-warnings.$Flavor.txt"
 $testsBaseline = Join-Path $docsDir "known-failing-tests.$Flavor.txt"
 
 $flavorToProject = @{
-    'Basic'          = 'RoslynSentinel.Server.Basic\RoslynSentinel.Server.Basic.csproj'
     'Advanced'       = 'RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj'
     'Solution'       = 'RoslynSentinel.slnx'
 }
@@ -230,7 +230,6 @@ function Invoke-TestMode {
         $exitCode = $LASTEXITCODE
     } else {
         $testProjectMap = @{
-            'Basic'    = 'RoslynSentinel.Tests.Battery.Basic\RoslynSentinel.Tests.Battery.Basic.csproj'
             'Advanced' = 'RoslynSentinel.Tests.Battery.Advanced\RoslynSentinel.Tests.Battery.Advanced.csproj'
         }
         $testProject = Join-Path $repoRoot $testProjectMap[$Flavor]

@@ -13,7 +13,7 @@ claude-lean is an exclusive mode with a per-tool allow-list. A tool you know fro
 | Question | Where to look |
 | --- | --- |
 | Is the tool in claude-lean at all? | `McpServerStatus(toolListing: inactive, toolNameFilter: <name>)`. `enabledBy` says why it is gated. |
-| Core (always on) | `ClaudeLeanToolNames` in `RoslynSentinel.Server.Basic/ToolClassRegistry.cs`. 24 names in Advanced, 23 in Basic (no `SubAgent`). Do not trust counts written in prose; the tests derive them. |
+| Core (always on) | `ClaudeLeanToolNames` in `RoslynSentinel.Server.Advanced/ToolClassRegistry.cs`. Do not trust counts written in prose; the tests derive them. |
 | On demand (hidden until `McpToolsetControl(toolSet: ..., enabled: true)`) | `ToolsetCatalog.ToolsBySet` / `Summaries` in `RoslynSentinel.Common/ToolsetCatalog.cs`; classes listed in `ClaudeLeanOnDemandToolClasses`. |
 | Merged replacements | In claude-lean `MethodSignature` and `ConstructorParameter` do not exist. `ParameterEdit` (`Tools.Basic/ParameterEditTools.cs`) replaces them, in the `declarations` toolset. `Declaration` likewise replaces ModifyModifier, ChangeAccessibility, ModifyAttribute and ModifyBaseType. |
 
@@ -33,15 +33,12 @@ Behaviour changes go in the shared impl or engine (for MethodSignature: `Tools.B
 
 **C. Add an existing tool to claude-lean (core).**
 1. Add the tool name to `ClaudeLeanToolNames`.
-2. Add the same name to `ClaudeLeanModeTests.CoreTools`, the one explicit oracle list. Counts are derived from it. If the tool lives in `Tools.Advanced`, also exclude it from `BasicCoreTools` (as `SubAgent` is).
-3. Make sure its class is in the claude-lean class set for each flavour that can host it:
-   - Class in `Tools.Basic`: it is already in or must join `ClaudeLeanToolClasses`.
-   - Class in `Tools.Advanced` (or `Tools.Experimental`): Basic cannot host it. Use an Advanced-only array in `ToolClassRegistry` and point `AdvancedModeToToolClasses[claude-lean]` at it. Adding it to the shared `ClaudeLeanToolClasses` would grow Basic's class set and break `ResolveActiveToolClasses_ClaudeLeanAlone_YieldsExactlyTheRegistryClaudeLeanClasses`.
+2. Add the same name to `ClaudeLeanModeTests.CoreTools`, the one explicit oracle list. Counts are derived from it.
+3. Make sure its class is in the claude-lean class set (`ClaudeLeanToolClasses` in `ToolClassRegistry`, referenced by `ModeToToolClasses[claude-lean]`). There is one server project and one map, so a class from `Tools.Basic`, `Tools.Advanced` or `Tools.Experimental` is added the same way.
 4. No DI edit is needed when the class's existing `if (activeToolClasses.Contains(...))` block already exists. Other tools on the same class stay hidden by the allow-list (`McpToolSchemaPatcher.WithSentinelTools`).
-5. The allow-list is shared by both flavours, so an Advanced-only name also appears in Basic's list. It is harmless there because no Basic class declares it.
-6. Regenerate the docs, check `ClaudeLeanSchemaBudgetTests`.
+5. Regenerate the docs, check `ClaudeLeanSchemaBudgetTests`.
 
-**D. Add a brand-new tool.** Do the three registration steps in CLAUDE.md (tool class, `ToolClassRegistry` dictionary entry, DI block), then C above.
+**D. Add a brand-new tool.** Do the three registration steps in CLAUDE.md (tool class, `ToolClassRegistry` map entry, DI block), then C above.
 
 **E. Move a tool to or from an on-demand toolset.** Edit `ToolsetCatalog` (`ToolsBySet`, `Summaries`) and the hand-listed names in the `McpToolsetControl` `[Description]` (`ToolsetControlTools.cs`), then the toolset tests in section 3.
 
@@ -51,9 +48,9 @@ All are in `RoslynSentinel.Tests.Server` unless noted. Rows marked B pin behavio
 
 | Test | Pins | Typical edit |
 | --- | --- | --- |
-| `ClaudeLeanModeTests`: `ClaudeLean_ExposesExactlyTheCoreToolsForItsFlavor` | The exposed tool set and count per flavour, derived from `CoreTools` / `BasicCoreTools` | Edit `CoreTools` |
-| `ClaudeLeanModeTests`: `Registry_ListsClaudeLean_InBothServersMaps_AndCoreSetMatches` | Registry allow-list equals `CoreTools` | Add the name to both. The message says so. |
-| `ClaudeLeanModeTests`: class-set tests | Basic's claude-lean class set equals the registry's | Only when the class set changes |
+| `ClaudeLeanModeTests`: `ClaudeLean_ExposesExactlyTheCoreTools` | The exposed tool set and count, derived from `CoreTools` | Edit `CoreTools` |
+| `ClaudeLeanModeTests`: `Registry_ListsClaudeLean_AndCoreSetMatches` | Registry allow-list equals `CoreTools` | Add the name to both. The message says so. |
+| `ClaudeLeanModeTests`: class-set tests | The claude-lean class set equals the registry's | Only when the class set changes |
 | `McpToolsetControlTests`: `LeanHost_StartsWithNoDynamicToolsAndTheExactCoreSurface` | Host-start surface equals `CoreTools` | None beyond `CoreTools` |
 | `McpToolsetControlTests`: disjointness, "every set described", "description names every tool" | The on-demand toolset catalogue | Only when `ToolsetCatalog` changes |
 | `McpToolsetControlTests`: ParameterEdit and Declaration tests | Merged-tool errors and schema-size check | Text edits |
@@ -78,7 +75,7 @@ All are in `RoslynSentinel.Tests.Server` unless noted. Rows marked B pin behavio
 ### 5. Trial run evidence (2026-10-14, reverted)
 Change: `BridgeAsyncMethods` (`Tools.Advanced/AsyncifyTools.cs:576`) made a core Advanced claude-lean tool. Files edited: `ToolClassRegistry.cs`, `ClaudeLeanModeTests.cs`, `McpToolsetControlTests.cs`, `docs/generated/architecture_tools.md`. No DI edit. The trial was thrown away after the process was documented.
 
-With the old hand-copied counts, one `RunTest` on `Tests.Server` after the registry edit alone gave 4 failures: two count assertions (25 vs 24), the registry-vs-`CoreTools` set check, and the generated-doc freshness check. After the streamlining below, the same change needs the allow-list, `CoreTools` (and `BasicCoreTools` for Advanced-only tools) and a regeneration.
+With the old hand-copied counts, one `RunTest` on `Tests.Server` after the registry edit alone gave 4 failures: two count assertions (25 vs 24), the registry-vs-`CoreTools` set check, and the generated-doc freshness check. After the streamlining below, the same change needs the allow-list, `CoreTools` and a regeneration.
 
 ## Usage
 Fast loop for any claude-lean surface change:
