@@ -131,17 +131,26 @@ default 30) is cancelled and surfaces `SolutionLoadTimeout`.
 `.cs` write must go through it, directly or via a caller that does. Order of refusals, verified in source:
 session-halt latch -> unrecoverable breaker -> scoped-ledger block per target -> write/delete overlap ->
 external-drift check (a confirmed hit trips the session halt). The full 11-step order (pre-image capture for
-undo, EOL guard, no-op and whitespace-only skip, watcher-loop suppression via `_internalChanges`, IOException
+undo, EOL pre-pass, byte-identical skip, watcher-loop suppression via `_internalChanges`, IOException
 retry, optional rollback, in-memory resync) is in `docs/current/reference-code-file-write-paths-v1.md`
-(re-verified 2026-10-04), along with the callers table and the one sanctioned direct write.
+(callers table re-verified 2026-10-04, EOL parts 2026-10-26), along with the sanctioned writes outside the chokepoint.
+
+**EOL policy.** `--eol auto|crlf|lf` (`Common/EolPolicyOptions.cs`, static, set at each server entry point; default `auto`) feeds
+`EolResolver.Resolve(mode, preImageText, editorConfigEol)` (`auto` = single-style pre-image, then `.editorconfig` `end_of_line` via
+`EditorConfigEolReader`, then the platform; `.editorconfig` is not read under an explicit `crlf`/`lf`). The chokepoint converts the whole
+file to that EOL (`EolWritePolicy`, `ComputeEolPrePass`) and refuses only if the final bytes are not uniform. Engines get the same value
+from `IEolResolver.ResolveEol` / `ResolveEolAsync` (implemented by the workspace manager; `IWorkspaceMutator` and `IWorkspaceReader` extend
+it) and pass it as `eol`; they never detect it from the source file. `EolFileWriter` covers the two workspace writes outside the chokepoint.
+Guards: `BareFileWriteRatchetTests`, `NewlineLiteralRatchetTests`, `EolAuditRatchetTests` (all `Tests.Basic`).
 
 Most tools reach it through `Common/ValidateAndApplyHelper.ValidateAndApplyAsync` (compile validation via
-`ValidationEngine`, EOL-change refusal, dry-run) rather than calling it raw. Direct callers as of 2026-10-04:
+`ValidationEngine`, collateral-change check, dry-run) rather than calling it raw. Direct callers as of 2026-10-04:
 `WholeFileWriteTools`, `WorkspaceFileEditImpl`, `WorkspaceProjectManagementImpl`, `MsToolAugmentEngine`,
 `AsyncBatchEngine`, `AsyncifyTools`, `CommentingTools`. Find the current set with
 `FindReferences(symbolName: ApplyProposedChangesAsync, kind: callers)`.
-Nothing compiler-enforced stops a new `File.WriteAllText`; `Tests.Basic/WriteChokepointGuardrailTests.cs`
-covers EOL/line-count behaviour of the shared path, not "no bypass".
+Nothing compiler-enforced stops a new `File.WriteAllText`, but `Tests.Basic/BareFileWriteRatchetTests.cs` fails one in production code
+outside `FileIoHelper` (allowlist of non-workspace writes); `WriteChokepointGuardrailTests.cs` and `EolChokepointConversionTests.cs`
+cover EOL/line-count behaviour of the shared path.
 
 **Session halt and acknowledge.** The drift latch is `_sessionHalted` in `PersistentWorkspaceManager`; the halt-stamp
 filter (pipeline item 3) shows it, and any tripped breaker, on every response. `ExternalFileDrift(operation:
@@ -167,6 +176,7 @@ prerequisite for staged writes: see `docs/current/design_read_chokepoint.md`, `d
 | Change which tools a mode exposes | `ToolClassRegistry.cs` (both dictionaries; Advanced is its own map) |
 | Expose a tool in claude-lean | `ClaudeLeanToolNames` (always on) or `ToolsetCatalog.ToolsBySet` (on demand) |
 | Persist a source edit | `ValidateAndApplyHelper.ValidateAndApplyAsync` -> `ApplyProposedChangesAsync` |
+| Get the line ending for engine-built text | `IEolResolver.ResolveEol(path, preImageText)` / `await workspace.ResolveEolAsync(document, ct)`; never a `"\n"` literal or `DetectDominantEol` on the source |
 | Add request-level behaviour | A filter in `AddRoslynSentinelToolsBasic`; mind the order above |
 | Let a new read-only tool run during an unrecoverable halt | Put `[UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]` on the tool method; update the golden set in `Tests.Server/UnrecoverableBreakerPolicyTests.cs` |
 | See every tool, its class, modes and breaker status | `docs/generated/architecture_tools.md` (generated; do not edit) |

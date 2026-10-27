@@ -1,6 +1,6 @@
 # Plan: Configurable EOL policy, single write chokepoint and final-bytes EOL guard
 
-**Status:** IN PROGRESS 2026-10-25. Steps 0-7 done (Steps 6-7 results are under each step; Steps 0-5: decisions, sweep, `scripts/Get-EolAudit.ps1`, working tree normalized, ratchet in `build.ps1`, `--eol` option, resolver, one dominant-EOL rule, chokepoint converts via the resolver and guards the final bytes; 5a-5c5 committed, flag and old path removed); Step 5 leftovers are listed under "Step 5 result"; Step 5 leftovers closed 2026-10-26 (see Decisions and follow-ups); Step 8 (8a-8c10, 8z) done 2026-10-26 apart from the baselined literals and the `Tools.Basic` detection sites listed under "Step 8 progress"; Step 9 (per-line EOL reporting tool) and Step 10 (docs) remain.
+**Status:** IN PROGRESS 2026-10-25. Steps 0-7 done (Steps 6-7 results are under each step; Steps 0-5: decisions, sweep, `scripts/Get-EolAudit.ps1`, working tree normalized, ratchet in `build.ps1`, `--eol` option, resolver, one dominant-EOL rule, chokepoint converts via the resolver and guards the final bytes; 5a-5c5 committed, flag and old path removed); Step 5 leftovers are listed under "Step 5 result"; Step 5 leftovers closed 2026-10-26 (see Decisions and follow-ups); Step 8 (8a-8c10, 8z) done 2026-10-26 apart from the baselined literals and the `Tools.Basic` detection sites listed under "Step 8 progress"; Step 10 (docs) done 2026-10-26; Step 9 (per-line EOL reporting tool) remains, with the follow-ups listed in TODO.md ("EOL policy follow-ups").
 
 > **Note (2026-10-19):** `NormalizeWholeSubtreeWhitespace` (named in the sweep and Step 2 below) was deleted (D1);
 > the EOL-aware helpers in `RoslynFormattingHelper` replace it. Treat those mentions as historical.
@@ -405,6 +405,7 @@ Step 0 results (2026-10-18):
   - Give `plan_file_normalization_tool.md` a Status line (EOL part superseded by this plan; BOM part
     independent).
 - Done when: the docs match the source.
+- Result (2026-10-26): done. `reference-code-file-write-paths-v1.md` has an "EOL policy" section (arg, resolver, `.editorconfig` in `auto` only, whole-file conversion and final-bytes check, `EolFileWriter`, `IEolResolver`, the three ratchets) and its stale no-op-skip and "dominant style" steps are fixed; `reference_architecture_map.md` has a short EOL paragraph and a Usage row; TODO.md's EOL entry is now the open follow-ups only and the resolved part is in CLOSED.md; `plan_file_normalization_tool.md` has a Status line. The TODO.md "InsertMemberDeclarationAndFormatInsertionAsync whole-file NormalizeEol" entry no longer existed (TODO.md:14 is the unrelated SyncInterface item); the source takes a required `eol` and has no whole-file `NormalizeEol`.
 
 ## Out of scope
 

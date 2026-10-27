@@ -1,5 +1,7 @@
 # File normalization tool (BOM / line endings / format) and encoding-preserving writes
 
+**Status:** PARTLY SUPERSEDED 2026-10-26. The EOL part is superseded by [plan_eol_policy_and_write_chokepoint.md](./plan_eol_policy_and_write_chokepoint.md) (`--eol` policy, resolver, whole-file conversion at the chokepoint); the BOM part (encoding-preserving writes, `Get-BomAudit.ps1`) is independent and still open.
+
 ## Context
 
 Blocker: `docs/current/blockers/blocking_error_member_strips_utf8_bom_on_write.md`. The shared write
