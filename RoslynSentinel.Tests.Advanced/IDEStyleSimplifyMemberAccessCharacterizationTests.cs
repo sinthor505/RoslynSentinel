@@ -17,7 +17,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [Category("IDEStyleEngine")] // sentinel:auto-category
 public class IDEStyleSimplifyMemberAccessCharacterizationTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private IDEStyleEngine _engine;
 
     [SetUp]
@@ -175,6 +175,8 @@ public class IDEStyleSimplifyMemberAccessCharacterizationTests
         // survives, so the stray CRLF must stay, while every edited line takes the document's dominant (LF) ending.
         var source = Src(false, Input()).Replace("    {\n        this._count++;", "    {\r\n        this._count++;");
         Assert.That(source, Does.Contain("    {\r\n        this._count++;"), "Precondition: the stray CRLF is on the brace line.");
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
         SetSource(source);
 
         var result = await _engine.SimplifyMemberAccessAsync("Test.cs");

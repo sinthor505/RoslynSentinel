@@ -27,7 +27,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [Category("MemberRefactoringEngine")] // sentinel:auto-category
 public class RefactoringEngineFormatCharacterizationTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private MemberRefactoringEngine _memberEngine;
     private SemanticRefactoringEngine _semanticEngine;
 
@@ -277,6 +277,8 @@ public class RefactoringEngineFormatCharacterizationTests
     [TestCase("    private int   Helper( ) { return  1; }\n")]
     public async Task RemoveMethodParameter_MixedEol_StrayCrlfLineKeepsItsTerminator(string anchor)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
         SetFiles(("Test.cs", WithStrayCrlf(Src(false, RemoveParamInput()), anchor)));
 
         var result = await _memberEngine.RemoveMethodParameterAsync("Test.cs", "Compute", "b");
@@ -292,6 +294,8 @@ public class RefactoringEngineFormatCharacterizationTests
     [TestCase("    private int   Helper( ) { return  1; }\r\n", "    private int   Helper( ) { return  1; }\r\n")]
     public async Task RemoveMethodParameter_CrlfDocument_StrayBareLfOnUnchangedLineIsKept(string inputAnchor, string expectedAnchor)
     {
+        // Changed lines take the resolved EOL, not the majority one; Crlf keeps this CRLF-majority mixed source's pinned expectation (Auto would follow the platform).
+        _workspaceManager.EolModeOverride = EolMode.Crlf;
         var input = Src(true, RemoveParamInput());
         var expected = Src(true, RemoveParamExpected());
         Assert.That(input.Split(inputAnchor).Length, Is.EqualTo(2), "Precondition: the input anchor is unique.");
@@ -395,6 +399,8 @@ public class RefactoringEngineFormatCharacterizationTests
     [TestCase("    private int   Helper( ) { return  1; }\n")]
     public async Task InlineVariable_UsageReplacement_MixedEol_StrayCrlfLineKeepsItsTerminator(string anchor)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
         SetFiles(("Test.cs", WithStrayCrlf(Src(false, InlineInput()), anchor)));
 
         var result = await _semanticEngine.InlineVariableAsync("Test.cs", "total");
@@ -411,6 +417,8 @@ public class RefactoringEngineFormatCharacterizationTests
     {
         SetFiles(("Svc.cs", Src(false, SvcSource.Split('\n'))), ("Caller.cs", WithStrayCrlf(Src(false, CallerInput()), anchor)));
 
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
         var result = await CascadeAsync("Caller.cs:*");
 
         Assert.That(ChangeFor(result, "Caller.cs"), Is.EqualTo(WithStrayCrlf(Src(false, CallerExpected()), anchor)));
@@ -425,6 +433,8 @@ public class RefactoringEngineFormatCharacterizationTests
     {
         SetFiles(("Svc.cs", WithStrayCrlf(Src(false, SameFileInput()), anchor)));
 
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
         var result = await CascadeAsync("Svc.cs:*");
 
         Assert.That(ChangeFor(result, "Svc.cs"), Is.EqualTo(WithStrayCrlf(Src(false, SameFileExpected()), anchor)));
@@ -436,6 +446,8 @@ public class RefactoringEngineFormatCharacterizationTests
     public async Task AddConstructorParameter_MixedEol_StrayCrlfOutsideEditedClassKeepsItsTerminator(string anchor)
     {
         const string source = "namespace TestProj;\npublic class Config { }\npublic class Other   { int   z; }\npublic class Svc\n{\n    public Svc(int a) { }\n}\n";
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
         SetFiles(("Svc.cs", WithStrayCrlf(source, anchor)));
 
         var result = await _memberEngine.AddConstructorParameterAsync("Svc.cs", "Svc", "config", "Config");
@@ -490,6 +502,8 @@ public class RefactoringEngineFormatCharacterizationTests
     [TestCase("    public   int  X;\n")]
     public async Task AddTopLevelType_NoNamespace_MixedEol_StrayCrlfLineKeepsItsTerminator(string anchor)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
         var lf = await AddTopLevelAsync(Src(false, TopLevelInput()));
 
         var mixed = await AddTopLevelAsync(WithStrayCrlf(Src(false, TopLevelInput()), anchor));
@@ -553,6 +567,8 @@ public class RefactoringEngineFormatCharacterizationTests
     [TestCase("    private int   Helper( ) { return  1; }\n")]
     public async Task ExtractMethod_MixedEol_StrayCrlfLineKeepsItsTerminator(string anchor)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
         var lf = await ExtractAsync(Src(false, ExtractInput()));
 
         var mixed = await ExtractAsync(WithStrayCrlf(Src(false, ExtractInput()), anchor));

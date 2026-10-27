@@ -21,7 +21,7 @@ public class PocoEditNormalizeCharacterizationTests
 {
     private const string UntouchedLine = "    private void  Untouched( )  { }~";
 
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
 
     [SetUp]
     public void Setup() => _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -90,6 +90,12 @@ public class PocoEditNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task GenerateXmlDocumentationStubs_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "using System;",
             "",
@@ -162,6 +168,12 @@ public class PocoEditNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task DocumentPocoFields_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol, PersonInput()));
 
         var result = await new DocumentationEngine(_workspaceManager).DocumentPocoFieldsAsync("Test.cs", "Person");
@@ -194,6 +206,12 @@ public class PocoEditNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task AddValidationToPoco_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol, PersonInput()));
 
         var result = await new ApiGenerationEngine(_workspaceManager).AddValidationToPocoAsync("Test.cs", "Person");

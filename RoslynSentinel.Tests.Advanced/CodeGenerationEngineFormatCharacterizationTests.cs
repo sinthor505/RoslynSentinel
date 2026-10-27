@@ -21,7 +21,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [Category("CodeGenerationEngine")] // sentinel:auto-category
 public class CodeGenerationEngineFormatCharacterizationTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private CodeGenerationEngine _engine;
 
     [SetUp]
@@ -304,6 +304,8 @@ public class CodeGenerationEngineFormatCharacterizationTests
     public async Task MixedEol_StrayCrlfLineKeepsItsTerminator(string site, string anchor)
     {
         var s = GetSite(site);
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
         SetFiles(("Test.cs", WithStrayCrlf(Src(false, s.Input), anchor)));
 
         Assert.That(await RunAsync(site), Is.EqualTo(WithStrayCrlf(Src(false, s.Expected), anchor)));

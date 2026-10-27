@@ -26,7 +26,7 @@ public class CodeHealingStyleNormalizeCharacterizationTests
 {
     private const string UntouchedLine = "    public void  Untouched( )  { }";
 
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private CodeHealingEngine _healing;
     private CodeStyleEngine _style;
     private IDEStyleEngine _ide;
@@ -77,6 +77,12 @@ public class CodeHealingStyleNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task FixThreadSleep_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "using System.Threading;",
             "using System.Threading.Tasks;",
@@ -114,6 +120,12 @@ public class CodeHealingStyleNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task AddRetryPolicy_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "using System;",
             "",
@@ -161,6 +173,12 @@ public class CodeHealingStyleNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ModernizeExceptions_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class Worker",
             "{",
@@ -191,6 +209,12 @@ public class CodeHealingStyleNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task FixDangerousLock_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "using System;",
             "",
@@ -238,6 +262,12 @@ public class CodeHealingStyleNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task SimplifyVerbosity_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "using System.Collections.Generic;",
             "",
@@ -279,6 +309,12 @@ public class CodeHealingStyleNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task UseCollectionExpressions_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "using System.Collections.Generic;",
             "",
@@ -318,6 +354,12 @@ public class CodeHealingStyleNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task UseTimeProvider_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "using System;",
             "",
@@ -354,6 +396,12 @@ public class CodeHealingStyleNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task SimplifyAllNames_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class Names",
             "{",
@@ -387,6 +435,12 @@ public class CodeHealingStyleNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task UseIndexFromEnd_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class Arrays",
             "{",
@@ -418,6 +472,12 @@ public class CodeHealingStyleNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task UseObjectInitializers_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class Person",
             "{",
@@ -467,6 +527,12 @@ public class CodeHealingStyleNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task UseNullPropagation_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "public class Notifier",
             "{",

@@ -17,7 +17,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [Category("AdvancedRefactoringEngine")]
 public class AdvancedRefactoringNormalizeCharacterizationTests
 {
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private AdvancedRefactoringEngine _engine;
 
     [SetUp]
@@ -351,6 +351,8 @@ public class AdvancedRefactoringNormalizeCharacterizationTests
     public async Task MixedEol_StrayCrlfOnAnchorLine_ByteExact(string site)
     {
         var s = GetSite(site);
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        _workspaceManager.EolModeOverride = EolMode.Lf;
         SetFiles(("Test.cs", WithStrayCrlf(Src(false, s.Input), s.Anchor)));
 
         Assert.That(await RunAsync(site), Is.EqualTo(WithStrayCrlf(Src(false, s.Expected), s.Anchor)));

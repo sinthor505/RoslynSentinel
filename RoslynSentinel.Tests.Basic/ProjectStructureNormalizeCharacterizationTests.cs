@@ -22,7 +22,7 @@ public class ProjectStructureNormalizeCharacterizationTests
 {
     private const string UntouchedLine = "    public void  Untouched( )  { }";
 
-    private IWorkspaceManager _workspaceManager;
+    private PersistentWorkspaceManager _workspaceManager;
     private SolutionStructureEngine _engine;
 
     [SetUp]
@@ -68,6 +68,12 @@ public class ProjectStructureNormalizeCharacterizationTests
     [TestCase("Mixed")]
     public async Task ConvertToBackgroundService_ByteExact(string eol)
     {
+        // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
+        if (eol == "Mixed")
+        {
+            _workspaceManager.EolModeOverride = EolMode.Lf;
+        }
+
         SetSource(Build(eol,
             "using System.Threading;",
             "using System.Threading.Tasks;",
