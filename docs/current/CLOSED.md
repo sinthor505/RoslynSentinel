@@ -19,6 +19,11 @@ through `8cc62db6`); `DocumentationTools` doc writes no longer keep LF (`92fbac4
 whole-file `NormalizeEol` (verified 2026-10-26): it now takes a required `eol` and applies it to the inserted trivia only. Guards:
 `BareFileWriteRatchetTests`, `NewlineLiteralRatchetTests` (`798b0098`), `EolAuditRatchetTests`, and the `build.ps1` EOL audit.
 Evidence: `Search`/`GetMethodSource` on the 2026-10-26 source; `docs/current/reference-code-file-write-paths-v1.md` ("EOL policy").
+Closed 2026-10-26 afterwards: `Tools.Basic` pre-normalisation uses `ResolveEol` (`bc9727ef`); `ApplyOutcome.Findings` (`f00dc7a0`) and the direct-write
+tools (WriteFile, DeleteFile, ApplyDiff, CreateFile, ReplaceSnippet/Batch) lift chokepoint findings to the response `findings` array (`2a65e4e2`);
+Step 9 shipped as a `ReadFile` finding that reports mixed line-ending counts and minority line numbers, no new tool class (`1d63c3e2`). Decided not to
+add a `CreateFile` EOL parameter or description note (a parameter breaks the single `--eol` policy, a note costs prompt tokens every session; the chokepoint
+already converts new files).
 Open follow-ups stay in TODO.md ("EOL policy follow-ups").
 
 ## Tool defects pinned by the Battery tests (#1-#24) - resolved or accepted (2026-10-25)

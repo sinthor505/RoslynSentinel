@@ -1,6 +1,6 @@
 # Plan: Configurable EOL policy, single write chokepoint and final-bytes EOL guard
 
-**Status:** IN PROGRESS 2026-10-25. Steps 0-7 done (Steps 6-7 results are under each step; Steps 0-5: decisions, sweep, `scripts/Get-EolAudit.ps1`, working tree normalized, ratchet in `build.ps1`, `--eol` option, resolver, one dominant-EOL rule, chokepoint converts via the resolver and guards the final bytes; 5a-5c5 committed, flag and old path removed); Step 5 leftovers are listed under "Step 5 result"; Step 5 leftovers closed 2026-10-26 (see Decisions and follow-ups); Step 8 (8a-8c10, 8z) done 2026-10-26 apart from the baselined literals and the `Tools.Basic` detection sites listed under "Step 8 progress"; Step 10 (docs) done 2026-10-26; Step 9 (per-line EOL reporting tool) remains, with the follow-ups listed in TODO.md ("EOL policy follow-ups").
+**Status:** DONE 2026-10-26 apart from the follow-ups listed in TODO.md ("EOL policy follow-ups"): Steps 0-10 are complete (Step 9 shipped as a `ReadFile` finding, see its result; the `Tools.Basic` detection sites moved). Historical status line follows. Steps 0-7 done (Steps 6-7 results are under each step; Steps 0-5: decisions, sweep, `scripts/Get-EolAudit.ps1`, working tree normalized, ratchet in `build.ps1`, `--eol` option, resolver, one dominant-EOL rule, chokepoint converts via the resolver and guards the final bytes; 5a-5c5 committed, flag and old path removed); Step 5 leftovers are listed under "Step 5 result"; Step 5 leftovers closed 2026-10-26 (see Decisions and follow-ups); Step 8 (8a-8c10, 8z) done 2026-10-26 apart from the baselined literals and the `Tools.Basic` detection sites listed under "Step 8 progress"; Step 10 (docs) done 2026-10-26; Step 9 (per-line EOL reporting tool) remains, with the follow-ups listed in TODO.md ("EOL policy follow-ups").
 
 > **Note (2026-10-19):** `NormalizeWholeSubtreeWhitespace` (named in the sweep and Step 2 below) was deleted (D1);
 > the EOL-aware helpers in `RoslynFormattingHelper` replace it. Treat those mentions as historical.
@@ -393,6 +393,16 @@ Step 0 results (2026-10-18):
 - Change: report line numbers by terminator class (CRLF/LF/CR) for a file, so EOL forensics no
   longer needs a shell byte scan (the dogfood hook blocks it, and correctly so).
 - Done when: a tool call lists the LF-only lines of a mixed fixture.
+- Result (2026-10-26): done (`1d63c3e2`). No new tool class: `ReadFile` adds an envelope finding only when the file is mixed
+  (`EolUtilities.DescribeMixedLineEndings`: counts, up to 20 minority line numbers, `+N more`); uniform files cost nothing. Covers slice,
+  large-result and full reads of a workspace or disk file.
+
+#### Follow-up result (2026-10-26)
+- Done: `Tools.Basic` detection sites use `ResolveEol` (`bc9727ef`); `ApplyOutcome.Findings` (`f00dc7a0`); WriteFile, DeleteFile, ApplyDiff (apply),
+  CreateFile (merged with its advice finding) and ReplaceSnippet/Batch lift `ApplyChangesResult.Findings` to the envelope (`2a65e4e2`).
+- Decided: `CreateFile` gets no EOL parameter (breaks the single `--eol` policy) and no description note (prompt-token cost; the chokepoint converts new files).
+- Open (TODO.md): the ~55 `ApplyOutcome` -> `AppliedChangeSummary` copy sites, `ApplyUnifiedDiff`/`SafeDelete`/`UndoLastApply`, and the ratchet baseline
+  (unchanged, no baselined site moved).
 
 ### Step 10 - Docs
 - Files: `docs/current/reference-code-file-write-paths-v1.md`,
