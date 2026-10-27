@@ -9,7 +9,7 @@ namespace RoslynSentinel.Engines.Advanced;
 
 /// <summary>
 /// Inserts using directives and attribute lists with explicit trivia plus <see cref="Formatter.Annotation"/>, so that
-/// <see cref="RoslynFormattingHelper.FormatAnnotatedTextAsync(Document, SyntaxNode, CancellationToken)"/> lays out only the inserted syntax and every untouched line stays byte-exact.
+/// <see cref="RoslynFormattingHelper.FormatAnnotatedTextAsync(Document, SyntaxNode, string, CancellationToken)"/> lays out only the inserted syntax and every untouched line stays byte-exact.
 /// </summary>
 internal static class AnnotatedInsertionHelper
 {

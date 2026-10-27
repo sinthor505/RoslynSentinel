@@ -48,8 +48,8 @@ public static class RoslynFormattingHelper
     /// Pass <see cref="TriviaEditIntent.ReplaceLeading"/> when the caller deliberately rewrote
     /// <paramref name = "newNode"/>'s leading trivia on purpose (e.g. stripping a doc comment) -> then
     /// <paramref name = "newNode"/>'s leading trivia wins unconditionally, even if it looks empty.
-    /// <paramref name = "eol"/> is the line ending the replacement and every other changed line takes,
-    /// instead of the dominant ending of <paramref name = "document"/>.
+    /// <paramref name = "eol"/> is the line ending the replacement and every other changed line takes; it is
+    /// normally resolved with IWorkspaceMutator.ResolveEol / WorkspaceMutatorEolExtensions.ResolveEolAsync.
     /// </summary>
     public static async Task<string> ReplaceNodeAndFormatReplacementAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, string eol, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld, ILogger? logger = null)
     {
@@ -74,31 +74,6 @@ public static class RoslynFormattingHelper
         }
 
         return normalizedText;
-    }
-
-    /// <summary>
-    /// Replaces <paramref name = "oldNode"/> with <paramref name = "newNode"/> and formats only the
-    /// replaced node (via a tracking annotation), instead of the whole file. Prevents write-back
-    /// paths from silently reformatting unrelated code and shifting line numbers below the edit.
-    /// <paramref name = "oldNode"/>'s leading and trailing trivia (blank lines, doc comments, etc.
-    /// anchored to its position in the file) is transplanted onto <paramref name = "newNode"/> by
-    /// default (<paramref name = "triviaIntent"/> = <see cref="TriviaEditIntent.PreserveOld"/>), since
-    /// a freshly synthesized replacement (e.g. via <c>WithModifiers</c> on a brand-new token list, or
-    /// SyntaxFactory.ParseMemberDeclaration) has no knowledge of the blank lines or doc comment that
-    /// belonged to the original node -> and a freshly-built token's own "empty" leading trivia (even a
-    /// single zero-width elastic marker) must never be mistaken for a deliberate replacement; a
-    /// trivia-count/shape heuristic previously used here to detect "custom trivia" was exactly this
-    /// mistake; see docs/current/CLOSED.md and RunTest ChangeAccessibility_PreservesLeadingDocComment.
-    /// Pass <see cref="TriviaEditIntent.ReplaceLeading"/> when the caller deliberately rewrote
-    /// <paramref name = "newNode"/>'s leading trivia on purpose (e.g. stripping a doc comment) -> then
-    /// <paramref name = "newNode"/>'s leading trivia wins unconditionally, even if it looks empty.
-    /// </summary>
-    [Obsolete("Use the eol overload")]
-    public static async Task<string> ReplaceNodeAndFormatReplacementAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld, ILogger? logger = null)
-    {
-        ArgumentNullException.ThrowIfNull(document);
-        var eol = EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken));
-        return await ReplaceNodeAndFormatReplacementAsync(document, root, oldNode, newNode, eol, cancellationToken, triviaIntent, logger);
     }
 
     public static List<string> CheckPostWriteInvariants(string afterText, TriviaEditIntent triviaIntent, SyntaxNode? oldNode)
@@ -141,7 +116,8 @@ public static class RoslynFormattingHelper
     /// and refuse to write the text when it is false. Edits whose targets can nest should use text-span edits against
     /// one original snapshot instead (see <c>AttributeTextEditBuilder</c>).
     /// </para>
-    /// <paramref name="eol"/> is the line ending every changed line takes, instead of the dominant ending of <paramref name="document"/>.
+    /// <paramref name="eol"/> is the line ending every changed line takes; it is normally resolved with
+    /// IWorkspaceMutator.ResolveEol / WorkspaceMutatorEolExtensions.ResolveEolAsync.
     /// </summary>
     public static async Task<ReplaceNodesResult> ReplaceNodesAndFormatReplacementsAsync(Document document, SyntaxNode root, Dictionary<SyntaxNode, SyntaxNode> replacements, string eol, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld)
     {
@@ -169,32 +145,6 @@ public static class RoslynFormattingHelper
         var formattedDoc = await FormatAnnotatedSpansAsync(document, currentRoot, eol, cancellationToken);
         var formattedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
         return new ReplaceNodesResult(formattedText, unlocatedNodes);
-    }
-
-    /// <summary>
-    /// Batch form of <see cref="ReplaceNodeAndFormatReplacementAsync"/>: replaces every old->new pair in
-    /// <paramref name="replacements"/> against one evolving root and formats the whole set in a
-    /// single annotated-span pass (<see cref="FormatAnnotatedSpansAsync"/>), instead of one call per pair. Needed because
-    /// after the first <c>ReplaceNode</c> call, every other pending old node reference is stale -> the
-    /// original node objects are no longer part of the tree being edited. <see cref="SyntaxNode.TrackNodes"/>/
-    /// <see cref="SyntaxNode.GetCurrentNode{TNode}"/> re-locates each tracked old node against the
-    /// current root before building its replacement, the same idiom already used in
-    /// <c>AdvancedRefactoringEngine</c> for chained method-body rewrites. Each old node's leading/
-    /// trailing trivia is preserved onto its replacement by default, same as the single-pair overload.
-    /// <para>
-    /// A replacement whose old node cannot be located (for example because an ancestor of it was replaced earlier in the
-    /// same fold, which takes the descendant's pending replacement with it) is not applied and is reported in
-    /// <see cref="ReplaceNodesResult.UnlocatedNodes"/>. Callers must check <see cref="ReplaceNodesResult.AllReplacementsApplied"/>
-    /// and refuse to write the text when it is false. Edits whose targets can nest should use text-span edits against
-    /// one original snapshot instead (see <c>AttributeTextEditBuilder</c>).
-    /// </para>
-    /// </summary>
-    [Obsolete("Use the eol overload")]
-    public static async Task<ReplaceNodesResult> ReplaceNodesAndFormatReplacementsAsync(Document document, SyntaxNode root, Dictionary<SyntaxNode, SyntaxNode> replacements, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld)
-    {
-        ArgumentNullException.ThrowIfNull(document);
-        var eol = EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken));
-        return await ReplaceNodesAndFormatReplacementsAsync(document, root, replacements, eol, cancellationToken, triviaIntent);
     }
 
     /// <summary>
@@ -267,31 +217,6 @@ public static class RoslynFormattingHelper
     }
 
     /// <summary>
-    /// Removes <paramref name = "nodeToRemove"/> without reformatting any sibling's interior.
-    /// KeepExteriorTrivia splices the removed node's leading trivia onto the token immediately
-    /// before it (as trailing trivia) and its trailing trivia onto the token immediately after (as
-    /// leading trivia) -> which may belong to a sibling member (e.g. the next method) or to the
-    /// container itself (e.g. its closing brace, when removing the first/last member). Both boundary
-    /// tokens are restored to their exact pre-removal trivia afterwards, since the gap's own
-    /// separation from whatever now precedes/follows it should be unchanged by the removal. This
-    /// avoids the whole-container/whole-sibling formatting this helper used previously, which
-    /// normalized untouched members' internal spacing as a side effect.
-    /// </summary>
-    /// <param name="removeOptions">
-    /// Passed to <c>SyntaxNode.RemoveNode</c>. The default preserves the historical behaviour. Note that the
-    /// boundary-token trivia restore runs regardless of this value, so directive-keeping flags
-    /// (<see cref="SyntaxRemoveOptions.KeepUnbalancedDirectives"/>, <see cref="SyntaxRemoveOptions.KeepDirectives"/>)
-    /// do not survive it: a directive that sat in the removed node's leading trivia is dropped, which can orphan
-    /// its matching <c>#endregion</c>/<c>#endif</c>. Not yet safe for callers that need directives kept (C4 slice C4a finding).
-    /// </param>
-    [Obsolete("Use the eol overload")]
-    public static async Task<string> RemoveNodePreservingTriviaAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions = SyntaxRemoveOptions.KeepExteriorTrivia, CancellationToken cancellationToken = default, ILogger? logger = null)
-    {
-        var eol = EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken));
-        return await RemoveNodePreservingTriviaAsync(document, root, nodeToRemove, eol, removeOptions, cancellationToken, logger);
-    }
-
-    /// <summary>
     /// Removes <paramref name="nodeToRemove"/> and formats only its former container (the nearest ancestor whose node
     /// identity survives the removal), instead of the whole file, and returns the full text in the line ending <paramref name="eol"/>.
     /// Unlike <see cref="RemoveNodePreservingTriviaAsync"/> there is no boundary-token
@@ -331,33 +256,6 @@ public static class RoslynFormattingHelper
         var trackedNodeToRemove = annotatedContainer.DescendantNodesAndSelf().Single(n => n.IsEquivalentTo(nodeToRemove) && n.Span == nodeToRemove.Span);
         var newRoot = annotatedRoot.RemoveNode(trackedNodeToRemove, removeOptions)!;
         return await FormatAnnotatedTextAsync(document, newRoot, eol, cancellationToken);
-    }
-
-    /// <summary>
-    /// Removes <paramref name="nodeToRemove"/> and formats only its former container (the nearest ancestor whose node
-    /// identity survives the removal), instead of the whole file, and returns the full text in the line ending of
-    /// <paramref name="document"/>. Unlike <see cref="RemoveNodePreservingTriviaAsync"/> there is no boundary-token
-    /// trivia restore, so the directive-keeping flags of <paramref name="removeOptions"/>
-    /// (<see cref="SyntaxRemoveOptions.KeepUnbalancedDirectives"/>, <see cref="SyntaxRemoveOptions.KeepDirectives"/>) are
-    /// honoured: a directive that sat in the removed node's leading trivia stays. The container is annotated with
-    /// <see cref="Formatter.Annotation"/> and formatted through <see cref="FormatAnnotatedTextAsync(Document, SyntaxNode, CancellationToken)"/>,
-    /// so lines the removal did not change keep their terminator and every changed line takes the dominant ending of
-    /// <paramref name="document"/> (the formatter's own NewLine option never leaks into the file).
-    /// A node with no parent has no container, so the whole document is formatted through
-    /// <see cref="FormatWholeDocumentAsync"/> with <paramref name="document"/> as the line-ending reference.
-    /// </summary>
-    /// <param name="document">The document before the edit. Supplies the dominant line ending, the encoding and the formatting options.</param>
-    /// <param name="root">The root that contains <paramref name="nodeToRemove"/>; it may already carry edits made to <paramref name="document"/>'s tree.</param>
-    /// <param name="nodeToRemove">The node to remove, a node of <paramref name="root"/>.</param>
-    /// <param name="removeOptions">Passed to <c>SyntaxNode.RemoveNode</c>.</param>
-    [Obsolete("Use the eol overload")]
-    public static async Task<string> RemoveNodeAndFormatContainerAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(document);
-        ArgumentNullException.ThrowIfNull(root);
-        ArgumentNullException.ThrowIfNull(nodeToRemove);
-        var eol = EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken));
-        return await RemoveNodeAndFormatContainerAsync(document, root, nodeToRemove, removeOptions, eol, cancellationToken);
     }
 
     /// <summary>
@@ -436,34 +334,9 @@ public static class RoslynFormattingHelper
     }
 
     /// <summary>
-    /// Inserts <paramref name = "newMember"/> into <paramref name = "container"/>'s member list at
-    /// <paramref name = "insertIndex"/> (the position it should occupy in the resulting list -> i.e.
-    /// pass the old index of the following member, or <c>container.Members.Count</c> to append) and
-    /// formats only the newly inserted member, instead of the whole container. Prevents
-    /// AddMember/InsertMemberAfter/InsertMemberBefore from reformatting sibling members' interior
-    /// spacing as a side effect of formatting the whole container span -> see
-    /// docs/current/blockers/blocking_error_member_replace_strips_blank_line_between_adjacent_members.md
-    /// and the earlier 2026-09-07 finding of the same class (unrelated method signatures re-spaced).
-    /// <paramref name = "newMember"/> is given an explicit blank-line separator (matching this repo's
-    /// established one-blank-line-between-members convention) before itself when there is a preceding
-    /// sibling, and before the following sibling (if any) when that sibling didn't already carry one ->
-    /// this is computed explicitly rather than left to <see cref="Formatter"/>, because a
-    /// freshly-parsed member's "empty" leading trivia is otherwise indistinguishable from a deliberate
-    /// zero-blank-line request, and formatting the whole container to resolve that ambiguity is exactly
-    /// what caused both symptoms this helper exists to avoid.
-    /// </summary>
-    [Obsolete("Use the eol overload")]
-    public static async Task<string> InsertMemberDeclarationAndFormatInsertionAsync(Document document, SyntaxNode root, TypeDeclarationSyntax container, int insertIndex, MemberDeclarationSyntax newMember, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(document);
-        var eol = EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken));
-        return await InsertMemberDeclarationAndFormatInsertionAsync(document, root, container, insertIndex, newMember, eol, cancellationToken);
-    }
-
-    /// <summary>
     /// Formats only the nodes of <paramref name="rewrittenRoot"/> that carry <see cref="Formatter.Annotation"/>,
-    /// then puts the result in the line ending of <paramref name="document"/> (the document as it was BEFORE the
-    /// rewrite). This is the existing-root path of the whole-subtree-whitespace rule: the rewriter adds
+    /// then puts the result in the line ending <paramref name="eol"/>. This is the existing-root path of the
+    /// whole-subtree-whitespace rule: the rewriter adds
     /// <see cref="Formatter.Annotation"/> to the nodes it created or changed and calls this instead of
     /// a whole-subtree <c>NormalizeWhitespace</c> or a whole-document format, so code the rewrite did not touch is not
     /// re-spaced (the one exception is the whitespace and line break immediately before an annotated node, which the
@@ -474,31 +347,19 @@ public static class RoslynFormattingHelper
     /// Windows, unless an .editorconfig says otherwise), which would put a bare CRLF into an LF document. Line
     /// endings are therefore normalized with <see cref="EolUtilities.NormalizeEolOfChangedLines"/> against the
     /// pre-rewrite text: a line that survives unchanged keeps its own terminator (so a stray CRLF in an LF file is
-    /// left alone), and every line the rewrite or the formatter added or changed takes the document's dominant
-    /// ending. For a single-ending document the result is that ending throughout.
+    /// left alone), and every line the rewrite or the formatter added or changed takes <paramref name="eol"/>.
+    /// For a single-ending document the result is that ending throughout.
     /// </para>
     /// <para>
     /// No annotation in <paramref name="rewrittenRoot"/> means nothing is formatted: the result is the rewritten
-    /// text in the dominant ending. The returned document carries the full result text; callers read it with
+    /// text in the line ending <paramref name="eol"/>. The returned document carries the full result text; callers read it with
     /// <c>GetTextAsync</c>. No formatting options are passed, so the formatter resolves them from the document
     /// (workspace options and any .editorconfig).
     /// </para>
     /// </summary>
-    /// <param name="document">The document before the rewrite. Supplies the dominant line ending, the encoding and the pre-image for line matching.</param>
+    /// <param name="document">The document before the rewrite. Supplies the encoding, the formatting options and the pre-image for line matching.</param>
     /// <param name="rewrittenRoot">The root after the rewrite, with <see cref="Formatter.Annotation"/> on the changed nodes.</param>
-    [Obsolete("Use the eol overload")]
-    public static async Task<Document> FormatAnnotatedSpansAsync(Document document, SyntaxNode rewrittenRoot, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(document);
-        ArgumentNullException.ThrowIfNull(rewrittenRoot);
-
-        var originalSourceText = await document.GetTextAsync(cancellationToken);
-        return await FormatAnnotatedSpansAsync(document, rewrittenRoot, EolUtilities.DetectDominantEol(originalSourceText), cancellationToken);
-    }
-
-    /// <summary>
-    /// Eol-explicit form of <see cref="FormatAnnotatedSpansAsync(Document, SyntaxNode, CancellationToken)"/>: <paramref name="eol"/> is the line ending every changed line takes, instead of the dominant ending of <paramref name="document"/>.
-    /// </summary>
+    /// <param name="eol">The line terminator every changed line takes; normally from IWorkspaceMutator.ResolveEol / WorkspaceMutatorEolExtensions.ResolveEolAsync.</param>
     public static async Task<Document> FormatAnnotatedSpansAsync(Document document, SyntaxNode rewrittenRoot, string eol, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -512,24 +373,11 @@ public static class RoslynFormattingHelper
     /// <summary>
     /// <see cref="FormatAnnotatedSpansAsync"/> followed by <c>GetTextAsync</c>: formats only the nodes of
     /// <paramref name="rewrittenRoot"/> annotated with <see cref="Formatter.Annotation"/> and returns the full text. Lines the
-    /// rewrite did not touch keep their text and terminator, and every changed line takes the dominant line ending of
-    /// <paramref name="document"/> (the document before the rewrite).
+    /// rewrite did not touch keep their text and terminator, and every changed line takes <paramref name="eol"/>.
     /// </summary>
     /// <param name="document">The document before the rewrite.</param>
     /// <param name="rewrittenRoot">The root after the rewrite, with <see cref="Formatter.Annotation"/> on the changed nodes.</param>
-    [Obsolete("Use the eol overload")]
-    public static async Task<string> FormatAnnotatedTextAsync(Document document, SyntaxNode rewrittenRoot, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(document);
-        ArgumentNullException.ThrowIfNull(rewrittenRoot);
-
-        var eol = EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken));
-        return await FormatAnnotatedTextAsync(document, rewrittenRoot, eol, cancellationToken);
-    }
-
-    /// <summary>
-    /// Eol-explicit form of the <see cref="Document"/> overload of <c>FormatAnnotatedTextAsync</c>: <paramref name="eol"/> is the line ending every changed line takes.
-    /// </summary>
+    /// <param name="eol">The line terminator every changed line takes; normally from IWorkspaceMutator.ResolveEol / WorkspaceMutatorEolExtensions.ResolveEolAsync.</param>
     public static async Task<string> FormatAnnotatedTextAsync(Document document, SyntaxNode rewrittenRoot, string eol, CancellationToken cancellationToken = default)
     {
         var formattedDoc = await FormatAnnotatedSpansAsync(document, rewrittenRoot, eol, cancellationToken);
@@ -537,25 +385,15 @@ public static class RoslynFormattingHelper
     }
 
     /// <summary>
-    /// The <see cref="Document"/> overload of this method for callers that hold only file text: <paramref name="originalText"/>
+    /// The <see cref="Microsoft.CodeAnalysis.Text.SourceText"/> form of <c>FormatAnnotatedTextAsync</c> for callers that hold only file text: <paramref name="originalText"/>
     /// is placed in a throwaway <see cref="AdhocWorkspace"/> document purely as the pre-image that
     /// <see cref="FormatAnnotatedSpansAsync"/> needs. That document has no project options and no .editorconfig, so the
     /// formatter uses the workspace defaults. Lines the rewrite did not touch keep their text and terminator, and every
-    /// line it added or changed takes the original text's dominant line ending.
+    /// line it added or changed takes <paramref name="eol"/>.
     /// </summary>
     /// <param name="originalText">The file text before the rewrite.</param>
     /// <param name="rewrittenRoot">The root after the rewrite, with <see cref="Formatter.Annotation"/> on the changed nodes.</param>
-    [Obsolete("Use the eol overload")]
-    public static async Task<string> FormatAnnotatedTextAsync(Microsoft.CodeAnalysis.Text.SourceText originalText, SyntaxNode rewrittenRoot, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(originalText);
-
-        return await FormatAnnotatedTextAsync(originalText, rewrittenRoot, EolUtilities.DetectDominantEol(originalText), cancellationToken);
-    }
-
-    /// <summary>
-    /// Eol-explicit form of the <see cref="Microsoft.CodeAnalysis.Text.SourceText"/> overload of <c>FormatAnnotatedTextAsync</c>: <paramref name="eol"/> is the line ending every changed line takes.
-    /// </summary>
+    /// <param name="eol">The line terminator every changed line takes; normally from IWorkspaceMutator.ResolveEol / WorkspaceMutatorEolExtensions.ResolveEolAsync.</param>
     public static async Task<string> FormatAnnotatedTextAsync(Microsoft.CodeAnalysis.Text.SourceText originalText, SyntaxNode rewrittenRoot, string eol, CancellationToken cancellationToken = default)
     {
         using var workspace = new AdhocWorkspace();
@@ -583,22 +421,6 @@ public static class RoslynFormattingHelper
     }
 
     /// <summary>
-    /// Formats a newly built member (or global statement) that is returned as a standalone snippet, not inserted into
-    /// <paramref name="document"/>, and returns its text without surrounding blank lines. The node is annotated with
-    /// <see cref="Formatter.Annotation"/> and formatted through <see cref="FormatAnnotatedSpansAsync"/> inside a throwaway
-    /// compilation unit. The pre-image handed to it carries only the document's dominant line ending, so every line of
-    /// the snippet takes that ending and none can inherit a stray terminator by text-matching a line of the document.
-    /// </summary>
-    /// <param name="document">The document the snippet is meant for. Supplies the dominant line ending, the encoding and the formatting options.</param>
-    /// <param name="member">The newly built member or global statement.</param>
-    [Obsolete("Use the eol overload")]
-    public static async Task<string> FormatNewSnippetAsync(Document document, MemberDeclarationSyntax member, CancellationToken cancellationToken = default)
-    {
-        var eol = EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken));
-        return await FormatNewSnippetAsync(document, member, eol, cancellationToken);
-    }
-
-    /// <summary>
     /// Formats the WHOLE of <paramref name="document"/>: every token's spacing, indentation and line breaks, not just
     /// what an edit touched. "Whole" is in the name because it is the risky scope: it re-spaces unrelated code and can
     /// shift every line number below the first change. Call it only when the whole document really is being
@@ -612,12 +434,9 @@ public static class RoslynFormattingHelper
     /// raw <c>Formatter.FormatAsync</c>, <c>Formatter.Format</c> or <c>NormalizeWhitespace</c> call in production code
     /// and on a higher raw-call count in an allowlisted member.
     /// <para>
-    /// The result is put in the line ending of <paramref name="eolReference"/> when given, otherwise of
-    /// <paramref name="document"/> as it is passed in (so a caller that builds the document with
-    /// <c>WithSyntaxRoot</c> and passes no reference gets the dominant ending of that edited text, which a
-    /// synthesized block of the other ending can flip; pass the pre-edit text as <paramref name="eolReference"/> to
-    /// avoid that): lines that survive the format unchanged keep their own terminator, and every line the
-    /// formatter added or changed takes the dominant ending (<see cref="EolUtilities.NormalizeEolOfChangedLines"/>).
+    /// The result is put in the line ending <paramref name="eol"/>: lines that survive the format unchanged keep their
+    /// own terminator, and every line the formatter added or changed takes <paramref name="eol"/>
+    /// (<see cref="EolUtilities.NormalizeEolOfChangedLines"/>).
     /// The formatter's own NewLine option (the host default, CRLF on Windows, unless an .editorconfig says otherwise)
     /// therefore never leaks into an LF document. No formatting options are passed, so the formatter resolves them
     /// from the document (workspace options and any .editorconfig). The returned document carries the full result
@@ -627,19 +446,8 @@ public static class RoslynFormattingHelper
     /// </para>
     /// </summary>
     /// <param name="document">The document to format (possibly already carrying an edited root).</param>
-    /// <param name="eolReference">Optional pre-edit text of the document. When given it supplies the dominant line ending, the pre-image for the changed-lines comparison, the encoding and the checksum algorithm, so lines the edit or the formatter changed take the original document's ending even if the edited text is dominated by another one. Null means <paramref name="document"/>'s own text.</param>
-    [Obsolete("Use the eol overload")]
-    public static async Task<Document> FormatWholeDocumentAsync(Document document, Microsoft.CodeAnalysis.Text.SourceText? eolReference = null, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(document);
-
-        var originalSourceText = eolReference ?? await document.GetTextAsync(cancellationToken);
-        return await FormatWholeDocumentAsync(document, EolUtilities.DetectDominantEol(originalSourceText), eolReference, cancellationToken);
-    }
-
-    /// <summary>
-    /// Eol-explicit form of <see cref="FormatWholeDocumentAsync(Document, Microsoft.CodeAnalysis.Text.SourceText?, CancellationToken)"/>: <paramref name="eol"/> is the line ending every changed line takes, instead of the dominant ending of <paramref name="eolReference"/> (or of <paramref name="document"/>).
-    /// </summary>
+    /// <param name="eol">The line terminator every changed line takes; normally from IWorkspaceMutator.ResolveEol / WorkspaceMutatorEolExtensions.ResolveEolAsync.</param>
+    /// <param name="eolReference">Optional pre-edit text of the document. When given it supplies the pre-image for the changed-lines comparison, the encoding and the checksum algorithm, so lines the edit or the formatter changed are compared against the original document even if the edited text differs. Null means <paramref name="document"/>'s own text.</param>
     public static async Task<Document> FormatWholeDocumentAsync(Document document, string eol, Microsoft.CodeAnalysis.Text.SourceText? eolReference = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -713,41 +521,6 @@ public static class RoslynFormattingHelper
         }
 
         return formattedText;
-    }
-
-    /// <summary>
-    /// Formats a NEWLY BUILT <see cref="CompilationUnitSyntax"/> (the root of a file that does not exist yet) that embeds
-    /// EXISTING code, and returns its text. It serves roots like the ones built by ExtractSuperclass,
-    /// ExtractMembersToPartial and ConvertTupleToClass: the using directives, members or types copied from the source file
-    /// carry the user's comments, blank lines and indentation, which <c>NormalizeWhitespace</c> would rewrite.
-    /// <para>
-    /// <paramref name="isNewNode"/> classifies the nodes of <paramref name="newRoot"/>: <c>true</c> for structure the
-    /// caller synthesized (namespace, class, name, braces), <c>false</c> for a node copied from existing source. Only the
-    /// DIRECT tokens of new nodes (keywords, identifiers, braces, semicolons) carry <see cref="Formatter.Annotation"/>
-    /// and are formatted, via <see cref="FormatAnnotatedSpansAsync"/>. A node classified as existing is skipped with its
-    /// whole subtree: its tokens and trivia (comments, blank lines, indentation, inner spacing) are left byte-exact. The
-    /// root itself is always treated as new. The formatter still owns the whitespace and line break that sit directly in
-    /// front of a new token, so a new brace between two existing members is placed correctly while the members are not
-    /// re-spaced.
-    /// </para>
-    /// <para>
-    /// Line endings follow <see cref="FormatAnnotatedSpansAsync"/>: <paramref name="document"/> is the SOURCE document the
-    /// existing code came from; a line that survives unchanged keeps its own terminator and every line the formatter added
-    /// or changed takes that document's dominant ending. When the last token of the root is new, the result ends with a
-    /// line break in that dominant ending.
-    /// </para>
-    /// </summary>
-    /// <param name="document">The document the embedded code came from. Supplies the dominant line ending, the pre-image for line matching and the formatting options.</param>
-    /// <param name="newRoot">The newly built root, with the existing nodes already embedded.</param>
-    /// <param name="isNewNode">True for a node the caller synthesized, false for a node copied from existing source (that node's whole subtree is left untouched).</param>
-    [Obsolete("Use the eol overload")]
-    public static async Task<string> FormatNewRootKeepingTriviaAsync(Document document, CompilationUnitSyntax newRoot, Func<SyntaxNode, bool> isNewNode, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(document);
-        ArgumentNullException.ThrowIfNull(newRoot);
-        ArgumentNullException.ThrowIfNull(isNewNode);
-        var eol = EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken));
-        return await FormatNewRootKeepingTriviaAsync(document, newRoot, isNewNode, eol, cancellationToken);
     }
 
     /// <summary>
