@@ -42,16 +42,7 @@ public class ModifyAttributeBatchTests
 
     private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager)
     {
-        var config = TestEngines.SentinelConfiguration();
-        var diffEngine = TestEngines.DiffEngine();
-        return TestTools.RefactoringStructuralTools(TestTools.RefactoringStructuralImpl(
-            TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
-            TestEngines.MemberRefactoringEngine(workspaceManager, TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance), config),
-            TestEngines.StructuralRefinementEngine(workspaceManager, config),
-            TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            workspaceManager,
-            TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
-            NullLogger<RefactoringStructuralImpl>.Instance));
+        return TestTools.RefactoringStructuralTools(workspaceManager);
     }
 
     [Test]

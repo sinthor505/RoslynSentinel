@@ -388,9 +388,9 @@ public class TestFactoryResolveTests
     [Test]
     public void TestCategoryTaggingTools_Impl()
     {
-        var impl = new TestCategoryTaggingImpl(
-            new TestCategoryTaggingEngine(_wm),
-            new TestCategoryApplyEngine(_wm, TestEngines.ValidationEngine(_wm)),
+        var impl = TestTools.TestCategoryTaggingImpl(
+            TestEngines.TestCategoryTaggingEngine(_wm),
+            TestEngines.TestCategoryApplyEngine(_wm, TestEngines.ValidationEngine(_wm)),
             _wm,
             NullLogger.Instance);
 
@@ -398,6 +398,103 @@ public class TestFactoryResolveTests
 
         Assert.That(tools, Is.TypeOf<TestCategoryTaggingTools>());
         Assert.That(Holds(tools, impl), Is.True, "the explicit impl must be the one the tool class holds");
+    }
+
+    [Test]
+    public void TestCategoryTaggingEngine_ManagerOnly()
+    {
+        var engine = TestEngines.TestCategoryTaggingEngine(_wm);
+        Assert.That(engine, Is.TypeOf<TestCategoryTaggingEngine>());
+        Assert.That(Holds(engine, _wm), Is.True);
+    }
+
+    [Test]
+    public void TestCategoryApplyEngine_ManagerAndValidation()
+    {
+        var validation = TestEngines.ValidationEngine(_wm);
+        var engine = TestEngines.TestCategoryApplyEngine(_wm, validation);
+        Assert.That(engine, Is.TypeOf<TestCategoryApplyEngine>());
+        Assert.That(Holds(engine, _wm), Is.True);
+        Assert.That(Holds(engine, validation), Is.True, "the explicit validation engine must be the one the engine holds");
+    }
+
+    [Test]
+    public void TestCategoryTaggingImpl_FourArgumentsExplicit()
+    {
+        var planner = TestEngines.TestCategoryTaggingEngine(_wm);
+        var applier = TestEngines.TestCategoryApplyEngine(_wm, TestEngines.ValidationEngine(_wm));
+        var logger = NullLogger.Instance;
+
+        var impl = TestTools.TestCategoryTaggingImpl(planner, applier, _wm, logger);
+
+        Assert.That(impl, Is.TypeOf<TestCategoryTaggingImpl>());
+        Assert.That(Holds(impl, planner), Is.True, "explicit engines must be the ones the impl holds");
+        Assert.That(Holds(impl, applier), Is.True);
+        Assert.That(Holds(impl, _wm), Is.True);
+        Assert.That(Holds(impl, logger), Is.True);
+    }
+
+    [Test]
+    public void SymbolRelationshipImpl_FourArgumentsExplicit()
+    {
+        var discovery = TestEngines.DiscoveryEngine(_wm);
+        var navigation = TestEngines.SymbolNavigationEngine(_wm, NullLogger<SymbolNavigationEngine>.Instance);
+        var logger = NullLogger<SymbolRelationshipImpl>.Instance;
+
+        var impl = TestTools.SymbolRelationshipImpl(discovery, navigation, _wm, logger);
+
+        Assert.That(impl, Is.TypeOf<SymbolRelationshipImpl>());
+        Assert.That(Holds(impl, discovery), Is.True, "explicit engines must be the ones the impl holds");
+        Assert.That(Holds(impl, navigation), Is.True);
+        Assert.That(Holds(impl, _wm), Is.True);
+        Assert.That(Holds(impl, logger), Is.True);
+    }
+
+    [Test]
+    public void RefactoringStructuralImpl_ManagerOnly_EnginesShareTheCallersManager()
+    {
+        var impl = TestTools.RefactoringStructuralImpl(_wm);
+        Assert.That(impl, Is.TypeOf<RefactoringStructuralImpl>());
+        Assert.That(Holds(impl, _wm), Is.True);
+        Assert.That(Holds(FieldOfType<ValidationEngine>(impl), _wm), Is.True);
+        Assert.That(Holds(FieldOfType<SymbolNavigationEngine>(impl), _wm), Is.True);
+    }
+
+    [Test]
+    public void RefactoringStructuralTools_ManagerOnly_HoldsAnImplOverTheCallersManager()
+    {
+        var tools = TestTools.RefactoringStructuralTools(_wm);
+        Assert.That(tools, Is.TypeOf<RefactoringStructuralTools>());
+        Assert.That(Holds(FieldOfType<RefactoringStructuralImpl>(tools), _wm), Is.True);
+    }
+
+    [Test]
+    public void RefactoringExtractionDocsImpl_ManagerOnly()
+    {
+        var impl = TestTools.RefactoringExtractionDocsImpl(_wm);
+        Assert.That(impl, Is.TypeOf<RefactoringExtractionDocsImpl>());
+        Assert.That(Holds(impl, _wm), Is.True);
+        Assert.That(Holds(FieldOfType<ValidationEngine>(impl), _wm), Is.True);
+    }
+
+    [Test]
+    public void RefactoringSignatureImpl_ManagerOnly()
+    {
+        var impl = TestTools.RefactoringSignatureImpl(_wm);
+        Assert.That(impl, Is.TypeOf<RefactoringSignatureImpl>());
+        Assert.That(Holds(impl, _wm), Is.True);
+        Assert.That(Holds(FieldOfType<ValidationEngine>(impl), _wm), Is.True);
+    }
+
+    [Test]
+    public void WholeFileWriteTools_ManagerAndWorkspaceTools()
+    {
+        var workspaceTools = TestTools.WorkspaceTools(_wm);
+        var tools = TestTools.WholeFileWriteTools(_wm, workspaceTools);
+        Assert.That(tools, Is.TypeOf<WholeFileWriteTools>());
+        Assert.That(Holds(tools, _wm), Is.True);
+        Assert.That(Holds(tools, workspaceTools), Is.True, "the explicit WorkspaceTools must be the one the tool class holds");
+        Assert.That(Holds(FieldOfType<ValidationEngine>(tools), _wm), Is.True);
     }
 
     [Test]

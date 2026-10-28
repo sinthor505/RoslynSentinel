@@ -46,18 +46,7 @@ public class ModifyBaseTypeBatchTests
 
     private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager)
     {
-        var config = TestEngines.SentinelConfiguration();
-        var diffEngine = TestEngines.DiffEngine();
-        var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        return TestTools.RefactoringStructuralTools(TestTools.RefactoringStructuralImpl(
-            TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
-            TestEngines.MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine, config),
-            TestEngines.StructuralRefinementEngine(workspaceManager),
-            symbolNavigationEngine,
-            workspaceManager,
-            validationEngine,
-            NullLogger<RefactoringStructuralImpl>.Instance));
+        return TestTools.RefactoringStructuralTools(workspaceManager);
     }
 
     [Test]

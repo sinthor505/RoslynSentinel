@@ -77,25 +77,7 @@ public class SearchModeTests
         var workspace = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspace.LoadSolutionAsync(fixture.SolutionPath);
 
-        var config = TestEngines.SentinelConfiguration();
-        var diffEngine = TestEngines.DiffEngine();
-        var diagnosticEngine = TestEngines.DiagnosticEngine(workspace);
-        var validationEngine = TestEngines.ValidationEngine(workspace, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(workspace, NullLogger<SymbolNavigationEngine>.Instance);
-        var tools = TestTools.WorkspaceTools(
-            workspace,
-            validationEngine,
-            diffEngine, diagnosticEngine,
-            TestEngines.SolutionManagementEngine(workspace),
-            TestEngines.StructuralRefinementEngine(workspace, config),
-            TestEngines.DependencyEngine(workspace),
-            TestEngines.ProjectConsistencyEngine(workspace),
-            config, NullLogger<WorkspaceTools>.Instance,
-            TestEngines.BuildEngine(workspace, diagnosticEngine),
-            symbolNavigationEngine,
-            TestEngines.TestRunEngine(workspace),
-            TestTools.WorkspaceReadNavigationImpl(workspace, NullLogger<WorkspaceReadNavigationImpl>.Instance),
-            WriteToolAdviceHelper.WithAllToolsExposed());
+        var tools = TestTools.WorkspaceTools(workspace);
 
         return new Harness(fixture, workspace, tools);
     }

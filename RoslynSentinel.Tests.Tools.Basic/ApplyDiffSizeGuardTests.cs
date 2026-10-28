@@ -56,9 +56,7 @@ public class ApplyDiffSizeGuardTests
 
     private static WholeFileWriteTools BuildWholeFileWriteTools(IWorkspaceManager workspaceManager)
     {
-        var diffEngine = TestEngines.DiffEngine();
-        var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        return TestTools.WholeFileWriteTools(workspaceManager, BuildTools(workspaceManager), validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        return TestTools.WholeFileWriteTools(workspaceManager, BuildTools(workspaceManager));
     }
 
     private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager) =>

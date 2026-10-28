@@ -43,7 +43,7 @@ public class FindReferencesAmbiguityToolTests
         _secondDocPath = Path.Combine(_dir, "AmbigProj", "Second.cs");
 
         _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _impl = new SymbolRelationshipImpl(
+        _impl = TestTools.SymbolRelationshipImpl(
             TestEngines.DiscoveryEngine(_workspaceManager),
             TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             _workspaceManager,

@@ -4,6 +4,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Basic;
@@ -78,4 +79,41 @@ public static class TestTools
 
     public static TestCategoryTaggingTools TestCategoryTaggingTools(TestCategoryTaggingImpl impl) =>
         ActivatorUtilities.CreateInstance<TestCategoryTaggingTools>(TestEngines.CreateProvider(), impl);
+
+    /// <summary>
+    /// Short form: only the manager is explicit; the engines resolve from the fresh container, which shares the caller's
+    /// manager. The non-generic ILogger parameter is not registered, so a NullLogger is passed.
+    /// </summary>
+    public static RefactoringStructuralImpl RefactoringStructuralImpl(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<RefactoringStructuralImpl>(
+            TestEngines.CreateProvider(workspaceManager), workspaceManager, NullLogger<RefactoringStructuralImpl>.Instance);
+
+    /// <summary>Short form: the tool class over a short-form impl (see <see cref="RefactoringStructuralImpl(IWorkspaceManager)"/>).</summary>
+    public static RefactoringStructuralTools RefactoringStructuralTools(IWorkspaceManager workspaceManager) =>
+        RefactoringStructuralTools(RefactoringStructuralImpl(workspaceManager));
+
+    public static RefactoringExtractionDocsImpl RefactoringExtractionDocsImpl(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<RefactoringExtractionDocsImpl>(
+            TestEngines.CreateProvider(workspaceManager), workspaceManager, NullLogger<RefactoringExtractionDocsImpl>.Instance);
+
+    public static RefactoringSignatureImpl RefactoringSignatureImpl(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<RefactoringSignatureImpl>(
+            TestEngines.CreateProvider(workspaceManager), workspaceManager, NullLogger<RefactoringSignatureImpl>.Instance);
+
+    /// <summary>Short form: the caller's workspace tools and manager are explicit; the engines resolve from the container.</summary>
+    public static WholeFileWriteTools WholeFileWriteTools(IWorkspaceManager workspaceManager, WorkspaceTools workspaceTools) =>
+        ActivatorUtilities.CreateInstance<WholeFileWriteTools>(
+            TestEngines.CreateProvider(workspaceManager), workspaceManager, workspaceTools);
+
+    public static SymbolRelationshipImpl SymbolRelationshipImpl(
+        DiscoveryEngine discoveryEngine, SymbolNavigationEngine symbolNavigationEngine,
+        IWorkspaceManager workspaceManager, ILogger logger) =>
+        ActivatorUtilities.CreateInstance<SymbolRelationshipImpl>(
+            TestEngines.CreateProvider(workspaceManager), discoveryEngine, symbolNavigationEngine, workspaceManager, logger);
+
+    public static TestCategoryTaggingImpl TestCategoryTaggingImpl(
+        TestCategoryTaggingEngine engine, TestCategoryApplyEngine applyEngine,
+        IWorkspaceManager workspaceManager, ILogger logger) =>
+        ActivatorUtilities.CreateInstance<TestCategoryTaggingImpl>(
+            TestEngines.CreateProvider(workspaceManager), engine, applyEngine, workspaceManager, logger);
 }

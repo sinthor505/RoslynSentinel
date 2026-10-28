@@ -52,16 +52,8 @@ public class DeclarationToolTests
 
     private static Tools BuildTools(IWorkspaceManager workspaceManager)
     {
-        var config = TestEngines.SentinelConfiguration();
-        var diffEngine = TestEngines.DiffEngine();
-        var basicEngine = TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
-        var navigation = TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var validation = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var memberEngine = TestEngines.MemberRefactoringEngine(workspaceManager, navigation, validation, config);
-        var structuralImpl = TestTools.RefactoringStructuralImpl(
-            basicEngine, memberEngine, TestEngines.StructuralRefinementEngine(workspaceManager, config), navigation, workspaceManager, validation,
-            NullLogger<RefactoringStructuralImpl>.Instance);
-        var signatureImpl = new RefactoringSignatureImpl(basicEngine, memberEngine, workspaceManager, validation, navigation, NullLogger<RefactoringSignatureImpl>.Instance);
+        var structuralImpl = TestTools.RefactoringStructuralImpl(workspaceManager);
+        var signatureImpl = TestTools.RefactoringSignatureImpl(workspaceManager);
         return new Tools(TestTools.RefactoringStructuralTools(structuralImpl), new RefactoringSignatureTools(signatureImpl), new DeclarationTools(structuralImpl, signatureImpl));
     }
 

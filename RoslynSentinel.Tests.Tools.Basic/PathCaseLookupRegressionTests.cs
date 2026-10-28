@@ -54,26 +54,8 @@ public class PathCaseLookupRegressionTests
         var loadPath = OperatingSystem.IsWindows() ? fixture.SolutionPath.ToLowerInvariant() : fixture.SolutionPath;
         await workspace.LoadSolutionAsync(loadPath);
 
-        var config = TestEngines.SentinelConfiguration();
-        var diffEngine = TestEngines.DiffEngine();
-        var diagnosticEngine = TestEngines.DiagnosticEngine(workspace);
-        var validationEngine = TestEngines.ValidationEngine(workspace, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(workspace, NullLogger<SymbolNavigationEngine>.Instance);
-        var tools = TestTools.WorkspaceTools(
-            workspace,
-            validationEngine,
-            diffEngine, diagnosticEngine,
-            TestEngines.SolutionManagementEngine(workspace),
-            TestEngines.StructuralRefinementEngine(workspace, config),
-            TestEngines.DependencyEngine(workspace),
-            TestEngines.ProjectConsistencyEngine(workspace),
-            config, NullLogger<WorkspaceTools>.Instance,
-            TestEngines.BuildEngine(workspace, diagnosticEngine),
-            symbolNavigationEngine,
-            TestEngines.TestRunEngine(workspace),
-            TestTools.WorkspaceReadNavigationImpl(workspace, NullLogger<WorkspaceReadNavigationImpl>.Instance),
-            WriteToolAdviceHelper.WithAllToolsExposed());
-        var writeTools = TestTools.WholeFileWriteTools(workspace, tools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, symbolNavigationEngine);
+        var tools = TestTools.WorkspaceTools(workspace);
+        var writeTools = TestTools.WholeFileWriteTools(workspace, tools);
         return new Harness(fixture, workspace, tools, writeTools);
     }
 
@@ -286,7 +268,7 @@ public class PathCaseLookupRegressionTests
     {
         using var h = await CreateHarnessAsync();
         var real = RealPath(h, "ContosoOrders.Core", "OrderStatus.cs");
-        var impl = new SymbolRelationshipImpl(
+        var impl = TestTools.SymbolRelationshipImpl(
             TestEngines.DiscoveryEngine(h.Workspace), TestEngines.SymbolNavigationEngine(h.Workspace, NullLogger<SymbolNavigationEngine>.Instance),
             h.Workspace, NullLogger<SymbolRelationshipImpl>.Instance);
 
@@ -308,7 +290,7 @@ public class PathCaseLookupRegressionTests
     {
         using var h = await CreateHarnessAsync();
         var missing = RealPath(h, "ContosoOrders.Core", "DoesNotExist.cs");
-        var impl = new SymbolRelationshipImpl(
+        var impl = TestTools.SymbolRelationshipImpl(
             TestEngines.DiscoveryEngine(h.Workspace), TestEngines.SymbolNavigationEngine(h.Workspace, NullLogger<SymbolNavigationEngine>.Instance),
             h.Workspace, NullLogger<SymbolRelationshipImpl>.Instance);
 

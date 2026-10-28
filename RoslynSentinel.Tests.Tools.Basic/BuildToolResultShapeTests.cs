@@ -31,18 +31,7 @@ public class BuildToolResultShapeTests
         _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _workspaceManager.SolutionPath = Path.Combine(_tempDir, "Test.sln");
 
-        var config = TestEngines.SentinelConfiguration();
-        var diagnosticEngine = TestEngines.DiagnosticEngine(_workspaceManager);
-        var validationEngine = TestEngines.ValidationEngine(_workspaceManager, TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
-        _workspaceTools = TestTools.WorkspaceTools(
-            _workspaceManager, validationEngine, TestEngines.DiffEngine(), diagnosticEngine,
-            TestEngines.SolutionManagementEngine(_workspaceManager), TestEngines.StructuralRefinementEngine(_workspaceManager, config),
-            TestEngines.DependencyEngine(_workspaceManager), TestEngines.ProjectConsistencyEngine(_workspaceManager), config,
-            NullLogger<WorkspaceTools>.Instance, TestEngines.BuildEngine(_workspaceManager, diagnosticEngine),
-            TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            TestEngines.TestRunEngine(_workspaceManager),
-            TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
-            WriteToolAdviceHelper.WithAllToolsExposed());
+        _workspaceTools = TestTools.WorkspaceTools(_workspaceManager);
     }
 
     [TearDown]

@@ -104,4 +104,10 @@ public static class TestEngines
 
     public static DiscoveryEngine DiscoveryEngine(IWorkspaceManager workspaceManager) =>
         ActivatorUtilities.CreateInstance<DiscoveryEngine>(CreateProvider(workspaceManager), workspaceManager);
+
+    public static TestCategoryTaggingEngine TestCategoryTaggingEngine(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<TestCategoryTaggingEngine>(CreateProvider(workspaceManager), workspaceManager);
+
+    public static TestCategoryApplyEngine TestCategoryApplyEngine(IWorkspaceManager workspaceManager, ValidationEngine validationEngine) =>
+        ActivatorUtilities.CreateInstance<TestCategoryApplyEngine>(CreateProvider(workspaceManager), workspaceManager, validationEngine);
 }

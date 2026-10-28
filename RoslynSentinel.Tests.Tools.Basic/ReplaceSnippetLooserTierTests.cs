@@ -60,25 +60,7 @@ public class ReplaceSnippetLooserTierTests
         var workspace = InMemoryWorkspace.Create((RelativePath, Source));
         var manager = workspace.Manager;
 
-        var config = TestEngines.SentinelConfiguration();
-        var diffEngine = TestEngines.DiffEngine();
-        var diagnosticEngine = TestEngines.DiagnosticEngine(manager);
-        var validationEngine = TestEngines.ValidationEngine(manager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(manager, NullLogger<SymbolNavigationEngine>.Instance);
-        var tools = TestTools.WorkspaceTools(
-            manager,
-            validationEngine,
-            diffEngine, diagnosticEngine,
-            TestEngines.SolutionManagementEngine(manager),
-            TestEngines.StructuralRefinementEngine(manager, config),
-            TestEngines.DependencyEngine(manager),
-            TestEngines.ProjectConsistencyEngine(manager),
-            config, NullLogger<WorkspaceTools>.Instance,
-            TestEngines.BuildEngine(manager, diagnosticEngine),
-            symbolNavigationEngine,
-            TestEngines.TestRunEngine(manager),
-            TestTools.WorkspaceReadNavigationImpl(manager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
-            WriteToolAdviceHelper.WithAllToolsExposed());
+        var tools = TestTools.WorkspaceTools(manager);
         return new Harness(workspace, tools);
     }
 

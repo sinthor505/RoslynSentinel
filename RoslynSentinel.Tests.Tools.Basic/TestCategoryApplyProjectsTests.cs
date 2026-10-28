@@ -107,9 +107,9 @@ namespace FixturesP
     {
         _workspaceManager = FakeWorkspaceManager.ReadWrite();
         _workspaceManager.SetTestSolution(BuildSolution());
-        var planner = new TestCategoryTaggingEngine(_workspaceManager);
-        var applier = new TestCategoryApplyEngine(_workspaceManager, Battery.Basic.TestEngines.ValidationEngine(_workspaceManager));
-        _tool = Battery.Basic.TestTools.TestCategoryTaggingTools(new TestCategoryTaggingImpl(planner, applier, _workspaceManager, NullLogger.Instance));
+        var planner = Battery.Basic.TestEngines.TestCategoryTaggingEngine(_workspaceManager);
+        var applier = Battery.Basic.TestEngines.TestCategoryApplyEngine(_workspaceManager, Battery.Basic.TestEngines.ValidationEngine(_workspaceManager));
+        _tool = Battery.Basic.TestTools.TestCategoryTaggingTools(Battery.Basic.TestTools.TestCategoryTaggingImpl(planner, applier, _workspaceManager, NullLogger.Instance));
     }
 
     [TearDown]

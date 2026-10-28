@@ -30,23 +30,7 @@ public class ListProjectFrameworkTargetsTests
         _tempDir = Path.Combine(Path.GetTempPath(), "ListProjectFrameworkTargetsTests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
 
-        var config = TestEngines.SentinelConfiguration();
-        var diffEngine = TestEngines.DiffEngine();
-        var validationEngine = TestEngines.ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var diagnosticEngine = TestEngines.DiagnosticEngine(_workspaceManager);
-        var solutionManagementEngine = TestEngines.SolutionManagementEngine(_workspaceManager);
-        var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(_workspaceManager, config);
-        var dependencyEngine = TestEngines.DependencyEngine(_workspaceManager);
-        var projectConsistencyEngine = TestEngines.ProjectConsistencyEngine(_workspaceManager);
-        _tools = TestTools.WorkspaceTools(
-            _workspaceManager, validationEngine, diffEngine, diagnosticEngine,
-            solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
-            projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
-            TestEngines.BuildEngine(_workspaceManager, diagnosticEngine),
-            TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            TestEngines.TestRunEngine(_workspaceManager),
-            TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
-            WriteToolAdviceHelper.WithAllToolsExposed());
+        _tools = TestTools.WorkspaceTools(_workspaceManager);
     }
 
     [TearDown]

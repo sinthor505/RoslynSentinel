@@ -60,7 +60,7 @@ public class FindReferencesIncludeTestsTests
         _testDocPath = Path.Combine(_dir, "TestsProj", "UnitTest1.cs");
 
         _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _impl = new SymbolRelationshipImpl(
+        _impl = TestTools.SymbolRelationshipImpl(
             TestEngines.DiscoveryEngine(_workspaceManager),
             TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             _workspaceManager,

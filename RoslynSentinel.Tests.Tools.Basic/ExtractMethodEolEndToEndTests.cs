@@ -12,15 +12,7 @@ public class ExtractMethodEolEndToEndTests
 {
     private static RefactoringExtractionDocsImpl BuildExtractionDocsImpl(IWorkspaceManager workspaceManager)
     {
-        var config = TestEngines.SentinelConfiguration();
-        var diffEngine = TestEngines.DiffEngine();
-        return new RefactoringExtractionDocsImpl(
-            TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
-            TestEngines.MsToolAugmentEngine(workspaceManager),
-            TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            workspaceManager,
-            TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
-            NullLogger<RefactoringExtractionDocsImpl>.Instance);
+        return TestTools.RefactoringExtractionDocsImpl(workspaceManager);
     }
 
     [Test]

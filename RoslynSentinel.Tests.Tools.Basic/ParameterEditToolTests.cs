@@ -47,13 +47,7 @@ public class ParameterEditToolTests
 
     private static Tools BuildTools(IWorkspaceManager workspaceManager)
     {
-        var config = TestEngines.SentinelConfiguration();
-        var diffEngine = TestEngines.DiffEngine();
-        var basicEngine = TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
-        var navigation = TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var validation = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var memberEngine = TestEngines.MemberRefactoringEngine(workspaceManager, navigation, validation, config);
-        var signatureImpl = new RefactoringSignatureImpl(basicEngine, memberEngine, workspaceManager, validation, navigation, NullLogger<RefactoringSignatureImpl>.Instance);
+        var signatureImpl = TestTools.RefactoringSignatureImpl(workspaceManager);
         return new Tools(new RefactoringSignatureTools(signatureImpl), new ParameterEditTools(signatureImpl));
     }
 
