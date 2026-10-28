@@ -58,22 +58,22 @@ public class BatteryTwentyTwoTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
-        _impactAnalyzer = new ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance);
-        _semanticSearchEngine = new DiscoveryEngine(_workspaceManager);
-        _metricsEngine = new MetricsEngine(_workspaceManager);
-        _inventoryEngine = new InventoryEngine(_workspaceManager);
-        _deadCodeEngine = new DeadCodeEngine(_workspaceManager, _config);
-        _documentationEngine = new DocumentationEngine(_workspaceManager);
-        _dependencyEngine = new DependencyEngine(_workspaceManager);
-        _solutionStructureEngine = new SolutionStructureEngine(_workspaceManager, _config);
-        _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
-        _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _solutionStructureEngine, _config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, _config));
-        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, _config);
-        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
-        _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _impactAnalyzer = Battery.Basic.TestEngines.ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance);
+        _semanticSearchEngine = Battery.Basic.TestEngines.DiscoveryEngine(_workspaceManager);
+        _metricsEngine = Battery.Advanced.TestEnginesAdvanced.MetricsEngine(_workspaceManager);
+        _inventoryEngine = Battery.Basic.TestEngines.InventoryEngine(_workspaceManager);
+        _deadCodeEngine = Battery.Advanced.TestEnginesAdvanced.DeadCodeEngine(_workspaceManager, _config);
+        _documentationEngine = Battery.Advanced.TestEnginesAdvanced.DocumentationEngine(_workspaceManager);
+        _dependencyEngine = Battery.Basic.TestEngines.DependencyEngine(_workspaceManager);
+        _solutionStructureEngine = Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, _config);
+        _asyncSafetyEngine = Battery.Advanced.TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
+        _healthOrchestrationEngine = Battery.Advanced.TestEnginesAdvanced.HealthOrchestrationEngine(_workspaceManager, _solutionStructureEngine, _config, Battery.Advanced.TestEnginesAdvanced.PerformanceEngine(_workspaceManager), Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, _config));
+        _antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, _config);
+        _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _dependencyInjectionEngine = Battery.Advanced.TestEnginesAdvanced.DependencyInjectionEngine(_workspaceManager);
+        _discoveryEngine = Battery.Basic.TestEngines.DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
         _tools = BatteryToolFactory.CreateIntelligenceTools(_workspaceManager);
         // Symbol-level tools moved to SymbolNavigationTools (Basic) in the server split.
         _symbolRelationshipTools = BatteryToolFactory.CreateSymbolRelationshipTools(_workspaceManager);
@@ -418,9 +418,9 @@ public class BatteryTwentyTwoTests
     public async Task CheckPackageInconsistency_ValidSolution_ReturnsList()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var dependencyEngine = new DependencyEngine(workspaceManager);
+        var dependencyEngine = Battery.Basic.TestEngines.DependencyEngine(workspaceManager);
         var result = await dependencyEngine.CheckPackageInconsistencyAsync();
         Assert.That(result, Is.Empty);
     }
@@ -437,9 +437,9 @@ public class BatteryTwentyTwoTests
         await File.WriteAllTextAsync(csprojPaths[0], firstText.Replace("</Project>", $"  <ItemGroup>\n    <PackageReference Include=\"{packageId}\" Version=\"13.0.1\" />\n  </ItemGroup>\n</Project>"));
         var secondText = await File.ReadAllTextAsync(csprojPaths[1]);
         await File.WriteAllTextAsync(csprojPaths[1], secondText.Replace("</Project>", $"  <ItemGroup>\n    <PackageReference Include=\"{packageId}\" Version=\"12.0.3\" />\n  </ItemGroup>\n</Project>"));
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var dependencyEngine = new DependencyEngine(workspaceManager);
+        var dependencyEngine = Battery.Basic.TestEngines.DependencyEngine(workspaceManager);
         var result = await dependencyEngine.CheckPackageInconsistencyAsync();
         Assert.That(result, Has.Count.EqualTo(1));
         Assert.That(result[0], Does.StartWith($"Package '{packageId}' has multiple versions: "));
@@ -864,7 +864,7 @@ public class AttributedTarget { }
                     Microsoft.CodeAnalysis.Text.SourceText.From("[Probe]\npublic class TestTarget { }\n"), filePath: Path.Combine(dir, "TestsProj", "Tests.cs"));
             _workspaceManager.SetTestSolution(solution);
 
-            var impl = new SymbolRelationshipImpl(_discoveryEngine, _symbolNavigationEngine, _workspaceManager, NullLogger<SymbolRelationshipImpl>.Instance);
+            var impl = Battery.Basic.TestTools.SymbolRelationshipImpl(_discoveryEngine, _symbolNavigationEngine, _workspaceManager, NullLogger<SymbolRelationshipImpl>.Instance);
 
             var hidden = await impl.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.attributeUsages, includeTests: false);
             Assert.That(hidden.IsError, Is.False, hidden.ErrorData?.Message);

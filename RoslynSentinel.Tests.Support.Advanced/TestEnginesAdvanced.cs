@@ -137,4 +137,18 @@ public static class TestEnginesAdvanced
     // every other constructor parameter resolves from the container, which shares the caller's workspace manager.
     public static HealthOrchestrationEngine HealthOrchestrationEngine(IWorkspaceManager workspaceManager) =>
         ActivatorUtilities.CreateInstance<HealthOrchestrationEngine>(CreateProvider(workspaceManager));
+
+    // The only constructor: all six arguments explicit (the shape the tests use), so the test's own engines and ledger are held.
+    public static AsyncBatchEngine AsyncBatchEngine(
+        IWorkspaceManager workspaceManager, AsyncOptimizationEngine asyncOptimizationEngine, ValidationEngine validationEngine,
+        AntiPatternEngine antiPatternEngine, MigrationLedger ledger, ILogger<AsyncBatchEngine> logger) =>
+        ActivatorUtilities.CreateInstance<AsyncBatchEngine>(
+            CreateProvider(workspaceManager), workspaceManager, asyncOptimizationEngine, validationEngine, antiPatternEngine, ledger, logger);
+
+    // The shape every existing call site uses (all five constructor arguments explicit, so the test's own engines are held).
+    public static HealthOrchestrationEngine HealthOrchestrationEngine(
+        IWorkspaceManager workspaceManager, SolutionStructureEngine solutionStructureEngine, SentinelConfiguration config,
+        PerformanceEngine performanceEngine, AntiPatternEngine antiPatternEngine) =>
+        ActivatorUtilities.CreateInstance<HealthOrchestrationEngine>(
+            CreateProvider(workspaceManager), workspaceManager, solutionStructureEngine, config, performanceEngine, antiPatternEngine);
 }

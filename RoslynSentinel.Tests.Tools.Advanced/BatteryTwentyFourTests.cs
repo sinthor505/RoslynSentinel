@@ -46,25 +46,25 @@ public class BatteryTwentyFourTests
     public void Setup()
     {
         WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
-        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _diffEngine = new DiffEngine();
-        _validationEngine = new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
-        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
-        _memberRefactoringEngine = new MemberRefactoringEngine(_workspaceManager, _symbolNavigationEngine, _validationEngine);
-        _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
-        _mappingEngine = new MappingEngine(_workspaceManager);
-        _semanticRefactoringEngine = new SemanticRefactoringEngine(_workspaceManager);
-        _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
-        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
-        _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
-        _codeFlowEngine = new LogicSimplificationEngine(_workspaceManager);
-        _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
-        _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
-        _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
-        _msToolAugmentEngine = new MsToolAugmentEngine(_workspaceManager);
-        _generationTools = new GenerationTools(_workspaceManager, NullLogger<GenerationTools>.Instance);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _diffEngine = Battery.Basic.TestEngines.DiffEngine();
+        _validationEngine = Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
+        _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
+        _memberRefactoringEngine = Battery.Basic.TestEngines.MemberRefactoringEngine(_workspaceManager, _symbolNavigationEngine, _validationEngine);
+        _advancedStructuralEngine = Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager);
+        _mappingEngine = Battery.Advanced.TestEnginesAdvanced.MappingEngine(_workspaceManager);
+        _semanticRefactoringEngine = Battery.Basic.TestEngines.SemanticRefactoringEngine(_workspaceManager);
+        _advancedLogicEngine = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+        _structuralRefinementEngine = Battery.Basic.TestEngines.StructuralRefinementEngine(_workspaceManager, _config);
+        _codeStyleEngine = Battery.Advanced.TestEnginesAdvanced.CodeStyleEngine(_workspaceManager, _config);
+        _codeFlowEngine = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+        _advancedRefactoringEngine = Battery.Advanced.TestEnginesAdvanced.AdvancedRefactoringEngine(_workspaceManager);
+        _logicOptimizationEngine = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+        _modernizationEngine = Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, _config);
+        _msToolAugmentEngine = Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager);
+        _generationTools = Battery.Advanced.TestToolsAdvanced.GenerationTools(_workspaceManager, NullLogger<GenerationTools>.Instance);
 
         _refactoringStructuralTools = BatteryToolFactory.CreateRefactoringStructuralTools(_workspaceManager);
         _typedMemberTools = BatteryToolFactory.CreateTypedMemberTools(_workspaceManager);

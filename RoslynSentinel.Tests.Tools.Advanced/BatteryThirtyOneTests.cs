@@ -33,20 +33,20 @@ public class BatteryThirtyOneTests
     [SetUp]
     public void SetUp()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
-        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
-        _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
-        _mappingEngine = new MappingEngine(_workspaceManager);
-        _semanticRefactoringEngine = new SemanticRefactoringEngine(_workspaceManager);
-        _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
-        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
-        _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
-        _codeFlowEngine = new LogicSimplificationEngine(_workspaceManager);
-        _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
-        _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
-        _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
-        _validationEngine = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
+        _advancedStructuralEngine = Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager);
+        _mappingEngine = Battery.Advanced.TestEnginesAdvanced.MappingEngine(_workspaceManager);
+        _semanticRefactoringEngine = Battery.Basic.TestEngines.SemanticRefactoringEngine(_workspaceManager);
+        _advancedLogicEngine = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+        _structuralRefinementEngine = Battery.Basic.TestEngines.StructuralRefinementEngine(_workspaceManager, _config);
+        _codeStyleEngine = Battery.Advanced.TestEnginesAdvanced.CodeStyleEngine(_workspaceManager, _config);
+        _codeFlowEngine = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+        _advancedRefactoringEngine = Battery.Advanced.TestEnginesAdvanced.AdvancedRefactoringEngine(_workspaceManager);
+        _logicOptimizationEngine = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+        _modernizationEngine = Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, _config);
+        _validationEngine = Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
         _tools = BatteryToolFactory.CreateAdvancedRefactoringTools(_workspaceManager);
     }
 

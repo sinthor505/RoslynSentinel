@@ -36,7 +36,7 @@ public class BlobIntegrityInvariantTests
         // GetSolutionRoot(), so an in-memory solution would make every blob write a no-op and the
         // invariant vacuously true.
         _fixture = new TestSolutionFixture();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await _workspaceManager.LoadSolutionAsync(_fixture.SolutionPath);
 
         _advancedRefactoringTools = BatteryToolFactory.CreateAdvancedRefactoringTools(_workspaceManager);

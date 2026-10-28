@@ -113,19 +113,19 @@ public class QualityClass
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
-        _performanceEngine = new PerformanceEngine(_workspaceManager);
-        _securityEngine = new SecurityEngine(_workspaceManager);
-        _testingEngine = new TestingEngine(_workspaceManager);
-        _controlFlowEngine = new ControlFlowEngine(_workspaceManager);
-        _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
-        _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
-        _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-        _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
-        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, _config);
-        _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
-        _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, new AsyncOptimizationEngine(_workspaceManager), new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _performanceEngine = Battery.Advanced.TestEnginesAdvanced.PerformanceEngine(_workspaceManager);
+        _securityEngine = Battery.Advanced.TestEnginesAdvanced.SecurityEngine(_workspaceManager);
+        _testingEngine = Battery.Advanced.TestEnginesAdvanced.TestingEngine(_workspaceManager);
+        _controlFlowEngine = Battery.Advanced.TestEnginesAdvanced.ControlFlowEngine(_workspaceManager);
+        _logicOptimizationEngine = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+        _asyncSafetyEngine = Battery.Advanced.TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
+        _asyncOptimizationEngine = Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager);
+        _diagnosticEngine = Battery.Basic.TestEngines.DiagnosticEngine(_workspaceManager);
+        _antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, _config);
+        _threadSafetyEngine = Battery.Basic.TestEngines.ThreadSafetyEngine(_workspaceManager);
+        _asyncBatchEngine = Battery.Advanced.TestEnginesAdvanced.AsyncBatchEngine(_workspaceManager, Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager), Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance), Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
         _tools = BatteryToolFactory.CreateQualityTools(_workspaceManager);
     }
 
@@ -392,10 +392,10 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task DetectMemoryLeaks_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await new ResourceSafetyEngine(_workspaceManager, _config).DetectMemoryLeaksAsync("Quality.cs");
+        var result = await Battery.Advanced.TestEnginesAdvanced.ResourceSafetyEngine(_workspaceManager, _config).DetectMemoryLeaksAsync("Quality.cs");
         Assert.That(result, Is.Empty);
         SetSource("public class Publisher { public event System.EventHandler Changed; } public class Sub { public void Hook(Publisher p) { p.Changed += this.OnChanged; } private void OnChanged(object s, System.EventArgs e) { } }", "Mem.cs");
-        var positive = await new ResourceSafetyEngine(_workspaceManager, _config).DetectMemoryLeaksAsync("Mem.cs");
+        var positive = await Battery.Advanced.TestEnginesAdvanced.ResourceSafetyEngine(_workspaceManager, _config).DetectMemoryLeaksAsync("Mem.cs");
         Assert.That(positive, Has.Count.EqualTo(1)); Assert.That(positive[0], Does.StartWith("Mem.cs:1 ")); Assert.That(positive[0], Does.Contain("Class 'Sub' subscribes to 'p.Changed' but class does not implement IDisposable"));
     }
 

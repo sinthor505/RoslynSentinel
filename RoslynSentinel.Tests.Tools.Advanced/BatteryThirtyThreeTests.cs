@@ -58,32 +58,32 @@ public class BatteryThirtyThreeTests
     [SetUp]
     public void SetUp()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
-        _impactAnalyzer = new ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance);
-        _semanticSearchEngine = new DiscoveryEngine(_workspaceManager);
-        _metricsEngine = new MetricsEngine(_workspaceManager);
-        _inventoryEngine = new InventoryEngine(_workspaceManager);
-        _deadCodeEngine = new DeadCodeEngine(_workspaceManager, _config);
-        _documentationEngine = new DocumentationEngine(_workspaceManager);
-        _dependencyEngine = new DependencyEngine(_workspaceManager);
-        _solutionStructureEngine = new SolutionStructureEngine(_workspaceManager, _config);
-        _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
-        _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _solutionStructureEngine, _config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, _config));
-        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
-        _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _impactAnalyzer = Battery.Basic.TestEngines.ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance);
+        _semanticSearchEngine = Battery.Basic.TestEngines.DiscoveryEngine(_workspaceManager);
+        _metricsEngine = Battery.Advanced.TestEnginesAdvanced.MetricsEngine(_workspaceManager);
+        _inventoryEngine = Battery.Basic.TestEngines.InventoryEngine(_workspaceManager);
+        _deadCodeEngine = Battery.Advanced.TestEnginesAdvanced.DeadCodeEngine(_workspaceManager, _config);
+        _documentationEngine = Battery.Advanced.TestEnginesAdvanced.DocumentationEngine(_workspaceManager);
+        _dependencyEngine = Battery.Basic.TestEngines.DependencyEngine(_workspaceManager);
+        _solutionStructureEngine = Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, _config);
+        _asyncSafetyEngine = Battery.Advanced.TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
+        _healthOrchestrationEngine = Battery.Advanced.TestEnginesAdvanced.HealthOrchestrationEngine(_workspaceManager, _solutionStructureEngine, _config, Battery.Advanced.TestEnginesAdvanced.PerformanceEngine(_workspaceManager), Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, _config));
+        _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _dependencyInjectionEngine = Battery.Advanced.TestEnginesAdvanced.DependencyInjectionEngine(_workspaceManager);
+        _discoveryEngine = Battery.Basic.TestEngines.DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
         _intelligenceTools = BatteryToolFactory.CreateIntelligenceTools(_workspaceManager);
-        _performanceEngine = new PerformanceEngine(_workspaceManager);
-        _securityEngine = new SecurityEngine(_workspaceManager);
-        _testingEngine = new TestingEngine(_workspaceManager);
-        _controlFlowEngine = new ControlFlowEngine(_workspaceManager);
-        _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
-        _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-        _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
-        _diffEngine = new DiffEngine();
-        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, _config);
-        _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, _asyncOptimizationEngine, new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
+        _performanceEngine = Battery.Advanced.TestEnginesAdvanced.PerformanceEngine(_workspaceManager);
+        _securityEngine = Battery.Advanced.TestEnginesAdvanced.SecurityEngine(_workspaceManager);
+        _testingEngine = Battery.Advanced.TestEnginesAdvanced.TestingEngine(_workspaceManager);
+        _controlFlowEngine = Battery.Advanced.TestEnginesAdvanced.ControlFlowEngine(_workspaceManager);
+        _logicOptimizationEngine = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+        _asyncOptimizationEngine = Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager);
+        _diagnosticEngine = Battery.Basic.TestEngines.DiagnosticEngine(_workspaceManager);
+        _diffEngine = Battery.Basic.TestEngines.DiffEngine();
+        _antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, _config);
+        _asyncBatchEngine = Battery.Advanced.TestEnginesAdvanced.AsyncBatchEngine(_workspaceManager, _asyncOptimizationEngine, Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance), Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
         _qualityTools = BatteryToolFactory.CreateQualityTools(_workspaceManager);
     }
 

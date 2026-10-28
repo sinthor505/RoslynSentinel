@@ -28,7 +28,7 @@ public sealed class RenameSymbolTests
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
         var tools = BatteryToolFactory.CreateRefactoringSignatureTools(workspace.Manager);
-        var symbolNavEngine = new SymbolNavigationEngine(workspace.Manager, NullLogger<SymbolNavigationEngine>.Instance);
+        var symbolNavEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(workspace.Manager, NullLogger<SymbolNavigationEngine>.Instance);
         // "GetLabel" is declared on both Order and IService in SimpleSource -> disambiguate.
         var located = await symbolNavEngine.LocateSymbolAsync("GetLabel", containingType: "Order");
         var handle = located.Single();

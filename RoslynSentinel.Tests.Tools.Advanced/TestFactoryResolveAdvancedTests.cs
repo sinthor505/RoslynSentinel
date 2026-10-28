@@ -133,6 +133,20 @@ public class TestFactoryResolveAdvancedTests
     }
 
     [Test]
+    public void HealthOrchestrationEngine_FiveArgumentsExplicit()
+    {
+        var config = Basic.TestEngines.SentinelConfiguration();
+        var structure = Basic.TestEngines.SolutionStructureEngine(_wm, config);
+        var performance = TestEnginesAdvanced.PerformanceEngine(_wm);
+        var antiPattern = TestEnginesAdvanced.AntiPatternEngine(_wm, config);
+        var engine = TestEnginesAdvanced.HealthOrchestrationEngine(_wm, structure, config, performance, antiPattern);
+        AssertManagerAndConfig(engine, config);
+        Assert.That(Holds(engine, structure), Is.True, "the explicit structure engine must be the one the engine holds");
+        Assert.That(Holds(engine, performance), Is.True, "the explicit performance engine must be the one the engine holds");
+        Assert.That(Holds(engine, antiPattern), Is.True, "the explicit anti-pattern engine must be the one the engine holds");
+    }
+
+    [Test]
     public void AntiPatternEngine_ManagerAndConfig()
     {
         var config = Basic.TestEngines.SentinelConfiguration();
@@ -181,6 +195,32 @@ public class TestFactoryResolveAdvancedTests
 
     [Test]
     public void GenerationTools_Manager() => AssertManagerOnly(TestToolsAdvanced.GenerationTools(_wm));
+
+    [Test]
+    public void GenerationTools_ManagerAndLogger()
+    {
+        var logger = NullLogger<GenerationTools>.Instance;
+        var tools = TestToolsAdvanced.GenerationTools(_wm, logger);
+        AssertManagerOnly(tools);
+        Assert.That(Holds(tools, logger), Is.True, "the explicit logger must be the one the tool class holds");
+    }
+
+    [Test]
+    public void AsyncBatchEngine_SixArgumentsExplicit()
+    {
+        var optimization = TestEnginesAdvanced.AsyncOptimizationEngine(_wm);
+        var validation = Basic.TestEngines.ValidationEngine(_wm);
+        var antiPattern = TestEnginesAdvanced.AntiPatternEngine(_wm);
+        var ledger = new MigrationLedger();
+        var logger = NullLogger<AsyncBatchEngine>.Instance;
+        var engine = TestEnginesAdvanced.AsyncBatchEngine(_wm, optimization, validation, antiPattern, ledger, logger);
+        AssertManagerOnly(engine);
+        Assert.That(Holds(engine, optimization), Is.True, "the explicit optimization engine must be the one the engine holds");
+        Assert.That(Holds(engine, validation), Is.True, "the explicit validation engine must be the one the engine holds");
+        Assert.That(Holds(engine, antiPattern), Is.True, "the explicit anti-pattern engine must be the one the engine holds");
+        Assert.That(Holds(engine, ledger), Is.True, "the explicit ledger must be the one the engine holds");
+        Assert.That(Holds(engine, logger), Is.True, "the explicit logger must be the one the engine holds");
+    }
 
     [Test]
     public void QualityTools_Manager() => AssertManagerOnly(TestToolsAdvanced.QualityTools(_wm));

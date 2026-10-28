@@ -18,11 +18,11 @@ public class AdvancedToolsTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
-        _config = new SentinelConfiguration();
-        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
-        _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _asyncSafetyEngine = Battery.Advanced.TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
+        _config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _syntaxUpgradeEngine = Battery.Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, _config);
+        _asyncOptimizationEngine = Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager);
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, _config);
     }
 
@@ -303,7 +303,7 @@ public class C {
         var a = age;
     }
 }", "C.cs");
-        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync("C.cs", "CreateUser");
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync("C.cs", "CreateUser");
         Assert.That(result.UpdatedText, Does.Contain("record CreateUserParameters"));
         Assert.That(result.UpdatedText, Does.Contain("request"));
         Assert.That(result.UpdatedText, Does.Contain("request.Name"));
@@ -321,7 +321,7 @@ public class C {
         var a = age;
     }
 }", "C.cs");
-        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync("C.cs", "CreateUser", "UserNameEmail", new[] { "name", "email" });
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync("C.cs", "CreateUser", "UserNameEmail", new[] { "name", "email" });
         Assert.That(result.UpdatedText, Does.Contain("record UserNameEmail"));
         // age should remain as a separate parameter
         Assert.That(result.UpdatedText, Does.Contain("int age"));
@@ -338,7 +338,7 @@ public class C {
         var y = count;
     }
 }", "C.cs");
-        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync("C.cs", "Process");
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync("C.cs", "Process");
         // Record should be emitted and params rewritten
         Assert.That(result.UpdatedText, Does.Contain("record ProcessParameters"));
         Assert.That(result.UpdatedText, Does.Contain("ProcessParameters request"));

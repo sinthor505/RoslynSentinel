@@ -65,13 +65,13 @@ public interface IOrderRepository
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
-        _apiGenerationEngine = new ApiGenerationEngine(_workspaceManager);
-        _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-        _validationEngine = new ValidationEngine(_workspaceManager);
-        _mappingEngine = new MappingEngine(_workspaceManager);
-        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _codeGenerationEngine = Battery.Advanced.TestEnginesAdvanced.CodeGenerationEngine(_workspaceManager);
+        _apiGenerationEngine = Battery.Advanced.TestEnginesAdvanced.ApiGenerationEngine(_workspaceManager);
+        _asyncOptimizationEngine = Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager);
+        _validationEngine = Battery.Basic.TestEngines.ValidationEngine(_workspaceManager);
+        _mappingEngine = Battery.Advanced.TestEnginesAdvanced.MappingEngine(_workspaceManager);
+        _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _generationTools = new GenerationTools(_codeGenerationEngine, _apiGenerationEngine, _mappingEngine, _symbolNavigationEngine, _validationEngine, _workspaceManager, NullLogger<GenerationTools>.Instance);
     }
 

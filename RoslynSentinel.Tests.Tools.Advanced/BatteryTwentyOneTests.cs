@@ -61,16 +61,16 @@ public class Worker
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
-        _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
-        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
-        _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
-        _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
-        _codeHealingEngine = new CodeHealingEngine(_workspaceManager, _config);
-        _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
-        _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
-        _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _modernizationEngine = Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, _config);
+        _syntaxUpgradeEngine = Battery.Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, _config);
+        _logicOptimizationEngine = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+        _codeStyleEngine = Battery.Advanced.TestEnginesAdvanced.CodeStyleEngine(_workspaceManager, _config);
+        _codeHealingEngine = Battery.Advanced.TestEnginesAdvanced.CodeHealingEngine(_workspaceManager, _config);
+        _advancedLogicEngine = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+        _ideStyleEngine = Battery.Advanced.TestEnginesAdvanced.IDEStyleEngine(_workspaceManager);
+        _asyncOptimizationEngine = Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager);
         _tools = BatteryToolFactory.CreateModernizationTools(_workspaceManager);
     }
 

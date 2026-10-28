@@ -544,6 +544,16 @@ public class TestFactoryResolveTests
     }
 
     [Test]
+    public void ImpactAnalyzer_ManagerAndLogger()
+    {
+        var logger = NullLogger<ImpactAnalyzer>.Instance;
+        var analyzer = TestEngines.ImpactAnalyzer(_wm, logger);
+        Assert.That(analyzer, Is.TypeOf<ImpactAnalyzer>());
+        Assert.That(Holds(analyzer, _wm), Is.True);
+        Assert.That(Holds(analyzer, logger), Is.True, "the explicit logger must be the one the analyzer holds");
+    }
+
+    [Test]
     public void InventoryEngine_ManagerOnly()
     {
         var engine = TestEngines.InventoryEngine(_wm);

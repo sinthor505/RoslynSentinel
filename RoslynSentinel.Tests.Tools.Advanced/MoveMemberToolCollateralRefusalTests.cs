@@ -60,7 +60,7 @@ public class MoveMemberToolCollateralRefusalTests
     public void Setup()
     {
         WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
@@ -100,17 +100,17 @@ public class MoveMemberToolCollateralRefusalTests
 
     private AdvancedRefactoringTools CreateTools(MemberRefactoringEngine memberEngine, SymbolNavigationEngine symbolNav, ValidationEngine validation)
     {
-        var config = new SentinelConfiguration();
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
         return new AdvancedRefactoringTools(
-            new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
-            new AdvancedRefactoringEngine(_workspaceManager),
-            new StructuralRefactoringEngine(_workspaceManager),
+            Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
+            Battery.Advanced.TestEnginesAdvanced.AdvancedRefactoringEngine(_workspaceManager),
+            Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager),
             memberEngine,
-            new SemanticRefactoringEngine(_workspaceManager),
-            new MappingEngine(_workspaceManager),
-            new SyntaxModernizationEngine(_workspaceManager, config),
-            new MsToolAugmentEngine(_workspaceManager),
-            new CodeGenerationEngine(_workspaceManager),
+            Battery.Basic.TestEngines.SemanticRefactoringEngine(_workspaceManager),
+            Battery.Advanced.TestEnginesAdvanced.MappingEngine(_workspaceManager),
+            Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, config),
+            Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager),
+            Battery.Advanced.TestEnginesAdvanced.CodeGenerationEngine(_workspaceManager),
             symbolNav,
             _workspaceManager,
             validation,
@@ -139,8 +139,8 @@ public class MoveMemberToolCollateralRefusalTests
     public async Task MoveMember_NormalizedSourceFile_IsRefusedUnmaskedAndWritesNothing()
     {
         SetRefactorSource();
-        var symbolNav = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var validation = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validation = Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
         var engine = new NormalizingMemberRefactoringEngine(_workspaceManager, symbolNav, validation);
         var tools = CreateTools(engine, symbolNav, validation);
 
@@ -159,9 +159,9 @@ public class MoveMemberToolCollateralRefusalTests
     public async Task MoveMember_PlainEngine_SameCallSucceeds()
     {
         SetRefactorSource();
-        var symbolNav = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var validation = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
-        var engine = new MemberRefactoringEngine(_workspaceManager, symbolNav, validation);
+        var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validation = Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var engine = Battery.Basic.TestEngines.MemberRefactoringEngine(_workspaceManager, symbolNav, validation);
         var tools = CreateTools(engine, symbolNav, validation);
 
         var result = await tools.MoveMemberTool(reason: "test message", FileName, "Src", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
@@ -174,9 +174,9 @@ public class MoveMemberToolCollateralRefusalTests
     public async Task MoveMember_DryRun_ReturnsEditSpansForTheTouchedFilesAndWritesNothing()
     {
         SetRefactorSource();
-        var symbolNav = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var validation = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
-        var engine = new MemberRefactoringEngine(_workspaceManager, symbolNav, validation);
+        var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validation = Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var engine = Battery.Basic.TestEngines.MemberRefactoringEngine(_workspaceManager, symbolNav, validation);
         var tools = CreateTools(engine, symbolNav, validation);
 
         var result = await tools.MoveMemberTool(reason: "test message", FileName, "Src", ["Foo"], "Target", dryRun: true, oldMember: MoveMemberOldMember.keepDelegator);
@@ -218,9 +218,9 @@ public class MoveMemberToolCollateralRefusalTests
     public async Task MoveMember_RealApply_ReturnsNoEditSpans()
     {
         SetRefactorSource();
-        var symbolNav = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var validation = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
-        var engine = new MemberRefactoringEngine(_workspaceManager, symbolNav, validation);
+        var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validation = Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var engine = Battery.Basic.TestEngines.MemberRefactoringEngine(_workspaceManager, symbolNav, validation);
         var tools = CreateTools(engine, symbolNav, validation);
 
         var result = await tools.MoveMemberTool(reason: "test message", FileName, "Src", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
@@ -236,9 +236,9 @@ public class MoveMemberToolCollateralRefusalTests
     public async Task MoveMember_InstanceToNewClass_LocalReceiverCaller_IsRefusedWithUnresolvedCallSitesAndWritesNothing()
     {
         SetInstanceSolution();
-        var symbolNav = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var validation = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
-        var engine = new MemberRefactoringEngine(_workspaceManager, symbolNav, validation);
+        var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validation = Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var engine = Battery.Basic.TestEngines.MemberRefactoringEngine(_workspaceManager, symbolNav, validation);
         var tools = CreateTools(engine, symbolNav, validation);
 
         var result = await tools.MoveMemberTool(reason: "test message", System.IO.Path.Combine(_projectDir, FileName), "A", ["Count"], "Counter", oldMember: MoveMemberOldMember.remove);
@@ -258,9 +258,9 @@ public class MoveMemberToolCollateralRefusalTests
     public async Task MoveMember_InstanceToNewClass_LocalReceiverCaller_RetryWithNewFixupSucceeds()
     {
         SetInstanceSolution();
-        var symbolNav = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var validation = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
-        var engine = new MemberRefactoringEngine(_workspaceManager, symbolNav, validation);
+        var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validation = Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var engine = Battery.Basic.TestEngines.MemberRefactoringEngine(_workspaceManager, symbolNav, validation);
         var tools = CreateTools(engine, symbolNav, validation);
         var fixups = new Dictionary<string, string> { ["*"] = "new" };
 
@@ -277,8 +277,8 @@ public class MoveMemberToolCollateralRefusalTests
     public async Task MoveMember_SkippedCallSiteAndNormalizedText_CollateralRefusalIsNotMaskedByUnresolvedCallSites()
     {
         SetInstanceSolution();
-        var symbolNav = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var validation = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validation = Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
         var engine = new NormalizingMemberRefactoringEngine(_workspaceManager, symbolNav, validation);
         var tools = CreateTools(engine, symbolNav, validation);
 
@@ -348,8 +348,8 @@ public class MoveMemberToolCollateralRefusalTests
 
     private AdvancedRefactoringTools CreateLedgerSeamTools()
     {
-        var symbolNav = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var validation = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validation = Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
         var engine = new PendingLedgerRefactoringEngine(_workspaceManager, symbolNav, validation);
         return CreateTools(engine, symbolNav, validation);
     }

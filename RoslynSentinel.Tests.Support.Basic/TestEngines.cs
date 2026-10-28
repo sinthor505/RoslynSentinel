@@ -127,6 +127,9 @@ public static class TestEngines
     public static SemanticRefactoringEngine SemanticRefactoringEngine(IWorkspaceManager workspaceManager) =>
         ActivatorUtilities.CreateInstance<SemanticRefactoringEngine>(CreateProvider(workspaceManager), workspaceManager);
 
+    public static ImpactAnalyzer ImpactAnalyzer(IWorkspaceManager workspaceManager, ILogger<ImpactAnalyzer> logger) =>
+        ActivatorUtilities.CreateInstance<ImpactAnalyzer>(CreateProvider(workspaceManager), workspaceManager, logger);
+
     public static InventoryEngine InventoryEngine(IWorkspaceManager workspaceManager) =>
         ActivatorUtilities.CreateInstance<InventoryEngine>(CreateProvider(workspaceManager), workspaceManager);
 }

@@ -7,6 +7,7 @@
 // one-argument overload), so replaceConstruction will not rewrite them; they exist to collapse helper bodies.
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 using RoslynSentinel.Tools.Advanced;
 
@@ -21,6 +22,9 @@ public static class TestToolsAdvanced
 
     public static GenerationTools GenerationTools(IWorkspaceManager workspaceManager) =>
         ActivatorUtilities.CreateInstance<GenerationTools>(TestEnginesAdvanced.CreateProvider(workspaceManager), workspaceManager);
+
+    public static GenerationTools GenerationTools(IWorkspaceManager workspaceManager, ILogger<GenerationTools> logger) =>
+        ActivatorUtilities.CreateInstance<GenerationTools>(TestEnginesAdvanced.CreateProvider(workspaceManager), workspaceManager, logger);
 
     public static QualityTools QualityTools(IWorkspaceManager workspaceManager) =>
         ActivatorUtilities.CreateInstance<QualityTools>(TestEnginesAdvanced.CreateProvider(workspaceManager));
