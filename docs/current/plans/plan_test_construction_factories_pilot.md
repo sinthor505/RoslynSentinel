@@ -43,7 +43,25 @@ container, so a new constructor parameter is absorbed in one place. Order:
 - Remaining `new` sites of engine/tool classes with no factory (census): WholeFileWriteTools 24, TestRunEngine 23,
   BasicRefactoringEngine 19, MemberRefactoringEngine 17, RefactoringStructuralTools 16, RefactoringStructuralImpl 13,
   MsToolAugmentEngine 12, WorkspaceHealthMiscImpl 5, DiscoveryEngine 5, TestCategoryTaggingTools 5 (199 hits, 38 types in all).
-  Not started: collapsing the `BuildTools` helpers onto `TestTools.WorkspaceTools(wm)`; a before/after test-run-time measurement.
+  Not started: a before/after test-run-time measurement (no baseline taken before slice 1).
+- BuildTools helper collapse DONE 2026-10-27 (d4e548d2, batch 2 commit after it): 11 helpers that wired the 15-argument
+  `WorkspaceTools` from locally created engines now delegate to `TestTools.WorkspaceTools(wm)` (about 20-25 lines to 2-3 each;
+  ApplyDiffSizeGuard, BatteryTwenty, CreateFileDeleteFile, EolInheritance, ListSolutionItemsAll, MutatingToolRejectionMessage,
+  ReplaceSnippetBatch, RunTest, UndoLastApply, ReadFile, GetLargeResult). Left as is: `ReplaceSnippetSizeGuardTests.BuildTools`
+  (optional `writeAdvice` override), the `CreateHarness`/Setup methods that hold engines in fields, the structural/impl builders
+  (7 `RefactoringStructuralTools` builders plus 3 impl builders: no factory yet) and `BuildWholeFileWriteTools`.
+
+## Step 5 interim report (2026-10-27)
+- Migrated ~600 construction sites across 13 types in `Tests.Tools.Basic` plus 11 helper bodies; 7 factored-type sites remain
+  (3 initializer skips, 4 inside a commented-out block). Overloads: 15 engine + 3 tool factories; 6 of the types needed two
+  `replaceConstruction` calls (one per overload), the rest one.
+- Tool skips by reason: only "argument shape does not match factory" (the sibling overload's sites) and the object-initializer skips.
+  No tool defect found; first live exercise of `replaceConstruction` was clean (119 sites in one call).
+- Trial constructor change now: adding a parameter to `ValidationEngine`/`DiffEngine`/etc. touches 0 test sites if the container
+  can resolve it (was 75/66 call-site edits); only `TestEngines.cs` (or none) changes. Not run as a live trial.
+- Open: test-run-time impact of a `ServiceProvider` per factory call (one project run is ~minutes either way; unmeasured);
+  decision whether to add factories for the 10 next classes (census above, ~145 sites) and roll out to `Tests.Advanced` (519 sites),
+  `Tests.Battery.Advanced` (322) and `Tests.Tools.Advanced` (220) is the user's.
 - Step 4 was BLOCKED (see 2026-10-27 note above): `replaceConstruction` could not be called. `McpToolsetControl(moveExtract)` reports the
   toolset enabled, but `SemanticFindReplace` never reaches the calling session's tool list, and two subagents
   (one enabling the toolset itself, one spawned afterwards) saw the same, so a subagent inherits the parent's tool list. Resume in
