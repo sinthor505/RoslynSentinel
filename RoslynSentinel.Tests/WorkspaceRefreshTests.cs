@@ -12,7 +12,7 @@ public class WorkspaceRefreshTests
     [SetUp]
     public void Setup()
     {
-        _manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _manager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]

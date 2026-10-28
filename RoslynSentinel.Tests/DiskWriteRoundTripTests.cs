@@ -293,7 +293,7 @@ public class DiskWriteRoundTripTests
         var fixture = new TestSolutionFixture();
         try
         {
-            var workspaceManager = new PersistentWorkspaceManager(new Microsoft.Extensions.Logging.Abstractions.NullLogger<IWorkspaceManager>());
+            var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(new Microsoft.Extensions.Logging.Abstractions.NullLogger<IWorkspaceManager>());
             workspaceManager.EolModeOverride = EolMode.Lf;
             await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
@@ -333,7 +333,7 @@ public class DiskWriteRoundTripTests
             var filePath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", fileName);
             await File.WriteAllBytesAsync(filePath, initialDiskBytes);
 
-            var workspaceManager = new PersistentWorkspaceManager(new Microsoft.Extensions.Logging.Abstractions.NullLogger<IWorkspaceManager>());
+            var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(new Microsoft.Extensions.Logging.Abstractions.NullLogger<IWorkspaceManager>());
             if (eolMode is { } mode)
             {
                 workspaceManager.EolModeOverride = mode;

@@ -67,6 +67,7 @@
 	<ItemGroup>
 	  <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
 	  <ProjectReference Include="..\RoslynSentinel.Engines.Basic\RoslynSentinel.Engines.Basic.csproj" />
+	  <ProjectReference Include="..\RoslynSentinel.Tests.Support.Basic\RoslynSentinel.Tests.Support.Basic.csproj" />
 	</ItemGroup>
 
 </Project>
