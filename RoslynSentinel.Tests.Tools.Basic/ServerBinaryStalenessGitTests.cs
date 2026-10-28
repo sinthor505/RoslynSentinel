@@ -4,6 +4,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// <see cref="ServerBinaryStaleness.EvaluateGit"/> against throwaway git repos. Takes the sha and directory as
 /// arguments, so it never touches the static LoadedSolutionDirectory / Current cache (safe in parallel).
 /// </summary>
+// Flaky on full/parallel runs: a different test of this fixture sometimes fails with 'git failed to run: ...' (git spawn); passes when the fixture is run alone.
 [TestFixture]
 public class ServerBinaryStalenessGitTests
 {

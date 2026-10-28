@@ -4018,7 +4018,6 @@ namespace MyApp
 
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
-        private QualityTools CreateTools() => Battery.Advanced.TestToolsAdvanced.QualityTools(_workspaceManager);
         [Test]
         public async Task AddGuardClausesAsync_FileNotInWorkspace_ThrowsNotFound()
         {
@@ -4081,7 +4080,6 @@ namespace MyApp
 
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
-        private QualityTools CreateTools() => Battery.Advanced.TestToolsAdvanced.QualityTools(_workspaceManager);
         [Test]
         public async Task AddBenchmarkStubAsync_MissingFile_ThrowsNotFound()
         {
@@ -4141,7 +4139,6 @@ namespace MyApp
 
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
-        private ModernizationTools CreateTools() => Battery.Advanced.TestToolsAdvanced.ModernizationTools(_workspaceManager);
         [Test]
         public async Task AddBracesAsync_FileNotInWorkspace_ThrowsNotFound()
         {
@@ -4193,7 +4190,6 @@ namespace MyApp
 
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
-        private ModernizationTools CreateTools() => Battery.Advanced.TestToolsAdvanced.ModernizationTools(_workspaceManager);
         [Test]
         public async Task MakeClassImmutableAsync_MissingFile_ThrowsNotFound()
         {
@@ -4254,7 +4250,6 @@ namespace MyApp
 
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
-        private BasicRefactoringEngine CreateTools() => Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
         // SyncInterfaceTool moved to AdvancedRefactoringTools in the Basic/Advanced server split.
         private AdvancedRefactoringTools CreateAdvancedTools() => Battery.Advanced.TestToolsAdvanced.AdvancedRefactoringTools(_workspaceManager);
         [Test]
