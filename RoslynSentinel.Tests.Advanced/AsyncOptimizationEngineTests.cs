@@ -13,9 +13,9 @@ internal class AsyncOptimizationEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
-        _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _asyncOptimizationEngine = Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager);
     }
 
     [TearDown]

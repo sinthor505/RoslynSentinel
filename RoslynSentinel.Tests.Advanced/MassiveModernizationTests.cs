@@ -21,22 +21,15 @@ public class MassiveModernizationTests
     [SetUp]
     public void Setup()
     {
-        var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
-        _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, config);
-        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
+        _advancedRefactoringEngine = Battery.Advanced.TestEnginesAdvanced.AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, config);
+        _syntaxUpgradeEngine = Battery.Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, config);
 
-        var modern = new SyntaxModernizationEngine(_workspaceManager, config);
-        _modernizationEngine = modern;
-        var logic = new LogicSimplificationEngine(_workspaceManager);
-        var style = new CodeStyleEngine(_workspaceManager, config);
-        var healing = new CodeHealingEngine(_workspaceManager, config);
-        var advLogic = new LogicSimplificationEngine(_workspaceManager);
-        var ideStyle = new IDEStyleEngine(_workspaceManager);
-        var asyncOpt = new AsyncOptimizationEngine(_workspaceManager);
+        _modernizationEngine = Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, config);
 
-        _modernizationTools = new ModernizationTools(modern, _syntaxUpgradeEngine, logic, style, healing, advLogic, ideStyle, asyncOpt, _workspaceManager, config, NullLogger<ModernizationTools>.Instance);
+        _modernizationTools = Battery.Advanced.TestToolsAdvanced.ModernizationTools(_workspaceManager);
     }
 
     [TearDown]

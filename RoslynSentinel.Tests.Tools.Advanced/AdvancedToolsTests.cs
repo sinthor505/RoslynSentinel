@@ -23,7 +23,7 @@ public class AdvancedToolsTests
         _config = Battery.Basic.TestEngines.SentinelConfiguration();
         _syntaxUpgradeEngine = Battery.Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, _config);
         _asyncOptimizationEngine = Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager);
-        _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, _config);
+        _advancedRefactoringEngine = Battery.Advanced.TestEnginesAdvanced.AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, _config);
     }
 
     [TearDown]

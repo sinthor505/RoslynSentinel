@@ -23,7 +23,7 @@ public class BugHuntTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
@@ -59,7 +59,7 @@ public class BugHuntTests
     [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task BUG1_FindBlockingCallsInAsync_ResultPropertySet_ShouldNotFlag()
     {
-        var engine = new AsyncAnalysisEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
         const string source = """
             class ActionContext { public string Result { get; set; } = ""; }
             class MyFilter
@@ -91,7 +91,7 @@ public class BugHuntTests
     [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task BUG1_FindBlockingCallsInAsync_TaskResultRead_ShouldFlag()
     {
-        var engine = new AsyncAnalysisEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
         const string source = """
             class Worker
             {
@@ -143,7 +143,7 @@ public class BugHuntTests
     [Test]
     public async Task BUG2_AsyncVoidEventHandler_NullableSender_ShouldNotFlag()
     {
-        var engine = new AntiPatternEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         const string source = """
             class MyForm
             {
@@ -173,7 +173,7 @@ public class BugHuntTests
     [Test]
     public async Task BUG2_Control_AsyncVoidEventHandler_NonNullableSender_ShouldNotFlag()
     {
-        var engine = new AntiPatternEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         const string source = """
             class MyForm
             {
@@ -198,7 +198,7 @@ public class BugHuntTests
     [Test]
     public async Task BUG2_Control_AsyncVoidNonEventHandler_ShouldFlag()
     {
-        var engine = new AntiPatternEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         const string source = """
             class MyService
             {
@@ -245,7 +245,7 @@ public class BugHuntTests
     [Test]
     public async Task BUG3_FindMutablePublicProperties_PrivateSetter_ShouldNotFlag()
     {
-        var engine = new AntiPatternEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         const string source = """
             public class UserAccount
             {
@@ -271,7 +271,7 @@ public class BugHuntTests
     [Test]
     public async Task BUG3_Control_FindMutablePublicProperties_PublicSetter_ShouldFlag()
     {
-        var engine = new AntiPatternEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         const string source = """
             public class UserAccount
             {
@@ -295,7 +295,7 @@ public class BugHuntTests
     [Test]
     public async Task BUG3_Control_FindMutablePublicProperties_InitSetter_ShouldNotFlag()
     {
-        var engine = new AntiPatternEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         const string source = """
             public class ImmutableRecord
             {
@@ -335,7 +335,7 @@ public class BugHuntTests
     [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task BUG4_PerformanceEngine_StringConcatBinaryInDoWhile_ShouldFlag()
     {
-        var engine = new PerformanceEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.PerformanceEngine(_workspaceManager);
         const string source = """
             class Builder
             {
@@ -372,7 +372,7 @@ public class BugHuntTests
     [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task BUG4_PerformanceEngine_StringConcatPlusAssignInDoWhile_ShouldFlag()
     {
-        var engine = new PerformanceEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.PerformanceEngine(_workspaceManager);
         const string source = """
             class Builder
             {
@@ -409,7 +409,7 @@ public class BugHuntTests
     [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task BUG4_Control_PerformanceEngine_StringConcatInForeach_ShouldFlag()
     {
-        var engine = new PerformanceEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.PerformanceEngine(_workspaceManager);
         const string source = """
             class Builder
             {
@@ -458,7 +458,7 @@ public class BugHuntTests
     [Test]
     public async Task BUG5_AntiPattern_StringConcatWithAddOperator_ShouldFlag()
     {
-        var engine = new AntiPatternEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         const string source = """
             class Builder
             {
@@ -498,7 +498,7 @@ public class BugHuntTests
     [Test]
     public async Task BUG5_Control_AntiPattern_PlusAssignInLoop_ShouldFlag()
     {
-        var engine = new AntiPatternEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         const string source = """
             class Builder
             {
@@ -529,7 +529,7 @@ public class BugHuntTests
     [Test]
     public async Task BUG5_Control_AntiPattern_PlusAssignInWhile_ShouldFlag()
     {
-        var engine = new AntiPatternEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         const string source = """
             class Builder
             {
@@ -571,7 +571,7 @@ public class BugHuntTests
     [Test]
     public async Task BonusBug_FindMutablePublicProperties_RecordWithPublicSetter_ShouldFlag()
     {
-        var engine = new AntiPatternEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         const string source = """
             public record class MutableOrder
             {

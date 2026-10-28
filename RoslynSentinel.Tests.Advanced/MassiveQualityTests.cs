@@ -15,9 +15,9 @@ public class MassiveQualityTests
     [SetUp]
     public void Setup()
     {
-        var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _securityEngine = new SecurityEngine(_workspaceManager);
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _securityEngine = Battery.Advanced.TestEnginesAdvanced.SecurityEngine(_workspaceManager);
     }
 
     [TearDown]

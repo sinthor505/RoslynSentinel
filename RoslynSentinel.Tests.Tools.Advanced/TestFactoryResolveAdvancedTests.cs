@@ -133,6 +133,16 @@ public class TestFactoryResolveAdvancedTests
     }
 
     [Test]
+    public void AdvancedRefactoringEngine_ManagerLoggerAndConfig()
+    {
+        var logger = NullLogger<AdvancedRefactoringEngine>.Instance;
+        var config = Basic.TestEngines.SentinelConfiguration();
+        var engine = TestEnginesAdvanced.AdvancedRefactoringEngine(_wm, logger, config);
+        AssertManagerAndConfig(engine, config);
+        Assert.That(Holds(engine, logger), Is.True, "the explicit logger must be the one the engine holds");
+    }
+
+    [Test]
     public void HealthOrchestrationEngine_FiveArgumentsExplicit()
     {
         var config = Basic.TestEngines.SentinelConfiguration();

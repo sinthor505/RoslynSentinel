@@ -17,7 +17,7 @@ public class SeededEngineFindingTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
@@ -40,7 +40,7 @@ public class SeededEngineFindingTests
                 public int Len(string text) { return text.Length; }
             }
             """);
-        var engine = new SecurityAndSafetyEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.SecurityAndSafetyEngine(_workspaceManager);
 
         var issues = await engine.DetectMissingNullChecksAsync("Test.cs");
 
@@ -65,7 +65,7 @@ public class SeededEngineFindingTests
             }
             """);
 
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration())
+        var result = await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration())
             .MakeClassImmutableAsync("Test.cs", "Holder");
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
@@ -94,7 +94,7 @@ public class SeededEngineFindingTests
                 }
             }
             """);
-        var engine = new PerformanceEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.PerformanceEngine(_workspaceManager);
 
         var issues = await engine.AnalyzePerformanceAsync("Test.cs");
 
@@ -121,7 +121,7 @@ public class SeededEngineFindingTests
                 private string password = "hunter2secret";
             }
             """);
-        var engine = new SecurityEngine(_workspaceManager);
+        var engine = Battery.Advanced.TestEnginesAdvanced.SecurityEngine(_workspaceManager);
 
         var issues = await engine.AnalyzeSecurityAsync("Test.cs");
 
@@ -145,7 +145,7 @@ public class SeededEngineFindingTests
                 public void C() { }
             }
             """);
-        var engine = new AntiPatternEngine(_workspaceManager, new SentinelConfiguration());
+        var engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
 
         var result = await engine.GenerateCallTreeAsync("Test.cs", "Chain.A");
 

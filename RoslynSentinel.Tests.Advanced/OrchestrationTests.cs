@@ -20,9 +20,9 @@ public class OrchestrationTests
     public void Setup()
     {
         _workspaceManager = FakeWorkspaceManager.ReadOnly();
-        var config = new SentinelConfiguration();
-        _structureEngine = new SolutionStructureEngine(_workspaceManager, config);
-        _healthEngine = new HealthOrchestrationEngine(_workspaceManager, _structureEngine, config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, config));
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _structureEngine = Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, config);
+        _healthEngine = Battery.Advanced.TestEnginesAdvanced.HealthOrchestrationEngine(_workspaceManager, _structureEngine, config, Battery.Advanced.TestEnginesAdvanced.PerformanceEngine(_workspaceManager), Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, config));
     }
 
     [TearDown]

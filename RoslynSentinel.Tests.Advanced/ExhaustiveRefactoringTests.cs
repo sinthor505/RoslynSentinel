@@ -18,10 +18,10 @@ public class ExhaustiveRefactoringTests
     [SetUp]
     public void Setup()
     {
-        var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
-        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
-        _codeStyleEngine = new CodeStyleEngine(_workspaceManager, config);
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
+        _syntaxUpgradeEngine = Battery.Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, config);
+        _codeStyleEngine = Battery.Advanced.TestEnginesAdvanced.CodeStyleEngine(_workspaceManager, config);
     }
 
     [TearDown]
@@ -89,14 +89,14 @@ public class C {
     [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ClassToRecord_ShouldHandleAttributesAndMethods()
     {
-        var config = new SentinelConfiguration();
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
         SetSource(@"
 public class MyPoco {
     [Required]
     public string Name { get; set; }
     public void DoWork() {}
 }");
-        var modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, config);
+        var modernizationEngine = Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, config);
         var result = await modernizationEngine.ClassToRecordAsync("Test.cs", "MyPoco");
         // Bug 2 fix: properties with [Required] cannot use positional syntax (would drop attributes),
         // so class-body record with init accessors is generated instead.

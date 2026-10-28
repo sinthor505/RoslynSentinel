@@ -15,9 +15,9 @@ internal class AsyncSafetyEngineTests
     [SetUp]
     public void Setup()
     {
-        var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _asyncSafetyEngine = Battery.Advanced.TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]

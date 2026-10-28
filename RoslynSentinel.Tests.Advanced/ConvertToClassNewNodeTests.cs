@@ -26,8 +26,8 @@ public class ConvertToClassNewNodeTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new StructuralRefactoringEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager);
     }
 
     [TearDown]

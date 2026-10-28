@@ -34,18 +34,18 @@ public class BugFixTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
-        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
-        _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
-        _mappingEngine = new MappingEngine(_workspaceManager);
-        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
-        _controlFlowEngine = new ControlFlowEngine(_workspaceManager);
-        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, _config);
-        _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
-        _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
-        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
+        _codeGenerationEngine = Battery.Advanced.TestEnginesAdvanced.CodeGenerationEngine(_workspaceManager);
+        _mappingEngine = Battery.Advanced.TestEnginesAdvanced.MappingEngine(_workspaceManager);
+        _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _discoveryEngine = Battery.Basic.TestEngines.DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
+        _controlFlowEngine = Battery.Advanced.TestEnginesAdvanced.ControlFlowEngine(_workspaceManager);
+        _antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, _config);
+        _codeStyleEngine = Battery.Advanced.TestEnginesAdvanced.CodeStyleEngine(_workspaceManager, _config);
+        _logicOptimizationEngine = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+        _structuralRefinementEngine = Battery.Basic.TestEngines.StructuralRefinementEngine(_workspaceManager, _config);
     }
 
     [TearDown]
@@ -824,13 +824,13 @@ public class Service
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            var config = new SentinelConfiguration();
-            _antiPatternEngine = new AntiPatternEngine(_workspaceManager, config);
-            _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
-            _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
-            _testingEngine = new TestingEngine(_workspaceManager);
-            _securityEngine = new SecurityEngine(_workspaceManager);
+            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            var config = Battery.Basic.TestEngines.SentinelConfiguration();
+            _antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, config);
+            _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
+            _codeGenerationEngine = Battery.Advanced.TestEnginesAdvanced.CodeGenerationEngine(_workspaceManager);
+            _testingEngine = Battery.Advanced.TestEnginesAdvanced.TestingEngine(_workspaceManager);
+            _securityEngine = Battery.Advanced.TestEnginesAdvanced.SecurityEngine(_workspaceManager);
         }
 
         [TearDown]
@@ -1097,9 +1097,9 @@ public class Product
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            var config = new SentinelConfiguration();
-            _antiPatternEngine = new AntiPatternEngine(_workspaceManager, config);
+            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            var config = Battery.Basic.TestEngines.SentinelConfiguration();
+            _antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, config);
         }
 
         [TearDown]
@@ -1221,13 +1221,13 @@ public class MyTests
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _config = new SentinelConfiguration();
-            _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
-            _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
-            _antiPatternEngine = new AntiPatternEngine(_workspaceManager, _config);
-            _diEngine = new DependencyInjectionEngine(_workspaceManager);
-            _navigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _config = Battery.Basic.TestEngines.SentinelConfiguration();
+            _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
+            _syntaxUpgradeEngine = Battery.Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, _config);
+            _antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, _config);
+            _diEngine = Battery.Advanced.TestEnginesAdvanced.DependencyInjectionEngine(_workspaceManager);
+            _navigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         }
 
         [TearDown]
@@ -1973,9 +1973,9 @@ public class Foo : IFoo
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _mappingEngine = new MappingEngine(_workspaceManager);
-            _asyncEngine = new AsyncOptimizationEngine(_workspaceManager);
+            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _mappingEngine = Battery.Advanced.TestEnginesAdvanced.MappingEngine(_workspaceManager);
+            _asyncEngine = Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager);
         }
 
         [TearDown]
@@ -2002,7 +2002,7 @@ public class Foo : IFoo
 }";
             SetSource(src, "OrderService.cs");
             // The context snippet matches the RHS of an existing var declaration
-            var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceVariableAsync("OrderService.cs", contextSnippet: "await _repo.CreateOrderAsync()", newVariableName: "orderId");
+            var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).IntroduceVariableAsync("OrderService.cs", contextSnippet: "await _repo.CreateOrderAsync()", newVariableName: "orderId");
             // Should NOT produce duplicate var orderId = orderId;
             Assert.That(result.UpdatedText, Does.Not.Contain("var orderId = orderId"), "Must not produce a duplicate 'var orderId = orderId' declaration");
             // Should return no-op indicator
@@ -2021,7 +2021,7 @@ public class Foo : IFoo
     }
 }";
             SetSource(src, "Calculator.cs");
-            var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceVariableAsync("Calculator.cs", contextSnippet: "a + b", newVariableName: "sum");
+            var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).IntroduceVariableAsync("Calculator.cs", contextSnippet: "a + b", newVariableName: "sum");
             Assert.That(result.UpdatedText, Does.Contain("var sum = a + b"), "Should extract sub-expression to new var");
             Assert.That(result.UpdatedText, Does.Contain("sum * c"), "Original expression should be replaced with the new variable reference");
         }
@@ -2151,7 +2151,7 @@ public class TargetDto
     public string Email { get; set; }
 }";
             SetSource(code, "User.cs");
-            var result = await new ApiGenerationEngine(_workspaceManager).AddValidationToPocoAsync("User.cs", "User");
+            var result = await Battery.Advanced.TestEnginesAdvanced.ApiGenerationEngine(_workspaceManager).AddValidationToPocoAsync("User.cs", "User");
             Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
             // Should have using
             Assert.That(result.UpdatedText, Does.Contain("using System.ComponentModel.DataAnnotations"), "Should add using directive");
@@ -2172,7 +2172,7 @@ public class TargetDto
     public string SKU { get; set; }
 }";
             SetSource(code, "Product.cs");
-            var result = await new ApiGenerationEngine(_workspaceManager).AddValidationToPocoAsync("Product.cs", "Product");
+            var result = await Battery.Advanced.TestEnginesAdvanced.ApiGenerationEngine(_workspaceManager).AddValidationToPocoAsync("Product.cs", "Product");
             // String property should get [Required] and [StringLength]
             Assert.That(result.UpdatedText, Does.Contain("[Required]"), "String property should have [Required]");
             Assert.That(result.UpdatedText, Does.Contain("[StringLength(256)"), "String property should have [StringLength(256)]");
@@ -2187,7 +2187,7 @@ public class TargetDto
     public int Quantity { get; set; }
 }";
             SetSource(code, "Widget.cs");
-            var result = await new ApiGenerationEngine(_workspaceManager).AddValidationToPocoAsync("Widget.cs", "Widget");
+            var result = await Battery.Advanced.TestEnginesAdvanced.ApiGenerationEngine(_workspaceManager).AddValidationToPocoAsync("Widget.cs", "Widget");
             // Int property should get [Range]
             Assert.That(result.UpdatedText, Does.Contain("[Range(0, 2147483647)"), "Int property should have [Range(0, int.MaxValue)]");
         }
@@ -2207,7 +2207,7 @@ public class TargetDto
     }
 }";
             SetSource(code, "Service.cs");
-            var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolTargetIneligibleException>(async () => await new StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("Service.cs", "_config"));
+            var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolTargetIneligibleException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("Service.cs", "_config"));
             Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.TargetIneligible));
             Assert.That(ex.Message, Does.Contain("without initializer"), "Should explain the field has no initializer to inline");
         }
@@ -2226,7 +2226,7 @@ public class TargetDto
     }
 }";
             SetSource(code, "Service.cs");
-            var result = await new StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("Service.cs", "_config");
+            var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("Service.cs", "_config");
             // Should successfully inline (replace field reference with its value)
             Assert.That(result.UpdatedText, Does.Not.Contain("ERROR"), "Should not error when field has initializer");
             Assert.That(result.UpdatedText, Does.Not.Contain("private string _config"), "Should remove field declaration after inlining");
@@ -2239,7 +2239,7 @@ public class TargetDto
         {
             const string code = @"public class Service { }";
             SetSource(code, "Service.cs");
-            var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("Service.cs", "NonExistentField"));
+            var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("Service.cs", "NonExistentField"));
             Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.NotFound));
             Assert.That(ex.Message, Does.Contain("Field 'NonExistentField' not found"), "Should name the missing field");
         }
@@ -2258,13 +2258,13 @@ public class TargetDto
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            var config = new SentinelConfiguration();
-            _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
-            _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
-            _performanceEngine = new PerformanceEngine(_workspaceManager);
-            _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
-            _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, config);
+            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            var config = Battery.Basic.TestEngines.SentinelConfiguration();
+            _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
+            _codeGenerationEngine = Battery.Advanced.TestEnginesAdvanced.CodeGenerationEngine(_workspaceManager);
+            _performanceEngine = Battery.Advanced.TestEnginesAdvanced.PerformanceEngine(_workspaceManager);
+            _syntaxUpgradeEngine = Battery.Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, config);
+            _advancedRefactoringEngine = Battery.Advanced.TestEnginesAdvanced.AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, config);
         }
 
         [TearDown]
@@ -2326,7 +2326,7 @@ public class OtherClass
     public string Name { get; set; }
 }";
             SetSource(src, "MyClass.cs");
-            var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "NonExistentMethod", "ToExpressionBody"));
+            var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "NonExistentMethod", "ToExpressionBody"));
             Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.NotFound));
             Assert.That(ex.Message, Does.Contain("Member 'NonExistentMethod' not found"), "Should name the missing member");
         }
@@ -2344,7 +2344,7 @@ public class OtherClass
     }
 }";
             SetSource(src, "MyClass.cs");
-            var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolTargetIneligibleException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody"));
+            var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolTargetIneligibleException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody"));
             Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.TargetIneligible));
             Assert.That(ex.Message, Does.Contain("only single-return methods can be converted"), "Should explain that the method has multiple statements");
         }
@@ -2361,7 +2361,7 @@ public class OtherClass
     }
 }";
             SetSource(src, "MyClass.cs");
-            var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolTargetIneligibleException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToBlockBody"));
+            var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolTargetIneligibleException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToBlockBody"));
             Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.TargetIneligible));
             Assert.That(ex.Message, Does.Contain("has no expression body"), "Should explain the member is already a block body");
         }
@@ -2386,7 +2386,7 @@ public class OtherClass
     }
 }";
             SetSource(src, "MyClass.cs");
-            var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody", contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
+            var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody", contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
             Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), "An unambiguous member should resolve by name alone; a mismatched contextSnippet should not block it.");
             Assert.That(result.UpdatedText, Does.Contain("=>"), "Method should have been converted to an expression body.");
         }
@@ -2402,7 +2402,7 @@ public class OtherClass
     }
 }";
             SetSource(src, "MyClass.cs");
-            var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody", contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
+            var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody", contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
             Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
             Assert.That(result.Warnings, Is.Not.Null);
             Assert.That(result.Warnings!, Has.Count.EqualTo(1));
@@ -2420,7 +2420,7 @@ public class OtherClass
     }
 }";
             SetSource(src, "MyClass.cs");
-            var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody", contextSnippet: "return \"hello\";");
+            var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody", contextSnippet: "return \"hello\";");
             Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
             Assert.That(result.Warnings, Is.Null);
         }
@@ -2441,7 +2441,7 @@ public class OtherClass
     }
 }";
             SetSource(src, "MyClass.cs");
-            var engine = new StructuralRefactoringEngine(_workspaceManager);
+            var engine = Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager);
 
             var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
                 await engine.ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody", contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE"));
@@ -2466,13 +2466,13 @@ public class OtherClass
             [SetUp]
             public void Setup()
             {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                _config = new SentinelConfiguration();
-                _solutionStructureEngine = new SolutionStructureEngine(_workspaceManager, _config);
-                _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
-                _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
-                _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
-                _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
+                _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                _config = Battery.Basic.TestEngines.SentinelConfiguration();
+                _solutionStructureEngine = Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, _config);
+                _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
+                _advancedStructuralEngine = Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager);
+                _codeGenerationEngine = Battery.Advanced.TestEnginesAdvanced.CodeGenerationEngine(_workspaceManager);
+                _structuralRefinementEngine = Battery.Basic.TestEngines.StructuralRefinementEngine(_workspaceManager, _config);
             }
 
             [TearDown]
@@ -2631,8 +2631,8 @@ public class MyService
                 [SetUp]
                 public void Setup()
                 {
-                    _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                    _codeFlowEngine = new LogicSimplificationEngine(_workspaceManager);
+                    _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                    _codeFlowEngine = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
                 }
 
                 [TearDown]
@@ -2667,7 +2667,7 @@ public class Processor
                         Assert.Fail("Document not found");
                     }
 
-                    var result = await new LogicSimplificationEngine(_workspaceManager).ReduceBlockDepthAsync(document!.FilePath!, "Process");
+                    var result = await Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ReduceBlockDepthAsync(document!.FilePath!, "Process");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
                     Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), "Should reduce the nested if to an early return");
                     Assert.That(result.UpdatedText, Does.Contain("if (input.Length > 5)"), "Should keep the nested condition in the reduced method");
@@ -2686,8 +2686,8 @@ public class Processor
                 [SetUp]
                 public void Setup()
                 {
-                    _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                    _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
+                    _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                    _threadSafetyEngine = Battery.Basic.TestEngines.ThreadSafetyEngine(_workspaceManager);
                 }
 
                 [TearDown]
@@ -2738,8 +2738,8 @@ public class Counter
                 [SetUp]
                 public void Setup()
                 {
-                    _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                    _asyncOptEngine = new AsyncOptimizationEngine(_workspaceManager);
+                    _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                    _asyncOptEngine = Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager);
                 }
 
                 [TearDown]
@@ -2793,7 +2793,7 @@ public class ItemProvider
                 [SetUp]
                 public void Setup()
                 {
-                    _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                    _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
                 }
 
                 [TearDown]
@@ -2819,7 +2819,7 @@ public class MathUtil
                         Assert.Fail("Document not found");
                     }
 
-                    var result = await new StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync(document!.FilePath!, "Double");
+                    var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync(document!.FilePath!, "Double");
                     Assert.That(result, Has.Count.EqualTo(1), "Only the defining file should be updated when there are no call sites");
                     Assert.That(result.Values.Single(), Does.Contain("public class MathUtil"), "Defining class should remain after inlining");
                     Assert.That(result.Values.Single(), Does.Not.Contain("Double("), "Method declaration should be removed");
@@ -2845,7 +2845,7 @@ public class Math
                         Assert.Fail("Document not found");
                     }
 
-                    await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync(document!.FilePath!, "Add"), "Multi-statement method should fail gracefully via a typed exception, not crash");
+                    await Assert.ThrowsAsync<ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync(document!.FilePath!, "Add"), "Multi-statement method should fail gracefully via a typed exception, not crash");
                 }
             }
 
@@ -2860,7 +2860,7 @@ public class Math
                 [SetUp]
                 public void Setup()
                 {
-                    _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                    _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
                 }
 
                 [TearDown]
@@ -2889,7 +2889,7 @@ public class Calculator
                         Assert.Fail("Document not found");
                     }
 
-                    var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync(document!.FilePath!, "x * 2", "multiplier");
+                    var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync(document!.FilePath!, "x * 2", "multiplier");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
                     Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), "Should add the multiplier parameter");
                     Assert.That(result.UpdatedText, Does.Contain("int multiplier"), "Should declare the multiplier parameter");
@@ -2917,7 +2917,7 @@ public class Processor
                     }
 
                     var documentPath = document!.FilePath!;
-                    var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync(documentPath, "input", "text"));
+                    var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync(documentPath, "input", "text"));
                     Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.NotFound));
                     Assert.That(ex.Message, Does.Contain("ambiguous"), "The snippet matches two places, so the engine should ask for a disambiguating line");
                 }
@@ -2939,10 +2939,10 @@ public class Processor
             [SetUp]
             public void Setup()
             {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                _config = new SentinelConfiguration();
-                _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
-                _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
+                _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                _config = Battery.Basic.TestEngines.SentinelConfiguration();
+                _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
+                _codeGenerationEngine = Battery.Advanced.TestEnginesAdvanced.CodeGenerationEngine(_workspaceManager);
             }
 
             [TearDown]
@@ -3137,13 +3137,13 @@ public class Processor
             [SetUp]
             public void Setup()
             {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                var config = new SentinelConfiguration();
-                _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-                _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
-                _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
-                _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
-                _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
+                _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                var config = Battery.Basic.TestEngines.SentinelConfiguration();
+                _asyncOptimizationEngine = Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager);
+                _advancedLogicEngine = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+                _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
+                _threadSafetyEngine = Battery.Basic.TestEngines.ThreadSafetyEngine(_workspaceManager);
+                _advancedStructuralEngine = Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager);
             }
 
             [TearDown]
@@ -3200,7 +3200,7 @@ public class StringExtensions
     }
 }";
                 SetSource(code, "StringExtensions.cs");
-                var result = await new LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("StringExtensions.cs", "IsValidEmail");
+                var result = await Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("StringExtensions.cs", "IsValidEmail");
                 Assert.That(result, Is.Not.Null, "Should return a result");
                 Assert.That(result.UpdatedText, Does.Contain("static class StringExtensions"), "Extension class must be declared static");
                 Assert.That(result.UpdatedText, Does.Contain("this string input"), "Method should be converted to extension (this parameter)");
@@ -3345,11 +3345,11 @@ public class Processor
             [SetUp]
             public void Setup()
             {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                _config = new SentinelConfiguration();
-                _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
-                _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
-                _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
+                _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                _config = Battery.Basic.TestEngines.SentinelConfiguration();
+                _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
+                _advancedStructuralEngine = Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager);
+                _structuralRefinementEngine = Battery.Basic.TestEngines.StructuralRefinementEngine(_workspaceManager, _config);
             }
 
             [TearDown]
@@ -3850,8 +3850,8 @@ public class User
             [SetUp]
             public void Setup()
             {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+                _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
             }
 
             [TearDown]
@@ -3932,8 +3932,8 @@ public class Svc
             [SetUp]
             public void Setup()
             {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
+                _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                _codeGenerationEngine = Battery.Advanced.TestEnginesAdvanced.CodeGenerationEngine(_workspaceManager);
             }
 
             [TearDown]
@@ -4008,9 +4008,9 @@ namespace MyApp
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _engine = new LogicSimplificationEngine(_workspaceManager);
-            _config = new SentinelConfiguration();
+            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _engine = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+            _config = Battery.Basic.TestEngines.SentinelConfiguration();
             // Load a minimal solution so engines can reach their "file not found" branch
             var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Stub.cs", "public class Stub { }")]);
             _workspaceManager.SetTestSolution(solution);
@@ -4018,7 +4018,7 @@ namespace MyApp
 
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
-        private QualityTools CreateTools() => new QualityTools(new TestingEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), new ThreadSafetyEngine(_workspaceManager), new DiagnosticEngine(_workspaceManager), new CodeStyleAnalysisEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), _workspaceManager, NullLogger<QualityTools>.Instance);
+        private QualityTools CreateTools() => Battery.Advanced.TestToolsAdvanced.QualityTools(_workspaceManager);
         [Test]
         public async Task AddGuardClausesAsync_FileNotInWorkspace_ThrowsNotFound()
         {
@@ -4072,16 +4072,16 @@ namespace MyApp
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _engine = new TestingEngine(_workspaceManager);
-            _config = new SentinelConfiguration();
+            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _engine = Battery.Advanced.TestEnginesAdvanced.TestingEngine(_workspaceManager);
+            _config = Battery.Basic.TestEngines.SentinelConfiguration();
             var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calc.cs", "public class Calc { public int Add(int a, int b) => a + b; }")]);
             _workspaceManager.SetTestSolution(solution);
         }
 
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
-        private QualityTools CreateTools() => new QualityTools(_engine, new ControlFlowEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), new ThreadSafetyEngine(_workspaceManager), new DiagnosticEngine(_workspaceManager), new CodeStyleAnalysisEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), _workspaceManager, NullLogger<QualityTools>.Instance);
+        private QualityTools CreateTools() => Battery.Advanced.TestToolsAdvanced.QualityTools(_workspaceManager);
         [Test]
         public async Task AddBenchmarkStubAsync_MissingFile_ThrowsNotFound()
         {
@@ -4132,16 +4132,16 @@ namespace MyApp
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _config = new SentinelConfiguration();
-            _engine = new SyntaxUpgradeEngine(_workspaceManager, _config);
+            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _config = Battery.Basic.TestEngines.SentinelConfiguration();
+            _engine = Battery.Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, _config);
             var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Stub.cs", "public class Stub { public void Foo() { } }")]);
             _workspaceManager.SetTestSolution(solution);
         }
 
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
-        private ModernizationTools CreateTools() => new ModernizationTools(new SyntaxModernizationEngine(_workspaceManager, _config), _engine, new LogicSimplificationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new LogicSimplificationEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+        private ModernizationTools CreateTools() => Battery.Advanced.TestToolsAdvanced.ModernizationTools(_workspaceManager);
         [Test]
         public async Task AddBracesAsync_FileNotInWorkspace_ThrowsNotFound()
         {
@@ -4185,26 +4185,26 @@ namespace MyApp
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _config = new SentinelConfiguration();
+            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _config = Battery.Basic.TestEngines.SentinelConfiguration();
             var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Foo.cs", "public class Foo { public string Name { get; set; } }")]);
             _workspaceManager.SetTestSolution(solution);
         }
 
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
-        private ModernizationTools CreateTools() => new ModernizationTools(new SyntaxModernizationEngine(_workspaceManager, _config), new SyntaxUpgradeEngine(_workspaceManager, _config), new LogicSimplificationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new LogicSimplificationEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+        private ModernizationTools CreateTools() => Battery.Advanced.TestToolsAdvanced.ModernizationTools(_workspaceManager);
         [Test]
         public async Task MakeClassImmutableAsync_MissingFile_ThrowsNotFound()
         {
-            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("nonexistent.cs", "MyClass"));
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("nonexistent.cs", "MyClass"));
             Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
         [Test]
         public async Task MakeClassImmutable_Tool_MissingFile_ThrowsNotFound()
         {
-            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("nonexistent.cs", "MyClass"));
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("nonexistent.cs", "MyClass"));
             Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
@@ -4213,7 +4213,7 @@ namespace MyApp
         {
             // A missing class in an existing file is a typed NotFound failure, not a no-op result.
             var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
-                await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("Foo.cs", "NonExistentClass"));
+                await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("Foo.cs", "NonExistentClass"));
             Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
             Assert.That(ex.Message, Does.Contain("Class not found."));
         }
@@ -4223,7 +4223,7 @@ namespace MyApp
         {
             // The engine throws a typed NotFound (not a no-op result) when the class is absent.
             var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
-                await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("Foo.cs", "NonExistentClass"));
+                await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("Foo.cs", "NonExistentClass"));
             Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
             Assert.That(ex.Message, Does.Contain("Class not found."));
         }
@@ -4244,9 +4244,9 @@ namespace MyApp
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _config = new SentinelConfiguration();
-            _engine = new AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, _config);
+            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _config = Battery.Basic.TestEngines.SentinelConfiguration();
+            _engine = Battery.Advanced.TestEnginesAdvanced.AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, _config);
             // Load a minimal solution so the engine reaches the "file/class not found" return path
             var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Stub.cs", "public interface IFoo { } public class Foo : IFoo { }")]);
             _workspaceManager.SetTestSolution(solution);
@@ -4254,9 +4254,9 @@ namespace MyApp
 
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
-        private BasicRefactoringEngine CreateTools() => new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
+        private BasicRefactoringEngine CreateTools() => Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
         // SyncInterfaceTool moved to AdvancedRefactoringTools in the Basic/Advanced server split.
-        private AdvancedRefactoringTools CreateAdvancedTools() => new AdvancedRefactoringTools(_workspaceManager);
+        private AdvancedRefactoringTools CreateAdvancedTools() => Battery.Advanced.TestToolsAdvanced.AdvancedRefactoringTools(_workspaceManager);
         [Test]
         [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
         public async Task SyncInterfaceToImplementationAsync_MissingFile_ThrowsNotFound()
@@ -4282,7 +4282,7 @@ namespace MyApp
         public async Task ConvertExpressionBodyAsync_FileNotInWorkspace_ThrowsNotFound()
         {
             // Pins the typed throw (RequireDocument), not an empty result.
-            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody"));
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody"));
             Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
@@ -4290,7 +4290,7 @@ namespace MyApp
         public async Task ConvertExpressionBody_Tool_FileNotInWorkspace_ThrowsNotFound()
         {
             // Pins the typed throw (RequireDocument), not an empty result.
-            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody"));
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody"));
             Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
     }

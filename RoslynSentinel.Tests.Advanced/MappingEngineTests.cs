@@ -17,8 +17,8 @@ public class MappingEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new MappingEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.MappingEngine(_workspaceManager);
     }
 
     [TearDown]

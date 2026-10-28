@@ -18,8 +18,8 @@ public class MassiveStructuralTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _structureEngine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _structureEngine = Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]

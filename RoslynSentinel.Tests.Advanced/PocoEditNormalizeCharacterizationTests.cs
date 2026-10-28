@@ -24,7 +24,7 @@ public class PocoEditNormalizeCharacterizationTests
     private PersistentWorkspaceManager _workspaceManager;
 
     [SetUp]
-    public void Setup() => _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+    public void Setup() => _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
@@ -116,7 +116,7 @@ public class PocoEditNormalizeCharacterizationTests
             UntouchedLine,
             "}"));
 
-        var result = await new DocumentationEngine(_workspaceManager).GenerateXmlDocumentationStubsAsync("Test.cs");
+        var result = await Battery.Advanced.TestEnginesAdvanced.DocumentationEngine(_workspaceManager).GenerateXmlDocumentationStubsAsync("Test.cs");
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         AssertPinned(result.UpdatedText, Build(eol,
@@ -156,7 +156,7 @@ public class PocoEditNormalizeCharacterizationTests
         // The space after "{" is that brace's own trailing trivia, which the per-method rewrite does not touch.
         SetSource("namespace Demo;\r\n\r\n    public class Svc { public void Run() { } }\r\n");
 
-        var result = await new DocumentationEngine(_workspaceManager).GenerateXmlDocumentationStubsAsync("Test.cs");
+        var result = await Battery.Advanced.TestEnginesAdvanced.DocumentationEngine(_workspaceManager).GenerateXmlDocumentationStubsAsync("Test.cs");
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         AssertPinned(result.UpdatedText,
@@ -176,7 +176,7 @@ public class PocoEditNormalizeCharacterizationTests
 
         SetSource(Build(eol, PersonInput()));
 
-        var result = await new DocumentationEngine(_workspaceManager).DocumentPocoFieldsAsync("Test.cs", "Person");
+        var result = await Battery.Advanced.TestEnginesAdvanced.DocumentationEngine(_workspaceManager).DocumentPocoFieldsAsync("Test.cs", "Person");
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         AssertPinned(result.UpdatedText, Build(eol,
@@ -214,7 +214,7 @@ public class PocoEditNormalizeCharacterizationTests
 
         SetSource(Build(eol, PersonInput()));
 
-        var result = await new ApiGenerationEngine(_workspaceManager).AddValidationToPocoAsync("Test.cs", "Person");
+        var result = await Battery.Advanced.TestEnginesAdvanced.ApiGenerationEngine(_workspaceManager).AddValidationToPocoAsync("Test.cs", "Person");
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         AssertPinned(result.UpdatedText, Build(eol,
@@ -244,7 +244,7 @@ public class PocoEditNormalizeCharacterizationTests
     public async Task DocumentPocoFields_MissingFile_ThrowsNotFound()
     {
         SetSource("public class C { }");
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new DocumentationEngine(_workspaceManager).DocumentPocoFieldsAsync("Missing.cs", "Person"));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.DocumentationEngine(_workspaceManager).DocumentPocoFieldsAsync("Missing.cs", "Person"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 }

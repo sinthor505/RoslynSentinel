@@ -21,8 +21,8 @@ public class CodeGenerationTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _codeGenerationEngine = Battery.Advanced.TestEnginesAdvanced.CodeGenerationEngine(_workspaceManager);
     }
 
     [TearDown]

@@ -24,13 +24,13 @@ public class AmbiguousNameTargetTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
-        _asyncOptimization = new AsyncOptimizationEngine(_workspaceManager);
-        _codeGeneration = new CodeGenerationEngine(_workspaceManager);
-        _codeStyle = new CodeStyleEngine(_workspaceManager, _config);
-        _deadCode = new DeadCodeEngine(_workspaceManager);
-        _dependencyInjection = new DependencyInjectionEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _asyncOptimization = Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager);
+        _codeGeneration = Battery.Advanced.TestEnginesAdvanced.CodeGenerationEngine(_workspaceManager);
+        _codeStyle = Battery.Advanced.TestEnginesAdvanced.CodeStyleEngine(_workspaceManager, _config);
+        _deadCode = Battery.Advanced.TestEnginesAdvanced.DeadCodeEngine(_workspaceManager);
+        _dependencyInjection = Battery.Advanced.TestEnginesAdvanced.DependencyInjectionEngine(_workspaceManager);
         _cloneDetection = new CloneDetectionEngine(_workspaceManager);
     }
 

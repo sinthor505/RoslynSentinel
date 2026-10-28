@@ -21,10 +21,10 @@ public class NewFeaturesTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _cloneEngine = new CloneDetectionEngine(_workspaceManager);
         _outParamEngine = new OutParamRefactoringEngine(_workspaceManager);
-        _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
+        _antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]

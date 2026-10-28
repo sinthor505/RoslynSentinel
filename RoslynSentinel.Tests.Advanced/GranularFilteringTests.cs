@@ -19,9 +19,9 @@ public class GranularFilteringTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _solutionStructureEngine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
-        _metricsEngine = new MetricsEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _solutionStructureEngine = Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
+        _metricsEngine = Battery.Advanced.TestEnginesAdvanced.MetricsEngine(_workspaceManager);
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject("ProjectA", new[] {
             ("File1.cs", "namespace App; public class C1 {} public class C2 {}"),

@@ -23,11 +23,11 @@ public class FinalRegressionTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
-        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
-        _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
+        _asyncOptimizationEngine = Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager);
+        _structuralRefinementEngine = Battery.Basic.TestEngines.StructuralRefinementEngine(_workspaceManager, _config);
     }
 
     [TearDown]
@@ -80,7 +80,7 @@ public class FinalRegressionTests
         SetSource(code);
         var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
-        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync(filePath, "Process");
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync(filePath, "Process");
         Assert.That(result, Is.Not.Null);
         // Should create parameter object and possibly warn about interface
         Assert.That(result.UpdatedText, Does.Contain("ProcessParameters") | Does.Contain("WARNING"), "Should introduce parameter object or warn about interface");
@@ -103,7 +103,7 @@ public class FinalRegressionTests
         SetSource(code);
         var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
-        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync(filePath, "Process");
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync(filePath, "Process");
         var classStart = result.UpdatedText.IndexOf("class Processor", StringComparison.Ordinal);
         Assert.That(classStart, Is.GreaterThanOrEqualTo(0), "Class Processor should still be present");
         Assert.That(result.UpdatedText.Substring(classStart), Does.Contain("Process(ProcessParameters request"), "Class implementation should take the parameter object");

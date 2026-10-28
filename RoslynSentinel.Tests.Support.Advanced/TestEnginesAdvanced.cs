@@ -79,6 +79,9 @@ public static class TestEnginesAdvanced
     public static AdvancedRefactoringEngine AdvancedRefactoringEngine(IWorkspaceManager workspaceManager) =>
         ActivatorUtilities.CreateInstance<AdvancedRefactoringEngine>(CreateProvider(workspaceManager), workspaceManager);
 
+    public static AdvancedRefactoringEngine AdvancedRefactoringEngine(IWorkspaceManager workspaceManager, ILogger<AdvancedRefactoringEngine> logger, SentinelConfiguration config) =>
+    ActivatorUtilities.CreateInstance<AdvancedRefactoringEngine>(CreateProvider(workspaceManager), workspaceManager, logger, config);
+
     public static AdvancedRefactoringEngine AdvancedRefactoringEngine(IWorkspaceManager workspaceManager, ILogger<AdvancedRefactoringEngine> logger) =>
         ActivatorUtilities.CreateInstance<AdvancedRefactoringEngine>(CreateProvider(workspaceManager), workspaceManager, logger);
 

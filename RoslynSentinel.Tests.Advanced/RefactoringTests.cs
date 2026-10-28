@@ -21,11 +21,11 @@ public class RefactoringTests
     [SetUp]
     public void Setup()
     {
-        var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
-        _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
-        _healingEngine = new CodeHealingEngine(_workspaceManager, config);
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
+        _advancedLogicEngine = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+        _healingEngine = Battery.Advanced.TestEnginesAdvanced.CodeHealingEngine(_workspaceManager, config);
     }
 
     [TearDown]
@@ -76,7 +76,7 @@ public class RefactoringTests
     {
         //Assert.Ignore("API changed: RenameSymbolAsync now requires SymbolHandle and ISymbol");
         _workspaceManager.SetTestSolution(CreateSolution(RichSource, "Order.cs"));
-        var navigationEngine = new SymbolNavigationEngine(_workspaceManager);
+        var navigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager);
         var candidates = await navigationEngine.LocateSymbolAsync("OrderId", "All", "Order");
         var symbol = candidates.FirstOrDefault();
         Assert.That(symbol?.DocCommentId, Is.Not.Null, "Symbol must have a DocCommentId for resolution");
@@ -96,7 +96,7 @@ public class RefactoringTests
     {
         var source = "public class C { public int GetTen() { return 10; } public void M() { var x = GetTen(); } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
-        var result = await new StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync("C.cs", "GetTen");
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync("C.cs", "GetTen");
         var updatedContent = result.Values.FirstOrDefault(v => !v.StartsWith("// ErrorDetails:")) ?? "";
         Assert.That(updatedContent, Contains.Substring("var x = 10;"));
         Assert.That(updatedContent, Does.Not.Contain("GetTen()"));
@@ -108,7 +108,7 @@ public class RefactoringTests
     {
         var source = "public static class Ext { public static void M(this string s) { } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "Ext.cs"));
-        var result = await new LogicSimplificationEngine(_workspaceManager).ExtensionToStaticAsync("Ext.cs", "M");
+        var result = await Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ExtensionToStaticAsync("Ext.cs", "M");
         Assert.That(result.UpdatedText, Contains.Substring("public static void M(string s)"));
         Assert.That(result.UpdatedText, Does.Not.Contain("this string"));
     }
@@ -119,7 +119,7 @@ public class RefactoringTests
     {
         var source = "public static class Ext { public static void M(string s) { } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "Ext.cs"));
-        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("Ext.cs", "M");
+        var result = await Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("Ext.cs", "M");
         Assert.That(result.UpdatedText, Contains.Substring("public static void M(this string s)"));
     }
 
@@ -131,7 +131,7 @@ public class RefactoringTests
     public async Task ConvertStaticToExtension_PartialClass_PutsStaticBeforePartial_NoCS0267(string source, string expectedDeclaration)
     {
         _workspaceManager.SetTestSolution(CreateSolution(source, "Ext.cs"));
-        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("Ext.cs", "M");
+        var result = await Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("Ext.cs", "M");
         Assert.That(result.UpdatedText, Does.Contain(expectedDeclaration));
         Assert.That(result.UpdatedText, Does.Not.Contain("partial static"));
         var syntaxErrors = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(result.UpdatedText)
@@ -149,7 +149,7 @@ public class RefactoringTests
     {
         var source = "public class C { private const int X = 42; public int M() => X; }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
-        var result = await new StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("C.cs", "X");
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("C.cs", "X");
         Assert.That(result.UpdatedText, Contains.Substring("=> 42;"));
         Assert.That(result.UpdatedText, Does.Not.Contain("const int X"));
     }
@@ -160,7 +160,7 @@ public class RefactoringTests
     {
         var source = "public class C { public void M1() {} public void M2() {} }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
-        var result = await new StructuralRefactoringEngine(_workspaceManager).ExtractMembersToPartialAsync("C.cs", "C", new[] { "M2" });
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ExtractMembersToPartialAsync("C.cs", "C", new[] { "M2" });
         Assert.That(result.Count, Is.EqualTo(1));
         var partialCode = result.Values.First();
         Assert.That(partialCode, Contains.Substring("partial class C"));

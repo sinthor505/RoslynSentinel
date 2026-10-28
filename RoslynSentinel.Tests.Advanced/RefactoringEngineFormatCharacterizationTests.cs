@@ -34,10 +34,10 @@ public class RefactoringEngineFormatCharacterizationTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        var navigation = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _memberEngine = new MemberRefactoringEngine(_workspaceManager, navigation, new ValidationEngine(_workspaceManager));
-        _semanticEngine = new SemanticRefactoringEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var navigation = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _memberEngine = Battery.Basic.TestEngines.MemberRefactoringEngine(_workspaceManager, navigation, Battery.Basic.TestEngines.ValidationEngine(_workspaceManager));
+        _semanticEngine = Battery.Basic.TestEngines.SemanticRefactoringEngine(_workspaceManager);
     }
 
     [TearDown]

@@ -46,9 +46,9 @@ public class GenericContainerNameTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _refactoringEngine = new BasicRefactoringEngine(
-            _workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, new SentinelConfiguration());
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(
+            _workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, Battery.Basic.TestEngines.SentinelConfiguration());
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Wrappers.cs", GenericSource)]);
         _workspaceManager.SetTestSolution(solution);

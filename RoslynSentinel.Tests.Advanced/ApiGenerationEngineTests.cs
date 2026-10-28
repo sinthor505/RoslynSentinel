@@ -23,9 +23,9 @@ public class ApiGenerationEngineTests
     [SetUp]
     public void SetUp()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _workspaceManager.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", Stub));
-        _engine = new ApiGenerationEngine(_workspaceManager);
+        _engine = Battery.Advanced.TestEnginesAdvanced.ApiGenerationEngine(_workspaceManager);
     }
 
 

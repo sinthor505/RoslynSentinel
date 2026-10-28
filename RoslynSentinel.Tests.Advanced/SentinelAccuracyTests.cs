@@ -19,8 +19,8 @@ public class FireAndForgetAccuracyTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AsyncAnalysisEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -273,8 +273,8 @@ public class SemaphoreAccuracyTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
@@ -445,8 +445,8 @@ public class MismatchedAwaitAccuracyTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
@@ -770,8 +770,8 @@ public class PerformanceAccuracyTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new PerformanceEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.PerformanceEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -1480,8 +1480,8 @@ public class ExceptionHandlingAccuracyTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AntiPatternEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -1708,8 +1708,8 @@ public class FireAndForgetTaskAccuracyTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AntiPatternEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -1804,8 +1804,8 @@ public class SecurityEngineAccuracyTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SecurityEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.SecurityEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -1949,8 +1949,8 @@ public class MissingDisposeAccuracyTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AntiPatternEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -2045,8 +2045,8 @@ public class EnumSwitchExhaustivenessTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ControlFlowEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.ControlFlowEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -2134,8 +2134,8 @@ public class PerformanceEngine2AccuracyTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new PerformanceEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.PerformanceEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -2252,8 +2252,8 @@ public class CaptiveDependencyAccuracyTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new DependencyInjectionEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.DependencyInjectionEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -2327,8 +2327,8 @@ public class SafetyEngineExtendedAccuracyTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SecurityAndSafetyEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.SecurityAndSafetyEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -2417,8 +2417,8 @@ public class CircularTypeReferenceTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        var config = new SentinelConfiguration();
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
     }
 
     [TearDown]
@@ -2431,7 +2431,7 @@ public class CircularTypeReferenceTests
 public class A { public A(B b) { } }
 public class B { public B(A a) { } }
 ");
-        var results = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).FindCircularTypeReferencesAsync();
+        var results = await Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).FindCircularTypeReferencesAsync();
         Assert.That(results, Is.Not.Empty, "A depends on B and B depends on A - circular dependency");
         Assert.That(results.Any(r => r.Contains("A") && r.Contains("B")), Is.True);
     }
@@ -2443,7 +2443,7 @@ public class B { public B(A a) { } }
 public class A { public A(B b) { } }
 public class B { public B() { } }
 ");
-        var results = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).FindCircularTypeReferencesAsync();
+        var results = await Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).FindCircularTypeReferencesAsync();
         Assert.That(results, Is.Empty, "A->B with B having no deps should not be circular");
     }
 
@@ -2455,7 +2455,7 @@ public class X { public X(Y y) { } }
 public class Y { public Y(Z z) { } }
 public class Z { public Z(X x) { } }
 ");
-        var results = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).FindCircularTypeReferencesAsync();
+        var results = await Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).FindCircularTypeReferencesAsync();
         Assert.That(results, Has.Count.EqualTo(3), "X->Y->Z->X is a three-way cycle - detector reports one finding per cycle member");
         Assert.That(string.Concat(results), Does.Contain("X").And.Contain("Y").And.Contain("Z"));
     }
@@ -2473,8 +2473,8 @@ public class AntiPatternExtendedTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AntiPatternEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -2587,9 +2587,9 @@ public class MissingGenericConstraintTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        var config = new SentinelConfiguration();
-        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, config);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, config);
     }
 
     [TearDown]
@@ -2662,8 +2662,8 @@ public class JsonAntiPatternTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SecurityEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.SecurityEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -2756,8 +2756,8 @@ public class PerformanceEngineExtendedTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new PerformanceEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.PerformanceEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -2886,8 +2886,8 @@ public class AnalysisEngineExtended2Tests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
@@ -2903,7 +2903,7 @@ public class C : System.IDisposable {
     public void Dispose() { }
     ~C() { /* no disposed guard */ Dispose(); }
 }");
-        var results = await new ResourceSafetyEngine(_workspaceManager, new SentinelConfiguration()).FindFinalizerOnDisposableAsync();
+        var results = await Battery.Advanced.TestEnginesAdvanced.ResourceSafetyEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).FindFinalizerOnDisposableAsync();
         Assert.That(results, Has.Count.EqualTo(1), "IDisposable class with unguarded finalizer should be flagged");
         Assert.That(results[0], Does.Contain("Class 'C' implements IDisposable and declares a finalizer"));
     }
@@ -2918,7 +2918,7 @@ public class C : System.IDisposable {
     public void Dispose() { _disposed = true; }
     ~C() { if (_disposed) return; Dispose(); }
 }");
-        var results = await new ResourceSafetyEngine(_workspaceManager, new SentinelConfiguration()).FindFinalizerOnDisposableAsync();
+        var results = await Battery.Advanced.TestEnginesAdvanced.ResourceSafetyEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).FindFinalizerOnDisposableAsync();
         Assert.That(results, Is.Empty, "Finalizer with _disposed guard is the correct pattern - must not be flagged");
     }
 
@@ -2996,8 +2996,8 @@ public class AntiPatternEngine2Tests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AntiPatternEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -3057,8 +3057,8 @@ public class ThreadSafetyEngineExtendedTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ThreadSafetyEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Basic.TestEngines.ThreadSafetyEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -3150,8 +3150,8 @@ public class ReDoSDetectionTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SecurityEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.SecurityEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -3194,8 +3194,8 @@ public class AsyncSafetyEngineExtendedTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AsyncAnalysisEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -3278,8 +3278,8 @@ public class MutableCollectionPropertyTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new CodeStyleAnalysisEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.CodeStyleAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -3335,8 +3335,8 @@ public class ThrowInFinallyTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AntiPatternEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -3384,8 +3384,8 @@ public class LinqRedundantWhereTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new PerformanceEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.PerformanceEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -3449,8 +3449,8 @@ public class DoubleCheckedLockingTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ThreadSafetyEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Basic.TestEngines.ThreadSafetyEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -3518,8 +3518,8 @@ public class StaticEventSubscriptionTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AntiPatternEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -3569,8 +3569,8 @@ public class UnvalidatedRegexSourceTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SecurityEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.SecurityEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -3617,8 +3617,8 @@ public class CheckThenActOnDictionaryTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ThreadSafetyEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Basic.TestEngines.ThreadSafetyEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -3673,8 +3673,8 @@ public class UnawakedDisposeAsyncTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AsyncAnalysisEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -3726,8 +3726,8 @@ public class RegexNewInLoopTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SecurityEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.SecurityEngine(_workspaceManager);
     }
 
     [TearDown]

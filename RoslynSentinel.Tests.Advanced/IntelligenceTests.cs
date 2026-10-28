@@ -15,8 +15,8 @@ public class IntelligenceTests
     [SetUp]
     public void Setup()
     {
-        var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
@@ -43,7 +43,7 @@ public class IntelligenceTests
         var projectIdB = ProjectId.CreateNewId();
         var solution = new AdhocWorkspace().CurrentSolution.AddProject(projectIdA, "ProjA", "ProjA", LanguageNames.CSharp).AddProject(projectIdB, "ProjB", "ProjB", LanguageNames.CSharp).AddProjectReference(projectIdA, new ProjectReference(projectIdB));
         _workspaceManager.SetTestSolution(solution);
-        var cycles = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).FindCircularDependenciesAsync();
+        var cycles = await Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).FindCircularDependenciesAsync();
         Assert.That(cycles.Count, Is.Zero, "Linear should not be a cycle.");
     }
 
@@ -58,7 +58,7 @@ public class IntelligenceTests
         // A -> B
         solution = solution.AddProjectReference(projAId, new ProjectReference(projBId));
         _workspaceManager.SetTestSolution(solution);
-        var cycles = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).FindCircularDependenciesAsync();
+        var cycles = await Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).FindCircularDependenciesAsync();
         Assert.That(cycles.Count, Is.Zero, "Linear dependency should not be flagged as circular.");
     }
 }

@@ -29,44 +29,44 @@ public class MassiveRefactoringTests
         _tempDir = Path.Combine(Path.GetTempPath(), "MassiveRefactoring_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
 
-        var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
 
-        var sr = new StructuralRefinementEngine(_workspaceManager, config);
-        var mapping = new MappingEngine(_workspaceManager);
-        var semLib = new SemanticRefactoringEngine(_workspaceManager);
-        var advLogic = new LogicSimplificationEngine(_workspaceManager);
-        var style = new CodeStyleEngine(_workspaceManager, config);
-        var codeFlow = new LogicSimplificationEngine(_workspaceManager);
-        var advRefactoring = new AdvancedRefactoringEngine(_workspaceManager);
-        var logicOpt = new LogicSimplificationEngine(_workspaceManager);
-        var modernization = new SyntaxModernizationEngine(_workspaceManager, config);
-        var nav = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var validation = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var sr = Battery.Basic.TestEngines.StructuralRefinementEngine(_workspaceManager, config);
+        var mapping = Battery.Advanced.TestEnginesAdvanced.MappingEngine(_workspaceManager);
+        var semLib = Battery.Basic.TestEngines.SemanticRefactoringEngine(_workspaceManager);
+        var advLogic = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+        var style = Battery.Advanced.TestEnginesAdvanced.CodeStyleEngine(_workspaceManager, config);
+        var codeFlow = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+        var advRefactoring = Battery.Advanced.TestEnginesAdvanced.AdvancedRefactoringEngine(_workspaceManager);
+        var logicOpt = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+        var modernization = Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, config);
+        var nav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validation = Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
 
-        _basicRefactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
-        _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
-        _memberRefactoringEngine = new MemberRefactoringEngine(_workspaceManager, nav, validation, config);
-        _structuralRefactoringEngine = new StructuralRefactoringEngine(_workspaceManager);
+        _basicRefactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
+        _advancedRefactoringEngine = Battery.Advanced.TestEnginesAdvanced.AdvancedRefactoringEngine(_workspaceManager);
+        _memberRefactoringEngine = Battery.Basic.TestEngines.MemberRefactoringEngine(_workspaceManager, nav, validation, config);
+        _structuralRefactoringEngine = Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager);
 
         _refactoringStructuralTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(
             _basicRefactoringEngine,
             _memberRefactoringEngine,
             sr,
-            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             _workspaceManager,
-            new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
+            Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance),
             NullLogger<RefactoringStructuralImpl>.Instance));
         _refactoringSignatureTools = new RefactoringSignatureTools(new RefactoringSignatureImpl(
             _basicRefactoringEngine,
             _memberRefactoringEngine,
             _workspaceManager,
-            new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
-            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance),
+            Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             NullLogger<RefactoringSignatureImpl>.Instance));
 
         // ExtractMembersTool / MoveTypeTool moved to AdvancedRefactoringTools in the server split.
-        _advancedRefactoringTools = new AdvancedRefactoringTools(_workspaceManager);
+        _advancedRefactoringTools = Battery.Advanced.TestToolsAdvanced.AdvancedRefactoringTools(_workspaceManager);
     }
 
     [TearDown]
@@ -150,7 +150,7 @@ namespace MyApp.Services
 
         // RenameSymbolTool takes a SymbolHandle (projectName, docCommentId) -> resolve it
         // via SymbolNavigationEngine first, as an agent would via LocateSymbolTool.
-        var symbolNavEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var symbolNavEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var handle = (await symbolNavEngine.LocateSymbolAsync($"OldM{id}")).Single();
 
         var result = await _refactoringSignatureTools.RenameSymbolTool(

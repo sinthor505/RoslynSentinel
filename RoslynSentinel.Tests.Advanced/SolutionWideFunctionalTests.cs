@@ -19,15 +19,15 @@ public class SolutionWideFunctionalTests
     public void Setup()
     {
         _workspaceManager = FakeWorkspaceManager.ReadOnly();
-        var config = new SentinelConfiguration();
-        _solutionStructureEngine = new SolutionStructureEngine(_workspaceManager, config);
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _solutionStructureEngine = Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, config);
 
-        _healthEngine = new HealthOrchestrationEngine(
+        _healthEngine = Battery.Advanced.TestEnginesAdvanced.HealthOrchestrationEngine(
             _workspaceManager,
             _solutionStructureEngine,
             config,
-            new PerformanceEngine(_workspaceManager),
-            new AntiPatternEngine(_workspaceManager, config));
+            Battery.Advanced.TestEnginesAdvanced.PerformanceEngine(_workspaceManager),
+            Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, config));
 
         // BuildTool a mock solution with 3 projects to test paging
         var solution = TestSolutionBuilder.CreateSolutionWithProject("ProjA", new[] { ("F1.cs", "class A {}") });

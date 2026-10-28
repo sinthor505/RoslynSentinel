@@ -26,10 +26,10 @@ public class RemoveNodeCharacterizationTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _semanticEngine = new SemanticRefactoringEngine(_workspaceManager);
-        _refinementEngine = new StructuralRefinementEngine(_workspaceManager, new SentinelConfiguration());
-        _structuralEngine = new StructuralRefactoringEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _semanticEngine = Battery.Basic.TestEngines.SemanticRefactoringEngine(_workspaceManager);
+        _refinementEngine = Battery.Basic.TestEngines.StructuralRefinementEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
+        _structuralEngine = Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager);
     }
 
     [TearDown]

@@ -24,16 +24,16 @@ public class DeepFunctionalVerificationTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
-        var config = new SentinelConfiguration();
-        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
-        _codeStyleEngine = new CodeStyleEngine(_workspaceManager, config);
-        _codeHealingEngine = new CodeHealingEngine(_workspaceManager, config);
-        _solutionStructureEngine = new SolutionStructureEngine(_workspaceManager, config);
-        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, new NullLogger<BasicRefactoringEngine>(), config);
-        _dependencyEngine = new DependencyEngine(_workspaceManager);
-        _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, config);
-        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, config);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _syntaxUpgradeEngine = Battery.Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, config);
+        _codeStyleEngine = Battery.Advanced.TestEnginesAdvanced.CodeStyleEngine(_workspaceManager, config);
+        _codeHealingEngine = Battery.Advanced.TestEnginesAdvanced.CodeHealingEngine(_workspaceManager, config);
+        _solutionStructureEngine = Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, config);
+        _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, new NullLogger<BasicRefactoringEngine>(), config);
+        _dependencyEngine = Battery.Basic.TestEngines.DependencyEngine(_workspaceManager);
+        _modernizationEngine = Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, config);
+        _structuralRefinementEngine = Battery.Basic.TestEngines.StructuralRefinementEngine(_workspaceManager, config);
     }
 
     [TearDown]

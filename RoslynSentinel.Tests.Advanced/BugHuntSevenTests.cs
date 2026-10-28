@@ -34,8 +34,8 @@ namespace RoslynSentinel.Tests.Advanced
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _engine = new AntiPatternEngine(_workspaceManager);
+            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         }
 
         [TearDown]
@@ -168,8 +168,8 @@ namespace RoslynSentinel.Tests.Advanced
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _engine = new AntiPatternEngine(_workspaceManager);
+            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         }
 
         [TearDown]
@@ -295,8 +295,8 @@ namespace RoslynSentinel.Tests.Advanced
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _engine = new SecurityAndSafetyEngine(_workspaceManager);
+            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _engine = Battery.Advanced.TestEnginesAdvanced.SecurityAndSafetyEngine(_workspaceManager);
         }
 
         [TearDown]
@@ -404,8 +404,8 @@ namespace RoslynSentinel.Tests.Advanced
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _engine = new SecurityAndSafetyEngine(_workspaceManager);
+            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _engine = Battery.Advanced.TestEnginesAdvanced.SecurityAndSafetyEngine(_workspaceManager);
         }
 
         [TearDown]
@@ -507,8 +507,8 @@ namespace RoslynSentinel.Tests.Advanced
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _engine = new ThreadSafetyEngine(_workspaceManager);
+            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _engine = Battery.Basic.TestEngines.ThreadSafetyEngine(_workspaceManager);
         }
 
         [TearDown]
@@ -612,8 +612,8 @@ namespace RoslynSentinel.Tests.Advanced
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _engine = new AntiPatternEngine(_workspaceManager);
+            _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _engine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         }
 
         [TearDown]

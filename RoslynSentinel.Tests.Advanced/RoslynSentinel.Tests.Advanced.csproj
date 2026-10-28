@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -48,6 +48,8 @@
     <ProjectReference Include="..\RoslynSentinel.Engines.Basic\RoslynSentinel.Engines.Basic.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Tests.Support.Advanced\RoslynSentinel.Tests.Support.Advanced.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Tests.Support.Basic\RoslynSentinel.Tests.Support.Basic.csproj" />
   </ItemGroup>
 
   <ItemGroup>

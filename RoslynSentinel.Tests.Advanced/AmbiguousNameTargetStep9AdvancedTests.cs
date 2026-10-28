@@ -23,13 +23,13 @@ public class AmbiguousNameTargetStep9AdvancedTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
-        _advancedRefactoring = new AdvancedRefactoringEngine(_workspaceManager);
-        _structural = new StructuralRefactoringEngine(_workspaceManager);
-        _logicSimplification = new LogicSimplificationEngine(_workspaceManager);
-        _modernization = new SyntaxModernizationEngine(_workspaceManager, _config);
-        _codeGeneration = new CodeGenerationEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _advancedRefactoring = Battery.Advanced.TestEnginesAdvanced.AdvancedRefactoringEngine(_workspaceManager);
+        _structural = Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager);
+        _logicSimplification = Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
+        _modernization = Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, _config);
+        _codeGeneration = Battery.Advanced.TestEnginesAdvanced.CodeGenerationEngine(_workspaceManager);
     }
 
     [TearDown]

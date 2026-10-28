@@ -19,10 +19,10 @@ public class DiscoveryEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
-        _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _discoveryEngine = Battery.Basic.TestEngines.DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
+        _dependencyInjectionEngine = Battery.Advanced.TestEnginesAdvanced.DependencyInjectionEngine(_workspaceManager);
     }
 
     [TearDown]

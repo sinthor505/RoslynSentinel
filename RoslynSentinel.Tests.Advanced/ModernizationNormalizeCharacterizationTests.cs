@@ -30,8 +30,8 @@ public class ModernizationNormalizeCharacterizationTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]

@@ -17,8 +17,8 @@ public class FeatureToggleTests
     public void Setup()
     {
         _workspaceManager = FakeWorkspaceManager.ReadOnly();
-        _config = new SentinelConfiguration();
-        _structureEngine = new SolutionStructureEngine(_workspaceManager, _config);
+        _config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _structureEngine = Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, _config);
         _perfEngine = new PerformanceEngine(_workspaceManager, _config);
     }
 

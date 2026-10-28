@@ -19,11 +19,11 @@ public class ModernizationTests
     [SetUp]
     public void Setup()
     {
-        var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _modernEngine = new SyntaxModernizationEngine(_workspaceManager, config);
-        _styleEngine = new CodeStyleEngine(_workspaceManager, config);
-        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _modernEngine = Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, config);
+        _styleEngine = Battery.Advanced.TestEnginesAdvanced.CodeStyleEngine(_workspaceManager, config);
+        _syntaxUpgradeEngine = Battery.Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, config);
     }
 
     [TearDown]

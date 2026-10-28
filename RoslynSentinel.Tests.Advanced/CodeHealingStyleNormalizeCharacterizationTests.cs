@@ -34,11 +34,11 @@ public class CodeHealingStyleNormalizeCharacterizationTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        var config = new SentinelConfiguration();
-        _healing = new CodeHealingEngine(_workspaceManager, config);
-        _style = new CodeStyleEngine(_workspaceManager, config);
-        _ide = new IDEStyleEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _healing = Battery.Advanced.TestEnginesAdvanced.CodeHealingEngine(_workspaceManager, config);
+        _style = Battery.Advanced.TestEnginesAdvanced.CodeStyleEngine(_workspaceManager, config);
+        _ide = Battery.Advanced.TestEnginesAdvanced.IDEStyleEngine(_workspaceManager);
     }
 
     [TearDown]

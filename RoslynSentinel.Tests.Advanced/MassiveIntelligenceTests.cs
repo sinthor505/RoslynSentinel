@@ -18,13 +18,13 @@ public class MassiveIntelligenceTests
     [SetUp]
     public void Setup()
     {
-        var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _metricsEngine = new MetricsEngine(_workspaceManager);
-        _searchEngine = new DiscoveryEngine(_workspaceManager);
-        _inventoryEngine = new InventoryEngine(_workspaceManager);
-        _deadCodeEngine = new DeadCodeEngine(_workspaceManager);
-        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, config);
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _metricsEngine = Battery.Advanced.TestEnginesAdvanced.MetricsEngine(_workspaceManager);
+        _searchEngine = Battery.Basic.TestEngines.DiscoveryEngine(_workspaceManager);
+        _inventoryEngine = Battery.Basic.TestEngines.InventoryEngine(_workspaceManager);
+        _deadCodeEngine = Battery.Advanced.TestEnginesAdvanced.DeadCodeEngine(_workspaceManager);
+        _antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, config);
     }
 
     [TearDown]
@@ -46,7 +46,7 @@ public class MassiveIntelligenceTests
     public async Task Search_ShouldFindMethodsByReturnType(int id)
     {
         SetSource($"public class C{id} {{ public int M{id}() => {id}; }}", $"C{id}.cs");
-        var results = await new DiscoveryEngine(_workspaceManager).FindMethodsByReturnTypeAsync("int");
+        var results = await Battery.Basic.TestEngines.DiscoveryEngine(_workspaceManager).FindMethodsByReturnTypeAsync("int");
         Assert.That(results.Any(r => r.MemberName == $"M{id}"), Is.True);
     }
 
@@ -64,7 +64,7 @@ public class MassiveIntelligenceTests
         // model (compilation.GetTypeByMetadataName), so the attribute class must actually
         // be declared/resolvable in source -> not just referenced by name.
         SetSource($"public class MyAttrAttribute : System.Attribute {{ }} [MyAttr] public class C{id} {{ }}", $"C{id}.cs");
-        var results = await new DiscoveryEngine(_workspaceManager).FindTypesByAttributeAsync("MyAttr");
+        var results = await Battery.Basic.TestEngines.DiscoveryEngine(_workspaceManager).FindTypesByAttributeAsync("MyAttr");
         Assert.That(results.Any(r => r.MemberName == $"C{id}"), Is.True);
     }
 

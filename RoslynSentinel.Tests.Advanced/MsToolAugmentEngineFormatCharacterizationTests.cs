@@ -32,8 +32,8 @@ public class MsToolAugmentEngineFormatCharacterizationTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new MsToolAugmentEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager);
     }
 
     [TearDown]

@@ -19,9 +19,9 @@ public class StubImplementationTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        var config = new SentinelConfiguration();
-        _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _ideStyleEngine = Battery.Advanced.TestEnginesAdvanced.IDEStyleEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -159,7 +159,7 @@ class C {
     }
 }
 ");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "Parse");
+        var result = await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "Parse");
         Assert.That(result.UpdatedText, Does.Contain("AsSpan(1, 3).ToString()"), "Substring(start,len) should become AsSpan(start,len).ToString()");
         Assert.That(result.UpdatedText, Does.Not.Contain(".Substring("));
     }
@@ -175,7 +175,7 @@ class C {
     }
 }
 ");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "GetSuffix");
+        var result = await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "GetSuffix");
         Assert.That(result.UpdatedText, Does.Contain("AsSpan(5).ToString()"));
         Assert.That(result.UpdatedText, Does.Not.Contain(".Substring(5)"));
     }
@@ -193,7 +193,7 @@ class C {
     }
 }
 ");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "Process");
+        var result = await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "Process");
         Assert.That(result.UpdatedText, Does.Not.Contain(".Substring("), "All Substring calls should be converted");
         Assert.That(result.UpdatedText.Split("AsSpan").Length - 1, Is.EqualTo(2), "Should have 2 AsSpan calls");
     }
@@ -208,7 +208,7 @@ class C {
     string B(string s) { return s.Substring(2, 3); }
 }
 ");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "A");
+        var result = await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "A");
         // Method A converted, B not
         Assert.That(result.UpdatedText, Does.Contain("AsSpan(0, 1)"), "Method A should be converted");
         Assert.That(result.UpdatedText, Does.Contain(".Substring(2, 3)"), "Method B should remain unchanged");
@@ -224,7 +224,7 @@ class C {
     string B(string s) { return s.Substring(2, 3); }
 }
 ");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "");
+        var result = await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "");
         Assert.That(result.UpdatedText, Does.Not.Contain(".Substring("), "With no method name, all Substring calls in file should be converted");
     }
 
@@ -236,7 +236,7 @@ class C {
         SetSource(source);
         // A missing method is a typed NotFound failure, not a returned result.
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
-            await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "NonExistent"));
+            await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "NonExistent"));
         Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         Assert.That(ex.Message, Does.Contain("Method 'NonExistent' not found."));
     }
@@ -258,7 +258,7 @@ class C {
     }
 }
 ");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
+        var result = await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
         Assert.That(result.UpdatedText, Does.Contain("?? throw"), "var + null-check-throw should become coalescing throw");
         Assert.That(result.UpdatedText, Does.Not.Contain("if (x == null) throw"), "The standalone null-check-throw should be gone");
     }
@@ -278,7 +278,7 @@ class C {
     void DoWork(object o) {}
 }
 ");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
+        var result = await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
         Assert.That(result.UpdatedText, Does.Contain("DoWork(x)"), "Statement after the null guard must be preserved");
     }
 
@@ -297,7 +297,7 @@ class C {
 }
 ";
         SetSource(source);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
+        var result = await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
         // Has else -> should not be merged into coalescing throw
         Assert.That(result.UpdatedText, Does.Contain("if (x == null)"), "if-else null checks must not be transformed");
     }
@@ -308,7 +308,7 @@ class C {
     {
         const string source = "class C { void M() { int x = 1; } }";
         SetSource(source);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
+        var result = await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
         Assert.That(result.UpdatedText, Does.Contain("int x = 1"));
     }
 
@@ -317,7 +317,7 @@ class C {
     public async Task UseThrowExpressions_MissingFile_ThrowsNotFound()
     {
         SetSource("class C {}");
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Missing.cs"));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).UseThrowExpressionsAsync("Missing.cs"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
@@ -335,7 +335,7 @@ class C {
     }
 }
 ");
-        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "type-to-var", 4);
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "type-to-var", 4);
         Assert.That(result.UpdatedText, Does.Contain("var name ="), "type-to-var should replace explicit type with var");
     }
 
@@ -351,7 +351,7 @@ class C {
 }
 ";
         SetSource(source);
-        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "type-to-var", 4);
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "type-to-var", 4);
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState), "const declarations must not be changed to var");
     }
 
@@ -367,7 +367,7 @@ class C {
     }
 }
 ");
-        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "remove-unused-local", 4);
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "remove-unused-local", 4);
         Assert.That(result.UpdatedText, Does.Not.Contain("unused"), "remove-unused-local should remove the declaration at target line");
         Assert.That(result.UpdatedText, Does.Contain("used"), "Other statements should remain");
     }
@@ -385,7 +385,7 @@ class C {
     void DoWork() {}
 }
 ");
-        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "add-braces", 4);
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "add-braces", 4);
         Assert.That(result.UpdatedText, Does.Contain("{"), "add-braces should wrap the single statement body in a block");
     }
 
@@ -403,7 +403,7 @@ class C {
 }
 ");
         // The if-statement starts at line 4
-        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "remove-braces", 4);
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "remove-braces", 4);
         // After removing braces: should have the statement without a block
         Assert.That(result.UpdatedText, Does.Not.Contain("{ DoWork(); }"), "remove-braces should drop the block around the single statement");
         Assert.That(result.UpdatedText, Does.Contain("if (x > 0) DoWork();"), "The single statement should remain as the if body");
@@ -420,7 +420,7 @@ class C {
     }
 }
 ");
-        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "extract-constant", 4);
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "extract-constant", 4);
         Assert.That(result.UpdatedText, Does.Contain("const string ExtractedConstant"), "extract-constant should inject a const field");
         Assert.That(result.UpdatedText, Does.Contain("ExtractedConstant"), "The usage site should reference the new constant");
     }
@@ -430,7 +430,7 @@ class C {
     public async Task RunMicroRefactoring_UnknownId_ThrowsArgumentException()
     {
         SetSource("class C { void M() {} }");
-        await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () => await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "nonexistent-refactoring", 1), "Unknown refactoring ID should throw ToolInvalidArgumentException with list of known IDs");
+        await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "nonexistent-refactoring", 1), "Unknown refactoring ID should throw ToolInvalidArgumentException with list of known IDs");
     }
 
     [Test]
@@ -439,7 +439,7 @@ class C {
     {
         SetSource("class C { void M() {} }");
         // Pins the typed throw (RequireDocument), not an empty result.
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("NoFile.cs", "type-to-var", 1));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("NoFile.cs", "type-to-var", 1));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
@@ -470,7 +470,7 @@ class C {
 }
 ");
         var before = "s.Substring(1, 2)";
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "M");
+        var result = await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "M");
         Assert.That(result.UpdatedText, Does.Not.Contain(before), "UseSpanForParsingAsync is no longer a no-op - must actually replace Substring");
     }
 
@@ -487,7 +487,7 @@ class C {
     }
 }
 ");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
+        var result = await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
         Assert.That(result.UpdatedText, Does.Contain("??"), "UseThrowExpressionsAsync is no longer a stub - must produce coalescing throw");
     }
 
@@ -502,7 +502,7 @@ class C {
     }
 }
 ");
-        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "type-to-var", 4);
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "type-to-var", 4);
         Assert.That(result.UpdatedText, Does.Not.Contain("simulation mode"), "RunMicroRefactoringAsync must no longer return fake simulation output");
         Assert.That(result.UpdatedText, Does.Contain("var x"), "Must return the actually transformed code");
     }

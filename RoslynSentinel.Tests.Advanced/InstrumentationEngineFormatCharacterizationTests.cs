@@ -24,7 +24,7 @@ public class InstrumentationEngineFormatCharacterizationTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new InstrumentationEngine(_workspaceManager);
     }
 

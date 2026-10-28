@@ -22,13 +22,13 @@ public class NewImplementationsTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
-        _deadCodeEngine = new DeadCodeEngine(_workspaceManager);
-        _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
-        _securityEngine = new SecurityEngine(_workspaceManager);
-        _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
-        _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _deadCodeEngine = Battery.Advanced.TestEnginesAdvanced.DeadCodeEngine(_workspaceManager);
+        _advancedRefactoringEngine = Battery.Advanced.TestEnginesAdvanced.AdvancedRefactoringEngine(_workspaceManager);
+        _securityEngine = Battery.Advanced.TestEnginesAdvanced.SecurityEngine(_workspaceManager);
+        _asyncSafetyEngine = Battery.Advanced.TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
+        _antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -264,7 +264,7 @@ public class Fan
         SetSource(@"
 public class Pub { public event System.EventHandler Tick; }
 public class Sub { public Sub(Pub p) { p.Tick += Handle; } private void Handle(object s, System.EventArgs e) { } }");
-        var results = await new ResourceSafetyEngine(_workspaceManager, _config).DetectMemoryLeaksAsync("Test.cs");
+        var results = await Battery.Advanced.TestEnginesAdvanced.ResourceSafetyEngine(_workspaceManager, _config).DetectMemoryLeaksAsync("Test.cs");
         Assert.That(results, Is.Empty, "Feature toggle off should produce no results.");
     }
 
@@ -285,7 +285,7 @@ public class Dashboard
     }
     private void Refresh(object s, System.EventArgs e) { }
 }", "Dashboard.cs");
-        var results = await new ResourceSafetyEngine(_workspaceManager, _config).DetectMemoryLeaksAsync("Dashboard.cs");
+        var results = await Battery.Advanced.TestEnginesAdvanced.ResourceSafetyEngine(_workspaceManager, _config).DetectMemoryLeaksAsync("Dashboard.cs");
         Assert.That(results.Any(r => r.Contains("Dashboard") && r.Contains("Tick")), Is.True, "Dashboard subscribes to _clock.Tick without IDisposable - potential memory leak.");
     }
 
@@ -303,7 +303,7 @@ public class Form : System.IDisposable
     public void Dispose() { _btn.Click -= OnClick; }
     private void OnClick(object s, System.EventArgs e) { }
 }", "Form.cs");
-        var results = await new ResourceSafetyEngine(_workspaceManager, _config).DetectMemoryLeaksAsync("Form.cs");
+        var results = await Battery.Advanced.TestEnginesAdvanced.ResourceSafetyEngine(_workspaceManager, _config).DetectMemoryLeaksAsync("Form.cs");
         Assert.That(results.All(r => !r.Contains("Form") || !r.Contains("Click")), Is.True, "Form implements IDisposable with proper unsubscription - should not be flagged.");
     }
 
@@ -863,7 +863,7 @@ public class Greeter
 {
     public string Greet(string name) => ""Hello, "" + name + ""!"";
 }", "Greeter.cs");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, _config).ReplaceStringConcatWithInterpolationAsync("Greeter.cs");
+        var result = await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, _config).ReplaceStringConcatWithInterpolationAsync("Greeter.cs");
         Assert.That(result.UpdatedText, Does.Contain("$\""), "Output must contain an interpolated string.");
         Assert.That(result.UpdatedText, Does.Contain("{name}"), "Variable 'name' must be in an interpolation hole.");
         Assert.That(result.UpdatedText, Does.Not.Contain("\" + name + \""), "Original concat must be replaced.");
@@ -876,7 +876,7 @@ public class Greeter
         // Two string literals concatenated -> Roslyn folds these at compile time; no variable to interpolate
         SetSource(@"
 public class C { public string S() => ""Hello"" + "", World""; }", "C.cs");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, _config).ReplaceStringConcatWithInterpolationAsync("C.cs");
+        var result = await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, _config).ReplaceStringConcatWithInterpolationAsync("C.cs");
         // Engine folds the literal chain into one interpolated string: "Hello" + ", World" -> $"Hello, World"
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         Assert.That(result.UpdatedText, Does.Contain("$\"Hello, World\""), "Pure literal concat must become one interpolated string.");
@@ -889,7 +889,7 @@ public class C { public string S() => ""Hello"" + "", World""; }", "C.cs");
     {
         const string source = @"public class C { public string Hello() => ""Hi""; }";
         SetSource(source, "C.cs");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, _config).ReplaceStringConcatWithInterpolationAsync("C.cs");
+        var result = await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, _config).ReplaceStringConcatWithInterpolationAsync("C.cs");
         // No concat found: the engine returns NoCandidatesFound. Nothing is changed; the unchanged text is returned.
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.NoCandidatesFound));
         Assert.That(result.UpdatedText, Is.EqualTo(source));
@@ -905,7 +905,7 @@ public class Reporter
     public string Line1(string x) => ""A="" + x;
     public string Line2(string y) => ""B="" + y;
 }", "Reporter.cs");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, _config).ReplaceStringConcatWithInterpolationAsync("Reporter.cs");
+        var result = await Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, _config).ReplaceStringConcatWithInterpolationAsync("Reporter.cs");
         Assert.That(result.UpdatedText.Contains("{x}") || result.UpdatedText.Contains("{y}"), Is.True, "At least one concat chain must be converted.");
     }
 
@@ -1006,7 +1006,7 @@ public class C
         int line = 5;
         var lines = source.Split('\n');
         int col = lines[line - 1].IndexOf("42") + 1;
-        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceFieldAsync("C.cs", "var x = 42", "_answer");
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).IntroduceFieldAsync("C.cs", "var x = 42", "_answer");
         Assert.That(result.UpdatedText, Does.Contain("_answer"), "New field name must appear in output.");
         Assert.That(result.UpdatedText, Does.Contain("private"), "Extracted field must be private.");
         Assert.That(result.UpdatedText, Does.Contain("private readonly "), "Field must be declared private readonly.");
@@ -1019,7 +1019,7 @@ public class C
         const string source = "public class C { public void M() { } }";
         SetSource(source, "C.cs");
         // Snippet points to class declaration -> no expression there, so the engine throws NotFound
-        var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).IntroduceFieldAsync("C.cs", "public class C", "_f"));
+        var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).IntroduceFieldAsync("C.cs", "public class C", "_f"));
         Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.NotFound));
         Assert.That(ex.Message, Does.Contain("Expression not found"), "Should explain that no expression sits at the snippet");
     }
@@ -1042,7 +1042,7 @@ public class C
         int line = 5;
         var lines = source.Split('\n');
         int col = lines[line - 1].IndexOf("30") + 1;
-        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync("C.cs", "int timeout = 30", "timeoutMs");
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync("C.cs", "int timeout = 30", "timeoutMs");
         Assert.That(result.UpdatedText, Does.Contain("timeoutMs"), "New parameter name must appear.");
         Assert.That(result.UpdatedText, Does.Contain("M("), "Method M signature must be present.");
     }
@@ -1065,7 +1065,7 @@ public class C
         int line = 5;
         var lines = source.Split('\n');
         int col = lines[line - 1].IndexOf("6") + 1;
-        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceVariableAsync("C.cs", "6 * 7", "product");
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).IntroduceVariableAsync("C.cs", "6 * 7", "product");
         Assert.That(result.UpdatedText, Does.Contain("product"), "Extracted variable name must appear.");
         Assert.That(result.UpdatedText, Does.Contain("var"), "Local variable should be declared with var.");
     }
@@ -1077,7 +1077,7 @@ public class C
     {
         const string source = "public partial class C\r\n{\r\n    public void M1() { }\r\n\r\n    public void M2() { }\r\n}\r\n";
         SetSource(source, "C.cs");
-        var result = await new StructuralRefactoringEngine(_workspaceManager).ExtractMembersToPartialWithSourceAsync("C.cs", "C", ["M2"]);
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ExtractMembersToPartialWithSourceAsync("C.cs", "C", ["M2"]);
         Assert.That(result.Count, Is.EqualTo(2));
         var rewrittenSource = result.Single(kv => kv.Key.ToString() == "C.cs").Value;
         var partialFile = result.Single(kv => kv.Key.ToString() != "C.cs").Value;
@@ -1096,7 +1096,7 @@ public class C
     {
         const string source = "internal static class Util<T> where T : class\r\n{\r\n    public static void M1() { }\r\n\r\n    public static T M2(T value) { return value; }\r\n}\r\n";
         SetSource(source, "Util.cs");
-        var result = await new StructuralRefactoringEngine(_workspaceManager).ExtractMembersToPartialWithSourceAsync("Util.cs", "Util", ["M2"]);
+        var result = await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ExtractMembersToPartialWithSourceAsync("Util.cs", "Util", ["M2"]);
         Assert.That(result.Count, Is.EqualTo(2));
         var rewrittenSource = result.Single(kv => kv.Key.ToString() == "Util.cs").Value;
         var partialFile = result.Single(kv => kv.Key.ToString() != "Util.cs").Value;

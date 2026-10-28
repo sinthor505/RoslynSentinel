@@ -21,8 +21,8 @@ public class Bug578RegressionTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _codeGenerationEngine = Battery.Advanced.TestEnginesAdvanced.CodeGenerationEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -65,7 +65,7 @@ public class Bug578RegressionTests
             """;
 
         SetSource(source, "MyWorker.cs");
-        var antiPatternEngine = new AntiPatternEngine(_workspaceManager);
+        var antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         var findings = await antiPatternEngine.DetectAntiPatternsAsync("MyWorker.cs");
 
         var blockingFindings = findings.Where(f => f.Pattern == "BlockingTaskWait").ToList();
@@ -92,7 +92,7 @@ public class Bug578RegressionTests
             """;
 
         SetSource(source, "BlockingService.cs");
-        var antiPatternEngine = new AntiPatternEngine(_workspaceManager);
+        var antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         var findings = await antiPatternEngine.DetectAntiPatternsAsync("BlockingService.cs");
 
         var blockingFindings = findings.Where(f => f.Pattern == "BlockingTaskWait").ToList();
@@ -119,7 +119,7 @@ public class Bug578RegressionTests
             """;
 
         SetSource(source, "ResultService.cs");
-        var antiPatternEngine = new AntiPatternEngine(_workspaceManager);
+        var antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         var findings = await antiPatternEngine.DetectAntiPatternsAsync("ResultService.cs");
 
         var blockingFindings = findings.Where(f => f.Pattern == "BlockingTaskWait").ToList();
