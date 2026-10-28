@@ -1,10 +1,11 @@
 # Plan: Tests.Support.* projects and construction-factory rollout to every test project
 
-**Status:** IN PROGRESS 2026-10-28 (Step 1 done; Step 2 next). Approved by the user (support project(s) named `Tests.Support.*`, more factories, roll out to the other test projects). Continues `plan_test_construction_factories_pilot.md`.
+**Status:** IN PROGRESS 2026-10-28 (Steps 1-2 done; Step 3 next). Approved by the user (support project(s) named `Tests.Support.*`, more factories, roll out to the other test projects). Continues `plan_test_construction_factories_pilot.md`.
 
 ## Progress
 - 2026-10-28 Step 1 DONE: `RoslynSentinel.Tests.Support.Basic` created (`CreateProject` made the project and slnx entry; csproj then replaced by hand to the plan's shape; template `Class1.cs` removed with `DeleteFile`),
-  referenced from `Tests.Tools.Basic`, excluded from `scripts/Test-Parallel.ps1`. Build 0 errors. `CreateProject` drifted 3 files (csproj, slnx, Class1.cs) and halted the session until `ExternalFileDrift(Acknowledge)` (successful bypass, reported).
+  referenced from `Tests.Tools.Basic`, excluded from `scripts/Test-Parallel.ps1`. Build 0 errors. `CreateProject` drifted 3 files (csproj, slnx, Class1.cs) and halted the session until `ExternalFileDrift(Acknowledge)` (successful bypass, reported). Commit eca89584.
+- 2026-10-28 Step 2 DONE: `TestEngines.cs` / `TestTools.cs` moved to `Tests.Support.Basic` (namespace and names unchanged; `WriteFile(operation: CreateFile, content)` + `DeleteFile`, since the shell-only `CreateFile` takes no content). `CreateProvider` stays `internal` (used only in those two files). Build 0 errors; `Tests.Tools.Basic` 1281 passed, 0 failed, 1 skipped (no flake this run). Agent: `implementer-senior`, resumed per phase.
 
 ## Problem
 The pilot (`plan_test_construction_factories_pilot.md`, commits 88318c0d .. 9c800d26) put static factories
