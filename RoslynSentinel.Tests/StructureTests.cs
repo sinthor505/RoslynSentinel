@@ -22,7 +22,7 @@ public class StructureTests
     public void Setup()
     {
         _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SolutionStructureEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
+        _engine = Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]

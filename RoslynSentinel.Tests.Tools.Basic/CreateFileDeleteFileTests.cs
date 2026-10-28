@@ -808,7 +808,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var config = Basic.TestEngines.SentinelConfiguration();
         var refactoringEngine = Basic.TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
-        var semanticRefactoringEngine = new SemanticRefactoringEngine(workspaceManager);
+        var semanticRefactoringEngine = Basic.TestEngines.SemanticRefactoringEngine(workspaceManager);
         var structuralRefinementEngine = Basic.TestEngines.StructuralRefinementEngine(workspaceManager, config);
         var msToolAugmentEngine = Basic.TestEngines.MsToolAugmentEngine(workspaceManager);
         var symbolNavigationEngine = Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);

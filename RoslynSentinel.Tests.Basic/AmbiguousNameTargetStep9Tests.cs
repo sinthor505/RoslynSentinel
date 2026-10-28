@@ -33,9 +33,9 @@ public class AmbiguousNameTargetStep9Tests
             _workspaceManager,
             NullLogger<BasicRefactoringEngine>.Instance,
             Battery.Basic.TestEngines.SentinelConfiguration());
-        _semanticRefactoringEngine = new SemanticRefactoringEngine(_workspaceManager);
+        _semanticRefactoringEngine = Battery.Basic.TestEngines.SemanticRefactoringEngine(_workspaceManager);
         _msToolAugmentEngine = Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager);
-        _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
+        _threadSafetyEngine = Battery.Basic.TestEngines.ThreadSafetyEngine(_workspaceManager);
     }
 
     [TearDown]

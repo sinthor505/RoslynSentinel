@@ -933,7 +933,7 @@ public class C
     public async Task WrapInUsing_SnippetMatchesNothing_ThrowsNotFound()
     {
         SetSource(SnippetMissSource, "WrapUsingMiss.cs");
-        var semanticEngine = new SemanticRefactoringEngine(_workspaceManager);
+        var semanticEngine = Battery.Basic.TestEngines.SemanticRefactoringEngine(_workspaceManager);
 
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
             await semanticEngine.WrapInUsingAsync("WrapUsingMiss.cs", "no such text anywhere", null, null, "d"));

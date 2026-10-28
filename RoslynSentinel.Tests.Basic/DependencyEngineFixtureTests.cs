@@ -91,7 +91,7 @@ public class SolutionStructureEngineFixtureTests
 
         var fake = FakeWorkspaceManager.ReadOnly();
         fake.SetTestSolution(solution);
-        var engine = new SolutionStructureEngine(fake, Battery.Basic.TestEngines.SentinelConfiguration());
+        var engine = Battery.Basic.TestEngines.SolutionStructureEngine(fake, Battery.Basic.TestEngines.SentinelConfiguration());
 
         var cycles = await engine.FindCircularDependenciesAsync();
 

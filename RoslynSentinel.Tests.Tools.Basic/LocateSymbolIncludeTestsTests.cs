@@ -50,7 +50,7 @@ public class LocateSymbolIncludeTestsTests
         _engine = TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _impl = new SymbolNavigationImpl(
             _engine,
-            new ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance),
+            TestEngines.ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance),
             _workspaceManager,
             NullLogger<SymbolNavigationImpl>.Instance);
 

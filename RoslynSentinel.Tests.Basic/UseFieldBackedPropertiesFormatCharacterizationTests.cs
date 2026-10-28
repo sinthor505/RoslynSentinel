@@ -25,7 +25,7 @@ public class UseFieldBackedPropertiesFormatCharacterizationTests
     public void Setup()
     {
         _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SyntaxUpgradeEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
+        _engine = Battery.Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]

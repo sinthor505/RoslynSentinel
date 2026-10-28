@@ -32,7 +32,7 @@ public class InlineVariableTests
     public void Setup()
     {
         _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _semanticRefactoringEngine = new SemanticRefactoringEngine(_workspaceManager);
+        _semanticRefactoringEngine = Battery.Basic.TestEngines.SemanticRefactoringEngine(_workspaceManager);
     }
 
     [TearDown]
