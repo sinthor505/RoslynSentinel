@@ -9,19 +9,21 @@
 | RoslynSentinel.Engines.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Basic |
 | RoslynSentinel.Engines.Basic | RoslynSentinel.Common |
 | RoslynSentinel.Server.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Tools.Advanced, RoslynSentinel.Tools.Basic, RoslynSentinel.Tools.Experimental |
-| RoslynSentinel.Tests | RoslynSentinel.Common, RoslynSentinel.Engines.Basic |
-| RoslynSentinel.Tests.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Advanced, RoslynSentinel.Engines.Basic, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests |
-| RoslynSentinel.Tests.Asyncify | RoslynSentinel.Common, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests, RoslynSentinel.Tools.Advanced |
-| RoslynSentinel.Tests.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Tests |
-| RoslynSentinel.Tests.Battery.Advanced | RoslynSentinel.Engines.Advanced, RoslynSentinel.Tests |
-| RoslynSentinel.Tests.Battery.Basic | RoslynSentinel.Tests |
+| RoslynSentinel.Tests | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Tests.Support.Basic |
+| RoslynSentinel.Tests.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Advanced, RoslynSentinel.Engines.Basic, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Advanced, RoslynSentinel.Tests.Support.Basic |
+| RoslynSentinel.Tests.Asyncify | RoslynSentinel.Common, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Advanced, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Tools.Advanced |
+| RoslynSentinel.Tests.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic |
+| RoslynSentinel.Tests.Battery.Advanced | RoslynSentinel.Engines.Advanced, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Advanced, RoslynSentinel.Tests.Support.Basic |
+| RoslynSentinel.Tests.Battery.Basic | RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic |
 | RoslynSentinel.Tests.Integration | RoslynSentinel.Common, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests |
 | RoslynSentinel.Tests.ModelEval | RoslynSentinel.Common, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests |
 | RoslynSentinel.Tests.PlanStepRunner | RoslynSentinel.Tests, RoslynSentinel.Utilities.PlanStepRunner |
 | RoslynSentinel.Tests.Server | RoslynSentinel.Common, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests |
 | RoslynSentinel.Tests.SubAgent | RoslynSentinel.Common, RoslynSentinel.Server.Advanced, RoslynSentinel.Tools.Advanced |
-| RoslynSentinel.Tests.Tools.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Advanced, RoslynSentinel.Engines.Basic, RoslynSentinel.Tests, RoslynSentinel.Tools.Advanced, RoslynSentinel.Tools.Basic |
-| RoslynSentinel.Tests.Tools.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Tests, RoslynSentinel.Tools.Basic |
+| RoslynSentinel.Tests.Support.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Advanced, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Tools.Advanced |
+| RoslynSentinel.Tests.Support.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Tools.Basic |
+| RoslynSentinel.Tests.Tools.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Advanced, RoslynSentinel.Engines.Basic, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Advanced, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Tools.Advanced, RoslynSentinel.Tools.Basic |
+| RoslynSentinel.Tests.Tools.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Tools.Basic |
 | RoslynSentinel.Tools.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Advanced, RoslynSentinel.Engines.Basic |
 | RoslynSentinel.Tools.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Basic |
 | RoslynSentinel.Tools.Experimental | RoslynSentinel.Common, RoslynSentinel.Engines.Advanced, RoslynSentinel.Engines.Basic |

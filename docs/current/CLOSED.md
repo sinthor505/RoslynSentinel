@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Test construction factories: Tests.Support.Basic / Tests.Support.Advanced rolled out to every test project - resolved (2026-10-28)
+
+About 1,450 `new Engine(...)` / `new Tools(...)` sites in 9 test projects now call static factories in two non-test
+projects (`RoslynSentinel.Tests.Support.Basic`, `RoslynSentinel.Tests.Support.Advanced`) built on
+`ActivatorUtilities` + a fresh container per call, so a new resolvable constructor parameter is absorbed in one place.
+Supersedes the earlier BLOCKED entry for the pilot Step 4 (`SemanticFindReplace` unreachable until a fresh session).
+Evidence: trial `ValidationEngine` constructor change broke 0 test files (2 production sites only); `Tests.Tools.Basic` 158 s
+vs 159 s and `Tests.Advanced` 27.5 s vs 28.3 s against the pre-pilot commit `171037b6`. Plans:
+[plans/closed/plan_tests_support_projects_factory_rollout.md](plans/closed/plan_tests_support_projects_factory_rollout.md),
+[plans/closed/plan_test_construction_factories_pilot.md](plans/closed/plan_test_construction_factories_pilot.md).
+Remaining `new` sites and follow-ups are listed in the rollout plan's Step 5e/6 notes and the open TODO.md entry on object initializers.
+
 ## Server.Basic folded into Server.Advanced; engine and tool-dependency registration moved to Engines.*/Tools.* - resolved (2026-10-27)
 
 Evidence: commits 4b9d998d, b875d27a, 9f6860d5 (fold; [proposal](proposals/closed/proposal_unify_server_projects.md)) and 8417587a

@@ -1,6 +1,6 @@
 # Plan: Pilot shared engine/tool construction factories in Tests.Tools.Basic
 
-**Status:** IN-PROGRESS 2026-10-28. Pilot slices done (commits 88318c0d, 10e67b7d, 9115d1d5, 7b902c90, 734fcf36, d4e548d2, 9c800d26); remaining work continues in `plan_tests_support_projects_factory_rollout.md`, after which this plan moves to `closed/`. Earlier status: Steps 0 (tool gap), 1 (survey), 2 and 3 done; Step 4 class slices done for the 13 factored types (remaining: `BuildTools` helper collapse, factories for the next classes); Step 5 open.
+**Status:** DONE 2026-10-28. Pilot slices done (commits 88318c0d, 10e67b7d, 9115d1d5, 7b902c90, 734fcf36, d4e548d2, 9c800d26); the rollout and the Step 6 measurements (trial constructor change: 0 test edits; no timing regression) are in `plan_tests_support_projects_factory_rollout.md` (closed with it). Earlier status: Steps 0 (tool gap), 1 (survey), 2 and 3 done; Step 4 class slices done for the 13 factored types (remaining: `BuildTools` helper collapse, factories for the next classes); Step 5 open.
 
 ## Re-sequencing (2026-10-25, updated 2026-10-27)
 Test DI was reconsidered: it needs no `Server.*` reference once the engine and tool-dependency
