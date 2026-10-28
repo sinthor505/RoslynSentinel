@@ -49,10 +49,10 @@ public class ParameterEditToolTests
     {
         var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
-        var basicEngine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
+        var basicEngine = TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
         var navigation = TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var validation = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var memberEngine = new MemberRefactoringEngine(workspaceManager, navigation, validation, config);
+        var memberEngine = TestEngines.MemberRefactoringEngine(workspaceManager, navigation, validation, config);
         var signatureImpl = new RefactoringSignatureImpl(basicEngine, memberEngine, workspaceManager, validation, navigation, NullLogger<RefactoringSignatureImpl>.Instance);
         return new Tools(new RefactoringSignatureTools(signatureImpl), new ParameterEditTools(signatureImpl));
     }

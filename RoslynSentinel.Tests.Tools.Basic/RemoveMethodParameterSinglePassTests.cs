@@ -23,7 +23,7 @@ public class RemoveMethodParameterSinglePassTests
         var config = TestEngines.SentinelConfiguration();
         var navigation = TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var validation = TestEngines.ValidationEngine(workspaceManager, TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
-        return new MemberRefactoringEngine(workspaceManager, navigation, validation, config);
+        return TestEngines.MemberRefactoringEngine(workspaceManager, navigation, validation, config);
     }
 
     private static async Task<(DocumentEditResult Result, InMemoryWorkspace Workspace)> RemoveAsync(params (string RelativePath, string Content)[] files)

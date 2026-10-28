@@ -46,8 +46,8 @@ public class MemberAddResultSizeTests
         var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
         return new RefactoringStructuralTools(new RefactoringStructuralImpl(
-            new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
-            new MemberRefactoringEngine(workspaceManager, TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance), config),
+            TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
+            TestEngines.MemberRefactoringEngine(workspaceManager, TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance), config),
             TestEngines.StructuralRefinementEngine(workspaceManager, config),
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             workspaceManager,

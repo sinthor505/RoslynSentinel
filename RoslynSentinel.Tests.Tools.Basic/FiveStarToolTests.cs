@@ -33,7 +33,7 @@ public class ExtractConstantSafeStrongTests
     public void Setup()
     {
         _workspaceManager = FakeWorkspaceManager.ReadOnly();
-        _engine = new MsToolAugmentEngine(_workspaceManager);
+        _engine = Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -335,7 +335,7 @@ public class ConvertStringFormatSmartTests
     public void Setup()
     {
         _workspaceManager = FakeWorkspaceManager.ReadOnly();
-        _engine = new MsToolAugmentEngine(_workspaceManager);
+        _engine = Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -551,7 +551,7 @@ public class PreviewAddMissingUsingsLoadedTests
     public void Setup()
     {
         _workspaceManager = FakeWorkspaceManager.ReadOnly();
-        _engine = new MsToolAugmentEngine(_workspaceManager);
+        _engine = Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -716,7 +716,7 @@ public class FormatDocumentSafeTests
     public void Setup()
     {
         _workspaceManager = FakeWorkspaceManager.ReadOnly();
-        _engine = new MsToolAugmentEngine(_workspaceManager);
+        _engine = Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager);
     }
 
     [TearDown]

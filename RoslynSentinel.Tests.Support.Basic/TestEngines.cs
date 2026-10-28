@@ -88,5 +88,17 @@ public static class TestEngines
         ActivatorUtilities.CreateInstance<ProjectConsistencyEngine>(CreateProvider(workspaceManager), workspaceManager);
 
     public static TestRunEngine TestRunEngine(IWorkspaceManager workspaceManager) =>
-    ActivatorUtilities.CreateInstance<TestRunEngine>(CreateProvider(workspaceManager), workspaceManager);
+        ActivatorUtilities.CreateInstance<TestRunEngine>(CreateProvider(workspaceManager), workspaceManager);
+
+    public static BasicRefactoringEngine BasicRefactoringEngine(IWorkspaceManager workspaceManager, ILogger<BasicRefactoringEngine> logger, SentinelConfiguration config) =>
+        ActivatorUtilities.CreateInstance<BasicRefactoringEngine>(CreateProvider(workspaceManager), workspaceManager, logger, config);
+
+    public static MemberRefactoringEngine MemberRefactoringEngine(IWorkspaceManager workspaceManager, SymbolNavigationEngine symbolNavigationEngine, ValidationEngine validationEngine) =>
+        ActivatorUtilities.CreateInstance<MemberRefactoringEngine>(CreateProvider(workspaceManager), workspaceManager, symbolNavigationEngine, validationEngine);
+
+    public static MemberRefactoringEngine MemberRefactoringEngine(IWorkspaceManager workspaceManager, SymbolNavigationEngine symbolNavigationEngine, ValidationEngine validationEngine, SentinelConfiguration config) =>
+        ActivatorUtilities.CreateInstance<MemberRefactoringEngine>(CreateProvider(workspaceManager), workspaceManager, symbolNavigationEngine, validationEngine, config);
+
+    public static MsToolAugmentEngine MsToolAugmentEngine(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<MsToolAugmentEngine>(CreateProvider(workspaceManager), workspaceManager);
 }

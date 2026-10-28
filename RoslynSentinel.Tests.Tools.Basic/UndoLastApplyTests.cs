@@ -253,9 +253,9 @@ public class UndoLastApplyTests
         var config = TestEngines.SentinelConfiguration();
         var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(workspaceManager, config);
         var validationEngine = TestEngines.ValidationEngine(workspaceManager, TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
-        var refactoringEngine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
+        var refactoringEngine = TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
         var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var memberRefactoringEngine = new MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine, config);
+        var memberRefactoringEngine = TestEngines.MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine, config);
         var structuralTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(refactoringEngine, memberRefactoringEngine, structuralRefinementEngine, symbolNavigationEngine, workspaceManager, validationEngine, NullLogger<RefactoringStructuralImpl>.Instance));
 
         var oldPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Mismatched.cs");

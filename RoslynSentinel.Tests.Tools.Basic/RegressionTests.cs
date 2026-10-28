@@ -43,7 +43,7 @@ public class RegressionTests
     {
         _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = Battery.Basic.TestEngines.SentinelConfiguration();
-        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
+        _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
         _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _diagnosticEngine = Battery.Basic.TestEngines.DiagnosticEngine(_workspaceManager);
         _workspaceHealthMisc = new WorkspaceHealthMiscImpl(_workspaceManager, _config);
@@ -594,7 +594,7 @@ public class RegressionTests
     // ══════════════════════════════════════════════════════════════════════════
 
     private MsToolAugmentEngine CreateAugmentEngine()
-        => new MsToolAugmentEngine(_workspaceManager);
+        => Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager);
 
     // ── EncapsulateFieldSafe ──────────────────────────────────────────────────
 
@@ -1205,7 +1205,7 @@ public class RegressionTests
     {
         using var freshManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(
             NullLogger<IWorkspaceManager>.Instance);
-        var engine = new MsToolAugmentEngine(freshManager);
+        var engine = Battery.Basic.TestEngines.MsToolAugmentEngine(freshManager);
 
         var result = await engine.PreviewAddMissingUsingsAsync("SomeFile.cs");
 

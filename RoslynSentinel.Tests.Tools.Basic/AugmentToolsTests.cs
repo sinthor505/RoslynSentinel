@@ -36,7 +36,7 @@ public class AugmentToolsTests
     {
         _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(
             NullLogger<IWorkspaceManager>.Instance);
-        _engine = new MsToolAugmentEngine(_workspaceManager);
+        _engine = Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager);
     }
 
     [TearDown]

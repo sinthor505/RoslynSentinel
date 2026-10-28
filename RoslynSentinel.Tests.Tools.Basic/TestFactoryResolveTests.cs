@@ -273,6 +273,52 @@ public class TestFactoryResolveTests
     }
 
     [Test]
+    public void BasicRefactoringEngine_ManagerLoggerAndConfig()
+    {
+        var logger = NullLogger<BasicRefactoringEngine>.Instance;
+        var config = TestEngines.SentinelConfiguration();
+        var engine = TestEngines.BasicRefactoringEngine(_wm, logger, config);
+        Assert.That(engine, Is.TypeOf<BasicRefactoringEngine>());
+        Assert.That(Holds(engine, _wm), Is.True);
+        Assert.That(Holds(engine, logger), Is.True, "the (manager, logger, config) constructor must be chosen");
+        Assert.That(Holds(engine, config), Is.True, "the explicit configuration must be the one the engine holds");
+    }
+
+    [Test]
+    public void MemberRefactoringEngine_ManagerNavigationAndValidation()
+    {
+        var navigation = TestEngines.SymbolNavigationEngine(_wm);
+        var validation = TestEngines.ValidationEngine(_wm);
+        var engine = TestEngines.MemberRefactoringEngine(_wm, navigation, validation);
+        Assert.That(engine, Is.TypeOf<MemberRefactoringEngine>());
+        Assert.That(Holds(engine, _wm), Is.True);
+        Assert.That(Holds(engine, navigation), Is.True, "the explicit navigation engine must be the one the engine holds");
+        Assert.That(Holds(engine, validation), Is.True, "the explicit validation engine must be the one the engine holds");
+    }
+
+    [Test]
+    public void MemberRefactoringEngine_ManagerNavigationValidationAndConfig()
+    {
+        var navigation = TestEngines.SymbolNavigationEngine(_wm);
+        var validation = TestEngines.ValidationEngine(_wm);
+        var config = TestEngines.SentinelConfiguration();
+        var engine = TestEngines.MemberRefactoringEngine(_wm, navigation, validation, config);
+        Assert.That(engine, Is.TypeOf<MemberRefactoringEngine>());
+        Assert.That(Holds(engine, _wm), Is.True);
+        Assert.That(Holds(engine, navigation), Is.True);
+        Assert.That(Holds(engine, validation), Is.True);
+        Assert.That(Holds(engine, config), Is.True, "the explicit configuration must be the one the engine holds");
+    }
+
+    [Test]
+    public void MsToolAugmentEngine_ManagerOnly()
+    {
+        var engine = TestEngines.MsToolAugmentEngine(_wm);
+        Assert.That(engine, Is.TypeOf<MsToolAugmentEngine>());
+        Assert.That(Holds(engine, _wm), Is.True);
+    }
+
+    [Test]
     public void EveryFactoryMethod_IsNonGenericAndNamedAfterItsReturnType()
     {
         // The naming rule is what lets replaceConstruction map `new X(...)` to a factory; guard it for future additions.

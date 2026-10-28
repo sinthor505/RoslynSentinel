@@ -44,7 +44,7 @@ public class RealProjectPatternTests
         // leaves unimplemented (real disk writes + drift detection, not worth faking faithfully).
         _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(
             NullLogger<IWorkspaceManager>.Instance);
-        _engine = new MsToolAugmentEngine(_workspaceManager);
+        _engine = Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager);
         _workspaceHealthMisc = new WorkspaceHealthMiscImpl(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
     }
 

@@ -15,8 +15,8 @@ public class ExtractMethodEolEndToEndTests
         var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
         return new RefactoringExtractionDocsImpl(
-            new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
-            new MsToolAugmentEngine(workspaceManager),
+            TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
+            TestEngines.MsToolAugmentEngine(workspaceManager),
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             workspaceManager,
             TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),

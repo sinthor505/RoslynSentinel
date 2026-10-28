@@ -807,14 +807,14 @@ public class CreateFileDeleteFileTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var config = Basic.TestEngines.SentinelConfiguration();
-        var refactoringEngine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
+        var refactoringEngine = Basic.TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
         var semanticRefactoringEngine = new SemanticRefactoringEngine(workspaceManager);
         var structuralRefinementEngine = Basic.TestEngines.StructuralRefinementEngine(workspaceManager, config);
-        var msToolAugmentEngine = new MsToolAugmentEngine(workspaceManager);
+        var msToolAugmentEngine = Basic.TestEngines.MsToolAugmentEngine(workspaceManager);
         var symbolNavigationEngine = Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var memberRefactoringEngine = new MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine);
+        var memberRefactoringEngine = Basic.TestEngines.MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine);
         var refactoringStructuralTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(
             refactoringEngine,
             memberRefactoringEngine,
@@ -935,11 +935,11 @@ public class CreateFileDeleteFileTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
         var config = Basic.TestEngines.SentinelConfiguration();
-        var refactoringEngine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
+        var refactoringEngine = Basic.TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
         var structuralRefinementEngine = Basic.TestEngines.StructuralRefinementEngine(workspaceManager, config);
         var symbolNavigationEngine = Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
-        var memberRefactoringEngine = new MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine);
+        var memberRefactoringEngine = Basic.TestEngines.MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine);
         var refactoringStructuralTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(
             refactoringEngine,
             memberRefactoringEngine,

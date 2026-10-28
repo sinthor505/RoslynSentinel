@@ -71,7 +71,7 @@ public class MemberInsertAfterEolTests
     {
         var symbolNav = TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var validationEng = TestEngines.ValidationEngine(workspaceManager);
-        return new MemberRefactoringEngine(workspaceManager, symbolNav, validationEng);
+        return TestEngines.MemberRefactoringEngine(workspaceManager, symbolNav, validationEng);
     }
 
     private static async Task<DocumentEditResult> InsertAsync(string eol, string afterMember)
