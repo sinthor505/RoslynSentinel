@@ -146,31 +146,9 @@ public class GetLargeResultTests
         Assert.That(result.ErrorData!.Message, Does.Contain("00000000000000000000000000000000"));
     }
 
-    private WorkspaceTools CreateWorkspaceToolsWithoutSolution()
-    {
-        var unloadedWorkspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        // Do NOT call SetTestSolution or set SolutionPath, so solution root remains empty
-        
-        var config = Battery.Basic.TestEngines.SentinelConfiguration();
-        var symbolNavEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(unloadedWorkspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        
-        return Battery.Basic.TestTools.WorkspaceTools(
-            unloadedWorkspaceManager,
-            Battery.Basic.TestEngines.ValidationEngine(unloadedWorkspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance),
-            Battery.Basic.TestEngines.DiffEngine(),
-            Battery.Basic.TestEngines.DiagnosticEngine(unloadedWorkspaceManager),
-            Battery.Basic.TestEngines.SolutionManagementEngine(unloadedWorkspaceManager),
-            Battery.Basic.TestEngines.StructuralRefinementEngine(unloadedWorkspaceManager, config),
-            Battery.Basic.TestEngines.DependencyEngine(unloadedWorkspaceManager),
-            Battery.Basic.TestEngines.ProjectConsistencyEngine(unloadedWorkspaceManager),
-            config,
-            NullLogger<WorkspaceTools>.Instance,
-            Battery.Basic.TestEngines.BuildEngine(unloadedWorkspaceManager, Battery.Basic.TestEngines.DiagnosticEngine(unloadedWorkspaceManager)),
-            symbolNavEngine,
-            new TestRunEngine(unloadedWorkspaceManager),
-            Battery.Basic.TestTools.WorkspaceReadNavigationImpl(unloadedWorkspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
-            WriteToolAdviceHelper.WithAllToolsExposed());
-    }
+    // Deliberately no SetTestSolution or SolutionPath: solution root remains empty.
+    private WorkspaceTools CreateWorkspaceToolsWithoutSolution() =>
+        Battery.Basic.TestTools.WorkspaceTools(Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance));
 
     // ══════════════════════════════════════════════════════════════════════════
     // T2b – No solution loaded, unknown resultId -> SolutionNotLoaded error

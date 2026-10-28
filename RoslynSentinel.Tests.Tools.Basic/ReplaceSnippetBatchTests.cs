@@ -47,26 +47,8 @@ public class ReplaceSnippetBatchTests
     private static string LastNonEmptyLine(string text) =>
         text.Split('\n').Reverse().First(l => !string.IsNullOrWhiteSpace(l)).TrimEnd('\r');
 
-    private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
-    {
-        var config = TestEngines.SentinelConfiguration();
-        var diffEngine = TestEngines.DiffEngine();
-        var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
-        return TestTools.WorkspaceTools(
-            workspaceManager,
-            TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
-            diffEngine, diagnosticEngine,
-            TestEngines.SolutionManagementEngine(workspaceManager),
-            TestEngines.StructuralRefinementEngine(workspaceManager, config),
-            TestEngines.DependencyEngine(workspaceManager),
-            TestEngines.ProjectConsistencyEngine(workspaceManager),
-            config, NullLogger<WorkspaceTools>.Instance,
-            TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
-            TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            new TestRunEngine(workspaceManager),
-            TestTools.WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
-            WriteToolAdviceHelper.WithAllToolsExposed());
-    }
+    private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager) =>
+        TestTools.WorkspaceTools(workspaceManager);
 
     [Test]
     public async Task ReplaceSnippet_BatchTwoEditsSameFile_BothApplyAgainstOriginalSnapshotAsync()

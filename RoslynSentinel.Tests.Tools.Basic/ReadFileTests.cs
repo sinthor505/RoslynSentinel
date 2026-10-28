@@ -274,31 +274,9 @@ public class ReadFileTests
         Assert.That(firstLineNumber, Is.EqualTo(lastLineNumber + 1), "Continuation should provide the next sequential line");
     }
 
-    private WorkspaceTools BuildToolsWithoutSolution()
-    {
-        // Create tools backed by a FakeWorkspaceManager that has NOT been assigned a solution,
-        // so CurrentSolution is null and ResolveFromWire returns NoSolutionLoaded.
-        var workspaceManager = FakeWorkspaceManager.ReadOnly();
-        // Deliberately do NOT call SetTestSolution, leaving CurrentSolution null.
-
-        var config = TestEngines.SentinelConfiguration();
-        var diffEngine = TestEngines.DiffEngine();
-        var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
-        var solutionManagementEngine = TestEngines.SolutionManagementEngine(workspaceManager);
-        var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(workspaceManager, config);
-        var dependencyEngine = TestEngines.DependencyEngine(workspaceManager);
-        var projectConsistencyEngine = TestEngines.ProjectConsistencyEngine(workspaceManager);
-        return TestTools.WorkspaceTools(
-            workspaceManager, validationEngine, diffEngine, diagnosticEngine,
-            solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
-            projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
-            TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
-            TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            new TestRunEngine(workspaceManager),
-            TestTools.WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
-            WriteToolAdviceHelper.WithAllToolsExposed());
-    }
+    // Deliberately no SetTestSolution: CurrentSolution stays null, so ResolveFromWire returns NoSolutionLoaded.
+    private WorkspaceTools BuildToolsWithoutSolution() =>
+        TestTools.WorkspaceTools(FakeWorkspaceManager.ReadOnly());
 
     [Test]
     public async Task ReadFile_NoSolutionLoadedAndRootedPath_ReadsFromDiskWithExplanationAsync()
