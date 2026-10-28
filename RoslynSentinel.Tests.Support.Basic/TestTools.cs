@@ -12,8 +12,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 public static class TestTools
 {
-    // TODO WholeFileWriteTools (25 survey sites, shape [wm, workspaceTools, validation, diff, logger, nav]) and the other
-    // tool classes (DocumentationTools, ...) have no factory yet; add them when their slice is migrated.
+    // TODO The other tool classes (DocumentationTools, ...) have no factory yet; add them when their slice is migrated.
 
     public static WorkspaceReadNavigationImpl WorkspaceReadNavigationImpl(IWorkspaceManager workspaceManager) =>
         ActivatorUtilities.CreateInstance<WorkspaceReadNavigationImpl>(TestEngines.CreateProvider(workspaceManager), workspaceManager);
@@ -44,4 +43,15 @@ public static class TestTools
             workspaceManager, validationEngine, diffEngine, diagnosticEngine, solutionManagementEngine,
             structuralRefinementEngine, dependencyEngine, projectConsistencyEngine, config, logger, buildEngine,
             symbolNavigationEngine, testRunEngine, readNav, writeAdvice);
+
+    /// <summary>
+    /// The only shape the tests use: all six constructor arguments explicit, so the test's own tool class and engines
+    /// are the ones WholeFileWriteTools holds.
+    /// </summary>
+    public static WholeFileWriteTools WholeFileWriteTools(
+        IWorkspaceManager workspaceManager, WorkspaceTools workspaceTools, ValidationEngine validationEngine,
+        DiffEngine diffEngine, ILogger<WholeFileWriteTools> logger, SymbolNavigationEngine symbolNavigationEngine) =>
+        ActivatorUtilities.CreateInstance<WholeFileWriteTools>(
+            TestEngines.CreateProvider(workspaceManager),
+            workspaceManager, workspaceTools, validationEngine, diffEngine, logger, symbolNavigationEngine);
 }

@@ -93,7 +93,7 @@ public class SearchModeTests
             config, NullLogger<WorkspaceTools>.Instance,
             TestEngines.BuildEngine(workspace, diagnosticEngine),
             symbolNavigationEngine,
-            new TestRunEngine(workspace),
+            TestEngines.TestRunEngine(workspace),
             TestTools.WorkspaceReadNavigationImpl(workspace, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
 

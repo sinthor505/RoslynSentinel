@@ -31,7 +31,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "NewFile.cs");
         var content = "public class NewFile { }";
@@ -52,7 +52,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var existingFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = await File.ReadAllTextAsync(existingFile);
@@ -73,7 +73,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var existingFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var replacementContent = "public class Replaced { }";
@@ -96,7 +96,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "ViaCreateAlias.cs");
 
@@ -119,7 +119,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "ViaReplaceAlias.cs");
 
@@ -141,7 +141,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var missingFile = Path.Combine(fixture.SolutionDirectory, "DoesNotExist.cs");
 
@@ -161,7 +161,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "NewSubdir", "Nested.cs");
 
@@ -185,7 +185,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "Notes.txt");
         var content = "plain text notes, not a Roslyn document";
@@ -210,7 +210,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "ToDelete.cs");
         await fixture.AddFileToSolution(workspaceManager, "ToDelete.cs", "public class ToDelete { }");
@@ -230,7 +230,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var missingFile = Path.Combine(fixture.SolutionDirectory, "DoesNotExist.cs");
 
@@ -250,7 +250,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "Undoable.cs");
         var content = "public class Undoable { }";
@@ -282,7 +282,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         // Modify the file directly on disk (bypassing ApplyProposedChangesAsync) without
@@ -974,7 +974,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        var wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         // validateOnApply: false -> the replacement is not a valid compilation unit for this fixture; this test only checks the EOL finding.
         var result = await wholeFileWriteTools.WriteFileTool(reason: "test message", WriteFileOperation.ReplaceFile, targetFile, "public class Replaced { }\n", validateOnApply: false);
@@ -997,7 +997,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        var wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         // validateOnApply: false -> the replacement is not a valid compilation unit for this fixture; this test only checks the EOL finding.
         var result = await wholeFileWriteTools.WriteFileTool(reason: "test message", WriteFileOperation.ReplaceFile, targetFile, "public class Replaced { }\n", validateOnApply: false);

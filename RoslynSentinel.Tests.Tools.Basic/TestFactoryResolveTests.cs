@@ -235,13 +235,41 @@ public class TestFactoryResolveTests
             _wm, validation, diff, diagnostic, TestEngines.SolutionManagementEngine(_wm),
             TestEngines.StructuralRefinementEngine(_wm, config), TestEngines.DependencyEngine(_wm),
             TestEngines.ProjectConsistencyEngine(_wm), config, NullLogger<WorkspaceTools>.Instance,
-            TestEngines.BuildEngine(_wm, diagnostic), navigation, new TestRunEngine(_wm), readNav,
+            TestEngines.BuildEngine(_wm, diagnostic), navigation, TestEngines.TestRunEngine(_wm), readNav,
             WriteToolAdviceHelper.WithAllToolsExposed());
 
         Assert.That(tools, Is.TypeOf<WorkspaceTools>());
         Assert.That(Holds(tools, validation), Is.True, "explicit engines must be the ones the tool class holds");
         Assert.That(Holds(tools, navigation), Is.True);
         Assert.That(Holds(tools, readNav), Is.True);
+    }
+
+    [Test]
+    public void TestRunEngine_ManagerOnly()
+    {
+        var engine = TestEngines.TestRunEngine(_wm);
+        Assert.That(engine, Is.TypeOf<TestRunEngine>());
+        Assert.That(Holds(engine, _wm), Is.True);
+    }
+
+    [Test]
+    public void WholeFileWriteTools_AllSixArgumentsExplicit()
+    {
+        var diff = TestEngines.DiffEngine();
+        var validation = TestEngines.ValidationEngine(_wm, diff, NullLogger<ValidationEngine>.Instance);
+        var navigation = TestEngines.SymbolNavigationEngine(_wm, NullLogger<SymbolNavigationEngine>.Instance);
+        var workspaceTools = TestTools.WorkspaceTools(_wm);
+        var logger = NullLogger<WholeFileWriteTools>.Instance;
+
+        var tools = TestTools.WholeFileWriteTools(_wm, workspaceTools, validation, diff, logger, navigation);
+
+        Assert.That(tools, Is.TypeOf<WholeFileWriteTools>());
+        Assert.That(Holds(tools, _wm), Is.True);
+        Assert.That(Holds(tools, workspaceTools), Is.True, "the explicit WorkspaceTools must be the one the tool class holds");
+        Assert.That(Holds(tools, validation), Is.True, "explicit engines must be the ones the tool class holds");
+        Assert.That(Holds(tools, diff), Is.True);
+        Assert.That(Holds(tools, logger), Is.True);
+        Assert.That(Holds(tools, navigation), Is.True);
     }
 
     [Test]

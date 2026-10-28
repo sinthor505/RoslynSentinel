@@ -70,10 +70,10 @@ public class PathCaseLookupRegressionTests
             config, NullLogger<WorkspaceTools>.Instance,
             TestEngines.BuildEngine(workspace, diagnosticEngine),
             symbolNavigationEngine,
-            new TestRunEngine(workspace),
+            TestEngines.TestRunEngine(workspace),
             TestTools.WorkspaceReadNavigationImpl(workspace, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
-        var writeTools = new WholeFileWriteTools(workspace, tools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, symbolNavigationEngine);
+        var writeTools = TestTools.WholeFileWriteTools(workspace, tools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, symbolNavigationEngine);
         return new Harness(fixture, workspace, tools, writeTools);
     }
 

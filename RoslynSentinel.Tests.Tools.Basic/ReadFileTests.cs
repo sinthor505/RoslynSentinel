@@ -52,7 +52,7 @@ public class ReadFileTests
             projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
             TestEngines.BuildEngine(_workspaceManager, diagnosticEngine),
             TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            new TestRunEngine(_workspaceManager),
+            TestEngines.TestRunEngine(_workspaceManager),
             TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
     }

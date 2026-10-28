@@ -86,4 +86,7 @@ public static class TestEngines
 
     public static ProjectConsistencyEngine ProjectConsistencyEngine(IWorkspaceManager workspaceManager) =>
         ActivatorUtilities.CreateInstance<ProjectConsistencyEngine>(CreateProvider(workspaceManager), workspaceManager);
+
+    public static TestRunEngine TestRunEngine(IWorkspaceManager workspaceManager) =>
+    ActivatorUtilities.CreateInstance<TestRunEngine>(CreateProvider(workspaceManager), workspaceManager);
 }

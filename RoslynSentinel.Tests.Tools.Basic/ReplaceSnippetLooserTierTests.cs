@@ -76,7 +76,7 @@ public class ReplaceSnippetLooserTierTests
             config, NullLogger<WorkspaceTools>.Instance,
             TestEngines.BuildEngine(manager, diagnosticEngine),
             symbolNavigationEngine,
-            new TestRunEngine(manager),
+            TestEngines.TestRunEngine(manager),
             TestTools.WorkspaceReadNavigationImpl(manager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
         return new Harness(workspace, tools);

@@ -50,10 +50,10 @@ public class BatteryTwentyTests
             _solutionManagementEngine, _structuralRefinementEngine, _dependencyEngine,
             _projectConsistencyEngine, _config, NullLogger<WorkspaceTools>.Instance, TestEngines.BuildEngine(_workspaceManager, _diagnosticEngine),
             TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            new TestRunEngine(_workspaceManager),
+            TestEngines.TestRunEngine(_workspaceManager),
             TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
-        _wholeFileWriteTools = new WholeFileWriteTools(_workspaceManager, _workspaceTools, _validationEngine, _diffEngine, NullLogger<WholeFileWriteTools>.Instance, TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        _wholeFileWriteTools = TestTools.WholeFileWriteTools(_workspaceManager, _workspaceTools, _validationEngine, _diffEngine, NullLogger<WholeFileWriteTools>.Instance, TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
     }
 
     [TearDown]

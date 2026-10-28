@@ -54,7 +54,7 @@ public class ReplaceSnippetSizeGuardTests
             config, NullLogger<WorkspaceTools>.Instance,
             TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            new TestRunEngine(workspaceManager),
+            TestEngines.TestRunEngine(workspaceManager),
             TestTools.WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             writeAdvice ?? WriteToolAdviceHelper.WithAllToolsExposed());
     }

@@ -136,7 +136,7 @@ public class EolInheritanceTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
         var workspaceTools = BuildTools(workspaceManager);
-        var wholeFileTools = new WholeFileWriteTools(
+        var wholeFileTools = TestTools.WholeFileWriteTools(
             workspaceManager,
             workspaceTools,
             TestEngines.ValidationEngine(workspaceManager, TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance),
@@ -209,7 +209,7 @@ public class EolInheritanceTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
         var workspaceTools = BuildTools(workspaceManager);
-        var wholeFileTools = new WholeFileWriteTools(
+        var wholeFileTools = TestTools.WholeFileWriteTools(
             workspaceManager,
             workspaceTools,
             TestEngines.ValidationEngine(workspaceManager, TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance),
@@ -253,7 +253,7 @@ public class EolInheritanceTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
         var workspaceTools = BuildTools(workspaceManager);
-        var wholeFileTools = new WholeFileWriteTools(
+        var wholeFileTools = TestTools.WholeFileWriteTools(
             workspaceManager,
             workspaceTools,
             TestEngines.ValidationEngine(workspaceManager, TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance),
