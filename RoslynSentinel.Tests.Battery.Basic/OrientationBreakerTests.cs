@@ -29,7 +29,7 @@ public class OrientationBreakerTests
     [Test]
     public void RecordSearchOutcome_BelowThreshold_DoesNotTrip()
     {
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var automaticBreaker = (IAutomaticCircuitBreaker)workspaceManager;
 
         automaticBreaker.RecordSearchOutcome(0);
@@ -42,7 +42,7 @@ public class OrientationBreakerTests
     [Test]
     public void RecordSearchOutcome_ThreeConsecutiveZeroMatches_Trips()
     {
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var automaticBreaker = (IAutomaticCircuitBreaker)workspaceManager;
 
         automaticBreaker.RecordSearchOutcome(0);
@@ -56,7 +56,7 @@ public class OrientationBreakerTests
     [Test]
     public void RecordSearchOutcome_NonZeroMatchMidStreak_ResetsStreakAndDoesNotTrip()
     {
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var automaticBreaker = (IAutomaticCircuitBreaker)workspaceManager;
 
         automaticBreaker.RecordSearchOutcome(0);
@@ -71,7 +71,7 @@ public class OrientationBreakerTests
     [Test]
     public void Reset_ClearsTrippedStateAndStreak()
     {
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var automaticBreaker = (IAutomaticCircuitBreaker)workspaceManager;
 
         automaticBreaker.RecordSearchOutcome(0);
@@ -94,7 +94,7 @@ public class OrientationBreakerTests
     [Test]
     public void ManualBreaker_RenameFromResetBreakerToReset_BehavesIdenticallyToBefore()
     {
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         IManualCircuitBreaker manualBreaker = workspaceManager;
 
         // Streak-trip threshold is 8 consecutive all-failure batches (BreakerStreakThreshold).
@@ -115,7 +115,7 @@ public class OrientationBreakerTests
     [Test]
     public void TwoBreakers_AreIndependent_TrippingOneDoesNotAffectTheOther()
     {
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         IManualCircuitBreaker manualBreaker = workspaceManager;
         var automaticBreaker = (IAutomaticCircuitBreaker)workspaceManager;
 

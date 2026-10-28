@@ -175,8 +175,8 @@ public class MoveMemberCollateralTripwireGuardFiresTests
 
     private static (MemberRefactoringEngine Engine, ValidationEngine Validation) CreateEngine(InMemoryWorkspace workspace)
     {
-        var validation = new ValidationEngine(workspace.Manager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
-        var symbolNav = new SymbolNavigationEngine(workspace.Manager, NullLogger<SymbolNavigationEngine>.Instance);
-        return (new MemberRefactoringEngine(workspace.Manager, symbolNav, validation), validation);
+        var validation = TestEngines.ValidationEngine(workspace.Manager, TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var symbolNav = TestEngines.SymbolNavigationEngine(workspace.Manager, NullLogger<SymbolNavigationEngine>.Instance);
+        return (TestEngines.MemberRefactoringEngine(workspace.Manager, symbolNav, validation), validation);
     }
 }

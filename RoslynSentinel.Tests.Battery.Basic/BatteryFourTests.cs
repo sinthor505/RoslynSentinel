@@ -29,8 +29,8 @@ public class EncapsulateFieldSafeAdvancedTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new MsToolAugmentEngine(_workspaceManager);
+        _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEngines.MsToolAugmentEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -168,8 +168,8 @@ public class AnalyzeForeachAdvancedTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new MsToolAugmentEngine(_workspaceManager);
+        _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEngines.MsToolAugmentEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -304,8 +304,8 @@ public class SwitchConversionAdvancedTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new MsToolAugmentEngine(_workspaceManager);
+        _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEngines.MsToolAugmentEngine(_workspaceManager);
     }
 
     [TearDown]

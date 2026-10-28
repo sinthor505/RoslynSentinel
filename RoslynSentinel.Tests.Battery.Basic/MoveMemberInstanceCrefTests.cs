@@ -998,10 +998,10 @@ public class MoveMemberInstanceCrefTests
         params (string relativePath, string content)[] files)
     {
         var workspace = InMemoryWorkspace.Create(files);
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspace.Manager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var symbolNav = new SymbolNavigationEngine(workspace.Manager, NullLogger<SymbolNavigationEngine>.Instance);
-        var engine = new MemberRefactoringEngine(workspace.Manager, symbolNav, validationEngine);
+        var diffEngine = TestEngines.DiffEngine();
+        var validationEngine = TestEngines.ValidationEngine(workspace.Manager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var symbolNav = TestEngines.SymbolNavigationEngine(workspace.Manager, NullLogger<SymbolNavigationEngine>.Instance);
+        var engine = TestEngines.MemberRefactoringEngine(workspace.Manager, symbolNav, validationEngine);
         return (workspace, engine);
     }
 }

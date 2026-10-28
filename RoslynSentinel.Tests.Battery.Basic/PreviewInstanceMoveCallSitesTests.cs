@@ -25,10 +25,10 @@ public class PreviewInstanceMoveCallSitesTests
         params (string relativePath, string content)[] files)
     {
         var workspace = InMemoryWorkspace.Create(files);
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspace.Manager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var symbolNav = new SymbolNavigationEngine(workspace.Manager, NullLogger<SymbolNavigationEngine>.Instance);
-        var engine = new MemberRefactoringEngine(workspace.Manager, symbolNav, validationEngine);
+        var diffEngine = TestEngines.DiffEngine();
+        var validationEngine = TestEngines.ValidationEngine(workspace.Manager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var symbolNav = TestEngines.SymbolNavigationEngine(workspace.Manager, NullLogger<SymbolNavigationEngine>.Instance);
+        var engine = TestEngines.MemberRefactoringEngine(workspace.Manager, symbolNav, validationEngine);
         return (workspace, engine);
     }
 
@@ -1134,13 +1134,13 @@ public class PreviewInstanceMoveCallSitesTests
         // Disk-tier only: this test needs the real disk fixture and its two-project compilation (see the
         // comment above). Every other test in this fixture runs on InMemoryWorkspace and creates no disk state.
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var symbolNav = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var engine = new MemberRefactoringEngine(workspaceManager, symbolNav, validationEngine);
+        var diffEngine = TestEngines.DiffEngine();
+        var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var symbolNav = TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var engine = TestEngines.MemberRefactoringEngine(workspaceManager, symbolNav, validationEngine);
 
         workspaceManager.SetTestSolution(solution);
 
