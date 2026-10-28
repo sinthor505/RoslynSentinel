@@ -51,26 +51,8 @@ public class MutatingToolRejectionMessageTests
         }
         """;
 
-    private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
-    {
-        var config = TestEngines.SentinelConfiguration();
-        var diffEngine = TestEngines.DiffEngine();
-        var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
-        var solutionManagementEngine = TestEngines.SolutionManagementEngine(workspaceManager);
-        var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(workspaceManager, config);
-        var dependencyEngine = TestEngines.DependencyEngine(workspaceManager);
-        var projectConsistencyEngine = TestEngines.ProjectConsistencyEngine(workspaceManager);
-        return TestTools.WorkspaceTools(
-            workspaceManager, validationEngine, diffEngine, diagnosticEngine,
-            solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
-            projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
-            TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
-            TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            new TestRunEngine(workspaceManager),
-            TestTools.WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
-            WriteToolAdviceHelper.WithAllToolsExposed());
-    }
+    private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager) =>
+        TestTools.WorkspaceTools(workspaceManager);
 
     private static void AssertRoutedThroughLookupHelper(SentinelCallToolResult<object> result)
     {

@@ -69,26 +69,8 @@ public class BatteryTwentyTests
     }
 
     // Same wiring as Setup, but on a caller-supplied manager (InMemoryWorkspace.Manager) for tests that need no fixture state.
-    private static WorkspaceTools BuildInMemoryTools(IWorkspaceManager workspaceManager)
-    {
-        var config = TestEngines.SentinelConfiguration();
-        var diffEngine = TestEngines.DiffEngine();
-        var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
-        var solutionManagementEngine = TestEngines.SolutionManagementEngine(workspaceManager);
-        var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(workspaceManager, config);
-        var dependencyEngine = TestEngines.DependencyEngine(workspaceManager);
-        var projectConsistencyEngine = TestEngines.ProjectConsistencyEngine(workspaceManager);
-        return TestTools.WorkspaceTools(
-            workspaceManager, validationEngine, diffEngine, diagnosticEngine,
-            solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
-            projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
-            TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
-            TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            new TestRunEngine(workspaceManager),
-            TestTools.WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
-            WriteToolAdviceHelper.WithAllToolsExposed());
-    }
+    private static WorkspaceTools BuildInMemoryTools(IWorkspaceManager workspaceManager) =>
+        TestTools.WorkspaceTools(workspaceManager);
 
 
     private void SetSources(params (string fileName, string source)[] files)

@@ -19,31 +19,8 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 [Category("WholeFileWriteTools")] // sentinel:auto-category
 public class CreateFileDeleteFileTests
 {
-    private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
-    {
-        var config = Basic.TestEngines.SentinelConfiguration();
-        var diffEngine = Basic.TestEngines.DiffEngine();
-        var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var diagnosticEngine = Basic.TestEngines.DiagnosticEngine(workspaceManager);
-        var solutionManagementEngine = Basic.TestEngines.SolutionManagementEngine(workspaceManager);
-        var structuralRefinementEngine = Basic.TestEngines.StructuralRefinementEngine(workspaceManager, config);
-        var dependencyEngine = Basic.TestEngines.DependencyEngine(workspaceManager);
-        var projectConsistencyEngine = Basic.TestEngines.ProjectConsistencyEngine(workspaceManager);
-
-        var workspaceTools = Basic.TestTools.WorkspaceTools(
-            workspaceManager, validationEngine, diffEngine, diagnosticEngine,
-            solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
-            projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
-            Basic.TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
-            Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            new TestRunEngine(workspaceManager),
-            Basic.TestTools.WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
-            WriteToolAdviceHelper.WithAllToolsExposed());
-
-        var wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
-
-        return workspaceTools;
-    }
+    private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager) =>
+        Basic.TestTools.WorkspaceTools(workspaceManager);
 
     [Test]
     public async Task CreateFile_NewPath_WritesContentAndReturnsSuccessAsync()

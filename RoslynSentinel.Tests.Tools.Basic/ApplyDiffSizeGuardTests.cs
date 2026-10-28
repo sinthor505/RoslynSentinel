@@ -61,28 +61,8 @@ public class ApplyDiffSizeGuardTests
         return new WholeFileWriteTools(workspaceManager, BuildTools(workspaceManager), validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
     }
 
-    private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
-    {
-        var config = TestEngines.SentinelConfiguration();
-        var diffEngine = TestEngines.DiffEngine();
-        var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
-        var solutionManagementEngine = TestEngines.SolutionManagementEngine(workspaceManager);
-        var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(workspaceManager, config);
-        var dependencyEngine = TestEngines.DependencyEngine(workspaceManager);
-        var projectConsistencyEngine = TestEngines.ProjectConsistencyEngine(workspaceManager);
-        var workspaceTools = TestTools.WorkspaceTools(
-            workspaceManager, validationEngine, diffEngine, diagnosticEngine,
-            solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
-            projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
-            TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
-            TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            new TestRunEngine(workspaceManager),
-            TestTools.WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
-            WriteToolAdviceHelper.WithAllToolsExposed());
-
-        return workspaceTools;
-    }
+    private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager) =>
+        TestTools.WorkspaceTools(workspaceManager);
 
     [Test]
     public async Task ApplyDiff_FilesFormatShrinksOver50Percent_RejectsWithConfirmationRequiredAsync()
