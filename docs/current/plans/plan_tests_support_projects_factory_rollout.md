@@ -1,6 +1,10 @@
 # Plan: Tests.Support.* projects and construction-factory rollout to every test project
 
-**Status:** DRAFT 2026-10-28. Approved in principle by the user (support project(s) named `Tests.Support.*`, more factories, roll out to the other test projects); nothing built yet. Continues `plan_test_construction_factories_pilot.md`.
+**Status:** IN PROGRESS 2026-10-28 (Step 1 done; Step 2 next). Approved by the user (support project(s) named `Tests.Support.*`, more factories, roll out to the other test projects). Continues `plan_test_construction_factories_pilot.md`.
+
+## Progress
+- 2026-10-28 Step 1 DONE: `RoslynSentinel.Tests.Support.Basic` created (`CreateProject` made the project and slnx entry; csproj then replaced by hand to the plan's shape; template `Class1.cs` removed with `DeleteFile`),
+  referenced from `Tests.Tools.Basic`, excluded from `scripts/Test-Parallel.ps1`. Build 0 errors. `CreateProject` drifted 3 files (csproj, slnx, Class1.cs) and halted the session until `ExternalFileDrift(Acknowledge)` (successful bypass, reported).
 
 ## Problem
 The pilot (`plan_test_construction_factories_pilot.md`, commits 88318c0d .. 9c800d26) put static factories

@@ -20,7 +20,7 @@ if (Test-Path $ResultsDirectory) { Remove-Item $ResultsDirectory -Recurse -Force
 New-Item -ItemType Directory -Path $ResultsDirectory | Out-Null
 
 $projects = Get-ChildItem -Path $repoRoot -Recurse -Filter "RoslynSentinel.Tests*.csproj" |
-    Where-Object { $_.FullName -notmatch '\\(bin|obj|PlanStepRunner)\\' }
+    Where-Object { $_.FullName -notmatch '\\(bin|obj|PlanStepRunner)\\' -and $_.Name -notmatch '^RoslynSentinel\.Tests\.Support\.' }
 
 if ($SkipBuild) {
     Write-Host "Skipping build (-SkipBuild); assuming caller already built the solution."
