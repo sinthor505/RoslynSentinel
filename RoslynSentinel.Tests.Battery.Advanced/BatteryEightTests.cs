@@ -27,8 +27,8 @@ public class InventoryEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new InventoryEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Basic.TestEngines.InventoryEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -86,7 +86,7 @@ public class ModernizationUpgradeEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
@@ -106,7 +106,7 @@ public class Parser
 {
     public string Process(string input) { return input.Substring(1); }
 }");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "Process");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "Process");
         Assert.That(result.UpdatedText, Does.Contain("Process"), "Method name should be preserved");
         Assert.That(result.UpdatedText, Does.Contain("AsSpan"), "Substring should be replaced with AsSpan");
         Assert.That(result.UpdatedText, Does.Not.Contain("Substring"), "Original Substring call should be gone");
@@ -125,7 +125,7 @@ public class Guard
         if (x == null) throw new ArgumentNullException(""x"");
     }
 }");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
         Assert.That(result.UpdatedText, Is.Not.Empty);
         Assert.That(result.UpdatedText, Does.Contain("Validate"), "Method name should be preserved");
     }
@@ -143,8 +143,8 @@ public class DependencyEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new DependencyEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Basic.TestEngines.DependencyEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -191,7 +191,7 @@ public class ModernLoggingEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
@@ -215,7 +215,7 @@ public class AuthService
         _logger.LogInformation(""User logged in"", userId);
     }
 }", "AuthService.cs");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).ConvertToSourceGeneratedLoggingAsync("AuthService.cs", "AuthService");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).ConvertToSourceGeneratedLoggingAsync("AuthService.cs", "AuthService");
         Assert.That(result.UpdatedText, Does.Contain("partial"), "Class should be made partial");
         Assert.That(result.UpdatedText, Does.Contain("LogInformationEvent1"), "Should generate LogInformationEvent1 method");
         Assert.That(result.UpdatedText, Does.Contain("LoggerMessage"), "Should add [LoggerMessage] attribute");
@@ -231,7 +231,7 @@ public class UserService
 {
     public string GetName() { return ""Alice""; }
 }", "UserService.cs");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).ConvertToSourceGeneratedLoggingAsync("UserService.cs", "UserService");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).ConvertToSourceGeneratedLoggingAsync("UserService.cs", "UserService");
         Assert.That(result.UpdatedText, Does.Contain("GetName"), "Method should be unchanged");
         Assert.That(result.UpdatedText, Does.Not.Contain("partial"), "No logging calls - class should not be made partial");
         Assert.That(result.UpdatedText, Does.Not.Contain("LoggerMessage"), "Should not generate LoggerMessage attribute");
@@ -241,7 +241,7 @@ public class UserService
     public async Task ConvertToSourceGeneratedLogging_UnknownClass_ThrowsInvalidOperation()
     {
         SetSource(@"public class Foo { }", "Foo.cs");
-        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).ConvertToSourceGeneratedLoggingAsync("Foo.cs", "NonExistentClass"));
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).ConvertToSourceGeneratedLoggingAsync("Foo.cs", "NonExistentClass"));
     }
 }
 
@@ -257,8 +257,8 @@ public class IDEStyleEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new IDEStyleEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.IDEStyleEngine(_workspaceManager);
     }
 
     [TearDown]

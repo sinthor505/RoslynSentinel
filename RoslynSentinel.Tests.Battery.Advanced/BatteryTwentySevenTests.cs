@@ -37,8 +37,8 @@ public class B08_DeadCode_WrittenButNeverRead
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new DeadCodeEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.DeadCodeEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -92,7 +92,7 @@ public class B02_Immutability_ConstFieldNotReadonly
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
@@ -111,7 +111,7 @@ public class B02_Immutability_ConstFieldNotReadonly
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Config.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Config.cs", "Config");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).MakeClassImmutableAsync("Config.cs", "Config");
         Assert.That(result.UpdatedText, Does.Not.Contain("const readonly"), "const fields must NOT receive a readonly modifier.");
         Assert.That(result.UpdatedText, Does.Contain("const int MaxRetries"), "const field must remain unchanged.");
         // The non-const field should get readonly
@@ -131,7 +131,7 @@ public class B01_Instrumentation_ValidThrowStatement
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new InstrumentationEngine(_workspaceManager);
     }
 
@@ -191,8 +191,8 @@ public class B03_SolutionStructureEngine_ValidMemberAccess
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
@@ -214,7 +214,7 @@ public class B03_SolutionStructureEngine_ValidMemberAccess
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("MyWorker.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).ConvertToBackgroundServiceAsync("MyWorker.cs", "MyWorker");
+        var result = await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).ConvertToBackgroundServiceAsync("MyWorker.cs", "MyWorker");
         // The result must contain "stoppingToken.IsCancellationRequested" as proper member access
         Assert.That(result.UpdatedText, Does.Contain("stoppingToken.IsCancellationRequested"), "Output must reference stoppingToken.IsCancellationRequested via member access.");
         // Crucially, the dotted form must NOT appear inside an IdentifierName literal string
@@ -236,8 +236,8 @@ public class B09_AdvancedRefactoring_IsTaskTypeNullGuard
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AdvancedRefactoringEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AdvancedRefactoringEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -335,8 +335,8 @@ public class B19_TestingEngine_MSTestSupport
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new TestingEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.TestingEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -408,8 +408,8 @@ public class B17_DocumentationEngine_RegionMethodsGetDocs
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new DocumentationEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.DocumentationEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -463,8 +463,8 @@ public class B11_ModernizationEngine_ClassToRecord_NoDuplicateProperties
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
@@ -522,8 +522,8 @@ public class B10_ModernizationEngine_OrChainFullPattern
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
@@ -569,8 +569,8 @@ public class B20_LogicOptimization_NullableParamNoGuard
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new LogicSimplificationEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -622,8 +622,8 @@ public class B04_AntiPattern_ZeroParamAsyncNeedsCancellationToken
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AntiPatternEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -682,8 +682,8 @@ public class B16_SecuritySafety_ExpressionBodiedMethodsChecked
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SecurityAndSafetyEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.SecurityAndSafetyEngine(_workspaceManager);
     }
 
     [TearDown]

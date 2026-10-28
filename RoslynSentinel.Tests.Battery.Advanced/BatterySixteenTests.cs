@@ -18,8 +18,8 @@ public class DependencyInjectionEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new DependencyInjectionEngine(_mgr);
+        _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.DependencyInjectionEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]));
     }
 
@@ -69,7 +69,7 @@ public class GranularRefactoringEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]));
     }
 
@@ -78,7 +78,7 @@ public class GranularRefactoringEngineTests
     [Test]
     public async Task InlineField_MissingFile_ThrowsNotFound()
     {
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_mgr).InlineFieldAsync("NoSuchFile.cs", "_field"));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestEnginesAdvanced.StructuralRefactoringEngine(_mgr).InlineFieldAsync("NoSuchFile.cs", "_field"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
@@ -92,7 +92,7 @@ public class MyClass
     public int GetCount() => _count;
 }";
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("MyClass.cs", source)]));
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_mgr).InlineFieldAsync("MyClass.cs", "_nonexistent"));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestEnginesAdvanced.StructuralRefactoringEngine(_mgr).InlineFieldAsync("MyClass.cs", "_nonexistent"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         Assert.That(ex.Message, Does.Contain("Field '_nonexistent' not found"));
     }
@@ -107,7 +107,7 @@ public class Calc
     public int Double(int x) => x * _factor;
 }";
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calc.cs", source)]));
-        var result = await new StructuralRefactoringEngine(_mgr).InlineFieldAsync("Calc.cs", "_factor");
+        var result = await TestEnginesAdvanced.StructuralRefactoringEngine(_mgr).InlineFieldAsync("Calc.cs", "_factor");
         Assert.That(result.UpdatedText, Does.Not.StartWith("// ERROR:"), "valid field should not return error comment");
         Assert.That(result.UpdatedText, Does.Contain("2"), "inlined value should appear in output");
     }
@@ -122,10 +122,10 @@ public class HealthOrchestrationEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        var config = new SentinelConfiguration();
-        var pse = new SolutionStructureEngine(_mgr, config);
-        _engine = new HealthOrchestrationEngine(_mgr, pse, config, new PerformanceEngine(_mgr), new AntiPatternEngine(_mgr, config));
+        _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var config = Basic.TestEngines.SentinelConfiguration();
+        var pse = Basic.TestEngines.SolutionStructureEngine(_mgr, config);
+        _engine = TestEnginesAdvanced.HealthOrchestrationEngine(_mgr, pse, config, TestEnginesAdvanced.PerformanceEngine(_mgr), TestEnginesAdvanced.AntiPatternEngine(_mgr, config));
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]));
     }
 

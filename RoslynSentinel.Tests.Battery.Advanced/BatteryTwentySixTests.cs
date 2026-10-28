@@ -31,8 +31,8 @@ public class BlockingCallFalsePositiveTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AntiPatternEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -146,8 +146,8 @@ public class AsyncVoidGotchaTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AsyncAnalysisEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -274,8 +274,8 @@ public class LockInAsyncGotchaTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AsyncAnalysisEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -370,8 +370,8 @@ public class ThreadSafeLockGotchaTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ThreadSafetyEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Basic.TestEngines.ThreadSafetyEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -489,8 +489,8 @@ public class ValueTaskMisuseGotchaTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AsyncAnalysisEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -585,8 +585,8 @@ public class ExceptionHandlingGotchaTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AntiPatternEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -707,7 +707,7 @@ public class ImmutabilityGotchaTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
@@ -720,7 +720,7 @@ public class ImmutabilityGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Entity.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Entity.cs", "Entity");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).MakeClassImmutableAsync("Entity.cs", "Entity");
         Assert.That(result.UpdatedText, Does.Contain("init"), "set; accessor must be replaced with init;");
         Assert.That(result.UpdatedText, Does.Not.Contain("set;"), "set; must no longer be present after mutation.");
     }
@@ -735,7 +735,7 @@ public class ImmutabilityGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("AI.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("AI.cs", "AlreadyImmutable");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).MakeClassImmutableAsync("AI.cs", "AlreadyImmutable");
         Assert.That(result, Is.Not.Null, "Must not return null for an already-immutable class.");
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
         Assert.That(result.UpdatedText, Does.Contain("init"), "init keyword must still be present.");
@@ -753,7 +753,7 @@ public class ImmutabilityGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Mutable.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Mutable.cs", "MutableFields");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).MakeClassImmutableAsync("Mutable.cs", "MutableFields");
         Assert.That(result.UpdatedText, Does.Contain("readonly"), "Public mutable fields must receive the readonly modifier.");
     }
 
@@ -767,7 +767,7 @@ public class ImmutabilityGotchaTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Real.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
-            await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Real.cs", "NonExistent"));
+            await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).MakeClassImmutableAsync("Real.cs", "NonExistent"));
         Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         Assert.That(ex.Message, Does.Contain("Class not found."));
     }
@@ -780,7 +780,7 @@ public class ImmutabilityGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Empty.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Empty.cs", "EmptyClass");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).MakeClassImmutableAsync("Empty.cs", "EmptyClass");
         Assert.That(result, Is.Not.Null, "Engine must not crash or return null for a class with no properties.");
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
         Assert.That(result.UpdatedText, Does.Contain("EmptyClass"), "Class name must be present in the returned code.");
@@ -802,8 +802,8 @@ public class StringConcatInLoopGotchaTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AntiPatternEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -904,8 +904,8 @@ public class MissingCancellationTokenGotchaTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AntiPatternEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -989,8 +989,8 @@ public class UnsafeTypeCastGotchaTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SecurityAndSafetyEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.SecurityAndSafetyEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -1091,8 +1091,8 @@ public class FireAndForgetGotchaTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AsyncAnalysisEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -1191,8 +1191,8 @@ public class ConfigureAwaitInLibraryGotchaTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AsyncAnalysisEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]

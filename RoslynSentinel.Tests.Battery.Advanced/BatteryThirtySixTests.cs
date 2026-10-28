@@ -25,10 +25,10 @@ public class BatteryThirtySixTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
-        _securityEngine = new SecurityEngine(_workspaceManager);
-        _solutionStructureEngine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _asyncSafetyEngine = TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
+        _securityEngine = TestEnginesAdvanced.SecurityEngine(_workspaceManager);
+        _solutionStructureEngine = Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]

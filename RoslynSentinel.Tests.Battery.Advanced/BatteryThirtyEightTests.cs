@@ -33,7 +33,7 @@ public class BatteryThirtyEightTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new PathDrivenTestEngine(_workspaceManager);
     }
 

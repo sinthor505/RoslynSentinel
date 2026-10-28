@@ -24,11 +24,11 @@ public class B30_RegressionTests
     [SetUp]
     public void Setup()
     {
-        _ws = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _cfg = new SentinelConfiguration();
-        _modEngine = new SyntaxModernizationEngine(_ws, _cfg);
-        _tsEngine = new ThreadSafetyEngine(_ws);
-        _suEngine = new SyntaxUpgradeEngine(_ws, _cfg);
+        _ws = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _cfg = Basic.TestEngines.SentinelConfiguration();
+        _modEngine = TestEnginesAdvanced.SyntaxModernizationEngine(_ws, _cfg);
+        _tsEngine = Basic.TestEngines.ThreadSafetyEngine(_ws);
+        _suEngine = Basic.TestEngines.SyntaxUpgradeEngine(_ws, _cfg);
     }
 
     [TearDown]
@@ -51,7 +51,7 @@ public class Product {
     public string Name { get; set; }
 }";
         SetSource(code, "Product.cs");
-        var result = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Product.cs", "Product");
+        var result = await TestEnginesAdvanced.ApiGenerationEngine(_ws).AddValidationToPocoAsync("Product.cs", "Product");
         // [Required] should be present exactly once
         var count = CountOccurrences(result.UpdatedText, "[Required]");
         Assert.That(count, Is.EqualTo(1), "Expected exactly 1 [Required] attribute on Name");
@@ -71,7 +71,7 @@ public class Product {
     public string Description { get; set; }
 }";
         SetSource(code, "Product.cs");
-        var result = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Product.cs", "Product");
+        var result = await TestEnginesAdvanced.ApiGenerationEngine(_ws).AddValidationToPocoAsync("Product.cs", "Product");
         // Name already had [Required] -> count must still be 1
         var requiredCount = CountOccurrences(result.UpdatedText, "[Required]");
         Assert.That(requiredCount, Is.EqualTo(2), "Description should get [Required] but Name should NOT get a duplicate - total must be 2");
@@ -88,7 +88,7 @@ public class Order {
     public string Code { get; set; }
 }";
         SetSource(code, "Order.cs");
-        var result = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Order.cs", "Order");
+        var result = await TestEnginesAdvanced.ApiGenerationEngine(_ws).AddValidationToPocoAsync("Order.cs", "Order");
         var count = CountOccurrences(result.UpdatedText, "StringLength");
         Assert.That(count, Is.EqualTo(1), "Should not duplicate [StringLength]");
     }
@@ -104,7 +104,7 @@ public class Measurement {
     public int Value { get; set; }
 }";
         SetSource(code, "Measurement.cs");
-        var result = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Measurement.cs", "Measurement");
+        var result = await TestEnginesAdvanced.ApiGenerationEngine(_ws).AddValidationToPocoAsync("Measurement.cs", "Measurement");
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
         var count = CountOccurrences(result.UpdatedText, "[Range(");
         Assert.That(count, Is.EqualTo(1), "Should not duplicate [Range]");
@@ -120,9 +120,9 @@ public class Customer {
     public int Age { get; set; }
 }";
         SetSource(code, "Customer.cs");
-        var first = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Customer.cs", "Customer");
+        var first = await TestEnginesAdvanced.ApiGenerationEngine(_ws).AddValidationToPocoAsync("Customer.cs", "Customer");
         SetSource(first.UpdatedText, "Customer.cs");
-        var second = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Customer.cs", "Customer");
+        var second = await TestEnginesAdvanced.ApiGenerationEngine(_ws).AddValidationToPocoAsync("Customer.cs", "Customer");
         // Running twice must produce the same result -> no extra attributes appended
         var req1 = CountOccurrences(first.UpdatedText, "[Required]");
         var req2 = CountOccurrences(second.UpdatedText, "[Required]");
@@ -139,9 +139,9 @@ public class Ticket {
     public string Title { get; set; }
 }";
         SetSource(code, "Ticket.cs");
-        var first = await new DocumentationEngine(_ws).DocumentPocoFieldsAsync("Ticket.cs", "Ticket");
+        var first = await TestEnginesAdvanced.DocumentationEngine(_ws).DocumentPocoFieldsAsync("Ticket.cs", "Ticket");
         SetSource(first.UpdatedText, "Ticket.cs");
-        var second = await new DocumentationEngine(_ws).DocumentPocoFieldsAsync("Ticket.cs", "Ticket");
+        var second = await TestEnginesAdvanced.DocumentationEngine(_ws).DocumentPocoFieldsAsync("Ticket.cs", "Ticket");
         Assert.That(second.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
         Assert.That(second.UpdatedText, Is.EqualTo(first.UpdatedText));
         Assert.That(CountOccurrences(second.UpdatedText, "[Description("), Is.EqualTo(1), "Second run must not add a duplicate [Description]");

@@ -17,8 +17,8 @@ public class AdvancedLogicEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new LogicSimplificationEngine(_mgr);
+        _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.LogicSimplificationEngine(_mgr);
     }
 
     [TearDown]
@@ -28,7 +28,7 @@ public class AdvancedLogicEngineTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
-        var result = await new LogicSimplificationEngine(_mgr).InvertBooleanLogicAsync("NoSuchFile.cs", "myBool");
+        var result = await TestEnginesAdvanced.LogicSimplificationEngine(_mgr).InvertBooleanLogicAsync("NoSuchFile.cs", "myBool");
         Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.DocumentNotFound), "unknown file should yield DocumentNotFound"); // TODO throw-migration: assert the typed exception once the boolean-logic engine throws
     }
 
@@ -37,7 +37,7 @@ public class AdvancedLogicEngineTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new LogicSimplificationEngine(_mgr).ConvertIfToSwitchExpressionAsync("NoSuchFile.cs", "GetValue"));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestEnginesAdvanced.LogicSimplificationEngine(_mgr).ConvertIfToSwitchExpressionAsync("NoSuchFile.cs", "GetValue"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
@@ -52,7 +52,7 @@ public static class MyExtensions
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Extensions.cs", source)]);
         _mgr.SetTestSolution(solution);
-        var result = await new LogicSimplificationEngine(_mgr).ExtensionToStaticAsync("Extensions.cs", "Shout");
+        var result = await TestEnginesAdvanced.LogicSimplificationEngine(_mgr).ExtensionToStaticAsync("Extensions.cs", "Shout");
         Assert.That(result.UpdatedText, Does.Not.Contain("this string"), "this keyword should be stripped from first parameter");
         Assert.That(result.UpdatedText, Does.Contain("Shout"), "method should still be present");
     }
@@ -67,8 +67,8 @@ public class AdvancedRefactoringEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AdvancedRefactoringEngine(_mgr);
+        _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AdvancedRefactoringEngine(_mgr);
     }
 
     [TearDown]
@@ -78,7 +78,7 @@ public class AdvancedRefactoringEngineTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
-        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SyntaxModernizationEngine(_mgr, new SentinelConfiguration()).ReplaceStringConcatWithInterpolationAsync("NoSuchFile.cs"));
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestEnginesAdvanced.SyntaxModernizationEngine(_mgr, Basic.TestEngines.SentinelConfiguration()).ReplaceStringConcatWithInterpolationAsync("NoSuchFile.cs"));
     }
 
     [Test]
@@ -92,7 +92,7 @@ public class Greeter
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Greeter.cs", source)]);
         _mgr.SetTestSolution(solution);
-        var result = await new SyntaxModernizationEngine(_mgr, new SentinelConfiguration()).ReplaceStringConcatWithInterpolationAsync("Greeter.cs");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_mgr, Basic.TestEngines.SentinelConfiguration()).ReplaceStringConcatWithInterpolationAsync("Greeter.cs");
         Assert.That(result.UpdatedText, Does.Contain("$\""), "result should use string interpolation syntax");
     }
 
@@ -115,8 +115,8 @@ public class AdvancedStructuralEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new StructuralRefactoringEngine(_mgr);
+        _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.StructuralRefactoringEngine(_mgr);
     }
 
     [TearDown]
@@ -173,8 +173,8 @@ public class AntiPatternEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AntiPatternEngine(_mgr);
+        _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AntiPatternEngine(_mgr);
     }
 
     [TearDown]

@@ -24,8 +24,8 @@ public class CodeStyleEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new CodeStyleEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.CodeStyleEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
@@ -84,8 +84,8 @@ public class SyntaxUpgradeEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SyntaxUpgradeEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
@@ -140,8 +140,8 @@ public class ModernizationEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
@@ -199,11 +199,11 @@ public class RefactoringEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new BasicRefactoringEngine(
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Basic.TestEngines.BasicRefactoringEngine(
             _workspaceManager,
             NullLogger<BasicRefactoringEngine>.Instance,
-            new SentinelConfiguration());
+            Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]

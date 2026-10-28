@@ -27,8 +27,8 @@ public class DocumentationEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new DocumentationEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.DocumentationEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -106,8 +106,8 @@ public class SolutionStructureEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
@@ -132,7 +132,7 @@ public class DataSyncWorker
 {
     public void DoWork() { }
 }");
-        var result = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "DataSyncWorker");
+        var result = await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "DataSyncWorker");
         Assert.That(result.UpdatedText, Does.Contain("BackgroundService"), "Should inherit from BackgroundService");
         Assert.That(result.UpdatedText, Does.Contain("Microsoft.Extensions.Hosting"), "Should add Hosting using directive");
     }
@@ -142,7 +142,7 @@ public class DataSyncWorker
     {
         SetSource(@"
 public class CacheWarmupWorker { public void Initialize() { } }");
-        var result = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "CacheWarmupWorker");
+        var result = await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "CacheWarmupWorker");
         Assert.That(result.UpdatedText, Does.Contain("ExecuteAsync"), "Should inject ExecuteAsync override");
         Assert.That(result.UpdatedText, Does.Contain("CancellationToken"), "ExecuteAsync must accept CancellationToken");
         Assert.That(result.UpdatedText, Does.Contain("stoppingToken"), "Conventional parameter name for BackgroundService");
@@ -158,7 +158,7 @@ public class W : IDisposable
 {
     public void Dispose() { }
 }");
-        var result = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "W");
+        var result = await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "W");
         Assert.That(result.UpdatedText, Does.Match(@"class W\s*:\s*BackgroundService\s*,\s*IDisposable"), "BackgroundService first, existing interface kept");
         var syntaxErrors = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(result.UpdatedText)
             .GetDiagnostics()
@@ -181,7 +181,7 @@ public class W : Foo, IDisposable
     public void Dispose() { }
 }";
         SetSource(source);
-        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "W"));
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "W"));
         Assert.That(ex!.Message, Does.Contain("Class 'W' already derives from 'Foo'"));
         Assert.That(ex.Message, Does.Contain("Convert it manually or remove the base class first"));
         // The refusal happens before any text is produced, so the committed document is unchanged.
@@ -197,7 +197,7 @@ public class W : Foo, IDisposable
 public class W : Missing
 {
 }");
-        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "W"));
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "W"));
         Assert.That(ex!.Message, Does.Contain("Class 'W'"));
         Assert.That(ex.Message, Does.Contain("'Missing'"));
     }
@@ -206,14 +206,14 @@ public class W : Missing
     public async Task ConvertToBackgroundService_ClassNotFound_ThrowsException()
     {
         SetSource("public class Foo { }", "Test.cs");
-        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "NonExistentClass"));
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "NonExistentClass"));
     }
 
     [Test]
     public async Task FindCircularDependencies_EmptyProject_ReturnsEmpty()
     {
         SetSource("// empty file with no types", "Empty.cs");
-        var cycles = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).FindCircularDependenciesAsync();
+        var cycles = await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).FindCircularDependenciesAsync();
         Assert.That(cycles, Is.Empty, "No types in project - no circular dependencies possible");
     }
 
@@ -230,7 +230,7 @@ public class NodeB
 {
     private NodeA _dependency;
 }"));
-        var cycles = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).FindCircularDependenciesAsync();
+        var cycles = await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).FindCircularDependenciesAsync();
         Assert.That(cycles, Is.Not.Empty, "Mutually dependent classes should form a detected cycle");
         var cycle = cycles[0];
         Assert.That(cycle.CycleType, Is.EqualTo("Direct"), "Two-node cycle should be classified as Direct");

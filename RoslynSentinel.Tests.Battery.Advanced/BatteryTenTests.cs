@@ -22,9 +22,9 @@ public class ValidationEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _diffEngine = new DiffEngine();
-        _engine = new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _diffEngine = Basic.TestEngines.DiffEngine();
+        _engine = Basic.TestEngines.ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject("Source",
             [("Greeter.cs", "public class Greeter { public string Greet() => \"Hello\"; }")]);
@@ -129,8 +129,8 @@ public class MetricsEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new MetricsEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.MetricsEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -190,8 +190,8 @@ public class DiagnosticEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new DiagnosticEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Basic.TestEngines.DiagnosticEngine(_workspaceManager);
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject("Source",
             [("Clean.cs", "public class Clean { public int Add(int a, int b) => a + b; }")]);
@@ -241,8 +241,8 @@ public class SecurityEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SecurityEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.SecurityEngine(_workspaceManager);
     }
 
     [TearDown]

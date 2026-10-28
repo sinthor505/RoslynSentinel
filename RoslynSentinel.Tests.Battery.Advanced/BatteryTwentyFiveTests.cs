@@ -20,8 +20,8 @@ public class AdvancedLogicEngineGapTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new LogicSimplificationEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -39,7 +39,7 @@ public class Calc {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calc.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertIfToSwitchStatementAsync("Calc.cs", "Describe", CancellationToken.None);
+        var result = await TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertIfToSwitchStatementAsync("Calc.cs", "Describe", CancellationToken.None);
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("switch"));
     }
 
@@ -48,7 +48,7 @@ public class Calc {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new LogicSimplificationEngine(_workspaceManager).ConvertIfToSwitchStatementAsync("NoSuchFile.cs", "Foo"));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertIfToSwitchStatementAsync("NoSuchFile.cs", "Foo"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
@@ -64,7 +64,7 @@ public class Looper {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Looper.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertForEachToForAsync("Looper.cs", 5);
+        var result = await TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertForEachToForAsync("Looper.cs", 5);
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("for ("));
     }
 
@@ -79,7 +79,7 @@ public class Looper {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Looper.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertForToForEachAsync("Looper.cs", 4);
+        var result = await TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertForToForEachAsync("Looper.cs", 4);
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("foreach ("));
     }
 
@@ -95,7 +95,7 @@ public class Looper {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Looper.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Looper.cs", 5);
+        var result = await TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Looper.cs", 5);
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("for ("));
     }
 }
@@ -112,8 +112,8 @@ public class AnalysisEngineGapTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _antiPatternEngine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
@@ -135,7 +135,7 @@ public class AnalysisEngineGapTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Used { public void Go() {} }")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new DeadCodeEngine(_workspaceManager, new SentinelConfiguration()).FindUninstantiatedTypesAsync();
+        var result = await TestEnginesAdvanced.DeadCodeEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).FindUninstantiatedTypesAsync();
         Assert.That(result, Has.Count.EqualTo(1));
         Assert.That(result, Has.Some.Contains("Used"));
     }
@@ -181,7 +181,7 @@ public class Guard {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Outer { internal class Inner {} }")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new DeadCodeEngine(_workspaceManager, new SentinelConfiguration()).FindInternalClassesThatCouldBePrivateAsync();
+        var result = await TestEnginesAdvanced.DeadCodeEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).FindInternalClassesThatCouldBePrivateAsync();
         Assert.That(result, Has.Count.EqualTo(1));
         Assert.That(result, Has.Some.Contains("Inner"));
     }
@@ -240,7 +240,7 @@ namespace Outer.Inner { public interface IBar { void Run(); } }
 ";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("App.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new DeadCodeEngine(_workspaceManager, new SentinelConfiguration()).FindUnusedInterfacesAsync();
+        var result = await TestEnginesAdvanced.DeadCodeEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).FindUnusedInterfacesAsync();
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Exists(r => r.Contains("'IFoo'")), Is.True, "global-namespace interface IFoo should be reported");
         Assert.That(result.Exists(r => r.Contains("'IBar'")), Is.True, "nested-namespace interface IBar should be reported");
@@ -259,8 +259,8 @@ public class AntiPatternEngineGapTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AntiPatternEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -339,8 +339,8 @@ public class CodeHealingEngineGapTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new CodeHealingEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.CodeHealingEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
@@ -368,8 +368,8 @@ public class CodeStyleEngineGapTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new CodeStyleEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.CodeStyleEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
@@ -412,8 +412,8 @@ public class ControlFlowEngineGapTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ControlFlowEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.ControlFlowEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -458,8 +458,8 @@ public class DeadCodeEngineGapTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new DeadCodeEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.DeadCodeEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -504,8 +504,8 @@ public class DependencyEngineGapTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new DependencyEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Basic.TestEngines.DependencyEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -548,8 +548,8 @@ public class DependencyInjectionEngineGapTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new DependencyInjectionEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.DependencyInjectionEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -596,7 +596,7 @@ public class GranularRefactoringEngineGapTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
@@ -608,7 +608,7 @@ public class GranularRefactoringEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         // Use a real dispatch ID -> 'type-to-var' is safe on any code (converts explicit types)
-        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Service.cs", "type-to-var", 1);
+        var result = await TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Service.cs", "type-to-var", 1);
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
     }
@@ -618,7 +618,7 @@ public class GranularRefactoringEngineGapTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("NoFile.cs", "r1", 1));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("NoFile.cs", "r1", 1));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
@@ -628,7 +628,7 @@ public class GranularRefactoringEngineGapTests
         var source = "public class Service { public void Go(int x) { var y = x + 1; } }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var engine = new StructuralRefactoringEngine(_workspaceManager);
+        var engine = TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager);
         await Assert.ThrowsAsync<ToolNotImplementedException>(() => engine.InlineParameterAsync("Service.cs", "Go", "x"));
     }
 
@@ -637,7 +637,7 @@ public class GranularRefactoringEngineGapTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).InlineParameterAsync("NoFile.cs", "Foo", "bar"));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).InlineParameterAsync("NoFile.cs", "Foo", "bar"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
@@ -647,7 +647,7 @@ public class GranularRefactoringEngineGapTests
         var source = "public class Cache { public string Get(int key) { return key.ToString(); } }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Cache.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertMethodToIndexerAsync("Cache.cs", "Get");
+        var result = await TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ConvertMethodToIndexerAsync("Cache.cs", "Get");
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("this[int key]"));
     }
 
@@ -656,7 +656,7 @@ public class GranularRefactoringEngineGapTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ConvertMethodToIndexerAsync("NoFile.cs", "Get"));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ConvertMethodToIndexerAsync("NoFile.cs", "Get"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
@@ -670,7 +670,7 @@ public class Outer {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Outer.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await new StructuralRefactoringEngine(_workspaceManager).MoveTypeToOuterScopeAsync("Outer.cs", "Inner"));
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).MoveTypeToOuterScopeAsync("Outer.cs", "Inner"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
         Assert.That(ex.Message, Does.Contain("allowWidenToInternal"));
     }
@@ -680,7 +680,7 @@ public class Outer {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).MoveTypeToOuterScopeAsync("NoFile.cs", "Inner"));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).MoveTypeToOuterScopeAsync("NoFile.cs", "Inner"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         Assert.That(ex.Message, Does.Contain("File 'NoFile.cs' not found"));
     }
@@ -698,8 +698,8 @@ public class PerformanceEngineGapTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new PerformanceEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.PerformanceEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -726,8 +726,8 @@ public class RefactoringEngineGapTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _basicRefactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, new SentinelConfiguration());
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _basicRefactoringEngine = Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
@@ -865,8 +865,8 @@ public class SymbolNavigationEngineGapTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
     }
 
     [TearDown]
@@ -1000,8 +1000,8 @@ public class SyntaxUpgradeEngineGapTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SyntaxUpgradeEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]

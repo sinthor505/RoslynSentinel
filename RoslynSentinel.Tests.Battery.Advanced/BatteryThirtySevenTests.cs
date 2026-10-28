@@ -27,9 +27,9 @@ public class BatteryThirtySevenTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
-        _structureEngine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _antiPatternEngine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
+        _structureEngine = Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]

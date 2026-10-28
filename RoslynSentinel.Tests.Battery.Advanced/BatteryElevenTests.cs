@@ -18,7 +18,7 @@ public class ImmutabilityEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
@@ -28,7 +28,7 @@ public class ImmutabilityEngineTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Entity.cs", "public class Entity { private int _age; }")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Entity.cs", "Entity");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).MakeClassImmutableAsync("Entity.cs", "Entity");
         Assert.That(result.UpdatedText, Does.Contain("readonly"), "Mutable field should get readonly modifier");
     }
 
@@ -37,7 +37,7 @@ public class ImmutabilityEngineTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Entity.cs", "public class Entity { public string Name { get; set; } }")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Entity.cs", "Entity");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).MakeClassImmutableAsync("Entity.cs", "Entity");
         Assert.That(result.UpdatedText, Does.Contain("init"), "set accessor should be replaced with init");
         Assert.That(result.UpdatedText, Does.Not.Contain(" set;"), "No plain setter should remain");
     }
@@ -47,7 +47,7 @@ public class ImmutabilityEngineTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("DoesNotExist.cs", "Entity"));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).MakeClassImmutableAsync("DoesNotExist.cs", "Entity"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 }
@@ -64,8 +64,8 @@ public class ThreadSafetyEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ThreadSafetyEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Basic.TestEngines.ThreadSafetyEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -113,8 +113,8 @@ public class AsyncSafetyEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AsyncAnalysisEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -182,8 +182,8 @@ public class DeadCodeEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new DeadCodeEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.DeadCodeEngine(_workspaceManager);
     }
 
     [TearDown]

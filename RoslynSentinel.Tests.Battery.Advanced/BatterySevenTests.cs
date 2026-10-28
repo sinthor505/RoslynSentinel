@@ -29,10 +29,10 @@ public class BasicRefactoringEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _basicRefactoringEngine = new BasicRefactoringEngine(_workspaceManager);
-        var navEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var validationEngine = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var navEngine = Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validationEngine = Basic.TestEngines.ValidationEngine(_workspaceManager, Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
     }
 
     [TearDown]
@@ -69,8 +69,8 @@ public class SemanticSearchEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new DiscoveryEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Basic.TestEngines.DiscoveryEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -91,7 +91,7 @@ public class InventoryService
     public Task<Product> GetByIdAsync(int id) => null!;
     public string GetName() => ""name"";
 }");
-        var results = await new DiscoveryEngine(_workspaceManager).FindMethodsByReturnTypeAsync("Task");
+        var results = await Basic.TestEngines.DiscoveryEngine(_workspaceManager).FindMethodsByReturnTypeAsync("Task");
         Assert.That(results, Is.Not.Empty);
         Assert.That(results.Count, Is.EqualTo(2), "Should find exactly 2 Task-returning methods");
         Assert.That(results.All(r => r.MemberName is "GetAllAsync" or "GetByIdAsync"), Is.True);
@@ -106,7 +106,7 @@ public class OrderService
     public int GetCount() => 0;
     public string GetName() => ""name"";
 }");
-        var results = await new DiscoveryEngine(_workspaceManager).FindMethodsByReturnTypeAsync("XmlDocument");
+        var results = await Basic.TestEngines.DiscoveryEngine(_workspaceManager).FindMethodsByReturnTypeAsync("XmlDocument");
         Assert.That(results, Is.Empty, "No methods return XmlDocument - should yield empty list");
     }
 
@@ -121,7 +121,7 @@ public class ProductsController { }
 
 public class RegularClass { }
 ");
-        var results = await new DiscoveryEngine(_workspaceManager).FindTypesByAttributeAsync("ApiController");
+        var results = await Basic.TestEngines.DiscoveryEngine(_workspaceManager).FindTypesByAttributeAsync("ApiController");
         Assert.That(results.Count, Is.EqualTo(1), "Only one class has ApiController attribute");
         Assert.That(results[0].MemberName, Is.EqualTo("ProductsController"));
     }
@@ -132,7 +132,7 @@ public class RegularClass { }
         SetSource(@"
 public class PlainDto { public int Id { get; set; } }
 ");
-        var results = await new DiscoveryEngine(_workspaceManager).FindTypesByAttributeAsync("Obsolete");
+        var results = await Basic.TestEngines.DiscoveryEngine(_workspaceManager).FindTypesByAttributeAsync("Obsolete");
         Assert.That(results, Is.Empty, "No types have Obsolete attribute");
     }
 
@@ -153,7 +153,7 @@ namespace App
     public class Plain { }
 }
 ");
-        var results = await new DiscoveryEngine(_workspaceManager).FindTypesByAttributeAsync("MyAttr");
+        var results = await Basic.TestEngines.DiscoveryEngine(_workspaceManager).FindTypesByAttributeAsync("MyAttr");
         Assert.That(results.Count, Is.EqualTo(1), "Bare-name query must resolve the namespaced attribute and find exactly one decorated type");
         Assert.That(results[0].MemberName, Is.EqualTo("Widget"));
     }
@@ -174,7 +174,7 @@ namespace App
     public class Widget { }
 }
 ");
-        var engine = new DiscoveryEngine(_workspaceManager);
+        var engine = Basic.TestEngines.DiscoveryEngine(_workspaceManager);
         var types = await engine.FindTypesByAttributeAsync("Ns.MyAttrAttribute");
         Assert.That(types.Count, Is.EqualTo(1), "Qualified query must find the type decorated with [MyAttr] written through the using directive");
         Assert.That(types[0].MemberName, Is.EqualTo("Widget"));
@@ -199,7 +199,7 @@ namespace App
     public class DocOnly { }
 }
 ");
-        var engine = new DiscoveryEngine(_workspaceManager);
+        var engine = Basic.TestEngines.DiscoveryEngine(_workspaceManager);
         var types = await engine.FindTypesByAttributeAsync("Ns.MyAttrAttribute");
         Assert.That(types, Is.Empty, "A cref in an XML doc comment is not an attribute application and must not be reported as a typesWithAttribute hit");
 
@@ -219,7 +219,7 @@ public class AdvancedTypeEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
@@ -238,7 +238,7 @@ public class DataService
 {
     public (int Id, string Name) GetData() { return (1, ""test""); }
 }");
-        var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertTupleToClassAsync("Test.cs", "GetData", "DataResult");
+        var result = await TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ConvertTupleToClassAsync("Test.cs", "GetData", "DataResult");
         var originalKey = result.Keys.FirstOrDefault(k => k.Contains("Test.cs"));
         Assert.That(originalKey.Absolute, Is.Not.Null.And.Not.Empty, "Should return updated original file");
         Assert.That(result[originalKey!], Does.Contain("DataResult"), "Original file should reference new class name");
@@ -257,7 +257,7 @@ public class Processor
 {
     public int Calculate(int x) { return x * 2; }
 }");
-        await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ConvertTupleToClassAsync("Test.cs", "Calculate", "Result"));
+        await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ConvertTupleToClassAsync("Test.cs", "Calculate", "Result"));
     }
 
     [Test]
@@ -269,7 +269,7 @@ public class Product
     public int Price { get; set; }
     public string Name { get; set; }
 }");
-        var result = await new StructuralRefactoringEngine(_workspaceManager).ChangePropertyTypeAsync("Test.cs", "Product", "Price", "decimal");
+        var result = await TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ChangePropertyTypeAsync("Test.cs", "Product", "Price", "decimal");
         var key = result.Keys.FirstOrDefault(k => k.Contains("Test.cs"));
         Assert.That(key.Absolute, Is.Not.Null.And.Not.Empty, "Should return changes for the modified file");
         Assert.That(result[key!], Does.Contain("decimal Price"), "Property type should be updated to decimal");
@@ -280,7 +280,7 @@ public class Product
     public async Task ChangePropertyType_PropertyNotFound_Throws()
     {
         SetSource(@"public class Foo { public int Bar { get; set; } }");
-        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ChangePropertyTypeAsync("Test.cs", "Foo", "NonExistent", "string"));
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ChangePropertyTypeAsync("Test.cs", "Foo", "NonExistent", "string"));
     }
 
     [Test]
@@ -294,7 +294,7 @@ public class Factory
         var item = new { Name = ""widget"", Quantity = 10 };
     }
 }");
-        var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertAnonymousToNamedAsync("Test.cs", "ItemDto");
+        var result = await TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).ConvertAnonymousToNamedAsync("Test.cs", "ItemDto");
         var newClassKey = result.Keys.FirstOrDefault(k => k.Contains("ItemDto.cs"));
         Assert.That(newClassKey.Absolute, Is.Not.Null.And.Not.Empty, "Should generate ItemDto.cs");
         Assert.That(result[newClassKey!], Does.Contain("ItemDto"), "Generated class should be named ItemDto");
@@ -316,10 +316,10 @@ public class MemberRefactoringEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        var navEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var validationEngine = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
-        _memberRefactoringEngine = new MemberRefactoringEngine(_workspaceManager, navEngine, validationEngine);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var navEngine = Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validationEngine = Basic.TestEngines.ValidationEngine(_workspaceManager, Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        _memberRefactoringEngine = Basic.TestEngines.MemberRefactoringEngine(_workspaceManager, navEngine, validationEngine);
     }
 
     [TearDown]

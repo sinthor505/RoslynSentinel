@@ -24,12 +24,12 @@ public class BatteryThirtyFiveTests
     [SetUp]
     public void SetUp()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
-        _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
-        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
-        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _config = Basic.TestEngines.SentinelConfiguration();
+        _advancedStructuralEngine = TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager);
+        _syntaxUpgradeEngine = Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, _config);
+        _symbolNavigationEngine = Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _asyncSafetyEngine = TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]

@@ -15,8 +15,8 @@ public class AsyncOptimizationEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AsyncOptimizationEngine(_mgr);
+        _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AsyncOptimizationEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", Stub));
     }
 
@@ -77,8 +77,8 @@ public class CodeFlowEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new LogicSimplificationEngine(_mgr);
+        _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.LogicSimplificationEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", Stub));
     }
 
@@ -87,7 +87,7 @@ public class CodeFlowEngineTests
     [Test]
     public async Task ReduceBlockDepth_MissingFile_ThrowsNotFound()
     {
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new LogicSimplificationEngine(_mgr).ReduceBlockDepthAsync("NoSuchFile.cs", "Process"));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestEnginesAdvanced.LogicSimplificationEngine(_mgr).ReduceBlockDepthAsync("NoSuchFile.cs", "Process"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
@@ -106,7 +106,7 @@ public class Processor
     }
 }";
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Processor.cs", source)]));
-        var result = await new LogicSimplificationEngine(_mgr).ReduceBlockDepthAsync("Processor.cs", "Process");
+        var result = await TestEnginesAdvanced.LogicSimplificationEngine(_mgr).ReduceBlockDepthAsync("Processor.cs", "Process");
         Assert.That(result.UpdatedText, Does.Contain("return"), "early return should be added");
         Assert.That(result.UpdatedText, Does.Contain("!"), "inverted condition should use logical NOT");
     }
@@ -126,7 +126,7 @@ public class Logger
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Logger.cs", source)]));
         // The engine throws ToolTargetIneligibleException (ErrorCode TargetIneligible) when there is no nested if to flatten.
         var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
-            await new LogicSimplificationEngine(_mgr).ReduceBlockDepthAsync("Logger.cs", "Log"));
+            await TestEnginesAdvanced.LogicSimplificationEngine(_mgr).ReduceBlockDepthAsync("Logger.cs", "Log"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
         Assert.That(ex.Message, Does.Contain("cannot have its block depth reduced"));
     }
@@ -142,8 +142,8 @@ public class CodeHealingEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new CodeHealingEngine(_mgr, new SentinelConfiguration());
+        _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.CodeHealingEngine(_mgr, Basic.TestEngines.SentinelConfiguration());
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", Stub));
     }
 

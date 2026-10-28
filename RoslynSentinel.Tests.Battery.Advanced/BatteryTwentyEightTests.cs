@@ -26,7 +26,7 @@ public class B02extra_Immutability_ReadonlySpacing
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
@@ -44,7 +44,7 @@ public class B02extra_Immutability_ReadonlySpacing
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Config.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Config.cs", "Config");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).MakeClassImmutableAsync("Config.cs", "Config");
         Assert.That(result.UpdatedText, Does.Contain("readonly int"), "readonly modifier for 'int' field must be separated by a space: 'readonly int', not 'readonlyint'.");
         Assert.That(result.UpdatedText, Does.Not.Contain("readonlyint"), "There must be no fused 'readonlyint' token.");
     }
@@ -62,7 +62,7 @@ public class B02extra_Immutability_ReadonlySpacing
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Greeter.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Greeter.cs", "Greeter");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).MakeClassImmutableAsync("Greeter.cs", "Greeter");
         Assert.That(result.UpdatedText, Does.Contain("readonly string"), "readonly modifier for 'string' field must emit 'readonly string' not 'readonlystring'.");
     }
 
@@ -80,7 +80,7 @@ public class B02extra_Immutability_ReadonlySpacing
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Box.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Box.cs", "Box");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).MakeClassImmutableAsync("Box.cs", "Box");
         Assert.That(result.UpdatedText, Does.Not.Contain("readonlyint"), "No field should produce 'readonlyint' - all must have space.");
         var readonlyCount = result.UpdatedText.Split("readonly int").Length - 1;
         Assert.That(readonlyCount, Is.EqualTo(2), "Both fields should get 'readonly int' with correct spacing.");
@@ -98,7 +98,7 @@ public class B02extra_Immutability_ReadonlySpacing
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Const.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Const.cs", "Const");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).MakeClassImmutableAsync("Const.cs", "Const");
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
         var readonlyCount = result.UpdatedText.Split("readonly").Length - 1;
         Assert.That(readonlyCount, Is.EqualTo(1), "An already-readonly field must not get a second readonly modifier.");
@@ -116,7 +116,7 @@ public class B02extra_Immutability_ReadonlySpacing
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Registry.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Registry.cs", "Registry");
+        var result = await TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).MakeClassImmutableAsync("Registry.cs", "Registry");
         Assert.That(result.UpdatedText, Does.Contain("readonly int"), "Static field made readonly must still have space between 'readonly' and 'int'.");
     }
 }
@@ -133,8 +133,8 @@ public class B04extra_AntiPattern_ZeroParamCancellationToken
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AntiPatternEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -213,8 +213,8 @@ public class B16extra_SecuritySafety_NullConditionalGuards
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SecurityAndSafetyEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.SecurityAndSafetyEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -296,8 +296,8 @@ public class WFextra_AdvancedLogic_WhileToFor
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new LogicSimplificationEngine(_workspaceManager);
+        _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -315,7 +315,7 @@ public class Looper {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Looper.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Looper.cs", 5);
+        var result = await TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Looper.cs", 5);
         Assert.That(result.UpdatedText, Does.Contain("for"), "Converted output must contain a 'for' loop.");
         Assert.That(result.UpdatedText, Does.Not.Contain("while"), "The 'while' loop must be removed after conversion.");
     }
@@ -337,7 +337,7 @@ public class Processor {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Processor.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Processor.cs", 6);
+        var result = await TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Processor.cs", 6);
         Assert.That(result.UpdatedText, Does.Contain("for"), "Result must contain a for loop.");
         // i++ in the body must be gone (moved to incrementors)
         var bodyStatements = result.UpdatedText.Split(new[] { "for " }, StringSplitOptions.None).Skip(1).FirstOrDefault() ?? "";
@@ -358,7 +358,7 @@ public class Safe {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Safe.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
-            await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Safe.cs", 5));
+            await TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Safe.cs", 5));
         Assert.That(ex.Message, Does.Contain("No while loop found at line"));
     }
 
@@ -375,7 +375,7 @@ public class Streamer {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Streamer.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
-            await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Streamer.cs", 4));
+            await TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Streamer.cs", 4));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
         Assert.That(ex.Message, Does.Contain("has no preceding statement"));
     }
