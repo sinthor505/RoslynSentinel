@@ -37,8 +37,8 @@ public class FlagMigrationCandidateTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AsyncOptimizationEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager);
         _tempDir = Path.Combine(Path.GetTempPath(), "FlagMigrationCandidateTests_" + Guid.NewGuid().ToString("N"));
     }
 

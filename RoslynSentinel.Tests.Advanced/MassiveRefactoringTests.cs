@@ -49,7 +49,7 @@ public class MassiveRefactoringTests
         _memberRefactoringEngine = Battery.Basic.TestEngines.MemberRefactoringEngine(_workspaceManager, nav, validation, config);
         _structuralRefactoringEngine = Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager);
 
-        _refactoringStructuralTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(
+        _refactoringStructuralTools = Battery.Basic.TestTools.RefactoringStructuralTools(Battery.Basic.TestTools.RefactoringStructuralImpl(
             _basicRefactoringEngine,
             _memberRefactoringEngine,
             sr,

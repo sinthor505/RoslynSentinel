@@ -83,17 +83,17 @@ public class AsyncifyToolsTests
     [SetUp]
     public void SetUp()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
 
         _tempDir = Path.Combine(Path.GetTempPath(), "AsyncifyToolsTests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
         _workspaceManager.SolutionPath = Path.Combine(_tempDir, "Test.sln");
 
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var antiPatternEngine = new AntiPatternEngine(_workspaceManager);
-        var asyncOptEngine = new AsyncOptimizationEngine(_workspaceManager);
-        var asyncBatchEngine = new AsyncBatchEngine(
+        var diffEngine = Battery.Basic.TestEngines.DiffEngine();
+        var validationEngine = Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
+        var asyncOptEngine = Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager);
+        var asyncBatchEngine = Battery.Advanced.TestEnginesAdvanced.AsyncBatchEngine(
             _workspaceManager,
             asyncOptEngine,
             validationEngine,
@@ -108,7 +108,7 @@ public class AsyncifyToolsTests
             antiPatternEngine,
             asyncOptEngine,
             asyncBatchEngine,
-            new MsToolAugmentEngine(_workspaceManager),
+            Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager),
             _workspaceManager,
             validationEngine,
             failureRouter,

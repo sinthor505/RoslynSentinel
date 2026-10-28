@@ -45,18 +45,18 @@ public class AsyncBatchEngineFlagOutcomeTests
     [SetUp]
     public void SetUp()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _tempDir = Path.Combine(Path.GetTempPath(), "AsyncBatchEngineFlagOutcomeTests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
         _workspaceManager.SolutionPath = Path.Combine(_tempDir, "Test.sln");
 
-        var validationEngine = new ValidationEngine(
-            _workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
-        _batchEngine = new AsyncBatchEngine(
+        var validationEngine = Battery.Basic.TestEngines.ValidationEngine(
+            _workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        _batchEngine = Battery.Advanced.TestEnginesAdvanced.AsyncBatchEngine(
             _workspaceManager,
-            new AsyncOptimizationEngine(_workspaceManager),
+            Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager),
             validationEngine,
-            new AntiPatternEngine(_workspaceManager),
+            Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager),
             new MigrationLedger(),
             NullLogger<AsyncBatchEngine>.Instance);
     }
@@ -489,13 +489,13 @@ public class AsyncBatchEngineFlagOutcomeTests
         File.SetAttributes(path, FileAttributes.ReadOnly);
 
         var logger = new WarningCapturingLogger();
-        var validationEngine = new ValidationEngine(
-            _workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
-        var batchEngine = new AsyncBatchEngine(
+        var validationEngine = Battery.Basic.TestEngines.ValidationEngine(
+            _workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var batchEngine = Battery.Advanced.TestEnginesAdvanced.AsyncBatchEngine(
             _workspaceManager,
-            new AsyncOptimizationEngine(_workspaceManager),
+            Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager),
             validationEngine,
-            new AntiPatternEngine(_workspaceManager),
+            Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager),
             new MigrationLedger(),
             logger);
 

@@ -51,72 +51,39 @@ public class MigrationScanResultTests
     [SetUp]
     public void SetUp()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-        _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
-        _diffEngine = new DiffEngine();
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _asyncOptimizationEngine = Battery.Advanced.TestEnginesAdvanced.AsyncOptimizationEngine(_workspaceManager);
+        _antiPatternEngine = Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
+        _diffEngine = Battery.Basic.TestEngines.DiffEngine();
 
-        _qualityTools = new QualityTools(
-            new TestingEngine(_workspaceManager),
-            new ControlFlowEngine(_workspaceManager),
-            _antiPatternEngine,
-            new ThreadSafetyEngine(_workspaceManager),
-            new DiagnosticEngine(_workspaceManager),
-            new CodeStyleAnalysisEngine(_workspaceManager),
-            new StackOverflowEngine(_workspaceManager),
-            new MsToolAugmentEngine(_workspaceManager),
-            _workspaceManager,
-            NullLogger<QualityTools>.Instance);
+        _qualityTools = Battery.Advanced.TestToolsAdvanced.QualityTools(_workspaceManager);
 
         // The async-migration scan/progress tools moved from QualityTools to
         // AsyncifyTools during the Basic/Advanced server split.
-        var validationEngine = new ValidationEngine(
-            _workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var validationEngine = Battery.Basic.TestEngines.ValidationEngine(
+            _workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
         _asyncifyTools = new AsyncifyTools(
             _antiPatternEngine,
             _asyncOptimizationEngine,
-            new AsyncBatchEngine(
+            Battery.Advanced.TestEnginesAdvanced.AsyncBatchEngine(
                 _workspaceManager,
                 _asyncOptimizationEngine,
                 validationEngine,
                 _antiPatternEngine,
                 new MigrationLedger(),
                 NullLogger<AsyncBatchEngine>.Instance),
-            new MsToolAugmentEngine(_workspaceManager),
+            Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager),
             _workspaceManager,
             validationEngine,
             new FailureRouter(ToolGraph.Empty),
             new MigrationLedger(),
             NullLogger<AsyncifyTools>.Instance);
 
-        var config = new SentinelConfiguration();
-        var symbolNavEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _scanTools = new ScanTools(
-            new SecurityEngine(_workspaceManager),
-            _antiPatternEngine,
-            new AsyncAnalysisEngine(_workspaceManager),
-            new ThreadSafetyEngine(_workspaceManager),
-            new ControlFlowEngine(_workspaceManager),
-            new PerformanceEngine(_workspaceManager),
-            new DeadCodeEngine(_workspaceManager),
-            new DependencyEngine(_workspaceManager),
-            new SolutionStructureEngine(_workspaceManager, config),
-            new DependencyInjectionEngine(_workspaceManager),
-            new ProjectConsistencyEngine(_workspaceManager),
-            new MetricsEngine(_workspaceManager),
-            new CloneDetectionEngine(_workspaceManager),
-            new DiscoveryEngine(_workspaceManager, symbolNavEngine),
-            new StackOverflowEngine(_workspaceManager),
-            new CodeStyleEngine(_workspaceManager, config),
-            new CodeStyleAnalysisEngine(_workspaceManager),
-            new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
-            symbolNavEngine,
-            new BreakingChangeEngine(_workspaceManager),
-            _workspaceManager,
-            new ResourceSafetyEngine(_workspaceManager),
-            NullLogger<ScanTools>.Instance);
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        var symbolNavEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _scanTools = Battery.Advanced.TestToolsAdvanced.ScanTools(_workspaceManager);
 
-        _workspaceTools = new WorkspaceTools(_workspaceManager, new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance), new DiffEngine(), new DiagnosticEngine(_workspaceManager), new SolutionManagementEngine(_workspaceManager), new StructuralRefinementEngine(_workspaceManager, config), new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config, NullLogger<WorkspaceTools>.Instance, new BuildEngine(_workspaceManager, new DiagnosticEngine(_workspaceManager)), symbolNavEngine, new TestRunEngine(_workspaceManager), new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+        _workspaceTools = Battery.Basic.TestTools.WorkspaceTools(_workspaceManager, Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance), Battery.Basic.TestEngines.DiffEngine(), Battery.Basic.TestEngines.DiagnosticEngine(_workspaceManager), Battery.Basic.TestEngines.SolutionManagementEngine(_workspaceManager), Battery.Basic.TestEngines.StructuralRefinementEngine(_workspaceManager, config), Battery.Basic.TestEngines.DependencyEngine(_workspaceManager), Battery.Basic.TestEngines.ProjectConsistencyEngine(_workspaceManager), config, NullLogger<WorkspaceTools>.Instance, Battery.Basic.TestEngines.BuildEngine(_workspaceManager, Battery.Basic.TestEngines.DiagnosticEngine(_workspaceManager)), symbolNavEngine, Battery.Basic.TestEngines.TestRunEngine(_workspaceManager), Battery.Basic.TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
 
         // Create a temp dir so GetSolutionRoot() returns a valid path for file-write tests.
@@ -579,7 +546,7 @@ public class Svc
         // SolutionPath is set in SetUp -> a fake .sln path inside _tempDir.
         SetSource("public class Svc { }");
 
-        var engine = new WorkspaceHealthMiscImpl(_workspaceManager);
+        var engine = Battery.Basic.TestTools.WorkspaceHealthMiscImpl(_workspaceManager);
         var report = await engine.GetWorkspaceHealthAsync();
 
         Assert.That(report.HasLoadedSolution, Is.True, "Solution should be loaded.");
