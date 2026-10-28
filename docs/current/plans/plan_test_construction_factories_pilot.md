@@ -1,6 +1,6 @@
 # Plan: Pilot shared engine/tool construction factories in Tests.Tools.Basic
 
-**Status:** IN-PROGRESS 2026-10-27. Steps 0 (tool gap), 1 (survey), 2 and 3 done; the prerequisites below are done (8417587a); Steps 4-5 are open.
+**Status:** IN-PROGRESS 2026-10-27. Steps 0 (tool gap), 1 (survey), 2 and 3 done; Step 4 class slices done for the 13 factored types (remaining: `BuildTools` helper collapse, factories for the next classes); Step 5 open.
 
 ## Re-sequencing (2026-10-25, updated 2026-10-27)
 Test DI was reconsidered: it needs no `Server.*` reference once the engine and tool-dependency
@@ -27,6 +27,23 @@ container, so a new constructor parameter is absorbed in one place. Order:
   `WholeFileWriteTools` (25 sites) and the other tool classes (`// TODO` in `TestTools.cs`).
 - 2026-10-27: in a fresh session, `McpToolsetControl(moveExtract)` made `SemanticFindReplace` visible to the main session
   (schema loadable). Subagent visibility is still unverified: do the Step 4 pre-step first.
+- Step 4 class slices DONE 2026-10-27 (commits 88318c0d, 10e67b7d, 9115d1d5, 7b902c90, 734fcf36), one
+  `implementer-senior` agent resumed per batch (over the sweep tier: 20-120 sites per call). Rewritten sites:
+  PersistentWorkspaceManager 119, SymbolNavigationEngine 79, ValidationEngine 78 (3-arg 66 + 1-arg 12), DiffEngine 66,
+  SentinelConfiguration 46, StructuralRefinementEngine 37, DiagnosticEngine 34, BuildEngine 30, WorkspaceReadNavigationImpl 28,
+  SolutionManagementEngine / DependencyEngine / ProjectConsistencyEngine 24 each, WorkspaceTools 23 (15-arg form). Total ~600.
+  Every Build 0 errors; every RunTest 0 failures except the flaky `ServerBinaryStalenessGitTests` fixture ("git failed to run:
+  rev-parse HEAD", passes re-run alone; not just the one test named earlier). Unrewritten factored-type sites: 3
+  `PersistentWorkspaceManager` object-initializer sites (`SearchModeTests.cs:71`, `SearchSolutionTextIncludeTestsTests.cs:47`,
+  `SearchSolutionTextRecoveryHintTests.cs:52`) and 4 inside a `/* */` block in `ApplyDiffSizeGuardTests.cs` (commented-out tests,
+  correctly ignored; not a tool miss). One overload per `replaceConstruction` call: the per-call skip count is just the sites
+  the sibling overload covers. The `WorkspaceTools` short form and `WorkspaceReadNavigationImpl` 1-arg form had no sites.
+  Rewritten calls are qualified per file (`TestEngines.`, `Basic.TestEngines.`, `Battery.Basic.TestEngines.`) because the
+  factories live in namespace `RoslynSentinel.Tests.Battery.Basic`; a namespace/using tidy is a possible follow-up.
+- Remaining `new` sites of engine/tool classes with no factory (census): WholeFileWriteTools 24, TestRunEngine 23,
+  BasicRefactoringEngine 19, MemberRefactoringEngine 17, RefactoringStructuralTools 16, RefactoringStructuralImpl 13,
+  MsToolAugmentEngine 12, WorkspaceHealthMiscImpl 5, DiscoveryEngine 5, TestCategoryTaggingTools 5 (199 hits, 38 types in all).
+  Not started: collapsing the `BuildTools` helpers onto `TestTools.WorkspaceTools(wm)`; a before/after test-run-time measurement.
 - Step 4 was BLOCKED (see 2026-10-27 note above): `replaceConstruction` could not be called. `McpToolsetControl(moveExtract)` reports the
   toolset enabled, but `SemanticFindReplace` never reaches the calling session's tool list, and two subagents
   (one enabling the toolset itself, one spawned afterwards) saw the same, so a subagent inherits the parent's tool list. Resume in
