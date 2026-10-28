@@ -45,7 +45,7 @@ public class FindReferencesAmbiguityToolTests
         _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _impl = new SymbolRelationshipImpl(
             new DiscoveryEngine(_workspaceManager),
-            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             _workspaceManager,
             NullLogger<SymbolRelationshipImpl>.Instance);
 

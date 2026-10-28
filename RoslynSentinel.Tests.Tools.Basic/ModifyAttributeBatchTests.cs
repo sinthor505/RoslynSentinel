@@ -46,9 +46,9 @@ public class ModifyAttributeBatchTests
         var diffEngine = new DiffEngine();
         return new RefactoringStructuralTools(new RefactoringStructuralImpl(
             new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
-            new MemberRefactoringEngine(workspaceManager, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance), config),
+            new MemberRefactoringEngine(workspaceManager, TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance), config),
             new StructuralRefinementEngine(workspaceManager, config),
-            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             workspaceManager,
             new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
             NullLogger<RefactoringStructuralImpl>.Instance));

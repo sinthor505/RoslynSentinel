@@ -71,7 +71,7 @@ public class ReplaceSnippetErrorCodeTests
         var diffEngine = new DiffEngine();
         var diagnosticEngine = new DiagnosticEngine(manager);
         var validationEngine = new ValidationEngine(manager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var symbolNavigationEngine = new SymbolNavigationEngine(manager, NullLogger<SymbolNavigationEngine>.Instance);
+        var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(manager, NullLogger<SymbolNavigationEngine>.Instance);
         var tools = new WorkspaceTools(
             manager,
             validationEngine,

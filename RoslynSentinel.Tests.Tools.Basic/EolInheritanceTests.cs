@@ -37,7 +37,7 @@ public class EolInheritanceTests
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
             new BuildEngine(workspaceManager, diagnosticEngine),
-            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
             new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
@@ -161,7 +161,7 @@ public class EolInheritanceTests
             new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
             new DiffEngine(),
             NullLogger<WholeFileWriteTools>.Instance,
-            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+            TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         // Replace with mixed content
         var mixedContent = "// Mixed\nclass Test\r\n{\n}\n";
@@ -234,7 +234,7 @@ public class EolInheritanceTests
             new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
             new DiffEngine(),
             NullLogger<WholeFileWriteTools>.Instance,
-            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+            TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         // Replace with LF content
         var lfContent = "// Replaced with LF line endings\nclass Test\n{\n}\n";
@@ -278,7 +278,7 @@ public class EolInheritanceTests
             new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
             new DiffEngine(),
             NullLogger<WholeFileWriteTools>.Instance,
-            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+            TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         // Apply with LF content via files-format
         var lfContent = "// ApplyDiff replacement with LF\nclass Replaced\n{\n}\n";

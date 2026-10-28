@@ -47,7 +47,7 @@ public class LocateSymbolIncludeTestsTests
         File.WriteAllText(Path.Combine(_dir, "AppProj", "AppProj.csproj"), PlainCsproj);
 
         _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _engine = TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _impl = new SymbolNavigationImpl(
             _engine,
             new ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance),

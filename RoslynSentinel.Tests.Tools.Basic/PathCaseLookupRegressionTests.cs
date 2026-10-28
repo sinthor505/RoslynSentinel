@@ -58,7 +58,7 @@ public class PathCaseLookupRegressionTests
         var diffEngine = new DiffEngine();
         var diagnosticEngine = new DiagnosticEngine(workspace);
         var validationEngine = new ValidationEngine(workspace, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var symbolNavigationEngine = new SymbolNavigationEngine(workspace, NullLogger<SymbolNavigationEngine>.Instance);
+        var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(workspace, NullLogger<SymbolNavigationEngine>.Instance);
         var tools = new WorkspaceTools(
             workspace,
             validationEngine,
@@ -287,7 +287,7 @@ public class PathCaseLookupRegressionTests
         using var h = await CreateHarnessAsync();
         var real = RealPath(h, "ContosoOrders.Core", "OrderStatus.cs");
         var impl = new SymbolRelationshipImpl(
-            new DiscoveryEngine(h.Workspace), new SymbolNavigationEngine(h.Workspace, NullLogger<SymbolNavigationEngine>.Instance),
+            new DiscoveryEngine(h.Workspace), TestEngines.SymbolNavigationEngine(h.Workspace, NullLogger<SymbolNavigationEngine>.Instance),
             h.Workspace, NullLogger<SymbolRelationshipImpl>.Instance);
 
         var result = await impl.FindReferences(
@@ -309,7 +309,7 @@ public class PathCaseLookupRegressionTests
         using var h = await CreateHarnessAsync();
         var missing = RealPath(h, "ContosoOrders.Core", "DoesNotExist.cs");
         var impl = new SymbolRelationshipImpl(
-            new DiscoveryEngine(h.Workspace), new SymbolNavigationEngine(h.Workspace, NullLogger<SymbolNavigationEngine>.Instance),
+            new DiscoveryEngine(h.Workspace), TestEngines.SymbolNavigationEngine(h.Workspace, NullLogger<SymbolNavigationEngine>.Instance),
             h.Workspace, NullLogger<SymbolRelationshipImpl>.Instance);
 
         var result = await impl.FindReferences(

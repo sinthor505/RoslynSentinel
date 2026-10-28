@@ -81,7 +81,7 @@ public class SearchModeTests
         var diffEngine = new DiffEngine();
         var diagnosticEngine = new DiagnosticEngine(workspace);
         var validationEngine = new ValidationEngine(workspace, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var symbolNavigationEngine = new SymbolNavigationEngine(workspace, NullLogger<SymbolNavigationEngine>.Instance);
+        var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(workspace, NullLogger<SymbolNavigationEngine>.Instance);
         var tools = new WorkspaceTools(
             workspace,
             validationEngine,

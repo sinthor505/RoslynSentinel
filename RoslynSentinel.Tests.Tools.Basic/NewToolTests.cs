@@ -27,7 +27,7 @@ public class NewToolTests
     {
         _workspaceManager = FakeWorkspaceManager.ReadOnly();
         _config = new SentinelConfiguration();
-        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
     }

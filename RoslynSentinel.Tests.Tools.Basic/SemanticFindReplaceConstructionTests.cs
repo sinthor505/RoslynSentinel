@@ -241,7 +241,7 @@ public class SemanticFindReplaceConstructionTests
             new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             NullLogger.Instance,
             _validationEngine,
-            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
         var undo = await editImpl.UndoLastApply(new ToolCallReason("testing undo of replaceConstruction"), changeId);
 

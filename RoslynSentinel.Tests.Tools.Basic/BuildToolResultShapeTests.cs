@@ -39,7 +39,7 @@ public class BuildToolResultShapeTests
             new SolutionManagementEngine(_workspaceManager), new StructuralRefinementEngine(_workspaceManager, config),
             new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config,
             NullLogger<WorkspaceTools>.Instance, new BuildEngine(_workspaceManager, diagnosticEngine),
-            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(_workspaceManager),
             new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());

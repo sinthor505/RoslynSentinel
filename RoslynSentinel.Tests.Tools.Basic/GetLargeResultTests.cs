@@ -47,7 +47,7 @@ public class GetLargeResultTests
         _workspaceManager.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", []));
 
         var config = new SentinelConfiguration();
-        var symbolNavEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var symbolNavEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
 
         _workspaceTools = new WorkspaceTools(_workspaceManager, new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance), new DiffEngine(), new DiagnosticEngine(_workspaceManager), new SolutionManagementEngine(_workspaceManager), new StructuralRefinementEngine(_workspaceManager, config), new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config, NullLogger<WorkspaceTools>.Instance, new BuildEngine(_workspaceManager, new DiagnosticEngine(_workspaceManager)), symbolNavEngine, new TestRunEngine(_workspaceManager), new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
@@ -152,7 +152,7 @@ public class GetLargeResultTests
         // Do NOT call SetTestSolution or set SolutionPath, so solution root remains empty
         
         var config = new SentinelConfiguration();
-        var symbolNavEngine = new SymbolNavigationEngine(unloadedWorkspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var symbolNavEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(unloadedWorkspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         
         return new WorkspaceTools(
             unloadedWorkspaceManager,
