@@ -1585,7 +1585,9 @@ public class WorkspaceReadNavigationImpl
             // unbounded fetch/still-too-big/re-offload loop.
             if (all.Type == ResultWrapperType.Raw)
             {
-                var rawText = all.Data.ToString();
+                // JsonNode.ToString() uses the default encoder (it escapes the angle brackets of generic types as unicode escapes) and indents
+                // with CRLF, which made each char window carry ~24% less data than compact relaxed output.
+                var rawText = all.Data.ToJsonString(SharedJsonOptions.Compact);
                 var start = Math.Clamp(offset, 0, rawText.Length);
 
                 // The offload filter's threshold check is on the raw response TEXT LENGTH (see
@@ -1637,7 +1639,7 @@ public class WorkspaceReadNavigationImpl
                 {
                     IsError = false,
                     SuccessData = pageData,
-                    TotalRecords = rawText.Length,
+                    // Raw payload has no known record shape: the character count is in successData.totalChars and TotalRecords is a record count, so it stays null.
                     HasMoreData = hasMoreRaw,
                     NextOffset = hasMoreRaw ? nextOffset : null,
                     WarningDetails = hasMoreRaw

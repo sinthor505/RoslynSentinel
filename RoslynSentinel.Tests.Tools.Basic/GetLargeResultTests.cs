@@ -402,6 +402,30 @@ public class GetLargeResultTests
         Assert.That(result.HasMoreData, Is.True);
     }
 
+    [Test, CancelAfter(10000)]
+    public async Task T12b_GetLargeResult_Raw_ReplaysCompactUnescapedJsonAndOmitsCharCountTotalRecords()
+    {
+        // Stored with the default serializer, which escapes the angle brackets of generic types as unicode escapes in the stored text. The Raw
+        // replay must hand back the real characters, compact, with no CRLF indentation.
+        var payload = new { items = new[] { "List<int>", "Dictionary<string,int>" }, nested = new { a = 1 } };
+        var stored = await LargeResultHelper.StoreRawJsonAsync(
+            JsonSerializer.Serialize(payload), _tempDir, CancellationToken.None);
+        Assert.That(stored.offloaded, Is.True);
+
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: stored.resultId, charLimit: LargeResultHelper.OffloadThresholdBytes);
+
+        Assert.That(!result.IsError, Is.True);
+        Assert.That(result.HasMoreData, Is.False);
+        Assert.That(result.TotalRecords, Is.Null, "A Raw payload has no known record shape, so TotalRecords (a record count) must stay null.");
+
+        var text = (string)result.SuccessData!.GetType().GetProperty("text")!.GetValue(result.SuccessData)!;
+        Assert.That(text, Does.Not.Contain("\\u003C"), "Replay must not re-escape < as \\u003C.");
+        Assert.That(text, Does.Not.Contain("\r\n"), "Replay must be compact, without CRLF indentation.");
+        Assert.That(text, Does.Contain("List<int>"));
+        using var doc = JsonDocument.Parse(text);
+        Assert.That(doc.RootElement.GetProperty("nested").GetProperty("a").GetInt32(), Is.EqualTo(1));
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // T13-T15 - ResultWrapperType.TextSearchMatchList (stored Search mode:text results).
     //           Regression for docs/current/blockers/blocking_error_getlargeresult_text_search_pages_halved_with_zero_totals_and_no_warning.md:
