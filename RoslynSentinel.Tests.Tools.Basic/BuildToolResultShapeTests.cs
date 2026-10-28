@@ -31,14 +31,14 @@ public class BuildToolResultShapeTests
         _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _workspaceManager.SolutionPath = Path.Combine(_tempDir, "Test.sln");
 
-        var config = new SentinelConfiguration();
-        var diagnosticEngine = new DiagnosticEngine(_workspaceManager);
+        var config = TestEngines.SentinelConfiguration();
+        var diagnosticEngine = TestEngines.DiagnosticEngine(_workspaceManager);
         var validationEngine = TestEngines.ValidationEngine(_workspaceManager, TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
         _workspaceTools = new WorkspaceTools(
             _workspaceManager, validationEngine, TestEngines.DiffEngine(), diagnosticEngine,
-            new SolutionManagementEngine(_workspaceManager), new StructuralRefinementEngine(_workspaceManager, config),
+            new SolutionManagementEngine(_workspaceManager), TestEngines.StructuralRefinementEngine(_workspaceManager, config),
             new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config,
-            NullLogger<WorkspaceTools>.Instance, new BuildEngine(_workspaceManager, diagnosticEngine),
+            NullLogger<WorkspaceTools>.Instance, TestEngines.BuildEngine(_workspaceManager, diagnosticEngine),
             TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(_workspaceManager),
             new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),

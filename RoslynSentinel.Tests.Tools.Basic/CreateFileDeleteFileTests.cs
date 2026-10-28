@@ -21,12 +21,12 @@ public class CreateFileDeleteFileTests
 {
     private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
     {
-        var config = new SentinelConfiguration();
+        var config = Basic.TestEngines.SentinelConfiguration();
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var diagnosticEngine = new DiagnosticEngine(workspaceManager);
+        var diagnosticEngine = Basic.TestEngines.DiagnosticEngine(workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
-        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
+        var structuralRefinementEngine = Basic.TestEngines.StructuralRefinementEngine(workspaceManager, config);
         var dependencyEngine = new DependencyEngine(workspaceManager);
         var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
 
@@ -34,7 +34,7 @@ public class CreateFileDeleteFileTests
             workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
-            new BuildEngine(workspaceManager, diagnosticEngine),
+            Basic.TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
             Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
             new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
@@ -829,10 +829,10 @@ public class CreateFileDeleteFileTests
         using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
-        var config = new SentinelConfiguration();
+        var config = Basic.TestEngines.SentinelConfiguration();
         var refactoringEngine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
         var semanticRefactoringEngine = new SemanticRefactoringEngine(workspaceManager);
-        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
+        var structuralRefinementEngine = Basic.TestEngines.StructuralRefinementEngine(workspaceManager, config);
         var msToolAugmentEngine = new MsToolAugmentEngine(workspaceManager);
         var symbolNavigationEngine = Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var diffEngine = Basic.TestEngines.DiffEngine();
@@ -957,9 +957,9 @@ public class CreateFileDeleteFileTests
         await File.WriteAllTextAsync(sourceFile, "namespace MyApp.Eol;\npublic class Foo\n{\n}\n");
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
-        var config = new SentinelConfiguration();
+        var config = Basic.TestEngines.SentinelConfiguration();
         var refactoringEngine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
-        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
+        var structuralRefinementEngine = Basic.TestEngines.StructuralRefinementEngine(workspaceManager, config);
         var symbolNavigationEngine = Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
         var memberRefactoringEngine = new MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine);

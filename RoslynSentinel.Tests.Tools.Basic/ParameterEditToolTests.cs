@@ -47,7 +47,7 @@ public class ParameterEditToolTests
 
     private static Tools BuildTools(IWorkspaceManager workspaceManager)
     {
-        var config = new SentinelConfiguration();
+        var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
         var basicEngine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
         var navigation = TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);

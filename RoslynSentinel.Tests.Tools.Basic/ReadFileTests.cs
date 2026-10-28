@@ -38,19 +38,19 @@ public class ReadFileTests
             });
         _workspaceManager.SetTestSolution(solution);
 
-        var config = new SentinelConfiguration();
+        var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
         var validationEngine = TestEngines.ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var diagnosticEngine = new DiagnosticEngine(_workspaceManager);
+        var diagnosticEngine = TestEngines.DiagnosticEngine(_workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
-        var structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, config);
+        var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(_workspaceManager, config);
         var dependencyEngine = new DependencyEngine(_workspaceManager);
         var projectConsistencyEngine = new ProjectConsistencyEngine(_workspaceManager);
         _tools = new WorkspaceTools(
             _workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
-            new BuildEngine(_workspaceManager, diagnosticEngine),
+            TestEngines.BuildEngine(_workspaceManager, diagnosticEngine),
             TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(_workspaceManager),
             new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
@@ -281,19 +281,19 @@ public class ReadFileTests
         var workspaceManager = FakeWorkspaceManager.ReadOnly();
         // Deliberately do NOT call SetTestSolution, leaving CurrentSolution null.
 
-        var config = new SentinelConfiguration();
+        var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
         var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var diagnosticEngine = new DiagnosticEngine(workspaceManager);
+        var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
-        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
+        var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(workspaceManager, config);
         var dependencyEngine = new DependencyEngine(workspaceManager);
         var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
         return new WorkspaceTools(
             workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
-            new BuildEngine(workspaceManager, diagnosticEngine),
+            TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
             new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),

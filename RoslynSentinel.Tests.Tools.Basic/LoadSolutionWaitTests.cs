@@ -74,13 +74,13 @@ public class LoadSolutionWaitTests
 
     private static WorkspaceProjectManagementImpl CreateImpl(PersistentWorkspaceManager workspaceManager)
     {
-        var config = new SentinelConfiguration();
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
         return new WorkspaceProjectManagementImpl(
             workspaceManager,
             new SolutionManagementEngine(workspaceManager),
             new DependencyEngine(workspaceManager),
             new ProjectConsistencyEngine(workspaceManager),
-            new StructuralRefinementEngine(workspaceManager, config),
+            Battery.Basic.TestEngines.StructuralRefinementEngine(workspaceManager, config),
             NullLogger<WorkspaceProjectManagementImpl>.Instance);
     }
 }

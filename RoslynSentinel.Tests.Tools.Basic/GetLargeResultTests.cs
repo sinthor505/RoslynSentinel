@@ -46,10 +46,10 @@ public class GetLargeResultTests
         _workspaceManager.SolutionPath = Path.Combine(_tempDir, "Test.sln");
         _workspaceManager.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", []));
 
-        var config = new SentinelConfiguration();
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
         var symbolNavEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
 
-        _workspaceTools = new WorkspaceTools(_workspaceManager, Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance), Battery.Basic.TestEngines.DiffEngine(), new DiagnosticEngine(_workspaceManager), new SolutionManagementEngine(_workspaceManager), new StructuralRefinementEngine(_workspaceManager, config), new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config, NullLogger<WorkspaceTools>.Instance, new BuildEngine(_workspaceManager, new DiagnosticEngine(_workspaceManager)), symbolNavEngine, new TestRunEngine(_workspaceManager), new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+        _workspaceTools = new WorkspaceTools(_workspaceManager, Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance), Battery.Basic.TestEngines.DiffEngine(), Battery.Basic.TestEngines.DiagnosticEngine(_workspaceManager), new SolutionManagementEngine(_workspaceManager), Battery.Basic.TestEngines.StructuralRefinementEngine(_workspaceManager, config), new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config, NullLogger<WorkspaceTools>.Instance, Battery.Basic.TestEngines.BuildEngine(_workspaceManager, Battery.Basic.TestEngines.DiagnosticEngine(_workspaceManager)), symbolNavEngine, new TestRunEngine(_workspaceManager), new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
     }
 
@@ -151,21 +151,21 @@ public class GetLargeResultTests
         var unloadedWorkspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         // Do NOT call SetTestSolution or set SolutionPath, so solution root remains empty
         
-        var config = new SentinelConfiguration();
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
         var symbolNavEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(unloadedWorkspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         
         return new WorkspaceTools(
             unloadedWorkspaceManager,
             Battery.Basic.TestEngines.ValidationEngine(unloadedWorkspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance),
             Battery.Basic.TestEngines.DiffEngine(),
-            new DiagnosticEngine(unloadedWorkspaceManager),
+            Battery.Basic.TestEngines.DiagnosticEngine(unloadedWorkspaceManager),
             new SolutionManagementEngine(unloadedWorkspaceManager),
-            new StructuralRefinementEngine(unloadedWorkspaceManager, config),
+            Battery.Basic.TestEngines.StructuralRefinementEngine(unloadedWorkspaceManager, config),
             new DependencyEngine(unloadedWorkspaceManager),
             new ProjectConsistencyEngine(unloadedWorkspaceManager),
             config,
             NullLogger<WorkspaceTools>.Instance,
-            new BuildEngine(unloadedWorkspaceManager, new DiagnosticEngine(unloadedWorkspaceManager)),
+            Battery.Basic.TestEngines.BuildEngine(unloadedWorkspaceManager, Battery.Basic.TestEngines.DiagnosticEngine(unloadedWorkspaceManager)),
             symbolNavEngine,
             new TestRunEngine(unloadedWorkspaceManager),
             new WorkspaceReadNavigationImpl(unloadedWorkspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),

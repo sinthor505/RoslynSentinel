@@ -24,12 +24,12 @@ public class MemberOutcomeFollowsCauseTests
 
     private static RefactoringStructuralImpl BuildStructuralImpl(IWorkspaceManager workspaceManager)
     {
-        var config = new SentinelConfiguration();
+        var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
         return new RefactoringStructuralImpl(
             new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
             new MemberRefactoringEngine(workspaceManager, TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance), config),
-            new StructuralRefinementEngine(workspaceManager, config),
+            TestEngines.StructuralRefinementEngine(workspaceManager, config),
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             workspaceManager,
             TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
@@ -38,7 +38,7 @@ public class MemberOutcomeFollowsCauseTests
 
     private static RefactoringExtractionDocsImpl BuildExtractionDocsImpl(IWorkspaceManager workspaceManager)
     {
-        var config = new SentinelConfiguration();
+        var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
         return new RefactoringExtractionDocsImpl(
             new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),

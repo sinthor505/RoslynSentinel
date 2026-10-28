@@ -12,7 +12,7 @@ public class ExtractMethodEolEndToEndTests
 {
     private static RefactoringExtractionDocsImpl BuildExtractionDocsImpl(IWorkspaceManager workspaceManager)
     {
-        var config = new SentinelConfiguration();
+        var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
         return new RefactoringExtractionDocsImpl(
             new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),

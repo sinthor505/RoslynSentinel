@@ -34,14 +34,14 @@ public class MemberBatchErrorWordingTests
 
     private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager)
     {
-        var config = new SentinelConfiguration();
+        var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
         var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         return new RefactoringStructuralTools(new RefactoringStructuralImpl(
             new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
             new MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine, config),
-            new StructuralRefinementEngine(workspaceManager, config),
+            TestEngines.StructuralRefinementEngine(workspaceManager, config),
             symbolNavigationEngine,
             workspaceManager,
             validationEngine,

@@ -26,10 +26,10 @@ public class NewToolTests
     public void Setup()
     {
         _workspaceManager = FakeWorkspaceManager.ReadOnly();
-        _config = new SentinelConfiguration();
+        _config = Battery.Basic.TestEngines.SentinelConfiguration();
         _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
-        _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
+        _diagnosticEngine = Battery.Basic.TestEngines.DiagnosticEngine(_workspaceManager);
     }
 
     [TearDown]

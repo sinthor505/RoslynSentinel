@@ -20,7 +20,7 @@ public class RemoveMethodParameterSinglePassTests
 
     private static MemberRefactoringEngine BuildEngine(IWorkspaceManager workspaceManager)
     {
-        var config = new SentinelConfiguration();
+        var config = TestEngines.SentinelConfiguration();
         var navigation = TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var validation = TestEngines.ValidationEngine(workspaceManager, TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
         return new MemberRefactoringEngine(workspaceManager, navigation, validation, config);

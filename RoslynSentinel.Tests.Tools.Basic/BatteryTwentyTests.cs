@@ -37,18 +37,18 @@ public class BatteryTwentyTests
     public void Setup()
     {
         _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
+        _config = TestEngines.SentinelConfiguration();
         _diffEngine = TestEngines.DiffEngine();
         _validationEngine = TestEngines.ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
-        _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
+        _diagnosticEngine = TestEngines.DiagnosticEngine(_workspaceManager);
         _solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
-        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
+        _structuralRefinementEngine = TestEngines.StructuralRefinementEngine(_workspaceManager, _config);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
         _projectConsistencyEngine = new ProjectConsistencyEngine(_workspaceManager);
         _workspaceTools = new WorkspaceTools(
             _workspaceManager, _validationEngine, _diffEngine, _diagnosticEngine,
             _solutionManagementEngine, _structuralRefinementEngine, _dependencyEngine,
-            _projectConsistencyEngine, _config, NullLogger<WorkspaceTools>.Instance, new BuildEngine(_workspaceManager, _diagnosticEngine),
+            _projectConsistencyEngine, _config, NullLogger<WorkspaceTools>.Instance, TestEngines.BuildEngine(_workspaceManager, _diagnosticEngine),
             TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(_workspaceManager),
             new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
@@ -71,19 +71,19 @@ public class BatteryTwentyTests
     // Same wiring as Setup, but on a caller-supplied manager (InMemoryWorkspace.Manager) for tests that need no fixture state.
     private static WorkspaceTools BuildInMemoryTools(IWorkspaceManager workspaceManager)
     {
-        var config = new SentinelConfiguration();
+        var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
         var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var diagnosticEngine = new DiagnosticEngine(workspaceManager);
+        var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
-        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
+        var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(workspaceManager, config);
         var dependencyEngine = new DependencyEngine(workspaceManager);
         var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
         return new WorkspaceTools(
             workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
-            new BuildEngine(workspaceManager, diagnosticEngine),
+            TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
             new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),

@@ -54,9 +54,9 @@ public class PathCaseLookupRegressionTests
         var loadPath = OperatingSystem.IsWindows() ? fixture.SolutionPath.ToLowerInvariant() : fixture.SolutionPath;
         await workspace.LoadSolutionAsync(loadPath);
 
-        var config = new SentinelConfiguration();
+        var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
-        var diagnosticEngine = new DiagnosticEngine(workspace);
+        var diagnosticEngine = TestEngines.DiagnosticEngine(workspace);
         var validationEngine = TestEngines.ValidationEngine(workspace, diffEngine, NullLogger<ValidationEngine>.Instance);
         var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(workspace, NullLogger<SymbolNavigationEngine>.Instance);
         var tools = new WorkspaceTools(
@@ -64,11 +64,11 @@ public class PathCaseLookupRegressionTests
             validationEngine,
             diffEngine, diagnosticEngine,
             new SolutionManagementEngine(workspace),
-            new StructuralRefinementEngine(workspace, config),
+            TestEngines.StructuralRefinementEngine(workspace, config),
             new DependencyEngine(workspace),
             new ProjectConsistencyEngine(workspace),
             config, NullLogger<WorkspaceTools>.Instance,
-            new BuildEngine(workspace, diagnosticEngine),
+            TestEngines.BuildEngine(workspace, diagnosticEngine),
             symbolNavigationEngine,
             new TestRunEngine(workspace),
             new WorkspaceReadNavigationImpl(workspace, NullLogger<WorkspaceReadNavigationImpl>.Instance),
@@ -331,7 +331,7 @@ public class PathCaseLookupRegressionTests
     public async Task GetFileDiagnostics_RelativePath_ResolvesOnlyViaResolveFromWireAsync()
     {
         using var h = await CreateHarnessAsync();
-        var engine = new DiagnosticEngine(h.Workspace);
+        var engine = TestEngines.DiagnosticEngine(h.Workspace);
         var relative = Path.Combine("ContosoOrders.Core", "OrderStatus.cs");
 
         await Assert.ThrowsAsync<ToolNotFoundException>(async () => await engine.GetFileDiagnosticsAsync(relative),

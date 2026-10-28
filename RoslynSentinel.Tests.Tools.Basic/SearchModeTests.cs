@@ -77,9 +77,9 @@ public class SearchModeTests
         var workspace = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspace.LoadSolutionAsync(fixture.SolutionPath);
 
-        var config = new SentinelConfiguration();
+        var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
-        var diagnosticEngine = new DiagnosticEngine(workspace);
+        var diagnosticEngine = TestEngines.DiagnosticEngine(workspace);
         var validationEngine = TestEngines.ValidationEngine(workspace, diffEngine, NullLogger<ValidationEngine>.Instance);
         var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(workspace, NullLogger<SymbolNavigationEngine>.Instance);
         var tools = new WorkspaceTools(
@@ -87,11 +87,11 @@ public class SearchModeTests
             validationEngine,
             diffEngine, diagnosticEngine,
             new SolutionManagementEngine(workspace),
-            new StructuralRefinementEngine(workspace, config),
+            TestEngines.StructuralRefinementEngine(workspace, config),
             new DependencyEngine(workspace),
             new ProjectConsistencyEngine(workspace),
             config, NullLogger<WorkspaceTools>.Instance,
-            new BuildEngine(workspace, diagnosticEngine),
+            TestEngines.BuildEngine(workspace, diagnosticEngine),
             symbolNavigationEngine,
             new TestRunEngine(workspace),
             new WorkspaceReadNavigationImpl(workspace, NullLogger<WorkspaceReadNavigationImpl>.Instance),

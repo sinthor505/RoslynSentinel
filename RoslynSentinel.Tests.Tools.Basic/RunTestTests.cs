@@ -18,19 +18,19 @@ public class RunTestTests
 {
     private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
     {
-        var config = new SentinelConfiguration();
+        var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
         var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var diagnosticEngine = new DiagnosticEngine(workspaceManager);
+        var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
-        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
+        var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(workspaceManager, config);
         var dependencyEngine = new DependencyEngine(workspaceManager);
         var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
         return new WorkspaceTools(
             workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
-            new BuildEngine(workspaceManager, diagnosticEngine),
+            TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
             new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),

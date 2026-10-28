@@ -42,10 +42,10 @@ public class RegressionTests
     public void Setup()
     {
         _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
+        _config = Battery.Basic.TestEngines.SentinelConfiguration();
         _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
         _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
+        _diagnosticEngine = Battery.Basic.TestEngines.DiagnosticEngine(_workspaceManager);
         _workspaceHealthMisc = new WorkspaceHealthMiscImpl(_workspaceManager, _config);
     }
 

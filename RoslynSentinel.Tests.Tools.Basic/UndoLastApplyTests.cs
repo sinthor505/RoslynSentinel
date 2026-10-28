@@ -55,19 +55,19 @@ public class UndoLastApplyTests
 
     private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
     {
-        var config = new SentinelConfiguration();
+        var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
         var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var diagnosticEngine = new DiagnosticEngine(workspaceManager);
+        var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
-        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
+        var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(workspaceManager, config);
         var dependencyEngine = new DependencyEngine(workspaceManager);
         var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
         return new WorkspaceTools(
             workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
-            new BuildEngine(workspaceManager, diagnosticEngine),
+            TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
             new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
@@ -268,8 +268,8 @@ public class UndoLastApplyTests
         const string widgetSource = "namespace ContosoOrders;\n\npublic class Widget\n{\n    public int Id { get; set; }\n}\n";
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Core", "Mismatched.cs"), widgetSource);
 
-        var config = new SentinelConfiguration();
-        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
+        var config = TestEngines.SentinelConfiguration();
+        var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(workspaceManager, config);
         var validationEngine = TestEngines.ValidationEngine(workspaceManager, TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
         var refactoringEngine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
         var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);

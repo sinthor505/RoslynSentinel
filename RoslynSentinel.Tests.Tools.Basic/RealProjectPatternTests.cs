@@ -45,7 +45,7 @@ public class RealProjectPatternTests
         _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(
             NullLogger<IWorkspaceManager>.Instance);
         _engine = new MsToolAugmentEngine(_workspaceManager);
-        _workspaceHealthMisc = new WorkspaceHealthMiscImpl(_workspaceManager, new SentinelConfiguration());
+        _workspaceHealthMisc = new WorkspaceHealthMiscImpl(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
@@ -665,7 +665,7 @@ public class InventoryRepository { }";
         // but no solution is loaded yet. The health check correctly distinguishes these.
         using var fresh = Battery.Basic.TestEngines.PersistentWorkspaceManager(
             NullLogger<IWorkspaceManager>.Instance);
-        var freshEngine = new WorkspaceHealthMiscImpl(fresh, new SentinelConfiguration());
+        var freshEngine = new WorkspaceHealthMiscImpl(fresh, Battery.Basic.TestEngines.SentinelConfiguration());
 
         var report = await freshEngine.GetWorkspaceHealthAsync();
 

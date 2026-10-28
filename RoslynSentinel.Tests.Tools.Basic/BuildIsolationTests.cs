@@ -49,7 +49,7 @@ public class BuildIsolationTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var buildEngine = new BuildEngine(workspaceManager, new DiagnosticEngine(workspaceManager));
+        var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
         var solutionDirectory = Path.GetDirectoryName(fixture.SolutionPath)!;
         var projectDirectory = Path.Combine(solutionDirectory, "ContosoOrders.Core");
         var projectBin = Path.Combine(projectDirectory, "bin");
@@ -88,7 +88,7 @@ public class BuildIsolationTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var buildEngine = new BuildEngine(workspaceManager, new DiagnosticEngine(workspaceManager));
+        var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
         var solutionDirectory = Path.GetDirectoryName(fixture.SolutionPath)!;
         var projectDirectory = Path.Combine(solutionDirectory, "ContosoOrders.Core");
 

@@ -28,9 +28,9 @@ public class MemberViewAmbiguityToolTests
         var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var validationEngine = TestEngines.ValidationEngine(_workspaceManager);
         _impl = new RefactoringStructuralImpl(
-            new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, new SentinelConfiguration()),
+            new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, TestEngines.SentinelConfiguration()),
             new MemberRefactoringEngine(_workspaceManager, symbolNavigationEngine, validationEngine),
-            new StructuralRefinementEngine(_workspaceManager),
+            TestEngines.StructuralRefinementEngine(_workspaceManager),
             symbolNavigationEngine,
             _workspaceManager,
             validationEngine,

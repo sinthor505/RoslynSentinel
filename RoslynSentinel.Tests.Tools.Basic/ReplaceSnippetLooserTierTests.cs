@@ -60,9 +60,9 @@ public class ReplaceSnippetLooserTierTests
         var workspace = InMemoryWorkspace.Create((RelativePath, Source));
         var manager = workspace.Manager;
 
-        var config = new SentinelConfiguration();
+        var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
-        var diagnosticEngine = new DiagnosticEngine(manager);
+        var diagnosticEngine = TestEngines.DiagnosticEngine(manager);
         var validationEngine = TestEngines.ValidationEngine(manager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(manager, NullLogger<SymbolNavigationEngine>.Instance);
         var tools = new WorkspaceTools(
@@ -70,11 +70,11 @@ public class ReplaceSnippetLooserTierTests
             validationEngine,
             diffEngine, diagnosticEngine,
             new SolutionManagementEngine(manager),
-            new StructuralRefinementEngine(manager, config),
+            TestEngines.StructuralRefinementEngine(manager, config),
             new DependencyEngine(manager),
             new ProjectConsistencyEngine(manager),
             config, NullLogger<WorkspaceTools>.Instance,
-            new BuildEngine(manager, diagnosticEngine),
+            TestEngines.BuildEngine(manager, diagnosticEngine),
             symbolNavigationEngine,
             new TestRunEngine(manager),
             new WorkspaceReadNavigationImpl(manager, NullLogger<WorkspaceReadNavigationImpl>.Instance),

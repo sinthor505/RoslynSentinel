@@ -26,7 +26,7 @@ public class BuildCascadeFixtureTests
             WriteFixtureSolution(root);
             using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             await workspaceManager.LoadSolutionAsync(Path.Combine(root, "CascadeFixture.slnx"));
-            var buildEngine = new BuildEngine(workspaceManager, new DiagnosticEngine(workspaceManager));
+            var buildEngine = TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager));
 
             var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50, level: BuildVerifyLevel.fullBuildThrowaway);
 

@@ -49,19 +49,19 @@ public class ReplaceSnippetBatchTests
 
     private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
     {
-        var config = new SentinelConfiguration();
+        var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
-        var diagnosticEngine = new DiagnosticEngine(workspaceManager);
+        var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
         return new WorkspaceTools(
             workspaceManager,
             TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
             diffEngine, diagnosticEngine,
             new SolutionManagementEngine(workspaceManager),
-            new StructuralRefinementEngine(workspaceManager, config),
+            TestEngines.StructuralRefinementEngine(workspaceManager, config),
             new DependencyEngine(workspaceManager),
             new ProjectConsistencyEngine(workspaceManager),
             config, NullLogger<WorkspaceTools>.Instance,
-            new BuildEngine(workspaceManager, diagnosticEngine),
+            TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
             new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),

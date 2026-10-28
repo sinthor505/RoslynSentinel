@@ -386,7 +386,7 @@ public class TestInstanceLauncherTests
         TestContext.Out.WriteLine($"server output: {outputDirectory}");
         var solutionPath = Path.Combine(repoRoot, "RoslynSentinel.slnx");
         var workspace = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        var launcher = new TestInstanceLauncher(workspace, new BuildEngine(workspace));
+        var launcher = new TestInstanceLauncher(workspace, TestEngines.BuildEngine(workspace));
         var buildSource = new TestInstanceBuildSource(outputDirectory, File.GetLastWriteTimeUtc(Path.Combine(outputDirectory, "RoslynSentinel.Server.Advanced.dll")), null, null, false);
         int? pid = null;
         try
