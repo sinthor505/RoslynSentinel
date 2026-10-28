@@ -22,6 +22,9 @@
     <BuildType Solution="DebugVisualStudio|*" Project="Debug" />
   </Project>
   <Project Path="RoslynSentinel.Tests.SubAgent/RoslynSentinel.Tests.SubAgent.csproj" />
+  <Project Path="RoslynSentinel.Tests.Support.Advanced/RoslynSentinel.Tests.Support.Advanced.csproj">
+    <BuildType Solution="DebugVisualStudio|*" Project="Debug" />
+  </Project>
   <Project Path="RoslynSentinel.Tests.Support.Basic/RoslynSentinel.Tests.Support.Basic.csproj">
     <BuildType Solution="DebugVisualStudio|*" Project="Debug" />
   </Project>

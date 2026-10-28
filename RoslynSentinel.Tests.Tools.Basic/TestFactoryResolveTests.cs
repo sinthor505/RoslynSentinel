@@ -498,6 +498,60 @@ public class TestFactoryResolveTests
     }
 
     [Test]
+    public void DiscoveryEngine_ManagerAndNavigation()
+    {
+        var navigation = TestEngines.SymbolNavigationEngine(_wm);
+        var engine = TestEngines.DiscoveryEngine(_wm, navigation);
+        Assert.That(engine, Is.TypeOf<DiscoveryEngine>());
+        Assert.That(Holds(engine, _wm), Is.True);
+        Assert.That(Holds(engine, navigation), Is.True, "the explicit navigation engine must be the one the engine holds");
+    }
+
+    [Test]
+    public void SolutionStructureEngine_ManagerAndConfig()
+    {
+        var config = TestEngines.SentinelConfiguration();
+        var engine = TestEngines.SolutionStructureEngine(_wm, config);
+        Assert.That(engine, Is.TypeOf<SolutionStructureEngine>());
+        Assert.That(Holds(engine, _wm), Is.True);
+        Assert.That(Holds(engine, config), Is.True, "the explicit config must be the one the engine holds");
+    }
+
+    [Test]
+    public void SyntaxUpgradeEngine_ManagerAndConfig()
+    {
+        var config = TestEngines.SentinelConfiguration();
+        var engine = TestEngines.SyntaxUpgradeEngine(_wm, config);
+        Assert.That(engine, Is.TypeOf<SyntaxUpgradeEngine>());
+        Assert.That(Holds(engine, _wm), Is.True);
+        Assert.That(Holds(engine, config), Is.True, "the explicit config must be the one the engine holds");
+    }
+
+    [Test]
+    public void ThreadSafetyEngine_ManagerOnly()
+    {
+        var engine = TestEngines.ThreadSafetyEngine(_wm);
+        Assert.That(engine, Is.TypeOf<ThreadSafetyEngine>());
+        Assert.That(Holds(engine, _wm), Is.True);
+    }
+
+    [Test]
+    public void SemanticRefactoringEngine_ManagerOnly()
+    {
+        var engine = TestEngines.SemanticRefactoringEngine(_wm);
+        Assert.That(engine, Is.TypeOf<SemanticRefactoringEngine>());
+        Assert.That(Holds(engine, _wm), Is.True);
+    }
+
+    [Test]
+    public void InventoryEngine_ManagerOnly()
+    {
+        var engine = TestEngines.InventoryEngine(_wm);
+        Assert.That(engine, Is.TypeOf<InventoryEngine>());
+        Assert.That(Holds(engine, _wm), Is.True);
+    }
+
+    [Test]
     public void EveryFactoryMethod_IsNonGenericAndNamedAfterItsReturnType()
     {
         // The naming rule is what lets replaceConstruction map `new X(...)` to a factory; guard it for future additions.

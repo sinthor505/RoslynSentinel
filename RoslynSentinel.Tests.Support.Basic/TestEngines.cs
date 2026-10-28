@@ -110,4 +110,23 @@ public static class TestEngines
 
     public static TestCategoryApplyEngine TestCategoryApplyEngine(IWorkspaceManager workspaceManager, ValidationEngine validationEngine) =>
         ActivatorUtilities.CreateInstance<TestCategoryApplyEngine>(CreateProvider(workspaceManager), workspaceManager, validationEngine);
+
+    // Basic-engine types the Advanced test projects construct heavily (Step 5 survey).
+    public static DiscoveryEngine DiscoveryEngine(IWorkspaceManager workspaceManager, SymbolNavigationEngine symbolNavigationEngine) =>
+        ActivatorUtilities.CreateInstance<DiscoveryEngine>(CreateProvider(workspaceManager), workspaceManager, symbolNavigationEngine);
+
+    public static SolutionStructureEngine SolutionStructureEngine(IWorkspaceManager workspaceManager, SentinelConfiguration config) =>
+        ActivatorUtilities.CreateInstance<SolutionStructureEngine>(CreateProvider(workspaceManager), workspaceManager, config);
+
+    public static SyntaxUpgradeEngine SyntaxUpgradeEngine(IWorkspaceManager workspaceManager, SentinelConfiguration config) =>
+        ActivatorUtilities.CreateInstance<SyntaxUpgradeEngine>(CreateProvider(workspaceManager), workspaceManager, config);
+
+    public static ThreadSafetyEngine ThreadSafetyEngine(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<ThreadSafetyEngine>(CreateProvider(workspaceManager), workspaceManager);
+
+    public static SemanticRefactoringEngine SemanticRefactoringEngine(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<SemanticRefactoringEngine>(CreateProvider(workspaceManager), workspaceManager);
+
+    public static InventoryEngine InventoryEngine(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<InventoryEngine>(CreateProvider(workspaceManager), workspaceManager);
 }
