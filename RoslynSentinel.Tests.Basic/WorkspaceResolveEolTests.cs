@@ -14,7 +14,7 @@ public class WorkspaceResolveEolTests
     {
         if (persistent)
         {
-            using var manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            using var manager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             manager.EolModeOverride = mode;
             return manager.ResolveEol(filePath, preImageText);
         }

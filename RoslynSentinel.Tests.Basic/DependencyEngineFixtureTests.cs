@@ -27,7 +27,7 @@ public class DependencyEngineFixtureTests
 
         var fake = FakeWorkspaceManager.ReadOnly();
         fake.SetTestSolution(solution);
-        var engine = new DependencyEngine(fake);
+        var engine = Battery.Basic.TestEngines.DependencyEngine(fake);
 
         var downstreamProject = solution.Projects.FirstOrDefault(p => p.Name == "DownstreamApp");
         Assert.That(downstreamProject, Is.Not.Null, "Downstream project must exist in solution.");
@@ -54,7 +54,7 @@ public class DependencyEngineFixtureTests
 
         var fake = FakeWorkspaceManager.ReadOnly();
         fake.SetTestSolution(solution);
-        var engine = new DependencyEngine(fake);
+        var engine = Battery.Basic.TestEngines.DependencyEngine(fake);
 
         var downstreamProject = solution.Projects.FirstOrDefault(p => p.Name == "DownstreamApp");
         Assert.That(downstreamProject, Is.Not.Null);
@@ -91,7 +91,7 @@ public class SolutionStructureEngineFixtureTests
 
         var fake = FakeWorkspaceManager.ReadOnly();
         fake.SetTestSolution(solution);
-        var engine = new SolutionStructureEngine(fake, new SentinelConfiguration());
+        var engine = new SolutionStructureEngine(fake, Battery.Basic.TestEngines.SentinelConfiguration());
 
         var cycles = await engine.FindCircularDependenciesAsync();
 

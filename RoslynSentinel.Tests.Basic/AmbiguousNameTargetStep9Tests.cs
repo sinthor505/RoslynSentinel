@@ -23,18 +23,18 @@ public class AmbiguousNameTargetStep9Tests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _memberRefactoringEngine = new MemberRefactoringEngine(
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _memberRefactoringEngine = Battery.Basic.TestEngines.MemberRefactoringEngine(
             _workspaceManager,
             _symbolNavigationEngine,
-            new ValidationEngine(_workspaceManager));
-        _basicRefactoringEngine = new BasicRefactoringEngine(
+            Battery.Basic.TestEngines.ValidationEngine(_workspaceManager));
+        _basicRefactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(
             _workspaceManager,
             NullLogger<BasicRefactoringEngine>.Instance,
-            new SentinelConfiguration());
+            Battery.Basic.TestEngines.SentinelConfiguration());
         _semanticRefactoringEngine = new SemanticRefactoringEngine(_workspaceManager);
-        _msToolAugmentEngine = new MsToolAugmentEngine(_workspaceManager);
+        _msToolAugmentEngine = Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager);
         _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
     }
 

@@ -43,16 +43,16 @@ public class MemberRefactoringTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _basicRefactoringEngine = new BasicRefactoringEngine(
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _basicRefactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(
             _workspaceManager,
             NullLogger<BasicRefactoringEngine>.Instance,
-            new SentinelConfiguration());
-        _memberRefactoringEngine = new MemberRefactoringEngine(
+            Battery.Basic.TestEngines.SentinelConfiguration());
+        _memberRefactoringEngine = Battery.Basic.TestEngines.MemberRefactoringEngine(
             _workspaceManager,
             _symbolNavigationEngine,
-            new ValidationEngine(_workspaceManager));
+            Battery.Basic.TestEngines.ValidationEngine(_workspaceManager));
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Wrappers.cs", GenericSource)]);
         _workspaceManager.SetTestSolution(solution);
@@ -946,7 +946,7 @@ public class C
     public async Task SafeDeleteSymbol_ContextSnippetMatchesNothing_ThrowsNotFound()
     {
         SetSource(DuplicateTypeSource, "SafeDeleteMiss.cs");
-        var refinementEngine = new StructuralRefinementEngine(_workspaceManager, new SentinelConfiguration());
+        var refinementEngine = Battery.Basic.TestEngines.StructuralRefinementEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
 
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
             await refinementEngine.SafeDeleteSymbolAsync("SafeDeleteMiss.cs", "Dup", "no such text anywhere", null, null));
@@ -959,7 +959,7 @@ public class C
     public async Task ExtractMethod_SnippetMatchesNothing_ThrowsNotFound()
     {
         SetSource(SnippetMissSource, "ExtractMethodMiss.cs");
-        var augmentEngine = new MsToolAugmentEngine(_workspaceManager);
+        var augmentEngine = Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager);
 
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await augmentEngine.ExtractMethodSafeAsync("ExtractMethodMiss.cs", "Extracted", "no such text anywhere"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
@@ -985,7 +985,7 @@ public class C
         await File.WriteAllTextAsync(path, SnippetMissSource);
         try
         {
-            var augmentEngine = new MsToolAugmentEngine(_workspaceManager);
+            var augmentEngine = Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager);
 
             var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await augmentEngine.ExtractConstantSafeAsync(path, "no such text anywhere", "MyConst"));
             Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));

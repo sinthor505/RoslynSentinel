@@ -22,9 +22,9 @@ public class ExtractMethodNormalizeCharacterizationTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        var symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _engine = new MemberRefactoringEngine(_workspaceManager, symbolNavigationEngine, new ValidationEngine(_workspaceManager));
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _engine = Battery.Basic.TestEngines.MemberRefactoringEngine(_workspaceManager, symbolNavigationEngine, Battery.Basic.TestEngines.ValidationEngine(_workspaceManager));
     }
 
     [TearDown]

@@ -22,7 +22,7 @@ public class EolChokepointConversionTests
     private static async Task<ApplyChangesResult> ApplyAsync(
         string file, string proposed, EolMode mode, bool exactRestore = false, string? operationLabel = null)
     {
-        using var manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var manager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         manager.EolModeOverride = mode;
         manager.SetTestSolution(new AdhocWorkspace().CurrentSolution);
         return await manager.ApplyProposedChangesAsync(
@@ -315,7 +315,7 @@ public class EolChokepointConversionTests
             File.SetAttributes(fileB, FileAttributes.ReadOnly);
             try
             {
-                using var manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                using var manager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
                 manager.EolModeOverride = EolMode.Crlf;
                 manager.SetTestSolution(new AdhocWorkspace().CurrentSolution);
                 var changes = new Dictionary<FilePathWrapper, string>
@@ -353,7 +353,7 @@ public class EolChokepointConversionTests
         await File.WriteAllBytesAsync(fileA, originalBytes);
         await File.WriteAllBytesAsync(fileB, Encoding.UTF8.GetBytes(CrlfSource));
 
-        using var manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var manager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         manager.EolModeOverride = EolMode.Crlf;
         await manager.LoadSolutionAsync(fixture.SolutionPath);
 

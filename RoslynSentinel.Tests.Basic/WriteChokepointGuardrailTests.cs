@@ -23,7 +23,7 @@ public class WriteChokepointGuardrailTests
         InMemoryWorkspace workspace, Dictionary<FilePathWrapper, string> changes, bool dryRun = false,
         IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits = null)
     {
-        var validation = new ValidationEngine(workspace.Manager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var validation = Battery.Basic.TestEngines.ValidationEngine(workspace.Manager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
         return await ValidateAndApplyHelper.ValidateAndApplyAsync(
             validation, workspace.Manager, NullLogger.Instance, changes, "GuardrailTest", dryRun: dryRun,
             expectedEdits: expectedEdits);
@@ -145,7 +145,7 @@ public class WriteChokepointGuardrailTests
         await File.WriteAllTextAsync(file, CrlfSource);
         try
         {
-            using var manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            using var manager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             manager.EolModeOverride = EolMode.Auto;
             manager.SetTestSolution(new AdhocWorkspace().CurrentSolution);
 
@@ -175,7 +175,7 @@ public class WriteChokepointGuardrailTests
     {
         var source = string.Join(eol, "namespace T;", "", "public class A", "{", "    public int X() => 1;", "}", "");
         using var workspace = InMemoryWorkspace.Create(("A.cs", source));
-        var engine = new BasicRefactoringEngine(workspace.Manager, NullLogger<BasicRefactoringEngine>.Instance, new SentinelConfiguration());
+        var engine = Battery.Basic.TestEngines.BasicRefactoringEngine(workspace.Manager, NullLogger<BasicRefactoringEngine>.Instance, Battery.Basic.TestEngines.SentinelConfiguration());
 
         var result = await engine.AddUsingDirectiveAsync(workspace.PathOf("A.cs"), "System.Linq");
 
@@ -192,7 +192,7 @@ public class WriteChokepointGuardrailTests
     {
         var source = string.Join(eol, "namespace T;", "", "public class A", "{", "    public int X(int a) => a;", "}", "");
         using var workspace = InMemoryWorkspace.Create(("A.cs", source));
-        var engine = new BasicRefactoringEngine(workspace.Manager, NullLogger<BasicRefactoringEngine>.Instance, new SentinelConfiguration());
+        var engine = Battery.Basic.TestEngines.BasicRefactoringEngine(workspace.Manager, NullLogger<BasicRefactoringEngine>.Instance, Battery.Basic.TestEngines.SentinelConfiguration());
         var solution = workspace.Manager.CurrentSolution!;
         var document = solution.GetDocument(solution.GetDocumentIdsWithFilePath(workspace.PathOf("A.cs")).Single())!;
 

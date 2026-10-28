@@ -16,12 +16,12 @@ public class SortMembersNoOpTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _memberRefactoringEngine = new MemberRefactoringEngine(
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _memberRefactoringEngine = Battery.Basic.TestEngines.MemberRefactoringEngine(
             _workspaceManager,
             _symbolNavigationEngine,
-            new ValidationEngine(_workspaceManager));
+            Battery.Basic.TestEngines.ValidationEngine(_workspaceManager));
     }
 
     [TearDown]

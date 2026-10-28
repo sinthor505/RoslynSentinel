@@ -25,12 +25,12 @@ public class BasicRefactoringTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _basicRefactoringEngine = new BasicRefactoringEngine(
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _basicRefactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(
             _workspaceManager,
             NullLogger<BasicRefactoringEngine>.Instance,
-            new SentinelConfiguration());
+            Battery.Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]

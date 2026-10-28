@@ -30,8 +30,8 @@ public class MsToolAugmentNormalizeCharacterizationTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new MsToolAugmentEngine(_workspaceManager);
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager);
         _tempDir = Path.Combine(Path.GetTempPath(), "MsAugmentNormalize_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
     }

@@ -26,11 +26,11 @@ public class AddUsingDirectiveFormatCharacterizationTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new BasicRefactoringEngine(
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = Battery.Basic.TestEngines.BasicRefactoringEngine(
             _workspaceManager,
             NullLogger<BasicRefactoringEngine>.Instance,
-            new SentinelConfiguration());
+            Battery.Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]

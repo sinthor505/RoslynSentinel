@@ -17,7 +17,7 @@ public class DiffEngineTests
     public void Setup()
     {
         var workspaceManager = FakeWorkspaceManager.ReadOnly();
-        _diffEngine = new DiffEngine();
+        _diffEngine = Battery.Basic.TestEngines.DiffEngine();
     }
 
     [Test]
@@ -229,8 +229,8 @@ public class DiffEngineTests
         var workspaceManager = FakeWorkspaceManager.ReadOnly();
         workspaceManager.SetTestSolution(solution);
 
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, new NullLogger<ValidationEngine>());
+        var diffEngine = Battery.Basic.TestEngines.DiffEngine();
+        var validationEngine = Battery.Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, new NullLogger<ValidationEngine>());
 
         var diff = "@@ -1,1 +1,1 @@\n-public class C { public void M() {} }\n+public class C { public void M() { int x = 1; } }";
 
@@ -248,8 +248,8 @@ public class DiffEngineTests
         var workspaceManager = FakeWorkspaceManager.ReadOnly();
         workspaceManager.SetTestSolution(solution);
 
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, new NullLogger<ValidationEngine>());
+        var diffEngine = Battery.Basic.TestEngines.DiffEngine();
+        var validationEngine = Battery.Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, new NullLogger<ValidationEngine>());
 
         // Introducing a syntax error (missing semicolon)
         var diff = "@@ -1,1 +1,1 @@\n-public class C { public void M() {} }\n+public class C { public void M() { int x = 1 } }";

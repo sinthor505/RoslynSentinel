@@ -18,9 +18,9 @@ public class MoveTypeToFileTests
     [SetUp]
     public void Setup()
     {
-        var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
-        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, new NullLogger<BasicRefactoringEngine>(), config);
+        var config = Battery.Basic.TestEngines.SentinelConfiguration();
+        _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
+        _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, new NullLogger<BasicRefactoringEngine>(), config);
     }
 
     [TearDown]
@@ -218,13 +218,13 @@ public class WidgetB { public string Label { get; set; } }
     {
         // The split-out files are new documents. Under Crlf they must reach disk as uniform CRLF through the chokepoint.
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         workspaceManager.EolModeOverride = EolMode.Crlf;
         var projectDir = Path.GetDirectoryName(Directory.EnumerateFiles(fixture.SolutionDirectory, "*.csproj", SearchOption.AllDirectories).First())!;
         var bundle = Path.Combine(projectDir, "Bundle.cs");
         await File.WriteAllTextAsync(bundle, "namespace MyApp;\npublic class Alpha { }\npublic class Beta { }\npublic class Gamma { }\n");
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var engine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, new SentinelConfiguration());
+        var engine = Battery.Basic.TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, Battery.Basic.TestEngines.SentinelConfiguration());
 
         var changes = await engine.MoveAllTypesToFilesAsync(bundle);
         var applied = await workspaceManager.ApplyProposedChangesAsync(changes, retryCount: 0, validateChanges: false);

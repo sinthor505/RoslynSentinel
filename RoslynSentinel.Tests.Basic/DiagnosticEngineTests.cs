@@ -22,7 +22,7 @@ public class DiagnosticEngineTests
 
         var fake = FakeWorkspaceManager.ReadOnly();
         fake.SetTestSolution(solution);
-        var engine = new DiagnosticEngine(fake);
+        var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
 
         var result = await engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs"));
 
@@ -39,7 +39,7 @@ public class DiagnosticEngineTests
 
         var fake = FakeWorkspaceManager.ReadOnly();
         fake.SetTestSolution(solution);
-        var engine = new DiagnosticEngine(fake);
+        var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
 
         var result = await engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs"));
 
@@ -58,7 +58,7 @@ public class DiagnosticEngineTests
 
         var fake = FakeWorkspaceManager.ReadOnly();
         fake.SetTestSolution(solution);
-        var engine = new DiagnosticEngine(fake);
+        var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
 
         var result = await engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs"));
 
@@ -72,7 +72,7 @@ public class DiagnosticEngineTests
     public async Task GetFileDiagnostics_WithNoSolutionLoaded_ThrowsSolutionNotLoaded()
     {
         var fake = FakeWorkspaceManager.ReadOnly();
-        var engine = new DiagnosticEngine(fake);
+        var engine = Battery.Basic.TestEngines.DiagnosticEngine(fake);
 
         await Assert.ThatAsync(
             () => engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs")),
