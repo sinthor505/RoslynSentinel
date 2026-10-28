@@ -41,17 +41,17 @@ public class BatteryTwentyTests
         _diffEngine = TestEngines.DiffEngine();
         _validationEngine = TestEngines.ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
         _diagnosticEngine = TestEngines.DiagnosticEngine(_workspaceManager);
-        _solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
+        _solutionManagementEngine = TestEngines.SolutionManagementEngine(_workspaceManager);
         _structuralRefinementEngine = TestEngines.StructuralRefinementEngine(_workspaceManager, _config);
-        _dependencyEngine = new DependencyEngine(_workspaceManager);
-        _projectConsistencyEngine = new ProjectConsistencyEngine(_workspaceManager);
-        _workspaceTools = new WorkspaceTools(
+        _dependencyEngine = TestEngines.DependencyEngine(_workspaceManager);
+        _projectConsistencyEngine = TestEngines.ProjectConsistencyEngine(_workspaceManager);
+        _workspaceTools = TestTools.WorkspaceTools(
             _workspaceManager, _validationEngine, _diffEngine, _diagnosticEngine,
             _solutionManagementEngine, _structuralRefinementEngine, _dependencyEngine,
             _projectConsistencyEngine, _config, NullLogger<WorkspaceTools>.Instance, TestEngines.BuildEngine(_workspaceManager, _diagnosticEngine),
             TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(_workspaceManager),
-            new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
         _wholeFileWriteTools = new WholeFileWriteTools(_workspaceManager, _workspaceTools, _validationEngine, _diffEngine, NullLogger<WholeFileWriteTools>.Instance, TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
     }
@@ -75,18 +75,18 @@ public class BatteryTwentyTests
         var diffEngine = TestEngines.DiffEngine();
         var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
-        var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
+        var solutionManagementEngine = TestEngines.SolutionManagementEngine(workspaceManager);
         var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(workspaceManager, config);
-        var dependencyEngine = new DependencyEngine(workspaceManager);
-        var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
-        return new WorkspaceTools(
+        var dependencyEngine = TestEngines.DependencyEngine(workspaceManager);
+        var projectConsistencyEngine = TestEngines.ProjectConsistencyEngine(workspaceManager);
+        return TestTools.WorkspaceTools(
             workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
             TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
-            new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            TestTools.WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
     }
 

@@ -34,14 +34,14 @@ public class BuildToolResultShapeTests
         var config = TestEngines.SentinelConfiguration();
         var diagnosticEngine = TestEngines.DiagnosticEngine(_workspaceManager);
         var validationEngine = TestEngines.ValidationEngine(_workspaceManager, TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
-        _workspaceTools = new WorkspaceTools(
+        _workspaceTools = TestTools.WorkspaceTools(
             _workspaceManager, validationEngine, TestEngines.DiffEngine(), diagnosticEngine,
-            new SolutionManagementEngine(_workspaceManager), TestEngines.StructuralRefinementEngine(_workspaceManager, config),
-            new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config,
+            TestEngines.SolutionManagementEngine(_workspaceManager), TestEngines.StructuralRefinementEngine(_workspaceManager, config),
+            TestEngines.DependencyEngine(_workspaceManager), TestEngines.ProjectConsistencyEngine(_workspaceManager), config,
             NullLogger<WorkspaceTools>.Instance, TestEngines.BuildEngine(_workspaceManager, diagnosticEngine),
             TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(_workspaceManager),
-            new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
     }
 

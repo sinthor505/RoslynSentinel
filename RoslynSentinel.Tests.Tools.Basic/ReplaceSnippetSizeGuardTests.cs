@@ -43,19 +43,19 @@ public class ReplaceSnippetSizeGuardTests
         var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
         var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
-        return new WorkspaceTools(
+        return TestTools.WorkspaceTools(
             workspaceManager,
             TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
             diffEngine, diagnosticEngine,
-            new SolutionManagementEngine(workspaceManager),
+            TestEngines.SolutionManagementEngine(workspaceManager),
             TestEngines.StructuralRefinementEngine(workspaceManager, config),
-            new DependencyEngine(workspaceManager),
-            new ProjectConsistencyEngine(workspaceManager),
+            TestEngines.DependencyEngine(workspaceManager),
+            TestEngines.ProjectConsistencyEngine(workspaceManager),
             config, NullLogger<WorkspaceTools>.Instance,
             TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
-            new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            TestTools.WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             writeAdvice ?? WriteToolAdviceHelper.WithAllToolsExposed());
     }
 

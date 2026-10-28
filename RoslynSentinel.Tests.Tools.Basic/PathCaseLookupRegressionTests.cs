@@ -59,19 +59,19 @@ public class PathCaseLookupRegressionTests
         var diagnosticEngine = TestEngines.DiagnosticEngine(workspace);
         var validationEngine = TestEngines.ValidationEngine(workspace, diffEngine, NullLogger<ValidationEngine>.Instance);
         var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(workspace, NullLogger<SymbolNavigationEngine>.Instance);
-        var tools = new WorkspaceTools(
+        var tools = TestTools.WorkspaceTools(
             workspace,
             validationEngine,
             diffEngine, diagnosticEngine,
-            new SolutionManagementEngine(workspace),
+            TestEngines.SolutionManagementEngine(workspace),
             TestEngines.StructuralRefinementEngine(workspace, config),
-            new DependencyEngine(workspace),
-            new ProjectConsistencyEngine(workspace),
+            TestEngines.DependencyEngine(workspace),
+            TestEngines.ProjectConsistencyEngine(workspace),
             config, NullLogger<WorkspaceTools>.Instance,
             TestEngines.BuildEngine(workspace, diagnosticEngine),
             symbolNavigationEngine,
             new TestRunEngine(workspace),
-            new WorkspaceReadNavigationImpl(workspace, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            TestTools.WorkspaceReadNavigationImpl(workspace, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
         var writeTools = new WholeFileWriteTools(workspace, tools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, symbolNavigationEngine);
         return new Harness(fixture, workspace, tools, writeTools);

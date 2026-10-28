@@ -49,7 +49,7 @@ public class GetLargeResultTests
         var config = Battery.Basic.TestEngines.SentinelConfiguration();
         var symbolNavEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
 
-        _workspaceTools = new WorkspaceTools(_workspaceManager, Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance), Battery.Basic.TestEngines.DiffEngine(), Battery.Basic.TestEngines.DiagnosticEngine(_workspaceManager), new SolutionManagementEngine(_workspaceManager), Battery.Basic.TestEngines.StructuralRefinementEngine(_workspaceManager, config), new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config, NullLogger<WorkspaceTools>.Instance, Battery.Basic.TestEngines.BuildEngine(_workspaceManager, Battery.Basic.TestEngines.DiagnosticEngine(_workspaceManager)), symbolNavEngine, new TestRunEngine(_workspaceManager), new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+        _workspaceTools = Battery.Basic.TestTools.WorkspaceTools(_workspaceManager, Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance), Battery.Basic.TestEngines.DiffEngine(), Battery.Basic.TestEngines.DiagnosticEngine(_workspaceManager), Battery.Basic.TestEngines.SolutionManagementEngine(_workspaceManager), Battery.Basic.TestEngines.StructuralRefinementEngine(_workspaceManager, config), Battery.Basic.TestEngines.DependencyEngine(_workspaceManager), Battery.Basic.TestEngines.ProjectConsistencyEngine(_workspaceManager), config, NullLogger<WorkspaceTools>.Instance, Battery.Basic.TestEngines.BuildEngine(_workspaceManager, Battery.Basic.TestEngines.DiagnosticEngine(_workspaceManager)), symbolNavEngine, new TestRunEngine(_workspaceManager), Battery.Basic.TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
     }
 
@@ -154,21 +154,21 @@ public class GetLargeResultTests
         var config = Battery.Basic.TestEngines.SentinelConfiguration();
         var symbolNavEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(unloadedWorkspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         
-        return new WorkspaceTools(
+        return Battery.Basic.TestTools.WorkspaceTools(
             unloadedWorkspaceManager,
             Battery.Basic.TestEngines.ValidationEngine(unloadedWorkspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance),
             Battery.Basic.TestEngines.DiffEngine(),
             Battery.Basic.TestEngines.DiagnosticEngine(unloadedWorkspaceManager),
-            new SolutionManagementEngine(unloadedWorkspaceManager),
+            Battery.Basic.TestEngines.SolutionManagementEngine(unloadedWorkspaceManager),
             Battery.Basic.TestEngines.StructuralRefinementEngine(unloadedWorkspaceManager, config),
-            new DependencyEngine(unloadedWorkspaceManager),
-            new ProjectConsistencyEngine(unloadedWorkspaceManager),
+            Battery.Basic.TestEngines.DependencyEngine(unloadedWorkspaceManager),
+            Battery.Basic.TestEngines.ProjectConsistencyEngine(unloadedWorkspaceManager),
             config,
             NullLogger<WorkspaceTools>.Instance,
             Battery.Basic.TestEngines.BuildEngine(unloadedWorkspaceManager, Battery.Basic.TestEngines.DiagnosticEngine(unloadedWorkspaceManager)),
             symbolNavEngine,
             new TestRunEngine(unloadedWorkspaceManager),
-            new WorkspaceReadNavigationImpl(unloadedWorkspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            Battery.Basic.TestTools.WorkspaceReadNavigationImpl(unloadedWorkspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
     }
 

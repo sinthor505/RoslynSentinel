@@ -42,18 +42,18 @@ public class ReadFileTests
         var diffEngine = TestEngines.DiffEngine();
         var validationEngine = TestEngines.ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = TestEngines.DiagnosticEngine(_workspaceManager);
-        var solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
+        var solutionManagementEngine = TestEngines.SolutionManagementEngine(_workspaceManager);
         var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(_workspaceManager, config);
-        var dependencyEngine = new DependencyEngine(_workspaceManager);
-        var projectConsistencyEngine = new ProjectConsistencyEngine(_workspaceManager);
-        _tools = new WorkspaceTools(
+        var dependencyEngine = TestEngines.DependencyEngine(_workspaceManager);
+        var projectConsistencyEngine = TestEngines.ProjectConsistencyEngine(_workspaceManager);
+        _tools = TestTools.WorkspaceTools(
             _workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
             TestEngines.BuildEngine(_workspaceManager, diagnosticEngine),
             TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(_workspaceManager),
-            new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
     }
 
@@ -285,18 +285,18 @@ public class ReadFileTests
         var diffEngine = TestEngines.DiffEngine();
         var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
-        var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
+        var solutionManagementEngine = TestEngines.SolutionManagementEngine(workspaceManager);
         var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(workspaceManager, config);
-        var dependencyEngine = new DependencyEngine(workspaceManager);
-        var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
-        return new WorkspaceTools(
+        var dependencyEngine = TestEngines.DependencyEngine(workspaceManager);
+        var projectConsistencyEngine = TestEngines.ProjectConsistencyEngine(workspaceManager);
+        return TestTools.WorkspaceTools(
             workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
             TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
-            new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            TestTools.WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
     }
 

@@ -22,18 +22,18 @@ public class ListSolutionItemsAllTests
         var diffEngine = TestEngines.DiffEngine();
         var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
-        var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
+        var solutionManagementEngine = TestEngines.SolutionManagementEngine(workspaceManager);
         var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(workspaceManager, config);
-        var dependencyEngine = new DependencyEngine(workspaceManager);
-        var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
-        return new WorkspaceTools(
+        var dependencyEngine = TestEngines.DependencyEngine(workspaceManager);
+        var projectConsistencyEngine = TestEngines.ProjectConsistencyEngine(workspaceManager);
+        return TestTools.WorkspaceTools(
             workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
             TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
-            new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            TestTools.WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
     }
 

@@ -72,19 +72,19 @@ public class ReplaceSnippetErrorCodeTests
         var diagnosticEngine = TestEngines.DiagnosticEngine(manager);
         var validationEngine = TestEngines.ValidationEngine(manager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(manager, NullLogger<SymbolNavigationEngine>.Instance);
-        var tools = new WorkspaceTools(
+        var tools = TestTools.WorkspaceTools(
             manager,
             validationEngine,
             diffEngine, diagnosticEngine,
-            new SolutionManagementEngine(manager),
+            TestEngines.SolutionManagementEngine(manager),
             TestEngines.StructuralRefinementEngine(manager, config),
-            new DependencyEngine(manager),
-            new ProjectConsistencyEngine(manager),
+            TestEngines.DependencyEngine(manager),
+            TestEngines.ProjectConsistencyEngine(manager),
             config, NullLogger<WorkspaceTools>.Instance,
             TestEngines.BuildEngine(manager, diagnosticEngine),
             symbolNavigationEngine,
             new TestRunEngine(manager),
-            new WorkspaceReadNavigationImpl(manager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            TestTools.WorkspaceReadNavigationImpl(manager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
         return new Harness(workspace, tools);
     }

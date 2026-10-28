@@ -53,7 +53,7 @@ public class SearchSolutionTextRecoveryHintTests
         {
             SolutionPath = Path.Combine(_dir, "Test.slnx")
         };
-        _impl = new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance);
+        _impl = TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance);
 
         var solution = TestSolutionBuilder.CreateEmptySolution();
         solution = AddProject(solution, _dir, "AppProj", plainCsproj, "App.cs",

@@ -180,7 +180,7 @@ public class CompactResultDefaultTests
             Assert.That(summary.ChangedContentResultId, Is.Not.Null.And.Not.Empty, "a solution root exists, so the content must be offloaded");
             Assert.That(summary.Note, Does.Contain("GetLargeResult").And.Contain(summary.ChangedContentResultId!));
 
-            var readNav = new WorkspaceReadNavigationImpl(workspace.Manager, NullLogger<WorkspaceReadNavigationImpl>.Instance);
+            var readNav = TestTools.WorkspaceReadNavigationImpl(workspace.Manager, NullLogger<WorkspaceReadNavigationImpl>.Instance);
             var fetched = await readNav.GetLargeResult(reason: "test fetch offloaded changed content", resultId: summary.ChangedContentResultId);
 
             Assert.That(fetched.IsError, Is.False, fetched.ErrorData?.Message);

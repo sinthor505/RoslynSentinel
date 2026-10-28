@@ -41,18 +41,18 @@ public class GetMethodSourceTests
         var diffEngine = TestEngines.DiffEngine();
         var validationEngine = TestEngines.ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = TestEngines.DiagnosticEngine(_workspaceManager);
-        var solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
+        var solutionManagementEngine = TestEngines.SolutionManagementEngine(_workspaceManager);
         var structuralRefinementEngine = TestEngines.StructuralRefinementEngine(_workspaceManager, config);
-        var dependencyEngine = new DependencyEngine(_workspaceManager);
-        var projectConsistencyEngine = new ProjectConsistencyEngine(_workspaceManager);
-        _tools = new WorkspaceTools(
+        var dependencyEngine = TestEngines.DependencyEngine(_workspaceManager);
+        var projectConsistencyEngine = TestEngines.ProjectConsistencyEngine(_workspaceManager);
+        _tools = TestTools.WorkspaceTools(
             _workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
             TestEngines.BuildEngine(_workspaceManager, diagnosticEngine),
             TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(_workspaceManager),
-            new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
     }
 

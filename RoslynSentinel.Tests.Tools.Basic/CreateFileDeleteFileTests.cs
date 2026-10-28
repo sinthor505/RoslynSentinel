@@ -25,19 +25,19 @@ public class CreateFileDeleteFileTests
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = Basic.TestEngines.DiagnosticEngine(workspaceManager);
-        var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
+        var solutionManagementEngine = Basic.TestEngines.SolutionManagementEngine(workspaceManager);
         var structuralRefinementEngine = Basic.TestEngines.StructuralRefinementEngine(workspaceManager, config);
-        var dependencyEngine = new DependencyEngine(workspaceManager);
-        var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
+        var dependencyEngine = Basic.TestEngines.DependencyEngine(workspaceManager);
+        var projectConsistencyEngine = Basic.TestEngines.ProjectConsistencyEngine(workspaceManager);
 
-        var workspaceTools = new WorkspaceTools(
+        var workspaceTools = Basic.TestTools.WorkspaceTools(
             workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
             Basic.TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
             Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
-            new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            Basic.TestTools.WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
 
         var wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));

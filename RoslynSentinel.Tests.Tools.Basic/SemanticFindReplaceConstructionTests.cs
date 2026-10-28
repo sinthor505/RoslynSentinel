@@ -238,7 +238,7 @@ public class SemanticFindReplaceConstructionTests
 
         var editImpl = new WorkspaceFileEditImpl(
             _workspaceManager,
-            new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            Battery.Basic.TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             NullLogger.Instance,
             _validationEngine,
             Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),

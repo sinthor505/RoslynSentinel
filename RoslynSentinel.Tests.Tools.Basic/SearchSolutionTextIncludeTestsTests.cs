@@ -48,7 +48,7 @@ public class SearchSolutionTextIncludeTestsTests
         {
             SolutionPath = Path.Combine(_dir, "Test.slnx")
         };
-        _impl = new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance);
+        _impl = TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance);
 
         var testsDocPath = Path.Combine(_dir, "TestsProj", "UnitTest1.cs");
         var appDocPath = Path.Combine(_dir, "AppProj", "App.cs");
