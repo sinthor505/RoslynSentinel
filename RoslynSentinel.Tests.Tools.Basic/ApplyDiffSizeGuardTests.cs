@@ -56,16 +56,16 @@ public class ApplyDiffSizeGuardTests
 
     private static WholeFileWriteTools BuildWholeFileWriteTools(IWorkspaceManager workspaceManager)
     {
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var diffEngine = TestEngines.DiffEngine();
+        var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         return new WholeFileWriteTools(workspaceManager, BuildTools(workspaceManager), validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
     }
 
     private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var diffEngine = TestEngines.DiffEngine();
+        var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = new DiagnosticEngine(workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
         var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);

@@ -68,9 +68,9 @@ public class ReplaceSnippetErrorCodeTests
         var manager = workspace.Manager;
 
         var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine();
+        var diffEngine = TestEngines.DiffEngine();
         var diagnosticEngine = new DiagnosticEngine(manager);
-        var validationEngine = new ValidationEngine(manager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var validationEngine = TestEngines.ValidationEngine(manager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(manager, NullLogger<SymbolNavigationEngine>.Instance);
         var tools = new WorkspaceTools(
             manager,

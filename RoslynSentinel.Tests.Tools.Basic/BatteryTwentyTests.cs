@@ -38,8 +38,8 @@ public class BatteryTwentyTests
     {
         _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
-        _diffEngine = new DiffEngine();
-        _validationEngine = new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
+        _diffEngine = TestEngines.DiffEngine();
+        _validationEngine = TestEngines.ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
         _solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
@@ -72,8 +72,8 @@ public class BatteryTwentyTests
     private static WorkspaceTools BuildInMemoryTools(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var diffEngine = TestEngines.DiffEngine();
+        var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = new DiagnosticEngine(workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
         var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);

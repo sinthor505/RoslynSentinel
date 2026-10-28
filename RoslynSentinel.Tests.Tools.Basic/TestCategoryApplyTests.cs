@@ -96,7 +96,7 @@ namespace FixturesBad
     {
         _workspaceManager = FakeWorkspaceManager.ReadWrite();
         _planner = new TestCategoryTaggingEngine(_workspaceManager);
-        _applier = new TestCategoryApplyEngine(_workspaceManager, new ValidationEngine(_workspaceManager));
+        _applier = new TestCategoryApplyEngine(_workspaceManager, Battery.Basic.TestEngines.ValidationEngine(_workspaceManager));
     }
 
     [TearDown]

@@ -49,7 +49,7 @@ public class GetLargeResultTests
         var config = new SentinelConfiguration();
         var symbolNavEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
 
-        _workspaceTools = new WorkspaceTools(_workspaceManager, new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance), new DiffEngine(), new DiagnosticEngine(_workspaceManager), new SolutionManagementEngine(_workspaceManager), new StructuralRefinementEngine(_workspaceManager, config), new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config, NullLogger<WorkspaceTools>.Instance, new BuildEngine(_workspaceManager, new DiagnosticEngine(_workspaceManager)), symbolNavEngine, new TestRunEngine(_workspaceManager), new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+        _workspaceTools = new WorkspaceTools(_workspaceManager, Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance), Battery.Basic.TestEngines.DiffEngine(), new DiagnosticEngine(_workspaceManager), new SolutionManagementEngine(_workspaceManager), new StructuralRefinementEngine(_workspaceManager, config), new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config, NullLogger<WorkspaceTools>.Instance, new BuildEngine(_workspaceManager, new DiagnosticEngine(_workspaceManager)), symbolNavEngine, new TestRunEngine(_workspaceManager), new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
     }
 
@@ -156,8 +156,8 @@ public class GetLargeResultTests
         
         return new WorkspaceTools(
             unloadedWorkspaceManager,
-            new ValidationEngine(unloadedWorkspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
-            new DiffEngine(),
+            Battery.Basic.TestEngines.ValidationEngine(unloadedWorkspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance),
+            Battery.Basic.TestEngines.DiffEngine(),
             new DiagnosticEngine(unloadedWorkspaceManager),
             new SolutionManagementEngine(unloadedWorkspaceManager),
             new StructuralRefinementEngine(unloadedWorkspaceManager, config),

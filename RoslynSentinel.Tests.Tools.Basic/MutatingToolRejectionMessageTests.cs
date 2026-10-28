@@ -54,8 +54,8 @@ public class MutatingToolRejectionMessageTests
     private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var diffEngine = TestEngines.DiffEngine();
+        var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = new DiagnosticEngine(workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
         var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
@@ -89,8 +89,8 @@ public class MutatingToolRejectionMessageTests
     {
         using var workspace = InMemoryWorkspace.Create(("ContosoOrders.Core/Helper.cs", HelperFileContent), ("ContosoOrders.Core/Caller.cs", CallerFileContent));
         var workspaceTools = BuildTools(workspace.Manager);
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspace.Manager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var diffEngine = TestEngines.DiffEngine();
+        var validationEngine = TestEngines.ValidationEngine(workspace.Manager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspace.Manager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, TestEngines.SymbolNavigationEngine(workspace.Manager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var helperPath = workspace.PathOf("ContosoOrders.Core/Helper.cs");
@@ -104,8 +104,8 @@ public class MutatingToolRejectionMessageTests
     {
         using var workspace = InMemoryWorkspace.Create(("ContosoOrders.Core/Helper.cs", HelperFileContent), ("ContosoOrders.Core/Caller.cs", CallerFileContent));
         var workspaceTools = BuildTools(workspace.Manager);
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspace.Manager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var diffEngine = TestEngines.DiffEngine();
+        var validationEngine = TestEngines.ValidationEngine(workspace.Manager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspace.Manager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, TestEngines.SymbolNavigationEngine(workspace.Manager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var helperPath = workspace.PathOf("ContosoOrders.Core/Helper.cs");
@@ -123,8 +123,8 @@ public class MutatingToolRejectionMessageTests
     {
         using var workspace = InMemoryWorkspace.Create(("ContosoOrders.Core/Helper.cs", HelperFileContent), ("ContosoOrders.Core/Caller.cs", CallerFileContent));
         var workspaceTools = BuildTools(workspace.Manager);
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspace.Manager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var diffEngine = TestEngines.DiffEngine();
+        var validationEngine = TestEngines.ValidationEngine(workspace.Manager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspace.Manager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, TestEngines.SymbolNavigationEngine(workspace.Manager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var helperPath = workspace.PathOf("ContosoOrders.Core/Helper.cs");

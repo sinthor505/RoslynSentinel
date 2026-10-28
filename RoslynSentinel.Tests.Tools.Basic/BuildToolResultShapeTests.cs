@@ -33,9 +33,9 @@ public class BuildToolResultShapeTests
 
         var config = new SentinelConfiguration();
         var diagnosticEngine = new DiagnosticEngine(_workspaceManager);
-        var validationEngine = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var validationEngine = TestEngines.ValidationEngine(_workspaceManager, TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
         _workspaceTools = new WorkspaceTools(
-            _workspaceManager, validationEngine, new DiffEngine(), diagnosticEngine,
+            _workspaceManager, validationEngine, TestEngines.DiffEngine(), diagnosticEngine,
             new SolutionManagementEngine(_workspaceManager), new StructuralRefinementEngine(_workspaceManager, config),
             new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config,
             NullLogger<WorkspaceTools>.Instance, new BuildEngine(_workspaceManager, diagnosticEngine),

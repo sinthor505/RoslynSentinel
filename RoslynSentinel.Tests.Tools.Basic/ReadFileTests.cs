@@ -39,8 +39,8 @@ public class ReadFileTests
         _workspaceManager.SetTestSolution(solution);
 
         var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var diffEngine = TestEngines.DiffEngine();
+        var validationEngine = TestEngines.ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = new DiagnosticEngine(_workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
         var structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, config);
@@ -282,8 +282,8 @@ public class ReadFileTests
         // Deliberately do NOT call SetTestSolution, leaving CurrentSolution null.
 
         var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var diffEngine = TestEngines.DiffEngine();
+        var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = new DiagnosticEngine(workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
         var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);

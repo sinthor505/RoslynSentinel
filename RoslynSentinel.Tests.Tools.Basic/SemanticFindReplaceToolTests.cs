@@ -263,7 +263,7 @@ public class Usage
 
     private static SemanticFindReplaceTools BuildTools(IWorkspaceManager workspaceManager) =>
     new(new SemanticReplaceEngine(workspaceManager),
-        new ValidationEngine(workspaceManager),
+        Battery.Basic.TestEngines.ValidationEngine(workspaceManager),
         workspaceManager,
         NullLogger<SemanticFindReplaceTools>.Instance);
 }

@@ -25,27 +25,27 @@ public class MemberOutcomeFollowsCauseTests
     private static RefactoringStructuralImpl BuildStructuralImpl(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine();
+        var diffEngine = TestEngines.DiffEngine();
         return new RefactoringStructuralImpl(
             new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
-            new MemberRefactoringEngine(workspaceManager, TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance), config),
+            new MemberRefactoringEngine(workspaceManager, TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance), config),
             new StructuralRefinementEngine(workspaceManager, config),
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             workspaceManager,
-            new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
+            TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
             NullLogger<RefactoringStructuralImpl>.Instance);
     }
 
     private static RefactoringExtractionDocsImpl BuildExtractionDocsImpl(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine();
+        var diffEngine = TestEngines.DiffEngine();
         return new RefactoringExtractionDocsImpl(
             new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
             new MsToolAugmentEngine(workspaceManager),
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             workspaceManager,
-            new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
+            TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
             NullLogger<RefactoringExtractionDocsImpl>.Instance);
     }
 

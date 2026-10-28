@@ -31,8 +31,8 @@ public class ListProjectFrameworkTargetsTests
         Directory.CreateDirectory(_tempDir);
 
         var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var diffEngine = TestEngines.DiffEngine();
+        var validationEngine = TestEngines.ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = new DiagnosticEngine(_workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
         var structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, config);

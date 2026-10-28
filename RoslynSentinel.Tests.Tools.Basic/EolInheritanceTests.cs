@@ -25,8 +25,8 @@ public class EolInheritanceTests
     private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var diffEngine = TestEngines.DiffEngine();
+        var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = new DiagnosticEngine(workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
         var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
@@ -158,8 +158,8 @@ public class EolInheritanceTests
         var wholeFileTools = new WholeFileWriteTools(
             workspaceManager,
             workspaceTools,
-            new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
-            new DiffEngine(),
+            TestEngines.ValidationEngine(workspaceManager, TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance),
+            TestEngines.DiffEngine(),
             NullLogger<WholeFileWriteTools>.Instance,
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
@@ -231,8 +231,8 @@ public class EolInheritanceTests
         var wholeFileTools = new WholeFileWriteTools(
             workspaceManager,
             workspaceTools,
-            new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
-            new DiffEngine(),
+            TestEngines.ValidationEngine(workspaceManager, TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance),
+            TestEngines.DiffEngine(),
             NullLogger<WholeFileWriteTools>.Instance,
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
@@ -275,8 +275,8 @@ public class EolInheritanceTests
         var wholeFileTools = new WholeFileWriteTools(
             workspaceManager,
             workspaceTools,
-            new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
-            new DiffEngine(),
+            TestEngines.ValidationEngine(workspaceManager, TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance),
+            TestEngines.DiffEngine(),
             NullLogger<WholeFileWriteTools>.Instance,
             TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 

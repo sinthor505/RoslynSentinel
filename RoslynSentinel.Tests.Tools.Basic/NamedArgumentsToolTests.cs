@@ -35,7 +35,7 @@ public class NamedArgumentsToolTests
 
     private static NamedArgumentsTools BuildTools(IWorkspaceManager workspaceManager) =>
     new(new NamedArgumentsEngine(workspaceManager),
-        new ValidationEngine(workspaceManager),
+        Battery.Basic.TestEngines.ValidationEngine(workspaceManager),
         workspaceManager,
         NullLogger<NamedArgumentsTools>.Instance);
 

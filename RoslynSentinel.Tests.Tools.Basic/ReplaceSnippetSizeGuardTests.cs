@@ -41,11 +41,11 @@ public class ReplaceSnippetSizeGuardTests
         WriteToolAdviceHelper? writeAdvice = null)
     {
         var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine();
+        var diffEngine = TestEngines.DiffEngine();
         var diagnosticEngine = new DiagnosticEngine(workspaceManager);
         return new WorkspaceTools(
             workspaceManager,
-            new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
+            TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
             diffEngine, diagnosticEngine,
             new SolutionManagementEngine(workspaceManager),
             new StructuralRefinementEngine(workspaceManager, config),

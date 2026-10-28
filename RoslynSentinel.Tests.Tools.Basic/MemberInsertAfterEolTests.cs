@@ -70,7 +70,7 @@ public class MemberInsertAfterEolTests
     private static MemberRefactoringEngine BuildEngine(IWorkspaceManager workspaceManager)
     {
         var symbolNav = TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var validationEng = new ValidationEngine(workspaceManager);
+        var validationEng = TestEngines.ValidationEngine(workspaceManager);
         return new MemberRefactoringEngine(workspaceManager, symbolNav, validationEng);
     }
 

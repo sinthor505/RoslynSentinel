@@ -53,10 +53,10 @@ public class DeclarationToolTests
     private static Tools BuildTools(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine();
+        var diffEngine = TestEngines.DiffEngine();
         var basicEngine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
         var navigation = TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var validation = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var validation = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var memberEngine = new MemberRefactoringEngine(workspaceManager, navigation, validation, config);
         var structuralImpl = new RefactoringStructuralImpl(
             basicEngine, memberEngine, new StructuralRefinementEngine(workspaceManager, config), navigation, workspaceManager, validation,

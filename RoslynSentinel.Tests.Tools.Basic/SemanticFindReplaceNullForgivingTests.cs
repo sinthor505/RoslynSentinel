@@ -102,7 +102,7 @@ public class SemanticFindReplaceNullForgivingTests
     public void Setup()
     {
         _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _validationEngine = new ValidationEngine(_workspaceManager);
+        _validationEngine = Battery.Basic.TestEngines.ValidationEngine(_workspaceManager);
         _tool = new SemanticFindReplaceTools(
             new SemanticReplaceEngine(_workspaceManager),
             _validationEngine,

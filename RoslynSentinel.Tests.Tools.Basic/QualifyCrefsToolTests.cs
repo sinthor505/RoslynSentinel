@@ -94,7 +94,7 @@ public class QualifyCrefsToolTests
     {
         _workspaceManager = FakeWorkspaceManager.ReadWrite();
         _tool = new QualifyCrefsTools(
-            new QualifyCrefsImpl(new ValidationEngine(_workspaceManager), _workspaceManager, NullLogger.Instance));
+            new QualifyCrefsImpl(Battery.Basic.TestEngines.ValidationEngine(_workspaceManager), _workspaceManager, NullLogger.Instance));
     }
 
     [TearDown]

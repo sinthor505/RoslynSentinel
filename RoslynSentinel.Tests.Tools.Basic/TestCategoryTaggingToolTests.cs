@@ -66,7 +66,7 @@ namespace Fixtures
         _tool = new TestCategoryTaggingTools(
             new TestCategoryTaggingImpl(
                 new TestCategoryTaggingEngine(_workspaceManager),
-                new TestCategoryApplyEngine(_workspaceManager, new ValidationEngine(_workspaceManager)),
+                new TestCategoryApplyEngine(_workspaceManager, Battery.Basic.TestEngines.ValidationEngine(_workspaceManager)),
                 _workspaceManager,
                 NullLogger.Instance));
     }

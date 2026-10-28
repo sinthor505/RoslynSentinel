@@ -51,7 +51,7 @@ public class Caller
         _workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _basicRefactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, new SentinelConfiguration());
-        _memberRefactoringEngine = new MemberRefactoringEngine(_workspaceManager, _symbolNavigationEngine, new ValidationEngine(_workspaceManager));
+        _memberRefactoringEngine = new MemberRefactoringEngine(_workspaceManager, _symbolNavigationEngine, Battery.Basic.TestEngines.ValidationEngine(_workspaceManager));
     }
 
     [TearDown]
@@ -74,7 +74,7 @@ public class Caller
             _basicRefactoringEngine,
             _memberRefactoringEngine,
             _workspaceManager,
-            new ValidationEngine(_workspaceManager),
+            Battery.Basic.TestEngines.ValidationEngine(_workspaceManager),
             _symbolNavigationEngine,
             NullLogger<RefactoringSignatureImpl>.Instance));
 

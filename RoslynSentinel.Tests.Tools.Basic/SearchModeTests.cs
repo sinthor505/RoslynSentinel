@@ -78,9 +78,9 @@ public class SearchModeTests
         await workspace.LoadSolutionAsync(fixture.SolutionPath);
 
         var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine();
+        var diffEngine = TestEngines.DiffEngine();
         var diagnosticEngine = new DiagnosticEngine(workspace);
-        var validationEngine = new ValidationEngine(workspace, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var validationEngine = TestEngines.ValidationEngine(workspace, diffEngine, NullLogger<ValidationEngine>.Instance);
         var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(workspace, NullLogger<SymbolNavigationEngine>.Instance);
         var tools = new WorkspaceTools(
             workspace,
