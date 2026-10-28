@@ -213,7 +213,7 @@ namespace FixturesBad
     public async Task Tool_DryRunFalse_PartialFailure_ReportsPerProjectOutcome()
     {
         _workspaceManager.SetTestSolution(BuildSolution(includeBad: true));
-        var tool = new TestCategoryTaggingTools(new TestCategoryTaggingImpl(_planner, _applier, _workspaceManager, NullLogger.Instance));
+        var tool = Battery.Basic.TestTools.TestCategoryTaggingTools(new TestCategoryTaggingImpl(_planner, _applier, _workspaceManager, NullLogger.Instance));
 
         var result = await tool.TagTestCategoriesTool(
             new ToolCallReason("testing the TagTestCategories tool"), "Targets", null, null, null, 1.0, 0.5,
@@ -245,7 +245,7 @@ namespace FixturesBad
             .AddDocument("Targets.cs", SourceText.From(TargetsSource), filePath: @"C:\fake\Targets\Targets.cs")
             .Project;
         _workspaceManager.SetTestSolution(AddTestProject(targets.Solution, targets.Id, "FixturesBad", "Tests.cs", BadSource, BadPath));
-        var tool = new TestCategoryTaggingTools(new TestCategoryTaggingImpl(_planner, _applier, _workspaceManager, NullLogger.Instance));
+        var tool = Battery.Basic.TestTools.TestCategoryTaggingTools(new TestCategoryTaggingImpl(_planner, _applier, _workspaceManager, NullLogger.Instance));
 
         var result = await tool.TagTestCategoriesTool(
             new ToolCallReason("testing the TagTestCategories tool"), "Targets", null, null, null, 1.0, 0.5,
@@ -263,7 +263,7 @@ namespace FixturesBad
     {
         _workspaceManager.SetTestSolution(BuildSolution(includeBad: false));
         _workspaceManager.ApplyException = new SessionHaltedException("Session halted: external file drift was detected on a tracked file.");
-        var tool = new TestCategoryTaggingTools(new TestCategoryTaggingImpl(_planner, _applier, _workspaceManager, NullLogger.Instance));
+        var tool = Battery.Basic.TestTools.TestCategoryTaggingTools(new TestCategoryTaggingImpl(_planner, _applier, _workspaceManager, NullLogger.Instance));
 
         var result = await tool.TagTestCategoriesTool(
             new ToolCallReason("testing the TagTestCategories tool"), "Targets", null, null, null, 1.0, 0.5,

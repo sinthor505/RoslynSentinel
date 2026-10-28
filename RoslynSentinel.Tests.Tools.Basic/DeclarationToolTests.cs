@@ -58,11 +58,11 @@ public class DeclarationToolTests
         var navigation = TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var validation = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var memberEngine = TestEngines.MemberRefactoringEngine(workspaceManager, navigation, validation, config);
-        var structuralImpl = new RefactoringStructuralImpl(
+        var structuralImpl = TestTools.RefactoringStructuralImpl(
             basicEngine, memberEngine, TestEngines.StructuralRefinementEngine(workspaceManager, config), navigation, workspaceManager, validation,
             NullLogger<RefactoringStructuralImpl>.Instance);
         var signatureImpl = new RefactoringSignatureImpl(basicEngine, memberEngine, workspaceManager, validation, navigation, NullLogger<RefactoringSignatureImpl>.Instance);
-        return new Tools(new RefactoringStructuralTools(structuralImpl), new RefactoringSignatureTools(signatureImpl), new DeclarationTools(structuralImpl, signatureImpl));
+        return new Tools(TestTools.RefactoringStructuralTools(structuralImpl), new RefactoringSignatureTools(signatureImpl), new DeclarationTools(structuralImpl, signatureImpl));
     }
 
     [TestCase(AddRemoveAction.add, NonAccessibilityModifier.@static, "static void MethodOne")]

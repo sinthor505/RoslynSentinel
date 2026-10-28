@@ -109,7 +109,7 @@ namespace FixturesP
         _workspaceManager.SetTestSolution(BuildSolution());
         var planner = new TestCategoryTaggingEngine(_workspaceManager);
         var applier = new TestCategoryApplyEngine(_workspaceManager, Battery.Basic.TestEngines.ValidationEngine(_workspaceManager));
-        _tool = new TestCategoryTaggingTools(new TestCategoryTaggingImpl(planner, applier, _workspaceManager, NullLogger.Instance));
+        _tool = Battery.Basic.TestTools.TestCategoryTaggingTools(new TestCategoryTaggingImpl(planner, applier, _workspaceManager, NullLogger.Instance));
     }
 
     [TearDown]

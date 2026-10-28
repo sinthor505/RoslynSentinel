@@ -815,7 +815,7 @@ public class CreateFileDeleteFileTests
         var diffEngine = Basic.TestEngines.DiffEngine();
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var memberRefactoringEngine = Basic.TestEngines.MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine);
-        var refactoringStructuralTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(
+        var refactoringStructuralTools = Basic.TestTools.RefactoringStructuralTools(Basic.TestTools.RefactoringStructuralImpl(
             refactoringEngine,
             memberRefactoringEngine,
             structuralRefinementEngine,
@@ -940,7 +940,7 @@ public class CreateFileDeleteFileTests
         var symbolNavigationEngine = Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
         var memberRefactoringEngine = Basic.TestEngines.MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine);
-        var refactoringStructuralTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(
+        var refactoringStructuralTools = Basic.TestTools.RefactoringStructuralTools(Basic.TestTools.RefactoringStructuralImpl(
             refactoringEngine,
             memberRefactoringEngine,
             structuralRefinementEngine,

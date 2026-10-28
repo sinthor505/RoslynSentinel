@@ -101,4 +101,7 @@ public static class TestEngines
 
     public static MsToolAugmentEngine MsToolAugmentEngine(IWorkspaceManager workspaceManager) =>
         ActivatorUtilities.CreateInstance<MsToolAugmentEngine>(CreateProvider(workspaceManager), workspaceManager);
+
+    public static DiscoveryEngine DiscoveryEngine(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<DiscoveryEngine>(CreateProvider(workspaceManager), workspaceManager);
 }

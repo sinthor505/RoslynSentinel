@@ -44,7 +44,7 @@ public class ModifyAttributeBatchTests
     {
         var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
-        return new RefactoringStructuralTools(new RefactoringStructuralImpl(
+        return TestTools.RefactoringStructuralTools(TestTools.RefactoringStructuralImpl(
             TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
             TestEngines.MemberRefactoringEngine(workspaceManager, TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance), config),
             TestEngines.StructuralRefinementEngine(workspaceManager, config),

@@ -30,7 +30,7 @@ public class BatteryEighteenTests
         WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _msEngine = TestEngines.MsToolAugmentEngine(_workspaceManager);
-        _workspaceHealthMisc = new WorkspaceHealthMiscImpl(_workspaceManager);
+        _workspaceHealthMisc = TestTools.WorkspaceHealthMiscImpl(_workspaceManager);
     }
 
     [TearDown]

@@ -63,7 +63,7 @@ namespace Fixtures
     {
         _workspaceManager = FakeWorkspaceManager.ReadWrite();
         _workspaceManager.SetTestSolution(BuildSolution());
-        _tool = new TestCategoryTaggingTools(
+        _tool = Battery.Basic.TestTools.TestCategoryTaggingTools(
             new TestCategoryTaggingImpl(
                 new TestCategoryTaggingEngine(_workspaceManager),
                 new TestCategoryApplyEngine(_workspaceManager, Battery.Basic.TestEngines.ValidationEngine(_workspaceManager)),

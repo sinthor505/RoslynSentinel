@@ -319,6 +319,88 @@ public class TestFactoryResolveTests
     }
 
     [Test]
+    public void DiscoveryEngine_ManagerOnly()
+    {
+        var engine = TestEngines.DiscoveryEngine(_wm);
+        Assert.That(engine, Is.TypeOf<DiscoveryEngine>());
+        Assert.That(Holds(engine, _wm), Is.True);
+    }
+
+    [Test]
+    public void WorkspaceHealthMiscImpl_ManagerOnly()
+    {
+        var impl = TestTools.WorkspaceHealthMiscImpl(_wm);
+        Assert.That(impl, Is.TypeOf<WorkspaceHealthMiscImpl>());
+        Assert.That(Holds(impl, _wm), Is.True);
+    }
+
+    [Test]
+    public void WorkspaceHealthMiscImpl_ManagerAndConfig()
+    {
+        var config = TestEngines.SentinelConfiguration();
+        var impl = TestTools.WorkspaceHealthMiscImpl(_wm, config);
+        Assert.That(impl, Is.TypeOf<WorkspaceHealthMiscImpl>());
+        Assert.That(Holds(impl, _wm), Is.True);
+        Assert.That(Holds(impl, config), Is.True, "the explicit configuration must be the one the impl holds");
+    }
+
+    [Test]
+    public void RefactoringStructuralImpl_AllSevenArgumentsExplicit()
+    {
+        var config = TestEngines.SentinelConfiguration();
+        var diff = TestEngines.DiffEngine();
+        var validation = TestEngines.ValidationEngine(_wm, diff, NullLogger<ValidationEngine>.Instance);
+        var navigation = TestEngines.SymbolNavigationEngine(_wm, NullLogger<SymbolNavigationEngine>.Instance);
+        var refactoring = TestEngines.BasicRefactoringEngine(_wm, NullLogger<BasicRefactoringEngine>.Instance, config);
+        var member = TestEngines.MemberRefactoringEngine(_wm, navigation, validation, config);
+        var structural = TestEngines.StructuralRefinementEngine(_wm, config);
+        var logger = NullLogger.Instance;
+
+        var impl = TestTools.RefactoringStructuralImpl(refactoring, member, structural, navigation, _wm, validation, logger);
+
+        Assert.That(impl, Is.TypeOf<RefactoringStructuralImpl>());
+        Assert.That(Holds(impl, _wm), Is.True);
+        Assert.That(Holds(impl, refactoring), Is.True, "explicit engines must be the ones the impl holds");
+        Assert.That(Holds(impl, member), Is.True);
+        Assert.That(Holds(impl, structural), Is.True);
+        Assert.That(Holds(impl, navigation), Is.True);
+        Assert.That(Holds(impl, validation), Is.True);
+        Assert.That(Holds(impl, logger), Is.True);
+    }
+
+    [Test]
+    public void RefactoringStructuralTools_Impl()
+    {
+        var config = TestEngines.SentinelConfiguration();
+        var validation = TestEngines.ValidationEngine(_wm);
+        var navigation = TestEngines.SymbolNavigationEngine(_wm);
+        var impl = TestTools.RefactoringStructuralImpl(
+            TestEngines.BasicRefactoringEngine(_wm, NullLogger<BasicRefactoringEngine>.Instance, config),
+            TestEngines.MemberRefactoringEngine(_wm, navigation, validation, config),
+            TestEngines.StructuralRefinementEngine(_wm, config), navigation, _wm, validation, NullLogger.Instance);
+
+        var tools = TestTools.RefactoringStructuralTools(impl);
+
+        Assert.That(tools, Is.TypeOf<RefactoringStructuralTools>());
+        Assert.That(Holds(tools, impl), Is.True, "the explicit impl must be the one the tool class holds");
+    }
+
+    [Test]
+    public void TestCategoryTaggingTools_Impl()
+    {
+        var impl = new TestCategoryTaggingImpl(
+            new TestCategoryTaggingEngine(_wm),
+            new TestCategoryApplyEngine(_wm, TestEngines.ValidationEngine(_wm)),
+            _wm,
+            NullLogger.Instance);
+
+        var tools = TestTools.TestCategoryTaggingTools(impl);
+
+        Assert.That(tools, Is.TypeOf<TestCategoryTaggingTools>());
+        Assert.That(Holds(tools, impl), Is.True, "the explicit impl must be the one the tool class holds");
+    }
+
+    [Test]
     public void EveryFactoryMethod_IsNonGenericAndNamedAfterItsReturnType()
     {
         // The naming rule is what lets replaceConstruction map `new X(...)` to a factory; guard it for future additions.

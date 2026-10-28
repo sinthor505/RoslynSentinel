@@ -46,7 +46,7 @@ public class RegressionTests
         _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
         _symbolNavigationEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _diagnosticEngine = Battery.Basic.TestEngines.DiagnosticEngine(_workspaceManager);
-        _workspaceHealthMisc = new WorkspaceHealthMiscImpl(_workspaceManager, _config);
+        _workspaceHealthMisc = Battery.Basic.TestTools.WorkspaceHealthMiscImpl(_workspaceManager, _config);
     }
 
     [TearDown]
@@ -1166,7 +1166,7 @@ public class RegressionTests
         // Create a fresh workspace manager with NO solution loaded
         using var freshManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(
             NullLogger<IWorkspaceManager>.Instance);
-        var engine = new WorkspaceHealthMiscImpl(freshManager);
+        var engine = Battery.Basic.TestTools.WorkspaceHealthMiscImpl(freshManager);
 
         var report = await engine.GetWorkspaceHealthAsync();
 

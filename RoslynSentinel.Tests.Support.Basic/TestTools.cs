@@ -54,4 +54,28 @@ public static class TestTools
         ActivatorUtilities.CreateInstance<WholeFileWriteTools>(
             TestEngines.CreateProvider(workspaceManager),
             workspaceManager, workspaceTools, validationEngine, diffEngine, logger, symbolNavigationEngine);
+
+    public static WorkspaceHealthMiscImpl WorkspaceHealthMiscImpl(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<WorkspaceHealthMiscImpl>(TestEngines.CreateProvider(workspaceManager), workspaceManager);
+
+    public static WorkspaceHealthMiscImpl WorkspaceHealthMiscImpl(IWorkspaceManager workspaceManager, SentinelConfiguration config) =>
+        ActivatorUtilities.CreateInstance<WorkspaceHealthMiscImpl>(TestEngines.CreateProvider(workspaceManager), workspaceManager, config);
+
+    /// <summary>
+    /// All seven constructor arguments explicit (the only shape the tests use); the manager is the fifth argument.
+    /// </summary>
+    public static RefactoringStructuralImpl RefactoringStructuralImpl(
+        BasicRefactoringEngine refactoringEngine, MemberRefactoringEngine memberRefactoringEngine,
+        StructuralRefinementEngine structuralRefinementEngine, SymbolNavigationEngine symbolNavigationEngine,
+        IWorkspaceManager workspaceManager, ValidationEngine validationEngine, ILogger logger) =>
+        ActivatorUtilities.CreateInstance<RefactoringStructuralImpl>(
+            TestEngines.CreateProvider(workspaceManager),
+            refactoringEngine, memberRefactoringEngine, structuralRefinementEngine, symbolNavigationEngine,
+            workspaceManager, validationEngine, logger);
+
+    public static RefactoringStructuralTools RefactoringStructuralTools(RefactoringStructuralImpl impl) =>
+        ActivatorUtilities.CreateInstance<RefactoringStructuralTools>(TestEngines.CreateProvider(), impl);
+
+    public static TestCategoryTaggingTools TestCategoryTaggingTools(TestCategoryTaggingImpl impl) =>
+        ActivatorUtilities.CreateInstance<TestCategoryTaggingTools>(TestEngines.CreateProvider(), impl);
 }

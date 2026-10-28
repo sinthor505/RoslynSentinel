@@ -50,7 +50,7 @@ public class ModifyBaseTypeBatchTests
         var diffEngine = TestEngines.DiffEngine();
         var symbolNavigationEngine = TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var validationEngine = TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        return new RefactoringStructuralTools(new RefactoringStructuralImpl(
+        return TestTools.RefactoringStructuralTools(TestTools.RefactoringStructuralImpl(
             TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
             TestEngines.MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine, config),
             TestEngines.StructuralRefinementEngine(workspaceManager),

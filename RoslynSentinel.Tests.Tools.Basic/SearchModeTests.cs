@@ -427,7 +427,7 @@ public class SearchModeTests
     public async Task FindTypesByAttribute_AttributeOnlyInTestProject_IncludeTestsFalseFindsNothing()
     {
         using var h = await CreateHarnessAsync();
-        var engine = new DiscoveryEngine(h.Workspace);
+        var engine = TestEngines.DiscoveryEngine(h.Workspace);
 
         var withoutTests = await engine.FindTypesByAttributeAsync("TestOnlyMarker", includeTests: false);
         Assert.That(withoutTests, Is.Empty, "includeTests=false must skip the test project when resolving typesWithAttribute.");

@@ -26,7 +26,7 @@ public class MemberOutcomeFollowsCauseTests
     {
         var config = TestEngines.SentinelConfiguration();
         var diffEngine = TestEngines.DiffEngine();
-        return new RefactoringStructuralImpl(
+        return TestTools.RefactoringStructuralImpl(
             TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
             TestEngines.MemberRefactoringEngine(workspaceManager, TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance), config),
             TestEngines.StructuralRefinementEngine(workspaceManager, config),
@@ -75,7 +75,7 @@ public class MemberOutcomeFollowsCauseTests
     public async Task Member_Replace_EnumMemberIdenticalSource_IsSuccessAsync()
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
-        var tools = new RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
+        var tools = TestTools.RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
         var before = workspace.ReadText(FixtureRelativePath);
 
         var result = await tools.MemberTool(
@@ -93,7 +93,7 @@ public class MemberOutcomeFollowsCauseTests
     public async Task Member_Replace_EnumMemberInvalidValue_ReturnsInvalidArgumentAndWritesNothingAsync()
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
-        var tools = new RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
+        var tools = TestTools.RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
         var before = workspace.ReadText(FixtureRelativePath);
 
         var result = await tools.MemberTool(
@@ -137,7 +137,7 @@ public class MemberOutcomeFollowsCauseTests
     public async Task Member_Replace_EnumMemberInvalidValue_ErrorPointsAtModifyEnumAsync()
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
-        var tools = new RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
+        var tools = TestTools.RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
 
         var result = await tools.MemberTool(
             reason: "test enum replace invalid value recovery hint",
@@ -160,7 +160,7 @@ public class MemberOutcomeFollowsCauseTests
     {
         const string methodFixture = "namespace ContosoOrders.Core;\n\npublic class OrderTarget\n{\n    public int Existing() => 1;\n}\n";
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, methodFixture));
-        var tools = new RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
+        var tools = TestTools.RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
         var before = workspace.ReadText(FixtureRelativePath);
 
         var result = await tools.MemberTool(
@@ -178,7 +178,7 @@ public class MemberOutcomeFollowsCauseTests
     public async Task Member_AddMemberAfterUnparsableSource_ReturnsInvalidArgumentAndWritesNothingAsync()
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
-        var tools = new RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
+        var tools = TestTools.RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
         var before = workspace.ReadText(FixtureRelativePath);
 
         var result = await tools.MemberTool(
