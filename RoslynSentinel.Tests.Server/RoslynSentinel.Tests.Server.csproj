@@ -28,6 +28,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Golden wire envelopes for the ResultPager tests; regenerate with scripts/New-WireResultGoldens.ps1. -->
+    <EmbeddedResource Include="Resources\Golden\*.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="NUnit.Framework" />
     <Using Include="RoslynSentinel.Common" />
   </ItemGroup>
