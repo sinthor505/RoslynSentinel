@@ -1024,7 +1024,7 @@ public class ScanTools
         {
             FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
             var result = await _solutionStructureEngine.DetectBreakingChangesAsync(baseline, projectName, resolvedFilePath, cancellationToken: cancellationToken);
-            return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(result, _workspaceManager.GetSolutionRoot(), typeof(BreakingChange).Name, ResultWrapperType.BreakingChangeList, totalRecords: result.Count, cancellationToken: cancellationToken);
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = result, TotalRecords = result.Count };
         }
         catch (Exception ex)
         {

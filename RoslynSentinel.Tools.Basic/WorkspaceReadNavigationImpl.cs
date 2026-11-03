@@ -627,13 +627,7 @@ public class WorkspaceReadNavigationImpl
                 ? null
                 : BuildHiddenTestMatchHint(hiddenByProject, hasVisibleHits: totalMatches > 0);
 
-            var result = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                entries,
-                solutionRoot,
-                typeof(SolutionSymbolEntry).Name,
-                ResultWrapperType.SolutionSymbolEntryList,
-                totalRecords: entries.Count,
-                cancellationToken: cancellationToken);
+            var result = new SentinelCallToolResult<object> { IsError = false, SuccessData = entries, TotalRecords = entries.Count };
 
             if (totalMatches > entries.Count)
             {
@@ -1160,15 +1154,7 @@ public class WorkspaceReadNavigationImpl
                     warnings.Add(recoveryHint);
                 }
                 var justTripped = _workspaceManager.RecordSearchOutcome(0);
-                var emptyResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                    new TextSearchResult(literalResults, regexResults, regexOverlapCount, regexPatternValid),
-                    _workspaceManager.GetSolutionRoot(),
-                    typeof(TextSearchMatch).Name,
-                    ResultWrapperType.TextSearchMatchList,
-                    totalRecords: 0,
-                    workspaceVersion: _workspaceManager.WorkspaceVersion,
-                    statusMessage: string.Join(" ", warnings),
-                    cancellationToken: cancellationToken);
+                var emptyResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = new TextSearchResult(literalResults, regexResults, regexOverlapCount, regexPatternValid), TotalRecords = 0, WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = string.Join(" ", warnings) };
                 return emptyResult with { IsError = false, WarningDetails = null, Findings = justTripped ? new[] { new Finding("OrientationBreaker", string.Join(" ", warnings), FindingSeverity.Warning) } : Array.Empty<Finding>() };
             }
             else if (totalResultCount >= maxResults)
@@ -1182,16 +1168,7 @@ public class WorkspaceReadNavigationImpl
             var payload = new TextSearchResult(literalResults, regexResults, regexOverlapCount, regexPatternValid);
             var allMatches = literalResults.Concat(regexResults).ToList();
             var matchSummary = SummarizeListResult.Build(allMatches, m => m.filePath.Absolute);
-            var searchResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                payload,
-                _workspaceManager.GetSolutionRoot(),
-                typeof(TextSearchMatch).Name,
-                ResultWrapperType.TextSearchMatchList,
-                totalRecords: literalResults.Count + regexResults.Count,
-                workspaceVersion: _workspaceManager.WorkspaceVersion,
-                statusMessage: matchSummary.ToSummaryMessage("match") + (hiddenHint.Length > 0 ? " " + hiddenHint : string.Empty),
-                listSummary: matchSummary,
-                cancellationToken: cancellationToken);
+            var searchResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = payload, TotalRecords = literalResults.Count + regexResults.Count, WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = matchSummary.ToSummaryMessage("match") + (hiddenHint.Length > 0 ? " " + hiddenHint : string.Empty), ListSummary = matchSummary };
             return searchResult with { WarningDetails = warning };
         }
         catch (Exception ex)

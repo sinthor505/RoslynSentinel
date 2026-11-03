@@ -299,9 +299,7 @@ public class WorkspaceBuildTestImpl
             }
 
             // includeOutput=true asks for the tails even from a clean build, so only strip them otherwise.
-            var buildToolResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                includeOutput ? projected : WithoutTailsWhenClean(projected), _workspaceManager.GetSolutionRoot(), "BuildResult", ResultWrapperType.Raw,
-                workspaceVersion: _workspaceManager.WorkspaceVersion, cancellationToken: cancellationToken);
+            var buildToolResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = includeOutput ? projected : WithoutTailsWhenClean(projected), WorkspaceVersion = _workspaceManager.WorkspaceVersion };
             var buildSummary = SummarizeBuild(buildResult);
             if (isFullBuild && scope != ToolScope.solution)
             {
@@ -368,10 +366,7 @@ public class WorkspaceBuildTestImpl
             }
 
             var failedRows = testRunResult.Results.Where(r => r.Outcome == TestOutcome.Failed).ToList();
-            var toolResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                WithoutTailsWhenClean(projected), _workspaceManager.GetSolutionRoot(), "TestRunResult", ResultWrapperType.Raw,
-                totalRecords: testRunResult.FailedCount, workspaceVersion: _workspaceManager.WorkspaceVersion,
-                statusMessage: SummarizeTestRun(testRunResult), listSummary: SummarizeListResult.Build(failedRows, TestClassOf), cancellationToken: cancellationToken);
+            var toolResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = WithoutTailsWhenClean(projected), TotalRecords = testRunResult.FailedCount, WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = SummarizeTestRun(testRunResult), ListSummary = SummarizeListResult.Build(failedRows, TestClassOf) };
             return toolResult with { Findings = result.Findings, StatusMessage = SummarizeTestRun(testRunResult) };
         }
         catch (Exception ex)

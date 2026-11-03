@@ -73,8 +73,10 @@ public sealed class SubAgentImpl(IWorkspaceManager workspaceManager, ILogger log
                 ? run.Transcript.Turns[^1].ModelMessage.Content ?? ""
                 : "";
 
-            return await SentinelCallToolResult<SubAgentResult>.ForPossiblyLargeDataAsync(
-                new SubAgentResult
+            return new SentinelCallToolResult<SubAgentResult>
+            {
+                IsError = false,
+                SuccessData = new SubAgentResult
                 {
                     Output = output,
                     Converged = run.Converged,
@@ -82,8 +84,7 @@ public sealed class SubAgentImpl(IWorkspaceManager workspaceManager, ILogger log
                     TurnCount = run.TurnCount,
                     TranscriptPath = run.TranscriptPath,
                 },
-                workspaceManager.GetSolutionRoot(), "SubAgentResult", ResultWrapperType.Raw,
-                cancellationToken: cancellationToken);
+            };
         }
         catch (SubAgentLaunchException ex)
         {

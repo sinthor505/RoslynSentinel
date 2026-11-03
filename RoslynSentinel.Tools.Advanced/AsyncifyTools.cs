@@ -233,12 +233,7 @@ public class AsyncifyTools
                                    summaryJson.Length);
             }
 
-            return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                summary,
-                _workspaceManager.GetSolutionRoot(),
-                nameof(MigrationScanSummary),
-                ResultWrapperType.MigrationScanSummary,
-                totalRecords: aggregateFindings.Count, cancellationToken: cancellationToken);
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = summary, TotalRecords = aggregateFindings.Count };
         }
         else
         {

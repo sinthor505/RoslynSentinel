@@ -142,10 +142,7 @@ public class RefactoringExtractionDocsImpl
             // other change bundled into the same write (formatting drift, accessibility changes,
             // whitespace normalization, etc.) -> the caller had no way to know from this tool's own
             // result whether something unexpected also changed.
-            return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId),
-                _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
-                workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description, cancellationToken: cancellationToken);
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = description };
         }
         catch (Exception ex)
         {
@@ -229,10 +226,7 @@ public class RefactoringExtractionDocsImpl
                 return new SentinelCallToolResult<object>() { IsError = false, StatusMessage = description, SuccessData = summary };
             }
 
-            return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                summary,
-                _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
-                workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description, cancellationToken: cancellationToken);
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = summary, WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = description };
         }
         catch (Exception ex)
         {

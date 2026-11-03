@@ -233,10 +233,7 @@ public class RefactoringSignatureImpl
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
 
-            return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId),
-                _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
-                workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description);
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = description };
         }
         catch (Exception ex)
         {
@@ -441,10 +438,7 @@ public class RefactoringSignatureImpl
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
 
-            return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId),
-                _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
-                workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description, cancellationToken: cancellationToken);
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = description };
         }
         catch (Exception ex)
         {

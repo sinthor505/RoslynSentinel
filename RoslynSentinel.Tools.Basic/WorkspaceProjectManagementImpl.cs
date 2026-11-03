@@ -49,13 +49,7 @@ public class WorkspaceProjectManagementImpl
             {
                 var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
                 var projectInfos = solution.Projects.Select(p => new ProjectInfoEntry(p.Name, p.FilePath)).ToList();
-                return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                    projectInfos,
-                    _workspaceManager.GetSolutionRoot(),
-                    typeof(ProjectInfoEntry).Name,
-                    ResultWrapperType.ProjectInfoList,
-                    totalRecords: projectInfos.Count,
-                    cancellationToken: cancellationToken);
+                return new SentinelCallToolResult<object> { IsError = false, SuccessData = projectInfos, TotalRecords = projectInfos.Count };
             }
 
             if (kind == SolutionItemsKind.solutionItems)
@@ -71,13 +65,7 @@ public class WorkspaceProjectManagementImpl
                 }
 
                 var items = _workspaceManager.GetSolutionFolderItems().Select(i => new SolutionItemFile(new FilePathWrapper(Path.GetFullPath(Path.Combine(solutionRoot, i.RelativePath)), solutionRoot), i.SolutionFolder)).ToList();
-                return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                    items,
-                    solutionRoot,
-                    typeof(SolutionItemFile).Name,
-                    ResultWrapperType.SolutionItemFileList,
-                    totalRecords: items.Count,
-                    cancellationToken: cancellationToken);
+                return new SentinelCallToolResult<object> { IsError = false, SuccessData = items, TotalRecords = items.Count };
             }
 
             if (kind == SolutionItemsKind.files)
@@ -106,13 +94,7 @@ public class WorkspaceProjectManagementImpl
 
                     var sep = Path.DirectorySeparatorChar;
                     var files = project.Documents.Select(d => d.FilePath ?? d.Name).Where(p => !p.Contains($"{sep}obj{sep}", StringComparison.OrdinalIgnoreCase) && !p.Contains($"{sep}bin{sep}", StringComparison.OrdinalIgnoreCase)).ToList();
-                    return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                        files,
-                        _workspaceManager.GetSolutionRoot(),
-                        "ProjectFile",
-                        ResultWrapperType.ProjectFileList,
-                        totalRecords: files.Count,
-                        cancellationToken: cancellationToken);
+                    return new SentinelCallToolResult<object> { IsError = false, SuccessData = files, TotalRecords = files.Count };
                 }
                 catch (Exception ex)
                 {
@@ -182,13 +164,7 @@ public class WorkspaceProjectManagementImpl
 
                 var combined = new SolutionItemsAllResult(projectInfos, solutionItems, projectDetails);
                 var totalRecords = projectInfos.Count + solutionItems.Count + projectDetails.Sum(p => p.Files.Count);
-                return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                    combined,
-                    solutionRoot,
-                    typeof(SolutionItemsAllResult).Name,
-                    ResultWrapperType.SolutionItemsAllResult,
-                    totalRecords: totalRecords,
-                    cancellationToken: cancellationToken);
+                return new SentinelCallToolResult<object> { IsError = false, SuccessData = combined, TotalRecords = totalRecords };
             }
 
             return new SentinelCallToolResult<object>()

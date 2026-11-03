@@ -70,9 +70,7 @@ public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger
                 result = SubAgentEvalResult.Build(run, buildText, testText, touchedPaths);
             }
 
-            return await SentinelCallToolResult<SubAgentEvalResult>.ForPossiblyLargeDataAsync(
-                result, workspaceManager.GetSolutionRoot(), "SubAgentEvalResult", ResultWrapperType.Raw,
-                cancellationToken: cancellationToken);
+            return new SentinelCallToolResult<SubAgentEvalResult> { IsError = false, SuccessData = result };
         }
         catch (SubAgentLaunchException ex)
         {

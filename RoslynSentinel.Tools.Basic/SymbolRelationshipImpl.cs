@@ -82,7 +82,7 @@ public class SymbolRelationshipImpl
             var results = await RunRelationshipQueryAsync(searchKind, name, projectName, filePathResolved, sortByFrequency, includeTests, hasAttribute, hiddenTestProjects, cancellationToken);
             if (results.Count > 0)
             {
-                var listResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(results, _workspaceManager.GetSolutionRoot(), nameof(FindUsagesSearchKind), ResultWrapperType.SymbolRelationshipResultList, totalRecords: results.Count, cancellationToken: cancellationToken);
+                var listResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = results, TotalRecords = results.Count };
                 if (hiddenTestProjects.Count == 0)
                 {
                     return listResult;
@@ -140,7 +140,7 @@ public class SymbolRelationshipImpl
 
             var totalFound = broadened.Sum(kv => kv.Value.Count);
             var summary = string.Join("; ", broadened.Select(kv => $"{kv.Value.Count} under '{kv.Key}'"));
-            var broadenedResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(broadened, _workspaceManager.GetSolutionRoot(), nameof(FindUsagesSearchKind), ResultWrapperType.BroadenedSymbolRelationshipResults, totalRecords: totalFound, cancellationToken: cancellationToken);
+            var broadenedResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = broadened, TotalRecords = totalFound };
             return broadenedResult with
             {
                 WarningDetails = $"0 results for '{searchKind}'. Broadened search across all relationship kinds - " + $"found {totalFound} result(s): {summary}."

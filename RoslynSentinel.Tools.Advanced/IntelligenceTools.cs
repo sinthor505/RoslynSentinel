@@ -105,7 +105,7 @@ public class IntelligenceTools
         try
         {
             var results = await _inventoryEngine.GetCodeInventoryAsync(resolvedFilePath, cancellationToken);
-            return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(results, _workspaceManager.GetSolutionRoot(), typeof(CodeInventoryReport).Name, ResultWrapperType.CodeInventoryReport, totalRecords: results.Methods.Count, cancellationToken: cancellationToken);
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = results, TotalRecords = results.Methods.Count };
         }
         catch (Exception ex)
         {
