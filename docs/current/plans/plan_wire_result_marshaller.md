@@ -1,6 +1,8 @@
 # Plan: one result marshaller at the SDK MarshalResult seam owns offload, paging, metadata and serialization
 
-**Status:** APPROVED 2026-11-02. Not started; Step 0 next. Supersedes
+**Status:** APPROVED 2026-11-02. In progress. Step 0 package bump landed (3ed8568d; SDK 2.3.0, MEAI 10.11.0, build and
+suite verified 2026-11-02, live restart checks pending). Step 1 implemented 2026-11-02 (switch default `off`; `MarshalResult`
+receives the awaited value and declared `T` on MEAI 10.11.0). Step 2 next. Supersedes
 [plan_typed_large_result_offload.md](plan_typed_large_result_offload.md) and
 [proposal_central_large_result_offload.md](../proposals/proposal_central_large_result_offload.md), and subsumes
 change #5 of `proposal_envelope_field_promotion.md` (inline first page plus `resultId`).

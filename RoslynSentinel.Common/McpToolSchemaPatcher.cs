@@ -169,10 +169,29 @@ public static class McpToolSchemaPatcher
         MethodInfo toolMethod,
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type toolType,
         IServiceProvider services,
-        JsonSerializerOptions? serializerOptions = null)
+        JsonSerializerOptions? serializerOptions = null) =>
+        // Default (ROSLYNSENTINEL_RESULT_MARSHALLER unset or off) keeps the SDK's own creation path unchanged.
+        CreateSentinelTool(toolMethod, toolType, services, serializerOptions, ResultMarshallerOptions.Mode != ResultMarshallerMode.Off);
+
+    /// <summary>
+    /// As <see cref="CreateSentinelTool(MethodInfo, Type, IServiceProvider, JsonSerializerOptions?)"/>, with the factory chosen
+    /// explicitly: <paramref name="useReplicatedFactory"/> builds the tool through <see cref="SentinelToolFactory"/> (our own
+    /// <c>AIFunction</c> and <c>MarshalResult</c> hook), otherwise through the SDK's <c>McpServerTool.Create(MethodInfo, ...)</c>.
+    /// <paramref name="services"/> may be null. The three <c>Apply*</c> patches run on the result either way.
+    /// </summary>
+    public static McpServerTool CreateSentinelTool(
+        MethodInfo toolMethod,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type toolType,
+        IServiceProvider services,
+        JsonSerializerOptions? serializerOptions,
+        bool useReplicatedFactory)
     {
         McpServerTool tool;
-        if (toolMethod.IsStatic)
+        if (useReplicatedFactory)
+        {
+            tool = SentinelToolFactory.Create(toolMethod, toolType, CreateOptions(services, serializerOptions));
+        }
+        else if (toolMethod.IsStatic)
         {
             tool = McpServerTool.Create(toolMethod, target: null, CreateOptions(services, serializerOptions));
         }
@@ -264,7 +283,7 @@ public static class McpToolSchemaPatcher
         SchemaCreateOptions = SchemaCreateOptions,
     };
 
-    private static object CreateTarget(IServiceProvider? services, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type type) =>
+    internal static object CreateTarget(IServiceProvider? services, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type type) =>
         services is null ? Activator.CreateInstance(type)! : ActivatorUtilities.CreateInstance(services, type);
 
     /// <summary>
