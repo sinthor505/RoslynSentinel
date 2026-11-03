@@ -1941,7 +1941,7 @@ public class MemberRefactoringEngine
 
         if (container == null)
         {
-            throw new ToolNotFoundException(SyntaxTargetResolver.BuildContainerNotFoundMessage(root, containerName), "type", containerName);
+            throw new ToolNotFoundException(await SyntaxTargetResolver.BuildContainerNotFoundMessageAsync(solution, root, containerName, cancellationToken), "type", containerName);
         }
 
         if (container is not TypeDeclarationSyntax typeDecl)
@@ -2001,7 +2001,7 @@ public class MemberRefactoringEngine
 
         if (container == null)
         {
-            throw new ToolNotFoundException(SyntaxTargetResolver.BuildContainerNotFoundMessage(root, containerName), "type", containerName);
+            throw new ToolNotFoundException(await SyntaxTargetResolver.BuildContainerNotFoundMessageAsync(solution, root, containerName, cancellationToken), "type", containerName);
         }
 
         if (container is not TypeDeclarationSyntax typeDecl)
@@ -2322,7 +2322,7 @@ public class MemberRefactoringEngine
 
         if (container == null)
         {
-            throw new ToolNotFoundException(SyntaxTargetResolver.BuildContainerNotFoundMessage(root, containerName), "type", containerName);
+            throw new ToolNotFoundException(await SyntaxTargetResolver.BuildContainerNotFoundMessageAsync(solution, root, containerName, cancellationToken), "type", containerName);
         }
 
         if (container is EnumDeclarationSyntax)

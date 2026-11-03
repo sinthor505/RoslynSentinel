@@ -106,6 +106,7 @@ public static class SyntaxTargetResolver
     /// immediately. Generic spellings resolve, so a listed name can be given back verbatim; see
     /// <see cref="SyntaxTargetResolver.NormalizeTypeName"/>.
     /// </remarks>
+    // TODO convert to BuildContainerNotFoundMessageAsync (BuildContainerMissDetail still uses the sync form)
     public static string BuildContainerNotFoundMessage(SyntaxNode root, string requestedName)
     {
         var declared = root.DescendantNodes()
@@ -125,6 +126,56 @@ public static class SyntaxTargetResolver
         return $"No type named '{requestedName}' was found in this file. Types declared here: " +
                $"{string.Join(", ", shown)}{suffix}. Pass one of those as containerName - a type " +
                "argument list is optional, so both 'Foo' and 'Foo<T>' resolve.";
+    }
+
+    /// <summary>
+    /// Async form of <see cref="BuildContainerNotFoundMessage"/>: the same message, plus a pointer to up to three
+    /// other documents in the solution that declare a type with the same bare name.
+    /// </summary>
+    public static async Task<string> BuildContainerNotFoundMessageAsync(Solution solution, SyntaxNode root, string requestedName, CancellationToken cancellationToken)
+    {
+        var message = BuildContainerNotFoundMessage(root, requestedName);
+        var bareName = NormalizeTypeName(requestedName);
+        var localPath = root.SyntaxTree.FilePath;
+        var hits = new List<string>();
+        foreach (var project in solution.Projects)
+        {
+            foreach (var document in project.Documents)
+            {
+                if (hits.Count >= 3)
+                {
+                    break;
+                }
+
+                if (document.FilePath != null && document.FilePath == localPath)
+                {
+                    continue;
+                }
+
+                // Cheap text pre-filter: only parse documents that mention the name at all.
+                var text = await document.GetTextAsync(cancellationToken);
+                if (!text.ToString().Contains(bareName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var otherRoot = await document.GetSyntaxRootAsync(cancellationToken);
+                var declares = otherRoot != null && otherRoot.DescendantNodes()
+                    .OfType<BaseTypeDeclarationSyntax>()
+                    .Any(t => t.Identifier.Text == bareName);
+                if (declares)
+                {
+                    hits.Add(document.FilePath ?? document.Name);
+                }
+            }
+        }
+
+        if (hits.Count == 0)
+        {
+            return message;
+        }
+
+        return message + $" A type named '{bareName}' is declared in {string.Join(", ", hits)}; pass that file's path as filePath.";
     }
 
     /// <summary>

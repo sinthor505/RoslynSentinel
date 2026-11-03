@@ -75,6 +75,17 @@ public class GenericContainerNameTests
                 "no trailing '>', so nothing is stripped");
         });
     }
+
+    [Test]
+    public async Task BuildContainerNotFoundMessageAsync_TypeDeclaredInAnotherFile_NamesThatFile()
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("A.cs", "public class Other {}"), ("B.cs", "public class Target {}")]);
+        var root = await solution.Projects.First().Documents.First().GetSyntaxRootAsync();
+
+        var message = await SyntaxTargetResolver.BuildContainerNotFoundMessageAsync(solution, root!, "Target", CancellationToken.None);
+        Assert.That(message, Does.Contain("No type named 'Target' was found in this file"));
+        Assert.That(message, Does.Contain("B.cs"));
+    }
 }
 
 [TestFixture]
