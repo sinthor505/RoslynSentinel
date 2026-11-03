@@ -526,6 +526,12 @@ $cases = @(
 
 $pass = 0; $fail = 0
 
+# Every denied case below appends to hook-blocks.jsonl in ROSLYNSENTINEL_JOURNAL_DIR. Point that at a
+# throwaway dir for the whole run so a test run never writes the real .claude\journal (restored at the end).
+$savedJournalDir = $env:ROSLYNSENTINEL_JOURNAL_DIR
+$suiteJournalDir = Join-Path ([System.IO.Path]::GetTempPath()) ('rs-dogfood-journal-' + [guid]::NewGuid().ToString('N'))
+$env:ROSLYNSENTINEL_JOURNAL_DIR = $suiteJournalDir
+
 foreach ($c in $cases) {
     $hookPath = if ($c.fx) { Get-FixtureHook $c.fx } else { $hook }
     $json = $c.p | ConvertTo-Json -Depth 5 -Compress
@@ -566,6 +572,37 @@ $logged = (Test-Path -LiteralPath $bypassLog) -and ((Get-Content -LiteralPath $b
 if ($logged) { $pass++; $mark = 'ok  ' } else { $fail++; $mark = 'FAIL' }
 '{0} {1,-42}' -f $mark, 'bypass log records accepted bypass' | Write-Host
 
+# Block log: a denied call writes exactly one hook-blocks.jsonl line; an allowed call writes none.
+# Each case gets its own fresh directory, and the suite journal dir is restored afterwards.
+$blockDirBlocked = Join-Path ([System.IO.Path]::GetTempPath()) ('rs-dogfood-blocklog-' + [guid]::NewGuid().ToString('N'))
+$blockDirAllowed = Join-Path ([System.IO.Path]::GetTempPath()) ('rs-dogfood-blocklog-' + [guid]::NewGuid().ToString('N'))
+try {
+    $env:ROSLYNSENTINEL_JOURNAL_DIR = $blockDirBlocked
+    $blockedJson = @{ tool_name = 'Read'; tool_input = @{ file_path = "$repo\RoslynSentinel.Common\Foo.cs" } } | ConvertTo-Json -Depth 5 -Compress
+    $gotBlocked = Invoke-Hook $blockedJson
+    $blockLog = Join-Path $blockDirBlocked 'hook-blocks.jsonl'
+    # Plain assignments, not if-expressions: an if-expression unrolls a one-line array to a bare string.
+    $blockLines = @()
+    if (Test-Path -LiteralPath $blockLog) { $blockLines = @(Get-Content -LiteralPath $blockLog) }
+    $blockEntry = $null
+    if ($blockLines.Count -eq 1) { $blockEntry = ConvertFrom-Json -InputObject $blockLines[0] }
+    $okBlocked = ($gotBlocked -eq 'DENY') -and ($blockLines.Count -eq 1) -and ($null -ne $blockEntry) -and
+        ($blockEntry.tool -eq 'Read') -and ($blockEntry.policy -eq 'dog-fooding') -and ([string]$blockEntry.headline -ne '')
+    if ($okBlocked) { $pass++; $mark = 'ok  ' } else { $fail++; $mark = 'FAIL' }
+    '{0} {1,-42} {2}' -f $mark, 'block log: denied Read writes one line', $(if ($blockLines.Count -gt 0) { $blockLines[0] } else { '(no line written)' }) | Write-Host
+
+    $env:ROSLYNSENTINEL_JOURNAL_DIR = $blockDirAllowed
+    $allowedJson = @{ tool_name = 'Edit'; tool_input = @{ file_path = "$repo\CLAUDE.md" } } | ConvertTo-Json -Depth 5 -Compress
+    $gotAllowed = Invoke-Hook $allowedJson
+    $okAllowed = ($gotAllowed -eq 'allow') -and -not (Test-Path -LiteralPath (Join-Path $blockDirAllowed 'hook-blocks.jsonl'))
+    if ($okAllowed) { $pass++; $mark = 'ok  ' } else { $fail++; $mark = 'FAIL' }
+    '{0} {1,-42} want={2,-5} got={3}' -f $mark, 'block log: allowed Edit writes no line', 'allow', $gotAllowed | Write-Host
+}
+finally {
+    $env:ROSLYNSENTINEL_JOURNAL_DIR = $suiteJournalDir
+    foreach ($d in @($blockDirBlocked, $blockDirAllowed)) { Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
 # Smoke test: both lanes of the LIVE tier file must satisfy the hook's validation rules, so a bad
 # hand-edit (missing key, string value, 0, tier outside the list) fails this suite, not a dispatch.
 function Test-LiveTierFile {
@@ -601,6 +638,8 @@ if ($liveProblems.Count -eq 0) { $pass++; $mark = 'ok  ' } else { $fail++; $mark
 '{0} {1,-42} {2}' -f $mark, 'live implementer-tiers.json (both lanes) valid', ($liveProblems -join '; ') | Write-Host
 
 foreach ($r in $fixtureRoots.Values) { Remove-Item -LiteralPath $r -Recurse -Force -ErrorAction SilentlyContinue }
+Remove-Item -LiteralPath $suiteJournalDir -Recurse -Force -ErrorAction SilentlyContinue
+$env:ROSLYNSENTINEL_JOURNAL_DIR = $savedJournalDir
 
 Write-Host ''
 Write-Host "pass=$pass fail=$fail"

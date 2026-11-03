@@ -61,6 +61,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\', '/')
 
 function Deny([string]$reason) {
+    Write-BlockLog $reason
     [Console]::Error.WriteLine($reason)
     exit 2
 }
@@ -216,6 +217,47 @@ function Exit-IfBypassed([string]$inlineText, [string]$target) {
     if ($r) { Write-BypassLog 'inline' $target $r; exit 0 }
     $r = Get-TokenBypassReason $target
     if ($r) { Write-BypassLog 'token' $target $r; exit 0 }
+}
+
+# Appends one compact JSON line per denied call to hook-blocks.jsonl (read by scripts/Get-HookBlockReport.ps1).
+# Fails open: any logging problem is swallowed so it never changes the exit code or stderr.
+function Write-BlockLog([string]$reason) {
+    try {
+        $dir = if ($env:ROSLYNSENTINEL_JOURNAL_DIR) { $env:ROSLYNSENTINEL_JOURNAL_DIR } else { Join-Path $repoRoot '.claude\journal' }
+        if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+
+        # Policy and headline come from the first line only: "BLOCKED by <policy> policy: <headline>".
+        # The bypass footer sits after the first line, so it is never logged.
+        $firstLine = ([string]$reason -split "`r?`n")[0]
+        $policy = 'unknown'
+        $pm = [regex]::Match($firstLine, '^BLOCKED by (.+?) policy:')
+        if ($pm.Success) { $policy = $pm.Groups[1].Value }
+        $headline = $firstLine
+        $hm = [regex]::Match($firstLine, 'policy: (.*)$')
+        if ($hm.Success) { $headline = $hm.Groups[1].Value }
+        $headline = $headline.Trim()
+        if ($headline.Length -gt 200) { $headline = $headline.Substring(0, 200) }
+
+        $target = ''
+        $ti = $toolInput
+        if ($ti) {
+            if ($ti.file_path)   { $target = [string]$ti.file_path }
+            elseif ($ti.command) { $target = [string]$ti.command }
+            elseif ($ti.pattern) { $target = [string]$ti.pattern }
+            elseif ($ti.prompt)  { $pr = [string]$ti.prompt; $target = $pr.Substring(0, [Math]::Min(100, $pr.Length)) }
+        }
+        $target = ($target -replace '\s+', ' ').Trim()
+        if ($target.Length -gt 100) { $target = $target.Substring(0, 100) }
+
+        $agent = 'main'
+        if ($payload.agent_id) { $agent = '{0}:{1}' -f $payload.agent_type, $payload.agent_id }
+        $entry = [ordered]@{
+            ts = (Get-Date).ToUniversalTime().ToString('o'); session = [string]$payload.session_id
+            agent = $agent; tool = [string]$toolName; policy = $policy; headline = $headline; target = $target
+        } | ConvertTo-Json -Compress
+        [System.IO.File]::AppendAllText((Join-Path $dir 'hook-blocks.jsonl'), $entry + "`n", (New-Object System.Text.UTF8Encoding($false)))
+    }
+    catch { }
 }
 
 try {
