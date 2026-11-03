@@ -129,7 +129,10 @@ function Remove-HereStrings([string]$cmd) {
 # -QuotedNeedsDir (reader rule only): a QUOTED literal must also contain a / \ or * to count, because a
 # quoted bare name is usually the search pattern (`Select-String 'Foo.cs'`); unquoted tokens always count.
 # Residual false positive (writer rule): a bare path-shaped literal (`.Replace('Foo.cs','Bar.cs')`) still counts.
-function Test-CsPathToken([string]$scan, [switch]$QuotedNeedsDir, [int]$depth = 0) {
+# -Collected (deviation, used only by Test-ShellCsTargetsOutsideRepo): when a List[string] is passed, every matching
+# token is appended to it and scanning continues instead of returning at the first hit; the return value is then
+# meaningless. Without -Collected the behaviour and return value are exactly as before.
+function Test-CsPathToken([string]$scan, [switch]$QuotedNeedsDir, [int]$depth = 0, [System.Collections.Generic.List[string]]$Collected = $null) {
     if (-not $scan) { return $false }
     $pathShaped = '^[\w.\\/:~$*-]+\.cs$'
     $seps = " `t`r`n;|&(){},=@"
@@ -143,10 +146,16 @@ function Test-CsPathToken([string]$scan, [switch]$QuotedNeedsDir, [int]$depth = 
             $end = $scan.IndexOf($ch, $i + 1)
             if ($end -gt $i) {
                 # A quote glued to a token (`--path="x.cs"`) starts a fresh token; flush what precedes it.
-                if ($tok.Length -gt 0) { if ($tok.ToString() -match $pathShaped) { return $true }; $prev = $tok.ToString().ToLowerInvariant(); [void]$tok.Clear() }
+                if ($tok.Length -gt 0) {
+                    if ($tok.ToString() -match $pathShaped) { if ($null -ne $Collected) { $Collected.Add($tok.ToString()) } else { return $true } }
+                    $prev = $tok.ToString().ToLowerInvariant(); [void]$tok.Clear()
+                }
                 $content = $scan.Substring($i + 1, $end - $i - 1)
-                if ($content -match $pathShaped -and (-not $QuotedNeedsDir -or $content -match '[\\/*]')) { return $true }
-                if ($depth -lt 3 -and $prev -in @('-c', '-lc', '-ic', '-command', '-cmd', '/c', '-encodedcommand') -and (Test-CsPathToken $content -QuotedNeedsDir:$QuotedNeedsDir -depth ($depth + 1))) { return $true }
+                if ($content -match $pathShaped -and (-not $QuotedNeedsDir -or $content -match '[\\/*]')) { if ($null -ne $Collected) { $Collected.Add($content) } else { return $true } }
+                if ($depth -lt 3 -and $prev -in @('-c', '-lc', '-ic', '-command', '-cmd', '/c', '-encodedcommand')) {
+                    if ($null -ne $Collected) { [void](Test-CsPathToken $content -QuotedNeedsDir:$QuotedNeedsDir -depth ($depth + 1) -Collected $Collected) }
+                    elseif (Test-CsPathToken $content -QuotedNeedsDir:$QuotedNeedsDir -depth ($depth + 1)) { return $true }
+                }
                 $prev = $content.ToLowerInvariant()
                 $i = $end + 1
                 continue
@@ -158,7 +167,7 @@ function Test-CsPathToken([string]$scan, [switch]$QuotedNeedsDir, [int]$depth = 
         if ($i -ge $n -or $seps.IndexOf($ch) -ge 0) {
             if ($tok.Length -gt 0) {
                 $t = $tok.ToString()
-                if ($t -match $pathShaped) { return $true }
+                if ($t -match $pathShaped) { if ($null -ne $Collected) { $Collected.Add($t) } else { return $true } }
                 $prev = $t.ToLowerInvariant()
                 [void]$tok.Clear()
             }
@@ -167,6 +176,111 @@ function Test-CsPathToken([string]$scan, [switch]$QuotedNeedsDir, [int]$depth = 
         $i++
     }
     return $false
+}
+
+# --- Out-of-repo locations in shell commands (deviation: shared by the git rule and the shell .cs rules) ---
+# The MCP Git/Search/ReadFile tools only see the loaded solution, so a shell command that explicitly targets a
+# location outside this repo has no compliant MCP route. These helpers find the explicit locations a command
+# names and decide whether they are all outside the repo. "Cannot tell" always means "keep enforcing".
+
+# Strips quotes and maps git-bash /c/foo to C:\foo (same mapping as Test-PathOutsideRepo).
+function Convert-LocationPath([string]$p) {
+    if (-not $p) { return '' }
+    $p = $p.Trim().Trim('"', "'")
+    if ($p -match '^/([A-Za-z])/') { $p = ($Matches[1] + ':\' + $p.Substring(3)) }
+    return $p
+}
+
+# Explicit location paths in a shell command: the path after cd|chdir|sl|pushd|Set-Location|Push-Location
+# (optionally after -Path/-LiteralPath; only at a command position: start, or after ; & | ( { or a newline),
+# the path after `git -C`, the value of `--git-dir=`/`--git-dir <p>`, and the value of -WorkingDirectory.
+# Returned strings are unquoted and git-bash mapped, but NOT resolved; relative ones stay relative.
+# Callers must wrap the call in @() (a lone result unrolls to a scalar).
+function Get-CommandLocations([string]$scan) {
+    $found = New-Object 'System.Collections.Generic.List[string]'
+    if (-not $scan) { return @() }
+    $pathPat = '(?<p>"[^"]+"|''[^'']+''|[^\s;&|)}]+)'
+    $ic = [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+    $patterns = @(
+        "(?:^|[;&|({\r\n])\s*(?:cd|chdir|sl|pushd|Set-Location|Push-Location)\s+(?:-(?:Path|LiteralPath)[\s:]+)?$pathPat",
+        "\bgit\s+(?:-c\s+\S+\s+)*-C\s+$pathPat",
+        "--git-dir(?:=|\s+)$pathPat",
+        "-WorkingDirectory(?:[\s:=]+)$pathPat"
+    )
+    foreach ($pat in $patterns) {
+        foreach ($m in [regex]::Matches($scan, $pat, $ic)) {
+            $v = Convert-LocationPath $m.Groups['p'].Value
+            if ($v) { $found.Add($v) }
+        }
+    }
+    return $found.ToArray()
+}
+
+# Local checkout roots that are known to be outside this repo even when they cannot be resolved (e.g. not yet
+# cloned). Missing or invalid .claude/hooks/outside-roots.json => empty list; never throws.
+function Get-OutsideRoots {
+    try {
+        $f = Join-Path $PSScriptRoot 'outside-roots.json'
+        if (-not (Test-Path -LiteralPath $f)) { return @() }
+        $j = Get-Content -LiteralPath $f -Raw | ConvertFrom-Json
+        return @(@($j.roots) | Where-Object { $_ -is [string] -and $_.Trim() } | ForEach-Object { $_.Trim() })
+    }
+    catch { return @() }
+}
+
+# True when $p (rooted) equals or is under a root listed in outside-roots.json. Path-boundary match,
+# case-insensitive, same style as Test-PathOutsideRepo.
+function Test-UnderOutsideRoot([string]$p) {
+    try {
+        $p = Convert-LocationPath $p
+        if (-not $p -or -not [System.IO.Path]::IsPathRooted($p)) { return $false }
+        $full = [System.IO.Path]::GetFullPath($p).TrimEnd('\', '/')
+        foreach ($r in (Get-OutsideRoots)) {
+            $root = [System.IO.Path]::GetFullPath($r).TrimEnd('\', '/')
+            if ($full -eq $root -or $full.StartsWith("$root\", [StringComparison]::OrdinalIgnoreCase) -or $full.StartsWith("$root/", [StringComparison]::OrdinalIgnoreCase)) { return $true }
+        }
+    }
+    catch { }
+    return $false
+}
+
+# True when there is at least one location and EVERY one is rooted and outside this repo (or under an
+# outside root). A relative location (`cd ..`) is unresolvable here, so it counts as "cannot tell".
+# -ResolveExisting (git rule): use Test-OutOfRepo, which needs the path to exist, so a typo'd path keeps enforcing.
+# Without it (.cs rules): any rooted non-repo path counts, matching the built-in Read/Edit/Write rules.
+function Test-AllLocationsOutside([string[]]$locs, [switch]$ResolveExisting) {
+    if (-not $locs -or $locs.Count -eq 0) { return $false }
+    foreach ($l in $locs) {
+        $p = Convert-LocationPath $l
+        if (-not $p -or -not [System.IO.Path]::IsPathRooted($p)) { return $false }
+        $outside = if ($ResolveExisting) { (Test-OutOfRepo $p) -or (Test-UnderOutsideRoot $p) } else { (Test-PathOutsideRepo $p) -or (Test-UnderOutsideRoot $p) }
+        if (-not $outside) { return $false }
+    }
+    return $true
+}
+
+# Shell .cs rules (reader and writer) exemption: true when every path-shaped .cs target is outside this repo.
+# An absolute token must itself be outside (Test-PathOutsideRepo). A relative/glob token is judged by the
+# command's explicit locations (cd/Set-Location/-WorkingDirectory/git -C) and passes only when there is at least
+# one and all are outside; a relative token with `..`, `$` or `~` is unresolvable and blocks. No tokens => false.
+# -ExtraTokens: redirect targets (`> x.cs`), which the tokenizer does not split on.
+function Test-ShellCsTargetsOutsideRepo([string]$scan, [switch]$QuotedNeedsDir, [string[]]$ExtraTokens = @()) {
+    $toks = New-Object 'System.Collections.Generic.List[string]'
+    [void](Test-CsPathToken $scan -QuotedNeedsDir:$QuotedNeedsDir -Collected $toks)
+    foreach ($e in $ExtraTokens) { if ($e) { $toks.Add($e) } }
+    if ($toks.Count -eq 0) { return $false }
+    $locsOutside = $null
+    foreach ($t in $toks) {
+        $p = Convert-LocationPath $t
+        if ([System.IO.Path]::IsPathRooted($p)) {
+            if (-not (Test-PathOutsideRepo $p)) { return $false }
+            continue
+        }
+        if ($p -match '(^|[\\/])\.\.([\\/]|$)' -or $p -match '[$~]') { return $false }
+        if ($null -eq $locsOutside) { $locsOutside = Test-AllLocationsOutside @(Get-CommandLocations $scan) }
+        if (-not $locsOutside) { return $false }
+    }
+    return $true
 }
 
 function Get-InlineBypassReason([string]$text) {
@@ -679,8 +793,12 @@ positive if the referenced name already exists elsewhere in the file. Proceeding
         # .csproj/.cshtml. Listing alone (Get-ChildItem *.cs for mtimes) is left alone: there is
         # no MCP equivalent and it reads no content. Harness worktrees stay exempt.
         $csReaders = 'grep|egrep|fgrep|rg|ag|ack|findstr|Select-String|sls|cat|type|Get-Content|gc|head|tail|less|more|sed|awk'
+        # Out-of-repo exemption (deviation): MCP tools cannot see files outside the loaded solution, so when every
+        # .cs target is outside this repo (absolute path, or relative under an out-of-repo Set-Location/cd/git -C)
+        # the rule does not apply. It is a condition, not an `exit 0`, so the git rule below still runs.
         if ((Test-CsPathToken $scan -QuotedNeedsDir) -and $command -notmatch '[\\/]Worktree[\\/]' -and
-            $scan -match "(^|[;&|(\r\n]\s*|\bxargs\s+)($csReaders)(\s|$)") {
+            $scan -match "(^|[;&|(\r\n]\s*|\bxargs\s+)($csReaders)(\s|$)" -and
+            -not (Test-ShellCsTargetsOutsideRepo $scan -QuotedNeedsDir)) {
             $which = $Matches[2]
             Exit-IfBypassed "$command`n$([string]$toolInput.description)" $null
             DenyBypassable @"
@@ -716,8 +834,12 @@ For docs, notes or scratchpad output use the Edit/Write tool on the non-.cs file
         $csWriters = 'Set-Content|Add-Content|Out-File|Copy-Item|Move-Item|Rename-Item|New-Item|tee|cp|mv|copy|move|ren|sc|ac'
         $csWriteApis = '\b(WriteAllText|WriteAllLines|WriteAllBytes|AppendAllText|AppendAllLines)\b'
         $csRedirect = '>{1,2}\s*["'']?[^\s"''|;&]*\.cs\b'
+        # Same out-of-repo exemption as the reader rule (deviation); redirect targets are classified too, because
+        # the tokenizer does not split on `>`.
+        $csRedirectTargets = @([regex]::Matches($scan, '>{1,2}\s*["'']?([^\s"''|;&]*\.cs)\b') | ForEach-Object { $_.Groups[1].Value })
         if ((Test-CsPathToken $scan) -and $command -notmatch '[\\/]Worktree[\\/]' -and
-            ($scan -match "(^|[;&|(\r\n]\s*)($csWriters)(\s|$)" -or $scan -match $csWriteApis -or $scan -match $csRedirect)) {
+            ($scan -match "(^|[;&|(\r\n]\s*)($csWriters)(\s|$)" -or $scan -match $csWriteApis -or $scan -match $csRedirect) -and
+            -not (Test-ShellCsTargetsOutsideRepo $scan -ExtraTokens $csRedirectTargets)) {
             Exit-IfBypassed "$command`n$([string]$toolInput.description)" $null
             DenyBypassable @"
 BLOCKED by dog-fooding policy: shell write/move/copy of a C# file.
@@ -744,13 +866,20 @@ For docs, notes or scratchpad output use the Edit/Write tool on the non-.cs file
         # loaded into the server - it has no parameter to target any other repo or
         # worktree. That makes it structurally unable to cover git status/log/diff
         # for a path outside this repo (e.g. a PlanStepRunner harness worktree under
-        # */Worktree/, which is its own separate git working tree). Blocking those
-        # calls here would strand the task on a read with no compliant route at all,
-        # which is worse than the drift-detection this hook exists to protect - so an
-        # explicit `git -C <path>` (or `git --git-dir=...`) pointed outside this repo's
-        # root is exempt for the read-only operations. Mutating operations (add/commit/
-        # revert) stay covered even out-of-repo, since those are exactly the ones this
-        # policy most needs to chokepoint; only status/log/diff get the pass.
+        # */Worktree/, or a sibling clone such as csharp-sdk, each its own separate
+        # git working tree). Blocking those calls here would strand the task on a read
+        # with no compliant route at all, which is worse than the drift-detection this
+        # hook exists to protect.
+        # Deviation from the earlier three-block form (--git-dir / -C / literal `cd`):
+        # Get-CommandLocations now collects every explicit location (cd/chdir/sl/pushd/
+        # Set-Location/Push-Location, git -C, --git-dir=, -WorkingDirectory). If there is
+        # at least one and EVERY one is outside this repo's root (or under a root listed
+        # in outside-roots.json), the command is exempt - for any read-only git operation
+        # (status, log, diff, describe, tag listing, rev-parse, show ...), not just
+        # status/log/diff. Mutating operations (add/commit/revert) stay covered even
+        # out-of-repo, since those are exactly the ones this policy most needs to
+        # chokepoint. If any location is in-repo, relative, unresolvable or absent, fall
+        # through to the normal checks ("cannot tell" => keep enforcing).
         function Test-OutOfRepo([string]$path) {
             if (-not $path) { return $false }
             $path = $path.Trim('"', "'")
@@ -761,25 +890,11 @@ For docs, notes or scratchpad output use the Edit/Write tool on the non-.cs file
             # same way.
             return -not ($resolved -eq $repoRoot -or $resolved.StartsWith("$repoRoot\", [StringComparison]::OrdinalIgnoreCase) -or $resolved.StartsWith("$repoRoot/", [StringComparison]::OrdinalIgnoreCase))
         }
-        if ($command -match "git\s+(?:-C\s+(?<path>""[^""]+""|'[^']+'|\S+)\s+)?.*--git-dir=(?<gd>""[^""]+""|'[^']+'|\S+)") {
-            if (Test-OutOfRepo $Matches['gd']) {
-                if ($command -match "\b(status|log|diff)\b") { exit 0 }
-            }
-        }
-        if ($command -match "git\s+-C\s+(?<path>""[^""]+""|'[^']+'|\S+)") {
-            if (Test-OutOfRepo $Matches['path']) {
-                if ($command -match "\b(status|log|diff)\b") { exit 0 }
-            }
-        }
-        # Same out-of-repo exemption, but for `cd <path> && git ...` / `cd <path>; git ...`
-        # instead of `git -C <path> ...` - the path context comes from a preceding shell
-        # builtin rather than a git flag, but it's functionally identical: the git command
-        # that follows operates on whatever repo `<path>` is in, not this one.
-        if ($command -match "(^|[;&|]\s*)cd\s+(?<path>""[^""]+""|'[^']+'|\S+)\s*[;&]") {
-            if (Test-OutOfRepo $Matches['path']) {
-                if ($command -match "\b(status|log|diff)\b") { exit 0 }
-            }
-        }
+        # git [global options] <mutating op> - never gets the out-of-repo pass: add, commit, revert, stash (except
+        # list/show), worktree add/remove/prune/move/lock/unlock/repair, and tag that creates or deletes (read-only
+        # `git tag`, `tag -l`, `tag --points-at` stay exempt).
+        $gitMutating = '\bgit\s+(?:(?:-C|-c|--git-dir|--work-tree)(?:\s+|=)\S+\s+|--\S+\s+)*(?:(?:add|commit|revert|stash)\b(?!\s+(?:list|show)\b)|worktree\s+(?:add|remove|prune|move|lock|unlock|repair)\b|tag\s+(?:-[adfsm]\b|--delete\b|[^-\s]))'
+        if ($scan -notmatch $gitMutating -and (Test-AllLocationsOutside @(Get-CommandLocations $scan) -ResolveExisting)) { exit 0 }
 
         # Only the operations the MCP Git tool actually implements AND this hook enforces.
         # Everything else (rebase, merge, restore...) has no MCP equivalent, so denying it
