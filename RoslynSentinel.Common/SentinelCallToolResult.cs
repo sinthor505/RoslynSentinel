@@ -460,6 +460,17 @@ public record LargeResultInfo
         get; init;
     }
 
+    /// <summary>
+    /// The cuts <see cref="ResultPager"/> made to fit this result inline, one per node (path, returned, total, unit,
+    /// inferred). Authoritative for what was omitted; <see cref="TotalRecords"/> stays only for older readers. Null - and so
+    /// omitted from the JSON - for every result type that is not an <c>Envelope</c>.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<OmittedPart>? Omitted
+    {
+        get; init;
+    }
+
     public LargeResultInfo(
     string resultType,
     bool writtenToFile,

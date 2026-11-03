@@ -58,6 +58,13 @@ public static class SentinelToolFactory
 {
     private static readonly Regex NonAsciiLetterDigits = new("[^0-9A-Za-z]+", RegexOptions.Compiled);
 
+    // Wire names of the tools built here, i.e. tools whose results pass through the MarshalResult hook. Names are only
+    // ever added: a tool re-created under the same name is still hooked. Read by the offload filter's miss detector.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> HookedToolNames = new(StringComparer.Ordinal);
+
+    /// <summary>True when <paramref name="toolName"/> was built by <see cref="Create"/>, so its result went through the marshaller hook.</summary>
+    public static bool IsHooked(string? toolName) => toolName is not null && HookedToolNames.ContainsKey(toolName);
+
     /// <summary>The four service types the SDK's request-scoped service provider answers itself.</summary>
     internal static readonly IReadOnlySet<Type> AugmentedServiceTypes = new HashSet<Type>
     {
@@ -87,6 +94,7 @@ public static class SentinelToolFactory
             ? AIFunctionFactory.Create(method, target: null, functionOptions)
             : AIFunctionFactory.Create(method, args => McpToolSchemaPatcher.CreateTarget(args.Services, toolType), functionOptions);
 
+        HookedToolNames[ResolveToolName(method, derived)] = true;
         return McpServerTool.Create(function, derived);
     }
 

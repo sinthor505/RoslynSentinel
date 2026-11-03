@@ -519,6 +519,17 @@ public static class RoslynSentinelServiceExtensionsBasic
                             "Large tool result: tool '{Tool}' returned {SizeChars} chars (threshold: {OffloadThresholdBytes})",
                             context.Params?.Name, text.Length, LargeResultHelper.OffloadThresholdBytes);
 
+                        // Result marshaller miss detector (plan_wire_result_marshaller.md Step 4): in mode On a tool built through
+                        // SentinelToolFactory (SentinelToolFactory.IsHooked) should never reach this point over the threshold,
+                        // because its marshaller already fitted the result. Reaching it is a pager or reserve bug (or a hooked tool
+                        // returning a non-envelope string); log it at error level and still offload below as the backstop.
+                        if (ResultMarshallerOptions.Mode == ResultMarshallerMode.On && SentinelToolFactory.IsHooked(context.Params?.Name))
+                        {
+                            logger?.LogError(
+                                "Result marshaller miss: hooked tool '{Tool}' still returned {SizeChars} chars (threshold: {OffloadThresholdBytes}) after marshalling; the offload filter is handling it as the backstop. Check ResultPager hints and LargeResultHelper.EchoReserveChars.",
+                                context.Params?.Name, text.Length, LargeResultHelper.OffloadThresholdBytes);
+                        }
+
                         var workspaceManager = context.Server.Services?.GetService<PersistentWorkspaceManager>();
                         var solutionRoot = workspaceManager?.GetSolutionRoot();
                         var stored = await LargeResultHelper.StoreRawJsonAsync(text, solutionRoot, cancellationToken);

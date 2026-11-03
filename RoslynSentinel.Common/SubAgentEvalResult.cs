@@ -217,6 +217,15 @@ public sealed record SubAgentEvalResult : IOperationResult
                 return toolText;
             }
 
+            // An Envelope file (the result marshaller's store) holds the full wire envelope, successData or errorData:
+            // return it whole, never wrapped as a payload.
+            if (TryGetPropertyIgnoreCase(fileDocument.RootElement, "type", out var wrapperType) &&
+                wrapperType.ValueKind == JsonValueKind.String &&
+                string.Equals(wrapperType.GetString(), nameof(ResultWrapperType.Envelope), StringComparison.OrdinalIgnoreCase))
+            {
+                return data.GetRawText();
+            }
+
             // The generic backstop stores the whole envelope; a typed large result stores the payload alone.
             return TryGetPropertyIgnoreCase(data, "successData", out _)
                 ? data.GetRawText()

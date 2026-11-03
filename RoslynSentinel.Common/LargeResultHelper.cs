@@ -14,6 +14,20 @@ public static class LargeResultHelper
     public const int OffloadThresholdBytes = 15 * 1024; // 15 KB
 
     /// <summary>
+    /// The inline size budget in characters of the final wire text: the length the generic offload filter
+    /// (<c>AddLargeResultOffloadFilter</c>) compares a response's text against, which is <see cref="OffloadThresholdBytes"/>
+    /// read as a character count. Introduced by plan_wire_result_marshaller.md Step 4 as the one named chars constant;
+    /// Step 9 makes it the only size constant.
+    /// </summary>
+    public const int InlineBudgetChars = OffloadThresholdBytes;
+
+    /// <summary>
+    /// Characters kept free beneath <see cref="InlineBudgetChars"/> for what later filters add to a response (the
+    /// tool-call echo adds up to about 2.3 KB, stamps a few hundred characters). A measured guess, see the plan's Risks.
+    /// </summary>
+    public const int EchoReserveChars = 2560;
+
+    /// <summary>
     /// Counts the items in a tool result's <c>successData</c> for the offload envelope's
     /// <c>itemCount</c> hint: a top-level array counts its elements; an object sums every array found
     /// under it, recursing through nested objects (so an array nested inside a sub-object is counted,
@@ -77,8 +91,22 @@ public static class LargeResultHelper
     /// Fails closed: if no solution root is available, returns <c>offloaded: false</c> rather than
     /// throwing, so a guardrail can never itself break the call it's guarding.
     /// </summary>
-    public static async Task<(bool offloaded, FilePathWrapper filePath, string? resultId)> StoreRawJsonAsync(
-        string json, string? solutionRoot, CancellationToken cancellationToken)
+    public static Task<(bool offloaded, FilePathWrapper filePath, string? resultId)> StoreRawJsonAsync(
+        string json, string? solutionRoot, CancellationToken cancellationToken) =>
+        StoreWrappedJsonAsync(json, solutionRoot, ResultWrapperType.Raw, cancellationToken);
+
+    /// <summary>
+    /// Writes the full wire text of a tool result envelope to a <see cref="ResultWrapperType.Envelope"/> file: the
+    /// same JSON the SDK would have sent, as <c>Data</c>, so a reader needs no type to replay it. Same naming,
+    /// folder and retention as every other large result. Returns <c>offloaded: false</c> when there is no solution
+    /// root or the text is empty; IO failures propagate so the caller can report a failed store.
+    /// </summary>
+    public static Task<(bool offloaded, FilePathWrapper filePath, string? resultId)> StoreEnvelopeAsync(
+        string envelopeWireText, string? solutionRoot, CancellationToken cancellationToken) =>
+        StoreWrappedJsonAsync(envelopeWireText, solutionRoot, ResultWrapperType.Envelope, cancellationToken);
+
+    private static async Task<(bool offloaded, FilePathWrapper filePath, string? resultId)> StoreWrappedJsonAsync(
+        string json, string? solutionRoot, ResultWrapperType wrapperType, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(solutionRoot) || string.IsNullOrEmpty(json))
         {
@@ -87,7 +115,7 @@ public static class LargeResultHelper
 
         var wrapper = new ResultWrapper
         {
-            Type = ResultWrapperType.Raw,
+            Type = wrapperType,
             Data = JsonNode.Parse(json)
         };
 
@@ -163,7 +191,9 @@ public enum ResultWrapperType
     SymbolRelationshipResultList,
     BroadenedSymbolRelationshipResults,
     Raw,
-    ErrorStructuredDetailList
+    ErrorStructuredDetailList,
+    /// <summary>The full wire envelope of a tool result as the SDK would have sent it (<see cref="LargeResultHelper.StoreEnvelopeAsync"/>). Appended last: stored files carry the name, never the number.</summary>
+    Envelope
 }
 
 /// <summary>Offloaded payload shape for a whole-file ReadFile result too large to inline (mirrors the anonymous shape ReadFile returns inline for the non-offloaded case).</summary>
