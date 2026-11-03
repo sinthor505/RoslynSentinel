@@ -20,7 +20,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="ModelContextProtocol.Extensions.Tasks" Version="2.2.0" />
+    <PackageReference Include="ModelContextProtocol.Extensions.Tasks" Version="2.3.0" />
   </ItemGroup>
 
   <ItemGroup>
