@@ -9,4 +9,4 @@ namespace RoslynSentinel.Common;
 /// nothing at all." <see cref="RegexPatternValid"/> is false when <c>pattern</c> doesn't compile
 /// as a regex; <see cref="RegexResults"/> is empty and literal search is unaffected in that case.
 /// </summary>
-public record TextSearchResult(List<TextSearchMatch> LiteralResults, List<TextSearchMatch> RegexResults, int RegexOverlapCount, bool RegexPatternValid);
+public record TextSearchResult([property: ResultRecords] List<TextSearchMatch> LiteralResults, List<TextSearchMatch> RegexResults, int RegexOverlapCount, bool RegexPatternValid);

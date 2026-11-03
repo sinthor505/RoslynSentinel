@@ -444,6 +444,15 @@ public class ResultPagerTests
     }
 
     [Test]
+    public void ResolveHints_TextSearchResult_RecordsPathIsLiteralResults()
+    {
+        var hints = ResultPager.ResolveHints(typeof(TextSearchResult), Wire);
+
+        Assert.That(hints.RecordsPath, Is.EqualTo("successData.literalResults"));
+        Assert.That(hints.NeverInlinePaths, Is.Empty);
+    }
+
+    [Test]
     public void NeverInline_IsAlwaysMovedOut_EvenWhenTheEnvelopeFits()
     {
         JsonObject original = Envelope(new JsonObject
