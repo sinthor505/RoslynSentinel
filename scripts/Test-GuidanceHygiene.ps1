@@ -17,6 +17,7 @@
     MEM-DUP      memory files that also exist under docs/current (any depth)
     TODO-LINK    relative markdown links in TODO.md whose target does not exist
     TODO-FORMAT  TODO.md entries longer than 12 lines (candidates to shrink to a link)
+    TRAILER      git commit trailers `Plan:`/`Closes:` naming no doc under docs; open docs with a `Closes:` commit
 
 .PARAMETER MemoryDir
   Defaults to the Claude project memory directory derived from the repo root.
@@ -153,6 +154,40 @@ for ($i = 0; $i -lt $todo.Count; $i++) {
         $start = $i
     }
 }
+
+# ---- Commit trailers (Plan:/Closes:) vs docs; convention: docs/current/templates/README.md rule 11.
+# A doc ID is a filename without extension. Only `Closes:` counts as done; `Plan:` alone is in progress
+# and is never reported. Report-only: any git failure is swallowed (this script always exits 0).
+try {
+    $raw = & git -C $RepoRoot log '--format=%H%x1f%B%x1e' 2>$null
+    if ($LASTEXITCODE -eq 0 -and $raw) {
+        $closedBy = @{}   # doc id -> first short hash of a Closes: commit
+        $unknown = @{}    # "Kind: id" -> short hash
+        foreach ($rec in (($raw -join "`n") -split [char]0x1e)) {
+            $parts = $rec -split [char]0x1f, 2
+            if ($parts.Count -lt 2) { continue }
+            $sha = $parts[0].Trim()
+            if ($sha.Length -lt 7) { continue }
+            $sha = $sha.Substring(0, 8)
+            foreach ($line in ($parts[1] -split "`r?`n")) {
+                $tm = [regex]::Match($line, '^(Plan|Closes):\s*([A-Za-z0-9_.\-]+(?:\s*,\s*[A-Za-z0-9_.\-]+)*)\s*$')
+                if (-not $tm.Success) { continue }
+                foreach ($id in ($tm.Groups[2].Value -split '\s*,\s*')) {
+                    if (-not $docNames.ContainsKey($id)) { $unknown["$($tm.Groups[1].Value): $id"] = $sha }
+                    elseif ($tm.Groups[1].Value -eq 'Closes' -and -not $closedBy.ContainsKey($id)) { $closedBy[$id] = $sha }
+                }
+            }
+        }
+        foreach ($k in $unknown.Keys) { Add-Finding 'TRAILER' "trailer '$k' (commit $($unknown[$k])) matches no doc under docs/" }
+        foreach ($d in $docFiles) {
+            if ($d.FullName -match '\\closed\\' -or -not $closedBy.ContainsKey($d.BaseName)) { continue }
+            $status = (Select-String -Path $d.FullName -Pattern '^\*\*Status:?\*\*:?\s*(.*)$' -List | ForEach-Object { $_.Matches[0].Groups[1].Value }) | Select-Object -First 1
+            if (-not $status) { $status = '(no Status line)' }
+            Add-Finding 'TRAILER' ("closure candidate: {0} has Closes: commit {1} but is not in closed/; Status: '{2}' - confirm, then move" -f $d.FullName.Substring($RepoRoot.Length + 1), $closedBy[$d.BaseName], $status.Substring(0, [math]::Min(60, $status.Length)))
+        }
+    }
+}
+catch { Write-Host "TRAILER check skipped: $($_.Exception.Message)" }
 
 Write-Host ''
 $unique = $findings | Sort-Object -Unique

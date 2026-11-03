@@ -67,7 +67,7 @@ Ideas and low priority.
 - [OPEN] Tool terminology/naming backlog (2026-08-24) - weak or ambiguous tool and parameter names, unactioned - [doc](tool-terminology-refinement-reference-v1.md)
 - [OPEN] Model tool-choice gap: `ApplyDiff` used instead of `ChangeAccessibility` for `ReplaceBlockFormatted`, 67.5% of all ApplyDiff failures (2026-09-05) - unactioned - [doc](model_eval_replaceblockformatted_accessibility_cost_2026_09_05.md)
 - [OPEN] Server-side telemetry/metrics for tool call counts and error rates (2026-09-05) - idea, not implemented - [doc](ideas/server_telemetry_idea.md)
-- [OPEN] `Plan:`/`Closes:` commit trailers reconciliation script for plan/proposal/finding docs (2026-10-18) - convention done 2026-10-21 (templates/README.md rule 11); script (extend `Test-GuidanceHygiene.ps1`) and `ProjectDoc` extension remain - [doc](ideas/idea_doc_id_commit_trailers_and_reconciliation.md)
+- [OPEN] `Plan:`/`Closes:` commit trailers reconciliation script for plan/proposal/finding docs (2026-10-18) - convention done 2026-10-21 (templates/README.md rule 11); the report-only `TRAILER` check in `Test-GuidanceHygiene.ps1` was added 2026-11-02 (run with `pwsh`; Windows PowerShell 5.1 fails on the empty `$PSScriptRoot` default for `$RepoRoot`); the idea doc and rule 11 still say "not built"; `ProjectDoc` extension remains - [doc](ideas/idea_doc_id_commit_trailers_and_reconciliation.md)
 
 ### Needs owner review (audit verdict UNSURE)
 
