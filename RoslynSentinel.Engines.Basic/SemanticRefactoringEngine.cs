@@ -245,7 +245,8 @@ public class SemanticRefactoringEngine
         }
 
         // Find the snippet position
-        var snippetPos = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter).Start;
+        var snippetMatch = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter);
+        var snippetPos = snippetMatch.Start;
 
         // Find the statements that contain the snippet position
         var nodes = root.DescendantNodes()
@@ -265,7 +266,7 @@ public class SemanticRefactoringEngine
 
         if (nodes.Count == 0)
         {
-            throw new ToolNotFoundException($"No statements found at the snippet location in '{filePath}'. Searched: statements containing the snippet match and statements on the snippet's line. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use {ToolCallHint.Call("GetFileOutline")} to find the lines.", "statements");
+            throw new ToolNotFoundException(SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "statement", "directly contains the statement(s) to wrap") + $" Searched: statements containing the snippet match and statements on the snippet's line. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use {ToolCallHint.Call("GetFileOutline")} to find the lines.", "statements");
         }
 
         // TODO this snippet form selects only the statement(s) containing the snippet, so it cannot cover a multi-statement range (the using block would be empty); WrapRange using is meant for startLine/endLine

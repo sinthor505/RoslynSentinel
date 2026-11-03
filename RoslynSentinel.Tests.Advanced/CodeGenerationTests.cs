@@ -818,4 +818,22 @@ public class SomeClass { }", "SomeClass.cs");
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _codeGenerationEngine.InterpolateStringAsync("Missing.cs", "string.Format(\"x\", 1)"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
+
+    [Test]
+    public async Task InterpolateStringSafe_SnippetOnNonFormatCall_MessageNamesFoundKind()
+    {
+        SetSource("""
+            public class Foo
+            {
+                public int M() { return 1; }
+            }
+            """);
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _codeGenerationEngine.InterpolateStringAsync("Test.cs", "return 1;");
+        });
+        Assert.That(ex!.Message, Does.Contain("no string.Format call is there"));
+        Assert.That(ex.Message, Does.Contain("ReturnStatement"));
+    }
 }

@@ -3454,4 +3454,20 @@ public class Calc
 
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
     }
+
+    [Test]
+    public async Task WrapInUsing_SnippetOnNonStatement_MessageNamesFoundKind()
+    {
+        SetSource(@"public class WrapUsingHdr
+{
+    public int X;
+}", "WrapUsingHdr.cs");
+        var semanticEngine = Battery.Basic.TestEngines.SemanticRefactoringEngine(_workspaceManager);
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await semanticEngine.WrapInUsingAsync("WrapUsingHdr.cs", "public int X;", null, null, "d"));
+
+        Assert.That(ex!.Message, Does.Contain("no statement is there"));
+        Assert.That(ex.Message, Does.Contain("FieldDeclaration"));
+    }
 }

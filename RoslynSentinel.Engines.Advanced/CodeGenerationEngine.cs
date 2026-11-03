@@ -1224,7 +1224,7 @@ public class CodeGenerationEngine
 
         if (invocation == null)
         {
-            throw new ToolNotFoundException("No string.Format call found at the given context snippet.");
+            throw new ToolNotFoundException(SnippetNodeKindError.Describe(srcText, root, snippetMatch!, "string.Format call", "directly contains the string.Format(...) call"));
         }
 
         var args = invocation.ArgumentList.Arguments;
