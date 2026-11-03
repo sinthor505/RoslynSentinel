@@ -303,6 +303,10 @@ public class WorkspaceBuildTestImpl
                 includeOutput ? projected : WithoutTailsWhenClean(projected), _workspaceManager.GetSolutionRoot(), "BuildResult", ResultWrapperType.Raw,
                 workspaceVersion: _workspaceManager.WorkspaceVersion, cancellationToken: cancellationToken);
             var buildSummary = SummarizeBuild(buildResult);
+            if (isFullBuild && scope != ToolScope.solution)
+            {
+                buildSummary += $" Scope '{scope}' was ignored: a full build always builds the whole solution.";
+            }
             if (buildResult.Outcome == BuildOutcome.Failed)
             {
                 // Surface external drift: a failed build may be caused by a file changed on disk under us.

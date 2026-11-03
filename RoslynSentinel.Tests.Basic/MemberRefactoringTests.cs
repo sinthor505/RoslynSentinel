@@ -2890,6 +2890,45 @@ public class C
         Assert.That(result.UpdatedText, Does.Not.Contain("UnusedMethod"), "Should remove unused member without errors");
     }
 
+    [Test]
+    public async Task RemoveMember_SelfRecursivePrivateHelper_IsRemoved()
+    {
+        const string code = @"
+            public class Walker
+            {
+                private int Countdown(int n) => n <= 0 ? 0 : Countdown(n - 1);
+
+                public void Run() { }
+            }";
+        SetSource(code);
+        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
+        var filePath = doc.FilePath ?? "Test.cs";
+        // Its only usage is its own recursive call, which is inside the removed member and must not block removal
+        var result = await _memberRefactoringEngine.RemoveMemberAsync(filePath, "Countdown");
+        Assert.That(result.UpdatedText, Does.Not.Contain("Countdown"), "A self-recursive member with no outside usages should be removed");
+    }
+
+    [Test]
+    public async Task RemoveMember_SelfRecursiveHelperAlsoCalledElsewhere_StillRefused()
+    {
+        const string code = @"
+            public class Walker
+            {
+                private int Countdown(int n) => n <= 0 ? 0 : Countdown(n - 1);
+
+                public int Run() => Countdown(3);
+            }";
+        SetSource(code);
+        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
+        var filePath = doc.FilePath ?? "Test.cs";
+        // Run() is an outside usage, so only the recursive self-call is excluded and removal is still refused
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveMemberAsync(filePath, "Countdown");
+        });
+        Assert.That(ex!.Message, Does.Contain("Cannot remove member 'Countdown'"), "A usage outside the removed member must still block removal");
+    }
+
     [TestCase("PairWrapper")]
     [TestCase("PairWrapper<TKey, TValue>")]
     [TestCase("PairWrapper<TKey,TValue>")]

@@ -8,6 +8,14 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Small tool fixes: Member(remove) self-recursion, Build fullBuild scope note, stale comments - resolved (2026-11-02)
+
+- `Member(remove)` refused a self-recursive private helper (its own recursive call counted as a usage). `RemoveMemberAsync` now ignores references inside the member's own span. Evidence: `RemoveMember_SelfRecursivePrivateHelper_IsRemoved` and `RemoveMember_SelfRecursiveHelperAlsoCalledElsewhere_StillRefused` pass. A `cref` in the member's own doc comment is leading trivia and still counts (not handled).
+- `Build(level: fullBuild, scope: project)` silently built the whole solution. Not changed to honour scope; the descriptions now say so and a full build with a non-solution scope appends "Scope '...' was ignored" to `StatusMessage` (`WorkspaceBuildTestImpl.Build`, `BuildDescription`, `BuildTool` scope description). Also fires for `fullBuildThrowaway`.
+- Stale header comment in `SearchSolutionTextRecoveryHintTests.cs` reworded (advice is in `StatusMessage`, `WarningDetails` stays null). Stale `// TODO throw-migration` in `BatteryTwentyOneTests.UpgradeToPrimaryConstructor_MissingFile_ThrowsNotFound` removed (assertion was already typed).
+- `ConvertMethodToPropertyAsync` and `MakeMethodStaticAsync` use `DocumentLookup.RequireDocument` instead of an inline "Document not found." throw.
+- Evidence: Tests.Basic 1030/1030, Tests.Tools.Basic 1322 passed + 1 skipped, Tests.Tools.Advanced 527/527.
+
 ## Test construction factories: Tests.Support.Basic / Tests.Support.Advanced rolled out to every test project - resolved (2026-10-28)
 
 About 1,450 `new Engine(...)` / `new Tools(...)` sites in 9 test projects now call static factories in two non-test

@@ -579,7 +579,6 @@ public class Service
         SetSource("public class C {}", "Test.cs");
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync("NonExistent.cs", "Service"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        // TODO throw-migration: assert the typed exception once UpgradeToPrimaryConstructorAsync throws
     }
 
     // --- FindUseFrozenCollections (via CodeStyleEngine) ---

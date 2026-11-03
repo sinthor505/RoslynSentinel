@@ -1,6 +1,6 @@
 // Coverage for the zero-hit recovery ladder of WorkspaceReadNavigationImpl.SearchSolutionText: when the
 // visible result is empty, ONE extra pass counts relaxed literal candidates (glob dropped, dotted-name
-// prefixes, '|' alternatives) and reports them as advice in StatusMessage/WarningDetails. Relaxed
+// prefixes, '|' alternatives) and reports them as advice in StatusMessage (WarningDetails stays null). Relaxed
 // matches are never returned as hits.
 
 using System.IO;

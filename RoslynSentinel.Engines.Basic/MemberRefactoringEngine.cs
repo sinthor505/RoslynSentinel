@@ -2538,7 +2538,11 @@ public class MemberRefactoringEngine
             if (symbol != null)
             {
                 var references = await Microsoft.CodeAnalysis.FindSymbols.SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
-                var usageCount = references.Sum(r => r.Locations.Count());
+                // Self-references inside the removed member's own span (e.g. a recursive helper) do not block its removal.
+                var memberTree = member.SyntaxTree;
+                var memberSpan = member.Span;
+                var usageCount = references.Sum(r => r.Locations.Count(l =>
+                    !(l.Location.SourceTree == memberTree && memberSpan.Contains(l.Location.SourceSpan))));
                 if (usageCount > 0)
                 {
                     throw new ToolTargetIneligibleException($"Cannot remove member '{memberName}' - it has {usageCount} usages in the solution.");
@@ -4007,11 +4011,7 @@ public class MemberRefactoringEngine
     public async Task<DocumentEditResult> ConvertMethodToPropertyAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new ToolNotFoundException("Document not found.", "document");
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? [], "Method", methodName);
@@ -4063,11 +4063,7 @@ public class MemberRefactoringEngine
     public async Task<DocumentEditResult> MakeMethodStaticAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new ToolNotFoundException("Document not found.", "document");
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
