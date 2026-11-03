@@ -133,4 +133,44 @@ public class TestRunEngineLockDetectionTests
         Assert.That(result[0].Signature, Is.EqualTo("first"));
         Assert.That(result[1].Signature, Is.EqualTo("second"));
     }
+
+    // Captured stderr of a real `dotnet test -v quiet` run (see Resources/Golden/dotnet-test-teardown.txt; the temp project path was replaced by C:\src\GoldenTd).
+    private static string LoadRealTearDownOutput()
+    {
+        using var stream = typeof(TestRunEngineLockDetectionTests).Assembly.GetManifestResourceStream("Golden.dotnet-test-teardown.txt")!;
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
+    [Test]
+    public void ParseFixtureTearDownFailures_RealDotnetTestOutput_ReturnsOrdinaryAndSetUpFixtureEntries()
+    {
+        var entries = TestRunEngine.ParseFixtureTearDownFailures(LoadRealTearDownOutput());
+
+        Assert.That(entries, Has.Count.EqualTo(2));
+        Assert.That(entries[0].ExampleRef, Is.EqualTo("GoldenTd.OrdinaryFixture"));
+        Assert.That(entries[1].ExampleRef, Is.EqualTo("GoldenTd.RootSetUp"));
+        Assert.That(entries.All(e => e.Count == 1), Is.True);
+    }
+
+    [Test]
+    public void ParseFixtureTearDownFailures_RealDotnetTestOutput_OrdinaryFixtureCarriesTeardownMessage()
+    {
+        var entries = TestRunEngine.ParseFixtureTearDownFailures(LoadRealTearDownOutput());
+
+        var ordinary = entries.Single(e => e.ExampleRef == "GoldenTd.OrdinaryFixture");
+        Assert.That(ordinary.Signature, Does.StartWith(TestRunEngine.TearDownFailureSignaturePrefix + "GoldenTd.OrdinaryFixture: "));
+        Assert.That(ordinary.Signature, Does.Contain("teardown boom"));
+    }
+
+    [Test]
+    public void ParseFixtureTearDownFailures_RealDotnetTestOutput_SetUpFixtureCarriesTeardownMessage()
+    {
+        var entries = TestRunEngine.ParseFixtureTearDownFailures(LoadRealTearDownOutput());
+
+        var setUp = entries.Single(e => e.ExampleRef == "GoldenTd.RootSetUp");
+        Assert.That(setUp.Signature, Does.StartWith(TestRunEngine.TearDownFailureSignaturePrefix + "GoldenTd.RootSetUp: "));
+        Assert.That(setUp.Signature, Does.Contain("setupfixture boom"));
+        Assert.That(setUp.Count, Is.EqualTo(1));
+    }
 }

@@ -1,0 +1,13 @@
+TearDown failed for test fixture GoldenTd.OrdinaryFixture
+TearDown : System.InvalidOperationException : teardown boom
+StackTrace: --TearDown
+   at GoldenTd.OrdinaryFixture.Boom() in C:\src\GoldenTd\Tests.cs:line 10
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+TearDown failed for test fixture GoldenTd.RootSetUp
+One or more child tests had errors
+TearDown : System.InvalidOperationException : setupfixture boom
+StackTrace: --TearDown
+   at GoldenTd.RootSetUp.Boom() in C:\src\GoldenTd\Tests.cs:line 17
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)

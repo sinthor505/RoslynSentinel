@@ -47,4 +47,8 @@
     <Using Include="RoslynSentinel.Common" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Golden\*.txt" LogicalName="Golden.%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>
