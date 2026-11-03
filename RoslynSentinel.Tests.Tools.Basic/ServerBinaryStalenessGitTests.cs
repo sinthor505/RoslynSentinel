@@ -80,6 +80,9 @@ public class ServerBinaryStalenessGitTests
         Assert.That(ServerBinaryStaleness.EvaluateGit(sha, _repo).IsStale, Is.False);
     }
 
+    // Fails only on full/parallel runs with 'git failed to run: rev-parse HEAD': GitProcess.TryRun returned null
+    // (process start, 60s timeout, or pipe EOF wait under load), not a shared-repo collision (each test has its own GUID repo).
+    // Passes alone; do not paper over it with retry loops.
     [Test]
     public void LaterCommitTouchingServerSource_IsStaleAndListed()
     {
