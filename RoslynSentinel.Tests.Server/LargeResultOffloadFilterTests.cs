@@ -37,14 +37,10 @@ public class LargeResultOffloadFilterTests
         Environment.SetEnvironmentVariable(RoslynSentinel.Common.ResultMarshallerOptions.EnvVarName, "off");
         _fixture = new TestSolutionFixture();
 
-        // SearchSolutionTextTool/ListSolutionItemsTool/etc. are already wired into the typed
-        // ForPossiblyLargeDataAsync/LargeResultInfo offload path (see
-        // docs/current/proposal_centralized_large_result_filter.md's "coexists with, does not
-        // replace" note), so by the time their response reaches the generic filter under test here
-        // it has already been shrunk to a small pointer and can never exercise this filter. Instead
-        // seed a target method plus many tiny distinct callers of it, so FindReferencesTool(kind:
-        // callers) -> which is NOT individually wired into ForPossiblyLargeDataAsync -> returns a
-        // flat CallerInfo list long enough to exceed OffloadThresholdBytes on its own.
+        // Seed a target method plus many tiny distinct callers of it, so FindReferencesTool(kind:
+        // callers) returns a flat CallerInfo list long enough to exceed OffloadThresholdBytes on its
+        // own. Mode off makes the typed ForPossiblyLargeDataAsync path a pass-through (it stores
+        // nothing), so every oversized response reaches the generic filter under test here.
         var callers = Enumerable.Range(0, CallerCount)
             .Select(i => $"    public void {CallerMethodPrefix}{i}() {{ Target(); }}");
         var source = "namespace ContosoOrders.Core;" + Environment.NewLine +
@@ -194,9 +190,11 @@ public class LargeResultOffloadFilterTests
     [Test]
     public async Task UnderThresholdToolResponse_PassesThroughUnchanged()
     {
+        // A narrow ListAll (kind class, one project) lists only the seeded OffloadFilterProbe, far below
+        // OffloadThresholdBytes, so the filter must leave its response untouched.
         var result = await _client.CallToolAsync(
             "ListAll",
-            new Dictionary<string, object?> { ["reason"] = "test message" }!,
+            new Dictionary<string, object?> { ["reason"] = "test message", ["kind"] = "class", ["projectName"] = "ContosoOrders.Core" }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
 
         Assert.That(result.IsError, Is.Not.True);
@@ -205,29 +203,24 @@ public class LargeResultOffloadFilterTests
         Assert.That(text, Does.Not.Contain("\"offloaded\":true"),
             "A response under threshold must pass through unmodified - the filter must stay a pure pass-through for small tool results.");
 
-        // TODO ListAll on this sample returns a typed largeResult pointer (writtenToFile) with no top-level successData, so the audit's successData-non-empty assert does not apply; tighten to a content assert once ListAll's typed routing is settled.
         using var doc = JsonDocument.Parse(text);
         var hasPayload = doc.RootElement.TryGetProperty("successData", out _) || doc.RootElement.TryGetProperty("largeResult", out _);
         Assert.That(hasPayload, Is.True, $"Under-threshold response carries neither successData nor largeResult: {text}");
     }
 
     [Test]
-    public async Task TypedBranchOffload_GetLargeResultFirstCall_ReturnsDataNotAnotherOffloadEnvelope()
+    public async Task ImplementorsQuery_ModeOff_OffloadsThroughGenericFilter_FirstGetLargeResultCallReturnsData()
     {
-        // Regression test for the originally reported bug (see
-        // docs/current/blockers/blocking_error_getlargeresult_typed_branch_reoffload_loop.md,
-        // now closed): QuerySymbolRelationshipsTool offloads through the SymbolRelationshipResultList
-        // branch of GetLargeResultTool (WorkspaceReadNavigationImpl.cs), which - unlike the Raw branch
-        // exercised above - previously did a bare Skip(offset).Take(limit) with no size
-        // verification, so the default limit=50 page still serialized past the threshold and the
-        // filter re-offloaded GetLargeResultTool's own response under a brand-new resultId with no way
-        // for the caller to converge. Seed enough implementations of a shared interface to force an
-        // offload, then confirm the very first GetLargeResultTool call at the default limit returns real
-        // "data", not another "offloaded" pointer.
+        // Regression test for the reported re-offload loop (see
+        // docs/current/blockers/blocking_error_getlargeresult_typed_branch_reoffload_loop.md, closed).
+        // With the marshaller off, QuerySymbolRelationshipsTool's typed ForPossiblyLargeDataAsync is a
+        // pass-through, so an oversized implementorsOf result reaches the generic filter and is stored
+        // raw. Seed enough implementations of a shared interface to force that offload, then confirm
+        // the very first GetLargeResult call at default limits returns real data, not another
+        // offload envelope.
         //
-        // Uses searchKind "implementorsOf" rather than "attributeUsages" - both offload through the
-        // same SymbolRelationshipResultList branch, but attributeUsages currently crashes with
-        // InvalidOperationException: Sequence contains no elements for freshly-seeded types
+        // Uses searchKind "implementorsOf" rather than "attributeUsages" - attributeUsages currently
+        // crashes with InvalidOperationException: Sequence contains no elements for freshly-seeded types
         // (DiscoveryEngine.FindAttributeUsagesAsync's unchecked .First() on an unresolved
         // LocateSymbolAsync lookup) - a separate, already-tracked defect, see
         // docs/current/blockers/blocking_error_findattributeusages_first_throws_on_unresolved_target.md.
@@ -268,17 +261,15 @@ public class LargeResultOffloadFilterTests
         var blocks = queryResult.Content.OfType<TextContentBlock>().ToList();
         Assert.That(blocks, Has.Count.EqualTo(1), "An offloaded response must be replaced with a single small pointer block.");
 
-        // QuerySymbolRelationshipsTool is wired into the typed ForPossiblyLargeDataAsync/LargeResultInfo
-        // path (see the "coexists with, does not replace" note on the generic filter), so an
-        // offloaded response here carries the pointer under a nested "largeResult" object, not the
-        // generic filter's top-level "offloaded"/"resultId" shape used for tools that AREN'T
-        // individually wired in (e.g. FindReferencesTool, exercised by the sibling test above).
+        // The generic filter's stub is top-level: {offloaded:true, resultId, sizeBytes, ...}. There is
+        // no nested "largeResult" object here because the typed path stores nothing in mode off.
         using var pointer = JsonDocument.Parse(blocks[0].Text);
-        Assert.That(pointer.RootElement.TryGetProperty("largeResult", out var largeResult), Is.True,
-            $"Expected this query to be large enough to trigger the typed offload path; got: {blocks[0].Text}");
-        var resultId = largeResult.GetProperty("resultId").GetString();
+        Assert.That(pointer.RootElement.TryGetProperty("offloaded", out var offloaded) && offloaded.GetBoolean(), Is.True,
+            $"Expected the generic filter to offload this {implementationCount}-implementor result; got: {blocks[0].Text}");
+        var resultId = pointer.RootElement.GetProperty("resultId").GetString();
         Assert.That(resultId, Is.Not.Null.And.Not.Empty);
 
+        // Default limits on purpose: the first page must already be real data, not another offload stub.
         var page = await _client.CallToolAsync(
             "GetLargeResult",
             new Dictionary<string, object?> { ["reason"] = "test message", ["resultId"] = resultId }!,
@@ -288,13 +279,14 @@ public class LargeResultOffloadFilterTests
         var pageBlocks = page.Content.OfType<TextContentBlock>().ToList();
         Assert.That(pageBlocks, Has.Count.EqualTo(1));
         using var pageDoc = JsonDocument.Parse(pageBlocks[0].Text);
-        // GetLargeResultTool is explicitly excluded from the generic offload-pointer wrapper (see
+        // GetLargeResultTool is excluded from the generic offload-pointer wrapper (see
         // ServiceRegistrationExtensionsBasic.cs's "if (context.Params?.Name == \"GetLargeResultTool\")
-        // { return result; }"), so its own response is never re-shaped into {offloaded, data}; it
-        // always returns its native {successData: [...]} shape directly.
+        // { return result; }"), so its own response is never re-shaped into {offloaded, data}.
+        Assert.That(pageDoc.RootElement.TryGetProperty("offloaded", out _), Is.False,
+            $"GetLargeResult's first call must not return another offload envelope. Got: {pageBlocks[0].Text}");
         Assert.That(pageDoc.RootElement.TryGetProperty("successData", out var data), Is.True,
-            $"GetLargeResult's first call on a typed (non-Raw) branch must return actual records, not another offload envelope. Got: {pageBlocks[0].Text}");
-        Assert.That(data.ValueKind, Is.EqualTo(JsonValueKind.Array));
-        Assert.That(data.GetArrayLength(), Is.GreaterThan(0), "The returned page must contain at least one real record.");
+            $"GetLargeResult must return its native successData shape. Got: {pageBlocks[0].Text}");
+        Assert.That(data.GetProperty("text").GetString(), Does.Contain("OffloadFilterProbeImpl"),
+            "The first page must contain real implementor records from the stored payload.");
     }
 }

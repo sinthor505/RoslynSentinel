@@ -332,39 +332,14 @@ public record SentinelCallToolResult<TSuccess, TError> : IOperationResult
 public record SentinelCallToolResult<T> : SentinelCallToolResult<T, ResultError>
 {
     /// <summary>
-    /// Builds a <see cref="SentinelCallToolResult{T}"/> for <paramref name="data"/>, offloading to disk via
-    /// <see cref="LargeResultHelper.StoreLargeResultAsync{T}"/> (populating <see cref="SentinelCallToolResult{TSuccess, TError}.LargeResult"/>
-    /// instead of <see cref="SentinelCallToolResult{TSuccess, TError}.SuccessData"/>) when the serialized payload exceeds
-    /// <see cref="LargeResultHelper.OffloadThresholdBytes"/>. Use this instead of hand-rolling a
-    /// size-check/write-to-disk block per tool (that duplication is what let GetMethodSource and
-    /// ReadFile's offload paths silently diverge from GetLargeResult's expected file format).
+    /// Pass-through kept for migration only: returns a <see cref="SentinelCallToolResult{T}"/> carrying
+    /// <paramref name="data"/> as SuccessData. It never stores to disk; the result marshaller offloads oversized results centrally.
     /// </summary>
-    public static async Task<SentinelCallToolResult<T>> ForPossiblyLargeDataAsync(
+    [Obsolete("Return the payload; the result marshaller offloads")]
+    public static Task<SentinelCallToolResult<T>> ForPossiblyLargeDataAsync(
         T data, string? solutionRoot, string resultType, ResultWrapperType wrapperType, int? totalRecords = null, int? workspaceVersion = null, string? statusMessage = null, ListSummary? listSummary = null, CancellationToken cancellationToken = default)
     {
-        var stored = await LargeResultHelper.StoreLargeResultAsync(data, solutionRoot, wrapperType, cancellationToken);
-        if (!stored.offloaded)
-        {
-            return new SentinelCallToolResult<T> { IsError = false, SuccessData = data, TotalRecords = totalRecords, WorkspaceVersion = workspaceVersion, StatusMessage = statusMessage, ListSummary = listSummary };
-        }
-
-        return new SentinelCallToolResult<T>
-        {
-            IsError = false,
-            TotalRecords = totalRecords,
-            WorkspaceVersion = workspaceVersion,
-            StatusMessage = statusMessage,
-            ListSummary = listSummary,
-            LargeResult = new LargeResultInfo(
-                resultType: resultType,
-                writtenToFile: true,
-                filePath: stored.filePath,
-                resultId: stored.resultId!,
-                sizeBytes: stored.jsonBytes.Length,
-                totalRecords: totalRecords ?? 1,
-                message: $"Result is {stored.jsonBytes.Length} bytes (threshold: {LargeResultHelper.OffloadThresholdBytes}). " +
-                         $"Use {LargeResultHints.FetchCall(stored.resultId!)} to page through results.")
-        };
+        return Task.FromResult(new SentinelCallToolResult<T> { IsError = false, SuccessData = data, TotalRecords = totalRecords, WorkspaceVersion = workspaceVersion, StatusMessage = statusMessage, ListSummary = listSummary });
     }
 }
 
@@ -384,43 +359,15 @@ public record ResultError(
     public ResultStatus Category => ResultStatusExtensions.FromErrorCode(ErrorCode);
 
     /// <summary>
-    /// Builds a <see cref="ResultError"/> for a <paramref name="structuredDetail"/> list that may be
-    /// too large to inline (e.g. MoveMember's per-call-site unresolved-entry list). Mirrors
-    /// <see cref="SentinelCallToolResult{T}.ForPossiblyLargeDataAsync"/>: offloads to disk via
-    /// <see cref="LargeResultHelper.StoreLargeResultAsync{T}"/> and populates
-    /// <see cref="StructuredDetailLargeResult"/> instead of <see cref="StructuredDetail"/> when the
-    /// serialized list exceeds <see cref="LargeResultHelper.OffloadThresholdBytes"/> - without this,
-    /// an oversized error fell through to the generic Raw-text offload backstop
-    /// (ServiceRegistrationExtensionsBasic.cs's AddCallToolFilter), which pages the whole serialized
-    /// envelope as an opaque character window and destroys structuredDetail's JSON structure in the
-    /// process. detail/message stay inline either way so the error remains legible without a
-    /// GetLargeResult round trip.
+    /// Pass-through kept for migration only: returns a <see cref="ResultError"/> carrying
+    /// <paramref name="structuredDetail"/> inline. It never stores to disk; the result marshaller offloads oversized results centrally.
     /// </summary>
-    public static async Task<ResultError> ForPossiblyLargeDetailAsync(
+    [Obsolete("Return the payload; the result marshaller offloads")]
+    public static Task<ResultError> ForPossiblyLargeDetailAsync(
         string errorCode, string message, string? detail, IReadOnlyList<object>? structuredDetail,
         string? solutionRoot, CancellationToken cancellationToken)
     {
-        if (structuredDetail is null or { Count: 0 })
-        {
-            return new ResultError(errorCode, message, detail, structuredDetail);
-        }
-
-        var stored = await LargeResultHelper.StoreLargeResultAsync(
-            structuredDetail, solutionRoot, ResultWrapperType.ErrorStructuredDetailList, cancellationToken);
-        if (!stored.offloaded)
-        {
-            return new ResultError(errorCode, message, detail, structuredDetail);
-        }
-
-        return new ResultError(errorCode, message, detail, StructuredDetail: null, StructuredDetailLargeResult: new LargeResultInfo(
-            resultType: "ErrorStructuredDetailList",
-            writtenToFile: true,
-            filePath: stored.filePath,
-            resultId: stored.resultId!,
-            sizeBytes: stored.jsonBytes.Length,
-            totalRecords: structuredDetail.Count,
-            message: $"structuredDetail is {stored.jsonBytes.Length} bytes ({structuredDetail.Count} entries), over the inline threshold. " +
-                     $"Use {LargeResultHints.FetchCall(stored.resultId!)} to page through the full structured list."));
+        return Task.FromResult(new ResultError(errorCode, message, detail, structuredDetail));
     }
 }
 
