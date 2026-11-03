@@ -270,4 +270,22 @@ public class Target { public string Name { get; set; } }
         Assert.That(result.UpdatedText, Does.Contain("dest.Name = source.Name"),
             "a fully-qualified type name must resolve even when another type shares its simple name");
     }
+
+    [Test]
+    public async Task InvertAssignments_SnippetOnNonAssignment_MessageNamesFoundKind()
+    {
+        SetSource(@"public class NoOp
+{
+    public int Compute(int a, int b)
+    {
+        return a + b;
+    }
+}", "NoOp.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _engine.InvertAssignmentsAsync("NoOp.cs", "return a + b", null, null));
+
+        Assert.That(ex!.Message, Does.Contain("no assignment expression is there"));
+        Assert.That(ex.Message, Does.Contain("ReturnStatement"));
+    }
 }

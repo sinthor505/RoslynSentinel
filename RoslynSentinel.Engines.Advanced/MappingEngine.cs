@@ -245,7 +245,8 @@ public class MappingEngine
         }
 
         // Find the snippet position
-        var snippetPos = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter).Start;
+        var snippetMatch = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter);
+        var snippetPos = snippetMatch.Start;
 
         // Find assignment expressions near/at the snippet position
         var nodes = root.DescendantNodes()
@@ -270,7 +271,7 @@ public class MappingEngine
 
         if (nodes.Count == 0)
         {
-            throw new ToolNotFoundException("No assignment expressions found at the snippet location");
+            throw new ToolNotFoundException(SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "assignment expression", "directly contains the assignment to invert"), "assignment expression");
         }
 
         var annotation = Formatter.Annotation;
