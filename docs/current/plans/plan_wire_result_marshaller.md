@@ -5,7 +5,9 @@ suite verified 2026-11-02, live restart checks pending). Step 1 implemented 2026
 receives the awaited value and declared `T` on MEAI 10.11.0). Step 2 implemented 2026-11-02 (`MarshalAsync` gained a `serializerOptions` parameter; live passthrough
 check pending). Step 3 implemented 2026-11-02 (pager and synthetic goldens, not wired). Step 4 implemented 2026-11-02 (mode `on` store, pointer, Envelope reader; `GetLargeResult` cannot read
 Envelope files until Step 5). Step 5 implemented 2026-11-02 (`GetLargeResult` `path`; needs restart for live use).
-Step 6 next, preceded by the pending live checks for Steps 0-5. Supersedes
+Step 6 implemented 2026-11-02 (default `on`; verified live on a LaunchTestInstance copy: Git diff cut to 150/477 lines
+with a pointer, paged by path in 4 pages and concatenated equal to the stored node; small results and legacy-offloaded
+Search unchanged; ModelEval smoke run and restart-on-own-instance pending). Step 7 next. Supersedes
 [plan_typed_large_result_offload.md](plan_typed_large_result_offload.md) and
 [proposal_central_large_result_offload.md](../proposals/proposal_central_large_result_offload.md), and subsumes
 change #5 of `proposal_envelope_field_promotion.md` (inline first page plus `resultId`).

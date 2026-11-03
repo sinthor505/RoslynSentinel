@@ -170,7 +170,7 @@ public static class McpToolSchemaPatcher
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type toolType,
         IServiceProvider services,
         JsonSerializerOptions? serializerOptions = null) =>
-        // Default (ROSLYNSENTINEL_RESULT_MARSHALLER unset or off) keeps the SDK's own creation path unchanged.
+        // ROSLYNSENTINEL_RESULT_MARSHALLER=off keeps the SDK's own creation path unchanged; the default (unset) is mode on.
         CreateSentinelTool(toolMethod, toolType, services, serializerOptions, ResultMarshallerOptions.Mode != ResultMarshallerMode.Off);
 
     /// <summary>

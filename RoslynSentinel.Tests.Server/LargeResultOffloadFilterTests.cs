@@ -13,9 +13,12 @@ using RoslynSentinel.Server.Advanced;
 namespace RoslynSentinel.Tests.Server;
 
 [TestFixture]
-
+[NonParallelizable] // flips the process-wide ROSLYNSENTINEL_RESULT_MARSHALLER env var in SetUp/TearDown
 public class LargeResultOffloadFilterTests
 {
+    // These tests cover the generic offload filter, which stays the backstop until plan_wire_result_marshaller.md Step 10. With the
+    // marshaller default on (Step 6) a hooked tool's oversized result is fitted before the filter sees it, so the fixture pins mode off.
+    private string? _previousMarshallerMode;
 
     private IHost _host = null!;
     private McpClient _client = null!;
@@ -30,6 +33,8 @@ public class LargeResultOffloadFilterTests
     [SetUp]
     public async Task SetUp()
     {
+        _previousMarshallerMode = Environment.GetEnvironmentVariable(RoslynSentinel.Common.ResultMarshallerOptions.EnvVarName);
+        Environment.SetEnvironmentVariable(RoslynSentinel.Common.ResultMarshallerOptions.EnvVarName, "off");
         _fixture = new TestSolutionFixture();
 
         // SearchSolutionTextTool/ListSolutionItemsTool/etc. are already wired into the typed
@@ -98,6 +103,7 @@ public class LargeResultOffloadFilterTests
         await _host.StopAsync();
         _host.Dispose();
         _fixture.Dispose();
+        Environment.SetEnvironmentVariable(RoslynSentinel.Common.ResultMarshallerOptions.EnvVarName, _previousMarshallerMode);
     }
     [Test]
     public async Task OversizedToolResponse_GetsOffloaded_AndGetLargeResultRoundTripsIt()

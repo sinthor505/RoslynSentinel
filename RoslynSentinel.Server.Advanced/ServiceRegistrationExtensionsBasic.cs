@@ -43,8 +43,8 @@ public static class RoslynSentinelServiceExtensionsBasic
         HashSet<string>? includeTools = null,
         HashSet<string>? excludeTools = null)
     {
-        // Wire result marshaller (plan_wire_result_marshaller.md Step 2). Registered only when the switch is not off, so the
-        // default server has no IToolResultMarshaller and SentinelToolFactory's MarshalResult stays the SDK's identity.
+        // Wire result marshaller (plan_wire_result_marshaller.md Step 2). Registered unless the switch is off (the default is on),
+        // so with ROSLYNSENTINEL_RESULT_MARSHALLER=off there is no IToolResultMarshaller and MarshalResult stays the SDK's identity.
         // Tools resolve it lazily per call from this container.
         if (ResultMarshallerOptions.Mode != ResultMarshallerMode.Off)
         {
@@ -520,14 +520,25 @@ public static class RoslynSentinelServiceExtensionsBasic
                             context.Params?.Name, text.Length, LargeResultHelper.OffloadThresholdBytes);
 
                         // Result marshaller miss detector (plan_wire_result_marshaller.md Step 4): in mode On a tool built through
-                        // SentinelToolFactory (SentinelToolFactory.IsHooked) should never reach this point over the threshold,
-                        // because its marshaller already fitted the result. Reaching it is a pager or reserve bug (or a hooked tool
-                        // returning a non-envelope string); log it at error level and still offload below as the backstop.
+                        // SentinelToolFactory (SentinelToolFactory.IsHooked) should never reach this point over the threshold with a
+                        // result the marshaller FITTED, because the fit leaves the pointer and echo reserve free. Reaching it is a pager
+                        // or reserve bug; log it at error level and still offload below as the backstop. The marshaller also hands back
+                        // whole, by design, results it cannot cut (non-object JSON roots, plain string or content-block returns, nothing
+                        // pageable): those carry no Envelope pointer and are only logged at debug level, so the error stays a real signal.
                         if (ResultMarshallerOptions.Mode == ResultMarshallerMode.On && SentinelToolFactory.IsHooked(context.Params?.Name))
                         {
-                            logger?.LogError(
-                                "Result marshaller miss: hooked tool '{Tool}' still returned {SizeChars} chars (threshold: {OffloadThresholdBytes}) after marshalling; the offload filter is handling it as the backstop. Check ResultPager hints and LargeResultHelper.EchoReserveChars.",
-                                context.Params?.Name, text.Length, LargeResultHelper.OffloadThresholdBytes);
+                            if (text.Contains("\"resultType\":\"Envelope\"", StringComparison.Ordinal))
+                            {
+                                logger?.LogError(
+                                    "Result marshaller miss: hooked tool '{Tool}' still returned {SizeChars} chars (threshold: {OffloadThresholdBytes}) after marshalling; the offload filter is handling it as the backstop. Check ResultPager hints and LargeResultHelper.EchoReserveChars.",
+                                    context.Params?.Name, text.Length, LargeResultHelper.OffloadThresholdBytes);
+                            }
+                            else
+                            {
+                                logger?.LogDebug(
+                                    "Hooked tool '{Tool}' returned {SizeChars} chars the marshaller could not cut; the offload filter stores it whole.",
+                                    context.Params?.Name, text.Length);
+                            }
                         }
 
                         var workspaceManager = context.Server.Services?.GetService<PersistentWorkspaceManager>();

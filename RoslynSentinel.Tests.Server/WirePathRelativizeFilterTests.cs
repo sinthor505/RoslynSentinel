@@ -30,6 +30,10 @@ public class WirePathRelativizeFilterTests
     private McpClient _client = null!;
     private TestSolutionFixture _fixture = null!;
 
+    // The offload tests here cover the generic offload filter, which stays the backstop until plan_wire_result_marshaller.md Step 10.
+    // With the marshaller default on (Step 6) a hooked tool's oversized result is fitted before the filter sees it, so pin mode off.
+    private string? _previousMarshallerMode;
+
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace" };
 
     // Enough distinct callers to exceed the 15 KB offload threshold for test 5.
@@ -38,6 +42,8 @@ public class WirePathRelativizeFilterTests
     [SetUp]
     public async Task SetUp()
     {
+        _previousMarshallerMode = Environment.GetEnvironmentVariable(ResultMarshallerOptions.EnvVarName);
+        Environment.SetEnvironmentVariable(ResultMarshallerOptions.EnvVarName, "off");
         _fixture = new TestSolutionFixture();
 
         var callers = Enumerable.Range(0, OffloadCallerCount)
@@ -101,6 +107,7 @@ public class WirePathRelativizeFilterTests
         await _host.StopAsync();
         _host.Dispose();
         _fixture.Dispose();
+        Environment.SetEnvironmentVariable(ResultMarshallerOptions.EnvVarName, _previousMarshallerMode);
     }
 
     private async Task<(CallToolResult Result, string Text)> CallAsync(string tool, Dictionary<string, object?> args)

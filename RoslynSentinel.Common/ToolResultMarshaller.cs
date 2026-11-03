@@ -43,9 +43,9 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
     private readonly Func<string?> _solutionRoot;
     private readonly Func<ResultMarshallerMode> _mode;
 
-    /// <summary>Pass-through only: there is no solution root, so mode <c>on</c> could not store.</summary>
+    /// <summary>Pass-through only, whatever the switch says: there is no solution root, so mode <c>on</c> could not store.</summary>
     public ToolResultMarshaller(ILogger<ToolResultMarshaller> logger)
-        : this(logger, static () => null)
+        : this(logger, static () => null, static () => ResultMarshallerMode.Passthrough)
     {
     }
 

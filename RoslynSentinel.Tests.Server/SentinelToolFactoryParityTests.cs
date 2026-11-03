@@ -135,10 +135,12 @@ public class SentinelToolFactoryParityTests
 
     // ---- switch ----
 
-    [TestCase(null, ResultMarshallerMode.Off)]
-    [TestCase("", ResultMarshallerMode.Off)]
+    [TestCase(null, ResultMarshallerMode.On)]
+    [TestCase("", ResultMarshallerMode.On)]
+    [TestCase("   ", ResultMarshallerMode.On)]
     [TestCase("off", ResultMarshallerMode.Off)]
-    [TestCase("nonsense", ResultMarshallerMode.Off)]
+    [TestCase(" OFF ", ResultMarshallerMode.Off)]
+    [TestCase("nonsense", ResultMarshallerMode.On)]
     [TestCase("passthrough", ResultMarshallerMode.Passthrough)]
     [TestCase(" PassThrough ", ResultMarshallerMode.Passthrough)]
     [TestCase("on", ResultMarshallerMode.On)]

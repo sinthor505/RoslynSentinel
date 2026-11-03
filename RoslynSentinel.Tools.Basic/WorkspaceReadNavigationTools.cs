@@ -95,7 +95,7 @@ public class WorkspaceReadNavigationTools
         => _impl.GetOperationDetail(reason, changeId, filter, maxItems, offset, cancellationToken);
     [McpServerTool(Name = "GetLargeResult")]
     [Produces(DataTag.Report)]
-    [Description("Pages through a large result written to disk after exceeding the inline size threshold. Page with offset; the response carries nextOffset and hasMoreData.")]
+    [Description("Pages a stored large result (the largeResult pointer). Page one omitted path with path, offset and limit; the response carries nextOffset and hasMoreData.")]
     public Task<SentinelCallToolResult<object>> GetLargeResultTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: exactly one of resultId/filePath must be supplied;
@@ -104,11 +104,11 @@ public class WorkspaceReadNavigationTools
         [Consumes(DataTag.ResultId)] string? resultId = null,
         [Description("Path to a largeresult_*.json file. Required if resultId is omitted.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
-        [Description("Max records per page; a page may return fewer. Continue from nextOffset while hasMoreData is true. For text results use charLimit.")]
+        [Description("Max items (lines for a text path) per page; a page may return fewer. Continue from nextOffset while hasMoreData is true.")]
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
-        [Description("Records (or characters, for text results) to skip before the next page.")]
+        [Description("Items (lines for a text path) to skip before the next page; characters for an old Raw result.")]
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
-        [Description("Max characters to return for a Raw/text result. Other result types use limit instead.")]
+        [Description("Old Raw results only: max characters to return. Otherwise page with path and limit.")]
         [ToolOption(ToolOptionTag.CharLimit)] int? charLimit = null,
         [Description("Pointers with largeResult.omitted: the omitted[].path to page (offset/limit count its items or lines). Default: first.")]
         string? path = null,

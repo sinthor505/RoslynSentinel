@@ -1526,7 +1526,7 @@ public class WorkspaceReadNavigationImpl
             {
                 IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.NotFound,
-                    "The stored result has no array or multi-line string to page. It was stored whole; read it with a Raw window (charLimit) or re-run the tool with narrower arguments.")
+                    "The stored result has no array or multi-line string to page. It was stored whole; re-run the tool with narrower arguments.")
             };
         }
 
