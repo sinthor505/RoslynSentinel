@@ -215,5 +215,10 @@
       "mcp__root_roslyn_sentinel_advanced_stdio__UsingDirective",
       "mcp__root_roslyn_sentinel_advanced_stdio__WriteFile"
     ]
-  }
+  },
+  	"disableBundledSkills": true,
+	"disableWorkflows": true,
+	"disableRemoteControl": true,
+	"disableClaudeAiConnectors": true,
+	"disableArtifact": true
 }
