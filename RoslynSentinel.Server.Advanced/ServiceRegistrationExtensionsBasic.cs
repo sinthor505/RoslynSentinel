@@ -43,6 +43,14 @@ public static class RoslynSentinelServiceExtensionsBasic
         HashSet<string>? includeTools = null,
         HashSet<string>? excludeTools = null)
     {
+        // Wire result marshaller (plan_wire_result_marshaller.md Step 2). Registered only when the switch is not off, so the
+        // default server has no IToolResultMarshaller and SentinelToolFactory's MarshalResult stays the SDK's identity.
+        // Tools resolve it lazily per call from this container.
+        if (ResultMarshallerOptions.Mode != ResultMarshallerMode.Off)
+        {
+            services.AddSingleton<IToolResultMarshaller, ToolResultMarshaller>();
+        }
+
         RegisterRoslynSentinelToolsBasic(services, mcpBuilder, activeModes, includeTools, excludeTools);
 
         // Add centralized error filters

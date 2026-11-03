@@ -90,13 +90,24 @@ public static class SentinelToolFactory
         return McpServerTool.Create(function, derived);
     }
 
-    /// <summary>Copy of the SDK's <c>CreateAIFunctionFactoryOptions</c> with the (identity) result hook owned here.</summary>
+    /// <summary>
+    /// Copy of the SDK's <c>CreateAIFunctionFactoryOptions</c> with the result hook owned here: <c>MarshalResult</c> hands
+    /// the result to the <see cref="IToolResultMarshaller"/> resolved from <c>options.Services</c> (the root provider
+    /// captured at creation) and is the SDK's identity when there is no provider or no marshaller registered.
+    /// </summary>
     internal static AIFunctionFactoryOptions CreateFunctionOptions(MethodInfo method, McpServerToolCreateOptions? options) =>
         new()
         {
-            Name = options?.Name ?? method.GetCustomAttribute<McpServerToolAttribute>()?.Name ?? DeriveName(method),
+            Name = ResolveToolName(method, options),
             Description = options?.Description,
-            MarshalResult = static (result, _, cancellationToken) => new ValueTask<object?>(result),
+            MarshalResult = (result, returnType, cancellationToken) => MarshalResultAsync(
+                options?.Services,
+                ResolveToolName(method, options),
+                method,
+                result,
+                returnType,
+                options?.SerializerOptions ?? McpJsonUtilities.DefaultOptions,
+                cancellationToken),
             SerializerOptions = options?.SerializerOptions ?? McpJsonUtilities.DefaultOptions,
             JsonSchemaCreateOptions = options?.SchemaCreateOptions,
             ConfigureParameterBinding = pi =>
@@ -130,6 +141,24 @@ public static class SentinelToolFactory
                 return default;
             },
         };
+
+    // The name the SDK gives the tool: explicit option, else the attribute's Name, else the derived snake_case name.
+    private static string ResolveToolName(MethodInfo method, McpServerToolCreateOptions? options) =>
+        options?.Name ?? method.GetCustomAttribute<McpServerToolAttribute>()?.Name ?? DeriveName(method);
+
+    // Resolved on each call from the provider captured at creation, so a marshaller registered after the tool was built
+    // is still seen. No provider or no registration = the SDK's identity behaviour.
+    private static ValueTask<object?> MarshalResultAsync(
+        IServiceProvider? rootServices,
+        string toolName,
+        MethodInfo method,
+        object? result,
+        Type? returnType,
+        JsonSerializerOptions serializerOptions,
+        CancellationToken cancellationToken) =>
+        rootServices?.GetService<IToolResultMarshaller>() is { } marshaller
+            ? marshaller.MarshalAsync(toolName, method, result, returnType, serializerOptions, cancellationToken)
+            : new ValueTask<object?>(result);
 
     /// <summary>Copy of the SDK's <c>DeriveOptions</c>; works on a fresh copy so the caller's options are never mutated.</summary>
     internal static McpServerToolCreateOptions DeriveCreateOptions(MethodInfo method, McpServerToolCreateOptions? options)
