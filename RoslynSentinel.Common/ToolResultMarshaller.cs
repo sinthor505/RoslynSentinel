@@ -120,7 +120,7 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
         string? storeFailure = null;
         try
         {
-            var stored = await LargeResultHelper.StoreEnvelopeAsync(text, _solutionRoot(), cancellationToken).ConfigureAwait(false);
+            var stored = await LargeResultHelper.StoreEnvelopeAsync(text, _solutionRoot(), cancellationToken, omitted).ConfigureAwait(false);
             if (stored.offloaded)
             {
                 resultId = stored.resultId;

@@ -42,6 +42,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Golden wire envelopes shared with Tests.Server (EnvelopeLargeResultPagingTests); regenerate with scripts/New-WireResultGoldens.ps1. -->
+    <EmbeddedResource Include="..\RoslynSentinel.Tests.Server\Resources\Golden\*.json" LogicalName="Golden.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="NUnit.Framework" />
     <Using Include="RoslynSentinel.Common" />
   </ItemGroup>

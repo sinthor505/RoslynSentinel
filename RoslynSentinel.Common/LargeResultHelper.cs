@@ -102,11 +102,11 @@ public static class LargeResultHelper
     /// root or the text is empty; IO failures propagate so the caller can report a failed store.
     /// </summary>
     public static Task<(bool offloaded, FilePathWrapper filePath, string? resultId)> StoreEnvelopeAsync(
-        string envelopeWireText, string? solutionRoot, CancellationToken cancellationToken) =>
-        StoreWrappedJsonAsync(envelopeWireText, solutionRoot, ResultWrapperType.Envelope, cancellationToken);
+        string envelopeWireText, string? solutionRoot, CancellationToken cancellationToken, IReadOnlyList<OmittedPart>? omitted = null) =>
+        StoreWrappedJsonAsync(envelopeWireText, solutionRoot, ResultWrapperType.Envelope, cancellationToken, omitted);
 
     private static async Task<(bool offloaded, FilePathWrapper filePath, string? resultId)> StoreWrappedJsonAsync(
-        string json, string? solutionRoot, ResultWrapperType wrapperType, CancellationToken cancellationToken)
+        string json, string? solutionRoot, ResultWrapperType wrapperType, CancellationToken cancellationToken, IReadOnlyList<OmittedPart>? omitted = null)
     {
         if (string.IsNullOrEmpty(solutionRoot) || string.IsNullOrEmpty(json))
         {
@@ -116,7 +116,8 @@ public static class LargeResultHelper
         var wrapper = new ResultWrapper
         {
             Type = wrapperType,
-            Data = JsonNode.Parse(json)
+            Data = JsonNode.Parse(json),
+            Omitted = omitted
         };
 
         var resultId = Guid.NewGuid().ToString("N");
@@ -166,6 +167,17 @@ public record ResultWrapper
         get; init;
     }
     public JsonNode? Data
+    {
+        get; init;
+    }
+
+    /// <summary>
+    /// <see cref="ResultWrapperType.Envelope"/> files only: the cuts the result marshaller made when it returned the fitted
+    /// copy inline (first entry = the default path <c>GetLargeResult</c> pages). Absent for every other type and for Envelope
+    /// files written before this field existed.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<OmittedPart>? Omitted
     {
         get; init;
     }

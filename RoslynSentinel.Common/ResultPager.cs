@@ -180,6 +180,76 @@ public static class ResultPager
         return (root, omitted);
     }
 
+    /// <summary>
+    /// Selects the node an <see cref="OmittedPart.Path"/> names: property names separated by dots and <c>[i]</c> array
+    /// indexes (<c>successData.regexResults</c>, <c>successData.groups[0].items</c>). Null when any step is missing or of the
+    /// wrong kind. The empty path selects <paramref name="root"/>. The same syntax <see cref="Fit(JsonNode, int, JsonSerializerOptions, string?, IReadOnlyCollection{string})"/> writes.
+    /// </summary>
+    public static JsonNode? SelectNode(JsonNode root, string path)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(path);
+
+        JsonNode? current = root;
+        int i = 0;
+        while (i < path.Length && current is not null)
+        {
+            if (path[i] == '.')
+            {
+                i++;
+            }
+            else if (path[i] == '[')
+            {
+                int close = path.IndexOf(']', i);
+                if (close < 0 ||
+                    !int.TryParse(path.AsSpan(i + 1, close - i - 1), out int index) ||
+                    current is not JsonArray array ||
+                    index < 0 ||
+                    index >= array.Count)
+                {
+                    return null;
+                }
+
+                current = array[index];
+                i = close + 1;
+            }
+            else
+            {
+                int end = i;
+                while (end < path.Length && path[end] != '.' && path[end] != '[')
+                {
+                    end++;
+                }
+
+                current = current is JsonObject obj && obj.TryGetPropertyValue(path[i..end], out JsonNode? child) ? child : null;
+                i = end;
+            }
+        }
+
+        return current;
+    }
+
+    /// <summary>
+    /// Paths of the bulk nodes under <c>successData</c>/<c>errorData</c> that can be paged (arrays with more than one element,
+    /// strings with more than one line), largest serialized form first, at most <paramref name="max"/>. Used when a stored
+    /// envelope carries no omitted list, and to tell a caller which paths exist when theirs does not.
+    /// </summary>
+    public static IReadOnlyList<string> PageablePaths(JsonNode envelope, int max)
+    {
+        ArgumentNullException.ThrowIfNull(envelope);
+        if (envelope is not JsonObject root)
+        {
+            return [];
+        }
+
+        return EnumerateBulk(root)
+            .Where(c => c.Count > 1)
+            .OrderByDescending(c => c.Node.ToJsonString().Length)
+            .Take(Math.Max(0, max))
+            .Select(c => c.Path)
+            .ToList();
+    }
+
     private static int Measure(JsonNode root, JsonSerializerOptions options) => root.ToJsonString(options).Length;
 
     private static BulkNode LargestOf(List<BulkNode> candidates, JsonSerializerOptions options)
@@ -278,8 +348,11 @@ public static class ResultPager
         return text[^1] == '\n' ? count : count + 1;
     }
 
-    // Whole lines with their terminators, so concatenating a prefix is an exact prefix of the original.
-    private static List<string> SplitLines(string text)
+    /// <summary>
+    /// Whole lines with their terminators, so concatenating a prefix is an exact prefix of the original. The line
+    /// definition behind <see cref="UnitLines"/>: a final piece without a terminator counts as a line; empty text has none.
+    /// </summary>
+    public static List<string> SplitLines(string text)
     {
         var lines = new List<string>();
         int start = 0;

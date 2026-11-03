@@ -647,8 +647,8 @@ public class WorkspaceTools
     // Non-tool delegator: the GetLargeResult [McpServerTool] lives on WorkspaceReadNavigationTools.
     public Task<SentinelCallToolResult<object>> GetLargeResultTool(
         ToolCallReason reason, string? resultId = null, string? filePath = null, int limit = 50, int offset = 0,
-        int? charLimit = null, CancellationToken cancellationToken = default)
-        => _readNavTools.GetLargeResultTool(reason, resultId, filePath, limit, offset, charLimit, cancellationToken);
+        int? charLimit = null, string? path = null, CancellationToken cancellationToken = default)
+        => _readNavTools.GetLargeResultTool(reason, resultId, filePath, limit, offset, charLimit, path, cancellationToken);
 
     private readonly SymbolNavigationImpl _symbolNavigation;
 

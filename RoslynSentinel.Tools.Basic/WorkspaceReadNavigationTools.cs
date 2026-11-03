@@ -110,8 +110,10 @@ public class WorkspaceReadNavigationTools
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
         [Description("Max characters to return for a Raw/text result. Other result types use limit instead.")]
         [ToolOption(ToolOptionTag.CharLimit)] int? charLimit = null,
+        [Description("Pointers with largeResult.omitted: the omitted[].path to page (offset/limit count its items or lines). Default: first.")]
+        string? path = null,
         CancellationToken cancellationToken = default)
-        => _impl.GetLargeResult(reason, resultId, filePath, limit, offset, charLimit: charLimit, cancellationToken: cancellationToken);
+        => _impl.GetLargeResult(reason, resultId, filePath, limit, offset, charLimit: charLimit, path: path, cancellationToken: cancellationToken);
 
     [McpServerTool(Name = "Search")]
     [Produces(DataTag.Report)]

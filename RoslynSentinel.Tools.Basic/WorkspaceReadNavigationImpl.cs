@@ -1488,13 +1488,154 @@ public class WorkspaceReadNavigationImpl
     }
 
     private static List<MethodAttributeInfo> ExtractAttributes(BaseMethodDeclarationSyntax method) => method.AttributeLists.SelectMany(al => al.Attributes).Select(a => new MethodAttributeInfo { Name = a.Name.ToString(), Arguments = a.ArgumentList?.Arguments.ToString() ?? "", }).ToList();
+
+    // Paths a caller can page in a stored Envelope result: the marshaller's recorded omitted paths when the file has them (the
+    // first is the default), else the largest arrays and strings of the stored envelope.
+    private static IReadOnlyList<string> EnvelopePagePaths(ResultWrapper stored, JsonNode root)
+    {
+        var recorded = (stored.Omitted ?? [])
+            .Select(p => p.Path)
+            .Where(p => ResultPager.SelectNode(root, p) is JsonArray or JsonValue)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        return recorded.Count > 0 ? recorded : ResultPager.PageablePaths(root, 8);
+    }
+
+    // GetLargeResult for a stored ResultWrapperType.Envelope file (plan_wire_result_marshaller.md Step 5): the stored Data is the
+    // full wire envelope, so a page is a slice of one array (elements) or string (whole lines) addressed by an OmittedPart-style
+    // path. The page is fitted to InlineBudgetChars minus EchoReserveChars (and a small margin for digits) with ResultPager, so
+    // the marshaller, which uses the same budget, never cuts it again, and the offload filter never sees it over its threshold.
+    private static SentinelCallToolResult<object> PageEnvelope(
+        ResultWrapper stored, string? path, int offset, int limit, string? resultId, string? filePath)
+    {
+        const int safetyMarginChars = 64;
+        JsonSerializerOptions wire = ModelContextProtocol.McpJsonUtilities.DefaultOptions;
+        JsonNode root = stored.Data!;
+        IReadOnlyList<string> available = EnvelopePagePaths(stored, root);
+        string availableText = available.Count == 0 ? "none" : string.Join(", ", available);
+
+        string FetchHint(int? fromOffset, string forPath) =>
+            !string.IsNullOrEmpty(resultId)
+                ? LargeResultHints.FetchCall(resultId, offset: fromOffset, path: forPath)
+                : LargeResultHints.FetchCallForFile(filePath ?? string.Empty, offset: fromOffset, path: forPath);
+
+        string? effectivePath = string.IsNullOrWhiteSpace(path) ? available.FirstOrDefault() : path.Trim();
+        if (effectivePath is null)
+        {
+            return new SentinelCallToolResult<object>
+            {
+                IsError = true,
+                ErrorData = new ResultError(ToolErrorCode.NotFound,
+                    "The stored result has no array or multi-line string to page. It was stored whole; read it with a Raw window (charLimit) or re-run the tool with narrower arguments.")
+            };
+        }
+
+        JsonNode? node = ResultPager.SelectNode(root, effectivePath);
+        if (node is null)
+        {
+            var suggestion = available.Count > 0 ? $" Retry with {FetchHint(null, available[0])}." : string.Empty;
+            return new SentinelCallToolResult<object>
+            {
+                IsError = true,
+                ErrorData = new ResultError(ToolErrorCode.NotFound,
+                    $"Path '{effectivePath}' was not found in the stored result. Pageable paths: {availableText}. Paths use property names separated by dots and [i] array indexes, for example successData.items[0].list.{suggestion}")
+            };
+        }
+
+        JsonArray? array = node as JsonArray;
+        string? text = node is JsonValue value && value.TryGetValue(out string? s) ? s : null;
+        if (array is null && text is null)
+        {
+            var children = node is JsonObject obj ? $" Its properties: {string.Join(", ", obj.Select(p => effectivePath + "." + p.Key))}." : string.Empty;
+            return new SentinelCallToolResult<object>
+            {
+                IsError = true,
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
+                    $"Path '{effectivePath}' is a {node.GetValueKind().ToString().ToLowerInvariant()}, and only arrays and strings can be paged.{children} Pageable paths: {availableText}.")
+            };
+        }
+
+        List<string>? lines = text is null ? null : ResultPager.SplitLines(text);
+        string unit = array is not null ? ResultPager.UnitItems : ResultPager.UnitLines;
+        int total = array?.Count ?? lines!.Count;
+        int start = Math.Clamp(offset, 0, total);
+        int want = Math.Min(Math.Max(1, limit), total - start);
+        int budget = LargeResultHelper.InlineBudgetChars - LargeResultHelper.EchoReserveChars - safetyMarginChars;
+
+        SentinelCallToolResult<object> Build(int count, string? warning)
+        {
+            // count 0 with elements left means the next element or line alone is larger than a page: step over it.
+            bool skippedOne = count == 0 && start < total;
+            int next = skippedOne ? start + 1 : start + count;
+            bool more = next < total;
+            var page = new EnvelopePageResult
+            {
+                Path = effectivePath,
+                Offset = start,
+                Returned = count,
+                Total = total,
+                Unit = unit,
+                NextOffset = more ? next : null,
+                HasMoreData = more,
+                Items = array is null ? null : new JsonArray(array.Skip(start).Take(count).Select(n => n?.DeepClone()).ToArray()),
+                Text = array is not null ? null : string.Concat(lines!.Skip(start).Take(count)),
+            };
+            return new SentinelCallToolResult<object>
+            {
+                IsError = false,
+                SuccessData = page,
+                TotalRecords = total,
+                HasMoreData = more,
+                NextOffset = more ? next : null,
+                WarningDetails = warning,
+            };
+        }
+
+        int WireLength(SentinelCallToolResult<object> result) =>
+            JsonSerializer.Serialize(result, wire.GetTypeInfo(typeof(object))).Length;
+
+        int count = want;
+        if (want > 0 && WireLength(Build(want, null)) > budget)
+        {
+            string trial = JsonSerializer.Serialize(Build(want, null), wire.GetTypeInfo(typeof(object)));
+            var (_, omitted) = ResultPager.Fit(JsonNode.Parse(trial)!, budget, wire, typeof(EnvelopePageResult));
+            string mainPath = "successData." + (array is not null ? "items" : "text");
+            // A cut anywhere but the page's own list or text means a single element is itself too big for a page.
+            count = omitted.Any(p => p.Path != mainPath)
+                ? 0
+                : omitted.FirstOrDefault(p => p.Path == mainPath)?.Returned ?? want;
+        }
+
+        // The warning is part of the page, so it is measured with it (the warning names the count it explains).
+        string? WarningFor(int pageCount)
+        {
+            if (pageCount == 0 && want > 0)
+            {
+                return array is not null
+                    ? $"Element {start} of '{effectivePath}' is larger than one page and was skipped. Page inside it with {FetchHint(null, $"{effectivePath}[{start}]")}, and continue this list from offset {start + 1}."
+                    : $"Line {start} of '{effectivePath}' is longer than one page and was skipped; continue from offset {start + 1}.";
+            }
+
+            return pageCount < want
+                ? $"Page shrunk from {want} to {pageCount} {unit} to stay under the size threshold. Call {FetchHint(start + pageCount, effectivePath)} to continue."
+                : null;
+        }
+
+        while (count > 0 && WireLength(Build(count, WarningFor(count))) > budget)
+        {
+            count = count > 1 ? count - Math.Max(1, count / 10) : 0;
+        }
+
+        return Build(count, WarningFor(count));
+    }
+
     public async Task<SentinelCallToolResult<object>> GetLargeResult(
         ToolCallReason reason,
         string? resultId = null,
         string? filePath = null,
         int limit = 50,
         int offset = 0,
-        CancellationToken cancellationToken = default, int? charLimit = null)
+        CancellationToken cancellationToken = default, int? charLimit = null, string? path = null)
     {
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         var solutionRoot = _workspaceManager.GetSolutionRoot();
@@ -1570,6 +1711,12 @@ public class WorkspaceReadNavigationImpl
                     IsError = true,
                     ErrorData = new ResultError("Exception", "Result file has no SuccessData payload - it may be corrupt.")
                 };
+            }
+
+            // Envelope (the result marshaller's store): the full wire envelope, paged by path with ResultPager. Old types below are untouched.
+            if (all.Type == ResultWrapperType.Envelope)
+            {
+                return PageEnvelope(all, path, offset, limit, resultId, filePath);
             }
 
             // Raw (the generic MCP request-filter offload backstop, see
