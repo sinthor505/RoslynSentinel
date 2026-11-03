@@ -267,8 +267,12 @@ enum value.
   later SDK upgrade must re-diff the replicated members against its tag; the Step 1 parity test is the guard.
 - **Step 0 side effects.** The Microsoft.Extensions.AI bump (10.8.3 -> 10.11.0) and the insertion-order listing
   are the likely sources of test churn; neither is verified by a build yet.
-- **Upstream request (user decision, outward-facing).** Asking the SDK to expose `MarshalResult` on
-  `McpServerToolCreateOptions` would delete the replication. No existing issue found 2026-11-02.
+- **Upstream request (already filed).** Exposing `MarshalResult` on `McpServerToolCreateOptions` would delete the
+  replication. csharp-sdk issue #1602 (open, `ready for work`, P2) asks for exactly that; PR #1874 implements it
+  (open, review required, no comments as of 2026-11-03; an earlier PR #1761 was closed for lack of review). No new
+  issue is needed. When #1874 ships in a released SDK, move to it and delete `SentinelToolFactory`'s replicated
+  builders (keep the parity test until then). Check that the SDK delegate can be async and return a `string`, as
+  Step 2 needs. A public comment on #1602/#1874 with our use case is a separate user decision.
 - **MarshalResult semantics for async methods** are inferred from the MEAI docs, not run; Step 1 verifies.
 - **Reserve.** `EchoReserveChars` (proposed 2560; echo adds up to ~2.3 KB, stamps a few hundred chars) is a
   measured guess; Step 4's filter detector shows if it is too small.
