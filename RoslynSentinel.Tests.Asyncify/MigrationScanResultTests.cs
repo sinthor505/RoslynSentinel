@@ -285,61 +285,48 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T4 – result genuinely exceeds threshold -> LargeResult.WrittenToFile=true
+    // T4 – large scan page -> inline SuccessData, LargeResult null, TotalRecords = full count, HasMoreData true
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(60000)]
-    public async Task T4_LargeResult_WrittenToFile_DataNull()
+    public async Task T4_LargeScan_InlinePage_LargeResultNull_TotalRecordsFull_HasMoreTrue()
     {
         // BuildTool ~500 methods, each with a 300-char Reason string.
-        // Per finding JSON ≈ 200 (base) + 300 (Reason field) + ~350 (Summary field) ≈ 850 bytes.
-        // 500 × 850 = ~425 KB > 15 KB -> must trigger the file-write path.
+        // Per finding JSON ≈ 850 bytes, so a 100-item page ≈ 85 KB, far above the 15 KB inline threshold.
+        // The tool returns the requested page inline; the central result marshaller (not run by these
+        // direct-call tests) is what offloads oversized output.
         var reason = new string('x', 300);
         SetSource(BuildManyFlaggedMethods(500, reason));
 
-        // Use a large limit to capture all findings in one page.
-        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", limit: 5000, offset: 0);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", limit: 100, offset: 0);
 
         var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.LargeResult, Is.Not.Null,
-            "A page > 256 KB should trigger the file-write path.");
-        Assert.That(result.LargeResult!.WrittenToFile, Is.True);
-        Assert.That(result.LargeResult.FilePath.Absolute, Is.Not.Null.And.Not.Empty);
-        Assert.That(result.LargeResult.ResultId, Is.Not.Null.And.Not.Empty);
-        Assert.That(result.LargeResult.SizeBytes, Is.GreaterThan(15 * 1024));
-        Assert.That(result.LargeResult.TotalRecords, Is.GreaterThan(0));
-        Assert.That(result.SuccessData, Is.Null, "SuccessDetails should be null when LargeResult is set.");
-        Assert.That(File.Exists(result.LargeResult.FilePath), Is.True,
-            "Scan file must exist on disk.");
+        Assert.That(!result!.IsError, Is.True);
+        Assert.That(result.LargeResult, Is.Null, "The tool no longer offloads to a file itself; LargeResult is set by the central marshaller.");
+        Assert.That(result.SuccessData, Is.Not.Null, "The requested page must be returned inline.");
+        Assert.That(result.SuccessData!.Count, Is.EqualTo(100), "Page should contain the requested 100 items.");
+        Assert.That(result.TotalRecords, Is.EqualTo(500), "TotalRecords should reflect the full post-filter count, not the page size.");
+        Assert.That(result.HasMoreData, Is.True, "More pages exist beyond offset 0 + limit 100 = 100 < 500.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T5 – get_large_result on T4's file -> structured records, paging works, TotalRecords matches
+    // T5 – inline offset/limit pages from the scan tool -> structured records, disjoint pages, TotalRecords consistent
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(60000)]
     [Category("WorkspaceTools")] // sentinel:auto-category
-    public async Task T5_GetLargeResult_ReadsFile_PagingWorks_TotalRecordsMatchesT4()
+    public async Task T5_LargeScan_PagesInline_DisjointPages_TotalRecordsConsistent()
     {
         var reason = new string('x', 300);
         SetSource(BuildManyFlaggedMethods(500, reason));
 
-        // Run the scan to produce the spill file (same as T4).
-        var scanRaw = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", limit: 5000, offset: 0);
-        var scanResult = Wrap<List<MigrationCandidateFinding>>(scanRaw);
-        Assert.That(scanResult?.LargeResult, Is.Not.Null, "Precondition: scan must have spilled to file.");
-
-        var operationId = scanResult!.LargeResult!.ResultId;
-        var totalFromT4 = scanResult.LargeResult.TotalRecords;
-
         // ── page 1 (limit=10, offset=0) ───────────────────────────────────────
-        var page1Result = Wrap<List<MigrationCandidateFinding>>(await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: operationId, limit: 10, offset: 0));
+        var page1Result = Wrap<List<MigrationCandidateFinding>>(await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", limit: 10, offset: 0));
         Assert.That(!page1Result.IsError, Is.True);
         Assert.That(page1Result.SuccessData, Is.Not.Null);
         Assert.That(page1Result.SuccessData!.Count, Is.EqualTo(10));
-        Assert.That(page1Result.TotalRecords, Is.EqualTo(totalFromT4),
-            "TotalRecords from get_large_result must match TotalRecords from the original scan.");
+        Assert.That(page1Result.TotalRecords, Is.EqualTo(500), "TotalRecords must be the full post-filter count, not the page size.");
         Assert.That(page1Result.HasMoreData, Is.True);
 
         // ── verify structured records (not preview text) ──────────────────────
@@ -349,9 +336,11 @@ public class Svc
         Assert.That(first.Pattern, Is.EqualTo("AsyncBridgeCandidate"));
         Assert.That(first.Score, Is.EqualTo(75));
 
-        // ── page 2 (limit=10, offset=10) -> must be disjoint from page 1 ──────
-        var page2Result = Wrap<List<MigrationCandidateFinding>>(await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: operationId, limit: 10, offset: 10));
+        // ── page 2 (limit=10, offset=10) -> must be disjoint from page 1 and report the same total ──
+        var page2Result = Wrap<List<MigrationCandidateFinding>>(await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", limit: 10, offset: 10));
         Assert.That(!page2Result.IsError, Is.True);
+        Assert.That(page2Result.TotalRecords, Is.EqualTo(page1Result.TotalRecords),
+            "TotalRecords must be consistent across pages.");
         var page1Names = page1Result.SuccessData!.Select(f => f.MethodName).ToHashSet();
         var page2Names = page2Result.SuccessData!.Select(f => f.MethodName).ToHashSet();
         Assert.That(page1Names.Intersect(page2Names), Is.Empty,
@@ -701,37 +690,6 @@ public class Svc
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // T19 – large-result offload message contains GetLargeResultTool and OperationId; no ReadFileTool
-    // ══════════════════════════════════════════════════════════════════════════
-
-    // Flaky under full/parallel test runs (fails intermittently in the full AsyncifyTool suite,
-    // passes every time when run in isolation, 2026-08-25) -> likely timing/threshold-sensitive
-    // due to the large synthetic payload used to force the offload spill. Not a regression from
-    // any single change; retriage if it starts failing in isolation too.
-    [Test, CancelAfter(60000)]
-    public async Task T19_LargeResult_Message_ContainsGetLargeResult_AndOperationId()
-    {
-        // Reuse T4 conditions: 500 methods with padded Reason to exceed 15 KB.
-        var reason = new string('x', 300);
-        SetSource(BuildManyFlaggedMethods(500, reason));
-
-        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", limit: 5000, offset: 0);
-        var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
-
-        Assert.That(result?.LargeResult, Is.Not.Null, "Precondition: scan must have spilled to file.");
-
-        var largeResult = result!.LargeResult!;
-        Assert.That(largeResult.Message, Is.Not.Null.And.Not.Empty,
-            "LargeResult.Message must be populated for agent guidance.");
-        Assert.That(largeResult.Message, Does.Contain("GetLargeResult"),
-            "Message must name the correct recovery tool.");
-        Assert.That(largeResult.Message, Does.Not.Contain("ReadFile"),
-            "Message must not reference the non-existent ReadFile tool.");
-        Assert.That(largeResult.Message, Does.Contain(largeResult.ResultId),
-            "Message must embed the ResultId so the agent can copy it directly.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════

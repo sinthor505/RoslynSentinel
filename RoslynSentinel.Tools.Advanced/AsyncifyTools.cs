@@ -270,29 +270,6 @@ public class AsyncifyTools
             var page = allFindings.Skip(offset).Take(limit).ToList();
             bool hasMorePages = (offset + limit) < totalCount;
 
-            var (offloaded, storedPath, resultId, allBytes) = await LargeResultHelper.StoreLargeResultAsync(
-                allFindings, _workspaceManager.GetSolutionRoot(), ResultWrapperType.MigrationCandidateFindingList, cancellationToken);
-
-            if (offloaded)
-            {
-                return new SentinelCallToolResult<object>
-                {
-                    IsError = false,
-                    TotalRecords = totalCount,
-                    HasMoreData = hasMorePages,
-                    LargeResult = new LargeResultInfo(
-                        resultType: typeof(MigrationCandidateFinding).Name,
-                        writtenToFile: true,
-                        filePath: storedPath.ToString(),
-                        resultId: resultId!,
-                        sizeBytes: allBytes.Length,
-                        totalRecords: totalCount,
-                        message: $"Result written to file ({allBytes.Length} bytes, {totalCount} records). " +
-                                       $"Use {RoslynSentinel.Common.LargeResultHints.FetchCall(resultId!)} to page through results. " +
-                                       "Pass limit and offset to control page size (default limit: 50).")
-                };
-            }
-
             // ── inline result ─────────────────────────────────────────────────
             return new SentinelCallToolResult<object>
             {

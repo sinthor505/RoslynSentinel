@@ -372,7 +372,7 @@ public class RefactoringSignatureImpl
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = true,
-                            ErrorData = await ResultError.ForPossiblyLargeDetailAsync(ToolErrorCode.UnresolvedCallSites, ex.Message, unresolvedDetail, ex.Sites.Cast<object>().ToList(), _workspaceManager.GetSolutionRoot(), cancellationToken)
+                            ErrorData = new ResultError(ToolErrorCode.UnresolvedCallSites, ex.Message, unresolvedDetail, ex.Sites.Cast<object>().ToList())
                         };
                     }
 

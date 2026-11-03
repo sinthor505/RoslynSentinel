@@ -1081,26 +1081,7 @@ public class ScanTools
             if (persistBaseline)
             {
                 var apiResult = await _solutionStructureEngine.GetPublicApiSurfaceAsync(projectName, resolvedFilePath, cancellationToken: cancellationToken);
-                var summaryResults = await LargeResultHelper.StoreLargeResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ResultWrapperType.ApiSurfaceEntryList, cancellationToken: cancellationToken);
-                if (summaryResults.offloaded)
-                {
-                    toolResult = new SentinelCallToolResult<object>
-                    {
-                        IsError = false,
-                        TotalRecords = apiResult.Count,
-                        HasMoreData = false,
-                        LargeResult = new LargeResultInfo(resultType: typeof(ApiSurfaceEntry).Name, writtenToFile: true, filePath: summaryResults.filePath.Absolute.ToString(), resultId: summaryResults.resultId!, sizeBytes: summaryResults.jsonBytes.Length, totalRecords: apiResult.Count, message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " + $"Use {RoslynSentinel.Common.LargeResultHints.FetchCall(summaryResults.resultId!)} to page through results. " + "Pass limit and offset to control page size (default limit: 50).")
-                    };
-                }
-                else
-                {
-                    return new SentinelCallToolResult<object>
-                    {
-                        IsError = false,
-                        SuccessData = apiResult,
-                        TotalRecords = apiResult.Count
-                    };
-                }
+                return new SentinelCallToolResult<object> { IsError = false, SuccessData = apiResult, TotalRecords = apiResult.Count };
             }
             else
             {
@@ -1115,29 +1096,8 @@ public class ScanTools
                 }
 
                 var apiResult = await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes, cancellationToken: cancellationToken);
-                var summaryResults = await LargeResultHelper.StoreLargeResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ResultWrapperType.ApiSurfaceEntryList, cancellationToken: cancellationToken);
-                if (summaryResults.offloaded)
-                {
-                    toolResult = new SentinelCallToolResult<object>
-                    {
-                        IsError = false,
-                        TotalRecords = apiResult.Count,
-                        HasMoreData = false,
-                        LargeResult = new LargeResultInfo(resultType: typeof(ApiSurfaceEntry).Name, writtenToFile: true, filePath: summaryResults.filePath.Absolute.ToString(), resultId: summaryResults.resultId!, sizeBytes: summaryResults.jsonBytes.Length, totalRecords: apiResult.Count, message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " + $"Use {RoslynSentinel.Common.LargeResultHints.FetchCall(summaryResults.resultId!)} to page through results. " + "Pass limit and offset to control page size (default limit: 50).")
-                    };
-                }
-                else
-                {
-                    return new SentinelCallToolResult<object>
-                    {
-                        IsError = false,
-                        SuccessData = apiResult,
-                        TotalRecords = apiResult.Count
-                    };
-                }
+                return new SentinelCallToolResult<object> { IsError = false, SuccessData = apiResult, TotalRecords = apiResult.Count };
             }
-
-            return toolResult;
         }
         catch (Exception ex) when ((ex is ArgumentException or ToolNotFoundException) && ex.Message.Contains("not found in solution"))
         {
