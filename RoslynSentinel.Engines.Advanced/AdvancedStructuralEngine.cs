@@ -645,12 +645,13 @@ public class StructuralRefactoringEngine
         }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
-        var position = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter).Start;
+        var snippetMatch = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter);
+        var position = snippetMatch.Start;
         var token = root.FindToken(position);
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null)
         {
-            throw new ToolNotFoundException("Expression not found.", "expression");
+            throw new ToolNotFoundException(SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "expression", "directly contains the whole expression to extract"), "expression");
         }
 
         var containingClass = expression.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault();
@@ -744,7 +745,7 @@ public class StructuralRefactoringEngine
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null)
         {
-            throw new ToolNotFoundException("Expression not found.", "expression");
+            throw new ToolNotFoundException(SnippetNodeKindError.Describe(sourceText, root, paramMatch!, "expression", "directly contains the whole expression to extract"), "expression");
         }
 
         var containingMethod = expression.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
@@ -802,7 +803,8 @@ public class StructuralRefactoringEngine
         }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
-        var position = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter).Start;
+        var snippetMatch = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter);
+        var position = snippetMatch.Start;
         // Primary: find an expression whose span starts at position and whose text matches
         // the snippet -> handles compound expressions like "a + b".
         var trimmedSnippet = contextSnippet.Trim();
@@ -810,7 +812,7 @@ public class StructuralRefactoringEngine
  ?? root.FindToken(position).Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null)
         {
-            throw new ToolNotFoundException("Expression not found.", "expression");
+            throw new ToolNotFoundException(SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "expression", "directly contains the whole expression to extract"), "expression");
         }
 
         var containingStatement = expression.Ancestors().OfType<StatementSyntax>().FirstOrDefault();

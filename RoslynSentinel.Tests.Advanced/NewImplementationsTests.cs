@@ -1021,7 +1021,32 @@ public class C
         // Snippet points to class declaration -> no expression there, so the engine throws NotFound
         var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).IntroduceFieldAsync("C.cs", "public class C", "_f"));
         Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.NotFound));
-        Assert.That(ex.Message, Does.Contain("Expression not found"), "Should explain that no expression sits at the snippet");
+        Assert.That(ex.Message, Does.Contain("no expression is there"), "Should explain that no expression sits at the snippet");
+        Assert.That(ex.Message, Does.Contain("ClassDeclaration"), "Should name the innermost node at the snippet");
+    }
+
+    [Test]
+    [Category("StructuralRefactoringEngine")]
+    public async Task IntroduceParameter_ThrowsNotFound_WhenSnippetIsAStatement()
+    {
+        const string source = "public class C { public int M(int a) { return a; } }";
+        SetSource(source, "C.cs");
+        var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync("C.cs", "return a;", "_p"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("no expression is there"), "Should explain that no expression sits at the snippet");
+        Assert.That(ex.Message, Does.Contain("ReturnStatement"), "Should name the innermost node at the snippet");
+    }
+
+    [Test]
+    [Category("StructuralRefactoringEngine")]
+    public async Task IntroduceVariable_ThrowsNotFound_WhenSnippetIsAStatement()
+    {
+        const string source = "public class C { public int M(int a) { return a; } }";
+        SetSource(source, "C.cs");
+        var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).IntroduceVariableAsync("C.cs", "return a;", "_v"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("no expression is there"), "Should explain that no expression sits at the snippet");
+        Assert.That(ex.Message, Does.Contain("ReturnStatement"), "Should name the innermost node at the snippet");
     }
 
     // ══════════════════════════════════════════════════════════════
