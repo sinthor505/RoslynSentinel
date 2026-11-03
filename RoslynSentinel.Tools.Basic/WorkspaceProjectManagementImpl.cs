@@ -266,7 +266,7 @@ public class WorkspaceProjectManagementImpl
 
     private static readonly (string Dir, string DocType)[] ProjectDocSubdirs = [("plans", "plan"), ("handoffs", "handoff"), ("completed", "completed_work"), ("documentation", "documentation"),];
 
-    private string BuildPostLoadHint(string solutionRoot)
+    private string BuildPostLoadHint(string solutionRoot, IReadOnlyList<string> projectFilePaths)
     {
         var parts = new List<string>();
         var solutionItems = _workspaceManager.GetSolutionFolderItems();
@@ -291,7 +291,78 @@ public class WorkspaceProjectManagementImpl
             }
         }
 
+        var unrestored = BuildUnrestoredHint(FindUnrestoredProjects(projectFilePaths));
+        if (unrestored.Length > 0)
+        {
+            parts.Add(unrestored);
+        }
+
         return parts.Count > 0 ? " " + string.Join(" ", parts) : "";
+    }
+
+    // Flags projects whose obj/project.assets.json is missing or older than the .csproj or the nearest
+    // Directory.Packages.props. Cheap file-system checks only; a project whose files cannot be read is skipped.
+    internal static IReadOnlyList<string> FindUnrestoredProjects(IEnumerable<string> csprojPaths)
+    {
+        var flagged = new List<string>();
+        foreach (var csproj in csprojPaths)
+        {
+            try
+            {
+                if (!File.Exists(csproj) || Path.GetDirectoryName(csproj) is not { } projectDir)
+                {
+                    continue;
+                }
+
+                var name = Path.GetFileNameWithoutExtension(csproj);
+                var assets = Path.Combine(projectDir, "obj", "project.assets.json");
+                if (!File.Exists(assets))
+                {
+                    flagged.Add(name);
+                    continue;
+                }
+
+                var assetsTime = File.GetLastWriteTimeUtc(assets);
+                if (assetsTime < File.GetLastWriteTimeUtc(csproj))
+                {
+                    flagged.Add(name);
+                    continue;
+                }
+
+                for (var dir = new DirectoryInfo(projectDir); dir is not null; dir = dir.Parent)
+                {
+                    var props = Path.Combine(dir.FullName, "Directory.Packages.props");
+                    if (File.Exists(props))
+                    {
+                        if (File.GetLastWriteTimeUtc(props) > assetsTime)
+                        {
+                            flagged.Add(name);
+                        }
+
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                // Unreadable project: no hint for it rather than failing the load response.
+            }
+        }
+
+        return flagged;
+    }
+
+    // Empty string when nothing is flagged. Names up to 3 projects, then "(+N more)".
+    internal static string BuildUnrestoredHint(IReadOnlyList<string> names)
+    {
+        if (names.Count == 0)
+        {
+            return "";
+        }
+
+        var shown = string.Join(", ", names.Take(3));
+        var more = names.Count > 3 ? $" (+{names.Count - 3} more)" : "";
+        return $"Unrestored project(s) (no current obj/project.assets.json): {shown}{more}. Run {ToolCallHint.Call("Build", ("level", "fullBuild"))} then {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))}.";
     }
 
     public async Task<SentinelCallToolResult<object>> LoadSolution(ToolCallReason reason, string solutionPath, string? baseRepoDir = null,
@@ -331,6 +402,8 @@ public class WorkspaceProjectManagementImpl
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             if (solutionRoot != null)
             {
+                var projectFilePaths = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken))?.Projects
+                    .Select(p => p.FilePath).OfType<string>().ToList() ?? new List<string>();
                 var isReload = forceReload && wasAlreadyLoaded;
                 var verb = isReload ? "reloaded" : "loaded";
                 var reloadNote = isReload
@@ -339,7 +412,7 @@ public class WorkspaceProjectManagementImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
-                    SuccessData = $"Solution {verb}: {solutionPath}.{reloadNote}{BuildPostLoadHint(solutionRoot)}"
+                    SuccessData = $"Solution {verb}: {solutionPath}.{reloadNote}{BuildPostLoadHint(solutionRoot, projectFilePaths)}"
                 };
             }
             else

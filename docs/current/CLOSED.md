@@ -8,6 +8,10 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## `LoadSolution` gave no hint when a project loaded degraded for lack of a restore - resolved (2026-11-02)
+
+- An unrestored project yields 0 `WorkspaceDiagnostic`s (MSBuildWorkspace 5.9.0, SDK 10.0.401); the missing package shows only as CS0103/CS0246 compile errors, so there was no load text to match. `BuildPostLoadHint` now flags projects structurally: `obj/project.assets.json` missing, or older than the `.csproj` or the nearest `Directory.Packages.props` (`FindUnrestoredProjects`, `BuildUnrestoredHint` in `WorkspaceProjectManagementImpl`), and points at `Build(fullBuild)` then `LoadSolution(forceReload)`. Evidence: `WorkspaceUnrestoredProjectHintTests` (2 tests). Not covered: the full sentence through a live `LoadSolution`; `GetSolutionAsync` in `LoadSolution` is not try/caught. Proposal: [proposal_load_solution_hint_for_unrestored_project.md](proposals/proposal_load_solution_hint_for_unrestored_project.md).
+
 ## Small tool fixes: Member(remove) self-recursion, Build fullBuild scope note, stale comments - resolved (2026-11-02)
 
 - `Member(remove)` refused a self-recursive private helper (its own recursive call counted as a usage). `RemoveMemberAsync` now ignores references inside the member's own span. Evidence: `RemoveMember_SelfRecursivePrivateHelper_IsRemoved` and `RemoveMember_SelfRecursiveHelperAlsoCalledElsewhere_StillRefused` pass. A `cref` in the member's own doc comment is leading trivia and still counts (not handled).
