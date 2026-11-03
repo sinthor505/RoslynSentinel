@@ -70,6 +70,13 @@ otherwise reads as "zero blast radius".
 The agent re-measures before editing and replies `RESCOPE:` (with its numbers) if the real blast radius
 exceeds the brief's; the dispatcher then re-slices.
 
+## Concurrent C# dispatches (trial)
+
+At most two subagents at once. Use disjoint files (a second agent's edits leave the first with a stale
+view and CS errors); only one may run `Build`/`RunTest`. If an error, stale-view mistake or tool failure
+looks caused by the second agent, first treat it as a trial finding: report it (`MULTI-AGENT:` plus what
+collided), drop back to one subagent and continue. Do not write a blocker doc or halt for it.
+
 ## Replies and what to do with them
 
 | Reply | Meaning | Dispatcher action |

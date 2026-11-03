@@ -18,7 +18,7 @@
       task's first mutating call (an edit tool, a C#-mutating MCP tool, or an implementer /
       test-writer dispatch). This is the headline number.
     - rereads: files read more than once within the task
-    - exploreDispatches: Explore / explore-haiku / general-purpose subagents started (their own
+    - exploreDispatches: Explore / explore-tier1 / explore-tier2 / general-purpose subagents started (their own
       cost appears as separate subagent rows)
 
   Output: a per-task CSV and a Markdown summary (medians / p75 by agent type, most-read files
@@ -85,7 +85,7 @@ $mutateTools = [System.Collections.Generic.HashSet[string]]::new([StringComparer
 $mutateNamePattern = '^(Add|Remove|Rename|Move|Extract|Modify|Replace|Apply|Create|Delete|Insert|Change|Convert|Introduce|Inline|Asyncify)'
 
 $readShellPattern = '^\s*(Get-Content|gc |cat |type |head |tail |Select-String|sls |rg |grep |findstr|Get-ChildItem|gci |ls |dir |tree|git (log|show|diff|blame|grep|status))'
-$exploreAgents = @('Explore', 'explore-haiku', 'general-purpose', 'Plan')
+$exploreAgents = @('Explore', 'explore-tier1', 'explore-tier2', 'general-purpose', 'Plan')
 $mutateAgents = '^(implementer|test-writer)'
 
 function Get-ShortToolName([string]$name) {

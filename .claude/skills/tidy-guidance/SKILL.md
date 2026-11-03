@@ -30,7 +30,7 @@ judge staleness - that is step 2. Keep the output; the end report compares befor
 
 ## 2. Audit (dispatch, read-only, two agents in parallel is fine)
 
-Main session must not read these files broadly. Dispatch `explore-sonnet` twice (breadth: very
+Main session must not read these files broadly. Dispatch `explore-tier2` twice (breadth: very
 thorough, "do NOT edit"):
 
 - **A - CLAUDE.md + memory.** Per CLAUDE.md section: redundancy, content better placed in a

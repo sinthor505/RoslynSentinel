@@ -61,17 +61,13 @@ decision for the user, not a blocker). Only if the listing is empty, try `Search
   files), `implementer-sweep` (one mechanical operation, many files), `implementer-senior` (over the
   limits) or `test-writer`. The main session plans, briefs, dispatches, reviews and commits; reading,
   searching, building, tests, git and Markdown edits stay. Load the `dispatch-implementer` skill before
-  the first dispatch; limits live in `.claude/implementer-tiers.json`; the `enforce-dogfood.ps1` hook
+  the first dispatch (limits, and the two-concurrent-agents trial rule); the `enforce-dogfood.ps1` hook
   refuses a non-conforming brief. If about to call `ReplaceSnippet`/`Member`/`ApplyDiff`/`RenameSymbol`/
   `MoveMember` on source, write a brief instead. Why: implementation churn crowds out planning in the main context.
-- **C# edit dispatches: at most two subagents at once (trial).** Use disjoint files (a second agent's
-  edits leave the first with a stale view and CS errors); only one may run `Build`/`RunTest`. If an
-  error, stale-view mistake or tool failure looks caused by the second agent, first treat it as a trial
-  finding: report it (`MULTI-AGENT:` plus what collided), drop back to one subagent and continue. Do
-  not write a blocker doc or halt for it.
 - **Exploration and review are dispatched.** The main session does only small reads (one outline,
-  method, file or `git status`). Anything broader goes to `explore-haiku` (symbol/usage lookups) or
-  `explore-sonnet` (multi-file investigation, reviews). If it needs more than a couple of reads, dispatch.
+  method, file or `git status`). Anything broader goes to `explore-tier1` (symbol/usage lookups) or
+  `explore-tier2` (multi-file investigation, reviews; pass `model: sonnet` for a hard review). If it
+  needs more than a couple of reads, dispatch.
 - **Verification is never a supervisor job.** `modeleval-runner` and `planstep-runner` are only for runs
   with a model under test. A post-change `Build`/`RunTest`/baseline comparison is a plain call.
 
@@ -101,16 +97,8 @@ Edit/Grep/shell are fine for Markdown, JSON, `.ps1`, `.csproj`, other non-C# fil
 the repo. Why: chokepointing surfaces drift and sequencing bugs; falling back when a tool is awkward
 hides them - the awkwardness is the finding.
 
-**ReplaceSnippet / Member gotchas**
-- Never pass `filePath` with `batchEdits`; each batch edit carries its own path.
-- Order batch edits definitions-first (the compile gate rejects non-compiling intermediate states);
-  rename a field and all its usages in one atomic batch.
-- Snippets must match exactly, whitespace and line endings included; copy context from a
-  `ReadFile`/`GetMethodSource` result, never invent it.
-- `Member(addMember)` takes one declaration per call; `addTopLevelType` for a new top-level type;
-  `Member` cannot edit an existing top-level record - use `ReplaceSnippet`.
-- `ModifyEnum`'s `values` is the complete list; omitting a member deletes it.
-- `CancellationToken` is always the last parameter; new parameters go before it.
+Edit-tool traps (batch edits, exact snippet match, enum `values`, parameter order):
+`docs/current/references/reference_edit_tool_gotchas.md`. Never pass `filePath` with `batchEdits`.
 
 ## Tool failures and hooks
 
@@ -120,27 +108,24 @@ unreachable or has no equivalent (and no staged route exists), finish in-flight 
 [reference_blocker_workflow.md](docs/current/references/reference_blocker_workflow.md). Do not retry
 speculatively or route around it with shell tools.
 
-`.claude/hooks/enforce-dogfood.ps1` mechanically blocks common violations (including `Read` on an
-in-repo `.cs`). A blocked attempt needs no report or log: use the MCP tool instead. The hook matches
-literal text, so it can block a benign command that merely mentions `.cs` or `git log`; report that
-false positive and stop - do not reword to slip past it. A custom subagent that lists `Read` must also
-list `ReadFile`/`GetMethodSource`/`Search`.
+`.claude/hooks/enforce-dogfood.ps1` blocks common violations (including `Read` on an in-repo `.cs`); use
+the MCP tool instead, no report needed. It matches literal text, so it can block a benign command that
+merely mentions `.cs` or `git log`: report that false positive and stop - do not reword to slip past it.
+A custom subagent that lists `Read` must also list `ReadFile`/`GetMethodSource`/`Search`.
 
 - **Successful bypass** (a `Read`/`Edit`/`Write`/shell call on a `.cs`, or shell git, that went through
-  when an MCP tool fit): report it and continue; no blocker doc. If it caused an unexplained tool-side
-  symptom, treat that as a tool failure. Deliberate bypass is legitimate only for a `.cs` outside the
-  repo or a manual call you decided is right, never for a failed tool; routes and logging:
-  `docs/current/references/reference_hook_bypass.md`.
-- **Never delete a tracked file with a shell command** (it trips external-drift detection and halts all
-  mutating tools: `SessionHalted`). Use `DeleteFile`. If halted: `ExternalFileDrift(operation: List)`
-  then `Acknowledge`; report it as a successful bypass.
+  when an MCP tool fit): report it and continue; no blocker doc. Deliberate bypass is legitimate only
+  for a `.cs` outside the repo or a manual call you decided is right, never for a failed tool; routes
+  and logging: `docs/current/references/reference_hook_bypass.md`.
+- **Never delete a tracked file with a shell command** (it halts all mutating tools: `SessionHalted`).
+  Use `DeleteFile`. If halted: `ExternalFileDrift(operation: List)` then `Acknowledge`; report it as a
+  successful bypass.
 
 ## Tool-experience journal
 
 The `SessionStart` hook prints the journal path. Append `- HH:mm [+|-|~] ToolName: one sentence` right
-after anything notable (compaction erases late notes): one call replacing many, confusing
-descriptions/parameters, helpful or unhelpful errors, and every unblocked shell/built-in fallback on C#
-with the reason. Hook-blocked attempts are not logged. "`~ nothing notable`" is fine.
+after anything notable (compaction erases late notes), including every unblocked shell/built-in
+fallback on C# with the reason. Hook-blocked attempts are not logged.
 
 ## Failure analysis
 
@@ -152,27 +137,19 @@ or turn number; unverified causes are hypotheses. Load the `failure-analysis` sk
 ## Working conventions
 
 - Build (0 errors) before committing. Run **one** `RunTest`/`dotnet test`/`Build` at a time (subagents
-  included); they share `bin/`/`obj/` and block on file locks. Several projects: one solution-scope run
-  or sequential project runs.
-- NUnit 5.0, not 4.6: `await` `Assert.ThrowsAsync`/`CatchAsync`/`DoesNotThrowAsync` (un-awaited asserts
-  nothing); `TestDelegate`/`AsyncTestDelegate` are gone. See `docs/current/references/reference_nunit5_test_conventions.md`.
+  included); they share `bin/`/`obj/` and block on file locks.
+- NUnit 5.0: `await` `Assert.ThrowsAsync`/`CatchAsync`/`DoesNotThrowAsync` (un-awaited asserts nothing).
 - Never leak raw exceptions, stack traces or internal paths into a tool's `ResultError`; catch at the
   tool boundary and return a structured, actionable error.
 - A not-found/zero-result error must rule out scope, name-shape, container and kind mistakes before
-  claiming absence, state what was searched and name the next call:
-  [reference_not_found_recovery_ladder.md](docs/current/references/reference_not_found_recovery_ladder.md).
+  claiming absence, state what was searched and name the next call.
 - An unhandled `CS####` during automated work gets a `docs/current/blockers/` writeup immediately.
-- `docs/current/TODO.md` is open-items-only; resolved entries go to `CLOSED.md`. A finished plan,
-  proposal or finding gets its Status line updated and moves to its folder's `closed/`.
 - Writing a blocker, finding, proposal, issue, design, plan, idea or reference doc: follow
   `docs/current/templates/README.md` (folder, filename, template); never read existing docs for style.
-  `docs/current/upstream/` and `docs/obsolete/` are not active documentation.
-- Exclude `*/Worktree/` folders (PlanStepRunner harness clones) from diffs, searches and reviews; their git output is not authoritative.
-- ASCII-only punctuation in comments, docs, commit messages and prompts (`-`/`--`, straight quotes,
-  `<=`/`>=`); non-ASCII becomes mojibake across the file -> server -> MCP -> harness chain.
-- Before hand-rolling a shell loop for a repeated task, check `scripts/` for a front-door `.ps1`
-  (`roslynsentinel-modeleval.ps1`, `roslynsentinel-planstep.ps1`, `build.ps1`, ...).
-- The solution is `RoslynSentinel.slnx` (no root `.sln`).
+- ASCII-only punctuation in comments, docs, commit messages and prompts; non-ASCII becomes mojibake.
+- Exclude `*/Worktree/` folders (PlanStepRunner harness clones) from diffs, searches and reviews.
+- Other conventions (doc lifecycle, `scripts/` front doors, solution file):
+  `docs/current/references/reference_working_conventions.md`.
 
 ## Architecture
 
@@ -182,18 +159,16 @@ pipeline, write chokepoint, tool registration, workspace manager) read
 and fix the map.
 
 - **Layering is one-way:** `Common` <- `Engines.*` <- `Tools.*` <- `Server.*` (`RoslynSentinel.<Layer>.<Flavor>`).
-  Engines hold Roslyn logic with no MCP types; Tools hold `[McpServerToolType]` classes (Basic's `*Impl`
-  classes live in `Tools.Basic`); Server is hosting/DI only. `Utilities.PlanStepRunner` references only `Common`.
+  Engines hold Roslyn logic with no MCP types; Tools hold `[McpServerToolType]` classes; Server is
+  hosting/DI only. `Utilities.PlanStepRunner` references only `Common`.
 - **Sibling projects cannot see each other** (`Tools.Advanced` not `Tools.Basic`; `Engines.Basic` not
   `Engines.Advanced`). Shared helpers go one layer down: `Engines.Basic` for engine logic, `Common` for
-  result/MCP plumbing. Check the `.csproj` `<ProjectReference>` list if unsure.
-- **Advanced is additive, not a fork.** A Basic fix suffices; verify with `scripts/build.ps1 -Flavor Solution`.
-- **A new MCP tool needs three things**, or it is silently dead with no startup error: (1) the
-  `[McpServerToolType]`/`[McpServerTool(Name = ...)]` class in a `Tools.*` project; (2) an entry in a mode
-  dictionary in `Server.Advanced/ToolClassRegistry.cs`; (3) an explicit `if (activeToolClasses.Contains("..."))`
-  DI block in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` or `ServiceRegistrationExtensionsAdvanced.cs`.
-  A new `Tools.*` project also needs a `<ProjectReference>` from `Server.Advanced`, the only server project.
-- The `*Tools` suffix is reserved for classes declaring `[McpServerTool]` methods; helpers use another (e.g. `TaskEnabledToolsHelper`).
+  result/MCP plumbing. Advanced is additive, not a fork: verify with `scripts/build.ps1 -Flavor Solution`.
+- **A new MCP tool needs three things**, or it is silently dead with no startup error: the
+  `[McpServerToolType]` class in a `Tools.*` project; an entry in `Server.Advanced/ToolClassRegistry.cs`; an
+  `if (activeToolClasses.Contains("..."))` DI block in `ServiceRegistrationExtensions{Basic,Advanced}.cs`.
+  A new `Tools.*` project also needs a `<ProjectReference>` from `Server.Advanced`.
+- The `*Tools` suffix is reserved for classes declaring `[McpServerTool]` methods.
 
 ## Commits
 
@@ -210,10 +185,7 @@ Rebuilding does not change the running server; it is stale until restarted. Afte
 source, run `Build(level: fullBuild)` and restart your own instance
 (`McpServerControl(operation: StopServer, confirmServerStop: ConfirmServerStop)`, then `LoadSolution`)
 with no subagent mid-operation. `"isServerBinaryStale": true` in a response means a newer DLL exists.
-`LoadSolution` changes which files are analyzed, not which binary runs. `Build` defaults to a throwaway
-output (`.roslynsentinel/build/<instance>/`); only `fullBuild` updates the shared `bin/`. To live-test
-uncommitted server changes, `Build` then `McpServerControl(operation: LaunchTestInstance)`; stop it with
-`StopTestInstance`. Details:
+Live-testing uncommitted changes (`LaunchTestInstance`) and `Build` output locations:
 `docs/current/references/reference_live_server_freshness.md`.
 
 Compare test results with the baselines (`docs/known-failing-tests.{Basic,Advanced,Solution}.txt`,
