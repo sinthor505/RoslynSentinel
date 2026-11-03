@@ -943,4 +943,62 @@ public class OrderLine
         Assert.That(result.UpdatedContent, Does.Contain("StringBuilder sb"),
             "The synthesized parameter should still be typed StringBuilder, just not nullable");
     }
+
+    [Test]
+    public async Task AnalyzeSwitchForPatternConversion_SnippetOnNonSwitch_BlockingReasonNamesFoundKind()
+    {
+        const string source = @"
+public class C
+{
+    public void M()
+    {
+        int x = 1;
+    }
+}";
+        SetSource(source, "C.cs");
+
+        var analysis = await _engine.AnalyzeSwitchForPatternConversionAsync("C.cs", "int x = 1;", null, null);
+
+        Assert.That(analysis.BlockingReason, Does.Contain("no switch statement is there"));
+        Assert.That(analysis.BlockingReason, Does.Contain("LocalDeclarationStatement"));
+    }
+
+    [Test]
+    public async Task ConvertStringFormatToInterpolatedSmart_SnippetOnNonFormatCall_MessageNamesFoundKind()
+    {
+        const string source = @"
+public class C
+{
+    public void M()
+    {
+        int x = 1;
+    }
+}";
+        SetSource(source, "C.cs");
+
+        var result = await _engine.ConvertStringFormatToInterpolatedSmartAsync("C.cs", "int x = 1;", null, null);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Message, Does.Contain("no string.Format() call is there"));
+        Assert.That(result.Message, Does.Contain("LocalDeclarationStatement"));
+    }
+
+    [Test]
+    public async Task AnalyzeForeachForLinqConversion_SnippetOnNonForeach_BlockingReasonNamesFoundKind()
+    {
+        const string source = @"
+public class C
+{
+    public void M()
+    {
+        int x = 1;
+    }
+}";
+        SetSource(source, "C.cs");
+
+        var analysis = await _engine.AnalyzeForeachForLinqConversionAsync("C.cs", "int x = 1;", null, null);
+
+        Assert.That(analysis.BlockingReason, Does.Contain("no foreach statement is there"));
+        Assert.That(analysis.BlockingReason, Does.Contain("LocalDeclarationStatement"));
+    }
 }

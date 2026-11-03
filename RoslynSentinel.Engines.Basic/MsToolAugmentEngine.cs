@@ -252,9 +252,10 @@ public class MsToolAugmentEngine
         }
 
         SwitchStatementSyntax? sw = null;
+        SnippetMatch? snippetMatch = null;
         try
         {
-            var snippetMatch = SnippetLookup.ResolveOrThrow(text, contextSnippet, lineBefore, lineAfter);
+            snippetMatch = SnippetLookup.ResolveOrThrow(text, contextSnippet, lineBefore, lineAfter);
             var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(snippetMatch.Start, snippetMatch.Length));
             sw = node.AncestorsAndSelf().OfType<SwitchStatementSyntax>().FirstOrDefault();
         }
@@ -265,7 +266,7 @@ public class MsToolAugmentEngine
 
         if (sw == null)
         {
-            return new SwitchConversionAnalysis(false, 0, [], "No switch statement found at contextSnippet location.");
+            return new SwitchConversionAnalysis(false, 0, [], SnippetNodeKindError.Describe(text, root, snippetMatch!, "switch statement", "starts at the switch keyword"));
         }
 
         var caseInfos = new List<SwitchCaseInfo>();
@@ -469,7 +470,7 @@ public class MsToolAugmentEngine
 
         if (invocation == null)
         {
-            return MsAugmentResult.Fail("No string.Format() call found at contextSnippet location.");
+            return MsAugmentResult.Fail(SnippetNodeKindError.Describe(text, root, snippetMatch, "string.Format() call", "directly contains the string.Format() call"));
         }
 
         var args = invocation.ArgumentList.Arguments;
@@ -827,7 +828,7 @@ public class MsToolAugmentEngine
         if (forEach == null)
         {
             return new ForeachLinqAnalysis(false, "", 0,
-                "No foreach statement found at contextSnippet location.", "Cannot analyze.");
+                SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "foreach statement", "starts at the foreach keyword"), "Cannot analyze.");
         }
 
         // Find List.Add() calls in the foreach body to determine the collection variable
@@ -1125,8 +1126,7 @@ public class MsToolAugmentEngine
         if (literal == null)
         {
             return MsAugmentResult.Fail(
-                "No literal expression found at contextSnippet location. " +
-                "Provide a contextSnippet that directly contains or is adjacent to the literal.");
+                SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "literal expression", "directly contains the literal to extract"));
         }
 
         if (!literal.IsKind(SyntaxKind.StringLiteralExpression) &&
@@ -1531,7 +1531,7 @@ public class MsToolAugmentEngine
                 else
                 {
                     return MsAugmentResult.Fail(
-                        "No statements found at the contextSnippet location. Try a broader snippet.");
+                        SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "statement", "directly contains the statement(s) to extract") + " Try a broader snippet.");
                 }
             }
 

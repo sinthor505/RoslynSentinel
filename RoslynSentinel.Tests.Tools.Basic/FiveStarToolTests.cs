@@ -291,7 +291,7 @@ public class ExtractConstantSafeStrongTests
             // (b) succeed if it finds an adjacent string piece
             // Either way: no throw, no null result, always has an error message when IsSuccess=false
             Assert.That(result.IsError, Is.True, "Interpolated string must fail cleanly");
-        Assert.That(result.Error, Does.Contain("No literal expression found at contextSnippet location"));
+        Assert.That(result.Error, Does.Contain("no literal expression is there"));
             if (result.IsError)
             {
                 Assert.That(result.Error, Is.Not.Null.And.Not.Empty,

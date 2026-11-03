@@ -503,7 +503,7 @@ public class InventoryItemService
 
             // TODO engine cannot extract a literal inside an interpolated string; decide whether this fixture should use a plain literal
             Assert.That(result.IsError, Is.True);
-            Assert.That(result.Error, Is.EqualTo("No literal expression found at contextSnippet location. Provide a contextSnippet that directly contains or is adjacent to the literal."));
+            Assert.That(result.Error, Does.Contain("no literal expression is there"));
         }
         finally { try { System.IO.File.Delete(tempFile); } catch { /* ignore */ } }
     }
