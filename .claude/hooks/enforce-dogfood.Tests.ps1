@@ -221,7 +221,7 @@ $cases = @(
     @{ n = 'PS here-string doc append naming .cs, (more, git log'; want = 'allow'
        p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Add-Content docs/x.md @'`nThe fix touches Foo.cs (more detail below). See also git log for history.`n'@" } } }
     @{ n = 'PS here-string plus a real Get-Content .cs'; want = 'DENY'
-       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Add-Content docs/x.md @'`nThe fix touches Foo.cs (more detail below). See also git log for history.`n'@`nGet-Content C:\runs\RoslynSentinel\Foo.cs" } } }
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Add-Content docs/x.md @'`nThe fix touches Foo.cs (more detail below). See also git log for history.`n'@`nGet-Content C:\Users\Administrator\source\repos\RoslynSentinel\Foo.cs" } } }
     @{ n = 'Bash heredoc doc append naming .cs and git commit'; want = 'allow'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = "cat >> docs/x.md <<'EOF'`nSee Bar.cs and run git commit afterwards.`nEOF" } } }
     @{ n = 'PS here-string plus a real git status'; want = 'DENY'
