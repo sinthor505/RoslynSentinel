@@ -7,7 +7,12 @@ check pending). Step 3 implemented 2026-11-02 (pager and synthetic goldens, not 
 Envelope files until Step 5). Step 5 implemented 2026-11-02 (`GetLargeResult` `path`; needs restart for live use).
 Step 6 implemented 2026-11-02 (default `on`; verified live on a LaunchTestInstance copy: Git diff cut to 150/477 lines
 with a pointer, paged by path in 4 pages and concatenated equal to the stored node; small results and legacy-offloaded
-Search unchanged; ModelEval smoke run and restart-on-own-instance pending). Step 7 next. Supersedes
+Search unchanged; ModelEval smoke run and restart-on-own-instance pending). Step 7 mostly implemented 2026-11-03 (helpers obsolete
+pass-throughs; 26 `ForPossiblyLargeDataAsync` and 4 `ForPossiblyLargeDetailAsync` callers converted; Asyncify scan and
+`GetPublicApiSurface` stores removed; `[ResultRecords]` on `TextSearchResult.LiteralResults`). Step 7 still open: the
+direct stores in `ReadFile` (plus `TrimRangeToInlineBudget`) and `GetMethodSource` (`// TODO` in place; changes what a
+large read returns, so wait for the Step 6 live checks), `[ResultRecords]` for Search references/callers/implementations
+(anonymous objects need a named record, a wire-shape decision) and bare-list tools (pager infers). Supersedes
 [plan_typed_large_result_offload.md](plan_typed_large_result_offload.md) and
 [proposal_central_large_result_offload.md](../proposals/proposal_central_large_result_offload.md), and subsumes
 change #5 of `proposal_envelope_field_promotion.md` (inline first page plus `resultId`).

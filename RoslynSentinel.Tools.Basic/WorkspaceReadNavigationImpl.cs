@@ -360,6 +360,7 @@ public class WorkspaceReadNavigationImpl
 
             if (methodBytes > thresholdBytes && !string.IsNullOrEmpty(solutionRoot))
             {
+                // TODO plan_wire_result_marshaller Step 7: retire this direct StoreLargeResultAsync and return Source inline so the marshaller cuts it by lines; deferred until the Step 6 live checks and ModelEval smoke run pass, because it changes what a large GetMethodSource returns.
                 var fullResult = new MethodSourceResult { Envelope = envelope, Signature = signature, Source = methodSource, Attributes = attributes };
                 var stored = await LargeResultHelper.StoreLargeResultAsync(fullResult, solutionRoot, ResultWrapperType.MethodSource, cancellationToken);
                 return new SentinelCallToolResult<MethodSourceResult, ResultError>

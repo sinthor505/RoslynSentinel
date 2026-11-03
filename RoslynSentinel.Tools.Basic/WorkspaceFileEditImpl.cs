@@ -267,6 +267,7 @@ public class WorkspaceFileEditImpl
         }
     }
 
+    // TODO plan_wire_result_marshaller Step 7: retire with the ReadFile direct store; ReadFileTests.ReadFile_RangeLargerThanInlineBudget_IsShortenedNotOffloadedAsync pins today's behaviour.
     private static int TrimRangeToInlineBudget(SourceText sourceText, int from, int to)
     {
         bool Fits(int candidateTo)
@@ -407,6 +408,7 @@ public class WorkspaceFileEditImpl
             if (textBytes > thresholdBytes && !string.IsNullOrEmpty(solutionRoot))
             {
                 var fullResult = new FileSourceResult { FilePath = (string)filePathResolved, StartLine = 1, EndLine = totalLines, TotalLines = totalLines, Source = fullText };
+                // TODO plan_wire_result_marshaller Step 7: retire this direct StoreLargeResultAsync (return source inline, marshaller cuts it); deferred with TrimRangeToInlineBudget until the Step 6 live checks and ModelEval smoke run pass, because it changes what a large ReadFile returns.
                 var stored = await LargeResultHelper.StoreLargeResultAsync(fullResult, solutionRoot, ResultWrapperType.FileSource, cancellationToken);
 
                 object? outlineData = null;
