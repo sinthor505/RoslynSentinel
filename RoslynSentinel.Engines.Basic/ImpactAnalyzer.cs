@@ -70,7 +70,7 @@ public class ImpactAnalyzer
 
             if (symbol == null)
             {
-                return new ImpactReport("", "", [], 0, 0, Error: "No symbol found at the specified position.", ErrorCode: ToolErrorCode.NotFound);
+                return new ImpactReport("", "", [], 0, 0, Error: $"No symbol found at the specified position. The snippet matched, but its innermost node ({token.Parent?.GetType().Name}) has no declared or referenced symbol; pass a snippet on a declaration or use lineBefore/lineAfter.", ErrorCode: ToolErrorCode.NotFound);
             }
 
             // Metadata (BCL/referenced) symbols have no source location; reporting their references would be a silent mis-resolution

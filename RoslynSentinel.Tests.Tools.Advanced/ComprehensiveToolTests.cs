@@ -269,4 +269,14 @@ public class ComprehensiveToolTests
         Assert.That(entries, Has.Count.EqualTo(2));
         Assert.That(entries.Select(e => e.Name), Is.EquivalentTo(new[] { "Pending", "Shipped" }));
     }
+
+    [Test]
+    public async Task GetBlastRadius_SnippetMatchesNoSymbol_ErrorNamesInnermostNode()
+    {
+        var source = "using System;\n";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
+        var report = await _impactAnalyzer.AnalyzeImpactAsync("C.cs", "using");
+        Assert.That(report.Error, Does.Contain("No symbol found at the specified position"));
+        Assert.That(report.Error, Does.Contain("innermost node (UsingDirectiveSyntax)"));
+    }
 }
