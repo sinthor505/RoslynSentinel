@@ -18,10 +18,14 @@ lines cut to 174, `Search(text)` 1387 items cut to 30 (declared hint), `GetLarge
 returns only 15 source lines because the attached `fileOutline` (~13 KB) uses the budget; decide whether to drop the
 outline or let the pager cut it. Step 7 still open: `[ResultRecords]` for Search references/callers/implementations
 (anonymous objects need a named record, a wire-shape decision) and bare-list tools (pager infers); Step 6 ModelEval
-smoke run is OPEN: `SizeThreshold -Size 60` on host 112 (2026-11-03, 3 repeats, 25 min) was inconclusive - the target
-file was 8,091 chars, no result overflowed, `GetLargeResult` was never called, and all 3 runs ended in LM Studio errors
-(JSON parse errors on tool-call arguments, one 33,024-token context overflow), none traced to the marshaller; a rerun
-needs a task that really overflows (a dedicated test, not a larger `-Size` on a 33K-context model). Supersedes
+smoke run DONE 2026-11-03 with the dedicated test `LargeResultPaging` (`Model_PagesLargeResultToFindNeedle`, 300-method
+file, `qwen3.5-9b-coder`, host 113; `SizeThreshold -Size 60` on 112 was inconclusive: an 8 KB target never overflowed).
+Before slice 2 the model ignored the pointer (pointer was the last key, vague text, `fileOutline` left 1 of 2105 source
+lines) and invented a rate; slice 2 (df2d912b: pointer first key, `INCOMPLETE:` message with a ready `GetLargeResult(...,
+path: ...)` call, no outline on a large `ReadFile`) gave 3/3 passes: the first `ReadFile` keeps 308 lines, every run
+followed the pointer and answered correctly, but none reached the needle by paging (pages of 50-200 lines; they switched
+to `Search`). Open: larger default pages or a status-message route to `Search`/ranged `ReadFile`. Remaining Step 6 live
+checks not yet run: SemanticFindReplace preview, Build with errors, a large error result. Supersedes
 [plan_typed_large_result_offload.md](plan_typed_large_result_offload.md) and
 [proposal_central_large_result_offload.md](../proposals/proposal_central_large_result_offload.md), and subsumes
 change #5 of `proposal_envelope_field_promotion.md` (inline first page plus `resultId`).
