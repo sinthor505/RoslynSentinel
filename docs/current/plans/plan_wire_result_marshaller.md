@@ -35,7 +35,9 @@ the omitted-`limit` path is covered by unit tests T18-T20 only. Step 6 live chec
 35/200 items, `inferred`) and pages with no `limit` (89 lines); `Build` with 60 errors is ~7 KB (errors capped at 20 by
 `maxDetails`), so it never reaches the marshaller; its `errorSummary.byProject` reads "(unknown)" (separate issue).
 Still not run: SemanticFindReplace preview (tool hidden in the same session after `McpToolsetControl(moveExtract)`;
-needs a fresh session). Supersedes
+needs a fresh session). Step 7's remaining `[ResultRecords]` item for Search callers/implementations/references is now
+a design proposal: [proposal_search_relationship_result_dtos.md](../proposals/proposal_search_relationship_result_dtos.md)
+(inference already gives the same message and counts; the open question is named DTOs for identification). Supersedes
 [plan_typed_large_result_offload.md](plan_typed_large_result_offload.md) and
 [proposal_central_large_result_offload.md](../proposals/proposal_central_large_result_offload.md), and subsumes
 change #5 of `proposal_envelope_field_promotion.md` (inline first page plus `resultId`).
