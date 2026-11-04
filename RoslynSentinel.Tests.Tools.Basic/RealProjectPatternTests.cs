@@ -504,6 +504,7 @@ public class InventoryItemService
             // TODO engine cannot extract a literal inside an interpolated string; decide whether this fixture should use a plain literal
             Assert.That(result.IsError, Is.True);
             Assert.That(result.Error, Does.Contain("no literal expression is there"));
+            Assert.That(result.Error, Does.Contain("InterpolatedStringExpression"));
         }
         finally { try { System.IO.File.Delete(tempFile); } catch { /* ignore */ } }
     }

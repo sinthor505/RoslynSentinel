@@ -304,7 +304,7 @@ public class ContextHelperTests
     [Test]
     public void FindExactSnippetPosition_AllLinesIndentationOnlyDiffer_NamesWhitespaceNotArrangement()
     {
-        // plan_contexterrorbuilder_orienting_guidance.md Step 6: every filtered snippet line
+        // plans/closed/plan_contexterrorbuilder_orienting_guidance.md Step 6: every filtered snippet line
         // matches source content once whitespace is collapsed - the diagnosis must name
         // whitespace/indentation as the cause, not the generic "arrangement" wording that fires
         // when lines match verbatim but are merely non-contiguous. Uses INTERNAL spacing

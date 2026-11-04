@@ -1001,4 +1001,27 @@ public class C
         Assert.That(analysis.BlockingReason, Does.Contain("no foreach statement is there"));
         Assert.That(analysis.BlockingReason, Does.Contain("LocalDeclarationStatement"));
     }
+
+    [Test]
+    public async Task ExtractMethod_SnippetOnlyNestedBlockBrace_ReturnsBroaderSnippetAdvice()
+    {
+        const string source = @"
+public class C
+{
+    public void M(int a)
+    {
+        if (a > 0)
+        {
+            int x = 1;
+        }
+    }
+}";
+        SetSource(source, "C.cs");
+
+        var result = await _engine.ExtractMethodSafeAsync("C.cs", "ExtractedMethod", "{", "if (a > 0)", null);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Message, Does.Contain("no statement is there"));
+        Assert.That(result.Message, Does.Contain("Try a broader snippet"));
+    }
 }
