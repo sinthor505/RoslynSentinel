@@ -346,9 +346,6 @@ public class WorkspaceReadNavigationImpl
             var attributes = ExtractAttributes(method);
             var signature = BuildSignature(method);
             _logger.LogInformation("GetMethodSource: {SizeBytes} bytes for '{MethodName}'", methodBytes, methodName);
-            const int thresholdBytes = LargeResultHelper.OffloadThresholdBytes;
-            var solutionRoot = _workspaceManager.GetSolutionRoot();
-
             var fileText = await document.GetTextAsync(cancellationToken);
             var fileLineCount = fileText.Lines.Count;
             var methodSpan = method.GetLocation().GetLineSpan();
@@ -357,20 +354,6 @@ public class WorkspaceReadNavigationImpl
                 memberFromLine: methodSpan.StartLinePosition.Line + 1,
                 memberToLine: methodSpan.EndLinePosition.Line + 1,
                 memberByteCount: methodBytes);
-
-            if (methodBytes > thresholdBytes && !string.IsNullOrEmpty(solutionRoot))
-            {
-                // TODO plan_wire_result_marshaller Step 7: retire this direct StoreLargeResultAsync and return Source inline so the marshaller cuts it by lines; deferred until the Step 6 live checks and ModelEval smoke run pass, because it changes what a large GetMethodSource returns.
-                var fullResult = new MethodSourceResult { Envelope = envelope, Signature = signature, Source = methodSource, Attributes = attributes };
-                var stored = await LargeResultHelper.StoreLargeResultAsync(fullResult, solutionRoot, ResultWrapperType.MethodSource, cancellationToken);
-                return new SentinelCallToolResult<MethodSourceResult, ResultError>
-                {
-                    IsError = false,
-                    LargeResult = new LargeResultInfo(resultType: "MethodSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: methodBytes, totalRecords: 1, message: $"Result is {methodBytes} bytes (threshold: {thresholdBytes}). " + $"Use {RoslynSentinel.Common.LargeResultHints.FetchCall(stored.resultId!)} to page through results."),
-                    SuccessData = new MethodSourceResult { Envelope = envelope, Signature = signature, Attributes = attributes },
-                    WorkspaceVersion = _workspaceManager.WorkspaceVersion,
-                };
-            }
 
             return new SentinelCallToolResult<MethodSourceResult, ResultError>()
             {

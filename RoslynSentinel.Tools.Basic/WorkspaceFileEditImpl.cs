@@ -404,13 +404,10 @@ public class WorkspaceFileEditImpl
             var mixedEol = EolUtilities.DescribeMixedLineEndings(fullText);
             var textBytes = System.Text.Encoding.UTF8.GetByteCount(fullText);
             const int thresholdBytes = LargeResultHelper.OffloadThresholdBytes;
-            var solutionRoot = _workspaceManager.GetSolutionRoot();
-            if (textBytes > thresholdBytes && !string.IsNullOrEmpty(solutionRoot))
+            if (textBytes > thresholdBytes)
             {
-                var fullResult = new FileSourceResult { FilePath = (string)filePathResolved, StartLine = 1, EndLine = totalLines, TotalLines = totalLines, Source = fullText };
-                // TODO plan_wire_result_marshaller Step 7: retire this direct StoreLargeResultAsync (return source inline, marshaller cuts it); deferred with TrimRangeToInlineBudget until the Step 6 live checks and ModelEval smoke run pass, because it changes what a large ReadFile returns.
-                var stored = await LargeResultHelper.StoreLargeResultAsync(fullResult, solutionRoot, ResultWrapperType.FileSource, cancellationToken);
-
+                // Over the threshold the marshaller cuts the payload and stores it; the tool returns the
+                // full source inline together with the outline so the caller can navigate without a second call.
                 object? outlineData = null;
                 try
                 {
@@ -425,16 +422,17 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsError = false,
-                    Findings = mixedEol is null ? [] : [new Finding("ReadFile", mixedEol)],
-                    // Paging here goes through LargeResult/GetLargeResultTool, not HasMoreData -> leaving it
-                    // false avoids signalling a second, redundant continuation mechanism.
-                    HasMoreData = false,
-                    LargeResult = new LargeResultInfo(resultType: "FileSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: textBytes, totalRecords: 1, message: $"Result is {totalLines} lines, {textBytes} bytes (threshold: {thresholdBytes}). " + $"Use {RoslynSentinel.Common.LargeResultHints.FetchCall(stored.resultId!)} to page through results, or retry {ToolCallHint.Call("ReadFile")} with startLine/endLine for just the slice you need, or use {ToolCallHint.Call("GetFileOutline")} to get the constructors, methods, helpers, members, enums, fields, properties, etc of a file without reading the entire file."),
                     SuccessData = new
                     {
+                        filePath = (string)filePathResolved,
+                        startLine = 1,
+                        endLine = totalLines,
                         totalLines,
+                        source = fullText,
                         fileOutline = outlineData
                     },
+                    Findings = mixedEol is null ? [] : [new Finding("ReadFile", mixedEol)],
+                    HasMoreData = false,
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
                 };
             }

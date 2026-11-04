@@ -193,7 +193,7 @@ public class GetMethodSourceTests
     }
 
     [Test]
-    public async Task GetMethodSource_MethodLargerThanThreshold_OffloadsAndReturnsLargeResultInfoAsync()
+    public async Task GetMethodSource_MethodLargerThanThreshold_ReturnsSourceInlineAsync()
     {
         var bigDocPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Big.cs");
         var bigBody = string.Concat(Enumerable.Range(0, 2000).Select(i => $"        var line{i} = {i};\n"));
@@ -210,8 +210,11 @@ public class GetMethodSourceTests
         var result = await _tools.GetMethodSourceTool(reason: "test message", bigDocPath, "Huge");
 
         Assert.That(!result.IsError, Is.True);
-        Assert.That(result.LargeResult, Is.Not.Null);
-        Assert.That(result.LargeResult!.ResultType, Is.EqualTo("MethodSource"));
+        Assert.That(result.LargeResult, Is.Null);
+        Assert.That(result.SuccessData!.Source, Is.Not.Null);
+        var inlineSource = result.SuccessData!.Source!;
+        Assert.That(inlineSource.Length, Is.GreaterThan(LargeResultHelper.OffloadThresholdBytes));
+        Assert.That(inlineSource, Does.Contain("var line1999 = 1999;"));
     }
 
     [Test]
