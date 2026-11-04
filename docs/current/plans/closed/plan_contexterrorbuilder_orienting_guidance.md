@@ -1,5 +1,9 @@
 # Plan: ContextErrorBuilder - always return orienting guidance on a failed contextSnippet match
 
+**Status:** IMPLEMENTED 2026-11-02. Steps 1-4 shipped 2026-09-15/16; Step 5 (wrong-node-kind family) shipped 2026-11-02 as `SnippetNodeKindError.Describe` in commits c96442fe (helper), 58964bbe (AdvancedStructuralEngine x3), f413b117 (MappingEngine), 980d9004 (CodeGenerationEngine, SemanticRefactoringEngine), 02d1692f (MsToolAugmentEngine x5). Leftovers are tracked in the audit doc, not here.
+
+**Update 2026-11-02:** the body below is the historical design and names code that no longer exists. `ContextErrorBuilder`, `DiagnoseNoMatch` and the `ContextHelper.FindSnippetPosition*` family were deleted in commit 361263f4 (Snippet matching 5f-C2); match failures are now handled by `RoslynSentinel.Common/SnippetMatching` (`SnippetLookup`, `SnippetResolver`, `SnippetErrorFormatter`). Engine renames: `GranularRefactoringEngine` -> `AdvancedStructuralEngine`, `SemanticRefactoringLibrary` -> `SemanticRefactoringEngine`, `RefactoringEngine` -> `BasicRefactoringEngine`. Step 5 was built as `SnippetNodeKindError.Describe(text, root, match, expectedNode, passInstead)` at 11 sites; exception types and error codes are unchanged. File and line references below are stale.
+
 ## If any step below admits more than one reasonable reading
 
 Stop before acting on it. State: (1) the ambiguity itself, (2) which reading you chose, (3) why -

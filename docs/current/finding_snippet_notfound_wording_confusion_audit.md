@@ -1,8 +1,12 @@
 # Finding: "not found" / "does not exist" wording is model-confusing across every ContextHelper-backed locator
 
+**Update 2026-11-02:** the body below predates the snippet-matching rewrite and names code that no longer exists. `ContextErrorBuilder`, `DiagnoseNoMatch` and the `ContextHelper.FindSnippetPosition*` family were deleted in commit 361263f4 (Snippet matching 5f-C2); match failures are now handled by `RoslynSentinel.Common/SnippetMatching` (`SnippetLookup`, `SnippetResolver`, `SnippetErrorFormatter`). Engine renames: `GranularRefactoringEngine` -> `AdvancedStructuralEngine`, `SemanticRefactoringLibrary` -> `SemanticRefactoringEngine`, `RefactoringEngine` -> `BasicRefactoringEngine`. Step 5 (the wrong-node-kind family) was implemented 2026-11-02 as `SnippetNodeKindError.Describe(text, root, match, expectedNode, passInstead)` in `Common/SnippetMatching`, used at 11 sites (commits c96442fe, 58964bbe, f413b117, 980d9004, 02d1692f); exception types and error codes are unchanged. The "Still open" paragraph and file:line references below are stale.
+
+**Still open after this update (this doc stays open):** (1) `contextSnippet` deprecation tracking; (2) `NearMissList`'s 3-candidate cap; (3) the optional raw-`ex.Message` sites `ImpactAnalyzer.cs:73` and `SymbolNavigationEngine.cs:445`, deferred; (4) the `ExtractMethodSafeAsync` site (~1534) has no test; (5) `RealProjectPatternTests` asserts only the message prefix, not the found node kind. Plan: [plan_contexterrorbuilder_orienting_guidance.md](plans/closed/plan_contexterrorbuilder_orienting_guidance.md) (IMPLEMENTED, moved to `plans/closed/`).
+
 **Status (2026-09-15/16):** Category A (ContextHelper.cs's two throw sites + exception taxonomy) and
 the Category B compiler-diagnostic labeling item are FIXED, via
-`docs/current/plans/plan_contexterrorbuilder_orienting_guidance.md` Steps 1-4 - see that plan doc
+`docs/current/plans/closed/plan_contexterrorbuilder_orienting_guidance.md` Steps 1-4 - see that plan doc
 for what shipped (`ContextErrorBuilder`, `SnippetMatchOutcome`, `DiagnoseNoMatch`, and `[COMPILER
 ERROR]` labels on all 5 `CompilerErrorLookupHelper.DescribeAsync` dump sites in
 `SentinelWorkspaceTools.cs` - one more site than originally scoped, found via `SearchSolutionText`
@@ -275,7 +279,7 @@ non-breaking behavior is working as designed today.
 
 **Found:** 2026-09-15. Full audit: [finding_snippet_notfound_wording_confusion_audit.md](finding_snippet_notfound_wording_confusion_audit.md).
 
-**Fixed 2026-09-15/16** via `docs/current/plans/plan_contexterrorbuilder_orienting_guidance.md` Steps
+**Fixed 2026-09-15/16** via `docs/current/plans/closed/plan_contexterrorbuilder_orienting_guidance.md` Steps
 1-4: `ContextHelper.cs`'s two throw sites (lines 216, 322) and `ToolException.cs`'s
 `ToolNotFoundException` conflation were replaced with `ContextErrorBuilder`/`SnippetMatchOutcome`/
 `DiagnoseNoMatch`, and `[COMPILER ERROR]` labels were added to all 5

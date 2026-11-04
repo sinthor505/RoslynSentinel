@@ -112,7 +112,7 @@ the halt message) remain valid and are tracked in `docs/current/TODO.md` rather 
 - `docs/current/blockers/blocking_error_session_halt_from_out_of_band_rm_mid_spike.md` - prior
   occurrence of the same exception type, different (self-inflicted) trigger; same open
   root-cause questions.
-- `docs/current/plans/plan_contexterrorbuilder_orienting_guidance.md` - the plan being implemented
+- `docs/current/plans/closed/plan_contexterrorbuilder_orienting_guidance.md` - the plan being implemented
   when this halt was hit.
 - `project_concurrent_sessions` (memory) - repo may have multiple Claude/VS sessions editing
   simultaneously; considered and downgraded as the likely explanation once git status showed zero

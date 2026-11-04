@@ -175,7 +175,7 @@ Each is pinned in a test with a `// TODO` describing the defect; none is fixed y
 - `plans/plan_error_codes_follow_cause.md` (IN-PROGRESS 2026-10-19): the predecessor; this proposal is its next phase (remove the catch-and-convert round trip, add payload). Fold into that plan once approved.
 - `findings/finding_batch_edit_errors_lose_tool_exception_code.md`, `findings/finding_nochange_producer_classification.md` (17 `NoChange` producers, ~50 consumers).
 - `proposal_tool_error_code_taxonomy.md` (root of `docs/current/`; Current state section stale: cites `ToolResult.cs:26`, "~11 constants" vs 22 today).
-- `plans/plan_contexterrorbuilder_orienting_guidance.md` (separating "absent" from "snippet text did not match"; its line refs are stale, matching now lives in `SnippetMatching/`).
+- `plans/closed/plan_contexterrorbuilder_orienting_guidance.md` (separating "absent" from "snippet text did not match"; its line refs are stale, matching now lives in `SnippetMatching/`).
 - `plans/plan_zero_match_is_not_an_error.md`, `plans/plan_shared_result_status_interface.md` (DONE 2026-10-11; built `IResultStatus`).
 - `findings/finding_engine_result_shapes_primitives_and_wrapper_usage.md` and `proposal_dto_ownership_role_lineage.md` (the approved `IOperationResult` rename, failure-prone primitives throwing a coded `ToolException`, removing `EngineResultWrapper<T>` where redundant); `.claude/skills/dto-conventions/SKILL.md:67-68` says "being renamed to `IOperationResult`" and must be updated with the rename.
 - `findings/20261020-Comprehensive-Review_Tests.*.md` (the nine test-audit docs that motivated this).
