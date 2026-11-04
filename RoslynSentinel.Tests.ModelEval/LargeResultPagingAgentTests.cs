@@ -58,6 +58,21 @@ public class LargeResultPagingAgentTests
         "WriteFile", "DeleteFile",
     };
 
+    // Same template, but the objective is the ReadFile tool itself: the model must page the whole file through
+    // GetLargeResult. Efficiency is explicitly irrelevant.
+    private const string LargeResultReadFileOnlyPromptTemplate = """
+        The objective of this session is to test the ReadFile tool. Read the whole file `{0}/FixtureHelpers/TierRates.cs` with ReadFile (no line range). If the result says it is INCOMPLETE, follow its GetLargeResult call and keep paging until you find the method that handles the Platinum annual contract tier, then report its method name and its rate value. Efficiency is irrelevant and no other tools are available. Do not edit anything.
+        """;
+
+    // Read-only find-by-name tools, blocked on top of BlockedToolNames for the ReadFile-only scenario. ReadFile stays
+    // available, but a ReadFile call that names a member (memberName) is refused too (see blockReadFileMemberLookup),
+    // so the whole-file read plus GetLargeResult paging is the only route to the needle.
+    private static readonly HashSet<string> ReadFileOnlyBlockedToolNames = new(BlockedToolNames)
+    {
+        "Search", "GetFileOutline", "GetMethodSource", "Member", "ListAll", "FindReferences", "InspectSymbol",
+        "LocateSymbol", "QuerySymbolRelationships",
+    };
+
     private IHost _host = null!;
     private McpClient _mcpClient = null!;
     private RoslynSentinel.Tests.TestSolutionFixture _fixture = null!;
@@ -151,8 +166,14 @@ public class LargeResultPagingAgentTests
     private static string ReadProperty(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) ? value.ToString() : "?";
 
+    // True when a ReadFile call names a member (memberName), i.e. a find-by-name shortcut around GetLargeResult paging.
+    private static bool NamesMember(CallToolRequestParams? parameters) =>
+        parameters?.Arguments is { } arguments
+        && arguments.TryGetValue("memberName", out var member)
+        && member.ValueKind == JsonValueKind.String;
+
     [SetUp]
-    public async Task SetUp()
+    public void SetUp()
     {
         LlmOptions.Configure([]);
         if (string.IsNullOrEmpty(LlmOptions.Model))
@@ -161,7 +182,14 @@ public class LargeResultPagingAgentTests
                 "ROSLYNSENTINEL_LLM_MODEL is not set - model-eval tests require a real LM Studio " +
                 "server with a loaded model and are skipped rather than failed when unconfigured.");
         }
+    }
 
+    /// <summary>
+    /// Starts the in-memory MCP server and the agent host for one scenario. blockedToolNames are refused by the
+    /// request filter; blockReadFileMemberLookup also refuses ReadFile calls that name a member.
+    /// </summary>
+    private async Task StartHarnessAsync(IReadOnlySet<string> blockedToolNames, bool blockReadFileMemberLookup)
+    {
         _fixture = new RoslynSentinel.Tests.TestSolutionFixture();
 
         var clientToServer = new Pipe();
@@ -184,7 +212,23 @@ public class LargeResultPagingAgentTests
             filters.AddCallToolFilter(next => new McpRequestHandler<CallToolRequestParams, CallToolResult>(
                 async (context, cancellationToken) =>
                 {
-                    if (context.Params?.Name is { } toolName && BlockedToolNames.Contains(toolName))
+                    if (blockReadFileMemberLookup && context.Params?.Name == "ReadFile" && NamesMember(context.Params))
+                    {
+                        return new CallToolResult
+                        {
+                            Content =
+                            [
+                                new TextContentBlock
+                                {
+                                    Text = "ReadFile with memberName is unavailable in this session - read the whole " +
+                                        "file (no memberName, no line range) and page the INCOMPLETE result with GetLargeResult.",
+                                },
+                            ],
+                            IsError = true,
+                        };
+                    }
+
+                    if (context.Params?.Name is { } toolName && blockedToolNames.Contains(toolName))
                     {
                         return new CallToolResult
                         {
@@ -266,6 +310,13 @@ public class LargeResultPagingAgentTests
         {
             ModelTestingResultsArchiver.ArchiveRunDirectory(_runDirectory);
         }
+
+        // Each scenario starts its own harness. Clear the handles so a test that ends in SetUp's Assert.Ignore
+        // does not stop or archive the previous test's objects.
+        _mcpClient = null!;
+        _host = null!;
+        _fixture = null!;
+        _runDirectory = null!;
     }
 
     private static List<(int TurnNumber, AgentToolCallRecord Call)> AllToolCalls(AgentRunResult result) =>
@@ -338,50 +389,56 @@ public class LargeResultPagingAgentTests
     }
 
     /// <summary>
-    /// Real-model smoke test of the large-result marshaller: ReadFile on the 300-method file is cut by the
-    /// server, and the model must follow the largeResult pointer with GetLargeResult to find the needle.
+    /// The last turn's answer. This model streams its final answer as ReasoningContent when a turn makes no tool
+    /// calls, so fall back to it the same way PlanOnlyAgentTests does.
     /// </summary>
-    [Test]
-    public async Task Model_PagesLargeResultToFindNeedle()
+    private static string FinalMessageOf(AgentRunResult result)
+    {
+        var finalTurn = result.Transcript.Turns
+            .LastOrDefault(t => !string.IsNullOrWhiteSpace(t.ModelMessage.Content) || !string.IsNullOrWhiteSpace(t.ModelMessage.ReasoningContent));
+        return finalTurn is null
+            ? string.Empty
+            : (string.IsNullOrWhiteSpace(finalTurn.ModelMessage.Content) ? finalTurn.ModelMessage.ReasoningContent : finalTurn.ModelMessage.Content) ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Runs the agent on the paging prompt and writes largeresult-summary.txt before any assertion, so the summary
+    /// exists even when an assertion fails. The harness must already be started by StartHarnessAsync.
+    /// </summary>
+    private async Task<(AgentRunResult Result, List<(int TurnNumber, AgentToolCallRecord Call)> Calls, string FinalMessage)> RunPagingScenarioAsync(
+        string userPrompt)
     {
         var runner = new ModelAgentRunner(
             _agentClient, _mcpClient, repeatedFailureLimit: 10, maxTokensPerTurn: 16384, turnCap: 15, wallClockCap: TimeSpan.FromMinutes(15),
             logger: _host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
-        var userPrompt = string.Format(LargeResultUserPromptTemplate, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
         var result = await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, _runDirectory, TestContext.CurrentContext.CancellationToken);
 
         var calls = AllToolCalls(result);
-
-        // This model streams its final answer as ReasoningContent when a turn makes no tool calls, so fall back
-        // to it the same way PlanOnlyAgentTests does.
-        var finalTurn = result.Transcript.Turns
-            .LastOrDefault(t => !string.IsNullOrWhiteSpace(t.ModelMessage.Content) || !string.IsNullOrWhiteSpace(t.ModelMessage.ReasoningContent));
-        var finalMessage = finalTurn is null
-            ? string.Empty
-            : (string.IsNullOrWhiteSpace(finalTurn.ModelMessage.Content) ? finalTurn.ModelMessage.ReasoningContent : finalTurn.ModelMessage.Content) ?? string.Empty;
-
-        // Summary first, so it exists even when an assertion below fails.
+        var finalMessage = FinalMessageOf(result);
         WriteSummary(result, calls, finalMessage);
+        return (result, calls, finalMessage);
+    }
 
-        // (a) Precondition: something must have overflowed, or the marshaller was not exercised at all.
-        var pointerCalls = calls.Where(c => CarriesLargeResultPointer(c.Call)).ToList();
-        if (pointerCalls.Count == 0)
+    /// <summary>
+    /// Precondition (a): something must have overflowed, or the marshaller was not exercised at all. Reports
+    /// Inconclusive otherwise and returns the number of pointer-carrying results.
+    /// </summary>
+    private static int AssertOverflowed(List<(int TurnNumber, AgentToolCallRecord Call)> calls)
+    {
+        var pointerCount = calls.Count(c => CarriesLargeResultPointer(c.Call));
+        if (pointerCount == 0)
         {
             Assert.Inconclusive("no result overflowed - the marshaller was not exercised");
         }
 
-        // (b) Main behaviour under test: the model must follow the pointer.
-        Assert.That(calls.Any(c => c.Call.ToolName == "GetLargeResult"), Is.True,
-            $"The model never followed the largeResult pointer (no GetLargeResult call) even though " +
-            $"{pointerCalls.Count} result(s) overflowed. Transcript: {result.TranscriptPath}");
+        return pointerCount;
+    }
 
-        // (c) The final answer names the needle and its rate.
-        Assert.That(finalMessage, Does.Contain(NeedleMethodName),
-            $"The final answer should name {NeedleMethodName}. Transcript: {result.TranscriptPath}");
-        Assert.That(finalMessage, Does.Contain(NeedleRate),
-            $"The final answer should state the rate {NeedleRate}. Transcript: {result.TranscriptPath}");
-
-        // (d) No stack-trace or generic-filter leakage in any tool result.
+    /// <summary>
+    /// No stack-trace or generic-filter leakage in any tool result.
+    /// </summary>
+    private static void AssertNoLeakage(List<(int TurnNumber, AgentToolCallRecord Call)> calls, AgentRunResult result)
+    {
         var leaked = calls
             .Where(c => System.Text.RegularExpressions.Regex.IsMatch(c.Call.ResultJson, @"\sat (?:RoslynSentinel|System)\.[\w.<>+,]*\(")
                 || c.Call.ResultJson.Contains(".cs:line ")
@@ -390,5 +447,70 @@ public class LargeResultPagingAgentTests
         Assert.That(leaked, Is.Empty,
             $"Tool results leaked a stack trace or the generic filter stub ({string.Join(", ", leaked.Select(c => c.Call.ToolName))}). " +
             $"Transcript: {result.TranscriptPath}");
+    }
+
+    /// <summary>
+    /// Real-model smoke test of the large-result marshaller: ReadFile on the 300-method file is cut by the
+    /// server, and the model must follow the largeResult pointer with GetLargeResult to find the needle.
+    /// </summary>
+    [Test]
+    public async Task Model_PagesLargeResultToFindNeedle()
+    {
+        await StartHarnessAsync(BlockedToolNames, blockReadFileMemberLookup: false);
+        var userPrompt = string.Format(LargeResultUserPromptTemplate, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
+        var (result, calls, finalMessage) = await RunPagingScenarioAsync(userPrompt);
+
+        var pointerCount = AssertOverflowed(calls);
+
+        // (b) Main behaviour under test: the model must follow the pointer.
+        Assert.That(calls.Any(c => c.Call.ToolName == "GetLargeResult"), Is.True,
+            $"The model never followed the largeResult pointer (no GetLargeResult call) even though " +
+            $"{pointerCount} result(s) overflowed. Transcript: {result.TranscriptPath}");
+
+        // (c) The final answer names the needle and its rate.
+        Assert.That(finalMessage, Does.Contain(NeedleMethodName),
+            $"The final answer should name {NeedleMethodName}. Transcript: {result.TranscriptPath}");
+        Assert.That(finalMessage, Does.Contain(NeedleRate),
+            $"The final answer should state the rate {NeedleRate}. Transcript: {result.TranscriptPath}");
+
+        // (d) No stack-trace or generic-filter leakage in any tool result.
+        AssertNoLeakage(calls, result);
+    }
+
+    /// <summary>
+    /// ReadFile-only variant: Search, GetFileOutline, GetMethodSource and Member are blocked, and ReadFile refuses
+    /// memberName, so the model can only read the whole file, follow the largeResult pointer and page it with
+    /// GetLargeResult. Efficiency is irrelevant; the assertions check that a GetLargeResult page itself carried the needle.
+    /// </summary>
+    [Test]
+    public async Task Model_PagesLargeResultToFindNeedle_ReadFileOnly()
+    {
+        await StartHarnessAsync(ReadFileOnlyBlockedToolNames, blockReadFileMemberLookup: true);
+        var userPrompt = string.Format(LargeResultReadFileOnlyPromptTemplate, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
+        var (result, calls, finalMessage) = await RunPagingScenarioAsync(userPrompt);
+
+        var pointerCount = AssertOverflowed(calls);
+
+        // (b) The model must follow the pointer with GetLargeResult.
+        Assert.That(calls.Any(c => c.Call.ToolName == "GetLargeResult"), Is.True,
+            $"The model never followed the largeResult pointer (no GetLargeResult call) even though " +
+            $"{pointerCount} result(s) overflowed. Transcript: {result.TranscriptPath}");
+
+        // (c) A GetLargeResult page itself must carry the needle name and its rate, not only the model's answer.
+        var pageCarriedNeedle = calls.Any(c => c.Call.ToolName == "GetLargeResult"
+            && c.Call.ResultJson.Contains(NeedleMethodName, StringComparison.Ordinal)
+            && c.Call.ResultJson.Contains(NeedleRate, StringComparison.Ordinal));
+        Assert.That(pageCarriedNeedle, Is.True,
+            $"No GetLargeResult result contained {NeedleMethodName} and {NeedleRate}, so the needle was never paged in. " +
+            $"Transcript: {result.TranscriptPath}");
+
+        // (d) The final answer names the needle and its rate.
+        Assert.That(finalMessage, Does.Contain(NeedleMethodName),
+            $"The final answer should name {NeedleMethodName}. Transcript: {result.TranscriptPath}");
+        Assert.That(finalMessage, Does.Contain(NeedleRate),
+            $"The final answer should state the rate {NeedleRate}. Transcript: {result.TranscriptPath}");
+
+        // (e) No stack-trace or generic-filter leakage in any tool result.
+        AssertNoLeakage(calls, result);
     }
 }

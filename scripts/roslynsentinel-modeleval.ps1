@@ -37,6 +37,12 @@
                           the marshaller was exercised, the pointer was followed, the answer is right, and
                           no stack trace leaked; writes largeresult-summary.txt next to agent.log. Not
                           [Explicit] - runs by default in the ModelEval project.
+      LargeResultPagingReadFileOnly - Model_PagesLargeResultToFindNeedle_ReadFileOnly. Same fixture and
+                          15 KB cap as LargeResultPaging, but Search, GetFileOutline, GetMethodSource,
+                          Member and ReadFile memberName lookups are blocked by a filter, so only whole-file
+                          ReadFile and GetLargeResult paging can reach the needle. Asserts the pointer was
+                          followed and a GetLargeResult page carried the needle, plus the same answer and
+                          leak checks. Not [Explicit].
       PlanThenExecute   - Model_FixesWholeFileRewriteBug_PlanThenExecute. Same disambiguated
                           task and full toolset as MinimalGuidanceDisambiguated, but the prompt
                           also asks the model to state its complete plan in prose before making
@@ -106,7 +112,7 @@
 
 .PARAMETER Test
     SizeThreshold | LiteralSteps | MinimalGuidance | MinimalGuidanceDisambiguated | PlanOnly | LargeResultPaging |
-    PlanThenExecute | ScriptedPlan | PlanImplementVerify | OrderPricingRefactor |
+    LargeResultPagingReadFileOnly | PlanThenExecute | ScriptedPlan | PlanImplementVerify | OrderPricingRefactor |
     OrderPricingRefactorChain4 | OrderPricingRefactorChain5 | OrderPricingRefactorChain6 |
     OrderPricingRefactorChain7 | OrderPricingRefactorChain8 | OrderPricingRefactorChain9 |
     OrderPricingRefactorChain10. Required. Accepts multiple values (e.g.
@@ -195,7 +201,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10')]
+    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10')]
     [string[]]$Test,
 
     [Parameter(Position = 2)]
@@ -251,6 +257,7 @@ $testNames = @{
     'MinimalGuidanceDisambiguated'  = 'Model_FixesWholeFileRewriteBug_MinimalGuidanceDisambiguated'
     'PlanOnly'                      = 'Model_PlansWholeFileRewriteFix_PrefersCallingHelper'
     'LargeResultPaging'             = 'Model_PagesLargeResultToFindNeedle'
+    'LargeResultPagingReadFileOnly' = 'Model_PagesLargeResultToFindNeedle_ReadFileOnly'
     'PlanThenExecute'               = 'Model_FixesWholeFileRewriteBug_PlanThenExecute'
     'ScriptedPlan'                   = 'Model_FixesWholeFileRewriteBug_ScriptedPlan'
     'PlanImplementVerify'           = 'Model_FixesWholeFileRewriteBug_PlanImplementVerify'
