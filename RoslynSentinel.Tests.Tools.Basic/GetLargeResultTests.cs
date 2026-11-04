@@ -583,4 +583,57 @@ public class GetLargeResultTests
         Assert.That(result.HasMoreData, Is.False);
         Assert.That(result.NextOffset, Is.Null, "A result that fits in one page must not carry a NextOffset.");
     }
+
+    [Test, CancelAfter(10000)]
+    public async Task T18_GetLargeResult_Envelope_NoLimit_FillsSizeBudgetWithShortLines()
+    {
+        // 5,000 two-character lines overflow one page, so the page is bound by the size budget, not by a line count.
+        var text = string.Concat(Enumerable.Repeat("x\n", 5000));
+        var resultId = Guid.NewGuid().ToString("N");
+        WriteLargeResultFile(new { successData = new { text } }, ResultWrapperType.Envelope, resultId);
+
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: resultId);
+
+        Assert.That(result.IsError, Is.False);
+        var returned = (int)result.SuccessData!.GetType().GetProperty("Returned")!.GetValue(result.SuccessData)!;
+        Assert.That(returned, Is.GreaterThan(200), "With no limit the page must fill the size budget, not stop at the old 50-line default.");
+        Assert.That(JsonSerializer.Serialize(result, ModelContextProtocol.McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(object))).Length,
+            Is.LessThanOrEqualTo(LargeResultHelper.InlineBudgetChars - LargeResultHelper.EchoReserveChars));
+        Assert.That(result.HasMoreData, Is.True);
+        Assert.That(result.NextOffset, Is.EqualTo(returned));
+    }
+
+    [Test, CancelAfter(10000)]
+    public async Task T19_GetLargeResult_Envelope_ExplicitLimit_IsAnUpperBound()
+    {
+        var text = string.Concat(Enumerable.Repeat("x\n", 5000));
+        var resultId = Guid.NewGuid().ToString("N");
+        WriteLargeResultFile(new { successData = new { text } }, ResultWrapperType.Envelope, resultId);
+
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: resultId, limit: 10);
+
+        Assert.That(result.IsError, Is.False);
+        var returned = (int)result.SuccessData!.GetType().GetProperty("Returned")!.GetValue(result.SuccessData)!;
+        Assert.That(returned, Is.EqualTo(10), "An explicit limit is an upper bound and must return exactly that many lines when they fit.");
+        Assert.That(result.HasMoreData, Is.True);
+        Assert.That(result.NextOffset, Is.EqualTo(10));
+    }
+
+    [Test, CancelAfter(10000)]
+    public async Task T20_GetLargeResult_Envelope_NoLimitShrunkPage_HasNoShrinkWarning()
+    {
+        // 200 lines of 200 characters: the budget fits only part of them, so the page shrinks. An omitted limit is not a
+        // caller-requested count, so the shrink must not be reported as "Page shrunk".
+        var text = string.Concat(Enumerable.Repeat(new string('y', 199) + "\n", 200));
+        var resultId = Guid.NewGuid().ToString("N");
+        WriteLargeResultFile(new { successData = new { text } }, ResultWrapperType.Envelope, resultId);
+
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: resultId);
+
+        Assert.That(result.IsError, Is.False);
+        var returned = (int)result.SuccessData!.GetType().GetProperty("Returned")!.GetValue(result.SuccessData)!;
+        Assert.That(returned, Is.GreaterThan(0).And.LessThan(200), "The page must shrink to fit the budget for this test to exercise the shrink path.");
+        Assert.That(result.HasMoreData, Is.True);
+        Assert.That(result.WarningDetails ?? string.Empty, Does.Not.Contain("Page shrunk"));
+    }
 }

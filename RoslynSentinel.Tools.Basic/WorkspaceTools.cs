@@ -645,8 +645,9 @@ public class WorkspaceTools
     // ── get_large_result ────────────────────────────────────────────────────────
 
     // Non-tool delegator: the GetLargeResult [McpServerTool] lives on WorkspaceReadNavigationTools.
+    // limit null = fill the size budget (see GetLargeResult); a non-null value is an upper bound.
     public Task<SentinelCallToolResult<object>> GetLargeResultTool(
-        ToolCallReason reason, string? resultId = null, string? filePath = null, int limit = 50, int offset = 0,
+        ToolCallReason reason, string? resultId = null, string? filePath = null, int? limit = null, int offset = 0,
         int? charLimit = null, string? path = null, CancellationToken cancellationToken = default)
         => _readNavTools.GetLargeResultTool(reason, resultId, filePath, limit, offset, charLimit, path, cancellationToken);
 

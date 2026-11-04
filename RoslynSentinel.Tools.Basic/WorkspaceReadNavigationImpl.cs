@@ -1467,7 +1467,7 @@ public class WorkspaceReadNavigationImpl
     // path. The page is fitted to InlineBudgetChars minus EchoReserveChars (and a small margin for digits) with ResultPager, so
     // the marshaller, which uses the same budget, never cuts it again, and the offload filter never sees it over its threshold.
     private static SentinelCallToolResult<object> PageEnvelope(
-        ResultWrapper stored, string? path, int offset, int limit, string? resultId, string? filePath)
+        ResultWrapper stored, string? path, int offset, int? limit, string? resultId, string? filePath)
     {
         const int safetyMarginChars = 64;
         JsonSerializerOptions wire = ModelContextProtocol.McpJsonUtilities.DefaultOptions;
@@ -1520,7 +1520,8 @@ public class WorkspaceReadNavigationImpl
         string unit = array is not null ? ResultPager.UnitItems : ResultPager.UnitLines;
         int total = array?.Count ?? lines!.Count;
         int start = Math.Clamp(offset, 0, total);
-        int want = Math.Min(Math.Max(1, limit), total - start);
+        // Omitted limit: the page is as many elements or lines as fit the budget (default fills the budget; plan_wire_result_marshaller).
+        int want = limit is null ? total - start : Math.Min(Math.Max(1, limit.Value), total - start);
         int budget = LargeResultHelper.InlineBudgetChars - LargeResultHelper.EchoReserveChars - safetyMarginChars;
 
         SentinelCallToolResult<object> Build(int count, string? warning)
@@ -1577,7 +1578,7 @@ public class WorkspaceReadNavigationImpl
                     : $"Line {start} of '{effectivePath}' is longer than one page and was skipped; continue from offset {start + 1}.";
             }
 
-            return pageCount < want
+            return limit is not null && pageCount < want
                 ? $"Page shrunk from {want} to {pageCount} {unit} to stay under the size threshold. Call {FetchHint(start + pageCount, effectivePath)} to continue."
                 : null;
         }
@@ -1594,7 +1595,7 @@ public class WorkspaceReadNavigationImpl
         ToolCallReason reason,
         string? resultId = null,
         string? filePath = null,
-        int limit = 50,
+        int? limitOrNull = null,
         int offset = 0,
         CancellationToken cancellationToken = default, int? charLimit = null, string? path = null)
     {
@@ -1677,8 +1678,11 @@ public class WorkspaceReadNavigationImpl
             // Envelope (the result marshaller's store): the full wire envelope, paged by path with ResultPager. Old types below are untouched.
             if (all.Type == ResultWrapperType.Envelope)
             {
-                return PageEnvelope(all, path, offset, limit, resultId, filePath);
+                return PageEnvelope(all, path, offset, limitOrNull, resultId, filePath);
             }
+
+            // Legacy list and text paths below keep the old default of 50 when limit is omitted.
+            int limit = limitOrNull ?? 50;
 
             // Raw (the generic MCP request-filter offload backstop, see
             // docs/current/proposal_centralized_large_result_filter.md) has no known element shape ->

@@ -104,8 +104,8 @@ public class WorkspaceReadNavigationTools
         [Consumes(DataTag.ResultId)] string? resultId = null,
         [Description("Path to a largeresult_*.json file. Required if resultId is omitted.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
-        [Description("Max items (lines for a text path) per page; a page may return fewer. Continue from nextOffset while hasMoreData is true.")]
-        [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
+        [Description("Max items (lines for a text path) per page; omit to return as many as fit the size budget. Continue from nextOffset while hasMoreData is true.")]
+        [ToolOption(ToolOptionTag.ResultLimit)] int? limit = null,
         [Description("Items (lines for a text path) to skip before the next page; characters for an old Raw result.")]
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
         [Description("Old Raw results only: max characters to return. Otherwise page with path and limit.")]
