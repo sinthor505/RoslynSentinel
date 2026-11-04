@@ -321,7 +321,7 @@ public class WorkspaceReadNavigationImpl
                 }
 
                 var sourceText = await document.GetTextAsync(cancellationToken);
-                var (missMessage, missCandidates) = SyntaxTargetResolver.BuildContainerMissDetail(root, sourceText, methodName, containerName!, filePathResolved,
+                var (missMessage, missCandidates) = await SyntaxTargetResolver.BuildContainerMissDetailAsync(root, sourceText, methodName, containerName!, filePathResolved,
                     retryCallTemplate: ToolCallHint.Call("GetMethodSource", ("filePath", "{file}"), ("methodName", "{member}"), ("containerName", "{container}")), methodsOnly: true);
                 return new SentinelCallToolResult<MethodSourceResult, ResultError>()
                 {

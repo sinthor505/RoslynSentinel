@@ -2736,7 +2736,7 @@ public class SymbolNavigationEngine
             var narrowed = SyntaxTargetResolver.FilterByContainingTypeStrict(memberCandidates, containerName);
             if (narrowed.Count == 0 && (memberCandidates.Count > 0 || allNameCandidates.Count == 0))
             {
-                var (message, candidates) = SyntaxTargetResolver.BuildContainerMissDetail(root, sourceText, memberName, containerName, document.FilePath ?? string.Empty, "ReadFile(filePath: '{file}', memberName: '{member}', containerName: '{container}')", methodsOnly: false); // hint-ok: retry template is string-replaced and regex-matched on the quoted '{container}' form; ToolCallHint would drop those quotes
+                var (message, candidates) = await SyntaxTargetResolver.BuildContainerMissDetailAsync(root, sourceText, memberName, containerName, document.FilePath ?? string.Empty, "ReadFile(filePath: '{file}', memberName: '{member}', containerName: '{container}')", methodsOnly: false); // hint-ok: retry template is string-replaced and regex-matched on the quoted '{container}' form; ToolCallHint would drop those quotes
                 throw new ToolNotFoundException(message, "member", memberName, candidates: candidates);
             }
 

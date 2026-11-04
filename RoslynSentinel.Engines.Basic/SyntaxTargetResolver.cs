@@ -106,7 +106,7 @@ public static class SyntaxTargetResolver
     /// immediately. Generic spellings resolve, so a listed name can be given back verbatim; see
     /// <see cref="SyntaxTargetResolver.NormalizeTypeName"/>.
     /// </remarks>
-    // TODO convert to BuildContainerNotFoundMessageAsync (BuildContainerMissDetail still uses the sync form)
+    // TODO convert to BuildContainerNotFoundMessageAsync (only the 10 test callers in GenericContainerNameTests still use the sync BuildContainerMissDetail)
     public static string BuildContainerNotFoundMessage(SyntaxNode root, string requestedName)
     {
         var declared = root.DescendantNodes()
@@ -746,6 +746,15 @@ public static class SyntaxTargetResolver
 
     // Same cap as the resolver's own closest-window list (SnippetCandidateFinder.MaxClosestWindows, internal to Common).
     private const int MaxScopedWindows = 5;
+
+    /// <summary>
+    /// Async form of <see cref="BuildContainerMissDetail"/> for async callers. The analysis is pure
+    /// in-memory syntax work, so the returned task is already complete.
+    /// </summary>
+    public static Task<(string Message, IReadOnlyList<AmbiguousCandidate> Candidates)> BuildContainerMissDetailAsync(
+        SyntaxNode root, SourceText sourceText, string memberName, string containerName, string filePath,
+        string retryCallTemplate, bool methodsOnly, bool includeTypeKinds = false)
+        => Task.FromResult(BuildContainerMissDetail(root, sourceText, memberName, containerName, filePath, retryCallTemplate, methodsOnly, includeTypeKinds));
 }
 
 /// <summary>
