@@ -24,8 +24,18 @@ Before slice 2 the model ignored the pointer (pointer was the last key, vague te
 lines) and invented a rate; slice 2 (df2d912b: pointer first key, `INCOMPLETE:` message with a ready `GetLargeResult(...,
 path: ...)` call, no outline on a large `ReadFile`) gave 3/3 passes: the first `ReadFile` keeps 308 lines, every run
 followed the pointer and answered correctly, but none reached the needle by paging (pages of 50-200 lines; they switched
-to `Search`). Open: larger default pages or a status-message route to `Search`/ranged `ReadFile`. Remaining Step 6 live
-checks not yet run: SemanticFindReplace preview, Build with errors, a large error result. Supersedes
+to `Search`). Slice 3 (a88a8a79): `GetLargeResult` `limit` defaults to null, so an Envelope page fills the size budget
+(160 lines live vs 50; a given `limit` stays an upper bound; legacy stored types keep 50; no "Page shrunk" warning
+without a `limit`); the first test run failed because the `WorkspaceTools.GetLargeResultTool` delegator kept its own
+`limit = 50`. Constrained test `LargeResultPagingReadFileOnly` (c29f5ff5; Search, GetFileOutline, GetMethodSource and
+other lookups refused by the request filter) passed 3/3 on host 113: the model paged to the needle page every run
+(offsets 884/900/908). Both ModelEval tests always passed `limit` (100-500, clipped to ~288 lines by the budget), so
+the omitted-`limit` path is covered by unit tests T18-T20 only. Step 6 live checks 2026-11-04: a large ERROR result
+(156 KB `Member` ValidationFailed) is cut with a pointer (`errorData.detail` 1/600 lines, `errorData.structuredDetail`
+35/200 items, `inferred`) and pages with no `limit` (89 lines); `Build` with 60 errors is ~7 KB (errors capped at 20 by
+`maxDetails`), so it never reaches the marshaller; its `errorSummary.byProject` reads "(unknown)" (separate issue).
+Still not run: SemanticFindReplace preview (tool hidden in the same session after `McpToolsetControl(moveExtract)`;
+needs a fresh session). Supersedes
 [plan_typed_large_result_offload.md](plan_typed_large_result_offload.md) and
 [proposal_central_large_result_offload.md](../proposals/proposal_central_large_result_offload.md), and subsumes
 change #5 of `proposal_envelope_field_promotion.md` (inline first page plus `resultId`).
