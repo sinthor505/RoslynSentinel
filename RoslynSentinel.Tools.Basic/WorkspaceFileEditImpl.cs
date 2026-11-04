@@ -406,19 +406,8 @@ public class WorkspaceFileEditImpl
             const int thresholdBytes = LargeResultHelper.OffloadThresholdBytes;
             if (textBytes > thresholdBytes)
             {
-                // Over the threshold the marshaller cuts the payload and stores it; the tool returns the
-                // full source inline together with the outline so the caller can navigate without a second call.
-                object? outlineData = null;
-                try
-                {
-                    var fileOutline = await _readNav.GetFileOutline(reason: reason, filePathResolved, cancellationToken);
-                    outlineData = fileOutline.SuccessData;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "GetFileOutline failed for '{FilePathWrapper}'", filePathResolved);
-                }
-
+                // Over the threshold the marshaller cuts the payload and stores the rest; the source gets the
+                // whole inline budget, so no outline is attached here (GetFileOutline is a separate call).
                 return new SentinelCallToolResult<object>
                 {
                     IsError = false,
@@ -428,11 +417,11 @@ public class WorkspaceFileEditImpl
                         startLine = 1,
                         endLine = totalLines,
                         totalLines,
-                        source = fullText,
-                        fileOutline = outlineData
+                        source = fullText
                     },
                     Findings = mixedEol is null ? [] : [new Finding("ReadFile", mixedEol)],
                     HasMoreData = false,
+                    StatusMessage = $"File is {totalLines} lines ({textBytes} bytes), over the inline limit: the first part is returned and the rest is stored (see largeResult). For a structure overview call {ToolCallHint.Call("GetFileOutline")}; for a slice call {ToolCallHint.Call("ReadFile", ("startLine", "1"), ("endLine", "200"))}.",
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
                 };
             }

@@ -118,7 +118,7 @@ public class ReadFileTests
     }
 
     [Test]
-    public async Task ReadFile_LargerThanThreshold_ReturnsSourceInlineWithOutlineAsync()
+    public async Task ReadFile_LargerThanThreshold_ReturnsSourceInlineAsync()
     {
         var bigDocPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Big.cs");
         var bigSource = string.Concat(Enumerable.Range(0, 2000).Select(i => $"var line{i} = {i};\n"));
@@ -138,7 +138,8 @@ public class ReadFileTests
         var data = result.SuccessData!;
         var source = (string)data.GetType().GetProperty("source")!.GetValue(data)!;
         Assert.That(source.Length, Is.EqualTo(bigSource.Length));
-        Assert.That(data.GetType().GetProperty("fileOutline")!.GetValue(data), Is.Not.Null);
+        Assert.That(data.GetType().GetProperty("fileOutline"), Is.Null);
+        Assert.That(result.StatusMessage, Does.Contain("GetFileOutline"));
     }
 
     [Test]

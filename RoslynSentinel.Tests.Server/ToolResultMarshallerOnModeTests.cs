@@ -155,6 +155,7 @@ public class ToolResultMarshallerOnModeTests
         Assert.That(text.Length, Is.LessThanOrEqualTo(LargeResultHelper.InlineBudgetChars), "fitted result plus pointer stays under the filter threshold");
 
         var envelope = JsonNode.Parse(text)!.AsObject();
+        Assert.That(envelope.First().Key, Is.EqualTo("largeResult"), "the pointer leads the envelope so a model reads it first");
         Assert.That(envelope["isError"]!.GetValue<bool>(), Is.False);
         Assert.That(envelope["statusMessage"]!.GetValue<string>(), Is.EqualTo("pinned status message"));
         Assert.That(envelope["warningDetails"]!.GetValue<string>(), Is.EqualTo("pinned warning"));
@@ -179,6 +180,7 @@ public class ToolResultMarshallerOnModeTests
         Assert.That(pointer["totalRecords"]!.GetValue<int>(), Is.EqualTo(400), "compat only: omitted[0].total");
         Assert.That(envelope["successData"]!["regexResults"]!.AsArray(), Has.Count.EqualTo(returned));
         Assert.That(pointer["message"]!.GetValue<string>(), Does.Contain("GetLargeResult").And.Contain(resultId));
+        Assert.That(pointer["message"]!.GetValue<string>(), Does.StartWith("INCOMPLETE:").And.Contain("path: \"successData.regexResults\""));
 
         // The store holds the FULL wire text, as an Envelope wrapper.
         string? stored = StoredFileFor(resultId);
@@ -215,6 +217,7 @@ public class ToolResultMarshallerOnModeTests
         object? marshalled = await MarshalAsync(On(solutionRoot: null), BigSearch(400));
 
         var envelope = JsonNode.Parse((string)marshalled!)!.AsObject();
+        Assert.That(envelope.First().Key, Is.EqualTo("largeResult"), "the pointer leads the envelope in the failure branch too");
         Assert.That(((string)marshalled!).Length, Is.LessThanOrEqualTo(LargeResultHelper.InlineBudgetChars));
         var pointer = envelope["largeResult"]!.AsObject();
         Assert.That(pointer.ContainsKey("resultId"), Is.False);

@@ -141,6 +141,7 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
             "; ",
             omitted.Take(3).Select(p => p.Path + " " + p.Returned + "/" + p.Total + " " + p.Unit)) + (omitted.Count > 3 ? "; ..." : string.Empty);
 
+        JsonNode pointerNode;
         if (resultId is not null)
         {
             var pointer = new LargeResultInfo(
@@ -150,16 +151,16 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
                 resultId: resultId,
                 sizeBytes: Encoding.UTF8.GetByteCount(text),
                 totalRecords: omitted[0].Total,
-                message: $"Result is {text.Length} chars; cut to fit: {summary}. Use {LargeResultHints.FetchCall(resultId)} to page through the full result.")
+                message: $"INCOMPLETE: this result was cut to fit ({summary}); the cut parts are stored in full. Call {LargeResultHints.FetchCall(resultId, path: omitted[0].Path)} to read the first cut part (add offset/limit to page; every cut part is listed in omitted).")
             {
                 Omitted = omitted,
             };
-            fitted["largeResult"] = JsonSerializer.SerializeToNode(pointer, options);
+            pointerNode = JsonSerializer.SerializeToNode(pointer, options)!;
         }
         else
         {
             string warning = $"Result is {text.Length} chars and was cut to fit ({summary}), but {storeFailure}; the omitted part is not retrievable. Narrow the request or page by offset.";
-            fitted["largeResult"] = JsonSerializer.SerializeToNode(
+            pointerNode = JsonSerializer.SerializeToNode(
                 new
                 {
                     resultType = nameof(ResultWrapperType.Envelope),
@@ -168,10 +169,20 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
                     message = warning,
                     omitted,
                 },
-                options);
+                options)!;
             fitted["warningDetails"] = fitted["warningDetails"] is JsonValue existing && existing.TryGetValue(out string? previous) && !string.IsNullOrEmpty(previous)
                 ? previous + " " + warning
                 : warning;
+        }
+
+        // Pointer first: a model reads the leading keys, so largeResult must be the envelope's first property.
+        // Clear detaches the nodes, so the remaining properties are re-added as deep clones in their original order.
+        var rest = fitted.Where(kv => kv.Key != "largeResult").Select(kv => (kv.Key, Value: kv.Value?.DeepClone())).ToList();
+        fitted.Clear();
+        fitted["largeResult"] = pointerNode;
+        foreach (var (key, value) in rest)
+        {
+            fitted[key] = value;
         }
 
         return fitted.ToJsonString(options);
