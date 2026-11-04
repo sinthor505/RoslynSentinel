@@ -9,10 +9,19 @@ Step 6 implemented 2026-11-02 (default `on`; verified live on a LaunchTestInstan
 with a pointer, paged by path in 4 pages and concatenated equal to the stored node; small results and legacy-offloaded
 Search unchanged; ModelEval smoke run and restart-on-own-instance pending). Step 7 mostly implemented 2026-11-03 (helpers obsolete
 pass-throughs; 26 `ForPossiblyLargeDataAsync` and 4 `ForPossiblyLargeDetailAsync` callers converted; Asyncify scan and
-`GetPublicApiSurface` stores removed; `[ResultRecords]` on `TextSearchResult.LiteralResults`). Step 7 still open: the
-direct stores in `ReadFile` (plus `TrimRangeToInlineBudget`) and `GetMethodSource` (`// TODO` in place; changes what a
-large read returns, so wait for the Step 6 live checks), `[ResultRecords]` for Search references/callers/implementations
-(anonymous objects need a named record, a wire-shape decision) and bare-list tools (pager infers). Supersedes
+`GetPublicApiSurface` stores removed; `[ResultRecords]` on `TextSearchResult.LiteralResults`). Step 7 slice 1 landed
+2026-11-03 (01e569e1): the `ReadFile` whole-file and `GetMethodSource` direct stores are gone (source returned inline,
+marshaller cuts it); `TrimRangeToInlineBudget` and the ranged-read branch are deliberately KEPT (user decision: ranged
+reads keep their deterministic `startLine` continuation and a truthful `endLine`). Live after restart: `Git(diff)` 710
+lines cut to 174, `Search(text)` 1387 items cut to 30 (declared hint), `GetLargeResult` paged both by path;
+`GetMethodSource` of a 366-line method cut to 137 lines. Open observation: a whole-file `ReadFile` of a 312 KB file
+returns only 15 source lines because the attached `fileOutline` (~13 KB) uses the budget; decide whether to drop the
+outline or let the pager cut it. Step 7 still open: `[ResultRecords]` for Search references/callers/implementations
+(anonymous objects need a named record, a wire-shape decision) and bare-list tools (pager infers); Step 6 ModelEval
+smoke run is OPEN: `SizeThreshold -Size 60` on host 112 (2026-11-03, 3 repeats, 25 min) was inconclusive - the target
+file was 8,091 chars, no result overflowed, `GetLargeResult` was never called, and all 3 runs ended in LM Studio errors
+(JSON parse errors on tool-call arguments, one 33,024-token context overflow), none traced to the marshaller; a rerun
+needs a task that really overflows (a dedicated test, not a larger `-Size` on a 33K-context model). Supersedes
 [plan_typed_large_result_offload.md](plan_typed_large_result_offload.md) and
 [proposal_central_large_result_offload.md](../proposals/proposal_central_large_result_offload.md), and subsumes
 change #5 of `proposal_envelope_field_promotion.md` (inline first page plus `resultId`).
