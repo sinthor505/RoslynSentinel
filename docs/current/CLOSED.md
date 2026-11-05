@@ -8,6 +8,15 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## `FindReferences` failures lacked a ready-to-run next call - resolved (2026-11-05)
+
+Snippet-miss and name-miss messages from `FindCallersAsync` / `FindImplementationsForMemberAsync` (the `FindReferences` engine path) now end with a `ToolCallHint` `Next: FindReferences(...)` call using the best candidate's filePath plus verbatim declaration line (a type gets filePath only). The file-pinned case wraps the `SnippetSymbolLocator` snippet-miss exception and appends the call; the Did-you-mean list ranks exact-name matches first, then non-test types, non-test members, then test code (`RankCandidate`). Re-measure with `scripts/Get-NotFoundRecoveryReport.ps1 -Tool FindReferences` after the next restart.
+Evidence: `RoslynSentinel.Tests.Advanced/BugFixTests.cs` (`*_EndsWithFindReferencesNextCall` x5, `FindCallersAsync_DidYouMean_RanksTypeAheadOfSameNamedTestMethod`), `FirstMatchRatchetTests` baseline entry for `BuildFindReferencesNextCallForFile`.
+
+## File-not-found messages checked loaded documents only - resolved (2026-11-05)
+
+The three copies (`WorkspaceReadNavigationImpl`, `WorkspaceFileEditImpl`, `DocumentLookupResult.Describe`) now call one helper, `RoslynSentinel.Common/FileNotFoundMessage.Build`. It reports a directory passed as a file, a `.csproj`/`.sln`/`.slnx` passed as a source file, and a file that exists on disk outside the loaded solution (naming the nearest `.sln`/`.slnx`, else `.csproj`, as a `LoadSolution(...)` call when callable), before the closest-path and no-match wording.
+Evidence: `RoslynSentinel.Tests.Tools.Basic/FileNotFoundMessageTests.cs` (12 tests, one per branch), `CallableToolHintTests` and `ToolHintRatchetTests` pass.
 ## `RenameSymbol` could not rename a namespace - resolved (2026-11-05)
 
 Roslyn's Renamer already rewrote namespace declarations, usings and qualified names across files and projects; the gaps were an accepted dotted `newName` (wrong rewrite) and a null updated handle. Now `docCommentId` `N:Ns.Name` with `newName` = the new last segment works; a dotted or non-identifier `newName` and the global namespace are refused with an actionable error; the updated handle is `N:<parent>.<newName>`. Follow-ups (Search(namespace) docCommentId, noisy residualMentions) are in TODO.md.
