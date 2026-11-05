@@ -52,4 +52,26 @@ public sealed class RenameSymbolTests
         Assert.That(result.ErrorData!.Message, Does.Contain("NoSuchSymbol").Or.Contain("no longer resolves"));
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("NotFound"));
     }
+
+    // A rename onto an existing signature must be refused by the compile gate, with the duplicate-definition hint, and leave the file untouched.
+    [Test]
+    [Category("RefactoringSignatureTools")]
+    public async Task RenameSymbol_NewNameCollidesWithExistingMemberSignature_IsRefusedAndWritesNothing()
+    {
+        const string collideSource = "namespace TestProj;\npublic class Widget\n{\n    public int Alpha() => 1;\n    public int Beta() => 2;\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Collide.cs", Crlf(collideSource)));
+        var tools = BatteryToolFactory.CreateRefactoringSignatureTools(workspace.Manager);
+        var symbolNavEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(workspace.Manager, NullLogger<SymbolNavigationEngine>.Instance);
+        var located = await symbolNavEngine.LocateSymbolAsync("Alpha", containingType: "Widget");
+        var handle = located.Single();
+        var result = await tools.RenameSymbolTool(reason: "test message", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!, newName: "Beta");
+        var errorText = $"{result.ErrorData?.Message}\n{result.ErrorData?.Detail}";
+        var diag = $"errorText=[{errorText}]";
+        Assert.That(result.IsError, Is.True, diag);
+        Assert.That(errorText, Does.Contain("collides with an existing declaration"), diag);
+        Assert.That(errorText, Does.Contain("CS0111"), diag);
+        var collideText = workspace.ReadText("Collide.cs");
+        Assert.That(collideText, Does.Contain("public int Alpha()"), "The refused rename must leave Alpha in place.");
+        Assert.That(collideText.Split("Beta(").Length - 1, Is.EqualTo(1), "The refused rename must not write a second Beta.");
+    }
 }

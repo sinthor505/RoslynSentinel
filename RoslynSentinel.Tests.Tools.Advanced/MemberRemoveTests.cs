@@ -114,6 +114,48 @@ public sealed class MemberRemoveTests
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")]
+    public async Task RemoveMember_FifteenHundredCallers_RefusalStaysBounded()
+    {
+        // A Member(remove) on a heavily used member once returned a 425 KB error ("1006 caller(s)") listing every caller;
+        // this pins the caller list at 10 entries and the whole refusal (Message + Detail) under 8 KB.
+        const int callerCount = 1500;
+        var callers = string.Join("\r\n", Enumerable.Range(0, callerCount).Select(i => $"    public void Use{i}() {{ var n = GetName(); }}"));
+        var source = "namespace TestProj;\r\n\r\npublic class Helper\r\n{\r\n    public string GetName() => \"Test\";\r\n\r\n" + callers + "\r\n}\r\n";
+        using var workspace = InMemoryWorkspace.Create(("Helper.cs", source));
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Helper.cs"), MemberAction.remove, memberName: "GetName");
+        var message = result.ErrorData?.Message ?? string.Empty;
+        var detailLength = result.ErrorData?.Detail?.Length ?? 0;
+        var diag = $"messageLen={message.Length} detailLen={detailLength} head={message.Substring(0, Math.Min(300, message.Length))}";
+        Assert.That(result.IsError, Is.True, diag);
+        Assert.That(message, Does.Contain($"{callerCount} caller(s)"), diag);
+        Assert.That(System.Text.RegularExpressions.Regex.Matches(message, "\"CallerMethod\"").Count, Is.LessThanOrEqualTo(10), diag);
+        Assert.That(message.Length + detailLength, Is.LessThan(8192), diag);
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")]
+    public async Task RemoveMember_OneMethodWithFifteenHundredCalls_RefusalStaysBounded()
+    {
+        // Same bound as the many-callers case, but one caller method holds 1500 call sites; the refusal must stay under 8 KB.
+        const int callSiteCount = 1500;
+        var lines = string.Join("\r\n", Enumerable.Range(0, callSiteCount).Select(i => $"        var n{i} = GetName();"));
+        var source = "namespace TestProj;\r\n\r\npublic class Helper\r\n{\r\n    public string GetName() => \"Test\";\r\n\r\n    public void Use()\r\n    {\r\n" + lines + "\r\n    }\r\n}\r\n";
+        using var workspace = InMemoryWorkspace.Create(("Helper.cs", source));
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Helper.cs"), MemberAction.remove, memberName: "GetName");
+        var message = result.ErrorData?.Message ?? string.Empty;
+        var detailLength = result.ErrorData?.Detail?.Length ?? 0;
+        var countText = System.Text.RegularExpressions.Regex.Match(message, @"\d+ caller\(s\)").Value;
+        var diag = $"messageLen={message.Length} detailLen={detailLength} countText='{countText}' head={message.Substring(0, Math.Min(300, message.Length))}";
+        Assert.That(result.IsError, Is.True, diag);
+        Assert.That(message, Does.Contain("1500 caller(s)"), diag);
+        Assert.That(System.Text.RegularExpressions.Regex.Matches(message, "\"CallerMethod\"").Count, Is.LessThanOrEqualTo(10), diag);
+        Assert.That(message.Length + detailLength, Is.LessThan(8192), diag);
+    }
+
+    [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task RemoveMember_HasCaller_SkipPrecheckTrue_StillRefusedByEngineCallerCheck()
     {

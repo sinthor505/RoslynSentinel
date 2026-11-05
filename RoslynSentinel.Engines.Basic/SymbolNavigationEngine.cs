@@ -2503,13 +2503,21 @@ public class SymbolNavigationEngine
             ConditionalExpressionSyntax) == true;
 
     /// <summary>
-    /// Builds a "symbolName WAS found at these locations, but contextSnippet didn't match" hint for
-    /// a contextSnippet-resolution failure, given the name-only candidate declarations already
-    /// available at the call site. Mirrors BasicRefactoringEngine's NearMissList hint shape (line +
-    /// first-line preview, up to 3, "+N more" suffix) so an agent sees the same style of actionable
-    /// error across every tool in this codebase that resolves by name+contextSnippet, not just the
-    /// BasicRefactoringEngine mutation tools. Returns an empty string (not a sentence fragment) when
-    /// symbolName itself doesn't resolve to anything nearby, since there's nothing to list.
+    /// Builds a "symbolName 'X' WAS found declared at: ..." hint for a contextSnippet-resolution
+    /// failure, from the name-only candidate declarations (syntax nodes) already available at the call
+    /// site. Input: syntax nodes, expected to come from ONE file (the body does not check this; each
+    /// line number comes from the node's own syntax tree, -1 when it has none). Output: the first 3
+    /// nodes as "line N `first line`", the first line trimmed to 50 chars (47 plus "..." when longer),
+    /// joined by ", ", with " (+N more)" appended when there are more than 3, then ". " (trailing
+    /// space). Returns an empty string when there are no candidates. Mirrors BasicRefactoringEngine's
+    /// NearMissList hint shape (line + first-line preview, up to 3, "+N more" suffix) so an agent sees
+    /// the same style of actionable error across every tool in this codebase that resolves by
+    /// name+contextSnippet, not just the BasicRefactoringEngine mutation tools. Use it when a
+    /// contextSnippet did not match although the name exists in the file. For a name that resolved to
+    /// nothing, use <see cref="DescribeNearMissCandidatesAsync"/>; for an ambiguous solution-wide name
+    /// that needs a retry, use <see cref="DescribeCandidateLocations"/>.
+    /// <seealso cref="DescribeNearMissCandidatesAsync"/>
+    /// <seealso cref="DescribeCandidateLocations"/>
     /// </summary>
     public static string DescribeNameOnlyCandidates(IReadOnlyList<SyntaxNode> candidates, string symbolName)
     {
@@ -2536,20 +2544,23 @@ public class SymbolNavigationEngine
     }
 
     /// <summary>
-    /// Builds a "Did you mean: ..." hint for a symbolName that resolved to zero candidates anywhere
-    /// in the solution (i.e. ResolveSymbolByNameAsync returned null) - as opposed to
-    /// DescribeNameOnlyCandidates above, which handles the exact-name-found-but-contextSnippet-failed
-    /// case. Runs a case-insensitive substring scan across every project's compilation using
-    /// Compilation.GetSymbolsWithName's predicate overload, so a typo'd or approximately-remembered
-    /// name still surfaces real candidates inline instead of forcing a second LocateSymbol round-trip.
-    /// Only ever called on the already-failing path (symbol == null after every other fallback), so
-    /// this adds no cost to a normal, successful resolution. Capped at 5 suggestions (wider than
-    /// DescribeNameOnlyCandidates's 3, since these hits span the whole solution rather than one file
-    /// and are more likely to include irrelevant noise). Returns an empty string when nothing similar
-    /// is found either, so the caller message degrades to a plain "not found" with no dangling hint.
-    /// When matches exist the returned string ENDS with a ready-to-run FindReferences next call (no trailing
-    /// space) built for the first-ranked match: exact-name matches first, then RankCandidate. Collects up to
-    /// 40 distinct matches and lists at most 5 labels.
+    /// Builds a "Did you mean: ...?" hint for a symbolName that resolved to zero candidates anywhere
+    /// in the solution (ResolveSymbolByNameAsync returned null). Input: the Solution, symbolName, and
+    /// kind (passed to the follow-up call). Scans every project's compilation with a case-insensitive
+    /// substring predicate on Compilation.GetSymbolsWithName (SymbolFilter.TypeAndMember), so an
+    /// approximately-remembered name still surfaces real candidates inline. Collects up to 40 distinct
+    /// matches (label "Name (ContainingType)", or just the name when the containing namespace is the
+    /// global one), orders exact-name matches first and then by RankCandidate, and lists at most 5
+    /// labels. When matches exist the returned string ends with the FindReferences next call from
+    /// BuildFindReferencesNextCall for the first-ranked match. Returns an empty string when nothing
+    /// similar is found, so the caller message degrades to a plain "not found". Only ever called on the
+    /// already-failing path, so a successful resolution pays no cost. Capped at 5 labels (wider than the
+    /// 3 of <see cref="DescribeNameOnlyCandidates"/>) because these hits span the whole solution. Use it
+    /// for a name that resolved to nothing; for a name found in one file whose contextSnippet missed, use
+    /// <see cref="DescribeNameOnlyCandidates"/>; for an ambiguous name needing a retry, use
+    /// <see cref="DescribeCandidateLocations"/>.
+    /// <seealso cref="DescribeNameOnlyCandidates"/>
+    /// <seealso cref="DescribeCandidateLocations"/>
     /// </summary>
     public static async Task<string> DescribeNearMissCandidatesAsync(
         Solution solution, string symbolName, string kind, CancellationToken cancellationToken)
@@ -3201,15 +3212,24 @@ public class SymbolNavigationEngine
     }
 
     /// <summary>
-    /// Solution-wide counterpart to DescribeNameOnlyCandidates: given a list of SemanticSymbolCandidate
-    /// (ISymbol-backed matches spanning every project, not one file's syntax nodes), builds a
-    /// "retry with one of these" hint - per candidate: kind, short signature, containing type, file:line,
-    /// the trimmed declaration line as contextSnippet (plus lineBefore when not unique in its file),
-    /// capped at 10 with a "+N more" line; narrowed-away candidates are listed separately. Used by FindCallersAsync/
+    /// Solution-wide counterpart to DescribeNameOnlyCandidates: builds a "Candidates (retry with filePath
+    /// + contextSnippet of the one you mean):" block from SemanticSymbolCandidate (ISymbol-backed matches,
+    /// not one file's syntax nodes). Input: candidates (solution-wide, as the callers pass them) and
+    /// optional excluded candidates that a contextSnippet narrowed away. Output: up to 10 counted
+    /// candidates in RankCandidate order, each as "  - kind signature in containingType at file:line,
+    /// contextSnippet="..."" plus lineBefore="..." when the declaration line is not unique in its file,
+    /// then a "(+N more)" line when there are more than 10. If excluded candidates were passed, a
+    /// "Not counted (pass filePath to select): file:line (Type.Name, kind), ..." tail lists all of them
+    /// (no cap). Returns an empty string for no candidates. Used by FindCallersAsync/
     /// FindImplementationsForMemberAsync's by-name-across-solution path when a contextSnippet misses
     /// every candidate, or when no contextSnippet was supplied and narrowing still leaves more than
     /// one candidate - both cases where silently picking FirstOrDefault() would resolve to an
-    /// arbitrary same-named symbol instead of the one the caller meant.
+    /// arbitrary same-named symbol instead of the one the caller meant. Use it for an ambiguous name
+    /// that needs a retry; for a name found in one file whose contextSnippet missed, see
+    /// <see cref="DescribeNameOnlyCandidates"/>; for a name that resolved to nothing, see
+    /// <see cref="DescribeNearMissCandidatesAsync"/>.
+    /// <seealso cref="DescribeNameOnlyCandidates"/>
+    /// <seealso cref="DescribeNearMissCandidatesAsync"/>
     /// </summary>
     public static string DescribeCandidateLocations(
         List<SemanticSymbolCandidate> candidates,

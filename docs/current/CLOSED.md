@@ -8,6 +8,11 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## `SyntaxTargetResolver` extraction follow-ups - closed by owner rulings (2026-11-05)
+
+Was: "RenameSymbol cannot merge into an existing signature (design: a merge mode retargeting callers to the existing member; owner decision); `Describe*` formatters unification; `Member(remove)` refusal list size; keyword-resolution symptom" ([proposal](proposals/proposal_syntax_target_resolver_extraction.md)).
+Evidence: owner ruling D6 - no RenameSymbol merge mode; a new name colliding with an existing member signature stays a refusal, pinned by `RenameSymbolTests.RenameSymbol_NewNameCollidesWithExistingMemberSignature_IsRefusedAndWritesNothing` (CS0111 plus the "collides with an existing declaration" hint). The three `Describe*` candidate formatters in `SymbolNavigationEngine.cs` stay separate and now carry cross-referencing XML docs (inputs, caps, wording, when to use which). Owner ruling D9 - `MemberRemoveTests.RemoveMember_FifteenHundredCallers_RefusalStaysBounded` and `RemoveMember_OneMethodWithFifteenHundredCalls_RefusalStaysBounded` pin the old 425 KB "1006 caller(s)" report (measured refusal ~2.6 KB / ~2.4 KB for 1500 callers, 10 listed). The keyword-resolution symptom did not reproduce (name-directed `SnippetSymbolLocator` overload). Build 0 errors; `RoslynSentinel.Tests.Tools.Advanced` 558/558 pass.
+
 ## Read-tool metadata envelope for other tools - closed by owner decision (2026-11-05)
 
 Was: "Read-tool metadata envelope (`isComplete`/truncation flag) for the read tools other than `ReadFile`/`GetMethodSource`/`GetFileOutline` ... owner decision pending on the `GetMethodSource` not-found contract and any other tool."
