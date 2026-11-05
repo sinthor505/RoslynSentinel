@@ -111,3 +111,21 @@ ChangeSignature, RenameSymbol conflicts) do not use it.
 **Not fixed:** review which tools should open ledger entries, how a model resolves one, and how the non-validated
 (compile-gate-skipping) edit path relates. Decision context: `proposals/proposal_journal_digest_followup_decisions.md`.
 
+### Ledger review (2026-11-05, source reading only, no tests run)
+
+**What it records.** `IScopedOperationLedger` / `ScopedOperationLedgerEngine` (`Common`/engine, in-memory, one open ledger at a time). An entry (`LedgerEntryBase`, `CallSiteLedgerEntry`) holds `EntryId`, `FilePath`, `Line`, `IsFixed`, `ChangeId`, plus `BrokenExpression`, `OldStaticType`, `Status`, `BlockReason`, `SuggestedFix`. No timestamp, so no expiry. It is opened only by `MoveMemberTool` (`AdvancedRefactoringTools.cs` ~541-550) after a successful, non-dry-run apply with unresolved call-site rows. `PersistentWorkspaceManager.ApplyProposedChangesAsync` (~1758-1772) then refuses writes to any file that is not one of the open entries' files (unconditional on `validateChanges`).
+
+**Gaps verified in source.**
+1. Nothing in production resolves an entry: `RecordFix` and `TryRelease` are called only from tests (`ScopedOperationLedgerBlockingTests.cs`). The plan's "resolving the last entry releases the block" (`plan_scoped_operation_ledger.md` Decision 5) is not implemented, so an open ledger blocks unrelated writes until the server restarts.
+2. The refusal text ("Resolve the open ledger's entries", `ScopedOperationLedgerEngine.cs` ~52) names no tool, because no tool exists for it.
+3. The refusal carries no `RefusalCode` (`ValidateAndApplyHelper.cs` ~126), so the caller gets generic `Exception` / "apply failed".
+4. `UndoLastApply` goes through the same check; a refused revert still reaches `RecordUndo` and reports `IsError=false` with "Reverted 0 files ... Failures".
+5. Pending entries are visible only inside the `MoveMember` summary and the refusal text; no read tool lists them (`GetOpenEntries` has no production caller beyond a pass-through).
+6. Writes outside `ApplyProposedChangesAsync` skip the ledger (`MsToolAugmentEngine.cs` ~782 for files outside the solution; `DocumentationTools.cs` ~361/458, targets not verified).
+7. The `validateOnApply:false` path still hits the ledger check (it is not a bypass), but `ChangeSignature` on interface members tells the model to hand-edit each side with `validateOnApply:false`; under an open ledger those edits are refused.
+8. Untested: undo under an open ledger, the refusal error code, behaviour after restart, production resolution.
+
+**Other tools checked.** `ChangeSignature` refuses the whole change when a call site cannot be relocated ("Nothing was changed"); `MethodSignature` / `ParameterEdit` (method) and `RenameSymbol` are compile-gated; `ParameterEdit` constructor-add refuses with `UnresolvedCallSites` and edits nothing. So no other tool currently produces an intentionally non-compiling interim state that a ledger would track.
+
+**Recommendation.** Do not extend to another tool yet. First add production resolution (a read of open entries plus a way to mark an entry fixed or release the ledger, with a named tool in the refusal text and a `RefusalCode`), because every new opener otherwise adds another block that only a restart clears. The next candidate is `ChangeSignature` (its skipped sites already carry per-site reasons, `BasicRefactoringEngine.cs` ~337/344/437): replace the all-or-nothing refusal (~476-502) with a partial apply plus pending rows, open the ledger in `ChangeSignatureTool` like `MoveMember` does, estimated 3 files plus a new test file. The proposal does not name a tool, so this is an owner decision (see `decisions_autonomous_run_2026-11-05.md`, Needs owner).
+
