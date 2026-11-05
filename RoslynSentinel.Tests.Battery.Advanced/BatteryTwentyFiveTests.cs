@@ -888,6 +888,26 @@ public class Calculator {
     }
 
     [Test]
+    [Category("SymbolHoverInfo")]
+    public async Task GetSymbolInfoAsync_SnippetMatchesKeywordOnly_ErrorNamesNodeKindAndSaysNoSymbol()
+    {
+        var source = @"
+public class Worker {
+    public void Run() {
+        return;
+    }
+}";
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Worker.cs", source)]);
+        _workspaceManager.SetTestSolution(solution);
+
+        var result = await _engine.GetSymbolInfoAsync("Worker.cs", "return;");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.IsError, Is.True);
+        Assert.That(result.Message, Does.Contain("but no symbol is there"));
+    }
+
+    [Test]
     public async Task FindAllImplementationsAsync_KnownInterface_ReturnsNonNull()
     {
         var source = @"

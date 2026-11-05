@@ -48,6 +48,12 @@ public sealed class SubAgentImpl(IWorkspaceManager workspaceManager, ILogger log
             return Failure(validationError);
         }
 
+        var loadError = await SubAgentModelRun.AwaitSolutionLoadAsync(workspaceManager, cancellationToken);
+        if (loadError is not null)
+        {
+            return Failure(loadError);
+        }
+
         var solutionPath = workspaceManager.SolutionPath;
         if (string.IsNullOrEmpty(solutionPath))
         {

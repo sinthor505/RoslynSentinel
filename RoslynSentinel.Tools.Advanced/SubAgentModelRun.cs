@@ -64,6 +64,22 @@ public static class SubAgentModelRun
     }
 
     /// <summary>
+    /// Waits, bounded by SolutionLoadWait.DefaultTimeout like GetCurrentSolutionAsync, for a queued or running solution load; returns a SolutionLoadTimeout error when it is still running, else null.
+    /// </summary>
+    public static async Task<ResultError?> AwaitSolutionLoadAsync(IWorkspaceManager workspaceManager, CancellationToken cancellationToken)
+    {
+        if (workspaceManager.SolutionLoadStatus != SolutionLoadStatus.Loading)
+        {
+            return null;
+        }
+
+        var status = await workspaceManager.WaitForLoadAsync(SolutionLoadWait.DefaultTimeout, cancellationToken);
+        return status == SolutionLoadStatus.Loading
+            ? new ResultError(ToolErrorCode.SolutionLoadTimeout, SolutionNotLoadedMessage.LoadWaitTimedOut(SolutionLoadWait.DefaultTimeout))
+            : null;
+    }
+
+    /// <summary>
     /// Runs <paramref name="prompt"/> against the child server with the dispatched <paramref name="model"/>.
     /// Writes agent.log and transcript.json under <see cref="SubAgentChildServer.LogDirectory"/>.
     /// </summary>

@@ -214,10 +214,16 @@ public class WorkspaceReadNavigationTools
                 SearchMode.attribute => "attribute name (with or without the Attribute suffix, e.g. TestFixture)",
                 _ => "symbol name"
             };
+            var example = mode switch
+            {
+                SearchMode.text => "TODO",
+                SearchMode.attribute => "TestFixture",
+                _ => "MyType"
+            };
             return new SentinelCallToolResult<object>
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"query is required for mode: {mode}. Pass the {what} in query.")
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"query is required for mode: {mode}. Pass the {what} in query, for example {RoslynSentinel.Common.ToolCallHint.Call("Search", ("mode", mode.ToString()), ("query", example))}.")
             };
         }
 

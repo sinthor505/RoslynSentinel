@@ -98,6 +98,8 @@ public class SearchModeTests
         Assert.That(result.IsError, Is.True, "A blank query must be rejected for mode callers.");
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(result.ErrorData?.Message, Does.Contain("query is required for mode"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("for example"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("Search("));
     }
 
     [Test]

@@ -86,7 +86,16 @@ public class WorkspaceBuildTestImpl
                 var buildRun = verify is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway
                     ? await _buildEngine.RunFullBuildAsync(cancellationToken, level: verify)
                     : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken);
-                buildRun.TryGetData(out buildVerification);
+                if (buildRun.TryGetData(out var rawBuild))
+                {
+                    // Project like Build does so the embedded verification does not carry up to 50 raw details.
+                    buildVerification = BuildResultProjector.Project(
+                        rawBuild, new BuildProjection(maxDetails, IncludeOutput: false, IncludeWarnings: false), await GetTransitiveDependenciesAsync(cancellationToken));
+                    if ((rawBuild.Outcome == BuildOutcome.Failed || buildVerification.OmittedErrorCount > 0) && rawBuild.FullDiagnostics is { } fullDiagnostics)
+                    {
+                        buildVerification = buildVerification with { FullDiagnosticsResultId = await StoreFullDiagnosticsAsync(fullDiagnostics, cancellationToken) };
+                    }
+                }
             }
 
             if (!summarize)

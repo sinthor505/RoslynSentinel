@@ -438,10 +438,16 @@ public class SymbolNavigationEngine
             }
 
             symbol = await SymbolFinder.FindSymbolAtPositionAsync(model, pos, solution.Workspace, cancellationToken);
+            if (symbol == null && root != null)
+            {
+                // The snippet matched, but at a node that is not a symbol: word it like the other wrong-node-kind sites.
+                return ErrorHoverInfo(SnippetNodeKindError.Describe(text, root, snippetMatch, "symbol", "includes the identifier directly (e.g. the method name or property name)"));
+            }
         }
 
         if (symbol == null)
         {
+            // Only reached when the syntax root was unavailable; a resolved root with no symbol returns above.
             return ErrorHoverInfo($"No symbol found at snippet '{contextSnippet}'. " +
                 "Try a snippet that includes the identifier directly (e.g. the method name or property name).");
         }

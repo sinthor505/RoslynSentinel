@@ -198,4 +198,18 @@ public class FindReferencesIncludeTestsTests
         Assert.That(StatusOf(result), Does.Contain(NoteFragment));
         Assert.That(StatusOf(result), Does.Contain(IncludeTestsHint));
     }
+
+    [Test]
+    public async Task Callers_SymbolWithNoCallers_StatusMessageExplainsScopeAndOffersSearch()
+    {
+        // UseAssist is declared in the test project and never called anywhere.
+        var result = await _impl.FindReferences(reason: "test message", symbolName: "UseAssist", kind: FindReferencesKind.callers,
+            filePath: _testDocPath, contextSnippet: "public void UseAssist()", includeTests: true);
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That(PathsIn(result, "callers"), Is.Empty);
+        Assert.That(StatusOf(result), Does.Contain("0 callers."));
+        Assert.That(StatusOf(result), Does.Contain("Searched"));
+        Assert.That(StatusOf(result), Does.Contain("Search("));
+    }
 }

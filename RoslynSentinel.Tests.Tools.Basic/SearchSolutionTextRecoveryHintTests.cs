@@ -163,5 +163,6 @@ public class SearchSolutionTextRecoveryHintTests
         Assert.That(result.StatusMessage, Does.Contain("matched 0 documents in any project"));
         Assert.That(result.StatusMessage, Does.Contain("1 for the same pattern outside fileGlob 'NoSuchProj/*.cs' (AppProj 1)"));
         Assert.That(result.StatusMessage, Does.Contain("Rerun without fileGlob or with fileGlob: 'AppProj/**/*.cs'."));
+        Assert.That(result.StatusMessage, Does.Contain("Rerun without fileGlob"));
     }
 }

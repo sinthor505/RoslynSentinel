@@ -1132,12 +1132,13 @@ public class WorkspaceReadNavigationImpl
                         .Distinct()
                         .Take(3)
                         .ToList();
+                    var globExampleFolder = sampleRelativePaths.Select(p => p.Split('/')[0]).FirstOrDefault(f => !string.IsNullOrEmpty(f)) ?? "MyProject";
                     var sampleText = sampleRelativePaths.Count > 0
                         ? $"Example paths in this solution: {string.Join(", ", sampleRelativePaths)}."
                         : "This solution has no documents to match against.";
                     warnings.Add(
                         $"fileGlob '{fileGlob}' matched 0 documents in any project (matched against {matchedAgainstDescription}), so the search for " +
-                        $"'{pattern}' did not run against any document. {sampleText} Widen or fix the fileGlob.");
+                        $"'{pattern}' did not run against any document. {sampleText} Rerun without fileGlob: {ToolCallHint.Call("Search", ("mode", "text"), ("query", pattern))}, or root the glob at a project folder, e.g. '{globExampleFolder}/**/*.cs'.");
                 }
                 else
                 {

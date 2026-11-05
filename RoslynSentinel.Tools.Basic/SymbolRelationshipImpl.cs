@@ -276,6 +276,21 @@ public class SymbolRelationshipImpl
         return $" {droppedProjectNames.Count} reference(s) in {projects} test project(s) excluded because includeTests is false; pass includeTests: true (needed for blast-radius checks).";
     }
 
+    /// <summary>
+    /// Zero-hit explanation for FindReferences: names the project scope that was searched and how to pin or scan instead.
+    /// Returns an empty string when the summary has hits.
+    /// </summary>
+    private static string ZeroResultScopeNote(ListSummary summary, string symbolName, bool includeTests)
+    {
+        if (summary.TotalCount != 0)
+        {
+            return string.Empty;
+        }
+
+        var scope = includeTests ? "all projects including test projects" : "non-test projects only (includeTests: false)";
+        return $" Searched {scope} for the declaration resolved from '{symbolName}'. If you expected hits, pin the right declaration with filePath and contextSnippet, or scan text with {ToolCallHint.Call("Search", ("mode", "text"), ("query", symbolName))}.";
+    }
+
     // Hint for attributeUsages hits hidden by includeTests: false. Leading space so it appends to a status message.
     private static string HiddenTestHitsHint(List<string> hiddenTestProjects)
     {
@@ -309,7 +324,7 @@ public class SymbolRelationshipImpl
                         callers = result,
                         summary
                     },
-                    StatusMessage = summary.ToSummaryMessage("caller") + DroppedTestHitsNote(droppedProjectNames),
+                    StatusMessage = summary.ToSummaryMessage("caller") + DroppedTestHitsNote(droppedProjectNames) + ZeroResultScopeNote(summary, symbolName, includeTests),
                     ListSummary = summary
                 };
             }
@@ -327,7 +342,7 @@ public class SymbolRelationshipImpl
                         implementations = result,
                         summary
                     },
-                    StatusMessage = summary.ToSummaryMessage("implementation") + DroppedTestHitsNote(droppedProjectNames),
+                    StatusMessage = summary.ToSummaryMessage("implementation") + DroppedTestHitsNote(droppedProjectNames) + ZeroResultScopeNote(summary, symbolName, includeTests),
                     ListSummary = summary
                 };
             }
@@ -363,7 +378,7 @@ public class SymbolRelationshipImpl
                         implementations,
                         summary
                     },
-                    StatusMessage = summary.ToSummaryMessage("hit") + DroppedTestHitsNote(droppedProjectNames)
+                    StatusMessage = summary.ToSummaryMessage("hit") + DroppedTestHitsNote(droppedProjectNames) + ZeroResultScopeNote(summary, symbolName, includeTests)
                         + (implementationsSkipped ? " Implementations skipped: the target cannot have implementations (sealed/static type or non-virtual member)." : string.Empty),
                     ListSummary = summary
                 };

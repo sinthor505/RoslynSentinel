@@ -154,7 +154,8 @@ public class WorkspaceHealthMiscImpl
                     : await _buildEngine.RunQuickBuildAsync(ToolScope.solution, null, 50, cancellationToken);
                 if (buildResult.TryGetData(out var data))
                 {
-                    result = result with { BuildVerification = data };
+                    // TODO pass the project dependency graph (root-cause ordering) and store FullDiagnostics like Build does; null means every project with errors counts as a root cause.
+                    result = result with { BuildVerification = BuildResultProjector.Project(data, new BuildProjection(20, IncludeOutput: false, IncludeWarnings: false), null) };
                 }
             }
 
