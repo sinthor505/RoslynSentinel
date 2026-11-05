@@ -8,6 +8,10 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## `Build(fullBuild)` ignored `scope` - resolved (2026-11-05)
+
+`RunFullBuildAsync` now takes `scope`/`scopeName`: project scope runs `dotnet build <project.csproj>`, file scope builds the containing project, unknown names return `BuildNotRun` with a `ListAll` hint, `ProjectsCompiled` lists the project plus its references; solution scope unchanged. The "scope was ignored" StatusMessage warning and the description text were removed. Evidence: `BuildScopeFullBuildTests` (6 tests, two independent Good/Bad projects); design [proposal](proposals/proposal_build_full_build_ignores_project_scope.md) Option 1. Live check after server restart pending.
+
 ## `RunTest` teardown-failure entries: parser tests against real output - resolved (2026-11-05)
 
 - `TestRunEngine.ParseFixtureTearDownFailures` entries are prepended (2026-10-22); golden-file parser tests over real `dotnet test -v quiet` output (`Resources/Golden/dotnet-test-teardown.txt`: ordinary fixture and `[SetUpFixture]`) landed 2026-11-02. The hand-written `ParseFixtureTearDownFailures_OrdinaryFixtureOneTimeTearDown_ReturnsOneEntry` was redundant with `..._RealDotnetTestOutput_OrdinaryFixtureCarriesTeardownMessage` (same prefix, message, ExampleRef, count assertions) and was deleted 2026-11-05. Known quirk kept: a SetUpFixture message can pick up the preceding "One or more child tests had errors" line. The aggregate `RunAsync` path end to end is deliberately untested (prepend tests cover the merge).
