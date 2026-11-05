@@ -8,6 +8,21 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## SubAgent tools did not wait for the solution load; embedded `BuildVerification` was not projected - resolved (2026-11-05)
+
+`SubAgent` / `SubAgentEval` now call `SubAgentModelRun.AwaitSolutionLoadAsync` (same bounded `SolutionLoadWait.DefaultTimeout` wait as `GetCurrentSolutionAsync`; `SolutionLoadTimeout` error if still loading) before reading `SolutionPath`. `GetDiagnostics` (verify != noBuild) projects its embedded `BuildVerification` through `BuildResultProjector` with the dependency graph and offloads full diagnostics like `Build`; `GetWorkspaceHealth` projects with cap 20 and no graph (`// TODO` for graph + offload).
+Evidence: `RoslynSentinel.Tools.Advanced/SubAgentModelRun.cs` (`AwaitSolutionLoadAsync`), `RoslynSentinel.Tools.Basic/WorkspaceBuildTestImpl.cs` (`GetDiagnostics`), `RoslynSentinel.Tools.Basic/WorkspaceHealthMiscImpl.cs`, `RoslynSentinel.Tests.Tools.Advanced/SubAgentModelRunTests.cs` (no-wait paths only; the Loading/timeout path is untested, `// TODO` in file), no test for the projected `BuildVerification` (no failing-build fixture).
+
+## Snippet wrong-node-kind leftovers (hover-info fallback) - resolved (2026-11-05)
+
+`SymbolNavigationEngine.GetSymbolInfoAsync` now words "snippet matched but no symbol there" with `SnippetNodeKindError.Describe` (same helper as the other sites); the old raw "No symbol found at snippet" text remains only as the fallback when the syntax root is unavailable.
+Evidence: `RoslynSentinel.Tests.Battery.Advanced/BatteryTwentyFiveTests.cs` (`GetSymbolInfoAsync_SnippetMatchesKeywordOnly_ErrorNamesNodeKindAndSaysNoSymbol`).
+
+## `Search` / `FindReferences` failures and zero results lacked a next step - resolved (2026-11-05)
+
+`Search` "query is required for mode" now ends with a ready `Search(mode, query)` example, and the fileGlob-matched-nothing warning ends with a rerun-without-fileGlob call and a project-rooted glob example (the 297 historic InvalidArgument events were mostly that glob case, now a warning). `FindReferences` zero-result status messages (callers, implementations, all) now state the scope searched (tests included or not) and a `Search(mode: text, query: <symbol>)` call. The rest of the "Failure messages without a next step" entry stays open in TODO.md.
+Evidence: `RoslynSentinel.Tests.Tools.Basic/SearchModeTests.cs`, `SearchSolutionTextRecoveryHintTests.cs`, `FindReferencesIncludeTestsTests.cs` (`Callers_SymbolWithNoCallers_StatusMessageExplainsScopeAndOffersSearch`).
+
 ## `FindReferences` failures lacked a ready-to-run next call - resolved (2026-11-05)
 
 Snippet-miss and name-miss messages from `FindCallersAsync` / `FindImplementationsForMemberAsync` (the `FindReferences` engine path) now end with a `ToolCallHint` `Next: FindReferences(...)` call using the best candidate's filePath plus verbatim declaration line (a type gets filePath only). The file-pinned case wraps the `SnippetSymbolLocator` snippet-miss exception and appends the call; the Did-you-mean list ranks exact-name matches first, then non-test types, non-test members, then test code (`RankCandidate`). Re-measure with `scripts/Get-NotFoundRecoveryReport.ps1 -Tool FindReferences` after the next restart.
