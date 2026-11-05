@@ -12,7 +12,9 @@ namespace RoslynSentinel.Engines.Basic;
 /// constructor) into a call to a static factory method, keeping the argument list text untouched.
 /// </summary>
 /// <remarks>
-/// The edit replaces only the span from the start of the creation expression up to its argument list, so nested
+/// Initializer sites (<c>new T(a) { P = v }</c>) become <c>Factory(a, p: v)</c> when each initializer member matches an unbound
+/// factory parameter by name; their edit covers the whole creation (nested matches inside it are dropped for a rerun).
+/// Otherwise the edit replaces only the span from the start of the creation expression up to its argument list, so nested
 /// matching sites (<c>new X(new X(1))</c>) never produce overlapping edits and every argument keeps its exact text.
 /// Whether the factory accepts a site's arguments is decided by speculatively binding the rewritten call at the site
 /// (full overload resolution: named arguments, conversions, optional and params parameters), not by comparing counts.
@@ -188,16 +190,31 @@ public static class ConstructionReplacer
 
                     var line = text.Lines.GetLineFromPosition(node.SpanStart).LineNumber + 1;
                     var before = node.ToString();
-                    var skipReason = GetSkipReason(node, model, factoryHere, factory, factoryTypeIds, project.Name, out var replacementPrefix);
+                    var skipReason = GetSkipReason(node, model, factoryHere, factory, factoryTypeIds, project.Name, out var replacementPrefix, out var wholeNodeReplacement);
                     if (skipReason is not null)
                     {
                         sites.Add(new SemanticReplaceSite(document.FilePath, line, SemanticReplaceRole.Unsupported, before, before, skipReason));
                         continue;
                     }
 
-                    var argumentStart = node.ArgumentList!.SpanStart;
-                    var span = TextSpan.FromBounds(node.SpanStart, argumentStart);
-                    var after = replacementPrefix + before[(argumentStart - node.SpanStart)..];
+                    TextSpan span;
+                    string after;
+                    string editText;
+                    if (wholeNodeReplacement is not null)
+                    {
+                        // Initializer site: the whole creation (including the initializer) becomes the factory call.
+                        span = node.Span;
+                        after = wholeNodeReplacement;
+                        editText = wholeNodeReplacement;
+                    }
+                    else
+                    {
+                        var argumentStart = node.ArgumentList!.SpanStart;
+                        span = TextSpan.FromBounds(node.SpanStart, argumentStart);
+                        after = replacementPrefix + before[(argumentStart - node.SpanStart)..];
+                        editText = replacementPrefix;
+                    }
+
                     sites.Add(new SemanticReplaceSite(document.FilePath, line, SemanticReplaceRole.Construction, before, after, null));
                     if (!editsByFile.TryGetValue(document.FilePath, out var fileEdits))
                     {
@@ -206,7 +223,7 @@ public static class ConstructionReplacer
                         textByFile[document.FilePath] = text;
                     }
 
-                    fileEdits.Add((span, replacementPrefix));
+                    fileEdits.Add((span, editText));
                 }
             }
         }
@@ -215,7 +232,23 @@ public static class ConstructionReplacer
         foreach (var (path, fileEdits) in editsByFile)
         {
             var result = textByFile[path].ToString();
-            foreach (var edit in fileEdits.OrderByDescending(e => e.Span.Start))
+            // A whole-node (initializer) edit can contain another matched creation. Keep the outer edit and drop any edit
+            // that lies inside an already kept one; applying both would corrupt the text.
+            // TODO the dropped inner site is still reported as rewritten; a rerun of the operation rewrites it.
+            var keptEdits = new List<(TextSpan Span, string NewText)>();
+            var keptEnd = -1;
+            foreach (var edit in fileEdits.OrderBy(e => e.Span.Start).ThenByDescending(e => e.Span.Length))
+            {
+                if (edit.Span.Start < keptEnd)
+                {
+                    continue;
+                }
+
+                keptEdits.Add(edit);
+                keptEnd = edit.Span.End;
+            }
+
+            foreach (var edit in keptEdits.OrderByDescending(e => e.Span.Start))
             {
                 result = result.Remove(edit.Span.Start, edit.Span.Length).Insert(edit.Span.Start, edit.NewText);
             }
@@ -234,9 +267,11 @@ public static class ConstructionReplacer
         IMethodSymbol factory,
         HashSet<string> factoryTypeIds,
         string projectName,
-        out string replacementPrefix)
+        out string replacementPrefix,
+        out string? wholeNodeReplacement)
     {
         replacementPrefix = string.Empty;
+        wholeNodeReplacement = null;
 
         var enclosing = model.GetEnclosingSymbol(node.SpanStart);
         for (var container = enclosing as INamedTypeSymbol ?? enclosing?.ContainingType; container is not null; container = container.ContainingType)
@@ -248,12 +283,31 @@ public static class ConstructionReplacer
             }
         }
 
-        if (node.Initializer is not null)
+        var initializer = node.Initializer;
+        var initializerEntries = new List<AssignmentExpressionSyntax>();
+        if (initializer is not null)
         {
-            return "site has an object or collection initializer; the factory call would lose it, so the site was left unchanged";
-        }
+            if (!initializer.IsKind(SyntaxKind.ObjectInitializerExpression))
+            {
+                return "site has a collection initializer; collection initializers are not supported, so the site was left unchanged";
+            }
 
-        if (node.ArgumentList is null)
+            foreach (var entry in initializer.Expressions)
+            {
+                if (entry is not AssignmentExpressionSyntax { RawKind: (int)SyntaxKind.SimpleAssignmentExpression, Left: IdentifierNameSyntax } assignment)
+                {
+                    return $"initializer entry '{entry}' is not a plain 'Member = value' assignment, so the site was left unchanged";
+                }
+
+                if (assignment.Right is InitializerExpressionSyntax)
+                {
+                    return $"initializer entry '{entry.ToString().Split('\n')[0].Trim()}' assigns a nested initializer, so the site was left unchanged";
+                }
+
+                initializerEntries.Add(assignment);
+            }
+        }
+        else if (node.ArgumentList is null)
         {
             return "creation expression has no argument list to forward to the factory";
         }
@@ -268,9 +322,60 @@ public static class ConstructionReplacer
             return "factory is not accessible from this site";
         }
 
+        string argumentListText;
+        if (initializer is null)
+        {
+            argumentListText = node.ArgumentList!.ToString();
+        }
+        else
+        {
+            // Map each initializer member onto a factory parameter of the same name (case-insensitive) that the
+            // existing arguments do not already supply, and append it as a named argument.
+            var existingArguments = node.ArgumentList is null ? new List<ArgumentSyntax>() : node.ArgumentList.Arguments.ToList();
+            var positionalCount = existingArguments.Count(a => a.NameColon is null);
+            var covered = new HashSet<string>(
+                existingArguments.Where(a => a.NameColon is not null).Select(a => a.NameColon!.Name.Identifier.ValueText),
+                StringComparer.Ordinal);
+            var unmapped = new List<string>();
+            var namedArguments = new List<string>();
+            foreach (var entry in initializerEntries)
+            {
+                var memberName = ((IdentifierNameSyntax)entry.Left).Identifier.ValueText;
+                IParameterSymbol? parameter = null;
+                for (var p = positionalCount; p < factoryHere.Parameters.Length; p++)
+                {
+                    var candidate = factoryHere.Parameters[p];
+                    if (string.Equals(candidate.Name, memberName, StringComparison.OrdinalIgnoreCase) && !covered.Contains(candidate.Name))
+                    {
+                        parameter = candidate;
+                        break;
+                    }
+                }
+
+                if (parameter is null)
+                {
+                    unmapped.Add(memberName);
+                    continue;
+                }
+
+                covered.Add(parameter.Name);
+                var parameterName = SyntaxFacts.GetKeywordKind(parameter.Name) == SyntaxKind.None && SyntaxFacts.GetContextualKeywordKind(parameter.Name) == SyntaxKind.None
+                    ? parameter.Name
+                    : "@" + parameter.Name;
+                namedArguments.Add($"{parameterName}: {entry.Right}");
+            }
+
+            if (unmapped.Count > 0)
+            {
+                return $"initializer member(s) {string.Join(", ", unmapped.Select(n => $"'{n}'"))} have no unbound parameter of the same name on factory {factory.ContainingType.Name}.{factory.Name}, so the site was left unchanged";
+            }
+
+            argumentListText = "(" + string.Join(", ", existingArguments.Select(a => a.ToString()).Concat(namedArguments)) + ")";
+        }
+
         var qualifier = factoryHere.ContainingType.ToMinimalDisplayString(model, node.SpanStart);
         var prefix = $"{qualifier}.{factoryHere.Name}";
-        var probe = SyntaxFactory.ParseExpression(prefix + node.ArgumentList.ToString());
+        var probe = SyntaxFactory.ParseExpression(prefix + argumentListText);
         var info = model.GetSpeculativeSymbolInfo(node.SpanStart, probe, SpeculativeBindingOption.BindAsExpression);
         if (info.Symbol is not IMethodSymbol bound
             || !SymbolEqualityComparer.Default.Equals(bound.OriginalDefinition, factoryHere.OriginalDefinition))
@@ -279,6 +384,11 @@ public static class ConstructionReplacer
         }
 
         replacementPrefix = prefix;
+        if (initializer is not null)
+        {
+            wholeNodeReplacement = prefix + argumentListText;
+        }
+
         return null;
     }
 

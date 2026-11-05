@@ -85,6 +85,45 @@ public class SemanticFindReplaceConstructionTests
         }
         """;
 
+    private const string GizmosPath = "ContosoOrders.Core/Cf/Gizmos.cs";
+    private const string GizmoConsumersPath = "ContosoOrders.Core/Cf/GizmoConsumers.cs";
+
+    private const string GizmoType = "T:Cf.Gizmo";
+    private const string GizmoCreate = "M:Cf.GizmoFactory.Create(System.String,System.Nullable{System.Int32})";
+    private const string BagType = "T:Cf.Bag";
+    private const string BagCreate = "M:Cf.BagFactory.Create";
+
+    private const string GizmosSource = """
+        namespace Cf;
+
+        public class Gizmo
+        {
+            public Gizmo() : this("default") { }
+            public Gizmo(string name) { Name = name; }
+            public string Name { get; }
+            public int? Size { get; set; }
+        }
+
+        public class Bag : System.Collections.Generic.List<int>
+        {
+        }
+
+        public static class GizmoFactory
+        {
+            public static Gizmo Create(string name = "default", int? size = null)
+            {
+                var gizmo = new Gizmo(name);
+                gizmo.Size = size;
+                return gizmo;
+            }
+        }
+
+        public static class BagFactory
+        {
+            public static Bag Create() => new Bag();
+        }
+        """;
+
     private IWorkspaceManager _workspaceManager;
     private ValidationEngine _validationEngine;
     private SemanticFindReplaceTools _tool;
@@ -158,6 +197,108 @@ public class SemanticFindReplaceConstructionTests
         Assert.That(ReadSeeded(WidgetsPath), Is.EqualTo(WidgetsSource));
         Assert.That(ReadSeeded(ConsumersPath), Is.EqualTo(ConsumersSource));
         Assert.That(ReadSeeded(TestConsumersPath), Is.EqualTo(TestConsumersSource));
+    }
+
+    private async Task SeedGizmoFixtureAsync(string consumersSource)
+    {
+        _fixture = new TestSolutionFixture();
+        await _workspaceManager.LoadSolutionAsync(_fixture.SolutionPath);
+        await _fixture.AddFileToSolution(_workspaceManager, GizmosPath, GizmosSource, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, GizmoConsumersPath, consumersSource, reloadSolution: true);
+    }
+
+    [Test]
+    [Description("An object initializer whose members all map to factory parameters is rewritten to named factory arguments")]
+    public async Task ReplaceConstruction_InitializerFullyMapped_PreviewShowsNamedArgumentAndApplyRemovesInitializer()
+    {
+        var consumers = GizmoConsumersFile("public Gizmo Mapped() => new Gizmo(\"a\") { Size = 3 };");
+        await SeedGizmoFixtureAsync(consumers);
+
+        var preview = Data(await RunAsync(SemanticReplaceMode.preview, GizmoType, GizmoCreate));
+        var site = FindSite(preview, "GizmoConsumers.cs", "new Gizmo(\"a\") { Size = 3 }");
+        Assert.That(site.GetProperty("After").GetString(), Is.EqualTo("GizmoFactory.Create(\"a\", size: 3)"));
+        Assert.That(site.GetProperty("UnsupportedReason").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        Assert.That(ReadSeeded(GizmoConsumersPath), Is.EqualTo(consumers), "Preview writes nothing");
+
+        var data = Data(await RunAsync(SemanticReplaceMode.apply, GizmoType, GizmoCreate));
+        Assert.That(data.GetProperty("rewritten").GetInt32(), Is.EqualTo(1));
+        Assert.That(ReadSeeded(GizmoConsumersPath), Is.EqualTo(
+            GizmoConsumersFile("public Gizmo Mapped() => GizmoFactory.Create(\"a\", size: 3);")));
+        Assert.That(ReadSeeded(GizmoConsumersPath), Does.Not.Contain("{ Size"), "The initializer braces are gone");
+    }
+
+    [Test]
+    [Description("An initializer member with no matching unbound factory parameter skips the site, names the member and leaves the file unchanged")]
+    public async Task ReplaceConstruction_InitializerMemberWithoutFactoryParameter_SkipsSiteAndNamesMember()
+    {
+        var consumers = GizmoConsumersFile("public Gizmo Unmapped() => new Gizmo(\"b\") { Weight = 2 };");
+        await SeedGizmoFixtureAsync(consumers);
+
+        var preview = Data(await RunAsync(SemanticReplaceMode.preview, GizmoType, GizmoCreate));
+        var site = FindSite(preview, "GizmoConsumers.cs", "new Gizmo(\"b\") { Weight = 2 }");
+        Assert.That(site.GetProperty("UnsupportedReason").GetString(), Does.Contain("'Weight'"));
+        Assert.That(site.GetProperty("After").GetString(), Is.EqualTo("new Gizmo(\"b\") { Weight = 2 }"));
+        Assert.That(preview.GetProperty("rewritten").GetInt32(), Is.EqualTo(0));
+
+        var applied = Data(await RunAsync(SemanticReplaceMode.apply, GizmoType, GizmoCreate));
+        Assert.That(applied.GetProperty("rewritten").GetInt32(), Is.EqualTo(0));
+        Assert.That(applied.TryGetProperty("changeId", out _), Is.False, "Nothing rewritten means no changeId");
+        Assert.That(ReadSeeded(GizmoConsumersPath), Is.EqualTo(consumers));
+    }
+
+    [Test]
+    [Description("A collection initializer site is skipped with a reason naming collection initializers and the file is unchanged")]
+    public async Task ReplaceConstruction_CollectionInitializer_SkipsSiteWithReason()
+    {
+        var consumers = GizmoConsumersFile("public Bag Full() => new Bag { 1, 2 };");
+        await SeedGizmoFixtureAsync(consumers);
+
+        var data = Data(await RunAsync(SemanticReplaceMode.preview, BagType, BagCreate));
+        var site = FindSite(data, "GizmoConsumers.cs", "new Bag { 1, 2 }");
+        Assert.That(site.GetProperty("UnsupportedReason").GetString(), Does.Contain("collection initializer"));
+        Assert.That(data.GetProperty("rewritten").GetInt32(), Is.EqualTo(0));
+        Assert.That(ReadSeeded(GizmoConsumersPath), Is.EqualTo(consumers));
+    }
+
+    [Test]
+    [Description("An object initializer without an argument list is rewritten to a factory call with only the named arguments")]
+    public async Task ReplaceConstruction_InitializerWithoutArgumentList_IsRewritten()
+    {
+        var consumers = GizmoConsumersFile("public Gizmo Bare() => new Gizmo { Size = 3 };");
+        await SeedGizmoFixtureAsync(consumers);
+
+        var preview = Data(await RunAsync(SemanticReplaceMode.preview, GizmoType, GizmoCreate));
+        var site = FindSite(preview, "GizmoConsumers.cs", "new Gizmo { Size = 3 }");
+        Assert.That(site.GetProperty("After").GetString(), Is.EqualTo("GizmoFactory.Create(size: 3)"));
+        Assert.That(site.GetProperty("UnsupportedReason").ValueKind, Is.EqualTo(JsonValueKind.Null));
+
+        var data = Data(await RunAsync(SemanticReplaceMode.apply, GizmoType, GizmoCreate));
+        Assert.That(data.GetProperty("rewritten").GetInt32(), Is.EqualTo(1));
+        Assert.That(ReadSeeded(GizmoConsumersPath), Is.EqualTo(
+            GizmoConsumersFile("public Gizmo Bare() => GizmoFactory.Create(size: 3);")));
+    }
+
+    [Test]
+    [Description("Skipped sites are listed at most three per reason; skippedSitesNotListed counts the rest and skipped stays the full count")]
+    public async Task ReplaceConstruction_ManySkippedSitesForOneReason_CapsListedSites()
+    {
+        var consumers = GizmoConsumersFile(
+            "public Gizmo S1() => new Gizmo(\"c\") { Weight = 1 };",
+            "public Gizmo S2() => new Gizmo(\"c\") { Weight = 1 };",
+            "public Gizmo S3() => new Gizmo(\"c\") { Weight = 1 };",
+            "public Gizmo S4() => new Gizmo(\"c\") { Weight = 1 };");
+        await SeedGizmoFixtureAsync(consumers);
+
+        var data = Data(await RunAsync(SemanticReplaceMode.preview, GizmoType, GizmoCreate));
+
+        // Four consumer sites share the 'Weight' reason; the factory's own creation is a second skipped reason.
+        Assert.That(data.GetProperty("rewritten").GetInt32(), Is.EqualTo(0));
+        Assert.That(data.GetProperty("skipped").GetInt32(), Is.EqualTo(5), "Full count: four 'Weight' sites plus the factory's own creation");
+        Assert.That(data.GetProperty("skippedSitesNotListed").GetInt32(), Is.EqualTo(1));
+        var listedWeightSites = data.GetProperty("sites").EnumerateArray()
+            .Count(s => (s.GetProperty("UnsupportedReason").GetString() ?? string.Empty).Contains("'Weight'"));
+        Assert.That(listedWeightSites, Is.EqualTo(3));
+        Assert.That(ReadSeeded(GizmoConsumersPath), Is.EqualTo(consumers));
     }
 
     [Test]
@@ -360,4 +501,9 @@ public class SemanticFindReplaceConstructionTests
         Assert.That(noNewName.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(noNewName.ErrorData.Message, Does.Contain("newName"));
     }
+
+    private static string GizmoConsumersFile(params string[] members) =>
+    "namespace Cf;\r\n\r\npublic class GizmoConsumers\r\n{\r\n"
+    + string.Concat(members.Select(m => "    " + m + "\r\n"))
+    + "}\r\n";
 }

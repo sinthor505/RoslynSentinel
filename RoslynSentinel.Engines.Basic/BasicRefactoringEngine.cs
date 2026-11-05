@@ -883,7 +883,13 @@ public class BasicRefactoringEngine
         // canonical DiffEngine.CreateDiff. This used to duplicate that with a second, weaker
         // lockstep diff (ComputeRenameHunks); removed as part of the diff-logic consistency fix
         // (docs/current/codebase-consistency-audit-v1.md #3).
-        var updatedHandle = await TryResolveUpdatedHandleAsync(handle, symbol, updated, newName, cancellationToken);
+        // A namespace has no declared-symbol node whose token equals newName (its name is a QualifiedName, which
+        // GetDeclaredSymbol does not map), so TryResolveUpdatedHandleAsync would always return null; the new id is
+        // simply the parent namespace plus the new last segment.
+        // TODO residualMentions for a namespace is a whole-word scan of the old last segment and is legitimately noisy.
+        var updatedHandle = symbol is INamespaceSymbol renamedNamespace
+            ? new SymbolHandle(handle.ProjectName, "N:" + (renamedNamespace.ContainingNamespace is { IsGlobalNamespace: false } parentNamespace ? parentNamespace.ToDisplayString() + "." : "") + newName)
+            : await TryResolveUpdatedHandleAsync(handle, symbol, updated, newName, cancellationToken);
         var residualMentions = await FindResidualMentionsAsync(updated, oldName, cancellationToken);
         return new RenameSymbolResult(oldName, newName, pendingChanges, null, updatedHandle, residualMentions);
     }

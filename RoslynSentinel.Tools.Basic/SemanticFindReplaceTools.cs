@@ -44,8 +44,8 @@ public class SemanticFindReplaceTools
         "required: symbol (docCommentId of the constructed type T:Ns.Type, or of one constructor M:Ns.Type.#ctor(...) to match only that overload), factory (docCommentId of a static, non-generic method whose return type is the type or a subtype), mode; " +
         "optional: projectFilter. " +
         "replaceConstruction rewrites every site whose arguments the factory accepts (checked by overload resolution at the site) and SKIPS, never blocks on, the others: " +
-        "sites with an object or collection initializer, sites whose argument shape does not match the factory, and sites inside the factory's own containing type. " +
-        "Each skipped site is returned with file, line and unsupportedReason. The result carries rewritten and skipped counts. " +
+        "object-initializer sites are rewritten when every member matches an unbound factory parameter of the same name (case-insensitive), else skipped, as are collection initializers, argument shape mismatches and sites inside the factory's own containing type. " +
+        "Skipped sites carry file, line and unsupportedReason, at most 3 listed per reason; skippedSitesNotListed counts the rest. The result carries rewritten and skipped counts. " +
         "If the factory's return type is not assignable to the constructed type the whole operation is refused. " +
         "operation: removeNullForgiving deletes the postfix ! from every expression bound to a property/field whose type is non-nullable (symbol = its docCommentId), across the solution or narrowed by projectFilter/fileFilter; preview first. " +
         "required: symbol, mode; optional: projectFilter, fileFilter; newName and factory are rejected. " +
@@ -148,6 +148,7 @@ public class SemanticFindReplaceTools
 
         var rewritten = outcome.Sites.Count(s => s.UnsupportedReason is null);
         var skipped = outcome.Sites.Count - rewritten;
+        var (listedSites, skippedSitesNotListed) = CapSkippedSites(outcome.Sites);
 
         // Preview mode: return sites without writing
         if (mode == SemanticReplaceMode.preview)
@@ -162,7 +163,8 @@ public class SemanticFindReplaceTools
                         mode = "preview",
                         rewritten,
                         skipped,
-                        sites = outcome.Sites
+                        skippedSitesNotListed,
+                        sites = listedSites
                     },
                     SemanticReplaceOperation.removeNullForgiving => new
                     {
@@ -190,9 +192,10 @@ public class SemanticFindReplaceTools
                     mode = "apply",
                     rewritten,
                     skipped,
+                    skippedSitesNotListed,
                     filesChanged = 0,
                     message = "No creation site could be rewritten, so nothing was written. See sites for the construction sites that were found and why each was skipped.",
-                    sites = outcome.Sites
+                    sites = listedSites
                 }
             };
         }
@@ -243,7 +246,8 @@ public class SemanticFindReplaceTools
                     changeId = applyOutcome.ChangeId,
                     rewritten,
                     skipped,
-                    sites = outcome.Sites,
+                    skippedSitesNotListed,
+                    sites = listedSites,
                     filesChanged = outcome.Changes.Count
                 }
                 : new
@@ -254,6 +258,36 @@ public class SemanticFindReplaceTools
                     filesChanged = outcome.Changes.Count
                 }
         };
+    }
+
+    /// <summary>Returns every rewritten site plus at most three skipped sites per distinct reason (first in order), and the count of skipped sites left out.</summary>
+    private static (List<SemanticReplaceSite> Sites, int NotListed) CapSkippedSites(IEnumerable<SemanticReplaceSite> sites)
+    {
+        const int MaxSkippedPerReason = 3;
+        var listed = new List<SemanticReplaceSite>();
+        var perReason = new Dictionary<string, int>(StringComparer.Ordinal);
+        var notListed = 0;
+        foreach (var site in sites)
+        {
+            if (site.UnsupportedReason is null)
+            {
+                listed.Add(site);
+                continue;
+            }
+
+            perReason.TryGetValue(site.UnsupportedReason, out var count);
+            if (count < MaxSkippedPerReason)
+            {
+                perReason[site.UnsupportedReason] = count + 1;
+                listed.Add(site);
+            }
+            else
+            {
+                notListed++;
+            }
+        }
+
+        return (listed, notListed);
     }
 
     private static SentinelCallToolResult<object> InvalidArgument(string message) =>
