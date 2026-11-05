@@ -148,13 +148,15 @@ in place. Findings reuse `Finding`.
 
 ### Step 1 - Context and operating mode option
 
-- Files: new `RoslynSentinel.Common/ToolCallContext.cs`; new `RoslynSentinel.Common/OperatingModeOptions.cs`;
+- Files: new `RoslynSentinel.Common/ToolCallContext.cs`; new `RoslynSentinel.Common/AgentOperatingModeOptions.cs`;
   `RoslynSentinel.Server.Advanced/ServerStdio.cs:47` and `ServerHttp.cs:35` (call `Configure` beside
   `EolPolicyOptions.Configure`).
 - Change: `ToolCallContext` (agent id and type, tool name, reason, `StartSeq`, `GatePassed`) with a static
   accessor wrapping the `AsyncLocal`, with a comment on why ambient (roughly 50 chokepoint call sites).
-  `OperatingModeOptions`: `Configured`, `Effective`, `Source`, `ResolveOnce(bool hasAgentId)` using
+  `AgentOperatingModeOptions`: `Configured`, `Effective`, `Source`, `ResolveOnce(bool hasAgentId)` using
   `Interlocked.CompareExchange`. `Configure` resets the latch, so tests reset with `Configure([])`.
+  The C# enum is `AgentOperatingMode`, because `RoslynSentinel.Common.OperatingMode` already exists (Production/Testing,
+  from `--testing`). The flag, env var and `McpServerStatus` field keep the `OperatingMode` name; none of them collide.
 - Done when tests show: the context flows across `await` and `Task.Run`; arg beats env var; explicit modes never
   change; `auto` latches on the first call and ignores later calls; concurrent first calls agree.
 
@@ -177,7 +179,7 @@ in place. Findings reuse `Finding`.
   `("AgentIdentity", AddAgentIdentityFilter)` as the first row, ahead of `ToolCallEcho`);
   `RoslynSentinel.Tests.Server/ToolTelemetryFilterOrderTests.cs`.
 - Change: read and remove `_agentId`/`_agentType`, read `reason` raw, call
-  `OperatingModeOptions.ResolveOnce`, set the context with `StartSeq = CurrentSeq` (0 when there is no provider),
+  `AgentOperatingModeOptions.ResolveOnce`, set the context with `StartSeq = CurrentSeq` (0 when there is no provider),
   then call `next`. Update what the new position makes false: the `names[0]`/`names[1]` asserts in
   `CallToolFilters_AreRegisteredInTheDeclaredOrder_WithTelemetrySecond` (rename it; AgentIdentity, then echo, then
   telemetry), the "must be registered first" and "must be registered second" doc comments on

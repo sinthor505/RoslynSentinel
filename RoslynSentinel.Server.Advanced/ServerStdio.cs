@@ -45,6 +45,7 @@ namespace RoslynSentinel.Server.Advanced
             ToolCallEchoOptions.Configure(args);
             SchemaOptions.Configure(args);
             EolPolicyOptions.Configure(args);
+            AgentOperatingModeOptions.Configure(args);
 
             if (ServerStartupHelpers.HandleListTools(
                     args,
