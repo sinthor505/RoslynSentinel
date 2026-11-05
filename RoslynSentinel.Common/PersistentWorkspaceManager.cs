@@ -412,6 +412,41 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     }
 
     /// <summary>
+    /// Records the current on-disk content of files the server itself wrote outside the write chokepoint
+    /// (for example CreateProject's child process) as their hash baseline, then drops them from the drift list.
+    /// With the baseline in place, any later watcher event for these paths hash-matches in OnFileSystemChanged
+    /// and is suppressed, so there is no timing race with watcher events that arrive after the writer exits.
+    /// Only the listed paths are touched: unrelated drift stays flagged, and _pendingChanges is left alone so
+    /// the debounced reload still picks up what was written.
+    /// </summary>
+    public void RegisterOwnWrites(IReadOnlyCollection<string> paths)
+    {
+        foreach (var path in paths)
+        {
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            try
+            {
+                var key = new FilePathWrapper(path);
+                _knownFileHashes[key] = ComputeContentHash(ReadAllTextShared(path));
+                if (path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                {
+                    _knownFileBomPresence[key] = HasUtf8BomAsync(path);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Locked/unreadable -> leave unbaselined; a watcher event for it will flag as before.
+            }
+        }
+
+        ClearExternalFileChanges(paths);
+    }
+
+    /// <summary>
     /// True once a confirmed drift hit has tripped the session-wide halt latch. See
     /// <see cref="SessionHaltedException"/> and docs/current/ideas/external-drift-hard-blocker.md.
     /// </summary>

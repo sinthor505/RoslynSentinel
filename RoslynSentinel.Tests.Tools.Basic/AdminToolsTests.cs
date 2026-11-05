@@ -146,6 +146,8 @@ public class AdminToolsTests
 
         public void ClearExternalFileChanges(IReadOnlyCollection<string> paths) => Tracked.RemoveAll(t => paths.Contains(t));
 
+        public void RegisterOwnWrites(IReadOnlyCollection<string> paths) => throw new NotImplementedException();
+
         public void ClearSessionHalt() => ClearSessionHaltCalls++;
 
         public bool IsSessionHalted() => ClearSessionHaltCalls == 0;

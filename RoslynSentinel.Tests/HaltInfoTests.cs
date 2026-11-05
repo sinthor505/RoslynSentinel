@@ -15,6 +15,7 @@ public class HaltInfoTests
 
         public void ClearExternalFileChanges() => throw new NotImplementedException();
         public void ClearExternalFileChanges(IReadOnlyCollection<string> paths) => throw new NotImplementedException();
+        public void RegisterOwnWrites(IReadOnlyCollection<string> paths) => throw new NotImplementedException();
         public Task<List<string>> GetContentExternalFileChangesAsync(CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public IEnumerable<string> GetDiagnostics() => throw new NotImplementedException();
         public List<string> GetExternalFileChanges() => throw new NotImplementedException();

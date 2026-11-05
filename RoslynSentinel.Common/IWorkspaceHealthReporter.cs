@@ -7,6 +7,8 @@ public interface IWorkspaceHealthReporter
     void ClearExternalFileChanges();
     /// <summary>Clears only the listed entries (matched per PathComparison); all other drift entries stay flagged.</summary>
     void ClearExternalFileChanges(IReadOnlyCollection<string> paths);
+    /// <summary>Declares that the server itself just wrote the listed files outside the write chokepoint (for example a child process): baselines their on-disk content and drops them from the drift list so follow-up edits do not trip the external-drift halt. Unrelated drift entries stay flagged.</summary>
+    void RegisterOwnWrites(IReadOnlyCollection<string> paths);
     /// <summary>Returns files whose on-disk content diverges from the in-memory workspace.</summary>
     Task<List<string>> GetContentExternalFileChangesAsync(CancellationToken cancellationToken = default);
     /// <summary>Returns free-form diagnostic messages about the workspace's internal state.</summary>

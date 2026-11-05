@@ -201,6 +201,7 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     public string? CheckRateLimit(string toolName, int defaultLimit) => null;
     public void ClearExternalFileChanges() => throw new NotImplementedException();
     public void ClearExternalFileChanges(IReadOnlyCollection<string> paths) => throw new NotImplementedException();
+    public void RegisterOwnWrites(IReadOnlyCollection<string> paths) => throw new NotImplementedException();
     public void ClearSessionHalt() => throw new NotImplementedException();
     public void Dispose()
     {
