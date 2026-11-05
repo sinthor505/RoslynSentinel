@@ -1,6 +1,6 @@
 # Finding: Member(addMember) re-indents the continuation line of an expression-bodied method
 
-**Status:** OPEN 2026-10-28. Reported once from the Tests.Support.* rollout; not reproduced, root cause not traced, fix not decided.
+**Status:** NOT REPRODUCED 2026-11-05 on current code (engine-level, CRLF fixture; see "Root cause"). Originally reported once from the Tests.Support.* rollout 2026-10-28. Regression tests kept; reopen only with a captured before/after from a real call.
 
 ## Context
 
@@ -30,7 +30,22 @@ lead, not a measured result.
 
 ## Root cause
 
-Not traced. What the code does (verified):
+**Measured 2026-11-05 (reproduction attempt).** New fixture
+`RoslynSentinel.Tests.Tools.Basic/MemberAddExpressionBodyIndentTests.cs` (CRLF, InMemoryWorkspace, class `ExprBodyTarget` with
+siblings `    public int Alpha() =>\r\n        1 + 1;` and `Beta` in the same two-line style). Input `newMemberSource`
+`public int X() =>\r\n        1 + 2;` (body one level deeper than the signature, CRLF). Results, both byte-exact on `UpdatedText`:
+
+- `MemberRefactoringEngine.AddMemberAsync` (append): output `    public int X() =>\r\n        1 + 2;` after a blank line; continuation
+  indent of 8 spaces kept; Alpha and Beta bodies unchanged. PASS.
+- `InsertMemberAfterAsync` (after `Alpha`): same result, siblings unchanged. PASS.
+
+So the Formatter-owns-the-arrow-body hypothesis below did NOT hold for this shape: the annotated-span format keeps the caller's
+continuation offset when the supplied indent equals the container's member indent + one level, and it does not touch sibling members.
+Not covered, therefore still possible causes of the original report: an LF file, a caller supplying a different body indent (for example
+a flat or tab-indented body), a tab-indented file, or a second tool call (`ReplaceSnippet`) in the rollout re-indenting `TestRunEngine`.
+Without a captured before/after the report cannot be pursued further.
+
+Not traced beyond that. What the code does (verified):
 
 - `MemberRefactoringEngine.AddMemberAsync` (`RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs:2303-2365`) parses the
   caller's text with `SyntaxFactory.ParseMemberDeclaration(newMemberSource)` and passes it to

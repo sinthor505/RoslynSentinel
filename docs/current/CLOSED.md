@@ -8,6 +8,16 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## `ChangeSignature` and `GetCallGraph` refused an ambiguous name but could not narrow it - resolved (2026-11-05)
+
+Both tools now take `contextSnippet` (plus `lineBefore`/`lineAfter`, shared `ToolParams` descriptions). `GetCallGraph` resolves overloads through `ResolveCallGraphMethod` (no first-overload pick, `// TODO overloads` removed); `NameTargetLookup.RequireSingle` gained an optional `retryCall` so the Ambiguous hint is a valid `ToolCallHint.Call` naming the real parameter. Other `RequireSingle` callers keep the old wording. Live check after restart still pending.
+Evidence: `RoslynSentinel.Tests.Tools.Advanced/AmbiguousNameTargetToolTests.cs` (new ChangeSignature and GetCallGraph cases); full solution run 6604 tests, 0 failed; Build 0 errors.
+
+## `Member(addMember)` flattening the continuation indent of expression-bodied methods - not reproducible (2026-11-05)
+
+A CRLF fixture with an inserted two-line `=>` method (`AddMemberAsync` and `InsertMemberAfterAsync`) keeps the 8-space continuation and leaves siblings unchanged. Untested: LF files, tab indents, a caller body indent that differs. Reopen with the exact before/after text if it recurs.
+Evidence: `RoslynSentinel.Tests.Tools.Basic/MemberAddExpressionBodyIndentTests.cs` (two passing tests); [finding](findings/finding_member_add_member_flattens_expression_body_continuation_indent.md).
+
 ## `Member` dispatcher was a 317-line method - resolved (2026-11-05)
 
 `RefactoringStructuralImpl.Member` is now a 54-line switch over private `MemberViewAsync`, `MemberReplaceAsync`, `MemberRemoveAsync`, `MemberAddTopLevelTypeAsync`, `MemberAddEnumMemberAsync` and `MemberAddToContainerAsync` (bodies moved verbatim), so `GetMethodSource` no longer offloads it. Also: the `Member(remove)` refusal now lists at most 10 callers and 10 implementations with a "(+N more)" marker.
