@@ -106,10 +106,10 @@ public class ResidualMentionSummarizerTests
         Assert.That(view.TopFiles, Has.Count.EqualTo(ResidualMentionSummarizer.MaxTopFiles));
         Assert.That(view.TopFiles.Select(f => f.Path).ToList(), Is.EqualTo(new[]
         {
-            Path.Combine("src", "f00.cs"), Path.Combine("src", "f01.cs"), Path.Combine("src", "f02.cs"),
-            Path.Combine("src", "f03.cs"), Path.Combine("src", "f04.cs"), Path.Combine("src", "f05.cs"),
-            Path.Combine("src", "f06.cs"), Path.Combine("src", "f07.cs"), Path.Combine("src", "f08.cs"),
-            Path.Combine("src", "f09.cs"),
+            "src/f00.cs", "src/f01.cs", "src/f02.cs",
+            "src/f03.cs", "src/f04.cs", "src/f05.cs",
+            "src/f06.cs", "src/f07.cs", "src/f08.cs",
+            "src/f09.cs",
         }));
         Assert.That(view.TopFiles.Select(f => f.Count).ToList(), Is.EqualTo(new[] { 100, 100, 100, 34, 34, 34, 34, 34, 34, 34 }));
 
@@ -119,7 +119,7 @@ public class ResidualMentionSummarizerTests
         {
             var expected = mentions.Where(m => m.Bucket == bucket)
                 .Take(ResidualMentionSummarizer.MaxExamplesPerBucket)
-                .Select(m => (m.FilePath.Relative, m.LineNumber))
+                .Select(m => (m.FilePath.Relative.Replace('\\', '/'), m.LineNumber))
                 .ToList();
             var actual = view.Examples[Key(bucket)].Select(e => (e.Path, e.Line)).ToList();
             Assert.That(actual, Is.EqualTo(expected), Key(bucket));
@@ -178,9 +178,9 @@ public class ResidualMentionSummarizerTests
 
         var view = ResidualMentionSummarizer.Summarize(mentions, OldName, null);
 
-        var renamerRelative = new FilePathWrapper(Path.Combine(_root, "src", "Engine", "Renamer.cs"), _root).Relative;
-        var readmeRelative = new FilePathWrapper(Path.Combine(_root, "docs", "readme.md"), _root).Relative;
-        Assert.That(renamerRelative, Is.EqualTo(Path.Combine("src", "Engine", "Renamer.cs")));
+        var renamerRelative = new FilePathWrapper(Path.Combine(_root, "src", "Engine", "Renamer.cs"), _root).Relative.Replace('\\', '/');
+        var readmeRelative = new FilePathWrapper(Path.Combine(_root, "docs", "readme.md"), _root).Relative.Replace('\\', '/');
+        Assert.That(renamerRelative, Is.EqualTo("src/Engine/Renamer.cs"));
 
         var paths = view.TopFiles.Select(f => f.Path)
             .Concat(view.Examples.Values.SelectMany(rows => rows.Select(r => r.Path)))
@@ -195,6 +195,25 @@ public class ResidualMentionSummarizerTests
         Assert.That(view.TopFiles.Select(f => f.Path), Does.Contain(renamerRelative));
         Assert.That(view.TopFiles.Select(f => f.Path), Does.Contain(readmeRelative));
         Assert.That(view.Examples[Key(ResidualBucket.Code)].Single().Path, Is.EqualTo(renamerRelative));
+    }
+
+    [Test]
+    public void Summarize_SubfolderMention_WirePathUsesForwardSlashesInCountsExamplesAndDetails()
+    {
+        var mentions = new List<ResidualMention>
+        {
+            Mention(Path.Combine("src", "Engine", "Renamer.cs"), 10, "OldName();", ResidualBucket.Code, 0),
+            Mention(Path.Combine("src", "Engine", "Renamer.cs"), 12, "// OldName", ResidualBucket.Comment, 3),
+        };
+
+        var view = ResidualMentionSummarizer.Summarize(mentions, OldName, null);
+
+        Assert.That(view.TopFiles.Single().Path, Is.EqualTo("src/Engine/Renamer.cs"));
+        Assert.That(view.TopFiles.Single().Count, Is.EqualTo(2));
+        Assert.That(view.Examples[Key(ResidualBucket.Code)].Single().Path, Is.EqualTo("src/Engine/Renamer.cs"));
+
+        var root = JsonNode.Parse(ResidualMentionSummarizer.BuildDetailEnvelope(mentions))!;
+        Assert.That((string)root["successData"]![Key(ResidualBucket.Code)]![0]!["path"]!, Is.EqualTo("src/Engine/Renamer.cs"));
     }
 
     [Test]

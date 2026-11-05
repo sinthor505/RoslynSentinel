@@ -29,6 +29,12 @@ public class ResidualMentionScannerTests
     {
         if (Directory.Exists(_root))
         {
+            // git marks object files read-only; clear that so the tree can be deleted.
+            foreach (var file in Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories))
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+            }
+
             Directory.Delete(_root, recursive: true);
         }
     }
@@ -185,6 +191,62 @@ public class ResidualMentionScannerTests
             Assert.That(mentions.Select(m => m.FilePath.Relative), Is.EquivalentTo(new[] { "Keep.md", "Real.cs" }));
             Assert.That(mentions.Single(m => m.FilePath.Relative == "Real.cs").Bucket, Is.EqualTo(ResidualBucket.Comment));
         });
+    }
+
+    [Test]
+    public async Task ScanAsync_GitRepo_ReportsTrackedMarkdownMention()
+    {
+        InitGitRepo();
+        WriteFileUnderRoot("notes.md", "Mentions OldName here.\n");
+        RunGit("add", "notes.md");
+
+        var mentions = await ResidualMentionScanner.ScanAsync(new AdhocWorkspace().CurrentSolution, _root, "OldName", isNamespace: false);
+
+        Assert.That(mentions.Select(m => m.FilePath.Relative), Is.EqualTo(new[] { "notes.md" }));
+    }
+
+    [Test]
+    public async Task ScanAsync_GitRepo_IgnoredAndUntrackedNonSourceFiles_AreNotReported()
+    {
+        InitGitRepo();
+        WriteFileUnderRoot(".gitignore", "bin-vscode/\n");
+        WriteFileUnderRoot("notes.md", "Mentions OldName here.\n");
+        WriteFileUnderRoot(Path.Combine("bin-vscode", "app.deps.json"), "{ \"k\": \"OldName\" }\n");
+        WriteFileUnderRoot("untracked.md", "OldName untracked\n");
+        RunGit("add", ".gitignore", "notes.md");
+
+        var mentions = await ResidualMentionScanner.ScanAsync(new AdhocWorkspace().CurrentSolution, _root, "OldName", isNamespace: false);
+
+        Assert.That(mentions.Select(m => m.FilePath.Relative), Is.EqualTo(new[] { "notes.md" }));
+    }
+
+    // Turns _root into a git repository. No commit is made: --cached reads the index.
+    private void InitGitRepo()
+    {
+        RunGit("init", "--quiet");
+    }
+
+    private void RunGit(params string[] args)
+    {
+        var info = new System.Diagnostics.ProcessStartInfo("git")
+        {
+            WorkingDirectory = _root,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        foreach (var arg in args)
+        {
+            info.ArgumentList.Add(arg);
+        }
+
+        using var process = System.Diagnostics.Process.Start(info)!;
+        process.StandardInput.Close();
+        var stderr = process.StandardError.ReadToEnd();
+        process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+        Assert.That(process.ExitCode, Is.EqualTo(0), $"git {string.Join(' ', args)} failed: {stderr}");
     }
 
     [Test]

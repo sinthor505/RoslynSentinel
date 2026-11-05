@@ -1,6 +1,6 @@
 # `McpToolsetControl` enabled a toolset on the server but the Claude Code client never loaded the new tools
 
-**Status:** OPEN 2026-10-25 (worked around the same day: commit `73d89af1` registers SemanticFindReplace in `--mode all`; a `LaunchTestInstance(mode: all)` HTTP instance emits and runs it, which is how step 6 was applied). The claude-lean client-refresh question below is still untraced. Server side confirmed working; the client-side cause (notification not sent, not honoured, or not delivered) is NOT traced, only hypotheses below.
+**Status:** NOT REPRODUCED 2026-11-05 at build bab9599b. After `McpToolsetControl(toolSet: declarations, enabled: true)` the client listed all 7 tools as deferred at once; `ToolSearch` loaded `ChangeSignature`, and it reached the server (`Ambiguous` on an overloaded method) from both the main session and a subagent spawned after the enable. Why the failure below occurred on 2026-10-25 was never traced, so the hypotheses below remain unverified. Original status: OPEN 2026-10-25 (worked around the same day: commit `73d89af1` registers SemanticFindReplace in `--mode all`; a `LaunchTestInstance(mode: all)` HTTP instance emits and runs it, which is how step 6 was applied).
 
 ## What was being attempted
 

@@ -15,8 +15,9 @@ namespace RoslynSentinel.Engines.Basic;
 /// <item>Every project .cs document of the post-rename solution, except generated ones: a path under a
 /// skipped directory, a name ending .g.cs, .g.i.cs, .designer.cs, .AssemblyInfo.cs or
 /// .AssemblyAttributes.cs, or one whose first lines contain "&lt;auto-generated".</item>
-/// <item>Non-source files under the solution root with extension .csproj, .props, .targets, .json, .md,
-/// .ps1, .slnx or .sln (read from disk; unreadable files and files over 5 MB are skipped).</item>
+/// <item>Git-tracked non-source files under the solution root with extension .csproj, .props, .targets, .json, .md,
+/// .ps1, .slnx or .sln (read from disk; unreadable files and files over 5 MB are skipped). The solution root is
+/// walked instead when it is not a git repository or nothing under it is tracked.</item>
 /// <item>Skipped directories (anywhere in a path below the solution root): bin, obj, .git, .roslynsentinel,
 /// Worktree, node_modules (names compared case-insensitively).</item>
 /// </list>
@@ -228,10 +229,48 @@ public static class ResidualMentionScanner
         return false;
     }
 
+    // Tracked files only: ignored build output and scratch folders are not residual mentions. Null means walk the root instead.
+    private static List<string>? TryCollectTrackedNonSourceFiles(string solutionRoot)
+    {
+        var run = GitProcess.TryRun(solutionRoot, TimeSpan.FromSeconds(10), "ls-files", "-z", "--cached");
+        if (run is null || run.Value.ExitCode != 0)
+        {
+            return null;
+        }
+
+        var relativePaths = run.Value.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        if (relativePaths.Length == 0)
+        {
+            return null;
+        }
+
+        var files = new List<string>();
+        foreach (var relative in relativePaths)
+        {
+            var path = Path.GetFullPath(Path.Combine(solutionRoot, relative));
+            var extension = Path.GetExtension(path);
+            if (NonSourceExtensions.Any(e => string.Equals(e, extension, StringComparison.OrdinalIgnoreCase))
+                && !IsInSkippedDirectory(path, solutionRoot)
+                && File.Exists(path))
+            {
+                files.Add(path);
+            }
+        }
+
+        files.Sort(StringComparer.OrdinalIgnoreCase);
+        return files;
+    }
+
     // Walks the solution root iteratively, pruning SkippedDirectoryNames, and returns matching files sorted by path.
     // Inaccessible directories and reparse points are skipped silently.
     private static List<string> CollectNonSourceFiles(string solutionRoot, CancellationToken cancellationToken)
     {
+        var tracked = TryCollectTrackedNonSourceFiles(solutionRoot);
+        if (tracked is not null)
+        {
+            return tracked;
+        }
+
         var files = new List<string>();
         var pending = new Stack<string>();
         pending.Push(solutionRoot);

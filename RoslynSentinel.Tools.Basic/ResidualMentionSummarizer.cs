@@ -170,8 +170,9 @@ public static class ResidualMentionSummarizer
         return value.Length <= DetailTextChars ? value : value[..(DetailTextChars - 3)] + "...";
     }
 
+    // Wire paths use forward slashes so they read like other tool results and paste into a fileGlob.
     private static string PathOf(ResidualMention mention) =>
-        mention.FilePath.Relative.Length > 0 ? mention.FilePath.Relative : mention.FilePath.Absolute;
+        (mention.FilePath.Relative.Length > 0 ? mention.FilePath.Relative : mention.FilePath.Absolute).Replace('\\', '/');
 }
 
 /// <summary>
