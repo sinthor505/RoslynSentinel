@@ -8,6 +8,15 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## `MoveType` could not lift a nested type to top level - resolved (2026-11-05)
+
+`MoveType(destination: ownFile)` on a nested type now rewrites the qualified `Outer.Nested` references (member access, qualified names, crefs, fully qualified forms) solution-wide in the same atomic change, via `SymbolFinder` and the semantic model (`NestedTypeReferenceLifter`, called from `BasicRefactoringEngine.MoveTypeToFileAsync`), and adds the namespace using where needed. Known limits: references through a derived type, `global::`-qualified names and generic containing types are not rewritten; a private/protected nested type is not widened.
+Evidence: `MoveTypeToFileTests` (multi-file CS0426 fixture + no-outside-references case) pass; Build 0 errors.
+
+## `MoveMember` did not carry needed usings to the target file - resolved (2026-11-05)
+
+`MoveMemberUsings.BuildMissingUsingsEdit` adds the plain `using` directives the moved code needs (found semantically; carried only when the source file has them and the target lacks them) to the target document's edits on the existing-class, base-type and instance-to-existing-class routes. The new-class routes already copied all usings.
+Evidence: `RoslynSentinel.Tests.Basic/MoveMemberCarriesUsingsTests.cs` (9 tests); 116 related Battery.Basic MoveMember/instance-move tests pass; Build 0 errors.
 ## `using static RoslynFormattingHelper` imports in five Advanced engines - resolved (2026-11-05)
 
 The 47 unqualified helper calls in AdvancedStructural/AsyncOptimization/CodeStyle/LogicOptimization/Modernization engines are now `RoslynFormattingHelper.X(...)`, and the imports plus their "deliberate exception" comments are removed. Done with per-file `ReplaceSnippet` batches (two sweep dispatches): `SemanticFindReplace` has no operation that qualifies static-import calls (only invertBoolean, replaceConstruction, removeNullForgiving).
