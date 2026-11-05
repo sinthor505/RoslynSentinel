@@ -8,6 +8,11 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## `using static RoslynFormattingHelper` imports in five Advanced engines - resolved (2026-11-05)
+
+The 47 unqualified helper calls in AdvancedStructural/AsyncOptimization/CodeStyle/LogicOptimization/Modernization engines are now `RoslynFormattingHelper.X(...)`, and the imports plus their "deliberate exception" comments are removed. Done with per-file `ReplaceSnippet` batches (two sweep dispatches): `SemanticFindReplace` has no operation that qualifies static-import calls (only invertBoolean, replaceConstruction, removeNullForgiving).
+Evidence: `Search` for `using static .*RoslynFormattingHelper` returns 0; Build 0 errors; full solution run 6605 tests, 0 failed.
+
 ## `ChangeSignature` and `GetCallGraph` refused an ambiguous name but could not narrow it - resolved (2026-11-05)
 
 Both tools now take `contextSnippet` (plus `lineBefore`/`lineAfter`, shared `ToolParams` descriptions). `GetCallGraph` resolves overloads through `ResolveCallGraphMethod` (no first-overload pick, `// TODO overloads` removed); `NameTargetLookup.RequireSingle` gained an optional `retryCall` so the Ambiguous hint is a valid `ToolCallHint.Call` naming the real parameter. Other `RequireSingle` callers keep the old wording. Live check after restart still pending.
