@@ -32,6 +32,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <InternalsVisibleTo Include="RoslynSentinel.Tests.Tools.Basic" />
+	</ItemGroup>
+
+	<ItemGroup>
 	  <Folder Include="Properties\" />
 	</ItemGroup>	
 

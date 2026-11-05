@@ -18,7 +18,8 @@ public sealed class TestInstanceException(string errorCode, string message) : To
 /// Starts, tracks and stops HTTP copies of this server built from the working tree ("test instances"), for
 /// developing the server itself. Each instance runs the throwaway build output on a free loopback port with
 /// <c>--respawn=none</c> and its own <c>--working-dir</c>; the caller drives it with raw JSON-RPC over HTTP
-/// (see <see cref="BuildHowToCall"/>). Children are killed when the owning server exits.
+/// (see <see cref="BuildHowToCall"/>). Children are killed when the owning server exits;
+/// on Windows a kill-on-close job object (<see cref="KillOnCloseJob"/>) also covers a hard kill of the owner.
 /// </summary>
 public sealed class TestInstanceLauncher
 {
@@ -46,7 +47,6 @@ public sealed class TestInstanceLauncher
     private int _launchCounter;
     private int _exitHookRegistered;
 
-    // TODO children are not in a job object: a hard kill of this server (taskkill /F) leaves them running and untracked.
     public TestInstanceLauncher(IWorkspaceManager workspaceManager, BuildEngine buildEngine, ServerInstancePaths? paths = null)
     {
         _workspaceManager = workspaceManager;
@@ -183,6 +183,12 @@ public sealed class TestInstanceLauncher
             {
                 throw new TestInstanceException(ToolErrorCode.Exception,
                     $"Could not start '{Path.GetFileName(fileName)}' for the test instance: {ex.Message}");
+            }
+
+            // Immediately after Start so grandchildren inherit job membership. A missing job must not fail the launch.
+            if (!KillOnCloseJob.TryAssignToProcessWideJob(process, out var jobWarning))
+            {
+                stderr.Add($"[job] {jobWarning}");
             }
 
             // The child never reads stdin; keeping the redirected pipe open (not inheriting ours) is what matters.
