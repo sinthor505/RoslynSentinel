@@ -90,7 +90,8 @@ public interface IOrderRepository
     {
         var json = @"{""id"": 1, ""name"": ""test"", ""active"": true}";
         var result = _generationTools.GenerateClassesFromJsonTool(reason: "test message", json, "Product", "TestProj");
-        var generated = (GenerationResult)result;
+        Assert.That(result.IsError, Is.False);
+        var generated = (GenerationResult)result.SuccessData!;
         Assert.That(generated.Content, Does.Contain("class Product"), "Generated class should be named Product");
         Assert.That(generated.Content, Does.Contain("Name").And.Contain("Active"), "Generated properties should follow the JSON keys");
     }
@@ -101,7 +102,8 @@ public interface IOrderRepository
     {
         var json = @"{""order"": {""id"": 1, ""items"": [{""sku"": ""A""}]}}";
         var result = _generationTools.GenerateClassesFromJsonTool(reason: "test message", json, "Root", "TestProj");
-        var generated = (GenerationResult)result;
+        Assert.That(result.IsError, Is.False);
+        var generated = (GenerationResult)result.SuccessData!;
         Assert.That(generated.Content, Does.Contain("class Root"), "Generated root class should be named Root");
         Assert.That(generated.Content, Does.Contain("Order"), "Nested object key should produce an Order property");
     }
@@ -113,7 +115,9 @@ public interface IOrderRepository
     {
         SetSource(ControllerSource, "Orders.cs");
         var result = await _generationTools.GenerateHttpClientTool(reason: "test message", "Orders.cs", "OrdersController");
-        Assert.That(result, Does.Contain($"\"Outcome\": {(int)EditOutcome.Modified}"), "Generation should report Modified");
+        Assert.That(result.IsError, Is.False);
+        var edit = (DocumentEditResult)result.SuccessData!;
+        Assert.That(edit.Outcome, Is.EqualTo(EditOutcome.Modified), "Generation should report Modified");
         // DEFERRED (accepted 2026-10-22, finding #22): the tool returns ToJsonSummary(), which omits UpdatedText ([JsonIgnore] on EngineResultBase.UpdatedText).
         // Left as-is on purpose until scheduled; do not re-raise in reviews.
     }
@@ -124,7 +128,9 @@ public interface IOrderRepository
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _generationTools.GenerateHttpClientTool(reason: "test message", "NonExistent.cs", "OrdersController");
-        Assert.That(result, Does.Contain("not found in the loaded solution"), "Tools return a message rather than throwing for an unknown file.");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData.Message, Does.Contain("not found in the loaded solution"), "Tools return a message rather than throwing for an unknown file.");
     }
 
     // --- GenerateConstructor ---
@@ -216,7 +222,8 @@ public interface IOrderRepository
         const string source = @"namespace TestProj; public class Order { public string T(IConfiguration config) => config[""Timeout""]; }";
         SetSource(source, "Order.cs");
         var result = await _generationTools.GenerateDefaultConfigJsonTool(reason: "test message", "TestProj");
-        Assert.That(result, Does.Contain("Timeout"), "A config key read in the project should appear in the generated JSON skeleton");
+        Assert.That(result.IsError, Is.False);
+        Assert.That((string)result.SuccessData!, Does.Contain("Timeout"), "A config key read in the project should appear in the generated JSON skeleton");
     }
 
     [Test]
@@ -225,7 +232,9 @@ public interface IOrderRepository
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _generationTools.GenerateDefaultConfigJsonTool(reason: "test message", "NoSuchProject");
-        Assert.That(result, Is.Not.Null, "Tools return a message rather than throwing for an unknown project.");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData.Message, Does.Contain("not found in the loaded solution"), "Tools return a structured not-found error rather than throwing for an unknown project.");
     }
 
     // --- GenerateAsyncOverload ---
@@ -331,7 +340,9 @@ public interface IOrderRepository
         const string src = @"namespace TestProj; public class Order { public string GetLabel(int id) { return string.Format(""{0}"", id); } }";
         SetSource(src, "Order.cs");
         var result = await _generationTools.InterpolateStringSafeTool(reason: "test message", "Order.cs", @"string.Format(""{0}""");
-        Assert.That(result, Does.Contain($"\"Outcome\": {(int)EditOutcome.Modified}"), "Conversion should report Modified");
+        Assert.That(result.IsError, Is.False);
+        var edit = (DocumentEditResult)result.SuccessData!;
+        Assert.That(edit.Outcome, Is.EqualTo(EditOutcome.Modified), "Conversion should report Modified");
         // DEFERRED (accepted 2026-10-22, finding #22): the tool returns ToJsonSummary(), which omits UpdatedText ([JsonIgnore] on EngineResultBase.UpdatedText).
         // Left as-is on purpose until scheduled; do not re-raise in reviews.
     }
@@ -342,6 +353,8 @@ public interface IOrderRepository
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _generationTools.InterpolateStringSafeTool(reason: "test message", "NonExistent.cs", "string.Format");
-        Assert.That(result, Does.Contain("not found in the loaded solution"), "Tools return a message rather than throwing for an unknown file.");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData.Message, Does.Contain("not found in the loaded solution"), "Tools return a structured not-found error rather than throwing for an unknown file.");
     }
 }

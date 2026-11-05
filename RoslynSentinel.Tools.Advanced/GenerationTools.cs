@@ -75,7 +75,7 @@ public class GenerationTools
     [McpServerTool(Name = "GenerateClassesFromJson")]
     [Produces(DataTag.ResultOnly)]
     [Description("Generates C# class declarations from a JSON string using rootClassName as the top-level type name under the specified namespace.")]
-    public object GenerateClassesFromJsonTool(
+    public SentinelCallToolResult<object> GenerateClassesFromJsonTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.Json)] string json,
         [ExternalInputRequired(DataTag.ClassName)] string rootClassName,
@@ -86,19 +86,28 @@ public class GenerationTools
     {
         try
         {
-            return _codeGenerationEngine.GenerateClassesFromJson(json, rootClassName, @namespace);
+            var generated = _codeGenerationEngine.GenerateClassesFromJson(json, rootClassName, @namespace);
+            return new SentinelCallToolResult<object>
+            {
+                IsError = false,
+                SuccessData = generated
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GenerateClassesFromJson failed for rootClassName='{RootClassName}'", rootClassName);
-            return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "GenerateClassesFromJson");
+            return new SentinelCallToolResult<object>
+            {
+                IsError = true,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GenerateClassesFromJson")
+            };
         }
     }
 
     [McpServerTool(Name = "GenerateHttpClient")]
     [Produces(DataTag.ResultOnly)]
     [Description("Generates a typed HttpClient wrapper for a Web API controller.")]
-    public async Task<string> GenerateHttpClientTool(
+    public async Task<SentinelCallToolResult<object>> GenerateHttpClientTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [ExternalInputRequired(DataTag.ClassName)] string controllerName,
@@ -118,25 +127,38 @@ public class GenerationTools
             fileIds = null;
         }
         if (fileIds == null || fileIds.Value.Length == 0)
-            return $"GenerateHttpClient: file '{Path.GetFileName(resolvedFilePath)}' not found in the loaded solution. " +
-                   $"Verify the path is correct and the solution is loaded. Loaded projects: {_workspaceManager.ProjectCount}.";
+            return new SentinelCallToolResult<object>
+            {
+                IsError = true,
+                ErrorData = new ResultError(ToolErrorCode.NotFound,
+                    $"GenerateHttpClient: file '{Path.GetFileName(resolvedFilePath)}' not found in the loaded solution. " +
+                   $"Verify the path is correct and the solution is loaded. Loaded projects: {_workspaceManager.ProjectCount}.")
+            };
 
         try
         {
             var result = await _apiGenerationEngine.GenerateHttpClientForControllerAsync(resolvedFilePath, controllerName, cancellationToken);
-            return result.ToJsonSummary();
+            return new SentinelCallToolResult<object>
+            {
+                IsError = false,
+                SuccessData = result
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GenerateHttpClient failed for '{ControllerName}' in '{FilePathWrapper}'", controllerName, resolvedFilePath);
-            return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "GenerateHttpClient");
+            return new SentinelCallToolResult<object>
+            {
+                IsError = true,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GenerateHttpClient")
+            };
         }
     }
 
     [McpServerTool(Name = "GenerateDefaultConfigJson")]
     [Produces(DataTag.ResultOnly)]
     [Description("Scans a project for all config[\"Key\"] and IConfiguration.GetValue<T>(\"Key\") usages and returns a JSON skeleton with all keys and inferred default values.")]
-    public async Task<string> GenerateDefaultConfigJsonTool(
+    public async Task<SentinelCallToolResult<object>> GenerateDefaultConfigJsonTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.ProjectName, required: true)] string projectName,
         // RequestContext<CallToolRequestParams> requestParams = null,
@@ -160,26 +182,39 @@ public class GenerationTools
         if (!projectExists)
         {
             var projectList = loadedProjects.Count > 0 ? string.Join(", ", loadedProjects) : "none";
-            return $"GenerateDefaultConfigJson: project '{projectName}' not found in the loaded solution. " +
-                   $"Loaded projects: {projectList}.";
+            return new SentinelCallToolResult<object>
+            {
+                IsError = true,
+                ErrorData = new ResultError(ToolErrorCode.NotFound,
+                    $"GenerateDefaultConfigJson: project '{projectName}' not found in the loaded solution. " +
+                   $"Loaded projects: {projectList}.")
+            };
         }
 
         try
         {
             var result = await _codeGenerationEngine.GenerateDefaultConfigJsonAsync(projectName, cancellationToken);
-            return result.UpdatedText;
+            return new SentinelCallToolResult<object>
+            {
+                IsError = false,
+                SuccessData = result.UpdatedText
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GenerateDefaultConfigJson failed for project '{ProjectName}'", projectName);
-            return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "GenerateDefaultConfigJson");
+            return new SentinelCallToolResult<object>
+            {
+                IsError = true,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GenerateDefaultConfigJson")
+            };
         }
     }
 
     [McpServerTool(Name = "InterpolateString")]
     [Produces(DataTag.ResultOnly)]
     [Description("Converts a string.Format(...) call to an interpolated string. Resolves const string format arguments via the semantic model (works even when the format string is a named const, not just a literal) and handles {0:format} specifiers correctly.")]
-    public async Task<string> InterpolateStringSafeTool(
+    public async Task<SentinelCallToolResult<object>> InterpolateStringSafeTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("Verbatim substring identifying the string.Format call to convert.")]
@@ -204,18 +239,31 @@ public class GenerationTools
             interpFileIds = null;
         }
         if (interpFileIds == null || interpFileIds.Value.Length == 0)
-            return $"InterpolateStringSafe: file '{Path.GetFileName(resolvedFilePath)}' not found in the loaded solution. " +
-                   $"Verify the path is correct and the solution is loaded. Loaded projects: {_workspaceManager.ProjectCount}.";
+            return new SentinelCallToolResult<object>
+            {
+                IsError = true,
+                ErrorData = new ResultError(ToolErrorCode.NotFound,
+                    $"InterpolateStringSafe: file '{Path.GetFileName(resolvedFilePath)}' not found in the loaded solution. " +
+                   $"Verify the path is correct and the solution is loaded. Loaded projects: {_workspaceManager.ProjectCount}.")
+            };
 
         try
         {
             var result = await _codeGenerationEngine.InterpolateStringAsync(resolvedFilePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
-            return result.ToJsonSummary();
+            return new SentinelCallToolResult<object>
+            {
+                IsError = false,
+                SuccessData = result
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "InterpolateStringSafe failed in '{FilePathWrapper}'", resolvedFilePath);
-            return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "InterpolateStringSafe");
+            return new SentinelCallToolResult<object>
+            {
+                IsError = true,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InterpolateStringSafe")
+            };
         }
     }
 

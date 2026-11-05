@@ -30,39 +30,47 @@ public class AdminToolsTests
     public void ExternalFileDrift_Status_ReportsNotHaltedOnFreshManager()
     {
         var result = _tools.ExternalFileDriftTool(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.Status);
-        Assert.That(result, Does.StartWith("SessionHalted=False"));
-        Assert.That(result, Does.Contain("tracked external changes: 0"));
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.SuccessData, Does.StartWith("SessionHalted=False"));
+        Assert.That(result.SuccessData, Does.Contain("tracked external changes: 0"));
     }
 
     [Test]
     public void ExternalFileDrift_List_OnFreshManager_SaysNoChanges()
     {
         var result = _tools.ExternalFileDriftTool(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.List);
-        Assert.That(result, Is.EqualTo("No tracked external file changes."));
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.SuccessData, Is.EqualTo("No tracked external file changes."));
     }
 
     [Test]
     public void ExternalFileDrift_FilesWithStatus_IsRefused()
     {
         var result = _tools.ExternalFileDriftTool(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.Status, files: "a.cs");
-        Assert.That(result, Does.Contain("only used with operation: Acknowledge"));
-        Assert.That(result, Does.Contain("nothing changed"));
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.Message, Does.Contain("only used with operation: Acknowledge"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("nothing changed"));
     }
 
     [Test]
     public void Acknowledge_UnknownFile_ReturnsNothingClearedNamingFile()
     {
         var result = _tools.ExternalFileDriftTool(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.Acknowledge, files: "nope.cs");
-        Assert.That(result, Does.Contain("Nothing cleared"));
-        Assert.That(result, Does.Contain("nope.cs"));
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData!.Message, Does.Contain("Nothing cleared"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("nope.cs"));
     }
 
     [Test]
     public void Acknowledge_MalformedJsonArray_ReportsParseError()
     {
         var result = _tools.ExternalFileDriftTool(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.Acknowledge, files: "[\"a.cs\"");
-        Assert.That(result, Does.Contain("looks like a JSON array"));
-        Assert.That(result, Does.Not.StartWith("Cleared"));
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.Message, Does.Contain("looks like a JSON array"));
+        Assert.That(result.ErrorData!.Message, Does.Not.StartWith("Cleared"));
     }
 
     [Test]
@@ -160,7 +168,30 @@ public class AdminToolsTests
     public async Task McpServerControl_GetServerStatus_ReportsRunning()
     {
         var result = await _tools.McpServerControlTool(reason: "test message", operation: AdminTools.McpServerControlOperation.GetServerStatus);
-        Assert.That(result, Does.StartWith("Running."));
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.SuccessData as string, Does.StartWith("Running."));
+    }
+
+    [Test]
+    public async Task McpServerControl_ListTestInstances_ReturnsPayloadNestedUnderSuccessData()
+    {
+        var result = await _tools.McpServerControlTool(reason: "test message", operation: AdminTools.McpServerControlOperation.ListTestInstances);
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.SuccessData, Is.TypeOf<System.Text.Json.JsonElement>());
+        var payload = (System.Text.Json.JsonElement)result.SuccessData!;
+        Assert.That(payload.GetProperty("instances").GetArrayLength(), Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task McpServerControl_StopTestInstanceUnknownPid_MapsIsErrorJsonToErrorEnvelope()
+    {
+        var result = await _tools.McpServerControlTool(
+            reason: "test message", operation: AdminTools.McpServerControlOperation.StopTestInstance, pid: 99999991);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData!.Message, Does.Contain("ListTestInstances"));
     }
 
     [Test]
@@ -241,7 +272,9 @@ public class AdminToolsTests
         var result = await tools.McpServerControlTool(
             reason: "test message", operation: AdminTools.McpServerControlOperation.StopServer);
 
-        Assert.That(result, Does.StartWith("Refused"));
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ConfirmationRequired));
+        Assert.That(result.ErrorData!.Message, Does.StartWith("Refused"));
     }
 
     [Test]

@@ -615,7 +615,7 @@ public class Svc
             new SentinelHostOptions(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<DocumentationTools>.Instance);
 
-        var result = docTools.ProjectDocTool(reason: "Test message", action: DocAction.read, docType: DocType.state) as DocReadResult;
+        var result = docTools.ProjectDocCore(reason: "Test message", action: DocAction.read, docType: DocType.state) as DocReadResult;
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Error, Is.Null,

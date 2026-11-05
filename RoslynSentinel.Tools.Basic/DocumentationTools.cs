@@ -372,10 +372,8 @@ public class DocumentationTools
             BytesWritten = bytes
         };
     }
-    [McpServerTool(Name = "ProjectDoc")]
-    [Produces(DataTag.Documentation)]
-    [Description("Reads, writes, appends, or lists project doc files under docs/.")]
-    public object ProjectDocTool(
+    // Legacy bare-object implementation behind the ProjectDoc tool; ProjectDocTool wraps it in SentinelCallToolResult.
+    public object ProjectDocCore(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("read, write, append (completed_work only), or list.")]
         DocAction action,
@@ -515,7 +513,74 @@ public class DocumentationTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ProjectDoc ({Action}/{DocType}) failed", action, docType);
-            return new DocWriteResult { IsError = true, Filename = name ?? "", Error = $"ProjectDoc failed: {ex.GetType().Name}: {ex.Message}" };
+            return new DocWriteResult { IsError = true, Filename = name ?? "", Error = $"ProjectDoc failed unexpectedly ({ex.GetType().Name}). Check the server log for details." };
         }
+    }
+
+    [McpServerTool(Name = "ProjectDoc")]
+    [Produces(DataTag.Documentation)]
+    [Description("Reads, writes, appends, or lists project doc files under docs/.")]
+    public SentinelCallToolResult<object> ProjectDocTool(
+    [Description(ToolParams.Reason)] ToolCallReason reason,
+    [Description("read, write, append (completed_work only), or list.")]
+        DocAction action,
+    [Description("Doc category: plan->plans/, handoff->handoffs/, completed_work->completed/ (append-only), documentation->documentation/, state->migration-state.yaml (name ignored).")]
+        DocType docType,
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: name is required for every action except when
+    // docType=state (which uses a fixed filename) or action=list.
+    [Description("File name or nested relative path, as shown by action=list. Required except for docType=state.")]
+        string? name = null,
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: content is required when action=write or action=append,
+    // not used otherwise.
+    [Description("Required for action=write/append.")]
+        string? content = null,
+    // RequestContext<CallToolRequestParams> requestParams = null,
+    CancellationToken cancellationToken = default)
+    {
+        var core = ProjectDocCore(reason, action, docType, name, content, cancellationToken);
+        return ToToolResult(core, name, docType);
+    }
+
+    /// <summary>
+    /// Folds the legacy bare-object result of <see cref="ProjectDocCore"/> into the envelope: the DTO becomes
+    /// SuccessData, and any failure uses ErrorData (code and message come from the DTO's own Code/Message).
+    /// </summary>
+    private static SentinelCallToolResult<object> ToToolResult(object core, string? name, DocType docType)
+    {
+        switch (core)
+        {
+            // TODO a missing file-based read reports ErrorCode Exception, not NotFound: DocReadResult.Code is NotFound only when Error is null, and ReadFile always sets Error. Fix needs a DocReadResult/ReadFile change.
+            case DocReadResult r when r.IsError:
+                var readMessage = r.Error is null && !r.Found
+                    ? $"Document not found: '{name ?? r.Filename}' (docType {docType}). Use {ToolCallHint.Call("ProjectDoc", ("action", "list"))} to see available files."
+                    : r.Message;
+                return ToError(r.Code, readMessage);
+            case DocReadResult r:
+                return ToSuccess(r);
+            case DocWriteResult w when w.IsError:
+                return ToError(w.Code, w.Message);
+            case DocWriteResult w:
+                return ToSuccess(w);
+            case DocListResult l when l.IsError:
+                return ToError(l.Code, l.Message);
+            case DocListResult l:
+                return ToSuccess(l);
+            default:
+                return ToError(ToolErrorCode.Exception, "ProjectDoc returned an unrecognized result.");
+        }
+
+        static SentinelCallToolResult<object> ToSuccess(object data)
+            => new()
+            {
+                IsError = false,
+                SuccessData = data
+            };
+
+        static SentinelCallToolResult<object> ToError(string? code, string? message)
+            => new()
+            {
+                IsError = true,
+                ErrorData = new ResultError(code ?? ToolErrorCode.Exception, message ?? "ProjectDoc failed.")
+            };
     }
 }

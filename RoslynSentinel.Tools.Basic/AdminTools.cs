@@ -39,7 +39,7 @@ public class AdminTools
     [McpServerTool(Name = "ExternalFileDrift")]
     [Produces(DataTag.ResultOnly)]
     [Description("Inspect and clear external file drift: a tracked file changed on disk outside this server. A write touching such a file is refused and halts the session; read-only tools keep working. operation Status = halted or not, plus the tracked count. List = tracked file paths; review these first. Acknowledge = clear the halt: pass files (from List) with acknowledgeScope ConfirmWithListedFiles (default), or acknowledgeScope ConfirmAll with no files. Files you did not name stay flagged.")]
-    public string ExternalFileDriftTool(
+    public SentinelCallToolResult<string> ExternalFileDriftTool(
     [Description(ToolParams.Reason)] ToolCallReason reason,
     [Description("Status, List or Acknowledge. After a 'Session halted' refusal, call List first.")] ExternalFileDriftOperation operation,
     [Description("Only for Acknowledge with ConfirmWithListedFiles: names or relative paths (CSV or JSON array) from List.")] string? files = null,
@@ -50,12 +50,12 @@ public class AdminTools
 
         if (operation == ExternalFileDriftOperation.Acknowledge)
         {
-            return AcknowledgeDrift(_workspaceManager, files, acknowledgeScope);
+            return AcknowledgeDriftResult(_workspaceManager, files, acknowledgeScope);
         }
 
         if (!string.IsNullOrWhiteSpace(files) || acknowledgeScope == ExternalFileDriftAcknowledgeScope.ConfirmAll)
         {
-            return "files and acknowledgeScope are only used with operation: Acknowledge; nothing changed.";
+            return Refused(ToolErrorCode.InvalidArgument, "files and acknowledgeScope are only used with operation: Acknowledge; nothing changed.");
         }
 
         var current = _workspaceManager.GetExternalFileChanges();
@@ -63,17 +63,17 @@ public class AdminTools
         if (operation == ExternalFileDriftOperation.Status)
         {
             var summary = current.Count > 0 ? $" ({DriftMessages.SummarizeFiles(current)})" : string.Empty;
-            return $"SessionHalted={_workspaceManager.IsSessionHalted()}; tracked external changes: {current.Count}{summary}.";
+            return Ok($"SessionHalted={_workspaceManager.IsSessionHalted()}; tracked external changes: {current.Count}{summary}.");
         }
 
         if (operation == ExternalFileDriftOperation.List)
         {
-            return current.Count == 0
+            return Ok(current.Count == 0
                 ? "No tracked external file changes."
-                : string.Join(Environment.NewLine, current);
+                : string.Join(Environment.NewLine, current));
         }
 
-        return $"Unknown operation '{operation}'. Valid operations: Status, List, Acknowledge.";
+        return Refused(ToolErrorCode.InvalidArgument, $"Unknown operation '{operation}'. Valid operations: Status, List, Acknowledge.");
     }
 
     /// <summary>
@@ -82,13 +82,29 @@ public class AdminTools
     /// </summary>
     public static string AcknowledgeDrift(IWorkspaceHealthReporter health, string? files, ExternalFileDriftAcknowledgeScope scope)
     {
+        // TODO remove AcknowledgeDrift once its direct-call tests move to AcknowledgeDriftResult; kept for its plain-text contract.
+        var r = AcknowledgeDriftResult(health, files, scope);
+        return r.IsError ? r.ErrorData!.Message : r.SuccessData!;
+    }
+
+    private static SentinelCallToolResult<string> Ok(string text) => new() { IsError = false, SuccessData = text };
+
+    private static SentinelCallToolResult<string> Refused(string errorCode, string message) =>
+        new() { IsError = true, ErrorData = new ResultError(errorCode, message) };
+
+    /// <summary>
+    /// Envelope form of <see cref="AcknowledgeDrift"/>: success carries the cleared-summary text; every refusal
+    /// carries an error code (InvalidArgument, or NotFound when a named file matches no tracked change) and the same message text.
+    /// </summary>
+    public static SentinelCallToolResult<string> AcknowledgeDriftResult(IWorkspaceHealthReporter health, string? files, ExternalFileDriftAcknowledgeScope scope)
+    {
         var hasFiles = !string.IsNullOrWhiteSpace(files);
 
         if (scope == ExternalFileDriftAcknowledgeScope.ConfirmAll)
         {
             if (hasFiles)
             {
-                return "Nothing cleared: acknowledgeScope ConfirmAll clears every tracked external change and cannot be combined with files. Either omit files (to clear all) or pass files with acknowledgeScope ConfirmWithListedFiles (to clear only those).";
+                return Refused(ToolErrorCode.InvalidArgument, "Nothing cleared: acknowledgeScope ConfirmAll clears every tracked external change and cannot be combined with files. Either omit files (to clear all) or pass files with acknowledgeScope ConfirmWithListedFiles (to clear only those).");
             }
 
             var all = new List<string>(health.GetExternalFileChanges());
@@ -101,25 +117,25 @@ public class AdminTools
                 cleared += $": {DriftMessages.SummarizeFiles(all)}";
             }
             cleared += ". Session-halt latch cleared.";
-            return cleared;
+            return Ok(cleared);
         }
 
         if (!hasFiles)
         {
             var tracked = health.GetExternalFileChanges();
-            return $"Nothing cleared: operation Acknowledge needs one of two things. (1) files = the files you reviewed with {ToolCallHint.Call("ExternalFileDrift", ("operation", "List"))}, keeping acknowledgeScope at its default ConfirmWithListedFiles, to clear only those files; or (2) acknowledgeScope = ConfirmAll with no files, to clear every tracked change. "
-                + $"Tracked changes: {DriftMessages.SummarizeFiles(tracked)}.";
+            return Refused(ToolErrorCode.InvalidArgument, $"Nothing cleared: operation Acknowledge needs one of two things. (1) files = the files you reviewed with {ToolCallHint.Call("ExternalFileDrift", ("operation", "List"))}, keeping acknowledgeScope at its default ConfirmWithListedFiles, to clear only those files; or (2) acknowledgeScope = ConfirmAll with no files, to clear every tracked change. "
+                + $"Tracked changes: {DriftMessages.SummarizeFiles(tracked)}.");
         }
 
         var requested = DelimitedListParser.ParseStringOrJsonArrayToList(files, out var parseError);
         if (parseError != null)
         {
-            return parseError;
+            return Refused(ToolErrorCode.InvalidArgument, parseError);
         }
 
         if (requested == null)
         {
-            return parseError ?? "Failed to parse files list.";
+            return Refused(ToolErrorCode.InvalidArgument, parseError ?? "Failed to parse files list.");
         }
 
         var current = health.GetExternalFileChanges();
@@ -127,12 +143,12 @@ public class AdminTools
 
         if (unmatched.Count > 0)
         {
-            return $"Nothing cleared: '{string.Join("', '", unmatched)}' match no tracked change. Tracked changes: {DriftMessages.SummarizeFiles(current)}. Call {ToolCallHint.Call("ExternalFileDrift", ("operation", "List"))} for full paths.";
+            return Refused(ToolErrorCode.NotFound, $"Nothing cleared: '{string.Join("', '", unmatched)}' match no tracked change. Tracked changes: {DriftMessages.SummarizeFiles(current)}. Call {ToolCallHint.Call("ExternalFileDrift", ("operation", "List"))} for full paths.");
         }
 
         if (matched.Count == 0)
         {
-            return $"Nothing cleared: files named no entries. Tracked changes: {DriftMessages.SummarizeFiles(current)}. Call {ToolCallHint.Call("ExternalFileDrift", ("operation", "List"))} for full paths.";
+            return Refused(ToolErrorCode.NotFound, $"Nothing cleared: files named no entries. Tracked changes: {DriftMessages.SummarizeFiles(current)}. Call {ToolCallHint.Call("ExternalFileDrift", ("operation", "List"))} for full paths.");
         }
 
         health.ClearExternalFileChanges(matched);
@@ -145,7 +161,7 @@ public class AdminTools
             message += $" {remaining.Count} file(s) remain flagged: {DriftMessages.SummarizeFiles(remaining)}. A write that touches one of them will halt the session again; acknowledge them too once reviewed.";
         }
 
-        return message;
+        return Ok(message);
     }
 
     public enum ExternalFileDriftOperation
@@ -241,10 +257,60 @@ public class AdminTools
         }
     }
 
+    private static readonly System.Text.Json.JsonSerializerOptions ResultErrorJson = new(System.Text.Json.JsonSerializerDefaults.Web);
+
+    /// <summary>
+    /// Maps the text <see cref="ControlTestInstancesAsync"/> returns onto the envelope: non-JSON text (the
+    /// unknown-operation message) is InvalidArgument; <c>{ isError: true, errorData }</c> becomes the error;
+    /// any other JSON payload is success data, with the payload shape unchanged.
+    /// </summary>
+    private static SentinelCallToolResult<object> FromTestInstanceText(string text)
+    {
+        System.Text.Json.JsonDocument document;
+        try
+        {
+            document = System.Text.Json.JsonDocument.Parse(text);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, text) };
+        }
+
+        using (document)
+        {
+            var root = document.RootElement;
+            if (root.ValueKind == System.Text.Json.JsonValueKind.Object
+                && root.TryGetProperty("isError", out var isError)
+                && isError.ValueKind == System.Text.Json.JsonValueKind.True)
+            {
+                ResultError? error = null;
+                if (root.TryGetProperty("errorData", out var errorData))
+                {
+                    try
+                    {
+                        error = System.Text.Json.JsonSerializer.Deserialize<ResultError>(errorData, ResultErrorJson);
+                    }
+                    catch (System.Text.Json.JsonException)
+                    {
+                        // Fall through to the fixed message below; never surface the parser's exception text.
+                    }
+                }
+
+                return new SentinelCallToolResult<object>
+                {
+                    IsError = true,
+                    ErrorData = error ?? new ResultError(ToolErrorCode.Exception, "McpServerControl returned an error that could not be read. Check the server log for details."),
+                };
+            }
+
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = root.Clone() };
+        }
+    }
+
     [McpServerTool(Name = "McpServerControl")]
     [Produces(DataTag.ResultOnly)]
     [Description("Operator control. StopServer needs confirmServerStop. LaunchTestInstance starts an HTTP copy of the working tree, returns url and request snippets (build Auto rebuilds only if sources changed). StopTestInstance stops pid or all. ListTestInstances lists.")]
-    public async Task<string> McpServerControlTool(
+    public async Task<SentinelCallToolResult<object>> McpServerControlTool(
      [Description(ToolParams.Reason)] ToolCallReason reason,
      McpServerControlOperation operation,
      McpServerStopConfirmation? confirmServerStop = null,
@@ -256,15 +322,19 @@ public class AdminTools
     {
         if (operation is McpServerControlOperation.LaunchTestInstance or McpServerControlOperation.StopTestInstance or McpServerControlOperation.ListTestInstances)
         {
-            return await ControlTestInstancesAsync(operation, build, mode, includeTools, pid, cancellationToken);
+            return FromTestInstanceText(await ControlTestInstancesAsync(operation, build, mode, includeTools, pid, cancellationToken));
         }
 
         // Children are killed before the delayed exit so a stopped server never leaves test instances behind.
-        return ControlServer(operation, confirmServerStop, () =>
+        var result = ControlServerResult(operation, confirmServerStop, () =>
         {
             _testInstances.KillAll();
             ScheduleProcessExit();
         }, _workspaceManager.SolutionPath, _respawn, cancellationToken);
+
+        return result.IsError
+            ? new SentinelCallToolResult<object> { IsError = true, ErrorData = result.ErrorData }
+            : new SentinelCallToolResult<object> { IsError = false, SuccessData = result.SuccessData };
     }
 
     /// <summary>
@@ -279,27 +349,44 @@ public class AdminTools
         RespawnPolicy respawn = RespawnPolicy.Auto,
         CancellationToken cancellationToken = default)
     {
+        // TODO remove ControlServer once its direct-call tests move to ControlServerResult; kept for its plain-text contract.
+        var r = ControlServerResult(operation, confirmServerStop, scheduleExit, loadedSolutionPath, respawn, cancellationToken);
+        return r.IsError ? r.ErrorData!.Message : r.SuccessData!;
+    }
+
+    /// <summary>
+    /// Envelope form of <see cref="ControlServer"/>: status and stop texts are success data; the unconfirmed-stop
+    /// refusal is ConfirmationRequired (and never calls <c>scheduleExit</c>); an unknown operation is InvalidArgument.
+    /// </summary>
+    public static SentinelCallToolResult<string> ControlServerResult(
+        McpServerControlOperation operation,
+        McpServerStopConfirmation? confirmServerStop,
+        Action scheduleExit,
+        string? loadedSolutionPath = null,
+        RespawnPolicy respawn = RespawnPolicy.Auto,
+        CancellationToken cancellationToken = default)
+    {
         _ = cancellationToken;
 
         if (operation == McpServerControlOperation.GetServerStatus)
         {
-            return $"Running. PID={Environment.ProcessId}, path={System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName}";
+            return Ok($"Running. PID={Environment.ProcessId}, path={System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName}");
         }
 
         if (operation == McpServerControlOperation.StopServer)
         {
             if (confirmServerStop != McpServerStopConfirmation.ConfirmServerStop)
             {
-                return "Refused: operation=StopServer requires confirmServerStop=ConfirmServerStop. "
-                    + "Re-issue the call with that parameter to stop the server; nothing was stopped.";
+                return Refused(ToolErrorCode.ConfirmationRequired, "Refused: operation=StopServer requires confirmServerStop=ConfirmServerStop. "
+                    + "Re-issue the call with that parameter to stop the server; nothing was stopped.");
             }
 
             scheduleExit();
             if (respawn == RespawnPolicy.None)
             {
                 // --respawn=none (the HTTP default): no launcher or client restarts this process.
-                return $"Stopping. This instance stays down: nothing will restart it, so there is no fresh instance to call {ToolCallHint.Call("LoadSolution")} on. "
-                    + $"To get another test instance, call {ToolCallHint.Call("McpServerControl", ("operation", "LaunchTestInstance"))} from your own session.";
+                return Ok($"Stopping. This instance stays down: nothing will restart it, so there is no fresh instance to call {ToolCallHint.Call("LoadSolution")} on. "
+                    + $"To get another test instance, call {ToolCallHint.Call("McpServerControl", ("operation", "LaunchTestInstance"))} from your own session.");
             }
 
             var loadHint = string.IsNullOrWhiteSpace(loadedSolutionPath)
@@ -311,10 +398,10 @@ public class AdminTools
             var dirty = string.IsNullOrWhiteSpace(loadedSolutionPath)
                 ? null
                 : ServerBinaryStaleness.DescribeUncommittedServerSource(Path.GetDirectoryName(loadedSolutionPath) ?? string.Empty);
-            return dirty is null ? stopping : $"{stopping} Warning: {dirty}";
+            return Ok(dirty is null ? stopping : $"{stopping} Warning: {dirty}");
         }
 
-        return $"Unknown operation '{operation}'. Valid operations: GetServerStatus, StopServer, LaunchTestInstance, StopTestInstance, ListTestInstances.";
+        return Refused(ToolErrorCode.InvalidArgument, $"Unknown operation '{operation}'. Valid operations: GetServerStatus, StopServer, LaunchTestInstance, StopTestInstance, ListTestInstances.");
     }
 
     private static void ScheduleProcessExit()

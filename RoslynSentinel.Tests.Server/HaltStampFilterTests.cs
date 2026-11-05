@@ -213,7 +213,7 @@ public class HaltStampFilterTests
 
         var body = ParseBody(text);
         AssertStampedAs(body, "unrecoverable");
-        Assert.That(body["message"]?.GetValue<string>(), Does.Contain("SessionHalted="));
+        Assert.That(body["successData"]?.GetValue<string>(), Does.Contain("SessionHalted="));
     }
 
     [Test]

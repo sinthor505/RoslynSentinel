@@ -52,14 +52,14 @@ public class QualityTools
     [Description("""
         Returns reference documentation for a named tool's valid input values - transform/kind/detector catalogues and parameter defaults. Only covers tools whose valid values cannot be inferred from the schema alone. Covered tools: scan, apply_file_codetransform, apply_method_codetransform, apply_class_codetransform, generate, convert_switch_to_pattern_safe, analyze_switch_for_pattern_conversion, analyze_foreach_for_linq_conversion. Returns ErrorCode="NoFurtherDocumentation" if the tool is not in the covered set - this does not mean the tool is invalid, only that its schema is self-describing.
         """)]
-    public ToolOptionsResult DescribeAdvancedToolOptionsTool(
+    public SentinelCallToolResult<ToolOptionsResult> DescribeAdvancedToolOptionsTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ToolOption(ToolOptionTag.ToolName, required: true)] string toolName,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
-        return toolName switch
+        var options = toolName switch
         {
             "scan" => ScanTools.ScanOptions(),
             "apply_file_codetransform" => CodeTransformCatalogues.ApplyFileCodeTransformOptions(),
@@ -81,6 +81,13 @@ public class QualityTools
                     "NoFurtherDocumentation",
                     $"'{toolName}' has no registered options table. See Description for the covered tool list.")
             }
+        };
+
+        return new SentinelCallToolResult<ToolOptionsResult>
+        {
+            IsError = false,
+            SuccessData = options,
+            StatusMessage = options.Error?.Message,
         };
     }
 
