@@ -378,8 +378,8 @@ function Restart-HttpCopy {
     return Start-HttpCopy -AssumeStopped
 }
 
-# Writes a stopped-by-script marker into an instance's root folder (one level above its exe, e.g.
-# bin-vscode\<id>\ for a stdio instance or bin-vscode\Advanced.Http\ for the HTTP copy) BEFORE
+# Writes a stopped-by-script marker into an instance's root folder (one level above its exe's folder, e.g.
+# bin-vscode\<id>\ for a stdio instance or bin-vscode\ for the HTTP copy) BEFORE
 # Stop-Process runs, so the marker's presence can never race the process's own shutdown - the
 # server reads and deletes it (see ServerStartupHelpers.ReadAndConsumeStoppedByScriptMarker) at its
 # own next startup and surfaces it live via McpServerStatus, so an agent can see "the previous
@@ -452,9 +452,10 @@ function Stop-AllHttpInstances {
         return $true
     }
 
-    # TODO this writes the marker into the HTTP copy's exe folder, but the server reads <binDir>\..\stopped-by-script.marker
-    # when it has no --working-dir (and the HTTP copy is started without one), so the marker is probably never consumed.
-    $markerPath = Write-StoppedByScriptMarker -InstanceRoot $httpOutDir -Pid_ $proc.Id
+    # The HTTP copy is started without --working-dir, so the server reads <binDir>\..\stopped-by-script.marker
+    # (ServerInstancePaths.Resolve); binDir is $httpOutDir, so the marker belongs in its parent (bin-vscode\).
+    $httpMarkerRoot = Split-Path $httpOutDir -Parent
+    $markerPath = Write-StoppedByScriptMarker -InstanceRoot $httpMarkerRoot -Pid_ $proc.Id
     Write-Host "Stopping PID $($proc.Id) ($httpOutDir) - marker: $markerPath" -ForegroundColor Yellow
     $proc | Stop-Process -Force
     Wait-ProcessExited -Process $proc

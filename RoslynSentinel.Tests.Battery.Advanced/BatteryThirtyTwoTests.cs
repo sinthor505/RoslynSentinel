@@ -27,6 +27,8 @@ using RoslynSentinel.Engines.Advanced;
 namespace RoslynSentinel.Tests.Battery.Advanced;
 
 [TestFixture]
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard), which would delete files other parallel fixtures in this assembly (AssemblyInfo.cs sets ParallelScope.Fixtures) are using.
+[NonParallelizable]
 [Category("CodeGenerationEngine")] // sentinel:auto-category
 [Category("FluentBuilderResult")] // sentinel:auto-category
 public class BatteryThirtyTwoTests
@@ -38,13 +40,18 @@ public class BatteryThirtyTwoTests
     [SetUp]
     public void SetUp()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = Basic.TestEngines.SentinelConfiguration();
         _codeGenerationEngine = TestEnginesAdvanced.CodeGenerationEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
 
     private void SetSource(string source, string fileName = "Test.cs")
     {
