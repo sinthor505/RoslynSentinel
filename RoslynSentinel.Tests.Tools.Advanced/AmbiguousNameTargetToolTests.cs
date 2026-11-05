@@ -129,4 +129,107 @@ public sealed class AmbiguousNameTargetToolTests
         Assert.That(result.ErrorData?.Message, Does.Contain("Calc"));
         Assert.That(workspace.ReadText("Refactor.cs"), Is.EqualTo(original), "A refused call must not write.");
     }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task ChangeSignature_OverloadsWithContextSnippet_ChangesOnlyTheSelectedOverload()
+    {
+        var original = "public class Worker\n{\n    public int Run(int a, int b) => a - b;\n    public int Run(string s, string t) => s.Length - t.Length;\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Run", [new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0)], contextSnippet: "public int Run(string s, string t)");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        var updated = workspace.ReadText("Refactor.cs");
+        Assert.That(updated, Does.Contain("Run(string t, string s)"), "The selected overload must be reordered.");
+        Assert.That(updated, Does.Contain("Run(int a, int b)"), "The other overload must be untouched.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task ChangeSignature_ConstructorsWithContextSnippet_ChangesOnlyTheSelectedConstructor()
+    {
+        var original = "public class Box\n{\n    public Box(int a, int b) { }\n    public Box(string s, string t) { }\n    public Box(double d, double e) { }\n    public Box(long x, long y) { }\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Box", [new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0)], contextSnippet: "public Box(double d, double e)");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        var updated = workspace.ReadText("Refactor.cs");
+        Assert.That(updated, Does.Contain("Box(double e, double d)"), "The selected constructor must be reordered.");
+        Assert.That(updated, Does.Contain("Box(int a, int b)").And.Contain("Box(string s, string t)").And.Contain("Box(long x, long y)"), "The other constructors must be untouched.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task ChangeSignature_OverloadsWithoutSnippet_AmbiguousHintIsAValidChangeSignatureCall()
+    {
+        var original = "public class Worker\n{\n    public int Run(int a, int b) => a - b;\n    public int Run(string s, string t) => s.Length - t.Length;\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Run", [new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0)]);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        var message = result.ErrorData?.Message ?? string.Empty;
+        Assert.That(message, Does.Contain("ChangeSignature(").And.Contain("contextSnippet: \"public int Run(int a, int b)"), "The retry hint must be a ChangeSignature call carrying the real parameter.");
+        Assert.That(ToolCallHint.Validate("ChangeSignature", ("contextSnippet", "x")), Is.Empty, "contextSnippet must be a real ChangeSignature parameter.");
+        Assert.That(workspace.ReadText("Refactor.cs"), Is.EqualTo(original), "A refused call must not write.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task ChangeSignature_OverloadsWithUnmatchedContextSnippet_ReturnsSnippetNotFoundAndWritesNothing()
+    {
+        var original = "public class Worker\n{\n    public int Run(int a, int b) => a - b;\n    public int Run(string s, string t) => s.Length - t.Length;\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Run", [new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0)], contextSnippet: "public int Run(double d, double e)");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData?.Message, Does.Contain("contextSnippet"));
+        Assert.That(workspace.ReadText("Refactor.cs"), Is.EqualTo(original), "A refused call must not write.");
+    }
+
+    [Test]
+    [Category("IntelligenceTools")]
+    [TestCase("forward")]
+    [TestCase("reverse")]
+    public async Task GetCallGraph_OverloadsWithoutSnippet_AmbiguousHintIsAValidGetCallGraphCall(string direction)
+    {
+        var original = "public class Worker\n{\n    public int Run(int a) => Add(a);\n    public int Run(string s) => Add(s.Length);\n    private int Add(int x) => x + 1;\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateIntelligenceTools(workspace.Manager);
+        var result = await tools.GetCallGraphTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Run", direction);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        var message = result.ErrorData?.Message ?? string.Empty;
+        Assert.That(message, Does.Contain("GetCallGraph(").And.Contain("contextSnippet: \"public int Run(int a)"), "The retry hint must be a GetCallGraph call carrying the real parameter.");
+        Assert.That(ToolCallHint.Validate("GetCallGraph", ("contextSnippet", "x"), ("direction", direction)), Is.Empty, "contextSnippet must be a real GetCallGraph parameter.");
+        Assert.That(workspace.ReadText("Refactor.cs"), Is.EqualTo(original), "A refused call must not write.");
+    }
+
+    [Test]
+    [Category("IntelligenceTools")]
+    public async Task GetCallGraph_OverloadsWithContextSnippet_ReturnsTheGraphOfThatOverloadOnly()
+    {
+        var original = "public class Worker\n{\n    public int Run(int a) => AddOne(a);\n    public int Run(string s) => Measure(s);\n    private int AddOne(int x) => x + 1;\n    private int Measure(string s) => s.Length;\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateIntelligenceTools(workspace.Manager);
+        var result = await tools.GetCallGraphTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Run", contextSnippet: "public int Run(string s)");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        var node = result.SuccessData as CallGraphNode;
+        Assert.That(node, Is.Not.Null);
+        var callees = node!.Callees.Select(c => c.MethodName).ToList();
+        Assert.That(callees, Is.EquivalentTo(new[] { "Measure" }), "Only the selected overload's callees belong in the graph.");
+    }
+
+    [Test]
+    [Category("IntelligenceTools")]
+    public async Task GetCallGraph_SingleMethodWithoutSnippet_StillReturnsItsGraph()
+    {
+        var original = "public class Worker\n{\n    public int Run(int a) => AddOne(a);\n    private int AddOne(int x) => x + 1;\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateIntelligenceTools(workspace.Manager);
+        var result = await tools.GetCallGraphTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Run");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That((result.SuccessData as CallGraphNode)?.Callees.Select(c => c.MethodName), Is.EquivalentTo(new[] { "AddOne" }));
+    }
 }

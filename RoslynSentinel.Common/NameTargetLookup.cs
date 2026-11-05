@@ -5,7 +5,12 @@ public static class NameTargetLookup
     /// <summary>
     /// Resolves a name lookup to one declaration: null when there are no matches (the caller keeps its own not-found message), the match when there is exactly one, and ToolAmbiguousMatchException listing each candidate's file and line when there are several.
     /// </summary>
-    public static T? RequireSingle<T>(System.Collections.Generic.IReadOnlyList<T> matches, string kind, string name) where T : Microsoft.CodeAnalysis.SyntaxNode
+    /// <param name="retryCall">
+    /// For a tool whose narrowing parameter is known: maps the first candidate's first source line to a complete retry call
+    /// (build it with <see cref="ToolCallHint.Call(string, (string Name, string Value)[])"/> so it names the tool's real parameter). When null the
+    /// message keeps the generic wording, which names contextSnippet and so suits only tools that accept it.
+    /// </param>
+    public static T? RequireSingle<T>(System.Collections.Generic.IReadOnlyList<T> matches, string kind, string name, System.Func<string, string>? retryCall = null) where T : Microsoft.CodeAnalysis.SyntaxNode
     {
         // A multi-target build loads one file into several projects, so one declaration can appear once per project; keep one copy of each.
         var distinct = new System.Collections.Generic.List<T>();
@@ -44,7 +49,10 @@ public static class NameTargetLookup
             var snippet = firstLine.Length > 80 ? firstLine.Substring(0, 80) + "..." : firstLine;
             return $"{path}:{line} `{snippet}`";
         });
+        var next = retryCall is null
+            ? "Next: rename one of them, or narrow the target with contextSnippet or a containing type when the tool accepts one."
+            : $"Next: retry with a line copied from the intended declaration, e.g. {retryCall(matches[0].ToString().Split('\n')[0].Trim())}";
         throw new ToolAmbiguousMatchException(
-            $"{kind} '{name}' matches {matches.Count} declarations: {string.Join("; ", descriptions)}. Next: rename one of them, or narrow the target with contextSnippet or a containing type when the tool accepts one.");
+            $"{kind} '{name}' matches {matches.Count} declarations: {string.Join("; ", descriptions)}. {next}");
     }
 }

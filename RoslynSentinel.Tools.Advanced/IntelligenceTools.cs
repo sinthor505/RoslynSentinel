@@ -148,7 +148,7 @@ public class IntelligenceTools
     [McpServerTool(Name = "GetCallGraph")]
     [Produces(DataTag.ResultOnly)]
     [Description("Builds a multi-level call graph for a method.")]
-    public async Task<SentinelCallToolResult<object>> GetCallGraphTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string methodName, [Description("forward: what it calls. reverse: who calls it. tree: markdown call-tree string.")][ToolOption(ToolOptionTag.Direction)] string direction = "forward", [Description("Maximum levels of depth to traverse.")][ToolOption(ToolOptionTag.MaxDepth)] int maxDepth = 3, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> GetCallGraphTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string methodName, [Description("forward: what it calls. reverse: who calls it. tree: markdown call-tree string.")][ToolOption(ToolOptionTag.Direction)] string direction = "forward", [Description("Maximum levels of depth to traverse.")][ToolOption(ToolOptionTag.MaxDepth)] int maxDepth = 3, [Description(ToolParams.ContextSnippet)] string? contextSnippet = null, [Description(ToolParams.LineBefore)] string? lineBefore = null, [Description(ToolParams.LineAfter)] string? lineAfter = null, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
@@ -156,7 +156,7 @@ public class IntelligenceTools
         {
             if (direction == "forward")
             {
-                var fwd = await _symbolNavigationEngine.GetCallGraphAsync(resolvedFilePath, methodName, maxDepth, cancellationToken);
+                var fwd = await _symbolNavigationEngine.GetCallGraphAsync(resolvedFilePath, methodName, maxDepth, contextSnippet, lineBefore, lineAfter, cancellationToken);
 
                 return new SentinelCallToolResult<object>
                 {
@@ -167,7 +167,7 @@ public class IntelligenceTools
 
             if (direction == "reverse")
             {
-                var rev = await _symbolNavigationEngine.GetReverseCallGraphAsync(resolvedFilePath, methodName, maxDepth, cancellationToken: cancellationToken);
+                var rev = await _symbolNavigationEngine.GetReverseCallGraphAsync(resolvedFilePath, methodName, maxDepth, contextSnippet, lineBefore, lineAfter, cancellationToken);
 
                 return new SentinelCallToolResult<object>
                 {
@@ -178,6 +178,16 @@ public class IntelligenceTools
 
             if (direction == "tree")
             {
+                // TODO tree direction (AntiPatternEngine.GenerateCallTreeAsync) has no overload selection; it still picks by name alone
+                if (!string.IsNullOrWhiteSpace(contextSnippet) || !string.IsNullOrWhiteSpace(lineBefore) || !string.IsNullOrWhiteSpace(lineAfter))
+                {
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsError = true,
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "contextSnippet, lineBefore and lineAfter apply to direction forward and reverse only; direction tree does not select an overload.")
+                    };
+                }
+
                 var result = await _antiPatternEngine.GenerateCallTreeAsync(resolvedFilePath, methodName, maxDepth, cancellationToken);
                 return new SentinelCallToolResult<object>
                 {

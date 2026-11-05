@@ -141,7 +141,7 @@ public class BasicRefactoringEngine
         };
     }
 
-    public async Task<ChangeSignatureResult> ChangeSignatureAsync(FilePathWrapper filePath, string methodName, IReadOnlyList<SignatureParameterSpec> parameters, CancellationToken cancellationToken = default)
+    public async Task<ChangeSignatureResult> ChangeSignatureAsync(FilePathWrapper filePath, string methodName, IReadOnlyList<SignatureParameterSpec> parameters, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         // Every early exit names its reason: an empty result with no Error reads to the caller as a successful no-op.
         static ChangeSignatureResult Refuse(string error) => new(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>(), error);
@@ -169,7 +169,23 @@ public class BasicRefactoringEngine
                 _ => false
             })
             .ToList();
-        var methodDecl = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
+        BaseMethodDeclarationSyntax? methodDecl;
+        if (string.IsNullOrWhiteSpace(contextSnippet) && string.IsNullOrWhiteSpace(lineBefore) && string.IsNullOrWhiteSpace(lineAfter))
+        {
+            // No snippet: an ambiguous name stays Ambiguous, and the retry hint names the real narrowing parameter.
+            methodDecl = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName,
+                retryCall: firstLine => ToolCallHint.Call("ChangeSignature", ("filePath", filePath.ToString()), ("methodName", methodName), ("contextSnippet", firstLine)));
+        }
+        else
+        {
+            // A snippet selects the overload/constructor whose declaration contains it; none or several is the usual snippet error, never a first pick.
+            var sourceText = await document.GetTextAsync(cancellationToken);
+            var candidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, methodName, cancellationToken)
+                .Where(c => c.Kind is CandidateKind.Method or CandidateKind.Constructor).ToList();
+            methodDecl = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode))?.Node as BaseMethodDeclarationSyntax;
+        }
+
         if (methodDecl == null)
         {
             return Refuse($"Method or constructor '{methodName}' was not found in '{filePath}' (a constructor is matched by its class name). Nothing was changed.");

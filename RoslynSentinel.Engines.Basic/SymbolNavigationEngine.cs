@@ -1155,10 +1155,41 @@ public class SymbolNavigationEngine
         return token.Parent?.AncestorsAndSelf().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text;
     }
 
+    /// <summary>
+    /// Resolves the one method declaration a call-graph request targets. With a contextSnippet (or lineBefore/lineAfter) the
+    /// shared snippet resolver selects the overload, and a snippet that matches none or several throws the usual snippet error.
+    /// Without one, class members are preferred over interface members of the same name, and a name that still has several
+    /// declarations throws ToolAmbiguousMatchException whose retry hint is a complete call naming contextSnippet.
+    /// Returns null when no method has that name.
+    /// </summary>
+    private static MethodDeclarationSyntax? ResolveCallGraphMethod(SyntaxNode root, SourceText sourceText, FilePathWrapper filePath, string methodName, string direction, string? contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken)
+    {
+        var candidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, methodName, cancellationToken)
+            .Where(c => c.Kind == CandidateKind.Method).ToList();
+        if (!string.IsNullOrWhiteSpace(contextSnippet) || !string.IsNullOrWhiteSpace(lineBefore) || !string.IsNullOrWhiteSpace(lineAfter))
+        {
+            return SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode))?.Node as MethodDeclarationSyntax;
+        }
+
+        // Prefer class methods over interface methods of the same name; only a preferred set that still holds several declarations is ambiguous.
+        var preferred = candidates.Select(c => c.Node).OfType<MethodDeclarationSyntax>().Where(m => m.Ancestors().OfType<ClassDeclarationSyntax>().Any()).ToList();
+        if (preferred.Count == 0)
+        {
+            preferred = candidates.Select(c => c.Node).OfType<MethodDeclarationSyntax>().ToList();
+        }
+
+        return NameTargetLookup.RequireSingle(preferred, "Method", methodName,
+            retryCall: firstLine => ToolCallHint.Call("GetCallGraph", ("filePath", filePath.ToString()), ("methodName", methodName), ("direction", direction), ("contextSnippet", firstLine)));
+    }
+
     public async Task<CallGraphNode> GetCallGraphAsync(
         FilePathWrapper filePath,
         string methodName,
         int maxDepth = 3,
+        string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
         CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: see LocateSymbolAsync above for rationale (production-caller cascade avoided).
@@ -1178,12 +1209,7 @@ public class SymbolNavigationEngine
             throw new ToolInvalidArgumentException($"Semantic model is unavailable for '{filePath}'; the file could not be analysed.");
         }
 
-        // Prefer class method over interface method when both exist in the same file
-        var methodDecls = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-            .Where(m => m.Identifier.Text == methodName).ToList();
-        // TODO overloads: first declaration wins and the tool has no contextSnippet/disambiguator parameter
-        var methodDecl = methodDecls.FirstOrDefault(m => m.Ancestors().OfType<ClassDeclarationSyntax>().Any())
-            ?? methodDecls.FirstOrDefault();
+        var methodDecl = ResolveCallGraphMethod(root, await document.GetTextAsync(cancellationToken), filePath, methodName, "forward", contextSnippet, lineBefore, lineAfter, cancellationToken);
         if (methodDecl == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Ensure the method name exactly matches (case-sensitive). Next: {ToolCallHint.Call("Search", ("mode", "method"), ("query", methodName))} or {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to list available methods in the file.", "method", methodName);
@@ -1295,6 +1321,9 @@ public class SymbolNavigationEngine
         FilePathWrapper filePath,
         string methodName,
         int maxDepth = 3,
+        string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
         CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: see LocateSymbolAsync above for rationale (production-caller cascade avoided).
@@ -1314,11 +1343,7 @@ public class SymbolNavigationEngine
             throw new ToolInvalidArgumentException($"Semantic model is unavailable for '{filePath}'; the file could not be analysed.");
         }
 
-        // Prefer class method over interface method when both exist in the same file
-        var methodDecls2 = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-            .Where(m => m.Identifier.Text == methodName).ToList();
-        var methodDecl = methodDecls2.FirstOrDefault(m => m.Ancestors().OfType<ClassDeclarationSyntax>().Any())
-            ?? methodDecls2.FirstOrDefault();
+        var methodDecl = ResolveCallGraphMethod(root, await document.GetTextAsync(cancellationToken), filePath, methodName, "reverse", contextSnippet, lineBefore, lineAfter, cancellationToken);
         if (methodDecl == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Ensure the method name exactly matches (case-sensitive). Next: {ToolCallHint.Call("Search", ("mode", "method"), ("query", methodName))} or {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to list available methods in the file.", "method", methodName);
