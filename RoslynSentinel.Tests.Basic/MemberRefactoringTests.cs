@@ -3185,6 +3185,150 @@ public class Service
     }
 
     [Test]
+    public async Task RemoveConstructorParameter_AmbiguousAcrossConstructors_ThrowsAmbiguousWithRetryHint()
+    {
+        SetSource(@"
+public class Service
+{
+    private readonly int _count;
+
+    public Service(int count)
+    {
+        _count = count;
+    }
+
+    public Service(int count, string label)
+    {
+        _count = count;
+    }
+}
+", "Service.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveConstructorParameterAsync("Service.cs", "Service", "count");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(ex.Message, Does.Contain("matches 2 declarations"));
+        Assert.That(ex.Message, Does.Match(@"Service\.cs:\d+ `public Service\(int count\)`"));
+        Assert.That(ex.Message, Does.Match(@"Service\.cs:\d+ `public Service\(int count, string label\)`"));
+        Assert.That(ex.Message, Does.Contain("ParameterEdit"));
+        Assert.That(ex.Message, Does.Contain("contextSnippet"));
+    }
+
+    [Test]
+    public async Task RemoveConstructorParameter_ContextSnippetOnSecondConstructor_EditsOnlyThatConstructor()
+    {
+        SetSource(@"
+public class Service
+{
+    private readonly int _count;
+
+    public Service(int count)
+    {
+        _count = count;
+    }
+
+    public Service(int count, string label)
+    {
+        _count = count;
+    }
+}
+", "Service.cs");
+
+        var result = await _memberRefactoringEngine.RemoveConstructorParameterAsync("Service.cs", "Service", "count", contextSnippet: "public Service(int count, string label)");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("public Service(int count)"));
+        Assert.That(result.UpdatedText, Does.Contain("public Service(string label)"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("public Service(int count, string label)"));
+    }
+
+    [Test]
+    public async Task RemoveConstructorParameter_ContextSnippetWithLeadingIndent_EditsOnlyThatConstructor()
+    {
+        SetSource(@"
+public class Service
+{
+    private readonly int _count;
+
+    public Service(int count)
+    {
+        _count = count;
+    }
+
+    public Service(int count, string label)
+    {
+        _count = count;
+    }
+}
+", "Service.cs");
+
+        var result = await _memberRefactoringEngine.RemoveConstructorParameterAsync("Service.cs", "Service", "count", contextSnippet: "    public Service(int count, string label)");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("public Service(int count)"));
+        Assert.That(result.UpdatedText, Does.Contain("public Service(string label)"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("public Service(int count, string label)"));
+    }
+
+    [Test]
+    public async Task RemoveConstructorParameter_ContextSnippetOutsideConstructors_ThrowsToolNotFound()
+    {
+        SetSource(@"
+public class Service
+{
+    private readonly int _count;
+
+    public Service(int count)
+    {
+        _count = count;
+    }
+
+    public Service(int count, string label)
+    {
+        _count = count;
+    }
+
+    public int Total => _count;
+}
+", "Service.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveConstructorParameterAsync("Service.cs", "Service", "count", contextSnippet: "public int Total => _count;");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("not inside any constructor"));
+    }
+
+    [Test]
+    public async Task RemoveConstructorParameter_NoConstructorDeclaresParameter_ThrowsToolNotFound()
+    {
+        SetSource(@"
+public class Service
+{
+    private readonly int _count;
+
+    public Service(int count)
+    {
+        _count = count;
+    }
+}
+", "Service.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveConstructorParameterAsync("Service.cs", "Service", "missing");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("'missing'"));
+    }
+
+    [Test]
     public async Task GetConstructorParameters_UnmatchedContextSnippet_ThrowsToolNotFound()
     {
         SetSource(@"

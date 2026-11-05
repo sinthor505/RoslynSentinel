@@ -312,4 +312,69 @@ public class AdvancedStructuralFormatCharacterizationTests
         Assert.That(result.Message, Does.Contain("WARNING: This method implements an interface."));
         Assert.That(result.UpdatedText, Is.EqualTo(WithStrayCrlf(Src(false, WarnExpected()), anchor)));
     }
+
+    // ---- overloads: two methods named Run in one class (D1: never take the first match silently) ----
+
+    private static string[] OverloadInput() =>
+    [
+        "using System;",
+        "",
+        "public class Worker",
+        "{",
+        "    private int _count;",
+        "",
+        "    public void Run(int a, int b)",
+        "    {",
+        "        Console.WriteLine(a + b);",
+        "    }",
+        "",
+        "    public void Run(string s, string t)",
+        "    {",
+        "        Console.WriteLine(s + t);",
+        "    }",
+        "}",
+    ];
+
+    [Test]
+    public async Task IntroduceParameterObject_TwoOverloadsNoSnippet_ThrowsAmbiguousMatch()
+    {
+        SetSource(Src(false, OverloadInput()));
+
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(
+            async () => await _engine.IntroduceParameterObjectAsync("Test.cs", "Run"));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(ex.Message, Does.Contain("Test.cs:7"));
+        Assert.That(ex.Message, Does.Contain("Test.cs:12"));
+        Assert.That(ex.Message, Does.Contain("IntroduceParameterObject"));
+        Assert.That(ex.Message, Does.Contain("contextSnippet"));
+    }
+
+    [TestCase("    public void Run(string s, string t)")]
+    [TestCase("public void Run(string s, string t)")]
+    public async Task IntroduceParameterObject_TwoOverloadsWithContextSnippet_ChangesOnlyTheMatchedOverload(string contextSnippet)
+    {
+        SetSource(Src(false, OverloadInput()));
+
+        var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run", contextSnippet: contextSnippet);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("    public void Run(int a, int b)\n    {\n        Console.WriteLine(a + b);\n    }"));
+        Assert.That(result.UpdatedText, Does.Contain("    public void Run(RunParameters request)"));
+        Assert.That(result.UpdatedText, Does.Contain("request.S + request.T"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("public void Run(string s, string t)"));
+    }
+
+    [Test]
+    public async Task IntroduceParameterObject_ContextSnippetOutsideEveryOverload_ThrowsNotFound()
+    {
+        SetSource(Src(false, OverloadInput()));
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(
+            async () => await _engine.IntroduceParameterObjectAsync("Test.cs", "Run",
+                contextSnippet: "    private int _count;"));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("not inside any method named 'Run'"));
+    }
 }

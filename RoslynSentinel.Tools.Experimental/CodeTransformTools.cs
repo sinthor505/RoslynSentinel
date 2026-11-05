@@ -963,7 +963,7 @@ public class CodeTransformTools
 
                 case "record_to_class":
                     {
-                        var r = await _modernizationEngine.RecordToClassAsync(resolvedFilePath, className, cancellationToken);
+                        var r = await _modernizationEngine.RecordToClassAsync(resolvedFilePath, className, contextSnippet: contextSnippet, lineBefore: lineBefore, lineAfter: lineAfter, cancellationToken: cancellationToken);
                         if (RefactoringToolHelpers.GuardEngineResult(r, "record_to_class", $"class '{className}' in '{resolvedFilePath}'", ClassLookupHint, NoOpHandling.Success($"Class '{className}' in '{resolvedFilePath}' is already in the target state; nothing to change.")) is { } outcomeGuard)
                         {
                             return outcomeGuard;

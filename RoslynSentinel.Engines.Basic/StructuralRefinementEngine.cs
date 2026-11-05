@@ -166,23 +166,34 @@ public class StructuralRefinementEngine
             throw new ToolInvalidArgumentException($"Could not parse '{filePath}': syntax root, source text or semantic model is unavailable.");
         }
 
-        var candidates = root.DescendantNodes()
+        var declared = root.DescendantNodes()
             .Where(n => GetDeclaredNodeName(n) == symbolName)
             .ToList();
 
+        // A single-declarator field matches twice (the FieldDeclarationSyntax and its VariableDeclaratorSyntax);
+        // count it once, as the declarator that GetDeclaredSymbol resolves.
+        var candidates = declared
+            .Where(n => n is not FieldDeclarationSyntax f || f.Declaration.Variables.Count != 1 || !declared.Contains(f.Declaration.Variables[0]))
+            .ToList();
+
         SyntaxNode? target;
-        if (contextSnippet == null || candidates.Count <= 1)
+        if (candidates.Count <= 1)
         {
-            // symbolName alone already resolves unambiguously -> see the identical guard and
-            // rationale in SyntaxTargetResolver.ResolveBySnippetOrThrow.
+            // TODO align SyntaxTargetResolver.ResolveBySnippetOrThrow: this path now returns the single
+            // candidate by name, while 2+ candidates without a snippet are ambiguous here.
             target = candidates.FirstOrDefault();
+        }
+        else if (string.IsNullOrWhiteSpace(contextSnippet))
+        {
+            target = RoslynSentinel.Common.NameTargetLookup.RequireSingle(candidates, "Symbol", symbolName,
+                retryCall: firstLine => ToolCallHint.Call("DeleteUnusedSymbol", ("filePath", filePath.ToString()), ("symbolName", symbolName), ("contextSnippet", firstLine)));
         }
         else
         {
             SnippetMatch snippetMatch = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter);
 
-            target = candidates.FirstOrDefault(c => c.Span.Contains(snippetMatch.Start))
-                ?? candidates.FirstOrDefault(c => new TextSpan(snippetMatch.Start, snippetMatch.Length).OverlapsWith(c.Span));
+            target = declared.FirstOrDefault(c => c.Span.Contains(snippetMatch.Start))
+                ?? declared.FirstOrDefault(c => new TextSpan(snippetMatch.Start, snippetMatch.Length).OverlapsWith(c.Span));
         }
 
         if (target == null)

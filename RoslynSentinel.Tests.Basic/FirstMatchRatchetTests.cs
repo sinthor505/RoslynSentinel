@@ -170,7 +170,6 @@ public class FirstMatchRatchetTests
         ["RoslynSentinel.Engines.Advanced/LogicOptimizationEngine.cs::ConvertStaticToExtensionAsync"] = 1,
         ["RoslynSentinel.Engines.Advanced/MappingEngine.cs::GenerateMappingAsync"] = 1,
         ["RoslynSentinel.Engines.Advanced/MetricsEngine.cs::AnalyzeTypeCohesionAsync"] = 1,
-        ["RoslynSentinel.Engines.Advanced/ModernizationEngine.cs::RecordToClassAsync"] = 1,
         ["RoslynSentinel.Engines.Advanced/OutParamRefactoringEngine.cs::ConvertOutParamsToValueTupleAsync"] = 1,
         ["RoslynSentinel.Engines.Advanced/ResourceSafetyEngine.cs::DetectMemoryLeaksAsync"] = 1,
         ["RoslynSentinel.Engines.Advanced/StackOverflowEngine.cs::AnalyzeStackOverflowRisksAsync"] = 1,

@@ -387,6 +387,98 @@ public class RemoveNodeCharacterizationTests
         Assert.That(result.UpdatedText, Is.EqualTo(expected));
     }
 
+    [Test]
+    public async Task SafeDelete_NameOnly_TwoUnusedOverloads_ThrowsAmbiguousWithRetryHint()
+    {
+        SetSource(Src(false,
+            "public class C",
+            "{",
+            "    private void Helper() { }",
+            "    private void Helper(int x) { }",
+            "}"));
+
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () =>
+            await _refinementEngine.SafeDeleteSymbolAsync("Test.cs", "Helper", null, null, null));
+
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(ex.Message, Does.Contain("Test.cs:3"));
+        Assert.That(ex.Message, Does.Contain("Test.cs:4"));
+        Assert.That(ex.Message, Does.Contain("DeleteUnusedSymbol"));
+        Assert.That(ex.Message, Does.Contain("contextSnippet"));
+    }
+
+    [Test]
+    public async Task SafeDelete_NameWithSnippet_TwoUnusedOverloads_DeletesOnlySnippetOverload()
+    {
+        SetSource(Src(false,
+            "public class C",
+            "{",
+            "    private void Helper() { }",
+            "    private void Helper(int x) { }",
+            "}"));
+
+        var result = await _refinementEngine.SafeDeleteSymbolAsync("Test.cs", "Helper", "private void Helper(int x)", null, null);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), result.Message);
+        Assert.That(result.UpdatedText, Does.Not.Contain("Helper(int x)"));
+        Assert.That(result.UpdatedText, Does.Contain("private void Helper() { }"));
+    }
+
+    [Test]
+    public async Task SafeDelete_NameOnly_SingleVariableField_DeletedAsOneCandidate()
+    {
+        SetSource(Src(false,
+            "public class C",
+            "{",
+            "    private int _count;",
+            "    public void Keep() { }",
+            "}"));
+
+        var result = await _refinementEngine.SafeDeleteSymbolAsync("Test.cs", "_count", null, null, null);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), result.Message);
+        Assert.That(result.UpdatedText, Does.Not.Contain("_count"));
+        Assert.That(result.UpdatedText, Does.Contain("public void Keep()"));
+    }
+
+    [Test]
+    public async Task SafeDelete_NameWithSnippet_SingleVariableField_Deleted()
+    {
+        SetSource(Src(false,
+            "public class C",
+            "{",
+            "    private int _count;",
+            "    public void Keep() { }",
+            "}"));
+
+        var result = await _refinementEngine.SafeDeleteSymbolAsync("Test.cs", "_count", "private int _count;", null, null);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), result.Message);
+        Assert.That(result.UpdatedText, Does.Not.Contain("_count"));
+        Assert.That(result.UpdatedText, Does.Contain("public void Keep()"));
+    }
+
+    [Test]
+    public async Task SafeDelete_NameOnly_FieldAndMethodSameName_ThrowsAmbiguous()
+    {
+        SetSource(Src(false,
+            "public class A",
+            "{",
+            "    private int Value;",
+            "}",
+            "public class B",
+            "{",
+            "    private int Value() { return 0; }",
+            "}"));
+
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () =>
+            await _refinementEngine.SafeDeleteSymbolAsync("Test.cs", "Value", null, null, null));
+
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(ex.Message, Does.Contain("Test.cs:3"));
+        Assert.That(ex.Message, Does.Contain("Test.cs:7"));
+    }
+
     // ---------------------------------------------------------------- InlineField
 
     [TestCase(false)]

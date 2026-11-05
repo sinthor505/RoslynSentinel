@@ -650,7 +650,7 @@ public class AdvancedRefactoringTools
     [McpServerTool(Name = "IntroduceParameterObject")]
     [Produces(DataTag.ChangeId)]
     [Description("Encapsulates method parameters into a new C# 12 record type; call sites need manual follow-up (flagged with TODO).")]
-    public async Task<SentinelCallToolResult<object>> IntroduceParameterObjectTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string methodName, [Description("Name for the generated record type. Defaults to a name derived from the method.")] string? newTypeName = null, [Description("Parameters to group into the record. Defaults to all non-CancellationToken parameters.")] string[]? parameterNames = null, [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> IntroduceParameterObjectTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string methodName, [Description("Name for the generated record type. Defaults to a name derived from the method.")] string? newTypeName = null, [Description("Parameters to group into the record. Defaults to all non-CancellationToken parameters.")] string[]? parameterNames = null, [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null, [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null, [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null, [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, // RequestContext<CallToolRequestParams> requestParams = null,
  CancellationToken cancellationToken = default)
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
@@ -663,7 +663,7 @@ public class AdvancedRefactoringTools
                     IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception, fileErr)
                 };
-            var result = await _advancedStructuralEngine.IntroduceParameterObjectAsync(resolvedFilePath, methodName, newTypeName, parameterNames, cancellationToken: cancellationToken);
+            var result = await _advancedStructuralEngine.IntroduceParameterObjectAsync(resolvedFilePath, methodName, newTypeName, parameterNames, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
             // Not wired into MemberChangedContentResult: the generated record's text isn't caller-
             // supplied or separately exposed -> IntroduceParameterObjectAsync only returns the whole-file
             // UpdatedText, so showing just the new record here would mean duplicating its formatting

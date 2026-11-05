@@ -70,6 +70,49 @@ public class ModernizationTests
     }
 
     [Test]
+    public async Task RecordToClass_TwoSameNamedRecordsNoSnippet_ThrowsAmbiguousMatch()
+    {
+        var source = "namespace A\n{\n    public record Point(int X);\n}\n\nnamespace B\n{\n    public record Point(int Y);\n}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Test.cs"));
+
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(
+            async () => await _modernEngine.RecordToClassAsync("Test.cs", "Point"));
+
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(ex.Message, Does.Contain("Test.cs:3"));
+        Assert.That(ex.Message, Does.Contain("Test.cs:8"));
+        Assert.That(ex.Message, Does.Contain("ApplyClassCodeTransform"));
+        Assert.That(ex.Message, Does.Contain("contextSnippet"));
+    }
+
+    [TestCase("public record Point(int Y);")]
+    [TestCase("    public record Point(int Y);")]
+    public async Task RecordToClass_TwoSameNamedRecordsWithSnippet_ConvertsOnlyTheMatchedRecord(string contextSnippet)
+    {
+        var source = "namespace A\n{\n    public record Point(int X);\n}\n\nnamespace B\n{\n    public record Point(int Y);\n}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Test.cs"));
+
+        var result = await _modernEngine.RecordToClassAsync("Test.cs", "Point", contextSnippet: contextSnippet);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Contains.Substring("public record Point(int X);"));
+        Assert.That(result.UpdatedText, Contains.Substring("public class Point"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("public record Point(int Y);"));
+    }
+
+    [Test]
+    public async Task RecordToClass_SnippetOutsideAnySameNamedRecord_ThrowsNotFound()
+    {
+        var source = "namespace A\n{\n    public record Point(int X);\n}\n\nnamespace B\n{\n    public record Point(int Y);\n    public class Other\n    {\n        public int Z;\n    }\n}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Test.cs"));
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(
+            async () => await _modernEngine.RecordToClassAsync("Test.cs", "Point", contextSnippet: "public class Other"));
+
+        Assert.That(ex!.Message, Does.Contain("not inside any record named 'Point'"));
+    }
+
+    [Test]
     public async Task ConvertToSourceGeneratedLogging_NoConvertibleLogCall_ReturnsNoCandidatesFound()
     {
         var source = "public class Svc { private object _logger; public void Run(string msg) { _logger.LogInformation(msg); } }";

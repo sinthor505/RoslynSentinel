@@ -1136,7 +1136,7 @@ public class StructuralRefactoringEngine
             .WithConstraintClauses(SyntaxFactory.List(constraintClauses));
     }
 
-    public async Task<DocumentEditResult> IntroduceParameterObjectAsync(FilePathWrapper filePath, string methodName, string? newTypeName = null, string[]? parameterNames = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> IntroduceParameterObjectAsync(FilePathWrapper filePath, string methodName, string? newTypeName = null, string[]? parameterNames = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -1151,14 +1151,73 @@ public class StructuralRefactoringEngine
             throw new ToolInvalidArgumentException("Could not parse file.");
         }
 
-        var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).OrderBy(m => m.Parent is InterfaceDeclarationSyntax ? 1 : 0).FirstOrDefault();
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        // Overloads share the name: never take the first one silently. The OrderBy keeps the non-interface
+        // declaration first, so an interface + implementation pair still resolves to the implementation.
+        var methodMatches = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).OrderBy(m => m.Parent is InterfaceDeclarationSyntax ? 1 : 0).ToList();
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        // A method and the interface member it implements are one logical family: collapse each family to its first
+        // candidate before deciding whether the name is ambiguous.
+        static ISymbol? MethodFamilyKey(IMethodSymbol? symbol)
+        {
+            if (symbol is null)
+            {
+                return null;
+            }
+
+            if (symbol.ContainingType.TypeKind == TypeKind.Interface)
+            {
+                return symbol;
+            }
+
+            foreach (var member in symbol.ContainingType.AllInterfaces.SelectMany(i => i.GetMembers(symbol.Name).OfType<IMethodSymbol>()))
+            {
+                if (SymbolEqualityComparer.Default.Equals(symbol.ContainingType.FindImplementationForInterfaceMember(member), symbol))
+                {
+                    return member;
+                }
+            }
+
+            return symbol;
+        }
+        var familySeen = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        var representatives = new List<MethodDeclarationSyntax>();
+        foreach (var candidate in methodMatches)
+        {
+            // Without a semantic model the families cannot be told apart, so every declaration stays a candidate.
+            var familyKey = semanticModel is null ? null : MethodFamilyKey(semanticModel.GetDeclaredSymbol(candidate, cancellationToken));
+            if (familyKey is null || familySeen.Add(familyKey))
+            {
+                representatives.Add(candidate);
+            }
+        }
+        // One family: keep the class-first ordering so later code retargets to the interface as before.
+        MethodDeclarationSyntax? methodNode = representatives.Count == 1 ? methodMatches[0] : null;
+        if (representatives.Count > 1)
+        {
+            if (string.IsNullOrWhiteSpace(contextSnippet) && string.IsNullOrWhiteSpace(lineBefore) && string.IsNullOrWhiteSpace(lineAfter))
+            {
+                methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(representatives, "Method", methodName,
+                    retryCall: firstLine => ToolCallHint.Call("IntroduceParameterObject", ("filePath", filePath.ToString()), ("methodName", methodName), ("contextSnippet", firstLine)));
+            }
+            else
+            {
+                var snippetMatch = RoslynSentinel.Common.SnippetMatching.SnippetLookup.ResolveOrThrow(sourceText, contextSnippet ?? string.Empty, lineBefore, lineAfter);
+                var containing = representatives.Where(m => m.FullSpan.Contains(snippetMatch.Start)).ToList();
+                if (containing.Count == 0)
+                {
+                    throw new ToolNotFoundException($"contextSnippet is not inside any method named '{methodName}'.", "method", methodName);
+                }
+
+                methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(containing, "Method", methodName);
+            }
+        }
         if (methodNode == null)
         {
             throw new ToolNotFoundException("Method not found.", "method", methodName);
         }
 
         // Check if method implements an interface
-        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         IMethodSymbol? methodSymbol = null;
         if (semanticModel != null)
         {

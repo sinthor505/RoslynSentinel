@@ -441,12 +441,37 @@ public class MemberRefactoringEngine
             throw new ToolNotFoundException("Cannot edit: class not found.", "class", className);
         }
 
-        var ctor = classDecl.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
-        var targetParam = ctor?.ParameterList.Parameters.FirstOrDefault(p => p.Identifier.Text == paramName);
-        if (ctor == null || targetParam == null || ctor.Body == null)
+        // Overloads may each declare the parameter: never take the first one silently.
+        var ctorMatches = classDecl.Members.OfType<ConstructorDeclarationSyntax>()
+            .Where(c => c.Body != null && c.ParameterList.Parameters.Any(p => p.Identifier.Text == paramName))
+            .ToList();
+        ConstructorDeclarationSyntax? ctor = ctorMatches.Count == 1 ? ctorMatches[0] : null;
+        if (ctorMatches.Count > 1)
+        {
+            if (string.IsNullOrWhiteSpace(contextSnippet) && string.IsNullOrWhiteSpace(lineBefore) && string.IsNullOrWhiteSpace(lineAfter))
+            {
+                ctor = NameTargetLookup.RequireSingle(ctorMatches, "Constructor with parameter", paramName,
+                    retryCall: firstLine => ToolCallHint.Call("ParameterEdit", ("operation", "constructor"), ("filePath", filePath.ToString()), ("action", "remove"), ("className", className), ("paramName", paramName), ("contextSnippet", firstLine)));
+            }
+            else
+            {
+                var snippetMatch = RoslynSentinel.Common.SnippetMatching.SnippetLookup.ResolveOrThrow(sourceText, contextSnippet ?? string.Empty, lineBefore, lineAfter);
+                var containing = ctorMatches.Where(c => c.FullSpan.Contains(snippetMatch.Start)).ToList();
+                if (containing.Count == 0)
+                {
+                    throw new ToolNotFoundException($"contextSnippet is not inside any constructor with parameter '{paramName}' on '{className}'.", "parameter", paramName);
+                }
+
+                ctor = NameTargetLookup.RequireSingle(containing, "Constructor with parameter", paramName);
+            }
+        }
+
+        if (ctor == null || ctor.Body == null)
         {
             throw new ToolNotFoundException($"Constructor parameter '{paramName}' not found on '{className}'.", "parameter", paramName);
         }
+
+        var targetParam = ctor.ParameterList.Parameters.First(p => p.Identifier.Text == paramName);
 
         // Locate the `<field> = <paramName>;` assignment this parameter feeds, so we know which
         // field is the removal candidate and which statement to drop alongside the parameter.

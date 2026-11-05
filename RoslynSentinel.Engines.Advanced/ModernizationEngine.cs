@@ -103,7 +103,7 @@ public class SyntaxModernizationEngine
         };
     }
 
-    public async Task<DocumentEditResult> RecordToClassAsync(FilePathWrapper filePath, string recordName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RecordToClassAsync(FilePathWrapper filePath, string recordName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("RecordToClass"))
         {
@@ -114,7 +114,29 @@ public class SyntaxModernizationEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var recordNode = root?.DescendantNodes().OfType<RecordDeclarationSyntax>().FirstOrDefault(r => r.Identifier.Text == recordName);
+        // Same-named records (nested or in different namespaces) must never be converted silently.
+        var recordMatches = root?.DescendantNodes().OfType<RecordDeclarationSyntax>().Where(r => r.Identifier.Text == recordName).ToList() ?? new List<RecordDeclarationSyntax>();
+        RecordDeclarationSyntax? recordNode = recordMatches.Count == 1 ? recordMatches[0] : null;
+        if (recordMatches.Count > 1)
+        {
+            if (string.IsNullOrWhiteSpace(contextSnippet) && string.IsNullOrWhiteSpace(lineBefore) && string.IsNullOrWhiteSpace(lineAfter))
+            {
+                recordNode = NameTargetLookup.RequireSingle(recordMatches, "Record", recordName,
+                    retryCall: firstLine => ToolCallHint.Call("ApplyClassCodeTransform", ("filePath", filePath.ToString()), ("className", recordName), ("transform", "record_to_class"), ("contextSnippet", firstLine)));
+            }
+            else
+            {
+                var sourceText = await document.GetTextAsync(cancellationToken);
+                var snippetMatch = RoslynSentinel.Common.SnippetMatching.SnippetLookup.ResolveOrThrow(sourceText, contextSnippet ?? string.Empty, lineBefore, lineAfter);
+                var containing = recordMatches.Where(r => r.FullSpan.Contains(snippetMatch.Start)).ToList();
+                if (containing.Count == 0)
+                {
+                    throw new ToolNotFoundException($"contextSnippet is not inside any record named '{recordName}'.", "record", recordName);
+                }
+
+                recordNode = NameTargetLookup.RequireSingle(containing, "Record", recordName);
+            }
+        }
         if (recordNode == null)
         {
             if (root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Any(c => c.Identifier.Text == recordName) == true)
