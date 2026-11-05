@@ -133,7 +133,7 @@ public class SolutionManagementEngineTests
     {
         // AdhocWorkspace has no FilePathWrapper; SolutionPath is also null -> "Solution path not found."
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
-            await _engine.CreateProjectAsync("NewProject", "classlib"));
+            await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).CreateProjectAsync("NewProject", "classlib"));
 
         Assert.That(ex!.Message, Does.Contain("Solution path not found"),
             "Should fail when no solution file path is available.");
@@ -144,7 +144,7 @@ public class SolutionManagementEngineTests
     {
         // SplitProject internally calls CreateProjectAsync first, which propagates the null-path error
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
-            await _engine.SplitProjectByFolderAsync("Source", "Services", "Source.Services"));
+            await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).SplitProjectByFolderAsync("Source", "Services", "Source.Services"));
 
         Assert.That(ex!.Message, Does.Contain("Solution path not found"),
             "SplitProject should propagate the missing solution path from CreateProject.");

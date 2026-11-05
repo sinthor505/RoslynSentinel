@@ -81,6 +81,7 @@ public class LoadSolutionWaitTests
             Battery.Basic.TestEngines.DependencyEngine(workspaceManager),
             Battery.Basic.TestEngines.ProjectConsistencyEngine(workspaceManager),
             Battery.Basic.TestEngines.StructuralRefinementEngine(workspaceManager, config),
-            NullLogger<WorkspaceProjectManagementImpl>.Instance);
+            NullLogger<WorkspaceProjectManagementImpl>.Instance,
+            Battery.Basic.TestEngines.SolutionStructureEngine(workspaceManager, config));
     }
 }

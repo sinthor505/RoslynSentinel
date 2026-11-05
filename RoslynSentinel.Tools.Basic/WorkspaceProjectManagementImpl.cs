@@ -24,19 +24,21 @@ public class WorkspaceProjectManagementImpl
     private readonly DependencyEngine _dependencyEngine;
     private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly StructuralRefinementEngine _structuralRefinementEngine;
+    private readonly SolutionStructureEngine _solutionStructureEngine;
     private readonly ILogger _logger;
 
     private const int ListWorkspaceSolutionsMaxFilesWalked = 5000;
 
     public WorkspaceProjectManagementImpl(IWorkspaceManager workspaceManager, SolutionManagementEngine solutionManagementEngine,
         DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine,
-        StructuralRefinementEngine structuralRefinementEngine, ILogger logger)
+        StructuralRefinementEngine structuralRefinementEngine, ILogger logger, SolutionStructureEngine solutionStructureEngine)
     {
         _workspaceManager = workspaceManager;
         _solutionManagementEngine = solutionManagementEngine;
         _dependencyEngine = dependencyEngine;
         _projectConsistencyEngine = projectConsistencyEngine;
         _structuralRefinementEngine = structuralRefinementEngine;
+        _solutionStructureEngine = solutionStructureEngine;
         _logger = logger;
     }
 
@@ -118,7 +120,7 @@ public class WorkspaceProjectManagementImpl
                     };
                 }
 
-                var result = await _dependencyEngine.GetProjectDependenciesAsync(projectName, cancellationToken);
+                var result = await _solutionStructureEngine.GetProjectDependenciesAsync(projectName, cancellationToken);
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
@@ -158,7 +160,7 @@ public class WorkspaceProjectManagementImpl
                         filesByPath[path] = path;
                     }
 
-                    var dependencies = await _dependencyEngine.GetProjectDependenciesAsync(project.Name, cancellationToken);
+                    var dependencies = await _solutionStructureEngine.GetProjectDependenciesAsync(project.Name, cancellationToken);
                     projectDetails.Add(new ProjectFilesAndDependencies(project.Name, filesByPath.Values.ToList(), dependencies));
                 }
 
@@ -452,7 +454,7 @@ public class WorkspaceProjectManagementImpl
     {
         try
         {
-            var result = await _solutionManagementEngine.CreateProjectAsync(projectName, projectType, cancellationToken);
+            var result = await _solutionStructureEngine.CreateProjectAsync(projectName, projectType, cancellationToken);
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
@@ -475,7 +477,7 @@ public class WorkspaceProjectManagementImpl
     {
         try
         {
-            var result = await _solutionManagementEngine.SplitProjectByFolderAsync(sourceProjectName, folderName, targetProjectName, cancellationToken);
+            var result = await _solutionStructureEngine.SplitProjectByFolderAsync(sourceProjectName, folderName, targetProjectName, cancellationToken);
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
@@ -497,7 +499,7 @@ public class WorkspaceProjectManagementImpl
     {
         try
         {
-            var result = await _projectConsistencyEngine.GetProjectFrameworkSummaryAsync(cancellationToken);
+            var result = await _solutionStructureEngine.GetProjectFrameworkSummaryAsync(cancellationToken);
             return new SentinelCallToolResult<List<ProjectFrameworkSummary>, ResultError>
             {
                 IsError = false,

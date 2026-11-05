@@ -155,7 +155,7 @@ public class DependencyEngineTests
         // AdhocWorkspace projects have no ProjectReferences and no .csproj file
         var solution = TestSolutionBuilder.CreateSolutionWithProject("OrderService", [("Order.cs", "public class Order { }")]);
         _workspaceManager.SetTestSolution(solution);
-        var report = await _engine.GetProjectDependenciesAsync("OrderService", CancellationToken.None);
+        var report = await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).GetProjectDependenciesAsync("OrderService", CancellationToken.None);
         Assert.That(report.ProjectReferences, Is.Empty, "In-memory project has no project references");
         Assert.That(report.PackageReferences, Is.Empty, "In-memory project has no .csproj file to parse");
     }
@@ -165,7 +165,7 @@ public class DependencyEngineTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Test.cs", "public class Foo { }")]);
         _workspaceManager.SetTestSolution(solution);
-        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.GetProjectDependenciesAsync("NonExistent", CancellationToken.None));
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).GetProjectDependenciesAsync("NonExistent", CancellationToken.None));
     }
 
     [Test]
@@ -175,7 +175,7 @@ public class DependencyEngineTests
         // -> FindUnusedReferences returns empty because the cast check for CompilationReference fails
         var solution = TestSolutionBuilder.CreateSolutionWithProject("PriceService", [("Price.cs", "public class Price { public decimal Amount { get; set; } }")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.FindUnusedReferencesAsync("PriceService");
+        var result = await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).FindUnusedReferencesAsync("PriceService");
         Assert.That(result, Is.Empty, "AdhocWorkspace has no CompilationReferences to flag as unused");
     }
 }

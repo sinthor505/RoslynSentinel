@@ -282,14 +282,14 @@ public class ScanTools
                         SuccessData = result29
                     };
                 case DetectorId.package_inconsistency:
-                    var result30 = await _dependencyEngine.CheckPackageInconsistencyAsync(cancellationToken: cancellationToken);
+                    var result30 = await _solutionStructureEngine.CheckPackageInconsistencyAsync(cancellationToken: cancellationToken);
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = false,
                         SuccessData = result30
                     };
                 case DetectorId.project_consistency:
-                    var result31 = await _projectConsistencyEngine.CheckConsistencyAsync(cancellationToken: cancellationToken);
+                    var result31 = await _solutionStructureEngine.CheckConsistencyAsync(cancellationToken: cancellationToken);
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = false,
@@ -502,7 +502,7 @@ public class ScanTools
                         SuccessData = result60
                     };
                 case DetectorId.unused_references:
-                    var result61 = await _dependencyEngine.FindUnusedReferencesAsync(RequireProject(scope, scopeName), cancellationToken: cancellationToken);
+                    var result61 = await _solutionStructureEngine.FindUnusedReferencesAsync(RequireProject(scope, scopeName), cancellationToken: cancellationToken);
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = false,

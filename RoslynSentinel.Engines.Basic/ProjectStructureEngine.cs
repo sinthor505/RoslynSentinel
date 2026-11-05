@@ -1,3 +1,5 @@
+using System.Xml.Linq;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -1502,5 +1504,395 @@ public class SolutionStructureEngine
         }
 
         return project.Name;
+    }
+
+    /// <summary>
+    /// Returns all project and NuGet dependencies for a specific project.
+    /// </summary>
+    public async Task<ProjectDependencyReport> GetProjectDependenciesAsync(string projectName, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw new ToolNotFoundException($"Project '{projectName}' not found.");
+        var projectRefs = project.ProjectReferences
+            .Select(r => solution.Projects.First(p => p.Id == r.ProjectId).Name)
+            .ToList();
+
+        var packageRefs = new List<string>();
+        if (project.FilePath != null && File.Exists(project.FilePath))
+        {
+            var content = await File.ReadAllTextAsync(project.FilePath, cancellationToken: cancellationToken);
+            var matches = System.Text.RegularExpressions.Regex.Matches(content, "<PackageReference\\s+Include=\"([^\"]+)\"");
+            foreach (System.Text.RegularExpressions.Match match in matches)
+            {
+                packageRefs.Add(match.Groups[1].Value);
+            }
+        }
+
+        return new ProjectDependencyReport(projectRefs, packageRefs);
+    }
+
+    /// <summary>
+    /// Scans project files to find unused NuGet package references.
+    /// </summary>
+    public async Task<List<string>> FindUnusedReferencesAsync(string projectName, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var project = ProjectLookup.FindProject(solution, projectName) ?? throw new ToolNotFoundException($"Project '{projectName}' not found.");
+
+        var compilation = await project.GetCompilationAsync(cancellationToken) ?? throw new InvalidOperationException($"Failed to get compilation for project '{projectName}'.");
+        var usedAssemblies = new HashSet<string>();
+        foreach (var document in project.Documents)
+        {
+            var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+            if (semanticModel == null)
+            {
+                continue;
+            }
+
+            var nodes = (await document.GetSyntaxRootAsync(cancellationToken))?.DescendantNodes();
+            if (nodes == null)
+            {
+                continue;
+            }
+
+            foreach (var node in nodes)
+            {
+                var symbol = semanticModel.GetSymbolInfo(node, cancellationToken).Symbol;
+                if (symbol != null && symbol.ContainingAssembly != null)
+                {
+                    usedAssemblies.Add(symbol.ContainingAssembly.Name);
+                }
+            }
+        }
+
+        var unused = new List<string>();
+        foreach (var reference in compilation.References)
+        {
+            if (reference is CompilationReference compRef && compRef.Compilation.AssemblyName != null && !usedAssemblies.Contains(compRef.Compilation.AssemblyName))
+            {
+                unused.Add(compRef.Compilation.AssemblyName);
+            }
+        }
+
+        return unused;
+    }
+
+    /// <summary>
+    /// Checks for version mismatches of the same package across multiple projects.
+    /// </summary>
+    public async Task<List<string>> CheckPackageInconsistencyAsync(CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var packageVersions = new Dictionary<string, List<(string Project, string Version)>>();
+
+        foreach (var project in solution.Projects)
+        {
+            if (project.FilePath == null)
+            {
+                continue;
+            }
+
+            // DEFERRED (accepted 2026-10-22, finding #22): reads the project file from disk, so an in-memory project raises FileNotFoundException.
+            // Left as-is on purpose until scheduled (throw-migration); do not re-raise in reviews.
+            var xml = await File.ReadAllTextAsync(project.FilePath, cancellationToken);
+            var matches = System.Text.RegularExpressions.Regex.Matches(xml, @"<PackageReference\s+Include=""([^""]+)""\s+Version=""([^""]+)""");
+
+            foreach (System.Text.RegularExpressions.Match match in matches)
+            {
+                var id = match.Groups[1].Value;
+                var version = match.Groups[2].Value;
+                if (!packageVersions.TryGetValue(id, out List<(string Project, string Version)>? value))
+                {
+                    value = new List<(string, string)>();
+                    packageVersions[id] = value;
+                }
+
+                value.Add((project.Name, version));
+            }
+        }
+
+        return packageVersions
+            .Where(kvp => kvp.Value.Select(v => v.Version).Distinct().Count() > 1)
+            .Select(kvp => $"Package '{kvp.Key}' has multiple versions: {string.Join(", ", kvp.Value.Select(v => $"{v.Project} ({v.Version})"))}")
+            .ToList();
+    }
+
+    public async Task<List<ProjectConsistencyIssue>> CheckConsistencyAsync(CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var issues = new List<ProjectConsistencyIssue>();
+
+        var projects = solution.Projects.ToList();
+        if (projects.Count == 0)
+        {
+            return issues;
+        }
+
+        issues.AddRange(await CheckTargetFrameworkConsistencyAsync(projects, cancellationToken));
+        issues.AddRange(CheckNamingConventions(projects));
+
+        return issues;
+    }
+
+    private static async Task<List<ProjectConsistencyIssue>> CheckTargetFrameworkConsistencyAsync(
+        List<Project> projects, CancellationToken cancellationToken = default)
+    {
+        var issues = new List<ProjectConsistencyIssue>();
+
+        // Read TargetFramework from .csproj XML for each project that has a file path
+        var frameworkByProject = new Dictionary<string, (string Framework, FilePathWrapper filePath)>();
+
+        foreach (var project in projects)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrEmpty(project.FilePath) || !File.Exists(project.FilePath))
+            {
+                continue;
+            }
+
+            try
+            {
+                var xml = await File.ReadAllTextAsync(project.FilePath, cancellationToken);
+                var doc = XDocument.Parse(xml);
+                var ns = doc.Root?.Name.Namespace ?? XNamespace.None;
+
+                // Handle both <TargetFramework> and <TargetFrameworks>
+                var tfElement = doc.Descendants(ns + "TargetFramework").FirstOrDefault()
+                             ?? doc.Descendants("TargetFramework").FirstOrDefault();
+                var tfsElement = doc.Descendants(ns + "TargetFrameworks").FirstOrDefault()
+                              ?? doc.Descendants("TargetFrameworks").FirstOrDefault();
+
+                var framework = tfElement?.Value?.Trim()
+                    ?? tfsElement?.Value?.Split(';').FirstOrDefault()?.Trim();
+
+                if (!string.IsNullOrEmpty(framework))
+                {
+                    frameworkByProject[project.Name] = (framework, project.FilePath);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Malformed .csproj -> skip
+            }
+        }
+
+        if (frameworkByProject.Count < 2)
+        {
+            return issues;
+        }
+
+        // Find the most common framework as the "standard"
+        var frameworks = frameworkByProject.Values
+            .GroupBy(v => v.Framework)
+            .OrderByDescending(g => g.Count())
+            .ToList();
+
+        if (frameworks.Count <= 1)
+        {
+            return issues;
+        }
+
+        var dominant = frameworks[0].Key;
+        var dominantCount = frameworks[0].Count();
+
+        foreach (var (projectName, (framework, filePath)) in frameworkByProject)
+        {
+            if (framework == dominant)
+            {
+                continue;
+            }
+
+            issues.Add(new ProjectConsistencyIssue(
+                "TargetFrameworkMismatch",
+                $"Project targets '{framework}' but {dominantCount} other project(s) target '{dominant}'. " +
+                "Mismatched frameworks can cause dependency resolution failures and runtime errors.",
+                projectName,
+                filePath));
+        }
+
+        return issues;
+    }
+
+    private static List<ProjectConsistencyIssue> CheckNamingConventions(List<Project> projects)
+    {
+        var issues = new List<ProjectConsistencyIssue>();
+
+        // Detect the root prefix (most common first segment of project names)
+        var prefixes = projects
+            .Select(p => p.Name.Split('.').FirstOrDefault() ?? "")
+            .Where(p => !string.IsNullOrEmpty(p))
+            .GroupBy(p => p)
+            .OrderByDescending(g => g.Count())
+            .ToList();
+
+        if (prefixes.Count == 0 || prefixes[0].Count() < 2)
+        {
+            return issues;
+        }
+
+        var dominantPrefix = prefixes[0].Key;
+        var minPrefixCount = Math.Max(2, projects.Count / 4);
+
+        // Only enforce if there's a clear dominant prefix (used by at least 25% of projects)
+        if (prefixes[0].Count() < minPrefixCount)
+        {
+            return issues;
+        }
+
+        foreach (var project in projects)
+        {
+            if (!project.Name.StartsWith(dominantPrefix, StringComparison.Ordinal))
+            {
+                issues.Add(new ProjectConsistencyIssue(
+                    "NamingConventionViolation",
+                    $"Project '{project.Name}' does not follow the solution naming convention. " +
+                    $"Most projects are prefixed with '{dominantPrefix}'. " +
+                    "Consistent naming helps IDE project selection and CI script targeting.",
+                    project.Name,
+                    project.FilePath));
+            }
+        }
+
+        return issues;
+    }
+
+    /// <summary>
+    /// Returns a structured summary of all project names and their TargetFramework values.
+    /// Useful for a quick overview before diving into specific inconsistencies.
+    /// </summary>
+    public async Task<List<ProjectFrameworkSummary>> GetProjectFrameworkSummaryAsync(CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var results = new List<ProjectFrameworkSummary>();
+
+        foreach (var project in solution.Projects)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string? framework = null;
+
+            if (!string.IsNullOrEmpty(project.FilePath) && File.Exists(project.FilePath))
+            {
+                try
+                {
+                    var xml = await File.ReadAllTextAsync(project.FilePath, cancellationToken);
+                    var doc = XDocument.Parse(xml);
+                    framework = doc.Descendants("TargetFramework").FirstOrDefault()?.Value?.Trim()
+                             ?? doc.Descendants("TargetFrameworks").FirstOrDefault()?.Value?.Trim();
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException) { /* malformed - leave null */ }
+            }
+
+            results.Add(new ProjectFrameworkSummary(project.Name, framework ?? "unknown", project.FilePath));
+        }
+
+        return results.OrderBy(r => r.ProjectName).ToList();
+    }
+
+    /// <summary>
+    /// Creates a new project within the solution.
+    /// </summary>
+    public async Task<ProjectEditResult> CreateProjectAsync(string projectName, string projectType = "console", CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var slnPath = _workspaceManager.SolutionPath ?? solution.FilePath;
+        var slnDir = Path.GetDirectoryName(slnPath) ?? throw new ToolNotFoundException("Solution path not found.");
+        var projectDir = Path.Combine(slnDir, projectName);
+        Directory.CreateDirectory(projectDir);
+
+        // We use dotnet CLI for project creation as Roslyn MSBuildWorkspace is better at reading than structural solution modification
+        // The exit-code guard between the two commands matters: -Command reports only the LAST native command's status,
+        // so without it a failed `dotnet new` followed by a succeeding `dotnet sln add` would look like success.
+        var csprojPath = Path.Combine(projectDir, projectName + ".csproj");
+        var command = $"dotnet new {projectType} -n {projectName} -o \"{projectDir}\"";
+        using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            Arguments = $"-NoProfile -Command \"{command}; if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}; dotnet sln '{solution.FilePath}' add '{csprojPath}'\"",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        }) ?? throw new ToolInvalidArgumentException($"Project {projectName} was not created: the dotnet CLI could not be started. Check that the dotnet SDK is installed, then retry {ToolCallHint.Call("CreateProject")}.");
+
+        // Drain both redirected streams while waiting so a chatty child cannot block on a full pipe; the text itself
+        // is not returned (it can contain absolute paths).
+        var drainStdOut = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var drainStdErr = process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+        await Task.WhenAll(drainStdOut, drainStdErr);
+
+        if (process.ExitCode != 0)
+        {
+            throw new ToolInvalidArgumentException($"Project {projectName} was not created or not added to the solution (dotnet exited with code {process.ExitCode}). Check that projectName is a valid project name and projectType is a valid dotnet template short name (for example console, classlib), then {ToolCallHint.Call("Build")} to see the solution state before retrying {ToolCallHint.Call("CreateProject")}.");
+        }
+
+        // The template .cs files dotnet new writes bypass the chokepoint, so they get the resolved EOL here.
+        string? eolRefusal = null;
+        foreach (var templateFile in Directory.EnumerateFiles(projectDir, "*.cs", SearchOption.AllDirectories))
+        {
+            var relativeSegments = Path.GetRelativePath(projectDir, templateFile).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (relativeSegments.Any(segment => segment is "bin" or "obj"))
+            {
+                continue;
+            }
+
+            eolRefusal ??= await EolFileWriter.NormalizeNewFileAsync(templateFile, cancellationToken);
+        }
+
+        // Register every file this call caused (written by the child process or the EOL pass above, i.e. outside the
+        // write chokepoint) so the drift guard does not treat them as external edits. bin/obj are excluded: the watcher
+        // ignores them already.
+        var ownWrites = new List<string> { csprojPath, slnPath };
+        if (!string.IsNullOrEmpty(solution.FilePath))
+        {
+            ownWrites.Add(solution.FilePath);
+        }
+
+        foreach (var projectFile in Directory.EnumerateFiles(projectDir, "*", SearchOption.AllDirectories))
+        {
+            var segments = Path.GetRelativePath(projectDir, projectFile).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (!segments.Any(segment => segment is "bin" or "obj"))
+            {
+                ownWrites.Add(projectFile);
+            }
+        }
+
+        _workspaceManager.RegisterOwnWrites(ownWrites);
+
+        var message = $"Project {projectName} created and added to solution; its files were registered so follow-up edits will not trip the external-drift halt.";
+        if (eolRefusal != null)
+        {
+            message += "; EOL normalisation refused: " + eolRefusal;
+        }
+
+        return new ProjectEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = default,
+            Message = message
+        };
+    }
+
+    /// <summary>
+    /// Splits a project by moving a folder's contents into a new project and updating references.
+    /// </summary>
+    public async Task<ProjectEditResult> SplitProjectByFolderAsync(string sourceProjectName, string folderName, string targetProjectName, CancellationToken cancellationToken = default)
+    {
+        // 1. Create target project
+        await CreateProjectAsync(targetProjectName, "classlib", cancellationToken);
+
+        // 2. Identify files to move
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var sourceProject = ProjectLookup.FindProject(solution, sourceProjectName) ?? throw new ToolNotFoundException("Source project not found.");
+        var filesToMove = sourceProject.Documents.Where(d => d.Folders.Contains(folderName)).ToList();
+
+        // 3. Physically move files and update solution (simulated for expansion)
+        // TODO SplitProjectByFolderAsync is a simulation: it creates the project and reports "Moved N files" without moving any file; throw ToolNotImplementedException or implement the move (plan_document_edit_result_non_nullable_updated_text risks)
+        return new ProjectEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = default,
+            Message = $"Moved {filesToMove.Count} files from {sourceProjectName}/{folderName} to {targetProjectName}. References will need manual updating."
+        };
     }
 }

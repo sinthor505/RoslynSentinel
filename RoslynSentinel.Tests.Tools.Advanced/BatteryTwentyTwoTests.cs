@@ -389,7 +389,7 @@ public class BatteryTwentyTwoTests
     public async Task FindUnusedReferences_ValidProject_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _dependencyEngine.FindUnusedReferencesAsync("TestProj");
+        var result = await _solutionStructureEngine.FindUnusedReferencesAsync("TestProj");
         Assert.That(result, Is.Empty);
     }
 
@@ -404,7 +404,7 @@ public class BatteryTwentyTwoTests
             .AddProject(projectIdB, "ProjB", "ProjB", LanguageNames.CSharp)
             .AddProjectReference(projectIdA, new ProjectReference(projectIdB));
         _workspaceManager.SetTestSolution(solution);
-        var result = await _dependencyEngine.FindUnusedReferencesAsync("ProjA");
+        var result = await _solutionStructureEngine.FindUnusedReferencesAsync("ProjA");
         Assert.That(result, Is.EqualTo(new[] { "ProjB" }));
     }
 
@@ -420,8 +420,8 @@ public class BatteryTwentyTwoTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var dependencyEngine = Battery.Basic.TestEngines.DependencyEngine(workspaceManager);
-        var result = await dependencyEngine.CheckPackageInconsistencyAsync();
+        var solutionStructureEngine = Battery.Basic.TestEngines.SolutionStructureEngine(workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
+        var result = await solutionStructureEngine.CheckPackageInconsistencyAsync();
         Assert.That(result, Is.Empty);
     }
 
@@ -439,8 +439,8 @@ public class BatteryTwentyTwoTests
         await File.WriteAllTextAsync(csprojPaths[1], secondText.Replace("</Project>", $"  <ItemGroup>\n    <PackageReference Include=\"{packageId}\" Version=\"12.0.3\" />\n  </ItemGroup>\n</Project>"));
         using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var dependencyEngine = Battery.Basic.TestEngines.DependencyEngine(workspaceManager);
-        var result = await dependencyEngine.CheckPackageInconsistencyAsync();
+        var solutionStructureEngine = Battery.Basic.TestEngines.SolutionStructureEngine(workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
+        var result = await solutionStructureEngine.CheckPackageInconsistencyAsync();
         Assert.That(result, Has.Count.EqualTo(1));
         Assert.That(result[0], Does.StartWith($"Package '{packageId}' has multiple versions: "));
         Assert.That(result[0], Does.Contain($"{Path.GetFileNameWithoutExtension(csprojPaths[0])} (13.0.1)"));

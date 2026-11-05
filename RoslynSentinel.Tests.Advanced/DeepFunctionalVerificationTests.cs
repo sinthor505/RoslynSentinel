@@ -187,7 +187,7 @@ public class C {
             _workspaceManager.SetTestSolution(solution);
 
             // Act
-            var report = await _dependencyEngine.GetProjectDependenciesAsync("MyProj", CancellationToken.None);
+            var report = await _solutionStructureEngine.GetProjectDependenciesAsync("MyProj", CancellationToken.None);
 
             // Assert
             Assert.That(report.PackageReferences, Contains.Item("Newtonsoft.Json"));

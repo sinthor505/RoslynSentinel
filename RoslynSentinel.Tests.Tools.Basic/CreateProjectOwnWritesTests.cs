@@ -31,7 +31,7 @@ public class CreateProjectOwnWritesTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var engine = Basic.TestEngines.SolutionManagementEngine(workspaceManager);
 
-        await engine.CreateProjectAsync("Extra", "classlib");
+        await Basic.TestEngines.SolutionStructureEngine(workspaceManager, Basic.TestEngines.SentinelConfiguration()).CreateProjectAsync("Extra", "classlib");
 
         var projectDir = Path.Combine(fixture.SolutionDirectory, "Extra");
         var csprojPath = Path.Combine(projectDir, "Extra.csproj");
@@ -80,7 +80,7 @@ public class CreateProjectOwnWritesTests
         Assert.That(workspaceManager.GetExternalFileChanges(), Does.Contain(unrelated).IgnoreCase,
             "precondition: the watcher must flag the unrelated edit before CreateProject runs");
 
-        await engine.CreateProjectAsync("Extra", "classlib");
+        await Basic.TestEngines.SolutionStructureEngine(workspaceManager, Basic.TestEngines.SentinelConfiguration()).CreateProjectAsync("Extra", "classlib");
         await WaitForWatcherToSettleAsync(TimeSpan.FromSeconds(3));
 
         var changes = workspaceManager.GetExternalFileChanges();
@@ -104,7 +104,7 @@ public class CreateProjectOwnWritesTests
 
         var wouldBeProjectDir = Path.Combine(fixture.SolutionDirectory, "Ghost");
         var ex = await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () =>
-            await engine.CreateProjectAsync("Ghost", "nosuchtemplate"));
+            await Basic.TestEngines.SolutionStructureEngine(workspaceManager, Basic.TestEngines.SentinelConfiguration()).CreateProjectAsync("Ghost", "nosuchtemplate"));
         Assert.That(ex!.Message, Does.Contain("was not created"));
 
         await WaitForWatcherToSettleAsync(TimeSpan.FromSeconds(3));

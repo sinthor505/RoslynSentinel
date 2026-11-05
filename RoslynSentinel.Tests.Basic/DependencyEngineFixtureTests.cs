@@ -33,7 +33,7 @@ public class DependencyEngineFixtureTests
         Assert.That(downstreamProject, Is.Not.Null, "Downstream project must exist in solution.");
 
         // Act
-        var result = await engine.GetProjectDependenciesAsync(downstreamProject!.Name, CancellationToken.None);
+        var result = await Battery.Basic.TestEngines.SolutionStructureEngine(fake, Battery.Basic.TestEngines.SentinelConfiguration()).GetProjectDependenciesAsync(downstreamProject!.Name, CancellationToken.None);
 
         // Assert: Verify exact references
         Assert.That(result, Is.Not.Null, "ProjectDependencyReport must not be null.");
@@ -60,7 +60,7 @@ public class DependencyEngineFixtureTests
         Assert.That(downstreamProject, Is.Not.Null);
 
         // Act
-        var unused = await engine.FindUnusedReferencesAsync(downstreamProject!.Name);
+        var unused = await Battery.Basic.TestEngines.SolutionStructureEngine(fake, Battery.Basic.TestEngines.SentinelConfiguration()).FindUnusedReferencesAsync(downstreamProject!.Name);
 
         // Assert: Verify UpstreamLib appears in unused list
         Assert.That(unused, Is.Not.Null, "Result list must not be null.");

@@ -523,7 +523,7 @@ public class DependencyEngineGapTests
         Exception? caughtEx = null;
         try
         {
-            result = await _engine.CheckPackageInconsistencyAsync();
+            result = await Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration()).CheckPackageInconsistencyAsync();
         }
         catch (Exception ex) when (ex is System.IO.DirectoryNotFoundException or System.IO.FileNotFoundException or InvalidOperationException)
         {
