@@ -8,6 +8,11 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## `RunTest` teardown-failure entries: parser tests against real output - resolved (2026-11-05)
+
+- `TestRunEngine.ParseFixtureTearDownFailures` entries are prepended (2026-10-22); golden-file parser tests over real `dotnet test -v quiet` output (`Resources/Golden/dotnet-test-teardown.txt`: ordinary fixture and `[SetUpFixture]`) landed 2026-11-02. The hand-written `ParseFixtureTearDownFailures_OrdinaryFixtureOneTimeTearDown_ReturnsOneEntry` was redundant with `..._RealDotnetTestOutput_OrdinaryFixtureCarriesTeardownMessage` (same prefix, message, ExampleRef, count assertions) and was deleted 2026-11-05. Known quirk kept: a SetUpFixture message can pick up the preceding "One or more child tests had errors" line. The aggregate `RunAsync` path end to end is deliberately untested (prepend tests cover the merge).
+- Evidence: `TestRunEngineLockDetectionTests.cs` outline; Build 0 errors; full solution RunTest 0 failures (2026-11-05).
+
 ## Wrap the 9 unwrapped `[McpServerTool]` returns in `SentinelCallToolResult` - resolved (2026-11-05)
 
 - McpServerStatus, GenerateClassesFromJson, GenerateHttpClient, GenerateDefaultConfigJson, InterpolateStringSafe, DescribeAdvancedToolOptions, ProjectDoc, ExternalFileDrift and McpServerControl now return the wrapper. Commit 295c2227; full solution run 6542 tests, 0 failed. Live check after restart: unconfirmed `StopServer` refused (`ConfirmationRequired`), `ExternalFileDrift(Status)` and `McpServerControl(ListTestInstances)` return `successData`. Wire shapes moved under `successData`/`errorData`. Open code TODOs: ProjectDoc missing-file read reports `Exception` not `NotFound`; legacy string wrappers `AcknowledgeDrift`/`ControlServer` removable once their direct-call tests move. Decisions: `decisions_autonomous_run_2026-11-05.md`.

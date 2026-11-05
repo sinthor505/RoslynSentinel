@@ -46,5 +46,5 @@ Create the folder if it does not exist yet.
     commit that finishes it carries `Closes: <id>` (put both above `Co-Authored-By`). Only `Closes:` means
     done; plans land in slices, so `Plan:` alone means in progress. Do not put IDs in code comments. On
     closing, update the doc's Status line, move it to its folder's `closed/` and move its TODO.md entry to
-    CLOSED.md. A reconciliation script is not built yet (see
+    CLOSED.md. The report-only `TRAILER` check in `scripts/Test-GuidanceHygiene.ps1` (run with `pwsh`) flags unknown IDs and closure candidates; a `ProjectDoc` extension is not built (see
     [idea_doc_id_commit_trailers_and_reconciliation.md](../ideas/idea_doc_id_commit_trailers_and_reconciliation.md)).
