@@ -248,6 +248,14 @@ public record SentinelCallToolResult<TSuccess, TError> : IOperationResult
         get; init;
     }
 
+    /// <summary>
+    /// Server-side declaration of which lists of <see cref="SuccessData"/> form the pageable record sequence when the
+    /// result is over the inline budget (see <see cref="PagingHints"/>, proposal_sequence_pager.md). Not serialized,
+    /// like <see cref="Status"/>, <see cref="Code"/> and <see cref="Message"/>. Null means the default sequence.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public PagingHints? Paging { get; init; }
+
     /// <summary>ErrorData details. Non-null when <see cref="IsError"/> is false.</summary>
     public TError? ErrorData
     {
@@ -414,6 +422,27 @@ public record LargeResultInfo
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<OmittedPart>? Omitted
+    {
+        get; init;
+    }
+
+    /// <summary>
+    /// Sequence-paged results (proposal_sequence_pager.md): the number of units of the sequence on this response's page
+    /// (records, or lines for a text sequence); <see cref="TotalRecords"/> is then the sequence total. Null - and so
+    /// omitted from the JSON - for every other result.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? Returned
+    {
+        get; init;
+    }
+
+    /// <summary>
+    /// Sequence-paged results: the <c>offset</c> to pass to <c>GetLargeResult</c> for the next page. Null - and so omitted
+    /// from the JSON - when there is no next page or the result is not sequence-paged.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? NextOffset
     {
         get; init;
     }

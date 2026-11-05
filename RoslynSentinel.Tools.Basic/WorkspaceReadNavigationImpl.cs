@@ -1501,6 +1501,86 @@ public class WorkspaceReadNavigationImpl
         return recorded.Count > 0 ? recorded : ResultPager.PageablePaths(root, 8);
     }
 
+    // GetLargeResult for a stored Envelope file that carries a Sequence (proposal_sequence_pager.md slice 6, Decided 10): offset
+    // and limit count sequence units (list records interleaved, or lines), the page is built by SequencePager.BuildPage from the
+    // stored full envelope, and path is ignored (with a note). The response is one EnvelopePageResult - the page cursor
+    // (offset/returned/total/nextOffset/hasMoreData) plus the page in the full envelope shape - and the envelope level keeps no
+    // cursor of its own beyond the non-optional hasMoreData flag. BuildPage gets the budget the marshaller uses (InlineBudgetChars
+    // minus EchoReserveChars, minus a small digits margin) for the WHOLE response: the wrapper around the page is measured and the
+    // page budget reduced by the excess, so the marshaller finds the response within budget and neither re-pages it nor gives it
+    // a new resultId. No ResultPager.Fit refit: the page is already built to the budget.
+    private static SentinelCallToolResult<object> PageSequence(
+        ResultWrapper stored, string? path, int offset, int? limit, string? resultId, string? filePath)
+    {
+        const int safetyMarginChars = 64;
+        const int maxAttempts = 6;
+        JsonSerializerOptions wire = ModelContextProtocol.McpJsonUtilities.DefaultOptions;
+        var full = (JsonObject)stored.Data!;
+        SequenceDescriptor sequence = stored.Sequence!;
+        int budget = LargeResultHelper.InlineBudgetChars - LargeResultHelper.EchoReserveChars - safetyMarginChars;
+        int unitLimit = limit is > 0 ? limit.Value : 0;
+        string unit = sequence.Kind == SequenceKind.Lines ? "lines" : "records";
+
+        string FetchHint(int nextOffset) =>
+            !string.IsNullOrEmpty(resultId)
+                ? LargeResultHints.FetchCall(resultId, offset: nextOffset)
+                : LargeResultHints.FetchCallForFile(filePath ?? string.Empty, offset: nextOffset);
+
+        SentinelCallToolResult<object> Wrap(SequencePage built)
+        {
+            bool more = built.NextOffset is not null;
+            string message = SequenceMessages.ForPage(full, sequence, built, built.NextOffset is { } next ? FetchHint(next) : null);
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                message += $" Note: this result is paged by sequence unit ({unit}), so offset counts {unit} and path '{path.Trim()}' was ignored.";
+            }
+
+            return new SentinelCallToolResult<object>
+            {
+                IsError = false,
+                SuccessData = new EnvelopePageResult
+                {
+                    Path = string.Join(", ", sequence.Paths),
+                    Offset = built.Offset,
+                    Returned = built.Returned,
+                    Total = built.Total,
+                    Unit = unit,
+                    NextOffset = built.NextOffset,
+                    HasMoreData = more,
+                    Envelope = built.Page,
+                },
+                // The non-optional envelope flag is kept truthful (a false here while the page has more would stop a reader);
+                // nextOffset and totalRecords are not repeated at the envelope level.
+                HasMoreData = more,
+                StatusMessage = message,
+                WarningDetails = built.ContractViolation
+                    ? $"One unit is larger than a page ({built.ViolationDetail}); it is returned alone and may be cut by the size limit."
+                    : null,
+            };
+        }
+
+        int WireLength(SentinelCallToolResult<object> result) =>
+            JsonSerializer.Serialize(result, wire.GetTypeInfo(typeof(object))).Length;
+
+        int innerBudget = budget;
+        SequencePage page = SequencePager.BuildPage(full, sequence, offset, unitLimit, innerBudget, wire);
+        SentinelCallToolResult<object> response = Wrap(page);
+        for (int attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            int excess = WireLength(response) - budget;
+            if (excess <= 0 || page.Returned <= 1)
+            {
+                break;
+            }
+
+            innerBudget -= excess;
+            page = SequencePager.BuildPage(full, sequence, offset, unitLimit, innerBudget, wire);
+            response = Wrap(page);
+        }
+
+        return response;
+    }
+
     // GetLargeResult for a stored ResultWrapperType.Envelope file (plan_wire_result_marshaller.md Step 5): the stored Data is the
     // full wire envelope, so a page is a slice of one array (elements) or string (whole lines) addressed by an OmittedPart-style
     // path. The page is fitted to InlineBudgetChars minus EchoReserveChars (and a small margin for digits) with ResultPager, so
@@ -1717,6 +1797,12 @@ public class WorkspaceReadNavigationImpl
             // Envelope (the result marshaller's store): the full wire envelope, paged by path with ResultPager. Old types below are untouched.
             if (all.Type == ResultWrapperType.Envelope)
             {
+                // A stored sequence (marshaller sequence pager) is paged by unit; files without one (older stores, Fit-path results) keep the path flow.
+                if (all.Sequence is { Kind: not SequenceKind.None } && all.Data is JsonObject)
+                {
+                    return PageSequence(all, path, offset, limitOrNull, resultId, filePath);
+                }
+
                 return PageEnvelope(all, path, offset, limitOrNull, resultId, filePath);
             }
 

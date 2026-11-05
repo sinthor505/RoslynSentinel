@@ -95,7 +95,7 @@ public class WorkspaceReadNavigationTools
         => _impl.GetOperationDetail(reason, changeId, filter, maxItems, offset, cancellationToken);
     [McpServerTool(Name = "GetLargeResult")]
     [Produces(DataTag.Report)]
-    [Description("Pages a stored large result (the largeResult pointer). Page one omitted path with path, offset and limit; the response carries nextOffset and hasMoreData.")]
+    [Description("Pages a stored large result (the largeResult pointer). offset counts units of its sequence (list records interleaved, or lines); follow nextOffset until hasMoreData is false. path is only for older results listing omitted.")]
     public Task<SentinelCallToolResult<object>> GetLargeResultTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: exactly one of resultId/filePath must be supplied;
@@ -104,13 +104,13 @@ public class WorkspaceReadNavigationTools
         [Consumes(DataTag.ResultId)] string? resultId = null,
         [Description("Path to a largeresult_*.json file. Required if resultId is omitted.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
-        [Description("Max items (lines for a text path) per page; omit to return as many as fit the size budget. Continue from nextOffset while hasMoreData is true.")]
+        [Description("Max units (records or lines) per page; omit to fill the size budget.")]
         [ToolOption(ToolOptionTag.ResultLimit)] int? limit = null,
-        [Description("Items (lines for a text path) to skip before the next page; characters for an old Raw result.")]
+        [Description("Units (records or lines) to skip: the previous nextOffset; characters for an old Raw result.")]
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
         [Description("Old Raw results only: max characters to return. Otherwise page with path and limit.")]
         [ToolOption(ToolOptionTag.CharLimit)] int? charLimit = null,
-        [Description("Pointers with largeResult.omitted: the omitted[].path to page (offset/limit count its items or lines). Default: first.")]
+        [Description("Older results listing largeResult.omitted only: the omitted[].path to page (default first); ignored otherwise.")]
         string? path = null,
         CancellationToken cancellationToken = default)
         => _impl.GetLargeResult(reason, resultId, filePath, limit, offset, charLimit: charLimit, path: path, cancellationToken: cancellationToken);

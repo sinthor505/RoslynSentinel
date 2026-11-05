@@ -37,4 +37,16 @@ public sealed record EnvelopePageResult
 
     /// <summary>The page of a string node: whole lines, line terminators kept, so consecutive pages concatenate to the stored text.</summary>
     public string? Text { get; init; }
+
+    /// <summary>
+    /// Sequence-stored results only (proposal_sequence_pager.md slice 6): the page in the full envelope shape of the original
+    /// result - each list under <c>successData</c> holds its share of this page, or the string holds the page's lines, and
+    /// every other field is unchanged. <see cref="Path"/> then names the sequence node(s), <see cref="Unit"/> is
+    /// <c>records</c> or <c>lines</c>, and <see cref="Offset"/>/<see cref="NextOffset"/> count sequence units.
+    /// <see cref="Items"/> and <see cref="Text"/> are null.
+    /// </summary>
+    public JsonObject? Envelope
+    {
+        get; init;
+    }
 }

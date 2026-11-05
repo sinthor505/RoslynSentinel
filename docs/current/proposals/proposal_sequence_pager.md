@@ -2,6 +2,8 @@
 
 **Status:** PROPOSED 2026-11-04. Design agreed in discussion; nothing built; slice 1 (read-only explorer pass) done 2026-11-04, its findings are in Open questions, and the challenges it raised (9-12) are decided.
 
+**Progress 2026-11-04:** slices 3-6 built and green (golden tests `SequencePagerTests`; `SequencePager`, `SequenceMessages`, `PagingHints` in Common; marshaller first page; `GetLargeResult` offset paging over the stored `Sequence`; ModelEval pointer detection). The default sequence is live (slice 8 effectively done: no probe, slice 2 skipped). `Search` needs no `PagingHints` (the default already takes `callers` + `implementations`; slice 7 envelope property exists, construction sites unchanged). Refinements made in the build: hint paths may be bare or `successData.`-rooted; an empty declared `[ResultRecords]` list falls through to the default; line chunks use a fixed `MaxUnitChars` (4000), counted in `totalRecords`; a result whose parts outside the sequence alone exceed the budget falls back to `Fit`. Not done: slice 6a (Raw/legacy stores), 9 (shape fixes), 10 (retire `Fit`/`omitted`/`path`), `ResolveHints` returning `PagingHints`, Open questions 2, 6, 8 (needs the runtime probe).
+
 ## Motivation
 
 The current pager (`ResultPager.Fit`, `RoslynSentinel.Common/ResultPager.cs`) is shape-agnostic: it cuts any array or

@@ -119,7 +119,7 @@
 | WorkspaceProjectManagementTools | LoadSolution | WorkspaceProjectManagement | - | Loads a .NET solution into memory; required before any tool that needs a loaded solution. |
 | WorkspaceProjectManagementTools | SplitProjectByFolder | WorkspaceProjectManagement | - | Moves all files under a specific folder from a source project to a new target project, preserving folder structure. |
 | WorkspaceReadNavigationTools | GetFileOutline | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | Allowed | Returns a structural outline of a file's types and members with 1-based line ranges (no bodies). |
-| WorkspaceReadNavigationTools | GetLargeResult | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | - | Pages a stored large result (the largeResult pointer). |
+| WorkspaceReadNavigationTools | GetLargeResult | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | - | Pages a stored large result (the largeResult pointer). offset counts units of its sequence (list records interleaved,... |
 | WorkspaceReadNavigationTools | GetMethodSource | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | - | Returns a method's or constructor's full source text and attributes. |
 | WorkspaceReadNavigationTools | GetOperationDetail | Claude, claude-lean (on demand), Workspace, WorkspaceFileContent, WorkspaceReadNav | Allowed | Returns a filtered, paged slice of an operation result blob by changeId. |
 | WorkspaceReadNavigationTools | ListAll | Claude, Workspace, WorkspaceFileContent, WorkspaceReadNav | Allowed | Lists every declared symbol in the loaded solution with file, kind, name, container, and line range. |

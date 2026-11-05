@@ -124,6 +124,14 @@ public class LargeResultPagingAgentTests
             case JsonValueKind.Object:
                 foreach (var property in element.EnumerateObject())
                 {
+                    // A sequence pointer (proposal_sequence_pager.md) has returned/nextOffset and no omitted: the next call is GetLargeResult(offset).
+                    if (property.NameEquals("largeResult") && property.Value.ValueKind == JsonValueKind.Object
+                        && property.Value.TryGetProperty("nextOffset", out var nextOffset))
+                    {
+                        lines.Add($"sequence pointer: returned={ReadProperty(property.Value, "returned")} " +
+                            $"total={ReadProperty(property.Value, "totalRecords")} nextOffset={nextOffset} -> next call GetLargeResult(offset)");
+                    }
+
                     if (property.NameEquals("omitted") && property.Value.ValueKind == JsonValueKind.Array)
                     {
                         foreach (var entry in property.Value.EnumerateArray())
@@ -325,7 +333,7 @@ public class LargeResultPagingAgentTests
             .ToList();
 
     private static bool CarriesLargeResultPointer(AgentToolCallRecord call) =>
-        call.ResultJson.Contains("omitted") && call.ResultJson.Contains("largeResult");
+        call.ResultJson.Contains("largeResult") && (call.ResultJson.Contains("omitted") || call.ResultJson.Contains("nextOffset"));
 
     /// <summary>
     /// Writes largeresult-summary.txt next to agent.log: tool calls in order, every result that carried a
@@ -348,7 +356,7 @@ public class LargeResultPagingAgentTests
         }
 
         lines.Add(string.Empty);
-        lines.Add("Results carrying largeResult.omitted:");
+        lines.Add("Results carrying largeResult (omitted entries, or a sequence nextOffset):");
         var pointerCount = 0;
         foreach (var (turnNumber, call) in calls.Where(c => CarriesLargeResultPointer(c.Call)))
         {
@@ -366,7 +374,7 @@ public class LargeResultPagingAgentTests
 
             if (entries.Count == 0)
             {
-                entries.Add("(largeResult present, no omitted entries parsed)");
+                entries.Add("(largeResult present, no omitted entries or sequence nextOffset parsed)");
             }
 
             lines.Add($"  turn {turnNumber} {call.ToolName}:");

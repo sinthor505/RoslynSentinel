@@ -32,6 +32,14 @@ namespace RoslynSentinel.Common;
 /// as the full text for the offload filter to handle.
 /// </para>
 /// <para>
+/// <b>Sequence paging</b> (proposal_sequence_pager.md slice 5): before <see cref="ResultPager"/> the marshaller asks
+/// <see cref="SequencePager.ResolveSequence"/> for the result's sequence (the envelope's <c>Paging</c> hints, a
+/// <see cref="ResultRecordsAttribute"/> list, every array under <c>successData</c>, or its one large string). When there
+/// is one, the first response is the page at offset 0, the stored file also holds the sequence descriptor, and
+/// <c>largeResult</c> carries <c>returned</c> and <c>nextOffset</c> instead of <c>omitted</c>. A result with no sequence
+/// (or whose sequence already fits whole) takes the <see cref="ResultPager"/> path above unchanged.
+/// </para>
+/// <para>
 /// A <see cref="string"/> return also reaches the SDK's structured-content step, which is a no-op for every tool today (no
 /// tool sets <c>UseStructuredContent = true</c>, so none has an output schema). Never throws: any exception returns the
 /// original object and is logged at error level (server-side only, nothing tool-visible).
@@ -101,6 +109,116 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
         }
     }
 
+    // Pointer first: a model reads the leading keys, so largeResult must be the envelope's first property.
+    // Clear detaches the nodes, so the remaining properties are re-added as deep clones in their original order.
+    private static string WithPointerFirst(JsonObject fitted, JsonNode pointerNode, JsonSerializerOptions options)
+    {
+        var rest = fitted.Where(kv => kv.Key != "largeResult").Select(kv => (kv.Key, Value: kv.Value?.DeepClone())).ToList();
+        fitted.Clear();
+        fitted["largeResult"] = pointerNode;
+        foreach (var (key, value) in rest)
+        {
+            fitted[key] = value;
+        }
+
+        return fitted.ToJsonString(options);
+    }
+
+    // The envelope's server-side Paging hints (SentinelCallToolResult<,>.Paging, never serialized); null for any other
+    // result shape. SuccessData stays typed as the tool's own type - an interface there would serialize as {}.
+    private static PagingHints? PagingHintsOf(object? result)
+    {
+        for (Type? type = result?.GetType(); type is not null; type = type.BaseType)
+        {
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(SentinelCallToolResult<,>))
+            {
+                return type.GetProperty(nameof(SentinelCallToolResult<object, object>.Paging))?.GetValue(result) as PagingHints;
+            }
+        }
+
+        return null;
+    }
+
+    // Stores the full wire text as an Envelope file (with the cuts or the sequence, whichever applies). Never throws except
+    // for cancellation: a failed store is reported as a short reason so the caller can degrade to a warning.
+    private async Task<(string? ResultId, FilePathWrapper FilePath, string? Failure)> TryStoreAsync(
+        string toolName, string text, IReadOnlyList<OmittedPart>? omitted, SequenceDescriptor? sequence, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var stored = await LargeResultHelper.StoreEnvelopeAsync(text, _solutionRoot(), cancellationToken, omitted, sequence).ConfigureAwait(false);
+            return stored.offloaded
+                ? (stored.resultId, stored.filePath, null)
+                : (null, default, "no solution is loaded to hold the full result");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Storing the full result of tool {ToolName} failed; returning the fitted result without a resultId.", toolName);
+            return (null, default, "the full result could not be written to the result store");
+        }
+    }
+
+    // First response of a sequence-paged result (proposal_sequence_pager.md slice 5): the page at offset 0, the full text
+    // stored with the sequence, and a largeResult pointer carrying returned / nextOffset. Returns null when the page already
+    // holds the whole sequence (the over-budget part is then outside the sequence), so the caller falls back to Fit.
+    private async Task<string?> PageSequenceAsync(
+        string toolName, JsonObject parsed, string text, SequenceDescriptor sequence, JsonSerializerOptions options, int budget, CancellationToken cancellationToken)
+    {
+        SequencePage page = SequencePager.BuildPage(parsed, sequence, 0, 0, budget, options);
+        if (page.ContractViolation)
+        {
+            _logger.LogWarning("Tool {ToolName} breaks the paging unit contract: {Detail}", toolName, page.ViolationDetail);
+        }
+
+        // No page to offer: the sequence already fits whole, or the parts outside it are over budget by themselves and
+        // only Fit can cut those.
+        if (page.NextOffset is null || page.PartsOutsideOverBudget)
+        {
+            return null;
+        }
+
+        var (resultId, filePath, storeFailure) = await TryStoreAsync(toolName, text, omitted: null, sequence, cancellationToken).ConfigureAwait(false);
+
+        JsonNode pointerNode;
+        if (resultId is not null)
+        {
+            var pointer = new LargeResultInfo(
+                resultType: nameof(ResultWrapperType.Envelope),
+                writtenToFile: true,
+                filePath: filePath,
+                resultId: resultId,
+                sizeBytes: Encoding.UTF8.GetByteCount(text),
+                totalRecords: page.Total,
+                message: SequenceMessages.ForPage(parsed, sequence, page, LargeResultHints.FetchCall(resultId, offset: page.NextOffset)))
+            {
+                Returned = page.Returned,
+                NextOffset = page.NextOffset,
+            };
+            pointerNode = JsonSerializer.SerializeToNode(pointer, options)!;
+        }
+        else
+        {
+            string unit = sequence.Kind == SequenceKind.Lines ? "lines" : "records";
+            string warning = $"Result is {text.Length} chars and only {page.Returned} of {page.Total} {unit} are shown, but {storeFailure}; the rest is not retrievable. Narrow the request or page by offset.";
+            pointerNode = JsonSerializer.SerializeToNode(
+                new
+                {
+                    resultType = nameof(ResultWrapperType.Envelope),
+                    writtenToFile = false,
+                    totalRecords = page.Total,
+                    message = warning,
+                    returned = page.Returned,
+                },
+                options)!;
+            JsonObject shown = page.Page;
+            shown["warningDetails"] = shown["warningDetails"] is JsonValue existing && existing.TryGetValue(out string? previous) && !string.IsNullOrEmpty(previous)
+                ? previous + " " + warning
+                : warning;
+        }
+
+        return WithPointerFirst(page.Page, pointerNode, options);
+    }
+
     private async Task<string> FitAndStoreAsync(
         string toolName, object? result, string text, JsonSerializerOptions options, int budget, CancellationToken cancellationToken)
     {
@@ -109,33 +227,26 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
             return text;
         }
 
-        var (inline, omitted) = ResultPager.Fit(parsed, budget, options, SuccessDataTypeOf(result));
+        // Sequence pager first (proposal_sequence_pager.md): a result with a list or a large string directly under
+        // successData pages by units. Anything else (dictionaries, nested shapes, scalar-only data) keeps the Fit path.
+        Type? successType = SuccessDataTypeOf(result);
+        SequenceDescriptor sequence = SequencePager.ResolveSequence(parsed, PagingHintsOf(result), successType, options, _logger);
+        if (sequence.Kind != SequenceKind.None)
+        {
+            string? paged = await PageSequenceAsync(toolName, parsed, text, sequence, options, budget, cancellationToken).ConfigureAwait(false);
+            if (paged is not null)
+            {
+                return paged;
+            }
+        }
+
+        var (inline, omitted) = ResultPager.Fit(parsed, budget, options, successType);
         if (omitted.Count == 0 || inline is not JsonObject fitted)
         {
             return text;
         }
 
-        string? resultId = null;
-        FilePathWrapper filePath = default;
-        string? storeFailure = null;
-        try
-        {
-            var stored = await LargeResultHelper.StoreEnvelopeAsync(text, _solutionRoot(), cancellationToken, omitted).ConfigureAwait(false);
-            if (stored.offloaded)
-            {
-                resultId = stored.resultId;
-                filePath = stored.filePath;
-            }
-            else
-            {
-                storeFailure = "no solution is loaded to hold the full result";
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            storeFailure = "the full result could not be written to the result store";
-            _logger.LogError(ex, "Storing the full result of tool {ToolName} failed; returning the fitted result without a resultId.", toolName);
-        }
+        var (resultId, filePath, storeFailure) = await TryStoreAsync(toolName, text, omitted, sequence: null, cancellationToken).ConfigureAwait(false);
 
         string summary = string.Join(
             "; ",
@@ -175,17 +286,7 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
                 : warning;
         }
 
-        // Pointer first: a model reads the leading keys, so largeResult must be the envelope's first property.
-        // Clear detaches the nodes, so the remaining properties are re-added as deep clones in their original order.
-        var rest = fitted.Where(kv => kv.Key != "largeResult").Select(kv => (kv.Key, Value: kv.Value?.DeepClone())).ToList();
-        fitted.Clear();
-        fitted["largeResult"] = pointerNode;
-        foreach (var (key, value) in rest)
-        {
-            fitted[key] = value;
-        }
-
-        return fitted.ToJsonString(options);
+        return WithPointerFirst(fitted, pointerNode, options);
     }
 
     // The runtime type of SentinelCallToolResult<TSuccess, TError>.SuccessData, where the typed hints ([ResultRecords],

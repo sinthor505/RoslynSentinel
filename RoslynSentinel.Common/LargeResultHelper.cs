@@ -100,13 +100,15 @@ public static class LargeResultHelper
     /// same JSON the SDK would have sent, as <c>Data</c>, so a reader needs no type to replay it. Same naming,
     /// folder and retention as every other large result. Returns <c>offloaded: false</c> when there is no solution
     /// root or the text is empty; IO failures propagate so the caller can report a failed store.
+    /// <paramref name="sequence"/> (sequence-paged results, proposal_sequence_pager.md) is stored beside the data so a later
+    /// page is built from the identical sequence: same paths, order and line-chunk size.
     /// </summary>
     public static Task<(bool offloaded, FilePathWrapper filePath, string? resultId)> StoreEnvelopeAsync(
-        string envelopeWireText, string? solutionRoot, CancellationToken cancellationToken, IReadOnlyList<OmittedPart>? omitted = null) =>
-        StoreWrappedJsonAsync(envelopeWireText, solutionRoot, ResultWrapperType.Envelope, cancellationToken, omitted);
+        string envelopeWireText, string? solutionRoot, CancellationToken cancellationToken, IReadOnlyList<OmittedPart>? omitted = null, SequenceDescriptor? sequence = null) =>
+        StoreWrappedJsonAsync(envelopeWireText, solutionRoot, ResultWrapperType.Envelope, cancellationToken, omitted, sequence);
 
     private static async Task<(bool offloaded, FilePathWrapper filePath, string? resultId)> StoreWrappedJsonAsync(
-        string json, string? solutionRoot, ResultWrapperType wrapperType, CancellationToken cancellationToken, IReadOnlyList<OmittedPart>? omitted = null)
+        string json, string? solutionRoot, ResultWrapperType wrapperType, CancellationToken cancellationToken, IReadOnlyList<OmittedPart>? omitted = null, SequenceDescriptor? sequence = null)
     {
         if (string.IsNullOrEmpty(solutionRoot) || string.IsNullOrEmpty(json))
         {
@@ -117,7 +119,8 @@ public static class LargeResultHelper
         {
             Type = wrapperType,
             Data = JsonNode.Parse(json),
-            Omitted = omitted
+            Omitted = omitted,
+            Sequence = sequence
         };
 
         var resultId = Guid.NewGuid().ToString("N");
@@ -178,6 +181,18 @@ public record ResultWrapper
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<OmittedPart>? Omitted
+    {
+        get; init;
+    }
+
+    /// <summary>
+    /// <see cref="ResultWrapperType.Envelope"/> files only: the pageable sequence the marshaller resolved (and paged the
+    /// first response from) when it stored the result. <c>GetLargeResult</c> rebuilds later pages from it with
+    /// <see cref="SequencePager.BuildPage"/>. Absent for files written before this field existed and for results fitted
+    /// by <see cref="ResultPager"/> instead; such files keep the <see cref="Omitted"/>/path scheme.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public SequenceDescriptor? Sequence
     {
         get; init;
     }
