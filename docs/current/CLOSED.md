@@ -8,6 +8,11 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## `Member` dispatcher was a 317-line method - resolved (2026-11-05)
+
+`RefactoringStructuralImpl.Member` is now a 54-line switch over private `MemberViewAsync`, `MemberReplaceAsync`, `MemberRemoveAsync`, `MemberAddTopLevelTypeAsync`, `MemberAddEnumMemberAsync` and `MemberAddToContainerAsync` (bodies moved verbatim), so `GetMethodSource` no longer offloads it. Also: the `Member(remove)` refusal now lists at most 10 callers and 10 implementations with a "(+N more)" marker.
+Evidence: `RoslynSentinel.Tools.Basic/RefactoringStructuralImpl.cs`, `RoslynSentinel.Tests.Tools.Advanced/MemberRemoveTests.cs` (`RemoveMember_ManyCallers_RefusalListsAtMostTenAndMarksTheRest`); 257 `Member` tests in Tests.Basic pass.
+
 ## SubAgent tools did not wait for the solution load; embedded `BuildVerification` was not projected - resolved (2026-11-05)
 
 `SubAgent` / `SubAgentEval` now call `SubAgentModelRun.AwaitSolutionLoadAsync` (same bounded `SolutionLoadWait.DefaultTimeout` wait as `GetCurrentSolutionAsync`; `SolutionLoadTimeout` error if still loading) before reading `SolutionPath`. `GetDiagnostics` (verify != noBuild) projects its embedded `BuildVerification` through `BuildResultProjector` with the dependency graph and offloads full diagnostics like `Build`; `GetWorkspaceHealth` projects with cap 20 and no graph (`// TODO` for graph + offload).
