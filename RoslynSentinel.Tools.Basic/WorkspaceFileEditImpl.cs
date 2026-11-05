@@ -148,6 +148,7 @@ public class WorkspaceFileEditImpl
                 }
             }
 
+            // TODO UndoLastApply reports a ledger-refused revert as success (WorkspaceFileEditImpl ~153)
             // Unconditional: the ledger itself sorts out whether changeId matches an individual
             // fix's entry or the changeId that opened the ledger (cascades to every entry in that
             // case) - see ScopedOperationLedgerEngine.RecordUndo. A no-op when no ledger is open

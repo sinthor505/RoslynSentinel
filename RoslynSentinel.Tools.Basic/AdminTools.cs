@@ -38,15 +38,21 @@ public class AdminTools
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "ExternalFileDrift")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Inspect and clear external file drift: a tracked file changed on disk outside this server. A write touching such a file is refused and halts the session; read-only tools keep working. operation Status = halted or not, plus the tracked count. List = tracked file paths; review these first. Acknowledge = clear the halt: pass files (from List) with acknowledgeScope ConfirmWithListedFiles (default), or acknowledgeScope ConfirmAll with no files. Files you did not name stay flagged.")]
+    [Description("Inspect and clear external file drift: a tracked file changed on disk outside this server. A write touching such a file is refused and halts the session; read-only tools keep working. operation Status = halted or not, plus the tracked count. List = tracked file paths; review these first. Acknowledge = clear the halt: pass files (from List) with acknowledgeScope ConfirmWithListedFiles (default), or acknowledgeScope ConfirmAll with no files. Files you did not name stay flagged. LedgerList/LedgerFix/LedgerRelease resolve an open MoveMember ledger that refuses unrelated writes.")]
     public SentinelCallToolResult<string> ExternalFileDriftTool(
     [Description(ToolParams.Reason)] ToolCallReason reason,
-    [Description("Status, List or Acknowledge. After a 'Session halted' refusal, call List first.")] ExternalFileDriftOperation operation,
+    [Description("Status, List, Acknowledge, LedgerList, LedgerFix or LedgerRelease. After a 'Session halted' refusal, call List first.")] ExternalFileDriftOperation operation,
     [Description("Only for Acknowledge with ConfirmWithListedFiles: names or relative paths (CSV or JSON array) from List.")] string? files = null,
     [Description("Only for Acknowledge. ConfirmWithListedFiles (default): clear only the named files; refused when files is empty. ConfirmAll: clear every tracked change; pass no files.")] ExternalFileDriftAcknowledgeScope acknowledgeScope = ExternalFileDriftAcknowledgeScope.ConfirmWithListedFiles,
+    [Description("Only for LedgerFix: entry ids (CSV or JSON array) from LedgerList.")] string? entryIds = null,
     CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
+
+        if (operation != ExternalFileDriftOperation.LedgerFix && !string.IsNullOrWhiteSpace(entryIds))
+        {
+            return Refused(ToolErrorCode.InvalidArgument, "entryIds is only used with operation: LedgerFix; nothing changed.");
+        }
 
         if (operation == ExternalFileDriftOperation.Acknowledge)
         {
@@ -56,6 +62,12 @@ public class AdminTools
         if (!string.IsNullOrWhiteSpace(files) || acknowledgeScope == ExternalFileDriftAcknowledgeScope.ConfirmAll)
         {
             return Refused(ToolErrorCode.InvalidArgument, "files and acknowledgeScope are only used with operation: Acknowledge; nothing changed.");
+        }
+
+        if (operation is ExternalFileDriftOperation.LedgerList or ExternalFileDriftOperation.LedgerFix or ExternalFileDriftOperation.LedgerRelease)
+        {
+            // Same instance MoveMember opens the ledger on; the ScopedOperationLedgerEngine registered in DI is a different object.
+            return LedgerResult(_workspaceManager as IScopedOperationLedger, operation, entryIds);
         }
 
         var current = _workspaceManager.GetExternalFileChanges();
@@ -73,7 +85,7 @@ public class AdminTools
                 : string.Join(Environment.NewLine, current));
         }
 
-        return Refused(ToolErrorCode.InvalidArgument, $"Unknown operation '{operation}'. Valid operations: Status, List, Acknowledge.");
+        return Refused(ToolErrorCode.InvalidArgument, $"Unknown operation '{operation}'. Valid operations: Status, List, Acknowledge, LedgerList, LedgerFix, LedgerRelease.");
     }
 
     /// <summary>
@@ -164,11 +176,161 @@ public class AdminTools
         return Ok(message);
     }
 
+    private const int LedgerListCap = 50;
+    private const int LedgerIdListCap = 10;
+
+    /// <summary>
+    /// Core of <c>ExternalFileDriftTool(operation: LedgerList | LedgerFix | LedgerRelease)</c>. <paramref name="ledger"/> is the
+    /// live ledger (the workspace manager MoveMember opens it on); null means this workspace manager has none.
+    /// </summary>
+    public static SentinelCallToolResult<string> LedgerResult(IScopedOperationLedger? ledger, ExternalFileDriftOperation operation, string? entryIds)
+    {
+        if (ledger is null)
+        {
+            return Refused(ToolErrorCode.InvalidArgument, "ledger not available on this workspace manager; nothing changed.");
+        }
+
+        return operation switch
+        {
+            ExternalFileDriftOperation.LedgerList => LedgerListResult(ledger),
+            ExternalFileDriftOperation.LedgerFix => LedgerFixResult(ledger, entryIds),
+            ExternalFileDriftOperation.LedgerRelease => LedgerReleaseResult(ledger),
+            _ => Refused(ToolErrorCode.InvalidArgument, $"'{operation}' is not a ledger operation; nothing changed.")
+        };
+    }
+
+    private static SentinelCallToolResult<string> LedgerListResult(IScopedOperationLedger ledger)
+    {
+        var entries = ledger.GetOpenEntries();
+        if (entries.Count == 0)
+        {
+            return Ok("Ledger: none open.");
+        }
+
+        var unresolved = entries.Where(e => !e.IsFixed).ToList();
+        // Unresolved first so the cap never hides the entries that still block writes.
+        var ordered = unresolved.Concat(entries.Where(e => e.IsFixed)).ToList();
+
+        var lines = new List<string>
+        {
+            $"Ledger open for '{ledger.OpenOperationName}' (opened by change {ledger.OpeningChangeId ?? "unknown"}): {entries.Count} entries, {unresolved.Count} unresolved."
+        };
+        lines.AddRange(ordered.Take(LedgerListCap).Select(LedgerEntryLine));
+        if (ordered.Count > LedgerListCap)
+        {
+            lines.Add($"... {ordered.Count - LedgerListCap} more");
+        }
+
+        var release = LedgerMessages.ReleaseCall();
+        lines.Add(unresolved.Count > 0
+            ? $"Next: after fixing the call site(s), {LedgerMessages.FixCall(unresolved[0].EntryId)}; or abandon the ledger with {release}."
+            : $"Next: every entry is fixed; {release} to close the ledger.");
+        return Ok(string.Join(Environment.NewLine, lines));
+    }
+
+    private static string LedgerEntryLine(LedgerEntryBase entry)
+    {
+        var parts = new List<string?> { entry.EntryId, $"{entry.FilePath}:{entry.Line}", entry.IsFixed ? "fixed" : "unresolved" };
+        if (entry is CallSiteLedgerEntry callSite)
+        {
+            parts.Add(callSite.BrokenExpression);
+            parts.Add(callSite.Status.ToString());
+            parts.Add(callSite.BlockReason);
+            parts.Add(callSite.SuggestedFix);
+        }
+
+        // One line per entry: collapse any line breaks inside an expression or reason.
+        return string.Join(" | ", parts
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => string.Join(' ', p!.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))));
+    }
+
+    private static string BoundedIds(IEnumerable<string> ids)
+    {
+        var list = ids.ToList();
+        var shown = string.Join(", ", list.Take(LedgerIdListCap));
+        return list.Count > LedgerIdListCap ? $"{shown} (+{list.Count - LedgerIdListCap} more)" : shown;
+    }
+
+    private static SentinelCallToolResult<string> LedgerFixResult(IScopedOperationLedger ledger, string? entryIds)
+    {
+        var listCall = LedgerMessages.ListCall();
+        if (string.IsNullOrWhiteSpace(entryIds))
+        {
+            return Refused(ToolErrorCode.InvalidArgument, $"Nothing changed: operation LedgerFix needs entryIds (CSV or JSON array). Get them with {listCall}.");
+        }
+
+        var requested = DelimitedListParser.ParseStringOrJsonArrayToList(entryIds, out var parseError);
+        if (parseError != null || requested == null)
+        {
+            return Refused(ToolErrorCode.InvalidArgument, parseError ?? "Failed to parse entryIds list.");
+        }
+
+        var entries = ledger.GetOpenEntries();
+        if (entries.Count == 0)
+        {
+            return Refused(ToolErrorCode.NotFound, "Nothing changed: no ledger is open.");
+        }
+
+        var known = entries.ToDictionary(e => e.EntryId, e => e.EntryId, StringComparer.OrdinalIgnoreCase);
+        var resolved = new List<string>();
+        var unknown = new List<string>();
+        foreach (var token in requested.Select(t => t.Trim()).Where(t => t.Length > 0))
+        {
+            if (known.TryGetValue(token, out var id))
+            {
+                resolved.Add(id);
+            }
+            else
+            {
+                unknown.Add(token);
+            }
+        }
+
+        if (unknown.Count > 0)
+        {
+            var unresolvedIds = entries.Where(e => !e.IsFixed).Select(e => e.EntryId);
+            return Refused(ToolErrorCode.NotFound, $"Nothing changed: unknown entry id(s) {BoundedIds(unknown)}. Unresolved ids: {BoundedIds(unresolvedIds)}. Call {listCall} for details.");
+        }
+
+        if (resolved.Count == 0)
+        {
+            return Refused(ToolErrorCode.InvalidArgument, $"Nothing changed: entryIds named no entries. Get them with {listCall}.");
+        }
+
+        ledger.RecordFix(resolved, "operator");
+        var released = ledger.TryRelease();
+        if (released)
+        {
+            return Ok($"Marked {resolved.Count} entry(ies) fixed (not re-verified against the source). 0 unresolved remain; ledger released, unrelated writes are allowed again.");
+        }
+
+        var remaining = ledger.GetOpenEntries().Where(e => !e.IsFixed).ToList();
+        return Ok($"Marked {resolved.Count} entry(ies) fixed (not re-verified against the source). {remaining.Count} unresolved remain; ledger still open. Next: {listCall}.");
+    }
+
+    private static SentinelCallToolResult<string> LedgerReleaseResult(IScopedOperationLedger ledger)
+    {
+        var operationName = ledger.OpenOperationName;
+        if (operationName is null && ledger.GetOpenEntries().Count == 0)
+        {
+            return Ok("Ledger: none open; nothing changed.");
+        }
+
+        var abandoned = ledger.ForceRelease();
+        return Ok(abandoned == 0
+            ? $"Released the ledger for '{operationName}'; it had no unresolved entries."
+            : $"Released the ledger for '{operationName}': {abandoned} unresolved entry(ies) were abandoned and the affected files may not compile.");
+    }
+
     public enum ExternalFileDriftOperation
     {
         Status,
         List,
-        Acknowledge
+        Acknowledge,
+        LedgerList,
+        LedgerFix,
+        LedgerRelease
     }
 
     public enum ExternalFileDriftAcknowledgeScope

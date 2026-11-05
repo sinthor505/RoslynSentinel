@@ -137,7 +137,8 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
                     IsError: true,
                     SucceededFiles: [],
                     FailedFiles: new Dictionary<FilePathWrapper, string> { [target] = ledgerBlockReason ?? "Blocked by an open scoped operation ledger entry." },
-                    Summary: $"Refused - '{Path.GetFileName(target)}' has an open scoped operation ledger entry: {ledgerBlockReason}");
+                    Summary: $"Refused - '{Path.GetFileName(target)}' has an open scoped operation ledger entry: {ledgerBlockReason}",
+                    RefusalCode: ToolErrorCode.ScopedLedgerBlocked);
             }
         }
 
@@ -332,6 +333,12 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
 
     IReadOnlyList<LedgerEntryBase> IScopedOperationLedger.GetOpenEntries()
         => _ledger.GetOpenEntries();
+
+    public string? OpenOperationName => _ledger.OpenOperationName;
+
+    public string? OpeningChangeId => _ledger.OpeningChangeId;
+
+    public int ForceRelease() => _ledger.ForceRelease();
 
 
 

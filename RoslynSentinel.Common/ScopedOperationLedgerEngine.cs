@@ -12,7 +12,7 @@ public class ScopedOperationLedgerEngine : IScopedOperationLedger
         {
             if (_entries is not null)
             {
-                rejectionReason = $"A ledger is already open for operation '{_openOperationName}' with {_entries.Count} entries. Resolve it before starting another blast-radius operation.";
+                rejectionReason = $"A ledger is already open for operation '{_openOperationName}' with {_entries.Count} entries ({_entries.Count(e => !e.IsFixed)} unresolved). Resolve it before starting another blast-radius operation. {LedgerMessages.Recovery()}";
                 return false;
             }
 
@@ -49,7 +49,7 @@ public class ScopedOperationLedgerEngine : IScopedOperationLedger
                 return false;
             }
 
-            blockReason = $"A scoped ledger is open for operation '{_openOperationName}' with unresolved entries outside this file. Resolve the open ledger's entries before making unrelated changes.";
+            blockReason = $"A scoped ledger is open for operation '{_openOperationName}' with unresolved entries outside this file. Resolve the open ledger's entries before making unrelated changes. {LedgerMessages.Recovery()}";
             return true;
         }
     }
@@ -135,6 +135,45 @@ public class ScopedOperationLedgerEngine : IScopedOperationLedger
         lock (_lock)
         {
             return _entries is null ? [] : [.. _entries];
+        }
+    }
+
+    public string? OpenOperationName
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _openOperationName;
+            }
+        }
+    }
+
+    public string? OpeningChangeId
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _openingChangeId;
+            }
+        }
+    }
+
+    public int ForceRelease()
+    {
+        lock (_lock)
+        {
+            if (_entries is null)
+            {
+                return 0;
+            }
+
+            var abandoned = _entries.Count(e => !e.IsFixed);
+            _entries = null;
+            _openOperationName = null;
+            _openingChangeId = null;
+            return abandoned;
         }
     }
 

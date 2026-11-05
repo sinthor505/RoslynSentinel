@@ -1768,7 +1768,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     IsError: true,
                     SucceededFiles: [],
                     FailedFiles: new Dictionary<FilePathWrapper, string> { [target] = ledgerBlockReason ?? "Blocked by an open scoped operation ledger entry." },
-                    Summary: $"Refused - '{Path.GetFileName(target)}' has an open scoped operation ledger entry: {ledgerBlockReason}");
+                    Summary: $"Refused - '{Path.GetFileName(target)}' has an open scoped operation ledger entry: {ledgerBlockReason}",
+                    RefusalCode: ToolErrorCode.ScopedLedgerBlocked);
             }
         }
 
@@ -2696,6 +2697,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     public void RecordUndo(string changeId) => _ledger.RecordUndo(changeId);
     public bool TryRelease() => _ledger.TryRelease();
     public IReadOnlyList<LedgerEntryBase> GetOpenEntries() => _ledger.GetOpenEntries();
+    public string? OpenOperationName => _ledger.OpenOperationName;
+    public string? OpeningChangeId => _ledger.OpeningChangeId;
+    public int ForceRelease() => _ledger.ForceRelease();
 
     private readonly UnrecoverableCircuitBreaker _unrecoverableBreaker;
 

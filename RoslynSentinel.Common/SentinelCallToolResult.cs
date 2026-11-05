@@ -157,6 +157,14 @@ public static class ToolErrorCode
     public const string CollateralChangeRefused = "CollateralChangeRefused";
 
     /// <summary>
+    /// The write-path refused a change because a scoped operation ledger is open (for example after MoveMember left
+    /// unresolved call sites) and the target file is not one of the ledger's unresolved files. Nothing was written. The
+    /// message carries ready-to-run ExternalFileDrift calls (LedgerList, then LedgerFix or LedgerRelease). Distinct from
+    /// <see cref="SessionHalted"/> (the whole session is halted) and <see cref="Exception"/> (unexpected failure).
+    /// </summary>
+    public const string ScopedLedgerBlocked = "ScopedLedgerBlocked";
+
+    /// <summary>
     /// The operation was cancelled before it finished.
     /// </summary>
     public const string Cancelled = "Cancelled";
