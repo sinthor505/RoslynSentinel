@@ -38,7 +38,7 @@ public class WorkspaceBuildTestTools
     public Task<SentinelCallToolResult<object>> BuildTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description(ToolParams.BuildLevel)] BuildVerifyLevel level = BuildVerifyLevel.fullBuildThrowaway,
-        [Description("Only quickBuild honours scope; full builds always build the whole solution.")] ToolScope scope = ToolScope.solution,
+        [Description("solution (default), project (scopeName = project name) or file (scopeName = file path; full builds build its project).")] ToolScope scope = ToolScope.solution,
         string? scopeName = null,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 20,
         [Description(ToolParams.UseScratchDir)] bool useScratchDir = false,

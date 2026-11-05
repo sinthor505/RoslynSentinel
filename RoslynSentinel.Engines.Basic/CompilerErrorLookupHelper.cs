@@ -279,7 +279,7 @@ public static class CompilerErrorLookupHelper
         var accessibility = symbol.Accessibility.ToLowerInvariant();
         var calledFrom = callerType != null ? $" from {callerType}" : string.Empty;
         return $"  '{qualifiedName}' is currently {accessibility}. It must be changed to a level accessible{calledFrom} ({diagnostic.FilePath}:{diagnostic.StartLine}).\n"
-            + $"  Note: accessibility is set per-member, not inherited from the containing type's accessibility - raising {simpleTypeName}'s own accessibility does not change {symbol.SymbolName}'s.";
+            + $"  Note: accessibility is set per-member, not inherited from the containing type's accessibility - raising {simpleTypeName}'s own accessibility does not change {symbol.SymbolName}'s.\n" + $"  Fix: change {symbol.SymbolName}'s accessibility first with the ChangeAccessibility tool (in a lean tool list, the Declaration tool), then re-apply this edit; do not hand-edit the modifier with ApplyDiff."; // hint-ok: static advice text, tool name without arguments
     }
 
     /// <summary>

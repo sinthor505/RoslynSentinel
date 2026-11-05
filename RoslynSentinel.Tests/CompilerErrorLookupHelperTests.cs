@@ -79,6 +79,7 @@ public class CompilerErrorLookupHelperTests
             "the caller's enclosing type should be named so the sentence reads as a concrete instruction");
         Assert.That(description.ToLowerInvariant(), Does.Contain("containing type"),
             "must warn that raising the class's accessibility does not change the member's own accessibility");
+        Assert.That(description, Does.Contain("ChangeAccessibility"), "the hint must name the accessibility tool");
     }
 
     /// <summary>

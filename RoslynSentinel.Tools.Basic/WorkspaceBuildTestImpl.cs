@@ -272,9 +272,9 @@ public class WorkspaceBuildTestImpl
 
             var isFullBuild = level is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway;
 
-            // quickBuild file scope: the engine takes an already-resolved path, so resolve the wire form
-            // (solution-root-relative '/' or absolute) here. Full builds ignore scope, project scope is a name.
-            if (!isFullBuild && scope == ToolScope.file && !string.IsNullOrEmpty(scopeName))
+            // file scope (quick and full builds): the engine takes an already-resolved path, so resolve the wire form
+            // (solution-root-relative '/' or absolute) here. Project scope is a name; full builds map file scope to its containing project.
+            if (scope == ToolScope.file && !string.IsNullOrEmpty(scopeName))
             {
                 scopeName = _workspaceManager.ResolveFromWire(scopeName).Absolute;
             }
@@ -282,7 +282,7 @@ public class WorkspaceBuildTestImpl
             // useScratchDir is obsolete: true with level=fullBuild means the throwaway level.
             var fullBuildLevel = level == BuildVerifyLevel.fullBuild && useScratchDir ? BuildVerifyLevel.fullBuildThrowaway : level;
             var result = isFullBuild
-                ? await _buildEngine.RunFullBuildAsync(cancellationToken, maxDetails, level: fullBuildLevel)
+                ? await _buildEngine.RunFullBuildAsync(cancellationToken, maxDetails, level: fullBuildLevel, scope: scope, scopeName: scopeName)
                 : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken);
 
             if (!result.TryGetData(out var buildResult))
@@ -301,10 +301,6 @@ public class WorkspaceBuildTestImpl
             // includeOutput=true asks for the tails even from a clean build, so only strip them otherwise.
             var buildToolResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = includeOutput ? projected : WithoutTailsWhenClean(projected), WorkspaceVersion = _workspaceManager.WorkspaceVersion };
             var buildSummary = SummarizeBuild(buildResult);
-            if (isFullBuild && scope != ToolScope.solution)
-            {
-                buildSummary += $" Scope '{scope}' was ignored: a full build always builds the whole solution.";
-            }
             if (buildResult.Outcome == BuildOutcome.Failed)
             {
                 // Surface external drift: a failed build may be caused by a file changed on disk under us.

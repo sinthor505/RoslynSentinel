@@ -183,12 +183,12 @@ public class BuildEngine
     /// layer treats a detail that is only this note as clean (it drops the stdout/stderr tails).</summary>
     public const string ThrowawayDetailPrefix = "fullBuildThrowaway: output went to ";
 
-    /// <summary>Runs `dotnet build` on the whole solution. <paramref name="level"/> = fullBuild writes the projects'
+    /// <summary>Runs `dotnet build` on the whole solution (scope=solution, default), only the scoped project and its project references (scope=project), or the file's containing project and its references (scope=file). <paramref name="level"/> = fullBuild writes the projects'
     /// own bin/obj (and keeps the competing-build probe); fullBuildThrowaway writes to
     /// .roslynsentinel/build/&lt;instance&gt;/ and skips the probe. <paramref name="useScratchDir"/> is obsolete:
     /// true is the same as level = fullBuildThrowaway. Both levels hold the server-wide <see cref="BuildGate"/>.</summary>
     public async Task<EngineResultWrapper<BuildResult>> RunFullBuildAsync(CancellationToken cancellationToken = default, int maxDetails = 50, bool useScratchDir = false,
-        BuildVerifyLevel level = BuildVerifyLevel.fullBuild)
+        BuildVerifyLevel level = BuildVerifyLevel.fullBuild, ToolScope scope = ToolScope.solution, string? scopeName = null)
     {
         var throwaway = useScratchDir || level == BuildVerifyLevel.fullBuildThrowaway;
         var usedLevel = throwaway ? BuildVerifyLevel.fullBuildThrowaway : BuildVerifyLevel.fullBuild;
@@ -211,6 +211,55 @@ public class BuildEngine
                     $"Full build compiled zero projects. The loaded solution contains no projects -- no compile verdict is available. Call {ToolCallHint.Call("LoadSolution")} with a populated .slnx/.sln, or {ToolCallHint.Call("ListAll", ("kind", "all"))} to inspect the current workspace."));
         }
 
+        string buildTargetPath = solutionPath;
+        List<string> builtProjectNames = projectNames;
+        List<string>? scopedProjectFilePaths = null;
+        if (scope is ToolScope.project or ToolScope.file)
+        {
+            if (string.IsNullOrEmpty(scopeName))
+            {
+                return new EngineResultWrapper<BuildResult>(EngineOutcome.InvalidInput,
+                    error: new EngineError(scope == ToolScope.project
+                        ? "scopeName (projectName) is required when scope=project."
+                        : "scopeName (filePath) is required when scope=file."));
+            }
+
+            Microsoft.CodeAnalysis.Project? scopedProject;
+            if (scope == ToolScope.project)
+            {
+                scopedProject = ProjectLookup.FindProject(currentSolution!, scopeName, ignoreCase: true);
+            }
+            else
+            {
+                var documentId = currentSolution!.GetDocumentIdsWithFilePath(scopeName).FirstOrDefault();
+                scopedProject = documentId is null ? null : currentSolution!.GetProject(documentId.ProjectId);
+            }
+
+            if (scopedProject is null || string.IsNullOrEmpty(scopedProject.FilePath))
+            {
+                return EngineResultWrapper<BuildResult>.Failure(
+                    EngineOutcome.InvalidInput,
+                    new EngineError(
+                        EngineErrorCode.BuildNotRun,
+                        $"Full build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to no project in the loaded solution -- no compile verdict is available. Call {ToolCallHint.Call("ListAll", ("kind", "all"))} to see valid project/file names."));
+            }
+
+            // Scoped build: the project plus every project it transitively references.
+            buildTargetPath = scopedProject.FilePath;
+            var scopedProjects = new List<Microsoft.CodeAnalysis.Project> { scopedProject };
+            foreach (var dependencyId in currentSolution!.GetProjectDependencyGraph().GetProjectsThatThisProjectTransitivelyDependsOn(scopedProject.Id))
+            {
+                var dependency = currentSolution!.GetProject(dependencyId);
+                if (dependency is not null)
+                {
+                    scopedProjects.Add(dependency);
+                }
+            }
+
+            builtProjectNames = scopedProjects.Select(p => p.Name).ToList();
+            scopedProjectFilePaths = scopedProjects.Select(p => p.FilePath).OfType<string>().ToList();
+        }
+
         BuildGateLease gateLease;
         try
         {
@@ -228,8 +277,11 @@ public class BuildEngine
         if (!throwaway)
         {
             // A throwaway build is isolated, so only a build writing to the repo's own obj/ and bin/ can collide.
-            var targetPaths = new List<string> { solutionPath };
-            targetPaths.AddRange(currentSolution?.Projects.Select(p => p.FilePath).OfType<string>() ?? []);
+            var targetPaths = scopedProjectFilePaths is null ? new List<string> { solutionPath } : new List<string>(scopedProjectFilePaths);
+            if (scopedProjectFilePaths is null)
+            {
+                targetPaths.AddRange(currentSolution?.Projects.Select(p => p.FilePath).OfType<string>() ?? []);
+            }
             var waitStart = DateTime.UtcNow;
             var competing = await BuildIsolation.WaitForNoCompetingBuildAsync(targetPaths, BuildIsolation.DefaultMaxWait, cancellationToken);
             if (competing.Count > 0)
@@ -251,7 +303,7 @@ public class BuildEngine
             CreateNoWindow = true,
         };
         process.StartInfo.ArgumentList.Add("build");
-        process.StartInfo.ArgumentList.Add(solutionPath);
+        process.StartInfo.ArgumentList.Add(buildTargetPath);
         process.StartInfo.ArgumentList.Add("--nologo");
         process.StartInfo.ArgumentList.Add("-v");
         process.StartInfo.ArgumentList.Add("quiet");
@@ -340,7 +392,7 @@ public class BuildEngine
         return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, new BuildResult(
             Outcome: process.ExitCode == 0 ? BuildOutcome.Succeeded : BuildOutcome.Failed,
             Level: usedLevel,
-            ProjectsCompiled: projectNames,
+            ProjectsCompiled: builtProjectNames,
             DiagnosticsComplete: true,
             ExitCode: process.ExitCode,
             ErrorCount: errors.Count,
