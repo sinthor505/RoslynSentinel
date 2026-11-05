@@ -234,7 +234,8 @@ public static class MoveMemberTextEdits
     /// <summary>
     /// The replacement text for a source method that stays behind as a forwarder: an expression-bodied
     /// <c>M(params) =&gt; receiver.M(args);</c>. Only accessibility, static, unsafe and new modifiers are kept; member and
-    /// parameter attributes are not copied; ref/out/in are mirrored at the call. Starts at the member's Span start
+    /// parameter attributes are not copied; ref/out/in are mirrored at the call. A generic method keeps its type parameters
+    /// and constraint clauses and the call passes explicit type arguments. Starts at the member's Span start
     /// (no leading trivia); line breaks use <paramref name = "eol"/>.
     /// </summary>
     public static string BuildForwarder(MethodDeclarationSyntax method, string qualifiedReceiver, bool deprecated, string targetDisplayName, string eol)
@@ -247,9 +248,21 @@ public static class MoveMemberTextEdits
             signature.Append(modifier.ValueText).Append(' ');
         }
 
-        signature.Append((method.ReturnType.ToString()).Trim()).Append(' ').Append(name).Append('(')
-            .Append(string.Join(", ", parameters.Select(p => FormatForwarderParameter(p)))).Append(") => ")
-            .Append(qualifiedReceiver).Append('.').Append(name).Append('(')
+        // Generic method: mirror the type parameter list and every constraint clause (declared between ")" and "=>"),
+        // and call the target with explicit type arguments so inference never changes the bound overload.
+        var typeParameters = method.TypeParameterList?.Parameters ?? default;
+        var typeParameterList = typeParameters.Count == 0
+            ? string.Empty
+            : "<" + string.Join(", ", typeParameters.Select(p => p.ToString().Trim())) + ">";
+        var typeArguments = typeParameters.Count == 0
+            ? string.Empty
+            : "<" + string.Join(", ", typeParameters.Select(p => p.Identifier.ValueText)) + ">";
+        var constraints = method.ConstraintClauses.Count == 0
+            ? string.Empty
+            : " " + string.Join(" ", method.ConstraintClauses.Select(c => "where " + c.Name.ToString().Trim() + " : " + string.Join(", ", c.Constraints.Select(x => x.ToString().Trim()))));
+        signature.Append((method.ReturnType.ToString()).Trim()).Append(' ').Append(name).Append(typeParameterList).Append('(')
+            .Append(string.Join(", ", parameters.Select(p => FormatForwarderParameter(p)))).Append(')').Append(constraints).Append(" => ")
+            .Append(qualifiedReceiver).Append('.').Append(name).Append(typeArguments).Append('(')
             .Append(string.Join(", ", parameters.Select(p => FormatForwarderArgument(p)))).Append(");");
         if (!deprecated)
         {

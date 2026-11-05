@@ -165,4 +165,33 @@ public class MoveMemberForwarderTests
         var removal = edits.Single(e => e.NewText == string.Empty);
         Assert.That(removal.Span.Contains(moved.Span), Is.True);
     }
+
+    [Test]
+    public void GenericMethod_MirrorsTypeParameterAndConstraint_AndCallsWithTypeArgument()
+    {
+        var text = Forwarder("public T Get<T>(int id) where T : class { return default; }");
+        Assert.That(text, Does.Contain("Get<T>(int id)"));
+        Assert.That(text, Does.Contain("where T : class"));
+        Assert.That(text, Does.Contain("=> global::Ns.Target.Get<T>(id);"));
+    }
+
+    [Test]
+    public void GenericMethod_MultipleTypeParameters_KeepAllConstraints_AndPassAllTypeArguments()
+    {
+        var text = Forwarder("public TValue Pair<TKey, TValue>(TKey key, TValue value) where TKey : notnull where TValue : struct { return value; }");
+        Assert.That(text, Does.Contain("Pair<TKey, TValue>(TKey key, TValue value)"));
+        Assert.That(text, Does.Contain("where TKey : notnull"));
+        Assert.That(text, Does.Contain("where TValue : struct"));
+        Assert.That(text, Does.Contain("=> global::Ns.Target.Pair<TKey, TValue>(key, value);"));
+    }
+
+    [Test]
+    public void GenericMethod_DeprecatedMode_EmitsObsoleteAndGenericForwarder()
+    {
+        var text = Forwarder("public static T Fetch<T>(int id) where T : class { return default; }", deprecated: true);
+        Assert.That(text, Does.StartWith("[global::System.Obsolete(\"Deprecated wrapper: call Target.Fetch instead.\", DiagnosticId = \"RSDEPRECATED\")]\n"));
+        Assert.That(text, Does.Contain("Fetch<T>(int id)"));
+        Assert.That(text, Does.Contain("where T : class"));
+        Assert.That(text, Does.Contain("=> global::Ns.Target.Fetch<T>(id);"));
+    }
 }

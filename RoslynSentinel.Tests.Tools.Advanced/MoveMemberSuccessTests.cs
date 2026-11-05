@@ -387,4 +387,155 @@ public sealed class MoveMemberSuccessTests
         Assert.That(text, Does.Contain("public int Foo(int x) => new global::App.NewTarget().Foo(x);"), "The forwarder must new the new class.");
         Assert.That(Lf(workspace.ReadText("NewTarget.cs")), Does.Contain("class NewTarget"), "The new class is created in the new file beside the source.");
     }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_GenericInstanceMethodSingleConstraint_DryRun_ShowsForwarderAndWritesNothing()
+    {
+        var original = "public class Src\n{\n    private readonly Target _impl = new Target();\n    public T Get<T>(int id) where T : class => default;\n}\n\npublic class Target\n{\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
+        var before = await ReadAllDocumentsAsync(workspace);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Src", ["Get"], "Target", dryRun: true, returnDiff: true, oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.DryRun, Is.True);
+        Assert.That(summary.Diff, Does.Contain("Get<T>(int id) where T : class"), "The forwarder must mirror the generic signature and its constraint.");
+        Assert.That(summary.Diff, Does.Contain(".Get<T>(id)"), "The forwarder must call the target with explicit type arguments.");
+        AssertDocumentsUnchanged(before, await ReadAllDocumentsAsync(workspace));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_GenericStaticMethodIntoStaticTarget_DryRun_ShowsQualifiedForwarder()
+    {
+        var original = "public static class Src\n{\n    public static T Make<T>(int id) where T : class => default;\n}\n\npublic static class Target\n{\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
+        var before = await ReadAllDocumentsAsync(workspace);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Src", ["Make"], "Target", dryRun: true, returnDiff: true, oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.DryRun, Is.True);
+        Assert.That(summary.Diff, Does.Contain("Make<T>(int id) where T : class"), "The static forwarder must mirror the generic signature and its constraint.");
+        Assert.That(summary.Diff, Does.Contain("global::Target.Make<T>(id)"), "The static forwarder must call the qualified generic target.");
+        AssertDocumentsUnchanged(before, await ReadAllDocumentsAsync(workspace));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_GenericMultipleTypeParamsWithConstraints_DryRun_ShowsAllConstraints()
+    {
+        var original = "public static class Src\n{\n    public static TValue Pair<TKey, TValue>(TKey key, TValue value) where TKey : notnull where TValue : struct => value;\n}\n\npublic static class Target\n{\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
+        var before = await ReadAllDocumentsAsync(workspace);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Src", ["Pair"], "Target", dryRun: true, returnDiff: true, oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.DryRun, Is.True);
+        Assert.That(summary.Diff, Does.Contain("where TKey : notnull"), "The forwarder must keep the notnull constraint on TKey.");
+        Assert.That(summary.Diff, Does.Contain("where TValue : struct"), "The forwarder must keep the struct constraint on TValue.");
+        Assert.That(summary.Diff, Does.Contain("global::Target.Pair<TKey, TValue>(key, value)"), "The forwarder must pass both type arguments explicitly.");
+        AssertDocumentsUnchanged(before, await ReadAllDocumentsAsync(workspace));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_GenericNewInterfaceAndUnmanagedConstraints_DryRun_ShowsAllConstraints()
+    {
+        var original = "using System;\n\npublic static class Src\n{\n    public static T Build<T>() where T : IDisposable, new() => new T();\n    public static T Raw<T>(T value) where T : unmanaged => value;\n}\n\npublic static class Target\n{\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
+        var before = await ReadAllDocumentsAsync(workspace);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Src", ["Build", "Raw"], "Target", dryRun: true, returnDiff: true, oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.DryRun, Is.True);
+        Assert.That(summary.Diff, Does.Contain("where T : IDisposable, new()"), "The forwarder must keep the interface and new() constraints.");
+        Assert.That(summary.Diff, Does.Contain("where T : unmanaged"), "The forwarder must keep the unmanaged constraint.");
+        Assert.That(summary.Diff, Does.Contain("global::Target.Build<T>()"), "The forwarder must call the qualified target with explicit type arguments.");
+        AssertDocumentsUnchanged(before, await ReadAllDocumentsAsync(workspace));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_GenericRefOutInParamsDefaults_DryRun_ShowsForwarderWithModifiers()
+    {
+        var original = "public static class Src\n{\n    public static int Mix<T>(ref T target, out int count, in T probe, int offset = 0, string label = null, params T[] items) where T : struct\n    {\n        count = items.Length + offset + (label == null ? 0 : label.Length);\n        target = probe;\n        return items.Length;\n    }\n}\n\npublic static class Target\n{\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
+        var before = await ReadAllDocumentsAsync(workspace);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Src", ["Mix"], "Target", dryRun: true, returnDiff: true, oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.DryRun, Is.True);
+        Assert.That(summary.Diff, Does.Contain("ref T target, out int count, in T probe"), "The forwarder must keep ref, out and in modifiers.");
+        Assert.That(summary.Diff, Does.Contain("int offset = 0, string label = null, params T[] items"), "The forwarder must keep default values and params.");
+        Assert.That(summary.Diff, Does.Contain("global::Target.Mix<T>(ref target, out count, in probe, offset, label, items)"), "The forwarder must pass ref, out and in arguments through.");
+        AssertDocumentsUnchanged(before, await ReadAllDocumentsAsync(workspace));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_GenericAsyncTaskOfT_DryRun_ShowsForwarder()
+    {
+        var original = "using System.Threading.Tasks;\n\npublic static class Src\n{\n    public static async Task<T> LoadAsync<T>(int id) where T : class\n    {\n        await Task.Yield();\n        return default;\n    }\n}\n\npublic static class Target\n{\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
+        var before = await ReadAllDocumentsAsync(workspace);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Src", ["LoadAsync"], "Target", dryRun: true, returnDiff: true, oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.DryRun, Is.True);
+        Assert.That(summary.Diff, Does.Contain("LoadAsync<T>(int id) where T : class"), "The async forwarder must mirror the generic signature and constraint.");
+        Assert.That(summary.Diff, Does.Contain("global::Target.LoadAsync<T>(id)"), "The async forwarder must call the qualified generic target.");
+        AssertDocumentsUnchanged(before, await ReadAllDocumentsAsync(workspace));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepAsDeprecatedWrapper_GenericMethod_DryRun_ShowsObsoleteGenericForwarder()
+    {
+        var original = "public static class Src\n{\n    public static T Fetch<T>(int id) where T : class => default;\n}\n\npublic static class Target\n{\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
+        var before = await ReadAllDocumentsAsync(workspace);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Src", ["Fetch"], "Target", dryRun: true, returnDiff: true, oldMember: MoveMemberOldMember.keepAsDeprecatedWrapper);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.DryRun, Is.True);
+        Assert.That(summary.Diff, Does.Contain("[global::System.Obsolete("), "The generic wrapper must carry the Obsolete attribute.");
+        Assert.That(summary.Diff, Does.Contain("RSDEPRECATED"), "The generic wrapper must carry the RSDEPRECATED diagnostic id.");
+        Assert.That(summary.Diff, Does.Contain("Fetch<T>(int id) where T : class"), "The deprecated wrapper must mirror the generic signature and constraint.");
+        AssertDocumentsUnchanged(before, await ReadAllDocumentsAsync(workspace));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_GenericStaticMethods_AllConstraintKinds_SolutionCompilesAfterMove()
+    {
+        var original = "using System;\nusing System.Threading.Tasks;\n\npublic static class Src\n{\n    public static T Build<T>() where T : IDisposable, new() => new T();\n    public static T Raw<T>(T value) where T : unmanaged => value;\n    public static int Mix<T>(ref T target, out int count, in T probe, int offset = 0, string label = null, params T[] items) where T : struct\n    {\n        count = items.Length + offset + (label == null ? 0 : label.Length);\n        target = probe;\n        return items.Length;\n    }\n    public static TValue Pair<TKey, TValue>(TKey key, TValue value) where TKey : notnull where TValue : struct => value;\n    public static async Task<T> LoadAsync<T>(int id) where T : class\n    {\n        await Task.Yield();\n        return default;\n    }\n}\n\npublic static class Target\n{\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Src", ["Build", "Raw", "Mix", "Pair", "LoadAsync"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var diagnostics = await GetDiagnosticsAsync(workspace);
+        Assert.That(diagnostics.Where(d => d.StartsWith("Error", StringComparison.Ordinal)), Is.Empty, "Every generated generic forwarder must compile.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_GenericInstanceMethod_SolutionCompilesAfterMove()
+    {
+        var original = "public class Src\n{\n    private readonly Target _impl = new Target();\n    public T Get<T>(int id) where T : class => default;\n}\n\npublic class Target\n{\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Src", ["Get"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var text = Lf(workspace.ReadText("Refactor.cs"));
+        Assert.That(Before(text, "class Target"), Does.Contain("Get<T>(int id) where T : class"), "The source keeps a generic forwarder.");
+        var diagnostics = await GetDiagnosticsAsync(workspace);
+        Assert.That(diagnostics.Where(d => d.StartsWith("Error", StringComparison.Ordinal)), Is.Empty, "The generated generic instance forwarder must compile.");
+    }
 }

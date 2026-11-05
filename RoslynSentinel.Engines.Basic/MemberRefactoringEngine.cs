@@ -2627,6 +2627,7 @@ public class MemberRefactoringEngine
     /// <summary>
     /// Refuses oldMember keep-mode requests this slice cannot honour, before any route runs or any write.
     /// With oldMember remove it only rejects a forwarderReceiver, which would otherwise be a silent no-op.
+    /// Generic methods are eligible; extension methods, virtual/abstract/override and interface-implementing methods are refused.
     /// </summary>
     private static void RequireKeepModeEligible(MoveMemberOldMember oldMember, string? forwarderReceiver, IReadOnlyList<MemberDeclarationSyntax> membersToMove, string className, string targetClassName, bool targetIsBaseType, INamedTypeSymbol? classSymbol, SemanticModel? semanticModel, CancellationToken cancellationToken)
     {
@@ -2658,14 +2659,14 @@ public class MemberRefactoringEngine
         foreach (var method in membersToMove.OfType<MethodDeclarationSyntax>())
         {
             var methodSymbol = semanticModel?.GetDeclaredSymbol(method, cancellationToken) as IMethodSymbol;
-            if (method.TypeParameterList != null || methodSymbol?.IsGenericMethod == true)
+            // Generic methods are supported: BuildForwarder mirrors the type parameters and constraints and calls the
+            // target with explicit type arguments. Extension methods stay refused (checked by syntax too, so a null
+            // semantic model cannot let one through).
+            var isExtension = methodSymbol?.IsExtensionMethod == true
+                || (method.ParameterList.Parameters.Count > 0 && method.ParameterList.Parameters[0].Modifiers.Any(SyntaxKind.ThisKeyword));
+            if (isExtension)
             {
-                throw new ToolNotImplementedException($"oldMember '{oldMember}' does not support generic method '{method.Identifier.Text}' yet. Use oldMember remove.");
-            }
-
-            if (methodSymbol?.IsExtensionMethod == true)
-            {
-                throw new ToolNotImplementedException($"oldMember '{oldMember}' does not support extension method '{method.Identifier.Text}' yet. Use oldMember remove.");
+                throw new ToolNotImplementedException($"oldMember '{oldMember}' does not support extension method '{method.Identifier.Text}': a forwarder would have to call a static target with the receiver as first argument, which keep modes do not generate. Use oldMember remove.");
             }
 
             if (methodSymbol != null && (methodSymbol.IsVirtual || methodSymbol.IsAbstract || methodSymbol.IsOverride))
