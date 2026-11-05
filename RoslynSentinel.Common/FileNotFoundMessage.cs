@@ -1,0 +1,157 @@
+namespace RoslynSentinel.Common;
+
+/// <summary>
+/// The one agent-facing explanation for "this path is not a document of the loaded solution", shared by
+/// <see cref="DocumentLookupResult.Describe"/> and the ReadFile / GetMethodSource / GetFileOutline not-found errors.
+/// Before this, three copies of the text existed and all of them looked only at the loaded documents, so a file that
+/// is on disk but outside the solution (or a directory, or a project file) got the misleading "does not exist anywhere".
+/// <see cref="Build"/> probes the disk for a rooted path and picks the first matching branch:
+/// 1) a directory; 2) a project/solution file; 3) a file that exists on disk but is outside the loaded solution (with
+/// the nearest LoadSolution target); 4) a loaded file with the same name exists; 5) nothing matches at all.
+/// </summary>
+public static class FileNotFoundMessage
+{
+    private static readonly string[] ProjectOrSolutionExtensions = [".csproj", ".vbproj", ".fsproj", ".sln", ".slnx"];
+
+    /// <summary>
+    /// Builds the message. <paramref name="requestedPath"/> is the path as the caller resolved it;
+    /// <paramref name="candidatePaths"/> are the loaded documents sharing its file name (see
+    /// <see cref="DocumentLookup.FindClosestPaths"/>); <paramref name="searchedProjectCount"/> is how many projects were searched.
+    /// <paramref name="isCallable"/> says whether a tool name can be called on this server (null = every tool can);
+    /// a tool is named in the text only when it can be called. A non-rooted path skips the disk checks.
+    /// </summary>
+    public static string Build(string requestedPath, IReadOnlyList<string> candidatePaths, int searchedProjectCount, Func<string, bool>? isCallable = null)
+    {
+        if (IsRooted(requestedPath))
+        {
+            if (SafeDirectoryExists(requestedPath))
+            {
+                var directoryText = $"'{requestedPath}' is a directory, not a file. Pass the path of a source file inside it.";
+                return Callable(isCallable, "ListSolutionItems")
+                    ? directoryText + $" To list the files of the loaded solution call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))}."
+                    : directoryText;
+            }
+
+            if (SafeFileExists(requestedPath))
+            {
+                if (ProjectOrSolutionExtensions.Contains(Path.GetExtension(requestedPath), PathComparison.Comparer))
+                {
+                    return $"'{requestedPath}' is a project/solution file, not a source document; this tool reads source files (.cs) of the loaded solution.";
+                }
+
+                return OutsideSolutionText(requestedPath, candidatePaths, isCallable);
+            }
+        }
+
+        var list = string.Join("\n", candidatePaths.Select(c => $"  - {c}"));
+        if (candidatePaths.Count > 0)
+        {
+            return $"File '{requestedPath}' was not found in the loaded solution (searched {searchedProjectCount} project(s); path comparison ignores case, so casing is not the cause). " +
+                   "A file with the same name exists at a different path. You MUST retry with the exact path of the file you meant:\n" + list;
+        }
+
+        var notFound = $"File '{requestedPath}' was not found anywhere in the loaded solution (searched {searchedProjectCount} project(s), no file-name match; path comparison ignores case, so casing is not the cause). ";
+        return Callable(isCallable, "ListSolutionItems")
+            ? notFound + $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path."
+            : notFound + "Retry with a path you have already seen in an earlier result; do not guess another one.";
+    }
+
+    private static string OutsideSolutionText(string requestedPath, IReadOnlyList<string> candidatePaths, Func<string, bool>? isCallable)
+    {
+        var text = $"'{requestedPath}' exists on disk but is outside the loaded solution (it is not part of any loaded project).";
+        var target = FindNearestLoadTarget(requestedPath);
+        if (target is null)
+        {
+            text += " No .sln, .slnx or .csproj was found in its directory or above it, so there is nothing to load for it.";
+        }
+        else if (Callable(isCallable, "LoadSolution"))
+        {
+            text += $" To work on it, load the project that contains it with {ToolCallHint.Call("LoadSolution", ("solutionPath", target))} (this replaces the currently loaded solution).";
+        }
+
+        if (candidatePaths.Count > 0)
+        {
+            text += " A file with the same name exists in the loaded solution; if you meant that one, retry with its exact path:\n" +
+                    string.Join("\n", candidatePaths.Select(c => $"  - {c}"));
+        }
+
+        return text;
+    }
+
+    /// <summary>
+    /// Walks up from the file's directory: at each level the alphabetically first .sln/.slnx wins, else the first .csproj.
+    /// Null when nothing is found up to the root or the disk cannot be read.
+    /// </summary>
+    private static string? FindNearestLoadTarget(string filePath)
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(filePath);
+            while (!string.IsNullOrEmpty(directory))
+            {
+                var files = Directory.Exists(directory)
+                    ? Directory.EnumerateFiles(directory).OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase).ToList()
+                    : [];
+                var solution = files.FirstOrDefault(f => HasExtension(f, ".sln") || HasExtension(f, ".slnx"));
+                if (solution is not null)
+                {
+                    return solution;
+                }
+
+                var project = files.FirstOrDefault(f => HasExtension(f, ".csproj"));
+                if (project is not null)
+                {
+                    return project;
+                }
+
+                directory = Path.GetDirectoryName(directory);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            // Unreadable disk state is treated as "nothing found".
+        }
+
+        return null;
+    }
+
+    private static bool HasExtension(string path, string extension) => string.Equals(Path.GetExtension(path), extension, PathComparison.Comparison);
+
+    private static bool Callable(Func<string, bool>? isCallable, string toolName) => isCallable is null || isCallable(toolName);
+
+    private static bool IsRooted(string path)
+    {
+        try
+        {
+            return !string.IsNullOrWhiteSpace(path) && Path.IsPathRooted(path);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    private static bool SafeDirectoryExists(string path)
+    {
+        try
+        {
+            return Directory.Exists(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    private static bool SafeFileExists(string path)
+    {
+        try
+        {
+            return File.Exists(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+}

@@ -178,25 +178,7 @@ public class WorkspaceFileEditImpl
     /// <summary>FileNotFound for ReadFile. <paramref name="isCallable"/> says whether a tool name can be called on this
     /// server (null = every tool can); ListSolutionItems is named only when it can.</summary>
     internal static ResultError BuildFileNotFoundError(Microsoft.CodeAnalysis.Solution solution, string normalizedPath, Func<string, bool>? isCallable = null)
-    {
-        var requestedFileName = Path.GetFileName(normalizedPath);
-        // The candidate search moved to Common (DocumentLookup.FindClosestPaths) so engines can use it too.
-        var candidates = DocumentLookup.FindClosestPaths(solution, normalizedPath);
-
-        if (candidates.Count > 0)
-        {
-            return new ResultError("FileNotFound",
-                $"'{requestedFileName}' does not exist at '{normalizedPath}'. A file with this name exists at a different path. " +
-                "You MUST retry with the correct path:\n" +
-                string.Join("\n", candidates.Select(c => $"  - {c}")));
-        }
-
-        var notFound = $"'{requestedFileName}' does not exist anywhere in the solution (searched {solution.Projects.Count()} project(s), no filename match). ";
-        return new ResultError("FileNotFound",
-            isCallable is null || isCallable("ListSolutionItems")
-                ? notFound + $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path."
-                : notFound + "Retry with a path you have already seen in an earlier result; do not guess another one.");
-    }
+        => new("FileNotFound", FileNotFoundMessage.Build(normalizedPath, DocumentLookup.FindClosestPaths(solution, normalizedPath), solution.Projects.Count(), isCallable));
 
     private const int RangedReadInlineBudgetChars = LargeResultHelper.OffloadThresholdBytes - 2048;
 

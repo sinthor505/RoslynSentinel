@@ -1,0 +1,191 @@
+using RoslynSentinel.Common;
+
+namespace RoslynSentinel.Tests.Basic;
+
+/// <summary>
+/// One test per branch of <see cref="FileNotFoundMessage.Build"/>: directory, project file, file on disk outside the
+/// loaded solution (with and without a LoadSolution target above it), loaded same-name candidates, nothing at all
+/// (ListSolutionItems callable or not), and a non-rooted path that skips the disk checks.
+/// </summary>
+[TestFixture]
+[Category("WorkspaceTools")] // sentinel:auto-category
+public class FileNotFoundMessageTests
+{
+    private static readonly IReadOnlyList<string> NoCandidates = [];
+
+    private string _root = "";
+
+    [SetUp]
+    public void CreateTempRoot()
+    {
+        _root = Path.Combine(Path.GetTempPath(), "fnfm_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_root);
+    }
+
+    [TearDown]
+    public void DeleteTempRoot()
+    {
+        if (Directory.Exists(_root))
+        {
+            Directory.Delete(_root, recursive: true);
+        }
+    }
+
+    private string MakeFile(params string[] relativeParts)
+    {
+        var path = Path.Combine([_root, .. relativeParts]);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "class C { }");
+        return path;
+    }
+
+    [Test]
+    public void Build_DirectoryPassed_SaysDirectoryAndOffersListing()
+    {
+        var directory = Path.Combine(_root, "src");
+        Directory.CreateDirectory(directory);
+
+        var text = FileNotFoundMessage.Build(directory, NoCandidates, 2);
+
+        Assert.That(text, Does.Contain("is a directory, not a file"));
+        Assert.That(text, Does.Contain(ToolCallHint.Call("ListSolutionItems", ("kind", "all"))));
+        Assert.That(text, Does.Not.Contain("was not found anywhere"));
+    }
+
+    [Test]
+    public void Build_DirectoryPassedAndListingNotCallable_NamesNoListingTool()
+    {
+        var directory = Path.Combine(_root, "src");
+        Directory.CreateDirectory(directory);
+
+        var text = FileNotFoundMessage.Build(directory, NoCandidates, 2, name => name == "ReadFile");
+
+        Assert.That(text, Does.Contain("is a directory, not a file"));
+        Assert.That(text, Does.Not.Contain("ListSolutionItems"));
+    }
+
+    [Test]
+    public void Build_ProjectFilePassed_SaysProjectFileNotSourceDocument()
+    {
+        var project = MakeFile("App", "App.csproj");
+
+        var text = FileNotFoundMessage.Build(project, NoCandidates, 2);
+
+        Assert.That(text, Does.Contain("is a project/solution file, not a source document"));
+        Assert.That(text, Does.Not.Contain("outside the loaded solution"));
+    }
+
+    [Test]
+    public void Build_FileOutsideSolutionWithSolutionFileAbove_NamesSolutionAsLoadTarget()
+    {
+        MakeFile("Sol", "A.csproj"); // a .csproj beside the .slnx must lose to the solution file
+        var solution = MakeFile("Sol", "B.slnx");
+        var source = MakeFile("Sol", "src", "Thing.cs");
+
+        var text = FileNotFoundMessage.Build(source, NoCandidates, 2);
+
+        Assert.That(text, Does.Contain("exists on disk but is outside the loaded solution"));
+        Assert.That(text, Does.Contain(ToolCallHint.Call("LoadSolution", ("solutionPath", solution))));
+        Assert.That(text, Does.Contain("replaces the currently loaded solution"));
+    }
+
+    [Test]
+    public void Build_FileOutsideSolutionWithOnlyCsprojAbove_NamesTheProject()
+    {
+        var project = MakeFile("Proj", "Proj.csproj");
+        var source = MakeFile("Proj", "sub", "Thing.cs");
+
+        var text = FileNotFoundMessage.Build(source, NoCandidates, 2);
+
+        Assert.That(text, Does.Contain("outside the loaded solution"));
+        Assert.That(text, Does.Contain(ToolCallHint.Call("LoadSolution", ("solutionPath", project))));
+    }
+
+    [Test]
+    public void Build_FileOutsideSolutionWithNothingAbove_StillSaysOutsideTheSolution()
+    {
+        // The temp folder has no project above it, but the walk-up may reach real ancestors, so only the common sentence is asserted.
+        var source = MakeFile("Lonely", "Thing.cs");
+
+        var text = FileNotFoundMessage.Build(source, NoCandidates, 2);
+
+        Assert.That(text, Does.Contain("outside the loaded solution"));
+        Assert.That(text, Does.Not.Contain("was not found anywhere"));
+    }
+
+    [Test]
+    public void Build_FileOutsideSolutionAndLoadSolutionNotCallable_OmitsTheLoadCall()
+    {
+        MakeFile("Sol", "B.sln");
+        var source = MakeFile("Sol", "Thing.cs");
+
+        var text = FileNotFoundMessage.Build(source, NoCandidates, 2, name => name == "ReadFile");
+
+        Assert.That(text, Does.Contain("outside the loaded solution"));
+        Assert.That(text, Does.Not.Contain("LoadSolution"));
+    }
+
+    [Test]
+    public void Build_FileOutsideSolutionWithSameNameCandidate_AppendsTheCandidateList()
+    {
+        MakeFile("Sol", "B.sln");
+        var source = MakeFile("Sol", "Thing.cs");
+        string[] candidates = [@"C:\loaded\src\Thing.cs"];
+
+        var text = FileNotFoundMessage.Build(source, candidates, 2);
+
+        Assert.That(text, Does.Contain("outside the loaded solution"));
+        Assert.That(text, Does.Contain(@"  - C:\loaded\src\Thing.cs"));
+    }
+
+    [Test]
+    public void Build_MissingFileWithCandidates_UsesTheDifferentPathWording()
+    {
+        var missing = Path.Combine(_root, "NoSuchDir", "Thing.cs");
+        string[] candidates = [@"C:\loaded\a\Thing.cs", @"C:\loaded\b\Thing.cs"];
+
+        var text = FileNotFoundMessage.Build(missing, candidates, 3);
+
+        Assert.That(text, Does.Contain($"File '{missing}' was not found in the loaded solution (searched 3 project(s)"));
+        Assert.That(text, Does.Contain("A file with the same name exists at a different path. You MUST retry with the exact path of the file you meant:"));
+        Assert.That(text, Does.Contain(@"  - C:\loaded\a\Thing.cs"));
+        Assert.That(text, Does.Contain(@"  - C:\loaded\b\Thing.cs"));
+    }
+
+    [Test]
+    public void Build_MissingFileNoCandidatesListingCallable_DirectsToListSolutionItems()
+    {
+        var missing = Path.Combine(_root, "NoSuchDir", "Thing.cs");
+
+        var text = FileNotFoundMessage.Build(missing, NoCandidates, 3, name => name == "ListSolutionItems");
+
+        Assert.That(text, Does.Contain("was not found anywhere in the loaded solution (searched 3 project(s), no file-name match"));
+        Assert.That(text, Does.Contain("You MUST call " + ToolCallHint.Call("ListSolutionItems", ("kind", "all"))));
+    }
+
+    [Test]
+    public void Build_MissingFileNoCandidatesListingNotCallable_NamesNoListingTool()
+    {
+        var missing = Path.Combine(_root, "NoSuchDir", "Thing.cs");
+
+        var text = FileNotFoundMessage.Build(missing, NoCandidates, 3, name => name is "ReadFile" or "GetLargeResult");
+
+        Assert.That(text, Does.Contain("was not found anywhere in the loaded solution"));
+        Assert.That(text, Does.Not.Contain("ListSolutionItems"));
+        Assert.That(text, Does.Contain("Retry with a path you have already seen"));
+    }
+
+    [Test]
+    public void Build_NonRootedPath_SkipsTheDiskBranches()
+    {
+        // "." and ".." exist relative to any working directory; a non-rooted path must not be probed, so they are reported as not found
+        // (the process working directory is deliberately left alone: tests run in parallel).
+        foreach (var relative in new[] { ".", ".." })
+        {
+            var text = FileNotFoundMessage.Build(relative, NoCandidates, 1, _ => true);
+
+            Assert.That(text, Does.Contain("was not found anywhere in the loaded solution"), relative);
+            Assert.That(text, Does.Not.Contain("is a directory"), relative);
+        }
+    }
+}

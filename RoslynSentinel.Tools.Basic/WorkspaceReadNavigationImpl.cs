@@ -77,30 +77,7 @@ public class WorkspaceReadNavigationImpl
     // rather than a suggestion, since softer phrasing ("consider calling X") was observed not
     // changing the model's next action.
     internal static ResultError BuildFileNotFoundError(Solution solution, string normalizedPath, Func<string, bool>? isCallable = null)
-    {
-        var requestedFileName = Path.GetFileName(normalizedPath);
-        var candidates = solution.Projects
-            .SelectMany(p => p.Documents)
-            .Where(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFileName(d.FilePath), requestedFileName, StringComparison.OrdinalIgnoreCase))
-            .Select(d => d.FilePath!)
-            .Distinct()
-            .Take(5)
-            .ToList();
-
-        if (candidates.Count > 0)
-        {
-            return new ResultError("FileNotFound",
-                $"'{requestedFileName}' does not exist at '{normalizedPath}'. A file with this name exists at a different path. " +
-                $"You MUST retry with the correct path:\n" +
-                string.Join("\n", candidates.Select(c => $"  - {c}")));
-        }
-
-        var notFound = $"'{requestedFileName}' does not exist anywhere in the solution (searched {solution.Projects.Count()} project(s), no filename match). ";
-        return new ResultError("FileNotFound",
-            isCallable is null || isCallable("ListSolutionItems")
-                ? notFound + $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path."
-                : notFound + "Retry with a path you have already seen in an earlier result; do not guess another one.");
-    }
+        => new("FileNotFound", FileNotFoundMessage.Build(normalizedPath, DocumentLookup.FindClosestPaths(solution, normalizedPath), solution.Projects.Count(), isCallable));
 
     /// <summary>
     /// Builds the MethodNotFound message for GetMethodSource. Parts, each only when it applies: the original sentence,

@@ -189,6 +189,7 @@ public class FirstMatchRatchetTests
         ["RoslynSentinel.Engines.Basic/SemanticReplaceEngine.cs::CollectSitesAsync"] = 1,
         ["RoslynSentinel.Engines.Basic/SemanticReplaceEngine.cs::FindArgumentFor"] = 1,
         ["RoslynSentinel.Engines.Basic/SymbolNavigationEngine.cs::BuildCallGraphNodeAsync"] = 1,
+        ["RoslynSentinel.Engines.Basic/SymbolNavigationEngine.cs::BuildFindReferencesNextCallForFile"] = 1, // first identifier token named symbolName inside one already-resolved declaration, not a solution-wide lookup
         ["RoslynSentinel.Engines.Basic/SymbolNavigationEngine.cs::BuildReverseCallGraphNodeAsync"] = 1,
         ["RoslynSentinel.Engines.Basic/SymbolNavigationEngine.cs::FindCallersAsync"] = 2,
         ["RoslynSentinel.Engines.Basic/SymbolNavigationEngine.cs::FindImplementationsForMemberAsync"] = 1,

@@ -1950,6 +1950,78 @@ public class Foo : IFoo
             Assert.That(ex.Message, Does.Contain("Calculator"));
         }
 
+        // -- Snippet miss without a file path: the not-found message ends with a ready-to-run FindReferences call --
+        [Test]
+        public async Task FindCallersAsync_NoFilePath_SnippetMiss_EndsWithFindReferencesNextCall()
+        {
+            SetMultipleFiles(
+                ("A.cs", "public class A\r\n{\r\n    public void Run() { }\r\n}"),
+                ("B.cs", "public class B\r\n{\r\n    public void Run() { }\r\n}"));
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindCallersAsync(null, "Run", contextSnippet: "no such text"));
+            Assert.That(ex!.Message, Does.Contain("Next: FindReferences("));
+            Assert.That(ex.Message, Does.Contain("symbolName: \"Run\""));
+            Assert.That(ex.Message, Does.Contain("kind: callers"));
+            Assert.That(ex.Message, Does.Contain("filePath:"));
+            Assert.That(ex.Message, Does.Contain("contextSnippet: \"public void Run() { }\""));
+            Assert.That(ex.Message.TrimEnd(), Does.EndWith(")"));
+        }
+
+        // -- Snippet miss with a file path pinned: the not-found message still ends with a ready-to-run FindReferences call --
+        [Test]
+        public async Task FindCallersAsync_FilePinned_SnippetMiss_EndsWithFindReferencesNextCall()
+        {
+            SetSource("public class A\r\n{\r\n    public void Run() { }\r\n}", "A.cs");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindCallersAsync("A.cs", "Run", contextSnippet: "no such text"));
+            Assert.That(ex!.Message, Does.Contain("Next: FindReferences("));
+            Assert.That(ex.Message, Does.Contain("symbolName: \"Run\""));
+            Assert.That(ex.Message, Does.Contain("kind: callers"));
+            Assert.That(ex.Message, Does.Contain("filePath:"));
+            Assert.That(ex.Message, Does.Contain("A.cs"));
+            Assert.That(ex.Message, Does.Contain("contextSnippet: \"public void Run() { }\""));
+            Assert.That(ex.Message.TrimEnd(), Does.EndWith(")"));
+        }
+
+        // -- Did-you-mean ranks a non-test type ahead of a test method sharing its name stem, even when the test method comes first in the file --
+        [Test]
+        public async Task FindCallersAsync_DidYouMean_RanksTypeAheadOfSameNamedTestMethod()
+        {
+            SetMultipleFiles(
+                ("A.cs", "public class TestAttribute : System.Attribute { }\r\npublic class Checks\r\n{\r\n    [Test]\r\n    public void WidgetShouldWork() { }\r\n}"),
+                ("B.cs", "public class Widget { }"));
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindCallersAsync(null, "Widge", contextSnippet: null));
+            var msg = ex!.Message;
+            Assert.That(msg, Does.Contain("Did you mean"));
+            Assert.That(msg, Does.Contain("Did you mean: Widget, WidgetShouldWork (Checks)"));
+            Assert.That(msg.TrimEnd(), Does.EndWith(")"));
+            Assert.That(msg, Does.Contain("symbolName: \"Widget\""));
+            Assert.That(msg, Does.Contain("filePath:"));
+            Assert.That(msg, Does.Contain("B.cs"));
+            Assert.That(msg, Does.Not.Contain("contextSnippet:"));
+        }
+
+        // -- FindImplementations snippet miss without a file path: the not-found message ends with a ready-to-run FindReferences implementations call --
+        [Test]
+        public async Task FindImplementationsForMemberAsync_NoFilePath_SnippetMiss_EndsWithFindReferencesNextCall()
+        {
+            SetMultipleFiles(
+                ("A.cs", "public class A\r\n{\r\n    public virtual void Run() { }\r\n}"),
+                ("B.cs", "public class B\r\n{\r\n    public virtual void Run() { }\r\n}"));
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindImplementationsForMemberAsync(null, "Run", contextSnippet: "no such text"));
+            Assert.That(ex!.Message, Does.Contain("Next: FindReferences("));
+            Assert.That(ex.Message, Does.Contain("kind: implementations"));
+        }
+
+        // -- FindImplementations snippet miss with a file path pinned: the not-found message still ends with a ready-to-run FindReferences implementations call --
+        [Test]
+        public async Task FindImplementationsForMemberAsync_FilePinned_SnippetMiss_EndsWithFindReferencesNextCall()
+        {
+            SetSource("public class A\r\n{\r\n    public virtual void Run() { }\r\n}", "A.cs");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindImplementationsForMemberAsync("A.cs", "Run", contextSnippet: "no such text"));
+            Assert.That(ex!.Message, Does.Contain("Next: FindReferences("));
+            Assert.That(ex.Message, Does.Contain("kind: implementations"));
+            Assert.That(ex.Message, Does.Contain("A.cs"));
+        }
+
         // -- Fix B6b: same near-miss hint for FindImplementations -> a misspelled type name suggests the type --
         [Test]
         public async Task FindImplementationsForMemberAsync_MisspelledTypeName_SuggestsTypeInDidYouMean()

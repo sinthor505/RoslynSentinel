@@ -1520,7 +1520,17 @@ public class SymbolNavigationEngine
 
             if (contextSnippet != null)
             {
-                symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, symbolName, lineBefore, lineAfter, cancellationToken);
+                try
+                {
+                    symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, symbolName, lineBefore, lineAfter, cancellationToken);
+                }
+                catch (ToolNotFoundException ex) when (ex.Snippet is not null)
+                {
+                    // The snippet locator throws (rather than returning null) when the snippet matches nothing;
+                    // keep its detail and append the ready-to-run next call for the declaring file.
+                    throw new ToolNotFoundException(ex.Message + BuildFindReferencesNextCallForFile(symbolName, "callers", document.FilePath ?? filePath, decls), ex.MissingTargetKind, ex.MissingTargetName, ex.Snippet, ex.Candidates);
+                }
+
                 if (symbol == null)
                 {
                     var positionalRecord = FindPositionalRecordProperty(model, root, symbolName);
@@ -1532,7 +1542,7 @@ public class SymbolNavigationEngine
                         "or omit contextSnippet if the symbolName is unambiguous in this file." +
                         (positionalRecord != null
                             ? $" '{symbolName}' is a positional parameter of record {positionalRecord.ContainingType.Name}; point contextSnippet at that line or omit it to resolve the property by name."
-                            : string.Empty)); // hint-ok: names tools in prose
+                            : string.Empty) + BuildFindReferencesNextCallForFile(symbolName, "callers", document.FilePath ?? filePath, decls)); // hint-ok: names tools in prose
                 }
             }
             else
@@ -1666,7 +1676,7 @@ public class SymbolNavigationEngine
                         "across the solution. This is NOT a confirmed zero-references result - the lookup " +
                         "never ran. " + DescribeCandidateLocations(memberMatches) + DescribeTypeMatchHint(allMatches, symbolName) +
                         "Re-check the snippet against GetMethodSource/GetFileOutline output for the " +
-                        "specific candidate you meant, or supply filePath to pin resolution to one file."); // hint-ok: names tools in prose
+                        "specific candidate you meant, or supply filePath to pin resolution to one file." + BuildFindReferencesNextCall(symbolName, "callers", allMatches)); // hint-ok: names tools in prose
                 }
             }
             else
@@ -1693,12 +1703,12 @@ public class SymbolNavigationEngine
 
         if (symbol == null)
         {
-            var nearMissHint = await DescribeNearMissCandidatesAsync(solution, symbolName, cancellationToken);
+            var nearMissHint = await DescribeNearMissCandidatesAsync(solution, symbolName, "callers", cancellationToken);
             throw new ToolNotFoundException(
                 $"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                 (contextSnippet != null ? " with the supplied contextSnippet" : "") + ". " +
-                "This is NOT a confirmed zero-references result - the lookup never ran. " + nearMissHint +
-                $"Verify the name via {ToolCallHint.Call("Search", ("mode", "symbol"))}/{ToolCallHint.Call("GetFileOutline")} before treating this as evidence the symbol is unused.");
+                "This is NOT a confirmed zero-references result - the lookup never ran. " +
+                $"Verify the name via {ToolCallHint.Call("Search", ("mode", "symbol"))}/{ToolCallHint.Call("GetFileOutline")} before treating this as evidence the symbol is unused. " + nearMissHint);
         }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
@@ -1863,7 +1873,21 @@ public class SymbolNavigationEngine
                 }
                 else if (contextSnippet != null)
                 {
-                    symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, symbolName, lineBefore, lineAfter, cancellationToken);
+                    try
+                    {
+                        symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, symbolName, lineBefore, lineAfter, cancellationToken);
+                    }
+                    catch (ToolNotFoundException ex) when (ex.Snippet is not null)
+                    {
+                        // The snippet locator throws (rather than returning null) when the snippet matches nothing;
+                        // keep its detail and append the ready-to-run next call for the declaring file.
+                        var snippetText = await document.GetTextAsync(cancellationToken);
+                        var snippetDecls = SyntaxTargetResolver.ResolveCandidates(root, snippetText, symbolName, cancellationToken)
+                            .Select(c => c.Node)
+                            .OfType<MemberDeclarationSyntax>()
+                            .ToList();
+                        throw new ToolNotFoundException(ex.Message + BuildFindReferencesNextCallForFile(symbolName, "implementations", document.FilePath ?? filePath, snippetDecls), ex.MissingTargetKind, ex.MissingTargetName, ex.Snippet, ex.Candidates);
+                    }
                     if (symbol == null)
                     {
                         // Same name-only lookup as the no-snippet branch below, used purely to
@@ -2022,7 +2046,7 @@ public class SymbolNavigationEngine
                         "across the solution. This is NOT a confirmed zero-implementations result - the " +
                         "lookup never ran. " + DescribeCandidateLocations(memberMatches) + DescribeTypeMatchHint(allMatches, symbolName) +
                         "Re-check the snippet against GetMethodSource/GetFileOutline output for the " +
-                        "specific candidate you meant, or supply filePath to pin resolution to one file."); // hint-ok: names tools in prose
+                        "specific candidate you meant, or supply filePath to pin resolution to one file." + BuildFindReferencesNextCall(symbolName, "implementations", allMatches)); // hint-ok: names tools in prose
                 }
             }
             else
@@ -2074,13 +2098,13 @@ public class SymbolNavigationEngine
 
         if (symbol == null)
         {
-            var nearMissHint = await DescribeNearMissCandidatesAsync(solution, symbolName, cancellationToken);
+            var nearMissHint = await DescribeNearMissCandidatesAsync(solution, symbolName, "implementations", cancellationToken);
             throw new ToolNotFoundException(
                 "FindImplementations: " + (scopedResolutionFailure ??
                     ($"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                     (contextSnippet != null ? " with the supplied contextSnippet" : "") + ".")) +
-                " This is NOT a confirmed zero-implementations result - the lookup never ran. " + nearMissHint +
-                $"Verify the name via {ToolCallHint.Call("Search", ("mode", "symbol"))}/{ToolCallHint.Call("GetFileOutline")} before treating this as evidence of no implementations.");
+                " This is NOT a confirmed zero-implementations result - the lookup never ran. " +
+                $"Verify the name via {ToolCallHint.Call("Search", ("mode", "symbol"))}/{ToolCallHint.Call("GetFileOutline")} before treating this as evidence of no implementations. " + nearMissHint);
         }
 
         // The resolved symbol may still be structurally incapable of having implementations - e.g.
@@ -2492,15 +2516,18 @@ public class SymbolNavigationEngine
     /// DescribeNameOnlyCandidates's 3, since these hits span the whole solution rather than one file
     /// and are more likely to include irrelevant noise). Returns an empty string when nothing similar
     /// is found either, so the caller message degrades to a plain "not found" with no dangling hint.
+    /// When matches exist the returned string ENDS with a ready-to-run FindReferences next call (no trailing
+    /// space) built for the first-ranked match: exact-name matches first, then RankCandidate. Collects up to
+    /// 40 distinct matches and lists at most 5 labels.
     /// </summary>
     public static async Task<string> DescribeNearMissCandidatesAsync(
-        Solution solution, string symbolName, CancellationToken cancellationToken)
+        Solution solution, string symbolName, string kind, CancellationToken cancellationToken)
     {
-        var suggestions = new List<string>();
+        var matches = new List<(string Label, ISymbol Symbol)>();
 
         foreach (var project in solution.Projects)
         {
-            if (suggestions.Count >= 5)
+            if (matches.Count >= 40)
             {
                 break;
             }
@@ -2521,14 +2548,14 @@ public class SymbolNavigationEngine
                 continue;
             }
 
-            var matches = compilation.GetSymbolsWithName(
+            var found = compilation.GetSymbolsWithName(
                 name => name.Contains(symbolName, StringComparison.OrdinalIgnoreCase),
                 SymbolFilter.TypeAndMember,
                 cancellationToken);
 
-            foreach (var match in matches)
+            foreach (var match in found)
             {
-                if (suggestions.Count >= 5)
+                if (matches.Count >= 40)
                 {
                     break;
                 }
@@ -2537,19 +2564,116 @@ public class SymbolNavigationEngine
                 // A type in the global namespace has an empty containing-namespace name -> render just
                 // the name instead of a dangling "Foo ()".
                 var label = containingType.Length == 0 ? match.Name : $"{match.Name} ({containingType})";
-                if (!suggestions.Contains(label))
+                if (!matches.Any(m => m.Label == label))
                 {
-                    suggestions.Add(label);
+                    matches.Add((label, match));
                 }
             }
         }
 
-        if (suggestions.Count == 0)
+        if (matches.Count == 0)
         {
             return string.Empty;
         }
 
-        return $"Did you mean: {string.Join(", ", suggestions)}? ";
+        var ordered = matches
+            .OrderByDescending(m => string.Equals(m.Symbol.Name, symbolName, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(m => RankCandidate(m.Symbol))
+            .ToList();
+        var labels = ordered.Take(5).Select(m => m.Label);
+        var first = ordered[0].Symbol;
+        var candidate = new SemanticSymbolCandidate(
+            first,
+            first.ContainingAssembly?.Name ?? string.Empty,
+            first.Locations.FirstOrDefault(l => l.IsInSource)?.SourceTree?.FilePath,
+            first.Locations.Any(l => l.IsInSource));
+        return $"Did you mean: {string.Join(", ", labels)}?" + BuildFindReferencesNextCall(first.Name, kind, new[] { candidate });
+    }
+
+    private static readonly string[] TestAttributeNames =
+        ["TestAttribute", "TestCaseAttribute", "TestCaseSourceAttribute", "FactAttribute", "TheoryAttribute", "TestMethodAttribute"];
+
+    /// <summary>Candidate rank for hints: 0 = non-test type, 1 = non-test member, 2 = test code (lower is listed first).</summary>
+    internal static int RankCandidate(ISymbol symbol) => IsTestSymbol(symbol) ? 2 : symbol is INamedTypeSymbol ? 0 : 1;
+
+    /// <summary>True for a test-attributed symbol or one declared in a directory whose name contains "Tests".</summary>
+    private static bool IsTestSymbol(ISymbol symbol)
+    {
+        if (symbol.GetAttributes().Any(a => a.AttributeClass is { } c && TestAttributeNames.Contains(c.Name)))
+        {
+            return true;
+        }
+
+        var path = symbol.Locations.FirstOrDefault(l => l.IsInSource)?.SourceTree?.FilePath;
+        var directory = string.IsNullOrEmpty(path) ? null : Path.GetDirectoryName(path);
+        return !string.IsNullOrEmpty(directory)
+            && directory.Split('\\', '/').Any(s => s.Contains("Tests", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Returns "" or a string that starts with one space: " Next: FindReferences(...)" built for the best-ranked candidate
+    /// (RankCandidate, stable). A type is pinned by filePath only (types resolve by name); a member also gets its
+    /// verbatim declaration-line contextSnippet (plus lineBefore when that line is not unique in its file).
+    /// </summary>
+    public static string BuildFindReferencesNextCall(string symbolName, string kind, IReadOnlyList<SemanticSymbolCandidate> candidates)
+    {
+        var best = candidates.OrderBy(c => RankCandidate(c.Symbol)).FirstOrDefault();
+        if (best == null)
+        {
+            return string.Empty;
+        }
+
+        var site = ResolveDeclarationSite(best);
+        var isType = best.Symbol is INamedTypeSymbol;
+        return FormatFindReferencesNextCall(symbolName, kind, site.File, isType ? null : site.Snippet, site.IsUnique ? null : site.LineBefore);
+    }
+
+    /// <summary>Same as the candidates overload for a file-pinned miss: the first declaration of symbolName in that file.</summary>
+    private static string BuildFindReferencesNextCallForFile(string symbolName, string kind, string filePath, IReadOnlyList<MemberDeclarationSyntax> declarations)
+    {
+        var decl = declarations.FirstOrDefault();
+        if (decl?.SyntaxTree == null)
+        {
+            return string.Empty;
+        }
+
+        var token = decl.DescendantTokens().FirstOrDefault(t => t.IsKind(SyntaxKind.IdentifierToken) && t.ValueText == symbolName);
+        if (token == default)
+        {
+            token = decl.GetFirstToken();
+        }
+
+        var lines = decl.SyntaxTree.GetText().Lines;
+        var index = token.GetLocation().GetLineSpan().StartLinePosition.Line;
+        var snippet = lines[index].ToString().Trim();
+        var isType = decl is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax;
+        string? lineBefore = null;
+        if (!isType && index > 0 && lines.Count(l => l.ToString().Trim() == snippet) > 1)
+        {
+            lineBefore = lines[index - 1].ToString().Trim();
+        }
+
+        return FormatFindReferencesNextCall(symbolName, kind, filePath, isType ? null : snippet, lineBefore);
+    }
+
+    private static string FormatFindReferencesNextCall(string symbolName, string kind, string filePath, string? contextSnippet, string? lineBefore)
+    {
+        if (string.IsNullOrWhiteSpace(filePath) || filePath == "?")
+        {
+            return string.Empty;
+        }
+
+        var known = new List<(string Name, string Value)> { ("symbolName", symbolName), ("kind", kind), ("filePath", filePath) };
+        if (!string.IsNullOrWhiteSpace(contextSnippet))
+        {
+            known.Add(("contextSnippet", contextSnippet));
+            if (!string.IsNullOrWhiteSpace(lineBefore))
+            {
+                known.Add(("lineBefore", lineBefore));
+            }
+        }
+
+        return " " + ToolCallHint.Next("FindReferences", string.Empty, known.ToArray());
     }
 
     /// <summary>
@@ -3029,7 +3153,7 @@ public class SymbolNavigationEngine
         }
 
         var result = new List<AmbiguousCandidate>();
-        foreach (var c in candidates.Take(maxCounted))
+        foreach (var c in candidates.OrderBy(c => RankCandidate(c.Symbol)).Take(maxCounted))
         {
             result.Add(Describe(c, counted: true));
         }

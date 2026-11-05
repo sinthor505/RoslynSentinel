@@ -115,16 +115,8 @@ public sealed record DocumentLookupResult(
                    "You MUST retry with the full path of the one you meant:\n" + list;
         }
 
-        if (CandidatePaths.Count > 0)
-        {
-            return $"File '{RequestedPath}' was not found in the loaded solution (searched {SearchedProjectCount} project(s); path comparison ignores case, so casing is not the cause). " +
-                   "A file with the same name exists at a different path. You MUST retry with the exact path of the file you meant:\n" + list;
-        }
-
-        var notFound = $"File '{RequestedPath}' was not found anywhere in the loaded solution (searched {SearchedProjectCount} project(s), no file-name match; path comparison ignores case, so casing is not the cause). ";
-        return isCallable is null || isCallable("ListSolutionItems")
-            ? notFound + $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path."
-            : notFound + "Retry with a path you have already seen in an earlier result; do not guess another one.";
+        // The shared builder also probes the disk (directory / project file / file outside the solution) before falling back to the lookup wording.
+        return FileNotFoundMessage.Build(RequestedPath, CandidatePaths, SearchedProjectCount, isCallable);
     }
 
     /// <summary>
