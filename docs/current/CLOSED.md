@@ -8,6 +8,11 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Record-parameter gaps after the locator fix - resolved (2026-11-05)
+
+FindImplementationsForMemberAsync and DescribeNameOnlyCandidates now handle positional record parameters (FindPositionalRecordParameters helper; no-snippet filePath lookup falls back to the synthesized property; snippet-miss message lists the parameter). The // TODO in SnippetSymbolLocator is removed. Finding: [finding](findings/closed/finding_snippet_locator_misses_record_positional_parameters.md).
+Evidence: tests FindImplementationsForMemberAsync_PositionalRecordParameter_* and DescribeNameOnlyCandidates_PositionalRecordParameter_ListsParameterLine in RoslynSentinel.Tests.Advanced/BugFixTests.cs; full-solution RunTest 6556 total, 0 failed.
+
 ## `Build(fullBuild)` ignored `scope` - resolved (2026-11-05)
 
 `RunFullBuildAsync` now takes `scope`/`scopeName`: project scope runs `dotnet build <project.csproj>`, file scope builds the containing project, unknown names return `BuildNotRun` with a `ListAll` hint, `ProjectsCompiled` lists the project plus its references; solution scope unchanged. The "scope was ignored" StatusMessage warning and the description text were removed. Evidence: `BuildScopeFullBuildTests` (6 tests, two independent Good/Bad projects); design [proposal](proposals/proposal_build_full_build_ignores_project_scope.md) Option 1. Live check after server restart pending.
