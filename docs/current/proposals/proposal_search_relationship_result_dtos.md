@@ -1,7 +1,9 @@
 # Named result DTOs for Search callers / implementations / references (finish plan_wire_result_marshaller Step 7)
 
-**Status:** PROPOSED 2026-11-04. Design open; nothing built. Written so a fresh session can continue the design;
-the recommendation below is the author's, not a decision.
+**Status:** PROPOSED 2026-11-04. Partly superseded 2026-11-04 by
+[proposal_sequence_pager.md](./proposal_sequence_pager.md): the "two-list limitation" section and open questions 2, 3
+and 5 no longer apply (the pager pages `callers` and `implementations` as one sequence, no reshaping); the named
+records remain an identification choice only. Nothing built.
 
 ## Motivation
 
