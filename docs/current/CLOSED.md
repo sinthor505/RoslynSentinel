@@ -8,6 +8,16 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## `RenameSymbol` could not rename a namespace - resolved (2026-11-05)
+
+Roslyn's Renamer already rewrote namespace declarations, usings and qualified names across files and projects; the gaps were an accepted dotted `newName` (wrong rewrite) and a null updated handle. Now `docCommentId` `N:Ns.Name` with `newName` = the new last segment works; a dotted or non-identifier `newName` and the global namespace are refused with an actionable error; the updated handle is `N:<parent>.<newName>`. Follow-ups (Search(namespace) docCommentId, noisy residualMentions) are in TODO.md.
+Evidence: `RoslynSentinel.Tests.Tools.Advanced/RenameNamespaceTests.cs` (5 tests, Lib + App fixture, namespace in 3+3 files), claude-lean schema budget tests pass.
+
+## `CreateProject` drifted its own files and halted the session - resolved (2026-11-05)
+
+`CreateProjectAsync` now calls the new `IWorkspaceHealthReporter.RegisterOwnWrites(paths)` (csproj, solution file(s), every non-bin/obj file under the project dir) after the child process and the EOL pass: it records content-hash baselines (BOM for `.cs`) and clears those paths from the drift list; unrelated drift stays. A non-zero child exit now throws `ToolInvalidArgumentException` (a `$LASTEXITCODE` guard between `dotnet new` and `dotnet sln add` makes a failed `dotnet new` visible). Live check still open: whether the new project becomes visible to Roslyn without `LoadSolution` (the hash-match path no longer arms the debounce reload; events during the child run still do).
+Evidence: `RoslynSentinel.Tests.Tools.Basic/CreateProjectOwnWritesTests.cs` (3 tests: no halt after csproj write + template delete, unrelated drift still flagged, invalid template throws).
+
 ## Record-parameter gaps after the locator fix - resolved (2026-11-05)
 
 FindImplementationsForMemberAsync and DescribeNameOnlyCandidates now handle positional record parameters (FindPositionalRecordParameters helper; no-snippet filePath lookup falls back to the synthesized property; snippet-miss message lists the parameter). The // TODO in SnippetSymbolLocator is removed. Finding: [finding](findings/closed/finding_snippet_locator_misses_record_positional_parameters.md).
