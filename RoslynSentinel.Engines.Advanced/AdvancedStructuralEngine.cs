@@ -6,9 +6,6 @@ using Microsoft.CodeAnalysis.Formatting;
 
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Common.SnippetMatching;
-// Deliberate exception to the explicit RoslynFormattingHelper.X call style: the shared FormatAnnotatedTextAsync
-// (whitespace slice D2) replaced a private copy this file calls many times; the static import keeps those call sites.
-using static RoslynSentinel.Common.RoslynFormattingHelper;
 
 namespace RoslynSentinel.Engines.Advanced;
 
@@ -51,7 +48,7 @@ public class StructuralRefactoringEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
-                UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
+                UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
                 FilePath = filePath
             };
         }
@@ -91,7 +88,7 @@ public class StructuralRefactoringEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
-                UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
+                UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
                 FilePath = filePath
             };
         }
@@ -228,7 +225,7 @@ public class StructuralRefactoringEngine
             var intermediate = (CompilationUnitSyntax)sourceRoot.ReplaceNode(targetClass, expandedTarget);
             var classToRemove = RoslynSentinel.Common.NameTargetLookup.RequireSingle(intermediate.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
             var newRoot = classToRemove != null ? (CompilationUnitSyntax)intermediate.RemoveNode(classToRemove, RemoveOptionsKeepingComments(classToRemove))! : intermediate;
-            result[sourceFilePath] = await FormatAnnotatedTextAsync(sourceDoc, newRoot, await _workspaceManager.ResolveEolAsync(sourceDoc, cancellationToken), cancellationToken);
+            result[sourceFilePath] = await RoslynFormattingHelper.FormatAnnotatedTextAsync(sourceDoc, newRoot, await _workspaceManager.ResolveEolAsync(sourceDoc, cancellationToken), cancellationToken);
             // Update type references in all other files
             if (classSymbol != null)
             {
@@ -264,8 +261,8 @@ public class StructuralRefactoringEngine
             var expandedTarget = targetClass.AddMembers(PrepareInlinedMembers(targetClass, membersToInline));
             var newTargetRoot = (CompilationUnitSyntax)targetRoot!.ReplaceNode(targetClass, expandedTarget);
             var newSourceRoot = (CompilationUnitSyntax)sourceRoot.RemoveNode(sourceClass, RemoveOptionsKeepingComments(sourceClass))!;
-            result[targetFilePath] = await FormatAnnotatedTextAsync(targetDoc, newTargetRoot, await _workspaceManager.ResolveEolAsync(targetDoc, cancellationToken), cancellationToken);
-            result[sourceFilePath] = await FormatAnnotatedTextAsync(sourceDoc, newSourceRoot, await _workspaceManager.ResolveEolAsync(sourceDoc, cancellationToken), cancellationToken);
+            result[targetFilePath] = await RoslynFormattingHelper.FormatAnnotatedTextAsync(targetDoc, newTargetRoot, await _workspaceManager.ResolveEolAsync(targetDoc, cancellationToken), cancellationToken);
+            result[sourceFilePath] = await RoslynFormattingHelper.FormatAnnotatedTextAsync(sourceDoc, newSourceRoot, await _workspaceManager.ResolveEolAsync(sourceDoc, cancellationToken), cancellationToken);
             // Update type references in all other files
             if (classSymbol != null)
             {
@@ -361,7 +358,7 @@ public class StructuralRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             // The Apply* helpers annotate only the nodes they create, so the formatted text carries the change.
-            UpdatedText = await FormatAnnotatedTextAsync(document, resultRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, resultRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -542,7 +539,7 @@ public class StructuralRefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await RemoveNodeAndFormatContainerAsync(document, newRoot, newField, SyntaxRemoveOptions.KeepUnbalancedDirectives, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
+                UpdatedText = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, newRoot, newField, SyntaxRemoveOptions.KeepUnbalancedDirectives, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
             };
         }
 
@@ -1913,7 +1910,7 @@ public class StructuralRefactoringEngine
         foreach (var (docId, updatedRoot) in updatedRoots)
         {
             var doc = solution.GetDocument(docId)!;
-            result[doc.FilePath!] = await FormatAnnotatedTextAsync(doc, updatedRoot, await _workspaceManager.ResolveEolAsync(doc, cancellationToken), cancellationToken);
+            result[doc.FilePath!] = await RoslynFormattingHelper.FormatAnnotatedTextAsync(doc, updatedRoot, await _workspaceManager.ResolveEolAsync(doc, cancellationToken), cancellationToken);
         }
 
         return result;
@@ -1966,7 +1963,7 @@ public class StructuralRefactoringEngine
         {
             {
                 filePath,
-                await FormatAnnotatedTextAsync(document, updatedRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
+                await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, updatedRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
             },
             {
                 Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"),
@@ -2107,7 +2104,7 @@ public class StructuralRefactoringEngine
         {
             {
                 filePath,
-                await FormatAnnotatedTextAsync(document, updatedRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
+                await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, updatedRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
             },
             {
                 Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"),

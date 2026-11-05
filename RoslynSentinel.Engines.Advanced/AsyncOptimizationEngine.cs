@@ -3,9 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
-// Deliberate exception to the explicit RoslynFormattingHelper.X call style: the shared FormatAnnotatedTextAsync
-// (whitespace slice D2) replaced a private copy this file calls many times; the static import keeps those call sites.
-using static RoslynSentinel.Common.RoslynFormattingHelper;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Engines.Advanced;
 
@@ -274,7 +272,7 @@ public class AsyncOptimizationEngine
             : s.WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed).WithAdditionalAnnotations(Formatter.Annotation));
         var newMethodNode = methodNode.WithBody(methodNode.Body.WithStatements(SyntaxFactory.List(annotatedStatements)));
         var newRoot = root!.ReplaceNode(methodNode, newMethodNode);
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken), FilePath = filePath };
     }
 
     /// <summary>
@@ -385,7 +383,7 @@ public class AsyncOptimizationEngine
         var newClassNode = classNode.InsertNodesAfter(methodNode, new[] { asyncMethod });
         var newRoot = root!.ReplaceNode(classNode, newClassNode);
 
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken), FilePath = filePath };
     }
 
     /// <summary>
@@ -660,7 +658,7 @@ public class AsyncOptimizationEngine
 
         var classWithBoth = bridgedClass.InsertNodesAfter(bridgeInNewClass, new[] { asyncMethod });
         var newRoot = bridgedRoot.ReplaceNode(bridgedClass, classWithBoth);
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await FormatAnnotatedTextAsync(bridgedDocument, newRoot, await _workspaceManager.ResolveEolAsync(bridgedDocument, cancellationToken), cancellationToken), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(bridgedDocument, newRoot, await _workspaceManager.ResolveEolAsync(bridgedDocument, cancellationToken), cancellationToken), FilePath = filePath };
     }
 
     /// <summary>
@@ -807,7 +805,7 @@ public class AsyncOptimizationEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot2, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot2, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
             FilePath = filePath,
         };
     }
@@ -964,7 +962,7 @@ public class AsyncOptimizationEngine
         rewrittenMethod = (MethodDeclarationSyntax)new AsyncifyAnonymousFunctionsRewriter().Visit(rewrittenMethod)!;
 
         var newRoot = root.ReplaceNode(methodNode, rewrittenMethod);
-        var updatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
+        var updatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         progress?.Report(new EngineProgress(
             (float)bridgeTargets.Count / bridgeTargets.Count,
             $"Rewrote {bridgeTargets.Count} bridge call(s) in '{asyncMethodName}' body in {filePath}"));
@@ -1038,7 +1036,7 @@ public class AsyncOptimizationEngine
             return orig.WithExpression(configureAwait.WithTriviaFrom(orig.Expression));
         });
 
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken), FilePath = filePath };
     }
 
     /// <summary>
@@ -1069,7 +1067,7 @@ public class AsyncOptimizationEngine
             return baseExpr.WithTriviaFrom(orig);
         });
 
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken), FilePath = filePath };
     }
 
     /// <summary>
@@ -1235,7 +1233,7 @@ public class AsyncOptimizationEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
             FilePath = filePath
         };
     }
@@ -1401,7 +1399,7 @@ public class AsyncOptimizationEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
             FilePath = filePath
         };
     }
@@ -1887,7 +1885,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
             methodNode, MigrationCandidateShortName, MigrationCandidateFullName, pattern, newAttr);
 
         var newRoot = root.ReplaceNode(methodNode, updatedMethod);
-        var newSource = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
+        var newSource = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
 
         var result = new Dictionary<FilePathWrapper, string> { { filePath, newSource } };
 
@@ -2083,7 +2081,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
             }
 
             // Write final combined source once for all methods in this file.
-            var finalSource = await FormatAnnotatedTextAsync(document, root, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
+            var finalSource = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, root, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
             var fileChanges = new Dictionary<FilePathWrapper, string> { { filePath, finalSource } };
 
             // Inject MigrationCandidateAttribute.cs if not yet in solution (check once per file).
@@ -2669,7 +2667,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 if (fileModified)
                 {
                     // Only the appended attribute lists carry Formatter.Annotation; the rest of the file keeps its text.
-                    var updatedText = await FormatAnnotatedTextAsync(document, rewrittenRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
+                    var updatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, rewrittenRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
                     lock (resultLock)
                     {
                         fileChanges[document.FilePath!] = updatedText;

@@ -3,9 +3,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using RoslynSentinel.Common;
 using Microsoft.CodeAnalysis.Formatting;
-// Deliberate exception to the explicit RoslynFormattingHelper.X call style: the shared FormatAnnotatedTextAsync
-// (whitespace slice D2) replaced a private copy this file calls many times; the static import keeps those call sites.
-using static RoslynSentinel.Common.RoslynFormattingHelper;
 
 namespace RoslynSentinel.Engines.Advanced;
 public class SyntaxModernizationEngine
@@ -102,7 +99,7 @@ public class SyntaxModernizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Class converted to record.",
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -159,7 +156,7 @@ public class SyntaxModernizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Record converted to class.",
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -197,7 +194,7 @@ public class SyntaxModernizationEngine
                     Outcome = EditOutcome.Modified,
                     FilePath = filePath,
                     Message = "// Method converted to expression-bodied.",
-                    UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
+                    UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
                 };
             }
         }
@@ -238,7 +235,7 @@ public class SyntaxModernizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Patterns modernized.",
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -601,7 +598,7 @@ public class SyntaxModernizationEngine
             FilePath = filePath,
             Message = "// String parsing upgraded to use Span<char>.",
             // No annotation: the rewrite needs no whitespace (it carries the replaced call's trivia).
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -630,7 +627,7 @@ public class SyntaxModernizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Null coalescing throw expressions applied.",
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -737,7 +734,7 @@ public class SyntaxModernizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Logging methods generated.",
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
     }
 
@@ -866,7 +863,7 @@ public class SyntaxModernizationEngine
         {
             Outcome = EditOutcome.Modified,
             // No annotation: the interpolated string needs no whitespace and carries the replaced chain's trivia.
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
             FilePath = filePath
         };
     }
