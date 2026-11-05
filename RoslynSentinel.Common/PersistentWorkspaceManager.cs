@@ -158,6 +158,11 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // Sticky record of the last failed load/reload, cleared by the next successful full load or reload.
     private WorkspaceReloadFailure? _reloadFailure;
     private readonly Timer _debounceTimer;
+    // Bounded automatic retry of a failed debounce reload; every attempt holds _solutionLock for a full MSBuild load, so keep it bounded.
+    private int _debounceRetryCount;
+    private const int MaxDebounceRetries = 1;
+    // Delay before the automatic debounce retry (test seam).
+    internal int DebounceRetryDelayMs { get; set; } = 3000;
 
     public SolutionLoadState LoadState => new(SolutionLoadState.ProcessStartedUtc, _lastSuccessfulLoadUtc, Volatile.Read(ref _loadsInProgress) > 0, Volatile.Read(ref _lastLoadFailure));
 
@@ -1312,10 +1317,10 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     var slnPath = _workspace.CurrentSolution.FilePath;
                     if (!string.IsNullOrEmpty(slnPath))
                     {
-                        CurrentSolution = await _workspace.OpenSolutionAsync(slnPath);
-                        // Full workspace recreation -> ProjectIds are not guaranteed stable.
-                        _compilationCache.Clear();
-                        ClearReloadFailure();
+                        // Unreachable in practice: a .sln/.slnx/.csproj change already took the full reload above.
+                        // Re-queue through the fresh-workspace reload path (which retries) instead of reusing _workspace.
+                        _watcherOverflowed = true;
+                        _debounceTimer.Change(0, Timeout.Infinite);
                     }
                     else
                     {
@@ -1328,6 +1333,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     Interlocked.Increment(ref _workspaceVersion);
                 }
             }
+            _debounceRetryCount = 0;
         }
         catch (ObjectDisposedException)
         {
@@ -1340,8 +1346,40 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 _logger.LogError(ex, "ErrorData refreshing workspace.");
             }
 
-            var trigger = ClassifyReloadTrigger(changes, watcherErrored, overflowed, out var triggerFile);
-            RecordReloadFailure(trigger, triggerFile, ex, oldWorkspaceKept: true);
+            if (_debounceRetryCount < MaxDebounceRetries && !_disposed)
+            {
+                _debounceRetryCount++;
+                foreach (var changed in changes)
+                {
+                    _pendingChanges.TryAdd(changed, DateTime.UtcNow);
+                }
+                if (overflowed)
+                {
+                    _watcherOverflowed = true;
+                }
+                if (watcherErrored)
+                {
+                    _watcherErrored = true;
+                }
+                if (_logger.IsEnabled(LogLevel.Warning))
+                {
+                    _logger.LogWarning("Debounced workspace reload failed; one automatic retry is queued.");
+                }
+                try
+                {
+                    _debounceTimer.Change(DebounceRetryDelayMs, Timeout.Infinite);
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Dispose() raced the retry; nothing left to schedule.
+                }
+            }
+            else
+            {
+                _debounceRetryCount = 0;
+                var trigger = ClassifyReloadTrigger(changes, watcherErrored, overflowed, out var triggerFile);
+                RecordReloadFailure(trigger, triggerFile, ex, oldWorkspaceKept: true);
+            }
         }
         finally
         {
@@ -2189,7 +2227,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         {
             var ext = Path.GetExtension(filePath).ToLowerInvariant();
 
-            if (ext is ".csproj" or ".sln")
+            if (ext is ".csproj" or ".sln" or ".slnx")
             {
                 needsFullReload = true;
                 continue;

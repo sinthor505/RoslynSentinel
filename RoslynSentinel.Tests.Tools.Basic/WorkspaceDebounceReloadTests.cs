@@ -7,7 +7,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 [NonParallelizable]
 public class WorkspaceDebounceReloadTests
 {
-    // Both tests drive the debounce-driven full-solution reload (OnDebounceTimerElapsed, 2A path) through a
+    // The tests drive the debounce-driven full-solution reload (OnDebounceTimerElapsed, 2A path) through a
     // real PersistentWorkspaceManager, so they cannot run in parallel.
     [Test]
     [NonParallelizable]
@@ -121,6 +121,80 @@ public class WorkspaceDebounceReloadTests
         Assert.That(manager.CurrentSolution, Is.Not.SameAs(before));
         Assert.That(manager.CurrentSolution!.Projects.Count(), Is.EqualTo(projectCountBefore));
         Assert.That(manager.WorkspaceVersion, Is.GreaterThan(versionBeforeRetry));
+    }
+
+    [Test]
+    [NonParallelizable]
+    public async Task DebounceReload_FailsOnceThenSucceeds_RetriesWithoutRecordingFailure()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var manager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await manager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var projectFile = FindFixtureProjectFile(manager, fixture);
+        var projectCountBefore = manager.CurrentSolution!.Projects.Count();
+        var before = manager.CurrentSolution;
+        // Capture the default open seam so the retry can delegate to the real open path.
+        var defaultOpen = manager.OpenSolutionOverride;
+        var openCalls = 0;
+        manager.DebounceRetryDelayMs = 200;
+        manager.OpenSolutionOverride = (ws, path, ct) =>
+        {
+            if (Interlocked.Increment(ref openCalls) == 1)
+            {
+                throw new IOException("boom");
+            }
+            return defaultOpen!(ws, path, ct);
+        };
+
+        var originalContent = await File.ReadAllTextAsync(projectFile);
+        await File.WriteAllTextAsync(projectFile, originalContent + "\n<!-- debounce reload retry -->\n");
+
+        // Sample ReloadFailure on every poll: a failure must never be visible while the retry is pending.
+        var failureSeen = false;
+        await WaitUntilAsync(() =>
+        {
+            failureSeen |= manager.ReloadFailure is not null;
+            return !ReferenceEquals(manager.CurrentSolution, before);
+        }, TimeSpan.FromSeconds(20));
+
+        Assert.That(manager.CurrentSolution, Is.Not.SameAs(before), "the retried debounce reload did not swap in a new solution within 20 s");
+        Assert.That(failureSeen, Is.False, "ReloadFailure was recorded even though the retry succeeded");
+        Assert.That(manager.ReloadFailure, Is.Null);
+        Assert.That(Volatile.Read(ref openCalls), Is.GreaterThanOrEqualTo(2));
+        Assert.That(manager.CurrentSolution!.Projects.Count(), Is.EqualTo(projectCountBefore));
+    }
+
+    [Test]
+    [NonParallelizable]
+    public async Task DebounceReload_FailsTwice_RecordsFailureOnlyAfterRetry()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var manager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await manager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var projectFile = FindFixtureProjectFile(manager, fixture);
+        var before = manager.CurrentSolution;
+        var openCalls = 0;
+        manager.DebounceRetryDelayMs = 200;
+        manager.OpenSolutionOverride = (ws, path, ct) =>
+        {
+            Interlocked.Increment(ref openCalls);
+            throw new IOException("boom");
+        };
+
+        var originalContent = await File.ReadAllTextAsync(projectFile);
+        await File.WriteAllTextAsync(projectFile, originalContent + "\n<!-- debounce reload double failure -->\n");
+        await WaitUntilAsync(() => manager.ReloadFailure is not null, TimeSpan.FromSeconds(20));
+
+        var failure = manager.ReloadFailure;
+        Assert.That(failure, Is.Not.Null, "the retried debounce reload did not record a failure within 20 s");
+        // >= because file-watcher events can add an extra debounce run.
+        Assert.That(Volatile.Read(ref openCalls), Is.GreaterThanOrEqualTo(2));
+        Assert.That(failure!.Trigger, Is.EqualTo(WorkspaceReloadTriggerKind.ProjectFileChange));
+        Assert.That(failure.Attempts, Is.EqualTo(1));
+        Assert.That(failure.OldWorkspaceKept, Is.True);
+        Assert.That(manager.CurrentSolution, Is.SameAs(before));
     }
 
     private static Task InvokeReloadFromDiskAsync(PersistentWorkspaceManager manager)
