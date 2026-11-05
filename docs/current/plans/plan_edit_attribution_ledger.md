@@ -228,11 +228,15 @@ in place. Findings reuse `Finding`.
 
 ### Step 8 - Hook
 
-- Files: new `.claude/hooks/inject-agent-identity.ps1`; `.claude/settings.json` (PreToolUse matcher on the
-  RoslynSentinel MCP tool prefix).
-- Change: return `updatedInput` as the full original `tool_input` plus `_agentId` and `_agentType`. Use
-  `powershell.exe`, not `pwsh` (Step 0). Folding into `enforce-dogfood.ps1` would not save the cost, because that hook's
-  matcher covers only some MCP tools.
+- Files: `.claude/settings.json` (PreToolUse matcher on the RoslynSentinel MCP tool prefix, command
+  `.claude/hooks/bin/agent-identity-hook.exe`). The helper is already built:
+  `RoslynSentinel.Utilities.AgentIdentityHook`, published by `scripts/publish-agent-identity-hook.ps1`. The exe is a local
+  build output, not committed, so the docs in Step 11 must name the publish script as a setup step.
+- Change: the helper returns `updatedInput` as the full original `tool_input` plus `_agentId` and `_agentType`, and fails
+  open on any problem. Folding into `enforce-dogfood.ps1` would not save the cost, because that hook's matcher covers only
+  some MCP tools.
+- Before saving the hook, confirm a missing exe fails open: Claude Code must run the tool call when the command cannot
+  start, on a clone that has not run the publish script.
 - **Rollout order: this is the last server-affecting change to go live.** The hook reaches every running session as soon
   as the settings file is saved, and any server without the Step 3 filter refuses every call with `Unknown parameter
   '_agentId'`. Merge Steps 1-7 first, restart every window so each instance serves a build with the filter, confirm with
@@ -284,8 +288,9 @@ in place. Findings reuse `Finding`.
 
 ## Risks and open decisions
 
-- **Hook latency (open, owner call before Step 8).** About 370 ms per RoslynSentinel call with `powershell.exe`, or roughly
-  18 s over a 50-call subagent run. If that is too much, replace the script with a small compiled helper.
+- **Hook latency (decided: compiled helper).** A `powershell.exe` hook measured about 370 ms per RoslynSentinel call, or
+  roughly 18 s over a 50-call subagent run. The NativeAOT helper measured median 25 ms spawned directly (20-35, 20 runs) and
+  50 ms through `cmd` (45-58), or about 2.5 s over the same run. Publishing it needs the VS C++ build tools.
 - **A server older than Step 3 behind the hook.** Once the hook is live, a launcher fallback to an older build
   (`lastLaunch.buildFailed`) or a window not yet restarted refuses every call as an unknown parameter. The failure is loud
   and names `_agentId`; the recovery is to rebuild or restart that window.

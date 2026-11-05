@@ -38,5 +38,6 @@
   <Project Path="RoslynSentinel.Tools.Advanced/RoslynSentinel.Tools.Advanced.csproj" Id="41b58d4b-cc7b-48db-98ee-ee3b3f703b70" />
   <Project Path="RoslynSentinel.Tools.Basic/RoslynSentinel.Tools.Basic.csproj" Id="812627e6-7ea8-49dc-89e4-b7ea1f6b7570" />
   <Project Path="RoslynSentinel.Tools.Experimental/RoslynSentinel.Tools.Experimental.csproj" />
+  <Project Path="RoslynSentinel.Utilities.AgentIdentityHook/RoslynSentinel.Utilities.AgentIdentityHook.csproj" />
   <Project Path="RoslynSentinel.Utilities.PlanStepRunner/RoslynSentinel.Utilities.PlanStepRunner.csproj" />
 </Solution>
