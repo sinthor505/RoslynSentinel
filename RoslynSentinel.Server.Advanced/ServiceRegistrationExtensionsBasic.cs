@@ -764,9 +764,14 @@ public static class RoslynSentinelServiceExtensionsBasic
                     if (automaticBreaker is not null && automaticBreaker.IsTripped() &&
                         toolName is not ("ListAll" or "ListSolutionItems" or "GetFileOutline" or "ReadFile"))
                     {
+                        // Name only tools this server can serve (the claude-lean allow-list hides ListAll/ListSolutionItems);
+                        // no surface registered = every tool is callable.
+                        var surface = context.Server.Services?.GetService<ActiveToolSurface>();
+                        Func<string, bool>? isCallable = surface is null ? null : surface.IsCallable;
                         return new ModelContextProtocol.Protocol.CallToolResult
                         {
-                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = automaticBreaker.StateMessage() ?? $"{ToolCallHint.Call("Search", ("mode", "text"))} is DISABLED. You MUST call {ToolCallHint.Call("ListAll", ("kind", "all"))} or {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} now." }],
+                            // TODO this fallback (reached only if the breaker resets between IsTripped and StateMessage) still names ListAll/ListSolutionItems unconditionally
+                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = automaticBreaker.StateMessage(isCallable) ?? $"{ToolCallHint.Call("Search", ("mode", "text"))} is DISABLED. You MUST call {ToolCallHint.Call("ListAll", ("kind", "all"))} or {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} now." }],
                             IsError = true,
                         };
                     }

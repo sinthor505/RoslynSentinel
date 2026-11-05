@@ -64,9 +64,10 @@ public class LargeResultPagingAgentTests
         Read the whole file `{0}/FixtureHelpers/TierRates.cs` with ReadFile (no line range). If the result says it is INCOMPLETE, follow its GetLargeResult call for the next page. Read each page carefully for the method that handles the Platinum annual contract tier. If it is not on the page, call the next page. Continue until you find it, then stop and report the method name, its rate value, and the offset of the page that contains it. Do not edit anything. The objective of this session is to test the ReadFile tool; efficiency is irrelevant and only ReadFile and GetLargeResult are available.
         """;
 
-    // Read-only find-by-name tools, blocked on top of BlockedToolNames for the ReadFile-only scenario. ReadFile stays
-    // available, but a ReadFile call that names a member (memberName) is refused too (see blockReadFileMemberLookup),
-    // so the whole-file read plus GetLargeResult paging is the only route to the needle.
+    // Read-only find-by-name tools, blocked on top of BlockedToolNames for the ReadFile-only scenario. That scenario also
+    // passes ReadFileOnlyAllowedToolNames, which hides every other tool, so this set is only the call-time safety net there.
+    // ReadFile stays available, but a ReadFile call that names a member (memberName) is refused too (see
+    // blockReadFileMemberLookup), so the whole-file read plus GetLargeResult paging is the only route to the needle.
     private static readonly HashSet<string> ReadFileOnlyBlockedToolNames = new(BlockedToolNames)
     {
         "Search", "GetFileOutline", "GetMethodSource", "Member", "ListAll", "FindReferences", "InspectSymbol",
@@ -508,7 +509,12 @@ public class LargeResultPagingAgentTests
     /// memberName, so the model can only read the whole file, follow the largeResult pointer and page it with
     /// GetLargeResult. Efficiency is irrelevant; the assertions check that a GetLargeResult page itself carried the needle.
     /// </summary>
+    // Explicit: with every other tool hidden and member/line reads refused, the only possible route is ReadFile then
+    // GetLargeResult following nextOffset, which makes this a deterministic test, not a model test. That loop now runs without a
+    // model as RoslynSentinel.Tests.Tools.Basic/ReadFilePagingLoopTests (pinned page offsets, one paging instruction per response).
+    // Run this one by hand only to see how a real model behaves under the same restrictions.
     [Test]
+    [Explicit("Deterministic since all other tools are hidden: covered by ReadFilePagingLoopTests in Tests.Tools.Basic. Run by hand to watch a model do it.")]
     public async Task Model_PagesLargeResultToFindNeedle_ReadFileOnly()
     {
         await StartHarnessAsync(ReadFileOnlyBlockedToolNames, blockReadFileMemberLookup: true, allowedToolNames: ReadFileOnlyAllowedToolNames);

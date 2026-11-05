@@ -2521,6 +2521,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     /// <summary>Directive describing the orientation breaker's tripped state; null when not tripped.</summary>
     string? IAutomaticCircuitBreaker.StateMessage() => _orientationBreaker.StateMessage();
 
+    /// <summary>The orientation directive naming only tools <paramref name="isCallable"/> accepts.</summary>
+    string? IAutomaticCircuitBreaker.StateMessage(Func<string, bool>? isCallable) => _orientationBreaker.StateMessage(isCallable);
+
     /// <summary>Clears the orientation breaker and its zero-match streak. Called automatically by the request filter -> no manual reset tool.</summary>
     void IAutomaticCircuitBreaker.Reset() => _orientationBreaker.Reset();
 

@@ -55,7 +55,15 @@ public class OrientationCircuitBreaker : IAutomaticCircuitBreaker
     }
 
     /// <summary>Directive describing the orientation breaker's tripped state; null when not tripped.</summary>
-    public string? StateMessage()
+    public string? StateMessage() => StateMessage(null);
+
+    /// <summary>
+    /// Same directive, naming only tools the server can actually serve: <paramref name="isCallable"/> says whether a
+    /// tool name is callable (null = every tool is, the text of a full surface). With neither ListAll nor
+    /// ListSolutionItems callable the text carries no tool call to make, only the instruction to reuse a path
+    /// already seen.
+    /// </summary>
+    public string? StateMessage(Func<string, bool>? isCallable)
     {
         lock (_orientationBreakerLock)
         {
@@ -64,12 +72,42 @@ public class OrientationCircuitBreaker : IAutomaticCircuitBreaker
                 return null;
             }
 
+            bool Callable(string tool) => isCallable is null || isCallable(tool);
+            var browse = new List<string>();
+            if (Callable("ListAll"))
+            {
+                browse.Add(ToolCallHint.Call("ListAll", ("kind", "all")));
+            }
+
+            if (Callable("ListSolutionItems"))
+            {
+                browse.Add(ToolCallHint.Call("ListSolutionItems", ("kind", "all")));
+            }
+
+            var follow = new List<string>();
+            if (Callable("GetFileOutline"))
+            {
+                follow.Add("GetFileOutline");
+            }
+
+            if (Callable("ReadFile"))
+            {
+                follow.Add(ToolCallHint.Call("ReadFile"));
+            }
+
             // hint-ok: names the disabled mode as a label, not a call to make
-            return $"Search(mode: text) is DISABLED after {_consecutiveZeroMatchSearches} consecutive calls returned " +
-                   "no matches. It will not run again until one of the tools below succeeds. You MUST call " +
-                   $"{ToolCallHint.Call("ListAll", ("kind", "all"))} or {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} now - browse the returned list for what " +
-                   $"you're looking for. GetFileOutline and {ToolCallHint.Call("ReadFile")} are also available once you have a real path " +
-                   "from that list.";
+            var text = $"Search(mode: text) is DISABLED after {_consecutiveZeroMatchSearches} consecutive calls returned " +
+                       "no matches. It will not run again until one of the tools below succeeds. ";
+            text += browse.Count > 0
+                ? $"You MUST call {string.Join(" or ", browse)} now - browse the returned list for what you're looking for. "
+                : "No listing tool is available here: use a path you have already seen in an earlier result. ";
+            if (follow.Count > 0)
+            {
+                text += $"{string.Join(" and ", follow)} {(follow.Count == 1 ? "is" : "are")} also available once you have a real path" +
+                        (browse.Count > 0 ? " from that list." : ".");
+            }
+
+            return text.TrimEnd();
         }
     }
 

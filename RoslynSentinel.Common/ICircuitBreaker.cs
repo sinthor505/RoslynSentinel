@@ -50,6 +50,9 @@ public interface IAutomaticCircuitBreaker : ICircuitBreaker
     // See IManualCircuitBreaker's redeclaration of the same two members for why this is needed.
     new bool IsTripped();
     new string? StateMessage();
+    /// <summary>The same directive naming only tools <paramref name="isCallable"/> accepts (null = all); see
+    /// <see cref="ActiveToolSurface.IsCallable"/>.</summary>
+    string? StateMessage(Func<string, bool>? isCallable);
     /// <summary>Resets this breaker to its initial, untripped state.</summary>
     void Reset();
     /// <summary>

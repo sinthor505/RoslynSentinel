@@ -80,7 +80,7 @@ public sealed record DocumentLookupResult(
     /// Returns the document, or throws <see cref="ToolNotFoundException"/> /
     /// <see cref="ToolAmbiguousMatchException"/> carrying <see cref="Describe"/> as its message.
     /// </summary>
-    public Document GetDocumentOrThrow()
+    public Document GetDocumentOrThrow(Func<string, bool>? isCallable = null)
     {
         if (TryGetDocument(out var document))
         {
@@ -89,17 +89,19 @@ public sealed record DocumentLookupResult(
 
         if (Status == DocumentLookupStatus.Ambiguous)
         {
-            throw new ToolAmbiguousMatchException(Describe());
+            throw new ToolAmbiguousMatchException(Describe(isCallable));
         }
 
-        throw new ToolNotFoundException(Describe(), "document", RequestedPath);
+        throw new ToolNotFoundException(Describe(isCallable), "document", RequestedPath);
     }
 
     /// <summary>
     /// Agent-facing explanation of a failed lookup: names the closest real paths (not found) or the
     /// candidates (ambiguous), and says casing is not the cause. Empty string when found.
+    /// <paramref name="isCallable"/> says whether a tool name can be called on this server (null = every tool can,
+    /// the text of a full surface); the "no match at all" text names ListSolutionItems only when it is callable.
     /// </summary>
-    public string Describe()
+    public string Describe(Func<string, bool>? isCallable = null)
     {
         if (Status == DocumentLookupStatus.Found)
         {
@@ -119,8 +121,10 @@ public sealed record DocumentLookupResult(
                    "A file with the same name exists at a different path. You MUST retry with the exact path of the file you meant:\n" + list;
         }
 
-        return $"File '{RequestedPath}' was not found anywhere in the loaded solution (searched {SearchedProjectCount} project(s), no file-name match; path comparison ignores case, so casing is not the cause). " +
-               $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path.";
+        var notFound = $"File '{RequestedPath}' was not found anywhere in the loaded solution (searched {SearchedProjectCount} project(s), no file-name match; path comparison ignores case, so casing is not the cause). ";
+        return isCallable is null || isCallable("ListSolutionItems")
+            ? notFound + $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path."
+            : notFound + "Retry with a path you have already seen in an earlier result; do not guess another one.";
     }
 
     /// <summary>
@@ -128,8 +132,8 @@ public sealed record DocumentLookupResult(
     /// <see cref="ToolErrorCode.Ambiguous"/>, with <see cref="Describe"/> as the message. Only call
     /// when <see cref="IsFound"/> is false.
     /// </summary>
-    public ResultError ToResultError()
-        => new(Status == DocumentLookupStatus.Ambiguous ? ToolErrorCode.Ambiguous : ToolErrorCode.NotFound, Describe());
+    public ResultError ToResultError(Func<string, bool>? isCallable = null)
+        => new(Status == DocumentLookupStatus.Ambiguous ? ToolErrorCode.Ambiguous : ToolErrorCode.NotFound, Describe(isCallable));
 }
 
 /// <summary>What <see cref="DocumentScope"/> selects.</summary>

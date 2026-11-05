@@ -55,11 +55,18 @@ public class WorkspaceReadNavigationImpl
     // Kept as a same-named field rather than replacing all 28 call sites with the fully-qualified
     // name, since this is an internal serialize/deserialize round-trip within this class either way.
     private static readonly JsonSerializerOptions _jsonOptions = RoslynSentinel.Common.SharedJsonOptions.Default;
-    public WorkspaceReadNavigationImpl(IWorkspaceManager workspaceManager, ILogger<WorkspaceReadNavigationImpl> logger)
+    // Which tools this server can serve; null (unit tests, hosts without a surface) = treat every tool as callable.
+    private readonly ActiveToolSurface? _activeToolSurface;
+
+    public WorkspaceReadNavigationImpl(IWorkspaceManager workspaceManager, ILogger<WorkspaceReadNavigationImpl> logger, ActiveToolSurface? activeToolSurface = null)
     {
         _workspaceManager = workspaceManager;
         _logger = logger;
+        _activeToolSurface = activeToolSurface;
     }
+
+    /// <summary>The surface's callable check for error text that names other tools, or null when there is no surface.</summary>
+    private Func<string, bool>? CallableCheck => _activeToolSurface is null ? null : _activeToolSurface.IsCallable;
 
     // Candidate-suggestion behavior confirmed live: an agent asked to read a file at a slightly
     // wrong path (e.g. missing a subfolder) retried the identical wrong path 2-3 times before
@@ -69,7 +76,7 @@ public class WorkspaceReadNavigationImpl
     // nothing matches by filename either, the message issues an explicit, unhedged directive
     // rather than a suggestion, since softer phrasing ("consider calling X") was observed not
     // changing the model's next action.
-    internal static ResultError BuildFileNotFoundError(Solution solution, string normalizedPath)
+    internal static ResultError BuildFileNotFoundError(Solution solution, string normalizedPath, Func<string, bool>? isCallable = null)
     {
         var requestedFileName = Path.GetFileName(normalizedPath);
         var candidates = solution.Projects
@@ -88,9 +95,11 @@ public class WorkspaceReadNavigationImpl
                 string.Join("\n", candidates.Select(c => $"  - {c}")));
         }
 
+        var notFound = $"'{requestedFileName}' does not exist anywhere in the solution (searched {solution.Projects.Count()} project(s), no filename match). ";
         return new ResultError("FileNotFound",
-            $"'{requestedFileName}' does not exist anywhere in the solution (searched {solution.Projects.Count()} project(s), no filename match). " +
-            $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path.");
+            isCallable is null || isCallable("ListSolutionItems")
+                ? notFound + $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path."
+                : notFound + "Retry with a path you have already seen in an earlier result; do not guess another one.");
     }
 
     /// <summary>
@@ -272,7 +281,7 @@ public class WorkspaceReadNavigationImpl
                 return new SentinelCallToolResult<MethodSourceResult, ResultError>()
                 {
                     IsError = true,
-                    ErrorData = BuildFileNotFoundError(solution, normalizedPath)
+                    ErrorData = BuildFileNotFoundError(solution, normalizedPath, CallableCheck)
                 };
             }
 
@@ -395,7 +404,7 @@ public class WorkspaceReadNavigationImpl
                 return new SentinelCallToolResult<FileOutlineResult, ResultError>()
                 {
                     IsError = true,
-                    ErrorData = BuildFileNotFoundError(solution, normalizedPath)
+                    ErrorData = BuildFileNotFoundError(solution, normalizedPath, CallableCheck)
                 };
             }
 

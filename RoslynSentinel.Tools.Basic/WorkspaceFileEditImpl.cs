@@ -34,8 +34,12 @@ public class WorkspaceFileEditImpl
     private readonly ILogger _logger;
     private readonly WorkspaceReadNavigationImpl _readNav;
 
-    public WorkspaceFileEditImpl(IWorkspaceManager workspaceManager, WorkspaceReadNavigationImpl readNav, ILogger logger, ValidationEngine validationEngine, SymbolNavigationEngine symbolNavigationEngine, WriteToolAdviceHelper writeAdvice)
+    // Which tools this server can serve; null (unit tests, hosts without a surface) = treat every tool as callable.
+    private readonly ActiveToolSurface? _activeToolSurface;
+
+    public WorkspaceFileEditImpl(IWorkspaceManager workspaceManager, WorkspaceReadNavigationImpl readNav, ILogger logger, ValidationEngine validationEngine, SymbolNavigationEngine symbolNavigationEngine, WriteToolAdviceHelper writeAdvice, ActiveToolSurface? activeToolSurface = null)
     {
+        _activeToolSurface = activeToolSurface;
         _workspaceManager = workspaceManager;
         _readNav = readNav;
         _logger = logger;
@@ -171,7 +175,9 @@ public class WorkspaceFileEditImpl
         }
     }
 
-    private static ResultError BuildFileNotFoundError(Microsoft.CodeAnalysis.Solution solution, string normalizedPath)
+    /// <summary>FileNotFound for ReadFile. <paramref name="isCallable"/> says whether a tool name can be called on this
+    /// server (null = every tool can); ListSolutionItems is named only when it can.</summary>
+    internal static ResultError BuildFileNotFoundError(Microsoft.CodeAnalysis.Solution solution, string normalizedPath, Func<string, bool>? isCallable = null)
     {
         var requestedFileName = Path.GetFileName(normalizedPath);
         // The candidate search moved to Common (DocumentLookup.FindClosestPaths) so engines can use it too.
@@ -185,9 +191,11 @@ public class WorkspaceFileEditImpl
                 string.Join("\n", candidates.Select(c => $"  - {c}")));
         }
 
+        var notFound = $"'{requestedFileName}' does not exist anywhere in the solution (searched {solution.Projects.Count()} project(s), no filename match). ";
         return new ResultError("FileNotFound",
-            $"'{requestedFileName}' does not exist anywhere in the solution (searched {solution.Projects.Count()} project(s), no filename match). " +
-            $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path.");
+            isCallable is null || isCallable("ListSolutionItems")
+                ? notFound + $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path."
+                : notFound + "Retry with a path you have already seen in an earlier result; do not guess another one.");
     }
 
     private const int RangedReadInlineBudgetChars = LargeResultHelper.OffloadThresholdBytes - 2048;
@@ -351,7 +359,7 @@ public class WorkspaceFileEditImpl
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = true,
-                        ErrorData = BuildFileNotFoundError(solution, normalizedPath)
+                        ErrorData = BuildFileNotFoundError(solution, normalizedPath, _activeToolSurface is null ? null : _activeToolSurface.IsCallable)
                     };
                 }
 

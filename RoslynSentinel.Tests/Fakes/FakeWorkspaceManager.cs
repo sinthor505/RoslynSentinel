@@ -248,6 +248,7 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     bool IAutomaticCircuitBreaker.RecordSearchOutcome(int matchCount) => throw new NotImplementedException();
     bool IAutomaticCircuitBreaker.IsTripped() => throw new NotImplementedException();
     string? IAutomaticCircuitBreaker.StateMessage() => throw new NotImplementedException();
+    string? IAutomaticCircuitBreaker.StateMessage(Func<string, bool>? isCallable) => throw new NotImplementedException();
     void IAutomaticCircuitBreaker.Reset() => throw new NotImplementedException();
 
     // Really implemented rather than a throw-stub, unlike the two breakers above: apply paths

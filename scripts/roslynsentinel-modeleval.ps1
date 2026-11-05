@@ -42,7 +42,8 @@
                           Member and ReadFile memberName lookups are blocked by a filter, so only whole-file
                           ReadFile and GetLargeResult paging can reach the needle. Asserts the pointer was
                           followed and a GetLargeResult page carried the needle, plus the same answer and
-                          leak checks. Not [Explicit].
+                          leak checks. [Explicit]: not run by default (the loop is deterministic with
+                          every other tool hidden; Tests.Tools.Basic/ReadFilePagingLoopTests covers it).
       PlanThenExecute   - Model_FixesWholeFileRewriteBug_PlanThenExecute. Same disambiguated
                           task and full toolset as MinimalGuidanceDisambiguated, but the prompt
                           also asks the model to state its complete plan in prose before making
