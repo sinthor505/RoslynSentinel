@@ -29,7 +29,7 @@ public sealed record RenameSymbolData(
     [property: Produces(DataTag.SymbolName)] string NewName,
     int FilesChanged,
     RenameSymbolUpdatedHandle? UpdatedHandle,
-    IReadOnlyList<ResidualMention>? ResidualMentions,
+    ResidualMentionsView? ResidualMentions,
     string? ResidualMentionsNote);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>

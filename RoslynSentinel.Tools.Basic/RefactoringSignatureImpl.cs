@@ -152,6 +152,17 @@ public class RefactoringSignatureImpl
         if (apply.Error is not null)
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
 
+        // Residual mentions: return only a small summary (owner ruling D2); the full rows are stored once as an Envelope
+        // large result and reached through the per-bucket GetLargeResult calls in residualMentions.details.
+        ResidualMentionsView? residualView = null;
+        string? residualNote = null;
+        if (result.ResidualMentions is { Count: > 0 } residualMentions)
+        {
+            string? detailResultId = await ResidualMentionDetailStore.StoreAsync(residualMentions, _workspaceManager.GetSolutionRoot(), cancellationToken);
+            residualView = ResidualMentionSummarizer.Summarize(residualMentions, result.OldName, detailResultId);
+            residualNote = ResidualMentionSummarizer.Note(result.OldName, residualMentions.Count, detailResultId is not null);
+        }
+
         // Deliberately not wired into ForPossiblyLargeDataAsync/MemberChangedContentResult: this
         // already returns rich custom SuccessData (oldName/newName/residualMentions/updatedHandle) instead
         // of a bare AppliedChangeSummary, and newName is caller-supplied verbatim -> there is no
@@ -174,10 +185,8 @@ public class RefactoringSignatureImpl
                         h.DocCommentId
                     }
                     : null,
-                residualMentions = result.ResidualMentions is { Count: > 0 } rm ? rm : null,
-                residualMentionsNote = result.ResidualMentions is { Count: > 0 }
-                    ? $"'{result.OldName}' still appears in {result.ResidualMentions.Count} place(s) Rename couldn't reach (e.g. embedded in another identifier, or in a non-source file). Review residualMentions."
-                    : null
+                residualMentions = residualView,
+                residualMentionsNote = residualNote
             }
         };
     }

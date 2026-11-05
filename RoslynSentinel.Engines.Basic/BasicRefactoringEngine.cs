@@ -27,7 +27,23 @@ public record ExtractMethodResult(bool IsError, string? ErrorMessage, string? Be
     public string? Message => ErrorMessage;
 }
 public record UsingDirectiveInfo(string Name, bool IsStatic, string? Alias);
-public record ResidualMention(FilePathWrapper FilePath, int LineNumber, string LineText);
+/// <summary>Where a residual mention of a renamed symbol sits; precedence is PathLike, then NonSource, then (for .cs) Comment/String/Code.</summary>
+[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
+public enum ResidualBucket
+{
+    /// <summary>In a .cs file, outside comments and string-like literals.</summary>
+    Code,
+    /// <summary>In a .cs comment, including structured doc comments.</summary>
+    Comment,
+    /// <summary>In a .cs string, char, interpolated-string-text, raw-string or utf8 literal token.</summary>
+    String,
+    /// <summary>Immediately followed by '/' or '\' (a folder or file path); any file type.</summary>
+    PathLike,
+    /// <summary>In a non-.cs file (project, props, json, md, ps1, sln).</summary>
+    NonSource
+}
+/// <summary>MatchColumn is the 0-based index of the match inside the trimmed <paramref name="LineText"/> (0 when unknown).</summary>
+public record ResidualMention(FilePathWrapper FilePath, int LineNumber, string LineText, ResidualBucket Bucket = ResidualBucket.Code, int MatchColumn = 0);
 public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, string? Error = null) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
@@ -927,6 +943,9 @@ public class BasicRefactoringEngine
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var oldName = symbol.Name;
+        // A namespace is scanned by its full old qualified name (computed before the rename); everything else by simple name.
+        var isNamespaceRename = symbol is INamespaceSymbol;
+        var residualScanName = isNamespaceRename ? symbol.ToDisplayString() : oldName;
         // RenameInComments/RenameInStrings are deliberately left false: Roslyn's renamer would
         // otherwise rewrite any comment/string-literal token containing the old identifier as a
         // substring, even when it is not a genuine symbol reference (see
@@ -956,55 +975,28 @@ public class BasicRefactoringEngine
         // A namespace has no declared-symbol node whose token equals newName (its name is a QualifiedName, which
         // GetDeclaredSymbol does not map), so TryResolveUpdatedHandleAsync would always return null; the new id is
         // simply the parent namespace plus the new last segment.
-        // TODO residualMentions for a namespace is a whole-word scan of the old last segment and is legitimately noisy.
         var updatedHandle = symbol is INamespaceSymbol renamedNamespace
             ? new SymbolHandle(handle.ProjectName, "N:" + (renamedNamespace.ContainingNamespace is { IsGlobalNamespace: false } parentNamespace ? parentNamespace.ToDisplayString() + "." : "") + newName)
             : await TryResolveUpdatedHandleAsync(handle, symbol, updated, newName, cancellationToken);
-        var residualMentions = await FindResidualMentionsAsync(updated, oldName, cancellationToken);
+        var residualMentions = await FindResidualMentionsAsync(updated, residualScanName, isNamespaceRename, cancellationToken);
         return new RenameSymbolResult(oldName, newName, pendingChanges, null, updatedHandle, residualMentions);
     }
 
     /// <summary>
-    /// Whole-word scan of the post-rename solution for leftover mentions of <paramref name="oldName"/>
-    /// that Roslyn's rename couldn't reach -> e.g. the old name embedded as a substring of an unrelated
-    /// identifier (like a test method named ...OldNameDoesNotBlock), or occurrences in non-source files
-    /// (docs, config) that aren't part of any project's compilation and so were never visited by the
-    /// rename engine. RenameInComments/RenameInStrings are off (see RenameSymbolAsync), so comment and
-    /// string-literal text is never rewritten by the rename itself and can still surface here.
+    /// Post-rename scan for leftover mentions Roslyn's rename did not rewrite, delegated to
+    /// <see cref="ResidualMentionScanner"/>. Scanned: the project .cs documents of <paramref name="updated"/> minus
+    /// generated ones (obj/bin/Worktree paths, .g.cs/.g.i.cs/.designer.cs/.AssemblyInfo.cs/.AssemblyAttributes.cs
+    /// names, "auto-generated" headers), plus non-source files under the solution root with extension
+    /// .csproj, .props, .targets, .json, .md, .ps1, .slnx or .sln (skipping bin, obj, .git, .roslynsentinel,
+    /// Worktree and node_modules directories). <paramref name="name"/> is the simple name for a non-namespace
+    /// (whole-word match) or the full old qualified name for a namespace (dotted-token match: not the tail of a longer
+    /// qualified name, not followed by an identifier char, a following ".Sub" matches). Each mention carries a
+    /// <see cref="ResidualBucket"/> (PathLike, NonSource, Comment, String, Code). RenameInComments/RenameInStrings stay
+    /// off (see RenameSymbolAsync), so comment and string-literal text is never rewritten by the rename itself.
     /// </summary>
-    private async Task<List<ResidualMention>> FindResidualMentionsAsync(Solution updated, string oldName, CancellationToken cancellationToken)
+    private async Task<List<ResidualMention>> FindResidualMentionsAsync(Solution updated, string name, bool isNamespace, CancellationToken cancellationToken)
     {
-        var mentions = new List<ResidualMention>();
-        var wordPattern = new Regex($@"\b{Regex.Escape(oldName)}\b", RegexOptions.Compiled);
-        foreach (var project in updated.Projects)
-        {
-            foreach (var document in project.Documents)
-            {
-                if (document.FilePath is null)
-                {
-                    continue;
-                }
-
-                var text = await document.GetTextAsync(cancellationToken);
-                var sourceText = text.ToString();
-                if (!sourceText.Contains(oldName, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                var filePath = new FilePathWrapper(document.FilePath, _workspaceManager.GetSolutionRoot());
-                var lines = sourceText.Split(separator, StringSplitOptions.None);
-                for (int i = 0; i < lines.Length; i++)
-                {
-                    if (wordPattern.IsMatch(lines[i]))
-                    {
-                        mentions.Add(new ResidualMention(filePath, i + 1, lines[i].Trim()));
-                    }
-                }
-            }
-        }
-
-        return mentions;
+        return await ResidualMentionScanner.ScanAsync(updated, _workspaceManager.GetSolutionRoot(), name, isNamespace, cancellationToken);
     }
 
     private static async Task<SymbolHandle?> TryResolveUpdatedHandleAsync(SymbolHandle handle, ISymbol originalSymbol, Solution updatedSolution, string newName, CancellationToken cancellationToken = default)

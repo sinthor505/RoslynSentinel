@@ -423,7 +423,37 @@ public class WorkspaceReadNavigationImpl
     /// <summary>Walks a document's syntax tree and extracts the same outline entries GetFileOutlineTool returns for one file -> shared with ListAllTool, which runs this across every document in the solution.</summary>
     internal static List<OutlineItem> ExtractOutlineItems(SyntaxNode root)
     {
-        var items = new List<OutlineItem>();
+        return ExtractOutlineEntries(root).Select(e => e.Item).ToList();
+    }
+
+    /// <summary>docCommentId (N:Full.Qualified.Name) for a namespace declaration node, or null for any other node. The full name is the dotted names of the node and every enclosing namespace declaration, outermost first (so a nested `namespace B` in `namespace A` is N:A.B); a `global::` prefix is dropped.</summary>
+    internal static string? NamespaceDocCommentId(SyntaxNode node)
+    {
+        if (node is not BaseNamespaceDeclarationSyntax)
+        {
+            return null;
+        }
+
+        var parts = new List<string>();
+        foreach (var declaration in node.AncestorsAndSelf().OfType<BaseNamespaceDeclarationSyntax>())
+        {
+            var written = string.Concat(declaration.Name.ToString().Where(c => !char.IsWhiteSpace(c)));
+            if (written.StartsWith("global::", StringComparison.Ordinal))
+            {
+                written = written.Substring("global::".Length);
+            }
+
+            parts.Add(written);
+        }
+
+        parts.Reverse();
+        return "N:" + string.Join(".", parts);
+    }
+
+    /// <summary>Same walk as <see cref="ExtractOutlineItems"/> but also yields the declaring syntax node of each item -> lets ListAll derive node-based data (e.g. a namespace's full docCommentId) without widening <see cref="OutlineItem"/>, which GetFileOutline serializes.</summary>
+    internal static List<(OutlineItem Item, SyntaxNode Node)> ExtractOutlineEntries(SyntaxNode root)
+    {
+        var items = new List<(OutlineItem Item, SyntaxNode Node)>();
         foreach (var node in root.DescendantNodes())
         {
             string? kind = null;
@@ -500,7 +530,7 @@ public class WorkspaceReadNavigationImpl
             }
 
             var span = node.GetLocation().GetLineSpan();
-            items.Add(new OutlineItem(Kind: kind, Name: name, Container: container, StartLine: span.StartLinePosition.Line + 1, EndLine: span.EndLinePosition.Line + 1));
+            items.Add((new OutlineItem(Kind: kind, Name: name, Container: container, StartLine: span.StartLinePosition.Line + 1, EndLine: span.EndLinePosition.Line + 1), node));
         }
 
         return items;
@@ -554,7 +584,7 @@ public class WorkspaceReadNavigationImpl
                     }
 
                     var filePath = new FilePathWrapper(document.FilePath);
-                    foreach (var item in ExtractOutlineItems(root))
+                    foreach (var (item, itemNode) in ExtractOutlineEntries(root))
                     {
                         if (kindFilter != null && item.Kind != kindFilter)
                         {
@@ -587,7 +617,7 @@ public class WorkspaceReadNavigationImpl
                         allMatches?.Add((document.FilePath, project.Name));
                         if (maxItems is null || entries.Count < maxItems.Value)
                         {
-                            entries.Add(new SolutionSymbolEntry(filePath, item.Kind, item.Name, item.Container, item.StartLine, item.EndLine));
+                            entries.Add(new SolutionSymbolEntry(filePath, item.Kind, item.Name, item.Container, item.StartLine, item.EndLine, NamespaceDocCommentId(itemNode)));
                         }
                     }
                 }
