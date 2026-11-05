@@ -320,4 +320,71 @@ public sealed class MoveMemberSuccessTests
         Assert.That(Before(text, "class Dog"), Does.Contain("public virtual string Bark() => \"woof\";"), "The pulled-up member must land in the base class, made virtual.");
         Assert.That(From(text, "class Dog"), Does.Not.Contain("Bark()"), "The member must be removed from the derived class.");
     }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_InstanceToStaticClass_LeavesForwarder()
+    {
+        var original = "public class Source\n{\n    public int Foo(int x) { return x + 1; }\n}\n\npublic static class Target\n{\n}\n";
+        var caller = "public class Caller\n{\n    public int Call(Source s) => s.Foo(1);\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")), ("Caller.cs", caller.ReplaceLineEndings("\r\n")));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var text = Lf(workspace.ReadText("Refactor.cs"));
+        Assert.That(Before(text, "class Target"), Does.Contain("public int Foo(int x) => global::Target.Foo(x);"), "The source keeps an instance forwarder to the static target.");
+        Assert.That(From(text, "class Target"), Does.Contain("public static int Foo(int x) { return x + 1; }"), "The static target holds the moved method, now static.");
+        Assert.That(Lf(workspace.ReadText("Caller.cs")), Is.EqualTo(caller), "Keep modes leave outside callers untouched.");
+        var diagnostics = await GetDiagnosticsAsync(workspace);
+        Assert.That(diagnostics.Where(d => d.StartsWith("Error", StringComparison.Ordinal)), Is.Empty, "The solution must build after the forwarder is written.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepAsDeprecatedWrapper_InstanceToStaticClass_AddsObsoleteAttribute()
+    {
+        var original = "public class Source\n{\n    public int Foo(int x) { return x + 1; }\n}\n\npublic static class Target\n{\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepAsDeprecatedWrapper);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var text = Lf(workspace.ReadText("Refactor.cs"));
+        Assert.That(text, Does.Contain("[global::System.Obsolete(\"Deprecated wrapper: call Target.Foo instead.\", DiagnosticId = \"RSDEPRECATED\")]\n    public int Foo(int x) => global::Target.Foo(x);"), "The Obsolete attribute must precede the instance forwarder to the static target.");
+        Assert.That(From(text, "class Target"), Does.Contain("public static int Foo(int x) { return x + 1; }"), "The static target holds the moved method, now static.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_InstanceToNewClass_LeavesNewInstanceForwarder()
+    {
+        var original = "namespace App\n{\n    public class Source\n    {\n        public int Foo(int x) { return x + 1; }\n    }\n}\n";
+        var caller = "namespace App\n{\n    public class Caller\n    {\n        public int Call(Source s) => s.Foo(1);\n    }\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")), ("Caller.cs", caller.ReplaceLineEndings("\r\n")));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Foo"], "NewTarget", oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var text = Lf(workspace.ReadText("Refactor.cs"));
+        Assert.That(text, Does.Contain("public int Foo(int x) => new global::App.NewTarget().Foo(x);"), "The source keeps an instance forwarder that news the new class.");
+        var newText = Lf(workspace.ReadText("NewTarget.cs"));
+        Assert.That(newText, Does.Contain("class NewTarget"), "The new class is created in the new file beside the source.");
+        Assert.That(newText, Does.Contain("public int Foo(int x) { return x + 1; }"), "The new class holds the full moved instance method.");
+        Assert.That(Lf(workspace.ReadText("Caller.cs")), Is.EqualTo(caller), "Keep modes leave outside callers untouched.");
+        var diagnostics = await GetDiagnosticsAsync(workspace);
+        Assert.That(diagnostics.Where(d => d.StartsWith("Error", StringComparison.Ordinal)), Is.Empty, "The solution must build after the forwarder is written.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepAsDeprecatedWrapper_InstanceToNewClass_AddsObsoleteAttribute()
+    {
+        var original = "namespace App\n{\n    public class Source\n    {\n        public int Foo(int x) { return x + 1; }\n    }\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Foo"], "NewTarget", oldMember: MoveMemberOldMember.keepAsDeprecatedWrapper);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var text = Lf(workspace.ReadText("Refactor.cs"));
+        Assert.That(text, Does.Contain("[global::System.Obsolete(").And.Contain("DiagnosticId = \"RSDEPRECATED\")]"), "The Obsolete attribute must be added to the forwarder.");
+        Assert.That(text, Does.Contain("public int Foo(int x) => new global::App.NewTarget().Foo(x);"), "The forwarder must new the new class.");
+        Assert.That(Lf(workspace.ReadText("NewTarget.cs")), Does.Contain("class NewTarget"), "The new class is created in the new file beside the source.");
+    }
 }

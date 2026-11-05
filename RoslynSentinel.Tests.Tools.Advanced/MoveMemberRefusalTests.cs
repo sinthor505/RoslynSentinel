@@ -145,19 +145,6 @@ public sealed class MoveMemberRefusalTests
 
     [Test]
     [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_InstanceToStaticClass_StillNotImplemented()
-    {
-        var original = "public class Source\n{\n    public int Foo(int x) { return x + 1; }\n}\n\npublic static class Target\n{\n}\n".ReplaceLineEndings("\r\n");
-        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
-        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotImplemented));
-        Assert.That(workspace.ReadText("Refactor.cs"), Is.EqualTo(original), "A refused keep-mode move must not write.");
-    }
-
-    [Test]
-    [Category("AdvancedRefactoringTools")]
     public async Task MoveMember_SomeRequestedNamesMissing_ReturnsNotFoundAndWritesNothing()
     {
         var before = "public class Source\n{\n    public int Foo() => 1;\n    public int Bar() => 2;\n}\n\npublic class Target\n{\n}\n".ReplaceLineEndings("\r\n");

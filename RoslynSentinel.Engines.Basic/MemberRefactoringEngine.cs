@@ -2877,12 +2877,9 @@ public class MemberRefactoringEngine
         {
             // Static target class: the instance methods/properties were verified stateless above, so they move as STATIC
             // members (a static modifier is added to each) and every instance-qualified caller is rewritten to the target type.
+            // Keep modes: the source keeps an instance forwarder to the static target and callers are left untouched
+            // (MoveMembersToExistingClassAsync keeps only the conversion edits inside the moved text).
             var staticTargetMemberSymbols = membersToMove.Select(m => semanticModel?.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m)).Where(s => s != null).Cast<ISymbol>().ToList();
-            if (oldMember != MoveMemberOldMember.remove)
-            {
-                throw new ToolNotImplementedException($"keep modes are not wired for instance members moved into static class '{targetClassName}' yet (oldMember '{oldMember}'). Use oldMember remove, or make the members static first.");
-            }
-
             var conversionNotes = new List<string>();
             var moved = await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, staticTargetMemberSymbols, instanceMembersToConvert, conversionNotes, oldMember, _workspaceManager, cancellationToken);
             return moved with { Notes = conversionNotes };
@@ -2890,11 +2887,6 @@ public class MemberRefactoringEngine
 
         if (nonStaticMembers.Count > 0)
         {
-            if (oldMember != MoveMemberOldMember.remove && (targetDoc == null || targetClassNode == null))
-            {
-                throw new ToolNotImplementedException($"keep modes are not wired for instance members moved into a new class yet (oldMember '{oldMember}', target '{targetClassName}'). Use oldMember remove, or move into an existing class.");
-            }
-
             if (!autoResolveCallSites && oldMember == MoveMemberOldMember.remove)
             {
                 var names = string.Join(", ", nonStaticMembers.Select(m => m switch
@@ -2921,7 +2913,8 @@ public class MemberRefactoringEngine
     }
 
     /// <summary>
-    /// MoveMember into a STATIC target class: every moved instance method/property must be convertible to static
+    /// MoveMember into a STATIC target class (keep modes supported: the source keeps an instance forwarder to the static
+    /// target): every moved instance method/property must be convertible to static
     /// (see <see cref="StaticConversionEdits"/>) and must use no instance state. Runs before
     /// <see cref="RequireNoUnmovedDependencies"/> so the refusal names the real cause (the instance state) instead of
     /// the CS0708 the unconverted copy would produce in the static class, or a dependency hint that points at a field
@@ -3951,7 +3944,8 @@ public class MemberRefactoringEngine
         }
 
         // Keep modes: each moved method is replaced over its Span by a forwarder to <receiver>.M(...). The receiver is
-        // forwarderReceiver when given, else the single non-static field/property of the source class whose type is the target.
+        // forwarderReceiver when given; else, for a NEW target class, a fresh `new global::<Ns>.<Target>()`; else the single
+        // non-static field/property of the source class whose type is the target.
         var keptMembers = new HashSet<MemberDeclarationSyntax>();
         Func<MemberDeclarationSyntax, string>? forwarderText = null;
         if (oldMember != MoveMemberOldMember.remove)
@@ -3963,6 +3957,14 @@ public class MemberRefactoringEngine
             if (forwarderReceiver != null)
             {
                 receiver = SyntaxFacts.IsValidIdentifier(forwarderReceiver) ? $"this.{forwarderReceiver}" : forwarderReceiver;
+            }
+            else if (existingTargetDoc is null || existingTargetClassNode is null)
+            {
+                // New target class: no source field can hold it. The moved members are methods that use no source instance
+                // state (RequireKeepModeEligible, RequireNoUnmovedDependencies), so a fresh instance is equivalent.
+                // The namespace is the one AddInstanceMoveStructuralEditsAsync writes the new class file into.
+                var newClassNamespace = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString();
+                receiver = newClassNamespace == null ? $"new global::{targetClassName}()" : $"new global::{newClassNamespace}.{targetClassName}()";
             }
             else
             {
