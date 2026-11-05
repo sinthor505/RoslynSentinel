@@ -496,7 +496,7 @@ public class SyntaxTargetResolverTests
     }
 
     [Test]
-    public void BuildContainerMissDetail_ContainerAbsent_ListsTypesAndWhereTheMemberLives()
+    public async Task BuildContainerMissDetail_ContainerAbsent_ListsTypesAndWhereTheMemberLives()
     {
         var source = "public class A\n{\n    public void Run()\n    {\n    }\n}\n\npublic class B\n{\n    public int X;\n}\n";
         var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Sample.cs", source)]);
@@ -504,7 +504,7 @@ public class SyntaxTargetResolverTests
         var root = document.GetSyntaxRootAsync().Result!;
         var sourceText = document.GetTextAsync().Result;
 
-        var (message, candidates) = SyntaxTargetResolver.BuildContainerMissDetail(
+        var (message, candidates) = await SyntaxTargetResolver.BuildContainerMissDetailAsync(compilation,
             root, sourceText, "Run", "Missing", "Sample.cs",
             "ReadFile(filePath: '{file}', memberName: '{member}', containerName: '{container}')", methodsOnly: false);
 
@@ -514,7 +514,7 @@ public class SyntaxTargetResolverTests
     }
 
     [Test]
-    public void BuildContainerMissDetail_ContainerPresentWithoutMember_NamesTheTypesThatDeclareIt_WithRetryPerTypeAndReadFileRange()
+    public async Task BuildContainerMissDetail_ContainerPresentWithoutMember_NamesTheTypesThatDeclareIt_WithRetryPerTypeAndReadFileRange()
     {
         var source = "public class A\n{\n    public void Run()\n    {\n    }\n}\n\npublic class B\n{\n    public int X;\n}\n";
         var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Sample.cs", source)]);
@@ -522,7 +522,7 @@ public class SyntaxTargetResolverTests
         var root = document.GetSyntaxRootAsync().Result!;
         var sourceText = document.GetTextAsync().Result;
 
-        var (message, candidates) = SyntaxTargetResolver.BuildContainerMissDetail(
+        var (message, candidates) = await SyntaxTargetResolver.BuildContainerMissDetailAsync(compilation,
             root, sourceText, "Run", "B", "Sample.cs",
             "ReadFile(filePath: '{file}', memberName: '{member}', containerName: '{container}')", methodsOnly: false);
 
@@ -537,7 +537,7 @@ public class SyntaxTargetResolverTests
     }
 
     [Test]
-    public void BuildContainerMissDetail_MemberDeclaredNowhere_PointsAtGetFileOutline()
+    public async Task BuildContainerMissDetail_MemberDeclaredNowhere_PointsAtGetFileOutline()
     {
         var source = "public class A\n{\n    public void Run()\n    {\n    }\n}\n\npublic class B\n{\n    public int X;\n}\n";
         var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Sample.cs", source)]);
@@ -545,7 +545,7 @@ public class SyntaxTargetResolverTests
         var root = document.GetSyntaxRootAsync().Result!;
         var sourceText = document.GetTextAsync().Result;
 
-        var (message, candidates) = SyntaxTargetResolver.BuildContainerMissDetail(
+        var (message, candidates) = await SyntaxTargetResolver.BuildContainerMissDetailAsync(compilation,
             root, sourceText, "Nope", "A", "Sample.cs",
             "ReadFile(filePath: '{file}', memberName: '{member}', containerName: '{container}')", methodsOnly: false);
 
@@ -557,7 +557,7 @@ public class SyntaxTargetResolverTests
     }
 
     [Test]
-    public void BuildContainerMissDetail_MethodsOnly_IgnoresAPropertyOfTheSameName()
+    public async Task BuildContainerMissDetail_MethodsOnly_IgnoresAPropertyOfTheSameName()
     {
         var source = "public class A\n{\n    public int Value { get; set; }\n}\n\npublic class B\n{\n    public int Value() => 1;\n}\n";
         var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Sample.cs", source)]);
@@ -565,7 +565,7 @@ public class SyntaxTargetResolverTests
         var root = document.GetSyntaxRootAsync().Result!;
         var sourceText = document.GetTextAsync().Result;
 
-        var (message, candidates) = SyntaxTargetResolver.BuildContainerMissDetail(
+        var (message, candidates) = await SyntaxTargetResolver.BuildContainerMissDetailAsync(compilation,
             root, sourceText, "Value", "C", "Sample.cs",
             "GetMethodSource(filePath: '{file}', methodName: '{member}', containerName: '{container}')", methodsOnly: true);
 
@@ -575,7 +575,7 @@ public class SyntaxTargetResolverTests
     }
 
     [Test]
-    public void BuildContainerMissDetail_OverloadsInOneType_OffersNoContainerRetryForThatType()
+    public async Task BuildContainerMissDetail_OverloadsInOneType_OffersNoContainerRetryForThatType()
     {
         var source = "public class A\n{\n    public void Run()\n    {\n    }\n    public void Run(int x)\n    {\n    }\n}\n\npublic class B\n{\n    public int X;\n}\n";
         var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Sample.cs", source)]);
@@ -583,7 +583,7 @@ public class SyntaxTargetResolverTests
         var root = document.GetSyntaxRootAsync().Result!;
         var sourceText = document.GetTextAsync().Result;
 
-        var (message, candidates) = SyntaxTargetResolver.BuildContainerMissDetail(
+        var (message, candidates) = await SyntaxTargetResolver.BuildContainerMissDetailAsync(compilation,
             root, sourceText, "Run", "B", "Sample.cs",
             "ReadFile(filePath: '{file}', memberName: '{member}', containerName: '{container}')", methodsOnly: false);
 
@@ -594,7 +594,7 @@ public class SyntaxTargetResolverTests
     }
 
     [Test]
-    public void BuildContainerMissDetail_CandidateLinesMatchTheMessage()
+    public async Task BuildContainerMissDetail_CandidateLinesMatchTheMessage()
     {
         var source = "public class A\n{\n    public void Run()\n    {\n    }\n    public void Run(int x)\n    {\n    }\n}\n\npublic class B\n{\n    public int X;\n}\n";
         var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Sample.cs", source)]);
@@ -602,7 +602,7 @@ public class SyntaxTargetResolverTests
         var root = document.GetSyntaxRootAsync().Result!;
         var sourceText = document.GetTextAsync().Result;
 
-        var (message, candidates) = SyntaxTargetResolver.BuildContainerMissDetail(
+        var (message, candidates) = await SyntaxTargetResolver.BuildContainerMissDetailAsync(compilation,
             root, sourceText, "Run", "B", "Sample.cs",
             "ReadFile(filePath: '{file}', memberName: '{member}', containerName: '{container}')", methodsOnly: false);
 
@@ -623,7 +623,7 @@ public class SyntaxTargetResolverTests
     }
 
     [Test]
-    public void BuildContainerMissDetail_RetryTemplate_IsExpandedWithFileMemberAndContainer()
+    public async Task BuildContainerMissDetail_RetryTemplate_IsExpandedWithFileMemberAndContainer()
     {
         var source = "public class A\n{\n    public void Run()\n    {\n    }\n}\n\npublic class B\n{\n    public int X;\n}\n";
         var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Sample.cs", source)]);
@@ -631,7 +631,7 @@ public class SyntaxTargetResolverTests
         var root = document.GetSyntaxRootAsync().Result!;
         var sourceText = document.GetTextAsync().Result;
 
-        var (message, _) = SyntaxTargetResolver.BuildContainerMissDetail(
+        var (message, _) = await SyntaxTargetResolver.BuildContainerMissDetailAsync(compilation,
             root, sourceText, "Run", "B", "Sample.cs",
             "GetMethodSource(filePath: '{file}', methodName: '{member}', containerName: '{container}')", methodsOnly: false);
 
@@ -642,7 +642,7 @@ public class SyntaxTargetResolverTests
     }
 
     [Test]
-    public void BuildContainerMissDetail_TopLevelDeclaration_SaysOmitTheContainerAndDropsTheContainerArgument()
+    public async Task BuildContainerMissDetail_TopLevelDeclaration_SaysOmitTheContainerAndDropsTheContainerArgument()
     {
         var source = "public class Run\n{\n}\n";
         var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Sample.cs", source)]);
@@ -650,7 +650,7 @@ public class SyntaxTargetResolverTests
         var root = document.GetSyntaxRootAsync().Result!;
         var sourceText = document.GetTextAsync().Result;
 
-        var (message, candidates) = SyntaxTargetResolver.BuildContainerMissDetail(
+        var (message, candidates) = await SyntaxTargetResolver.BuildContainerMissDetailAsync(compilation,
             root, sourceText, "Run", "Missing", "Sample.cs",
             "ReadFile(filePath: '{file}', memberName: '{member}', containerName: '{container}')", methodsOnly: false, includeTypeKinds: true);
 
@@ -662,7 +662,7 @@ public class SyntaxTargetResolverTests
     }
 
     [Test]
-    public void BuildContainerMissDetail_IncludeTypeKinds_ListsATypeNamedLikeTheMember()
+    public async Task BuildContainerMissDetail_IncludeTypeKinds_ListsATypeNamedLikeTheMember()
     {
         var source = "public class Holder\n{\n}\n\npublic class Run\n{\n}\n";
         var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Sample.cs", source)]);
@@ -671,14 +671,14 @@ public class SyntaxTargetResolverTests
         var sourceText = document.GetTextAsync().Result;
         const string template = "ReadFile(filePath: '{file}', memberName: '{member}', containerName: '{container}')";
 
-        var (withoutTypes, withoutCandidates) = SyntaxTargetResolver.BuildContainerMissDetail(
+        var (withoutTypes, withoutCandidates) = await SyntaxTargetResolver.BuildContainerMissDetailAsync(compilation,
             root, sourceText, "Run", "Holder", "Sample.cs", template, methodsOnly: false, includeTypeKinds: false);
 
         Assert.That(withoutCandidates, Is.Empty);
         Assert.That(withoutTypes, Does.Contain("Type 'Holder' declares no member named 'Run'"));
         Assert.That(withoutTypes, Does.Contain("No type in this file declares 'Run'"));
 
-        var (withTypes, withCandidates) = SyntaxTargetResolver.BuildContainerMissDetail(
+        var (withTypes, withCandidates) = await SyntaxTargetResolver.BuildContainerMissDetailAsync(compilation,
             root, sourceText, "Run", "Holder", "Sample.cs", template, methodsOnly: false, includeTypeKinds: true);
 
         Assert.That(withCandidates, Has.Count.EqualTo(1));

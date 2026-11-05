@@ -106,7 +106,6 @@ public static class SyntaxTargetResolver
     /// immediately. Generic spellings resolve, so a listed name can be given back verbatim; see
     /// <see cref="SyntaxTargetResolver.NormalizeTypeName"/>.
     /// </remarks>
-    // TODO convert to BuildContainerNotFoundMessageAsync (only the 10 test callers in GenericContainerNameTests still use the sync BuildContainerMissDetail)
     public static string BuildContainerNotFoundMessage(SyntaxNode root, string requestedName)
     {
         var declared = root.DescendantNodes()
@@ -242,16 +241,18 @@ public static class SyntaxTargetResolver
 
     /// <summary>
     /// Explains a strict container miss: names the types the file declares, where the member lives,
-    /// and a retry call per container, plus the exact line range to read.
+    /// and a retry call per container, plus the exact line range to read. Behind <see cref="BuildContainerMissDetailAsync"/>.
     /// </summary>
     /// <remarks>
     /// <paramref name="retryCallTemplate"/> is the whole call to retry, with placeholders <c>{file}</c>,
     /// <c>{member}</c> and <c>{container}</c>. A top-level declaration drops its container argument.
     /// Never throws for a bad <paramref name="containerName"/>.
+    /// When <paramref name="containerNotFoundMessage"/> is supplied it replaces the file-local not-found text;
+    /// null keeps <see cref="BuildContainerNotFoundMessage"/>.
     /// </remarks>
-    public static (string Message, IReadOnlyList<AmbiguousCandidate> Candidates) BuildContainerMissDetail(
+    private static (string Message, IReadOnlyList<AmbiguousCandidate> Candidates) BuildContainerMissDetailCore(
         SyntaxNode root, SourceText sourceText, string memberName, string containerName, string filePath,
-        string retryCallTemplate, bool methodsOnly, bool includeTypeKinds = false)
+        string retryCallTemplate, bool methodsOnly, bool includeTypeKinds, string? containerNotFoundMessage)
     {
         var containerExists = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
             .Any(t => ContainingTypeMatches(t.Identifier.Text, containerName));
@@ -272,7 +273,7 @@ public static class SyntaxTargetResolver
         {
             containerExists
                 ? $"Type '{containerName}' declares no {kindWord} named '{memberName}' (searched the whole file '{filePath}'; type arguments optional, case ignored)."
-                : BuildContainerNotFoundMessage(root, containerName),
+                : containerNotFoundMessage ?? BuildContainerNotFoundMessage(root, containerName),
         };
 
         if (listed.Count > 0)
@@ -748,13 +749,21 @@ public static class SyntaxTargetResolver
     private const int MaxScopedWindows = 5;
 
     /// <summary>
-    /// Async form of <see cref="BuildContainerMissDetail"/> for async callers. The analysis is pure
-    /// in-memory syntax work, so the returned task is already complete.
+    /// Async entry point for the strict container-miss explanation. When the container is missing from
+    /// this file, the not-found message also names up to three other solution files that declare a type with the
+    /// same bare name (via <see cref="BuildContainerNotFoundMessageAsync"/>). Otherwise it is the plain container-miss result.
     /// </summary>
-    public static Task<(string Message, IReadOnlyList<AmbiguousCandidate> Candidates)> BuildContainerMissDetailAsync(
-        SyntaxNode root, SourceText sourceText, string memberName, string containerName, string filePath,
-        string retryCallTemplate, bool methodsOnly, bool includeTypeKinds = false)
-        => Task.FromResult(BuildContainerMissDetail(root, sourceText, memberName, containerName, filePath, retryCallTemplate, methodsOnly, includeTypeKinds));
+    public static async Task<(string Message, IReadOnlyList<AmbiguousCandidate> Candidates)> BuildContainerMissDetailAsync(
+        Solution solution, SyntaxNode root, SourceText sourceText, string memberName, string containerName, string filePath,
+        string retryCallTemplate, bool methodsOnly, bool includeTypeKinds = false, CancellationToken cancellationToken = default)
+    {
+        var containerExists = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
+            .Any(t => ContainingTypeMatches(t.Identifier.Text, containerName));
+        string? containerNotFoundMessage = containerExists
+            ? null
+            : await BuildContainerNotFoundMessageAsync(solution, root, containerName, cancellationToken);
+        return BuildContainerMissDetailCore(root, sourceText, memberName, containerName, filePath, retryCallTemplate, methodsOnly, includeTypeKinds, containerNotFoundMessage);
+    }
 }
 
 /// <summary>

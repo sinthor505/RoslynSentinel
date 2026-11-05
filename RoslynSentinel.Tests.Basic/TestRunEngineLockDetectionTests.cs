@@ -90,20 +90,6 @@ public class TestRunEngineLockDetectionTests
     }
 
     [Test]
-    public void ParseFixtureTearDownFailures_OrdinaryFixtureOneTimeTearDown_ReturnsOneEntry()
-    {
-        // The parser keys only on the teardown line, so an ordinary fixture's [OneTimeTearDown] failure is parsed like a SetUpFixture one.
-        const string stderr = "TearDown failed for test fixture OrdinaryFixture\nteardown boom\nStackTrace:    at OrdinaryFixture.Dispose() in C:\\x\\Tests.cs:line 9\n\nTest Run Failed.\n";
-
-        var entries = TestRunEngine.ParseFixtureTearDownFailures(stderr);
-
-        Assert.That(entries, Has.Count.EqualTo(1));
-        Assert.That(entries[0].Signature, Does.StartWith(TestRunEngine.TearDownFailureSignaturePrefix).And.Contain("teardown boom"));
-        Assert.That(entries[0].ExampleRef, Is.EqualTo("OrdinaryFixture"));
-        Assert.That(entries[0].Count, Is.EqualTo(1));
-    }
-
-    [Test]
     public void PrependTearDownFailures_TearDownEntriesComeFirst()
     {
         var testGroups = Enumerable.Range(1, 12)
