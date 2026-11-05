@@ -3240,7 +3240,16 @@ public class MemberRefactoringEngine
             return new MoveMemberResult(new Dictionary<FilePathWrapper, string> { { filePath, MoveMemberTextEdits.ApplyChanges(sourceText, sourceEdits) } }, new List<SkippedCallSite>(), AppliedEdits: new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>> { { filePath, sourceEdits.ToList() } });
         }
 
-        return new MoveMemberResult(new Dictionary<FilePathWrapper, string> { { filePath, MoveMemberTextEdits.ApplyChanges(sourceText, sourceEdits) }, { baseFile, MoveMemberTextEdits.ApplyChanges(baseText, new[] { insertion }) } }, new List<SkippedCallSite>(), AppliedEdits: new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>> { { filePath, sourceEdits.ToList() }, { baseFile, new[] { insertion } } });
+        // The moved code may need usings the base type's file lacks (the source file's usings do not travel with it).
+        var baseEdits = new List<TextChange> { insertion };
+        var sourceModel = await sourceDocument.GetSemanticModelAsync(cancellationToken);
+        var usingsEdit = sourceModel == null ? null : MoveMemberUsings.BuildMissingUsingsEdit(sourceModel, membersToMove, baseClassNode, baseText, baseEol);
+        if (usingsEdit != null)
+        {
+            baseEdits.Add(usingsEdit.Value);
+        }
+
+        return new MoveMemberResult(new Dictionary<FilePathWrapper, string> { { filePath, MoveMemberTextEdits.ApplyChanges(sourceText, sourceEdits) }, { baseFile, MoveMemberTextEdits.ApplyChanges(baseText, baseEdits) } }, new List<SkippedCallSite>(), AppliedEdits: new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>> { { filePath, sourceEdits.ToList() }, { baseFile, baseEdits } });
     }
 
     /// <summary>
@@ -3399,6 +3408,14 @@ public class MemberRefactoringEngine
             }
 
             targetEdits.Add(insertion);
+
+            // The moved code may need usings the target file lacks (the source file's usings do not travel with it).
+            var sourceModel = await sourceDocument.GetSemanticModelAsync(cancellationToken);
+            var usingsEdit = sourceModel == null ? null : MoveMemberUsings.BuildMissingUsingsEdit(sourceModel, membersToMove, targetClassNode, targetText, targetEol);
+            if (usingsEdit != null)
+            {
+                targetEdits.Add(usingsEdit.Value);
+            }
         }
 
         editsByDocument[sourceDocument.Id] = sourceEdits;
@@ -3536,6 +3553,15 @@ public class MemberRefactoringEngine
                 }
 
                 targetEdits.Add(insertion);
+
+                // The moved code may need usings the target file lacks (the source file's usings do not travel with it).
+                // An ordinary edit in the target's list, so MovePositionMap (built from these edits) shifts through it.
+                var sourceModel = await sourceDocument.GetSemanticModelAsync(cancellationToken);
+                var usingsEdit = sourceModel == null ? null : MoveMemberUsings.BuildMissingUsingsEdit(sourceModel, membersToMove, targetClassNode, targetText, targetEol);
+                if (usingsEdit != null)
+                {
+                    targetEdits.Add(usingsEdit.Value);
+                }
             }
         }
         else if (createNewClassFile)
