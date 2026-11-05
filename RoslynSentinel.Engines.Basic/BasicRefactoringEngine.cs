@@ -550,6 +550,20 @@ public class BasicRefactoringEngine
             return new Dictionary<FilePathWrapper, string>();
         }
 
+        // Guard: if the type's name already matches the source file name, it's already in its own file -> nothing to move
+        if (string.Equals(typeName, Path.GetFileNameWithoutExtension(document.Name), StringComparison.OrdinalIgnoreCase))
+        {
+            return new Dictionary<FilePathWrapper, string>();
+        }
+
+        // A nested type becomes a top-level type: qualified Outer.Nested references solution-wide (and in this file) are rewritten first,
+        // so the declaration is taken from the rewritten root.
+        var referenceEdits = new Dictionary<FilePathWrapper, string>();
+        if (typeNode.Parent is TypeDeclarationSyntax)
+        {
+            (root, typeNode) = await LiftNestedTypeReferencesAsync(solution, document, root!, typeNode, referenceEdits, cancellationToken);
+        }
+
         var (newRoot, cleanTypeNode) = BuildSplitFileRoot(root!, typeNode);
         var ns = typeNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
         if (ns != null)
@@ -565,11 +579,6 @@ public class BasicRefactoringEngine
         var sourceDirectory = Path.GetDirectoryName(document.FilePath ?? filePath);
         var targetDirectory = string.IsNullOrEmpty(targetFolder) ? sourceDirectory : targetFolder;
         var newPath = string.IsNullOrEmpty(targetDirectory) ? $"{typeName}.cs" : Path.Combine(targetDirectory, $"{typeName}.cs");
-        // Guard: if the type's name already matches the source file name, it's already in its own file -> nothing to move
-        if (string.Equals(typeName, Path.GetFileNameWithoutExtension(document.Name), StringComparison.OrdinalIgnoreCase))
-        {
-            return new Dictionary<FilePathWrapper, string>();
-        }
 
         var updatedOrig = RemoveOrphanedRegionDirectives(root!.RemoveNode(typeNode, SyntaxRemoveOptions.KeepNoTrivia)!);
         var newDoc = await RemoveUnusedUsingsAsync(document.Project.AddDocument($"{typeName}.cs", newRoot), cancellationToken);
@@ -587,7 +596,7 @@ public class BasicRefactoringEngine
         var updatedOrigDoc = document.WithSyntaxRoot(updatedOrig);
         var formattedOrigDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(updatedOrigDoc, eol, sourceText, cancellationToken);
         var updatedOrigContent = (await formattedOrigDoc.GetTextAsync(cancellationToken)).ToString();
-        return new Dictionary<FilePathWrapper, string>
+        var moveResult = new Dictionary<FilePathWrapper, string>
         {
             {
                 filePath,
@@ -598,6 +607,51 @@ public class BasicRefactoringEngine
                 newContent
             }
         };
+        foreach (var referenceEdit in referenceEdits)
+        {
+            moveResult.TryAdd(referenceEdit.Key, referenceEdit.Value);
+        }
+
+        return moveResult;
+    }
+
+    // Rewrites qualified Outer.Nested references to Nested (adding the using where the file cannot see the namespace) for a nested type that is being lifted to top level.
+    // The declaring document's rewritten root and type node are returned (the caller removes the declaration from that root); other documents' new text goes into otherEdits.
+    // Limitation: references through a derived type, to a generic containing type, or alias-qualified are left as is (the compile gate then reports them).
+    private async Task<(CompilationUnitSyntax Root, BaseTypeDeclarationSyntax TypeNode)> LiftNestedTypeReferencesAsync(Solution solution, Document document, CompilationUnitSyntax root, BaseTypeDeclarationSyntax typeNode, Dictionary<FilePathWrapper, string> otherEdits, CancellationToken cancellationToken)
+    {
+        var model = await document.GetSemanticModelAsync(cancellationToken);
+        if (model?.GetDeclaredSymbol(typeNode, cancellationToken) is not INamedTypeSymbol nested)
+        {
+            return (root, typeNode);
+        }
+
+        var sites = await NestedTypeReferenceLifter.FindSitesAsync(solution, nested, cancellationToken);
+        var namespaceName = NestedTypeReferenceLifter.NamespaceNameOrNull(nested);
+        foreach (var documentSites in sites.GroupBy(s => s.DocumentId))
+        {
+            var siteDocument = solution.GetDocument(documentSites.Key);
+            if (siteDocument == null)
+            {
+                continue;
+            }
+
+            var documentEol = await _workspaceManager.ResolveEolAsync(siteDocument, cancellationToken);
+            var siteList = documentSites.Select(s => (s.Span, s.Kind, s.NeedsUsing, s.QualifyFully, s.KeepQualifier)).ToList();
+            if (documentSites.Key == document.Id)
+            {
+                var (rewrittenRoot, rewrittenType) = NestedTypeReferenceLifter.ApplyRewrites(root, siteList, typeNode, namespaceName, documentEol);
+                root = rewrittenRoot;
+                typeNode = (BaseTypeDeclarationSyntax)rewrittenType!;
+            }
+            else if (await siteDocument.GetSyntaxRootAsync(cancellationToken) is CompilationUnitSyntax siteRoot)
+            {
+                var (rewrittenRoot, _) = NestedTypeReferenceLifter.ApplyRewrites(siteRoot, siteList, null, namespaceName, documentEol);
+                otherEdits[siteDocument.FilePath ?? siteDocument.Name] = rewrittenRoot.ToFullString();
+            }
+        }
+
+        return (root, typeNode);
     }
 
     private async Task<Dictionary<FilePathWrapper, string>> MoveAllTypesToFilesForDocumentAsync(Document document, CancellationToken cancellationToken = default)
