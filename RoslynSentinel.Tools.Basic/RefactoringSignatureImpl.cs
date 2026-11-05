@@ -82,6 +82,40 @@ public class RefactoringSignatureImpl
             };
         }
 
+        // A namespace rename replaces only the LAST segment of the namespace (IDE semantics); Roslyn's Renamer
+        // rewrites the identifier token of every declaration, using directive and qualified name, so a dotted
+        // newName would nest a second namespace under the parent instead of renaming. Refuse it up front.
+        if (resolution.Symbol is Microsoft.CodeAnalysis.INamespaceSymbol nsSymbol)
+        {
+            if (nsSymbol.IsGlobalNamespace)
+            {
+                return new SentinelCallToolResult<object>
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "The global namespace cannot be renamed. Pass docCommentId 'N:<Namespace.Name>' of a named namespace.")
+                };
+            }
+
+            if (newName.Contains('.'))
+            {
+                return new SentinelCallToolResult<object>
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
+                        $"newName '{newName}' contains '.'. A namespace rename replaces only the last segment: pass the new last segment only, e.g. 'Advanced' to turn A.B.Basic into A.B.Advanced. To move a namespace elsewhere, rename it segment by segment.")
+                };
+            }
+
+            if (!Microsoft.CodeAnalysis.CSharp.SyntaxFacts.IsValidIdentifier(newName))
+            {
+                return new SentinelCallToolResult<object>
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"newName '{newName}' is not a valid C# identifier; pass the new last segment of the namespace.")
+                };
+            }
+        }
+
         RenameSymbolResult result = await _refactoringEngine.RenameSymbolAsync(
             resolution.Handle, resolution.Symbol!, newName, cancellationToken);
 
