@@ -82,6 +82,7 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
         JsonSerializerOptions serializerOptions,
         CancellationToken cancellationToken)
     {
+        ForwardGuidance(result);
         try
         {
             object? passthrough = Passthrough(result, serializerOptions);
@@ -122,6 +123,40 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
         }
 
         return fitted.ToJsonString(options);
+    }
+
+    // Guidance-adherence telemetry: the telemetry filter only sees the serialized CallToolResult, so the envelope's
+    // never-serialized GuidanceHint is handed to the per-call ToolGuidanceCollector here, where the typed result is still
+    // in hand (this runs inside the tool call's async flow). A no-op without an open collector; never throws.
+    private static void ForwardGuidance(object? result)
+    {
+        try
+        {
+            if (!ToolGuidanceCollector.IsOpen)
+            {
+                return;
+            }
+
+            for (Type? type = result?.GetType(); type is not null; type = type.BaseType)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(SentinelCallToolResult<,>))
+                {
+                    if (type.GetProperty(nameof(SentinelCallToolResult<object, object>.GuidanceHint))?.GetValue(result) is GuidanceHint hint)
+                    {
+                        foreach (var toolName in hint.SuggestedToolNames ?? [])
+                        {
+                            ToolGuidanceCollector.Record(toolName);
+                        }
+                    }
+
+                    return;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Tool guidance forward failed: {ex}");
+        }
     }
 
     // The envelope's server-side Paging hints (SentinelCallToolResult<,>.Paging, never serialized); null for any other

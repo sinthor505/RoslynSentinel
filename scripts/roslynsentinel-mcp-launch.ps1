@@ -214,6 +214,9 @@ if ($prodMode) {
     $buildsRoot = Join-Path $prodRoot 'builds'
     $wtRoot = Join-Path $prodRoot 'wt'
     $instancesDirRoot = Join-Path $prodRoot 'instances'
+    # Where the sweep saves each stale instance's server-telemetry_*.json before deleting the folder. A SIBLING of
+    # instances\ (not under it) and created lazily by Save-StaleInstanceTelemetry, so no sweep loop enumerates it.
+    $telemetryRoot = Join-Path $prodRoot 'telemetry'
     try {
         foreach ($d in @($prodRoot, $buildsRoot, $wtRoot, $instancesDirRoot)) {
             New-Item -ItemType Directory -Path $d -Force | Out-Null
@@ -432,6 +435,8 @@ Get-ChildItem -LiteralPath $binVscodeRoot -Directory -ErrorAction SilentlyContin
             return
         }
 
+        # No Save-StaleInstanceTelemetry here: legacy launches pass no --working-dir, so the server writes no
+        # server-telemetry_*.json and these bin-vscode\<id> folders (build output) cannot contain one.
         Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
         if (-not (Test-Path -LiteralPath $_.FullName)) {
             $sweptNames.Add($_.Name)
@@ -684,6 +689,42 @@ function Remove-SweepFolder {
     return (-not (Test-Path -LiteralPath $Path))
 }
 
+# Copies a stale instance folder's server-telemetry_*.json into $TelemetryRoot before the folder is deleted, so a rollup
+# script can read them later. Never overwrites a copy that is newer than or as new as the source (LastWriteTimeUtc), so
+# two folders yielding the same file name keep the newer one. A failure on any file only logs a warning: it must never
+# block the delete or the launch. Returns the number of files copied; creates $TelemetryRoot only when there is a file.
+function Save-StaleInstanceTelemetry {
+    param([string]$Folder, [string]$TelemetryRoot)
+
+    $copied = 0
+    $files = @()
+    try { $files = @(Get-ChildItem -LiteralPath $Folder -Filter 'server-telemetry_*.json' -File -ErrorAction Stop) }
+    catch { return 0 }
+    if ($files.Count -eq 0) { return 0 }
+
+    try { New-Item -ItemType Directory -Path $TelemetryRoot -Force -ErrorAction Stop | Out-Null }
+    catch {
+        Write-LaunchLog "Sweep: WARNING cannot create telemetry folder '$TelemetryRoot' ($($_.Exception.Message)) - telemetry of '$Folder' not saved."
+        return 0
+    }
+
+    foreach ($file in $files) {
+        try {
+            $destination = Join-Path $TelemetryRoot $file.Name
+            if (Test-Path -LiteralPath $destination) {
+                $existing = Get-Item -LiteralPath $destination -ErrorAction Stop
+                if ($existing.LastWriteTimeUtc -ge $file.LastWriteTimeUtc) { continue }
+            }
+            Copy-Item -LiteralPath $file.FullName -Destination $destination -Force -ErrorAction Stop
+            $copied++
+        }
+        catch {
+            Write-LaunchLog "Sweep: WARNING could not save telemetry file '$($file.FullName)' ($($_.Exception.Message)) - deleting its folder anyway."
+        }
+    }
+    return $copied
+}
+
 #region Sweep (prod layout)
 try {
     Write-LaunchLog "Sweep: starting (minimum age $([int]$minimumAgeForSweep.TotalSeconds)s)."
@@ -698,7 +739,8 @@ try {
     $keptLive = 0
     $now = Get-Date
 
-    # instances\<id> whose server process is gone.
+    # instances\<id> whose server process is gone. The telemetry folder is not under instances\ and its name does not
+    # match $instanceFolderPattern, so it is never a candidate here.
     Get-ChildItem -LiteralPath $instancesDirRoot -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -match $instanceFolderPattern -and $_.Name -ne $instanceId } |
         ForEach-Object {
@@ -709,6 +751,8 @@ try {
             if (Test-Path -LiteralPath $staleMarker) {
                 Write-LaunchLog "Sweep: instance '$($_.Name)' had a stopped-by-script marker (never consumed by a relaunch): $(Get-Content -LiteralPath $staleMarker -Raw -ErrorAction SilentlyContinue)"
             }
+            $telemetryCopied = Save-StaleInstanceTelemetry -Folder $folderPath -TelemetryRoot $telemetryRoot
+            if ($telemetryCopied -gt 0) { Write-LaunchLog "Sweep: saved $telemetryCopied telemetry file(s) of instance '$($_.Name)' to '$telemetryRoot'." }
             if (Remove-SweepFolder -Path $folderPath -MustBeUnder $instancesDirRoot) { $swept.Add("instances\$($_.Name)") }
             else { Write-LaunchLog "Sweep: instance '$($_.Name)' still present after delete attempt - left in place, will retry next launch." }
         }

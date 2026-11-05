@@ -51,26 +51,57 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton<IToolResultMarshaller, ToolResultMarshaller>();
         }
 
+        // Per-tool call counters, read by McpServerStatus and updated by the telemetry filter below. Created here (not on
+        // first use) so ServerStartedUtc is the server's start. Shared by both flavors: Advanced calls this method.
+        services.TryAddSingleton(new ToolTelemetry());
+
+        // Persists the counters to server-telemetry_<instanceId>.json (explicit --working-dir only; otherwise a no-op) every 60 s
+        // when changed and once more on graceful host stop. A hosted service starts under both hosts (stdio Generic Host, HTTP
+        // WebApplication) and is inert in the tool-manifest ServiceCollection used by --list-tools.
+        services.TryAddSingleton(sp => new ToolTelemetryFlusher(
+            sp.GetRequiredService<ToolTelemetry>(), logger: sp.GetService<ILogger<ToolTelemetryFlusher>>()));
+        services.AddHostedService(sp => new ToolTelemetryFlushService(sp.GetRequiredService<ToolTelemetryFlusher>()));
+
         RegisterRoslynSentinelToolsBasic(services, mcpBuilder, activeModes, includeTools, excludeTools);
 
-        // Add centralized error filters
+        // Add centralized error filters, in CallToolFilterRegistrations order (the first registered is the outermost).
         mcpBuilder.WithRequestFilters(filters =>
         {
-            AddToolCallEchoFilter(filters);
-            AddArgumentValidationFilter(filters);
-            AddHaltStampFilter(filters);
-            AddWorkspaceStaleStampFilter(filters);
-            AddToolErrorFilter(filters);
-            AddWorkspaceNotLoadedFilter(filters);
-            AddDriftFilter(filters);
-            AddLargeResultOffloadFilter(filters);
-            AddWirePathRelativizeFilter(filters);
-            AddOrientationBreakerFilter(filters);
-            AddUnrecoverableBreakerFilter(filters);
+            foreach (var (_, add) in CallToolFilterRegistrations)
+            {
+                add(filters);
+            }
         });
 
         return mcpBuilder;
     }
+
+    /// <summary>
+    /// The call-tool filters in registration order, which is their nesting order: the first is the outermost
+    /// (csharp-sdk McpServerImpl.BuildFilterPipeline folds from the last filter inward). Single source for both
+    /// the registration and <see cref="CallToolFilterNames"/>, so a test can pin the order. ToolTelemetry sits
+    /// second, right inside the echo filter, so it wraps every other filter: argument validation and the breakers
+    /// (which refuse without calling next), and ToolError, which copies the body's isError onto CallToolResult.IsError
+    /// before the telemetry filter reads it.
+    /// </summary>
+    private static readonly (string Name, Action<IMcpRequestFilterBuilder> Add)[] CallToolFilterRegistrations =
+    [
+        ("ToolCallEcho", AddToolCallEchoFilter),
+        ("ToolTelemetry", AddToolTelemetryFilter),
+        ("ArgumentValidation", AddArgumentValidationFilter),
+        ("HaltStamp", AddHaltStampFilter),
+        ("WorkspaceStaleStamp", AddWorkspaceStaleStampFilter),
+        ("ToolError", AddToolErrorFilter),
+        ("WorkspaceNotLoaded", AddWorkspaceNotLoadedFilter),
+        ("Drift", AddDriftFilter),
+        ("LargeResultOffload", AddLargeResultOffloadFilter),
+        ("WirePathRelativize", AddWirePathRelativizeFilter),
+        ("OrientationBreaker", AddOrientationBreakerFilter),
+        ("UnrecoverableBreaker", AddUnrecoverableBreakerFilter),
+    ];
+
+    /// <summary>Names of the call-tool filters in the order <see cref="AddRoslynSentinelToolsBasic"/> registers them (outermost first).</summary>
+    public static IReadOnlyList<string> CallToolFilterNames => CallToolFilterRegistrations.Select(r => r.Name).ToArray();
 
     private static void RegisterRoslynSentinelToolsBasic(IServiceCollection services, IMcpServerBuilder mcpBuilder, HashSet<string> activeModes, HashSet<string>? includeTools = null, HashSet<string>? excludeTools = null)
     {
@@ -1026,6 +1057,39 @@ public static class RoslynSentinelServiceExtensionsBasic
                 }
 
                 return result;
+            }));
+    }
+
+    /// <summary>
+    /// Registers the tool-telemetry filter: counts every tool call (and its outcome and duration) on
+    /// <see cref="ToolTelemetry"/>. The logic is <see cref="ToolTelemetryRecorder.RecordAsync"/>.
+    /// <para>
+    /// Must be registered second - immediately inside the echo filter and before everything else - so it wraps
+    /// argument validation and the breakers (which refuse without calling next) and the ToolError filter, whose
+    /// body-isError sync means it reads the corrected <c>CallToolResult.IsError</c> (see
+    /// <see cref="CallToolFilterRegistrations"/>). Because it records only after <c>next</c> returns, a McpServerStatus
+    /// call reports itself only from the following call on. With no <see cref="ToolTelemetry"/> in the container it
+    /// passes straight through.
+    /// </para>
+    /// </summary>
+    private static void AddToolTelemetryFilter(IMcpRequestFilterBuilder filters)
+    {
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            (context, cancellationToken) =>
+            {
+                ToolTelemetry? telemetry = null;
+                try
+                {
+                    telemetry = context.Server.Services?.GetService<ToolTelemetry>();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Tool telemetry lookup failed: {ex}");
+                }
+
+                return ToolTelemetryRecorder.RecordAsync(telemetry, context.Params?.Name, () => next(context, cancellationToken));
             }));
     }
 

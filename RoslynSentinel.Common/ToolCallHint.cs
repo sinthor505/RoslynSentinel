@@ -73,6 +73,11 @@ public static class ToolCallHint
             return string.Empty;
         }
 
+        // Guidance tracking: note the suggested tool (plus its operation/mode argument, unused for now) for the call in
+        // flight. Every hint builder funnels through here (Next and the catalog-less overloads call this). Strict no-op
+        // when no ToolGuidanceCollector is open. A hint built here but discarded later still counts as issued.
+        ToolGuidanceCollector.Record(toolName, OperationArgument(known));
+
         if (catalog is null || !catalog.TryGetParameters(toolName, out var parameters))
         {
             return toolName;
@@ -163,6 +168,28 @@ public static class ToolCallHint
 
     /// <summary>Same as <see cref="Validate(ToolSignatureCatalog, string, (string Name, string Value)[])"/> using <see cref="Current"/>.</summary>
     public static IReadOnlyList<string> Validate(string toolName, params (string Name, string Value)[] known) => Validate(Current, toolName, known);
+
+    // The "operation" argument, else "mode", of a hint call; null when the hint supplies neither.
+    private static string? OperationArgument((string Name, string Value)[]? known)
+    {
+        if (known is null)
+        {
+            return null;
+        }
+
+        foreach (var wanted in new[] { "operation", "mode" })
+        {
+            foreach (var pair in known)
+            {
+                if (string.Equals(pair.Name, wanted, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(pair.Value))
+                {
+                    return pair.Value;
+                }
+            }
+        }
+
+        return null;
+    }
 
     private static ToolParameterSpec? FindSpec(IReadOnlyList<ToolParameterSpec> parameters, string? name) =>
         name is null ? null : parameters.FirstOrDefault(parameter => parameter.Name == name);

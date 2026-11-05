@@ -264,6 +264,14 @@ public record SentinelCallToolResult<TSuccess, TError> : IOperationResult
     [System.Text.Json.Serialization.JsonIgnore]
     public PagingHints? Paging { get; init; }
 
+    /// <summary>
+    /// Server-side route for a result to name the tools it suggests next when the suggestion is not built through
+    /// <see cref="ToolCallHint"/> (guidance-adherence telemetry; see <see cref="GuidanceHint"/>). Not serialized.
+    /// <c>ToolResultMarshaller</c> forwards it into the open <see cref="ToolGuidanceCollector"/>. Null means none.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public GuidanceHint? GuidanceHint { get; init; }
+
     /// <summary>ErrorData details. Non-null when <see cref="IsError"/> is false.</summary>
     public TError? ErrorData
     {

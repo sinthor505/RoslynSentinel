@@ -11,15 +11,19 @@ public class ServerStatusTools
     private readonly StoppedByScriptMarker _stoppedByScriptMarker;
     private readonly ToolsetService? _toolsets;
     private readonly SentinelHostOptions? _hostOptions;
+    private readonly ToolTelemetry? _toolTelemetry;
 
     /// <param name="toolsets">Present only in claude-lean, where McpToolsetControlTool can switch tools on at runtime.</param>
+    /// <param name="toolTelemetry">Per-tool call counters; null (tests, hosts without the telemetry filter) omits the toolTelemetry field.</param>
     public ServerStatusTools(
         IWorkspaceManager workspaceManager,
         ActiveToolSurface activeToolSurface,
         StoppedByScriptMarker stoppedByScriptMarker,
         ToolsetService? toolsets = null,
-        SentinelHostOptions? hostOptions = null)
+        SentinelHostOptions? hostOptions = null,
+        ToolTelemetry? toolTelemetry = null)
     {
+        _toolTelemetry = toolTelemetry;
         _hostOptions = hostOptions;
         _workspaceManager = workspaceManager;
         _activeToolSurface = activeToolSurface;
@@ -143,7 +147,10 @@ public class ServerStatusTools
             // Effective --respawn (auto | none): whether anything restarts this process after StopServer.
             Respawn: (_hostOptions?.Respawn ?? RespawnPolicy.Auto).ToString().ToLowerInvariant(),
             // The launcher's last build outcome (null when no marker: legacy layout, HTTP, no launcher).
-            LastLaunch: LaunchBuildMarker.Current
+            LastLaunch: LaunchBuildMarker.Current,
+            // Only once a call has been recorded; the call that produces this status is not counted yet (the telemetry
+            // filter records after the call completes), so the very first status of a process omits the field.
+            ToolTelemetry: _toolTelemetry is { HasCalls: true } ? _toolTelemetry.Snapshot() : null
         )
         };
     }
@@ -242,7 +249,8 @@ public sealed record McpServerStatusResult(
     bool WorkingDirExplicit = false,
     string? BuildSha = null,
     string? Respawn = null,
-    LaunchBuildResult? LastLaunch = null);
+    LaunchBuildResult? LastLaunch = null,
+    ToolTelemetrySnapshot? ToolTelemetry = null);
 /// <summary>
 /// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
 /// by McpServerStatusTool's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this
