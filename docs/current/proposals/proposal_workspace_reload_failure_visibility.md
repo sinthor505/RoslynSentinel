@@ -1,6 +1,6 @@
 # Make a failed workspace load/reload a sticky, observable STALE state instead of a log line
 
-**Status:** OPEN 2026-10-21. Proposal for review; nothing built. Line numbers cite the working tree of 2026-10-21, which was being edited by the #32 fix at the time, so they may shift.
+**Status:** slices 1-4 built (slices 1-3 2026-10-21; helper `SwapInFreshWorkspaceLocked`/`OpenFreshWorkspaceAsync` and the bounded debounce retry 2026-11-05: one automatic retry after `DebounceRetryDelayMs`, failure recorded only if the retry also fails, the 2C fold fallback now re-queues the fresh-workspace reload); remaining items are in docs/current/TODO.md. The text below is the original proposal; line numbers and "nothing built" statements are historical. Line numbers cite the working tree of 2026-10-21, which was being edited by the #32 fix at the time, so they may shift.
 
 ## Motivation
 
