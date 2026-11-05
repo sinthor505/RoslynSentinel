@@ -8,6 +8,10 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Wrap the 9 unwrapped `[McpServerTool]` returns in `SentinelCallToolResult` - resolved (2026-11-05)
+
+- McpServerStatus, GenerateClassesFromJson, GenerateHttpClient, GenerateDefaultConfigJson, InterpolateStringSafe, DescribeAdvancedToolOptions, ProjectDoc, ExternalFileDrift and McpServerControl now return the wrapper. Commit 295c2227; full solution run 6542 tests, 0 failed. Live check after restart: unconfirmed `StopServer` refused (`ConfirmationRequired`), `ExternalFileDrift(Status)` and `McpServerControl(ListTestInstances)` return `successData`. Wire shapes moved under `successData`/`errorData`. Open code TODOs: ProjectDoc missing-file read reports `Exception` not `NotFound`; legacy string wrappers `AcknowledgeDrift`/`ControlServer` removable once their direct-call tests move. Decisions: `decisions_autonomous_run_2026-11-05.md`.
+
 ## `contextSnippet` "not found" wording, Step 5 (wrong-node-kind family) - resolved (2026-11-02)
 
 - The "position resolved but wrong node kind" messages were unlabeled raw text at 11 sites. They now all call `SnippetNodeKindError.Describe(text, root, match, expectedNode, passInstead)` in `RoslynSentinel.Common/SnippetMatching`, which names the node kind actually found at the contextSnippet; exception types and error codes are unchanged. Commits: c96442fe (helper), 58964bbe (`AdvancedStructuralEngine` x3), f413b117 (`MappingEngine`), 980d9004 (`CodeGenerationEngine`, `SemanticRefactoringEngine`), 02d1692f (`MsToolAugmentEngine` x5). Steps 1-4 of the plan shipped 2026-09-15/16; `ContextErrorBuilder` and `DiagnoseNoMatch` were later deleted in 361263f4 (replaced by `Common/SnippetMatching`).
