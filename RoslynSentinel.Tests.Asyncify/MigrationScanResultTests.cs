@@ -391,7 +391,7 @@ public class Svc
     //
     // filePath only takes effect under scope=file -> the tool's own docstring says scope=solution
     // (the default) ignores filePath entirely, and FindMigrationCandidatesAsync confirms it:
-    // called with scope=file it throws ArgumentException("filePath '...' matched no documents in
+    // called with scope=file it throws ToolInvalidArgumentException("filePath '...' matched no documents in
     // solution"), which the tool converts to InvalidArgument. The original test never set
     // scope=file, so it always hit the "filePath ignored" path and never actually exercised this.
     // ══════════════════════════════════════════════════════════════════════════

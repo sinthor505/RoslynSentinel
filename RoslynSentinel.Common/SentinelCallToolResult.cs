@@ -263,7 +263,14 @@ public record SentinelCallToolResult<TSuccess, TError> : IOperationResult
     }
 
     /// <summary>Non-fatal observations surfaced alongside the result. Empty when there are none.</summary>
-    public IReadOnlyList<Finding> Findings { get; init; } = [];
+    private IReadOnlyList<Finding>? _findings;
+
+    // Explicit findings win; otherwise lift the write-chokepoint findings carried on an AppliedChangeSummary payload.
+    public IReadOnlyList<Finding> Findings
+    {
+        get => _findings is { Count: > 0 } ? _findings : (SuccessData as AppliedChangeSummary)?.Findings ?? [];
+        init => _findings = value;
+    }
 
     /// <summary>
     /// Present when the result exceeded the inline-size threshold and was written to disk.

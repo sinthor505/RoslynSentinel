@@ -600,6 +600,13 @@ public class CreateFileDeleteFileTests
         Assert.That(await WaitUntilAsync(() => hashes[key] as string == HashOf(foldedContent), 15), Is.True,
             "the fold should record the folded content's hash (load-time hash was " + loadTimeHash + ")");
 
+        // The recoverable-text reasoning behind RecordFoldedDocumentBaseline: the fold stores constant text (WithDocumentText from a SourceText),
+        // so the workspace document is resident/recoverable and equals the folded content - which is why the content hash is the correct baseline.
+        var foldedDoc = workspaceManager.CurrentSolution!.Projects.SelectMany(p => p.Documents)
+            .First(d => string.Equals(d.FilePath, targetFile, StringComparison.OrdinalIgnoreCase));
+        Assert.That(foldedDoc.TryGetText(out var residentText), Is.True, "the folded document must hold constant, recoverable text");
+        Assert.That(residentText!.ToString(), Is.EqualTo(foldedContent), "the recoverable text must be exactly the content the baseline hash was taken from");
+
         // Acknowledge the drift, as ExternalFileDrift(Acknowledge) does.
         workspaceManager.ClearExternalFileChanges([targetFile]);
         Assert.That(IsFlagged(), Is.False);
@@ -1004,5 +1011,44 @@ public class CreateFileDeleteFileTests
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(result.Findings?.Count ?? 0, Is.Zero);
+    }
+
+    [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task MemberTool_AddTopLevelType_MixedPreImageUnderCrlf_FindingReachesToolResponseAsync()
+    {
+        // The AppliedChangeSummary the tool builds by hand must carry ApplyOutcome.Findings so the chokepoint attribution reaches the response envelope.
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        workspaceManager.EolModeOverride = EolMode.Crlf;
+        var existingProjectDir = Path.GetDirectoryName(Directory.EnumerateFiles(fixture.SolutionDirectory, "*.csproj", SearchOption.AllDirectories).First())!;
+        var sourceFile = Path.Combine(existingProjectDir, "EolMemberFindingSource.cs");
+        await File.WriteAllTextAsync(sourceFile, "namespace MyApp.Eol;\r\npublic class Foo\n{\r\n}\n");
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var config = Basic.TestEngines.SentinelConfiguration();
+        var refactoringEngine = Basic.TestEngines.BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
+        var structuralRefinementEngine = Basic.TestEngines.StructuralRefinementEngine(workspaceManager, config);
+        var symbolNavigationEngine = Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var memberRefactoringEngine = Basic.TestEngines.MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine);
+        var refactoringStructuralTools = Basic.TestTools.RefactoringStructuralTools(Basic.TestTools.RefactoringStructuralImpl(
+            refactoringEngine,
+            memberRefactoringEngine,
+            structuralRefinementEngine,
+            symbolNavigationEngine,
+            workspaceManager,
+            validationEngine,
+            NullLogger<RefactoringStructuralImpl>.Instance));
+
+        var result = await refactoringStructuralTools.MemberTool(
+            reason: "test message",
+            operation: MemberAction.addTopLevelType,
+            filePath: sourceFile,
+            newMemberSource: "public class Bar { }");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(result.Findings.Any(f => f.Source == "WriteChokepoint"), Is.True, "the mixed pre-image finding must reach the Member tool response");
     }
 }

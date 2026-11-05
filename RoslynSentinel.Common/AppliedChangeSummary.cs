@@ -18,7 +18,9 @@ public record AppliedChangeSummary(
     bool Validated = false,
     List<FileLineChange>? LineChanges = null,
     string? ChangedContentResultId = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<AppliedEditSpan>? EditSpans = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<AppliedEditSpan>? EditSpans = null,
+    // Write-chokepoint findings copied from ApplyOutcome.Findings; not serialized here, the result envelope lifts them (SentinelCallToolResult.Findings).
+    [property: JsonIgnore] List<Finding>? Findings = null
 ) : IOperationResult
 {
     /// <summary>

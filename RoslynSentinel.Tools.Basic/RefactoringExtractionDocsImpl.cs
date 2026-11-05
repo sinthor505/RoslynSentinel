@@ -129,7 +129,7 @@ public class RefactoringExtractionDocsImpl
                 : $"Removes 'using {namespaceName};' from {Path.GetFileName(filePathResolved)}.";
             if (operation != AddRemoveViewAction.add)
             {
-                return new SentinelCallToolResult<object>() { IsError = false, StatusMessage = description, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, returnDiff ? apply.Diff : null, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId) };
+                return new SentinelCallToolResult<object>() { IsError = false, StatusMessage = description, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, returnDiff ? apply.Diff : null, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings) };
             }
 
             // Diff is populated from the actual before/after document diff (apply.Diff, built by
@@ -142,7 +142,7 @@ public class RefactoringExtractionDocsImpl
             // other change bundled into the same write (formatting drift, accessibility changes,
             // whitespace normalization, etc.) -> the caller had no way to know from this tool's own
             // result whether something unexpected also changed.
-            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = description };
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = description };
         }
         catch (Exception ex)
         {
@@ -217,7 +217,7 @@ public class RefactoringExtractionDocsImpl
             var apply = await ValidateAndApplyAsync(changes, description, "SummaryComment", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
-            var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId);
+            var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings);
 
             // add: summaryText is caller-supplied verbatim, echoed back as the added content
             // (same reasoning as MemberTool(add)'s raw-source path). remove has no new content to show.
@@ -264,7 +264,7 @@ public class RefactoringExtractionDocsImpl
             // returns the whole-file UpdatedText, so reconstructing just the new "var x = ..." line
             // here would mean duplicating ExtractLocalVariableAsync's formatting logic. Revisit only
             // if that engine method is changed to return the new declaration text alongside UpdatedText.
-            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Extracted '{variableName}' as a local variable in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId) };
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Extracted '{variableName}' as a local variable in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings) };
         }
         catch (Exception ex)
         {
@@ -344,7 +344,7 @@ public class RefactoringExtractionDocsImpl
             return new SentinelCallToolResult<AppliedChangeSummary>
             {
                 IsError = false,
-                SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Extracted '{newMethodName}' into a new method in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId)
+                SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Extracted '{newMethodName}' into a new method in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings)
             };
         }
         catch (Exception ex)

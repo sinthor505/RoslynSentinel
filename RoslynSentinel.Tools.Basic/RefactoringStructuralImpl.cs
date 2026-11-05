@@ -110,7 +110,7 @@ public class RefactoringStructuralImpl
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = apply.Error };
             }
 
-            var summary = new AppliedChangeSummary(apply.ChangeId, conversion.Changes.Keys.ToList(), description, apply.DryRun, apply.Diff, ChangedContent: conversion.Changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId);
+            var summary = new AppliedChangeSummary(apply.ChangeId, conversion.Changes.Keys.ToList(), description, apply.DryRun, apply.Diff, ChangedContent: conversion.Changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings);
             return new SentinelCallToolResult<AppliedChangeSummary>() { IsError = false, StatusMessage = description, Findings = findings, SuccessData = summary };
         }
         catch (Exception ex)
@@ -262,7 +262,7 @@ public class RefactoringStructuralImpl
             return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = apply.Error };
 
         var description = $"Applied {edits.Count} modifier edit(s) across {touchedFiles.Count} file(s)." + (handledByStaticConversion.Count > 0 ? $" {handledByStaticConversion.Count} add-static edit(s) also rewrote instance-qualified callers." : string.Empty);
-        var summary = new AppliedChangeSummary(apply.ChangeId, touchedFiles, description, apply.DryRun, apply.Diff, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId);
+        var summary = new AppliedChangeSummary(apply.ChangeId, touchedFiles, description, apply.DryRun, apply.Diff, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings);
         return new SentinelCallToolResult<AppliedChangeSummary>() { IsError = false, StatusMessage = description, SuccessData = summary, Findings = staticNotes.Select(n => new Finding("ModifyModifier", n, FindingSeverity.Caution)).ToList() };
     }
 
@@ -425,7 +425,7 @@ public class RefactoringStructuralImpl
         var description = noEffect.Count == 0
             ? $"Applied {appliedIndexes.Count} attribute edit(s) across {touchedFiles.Count} file(s)."
             : $"Applied {appliedIndexes.Count} of {edits.Count} attribute edit(s) across {touchedFiles.Count} file(s); no effect: {string.Join(", ", noEffect)}.";
-        var summary = new AppliedChangeSummary(apply.ChangeId, touchedFiles, description, apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId);
+        var summary = new AppliedChangeSummary(apply.ChangeId, touchedFiles, description, apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings);
         return new SentinelCallToolResult<AppliedChangeSummary>() { IsError = false, StatusMessage = description, SuccessData = summary };
     }
 
@@ -521,7 +521,7 @@ public class RefactoringStructuralImpl
             return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = apply.Error };
 
         var description = $"Applied {edits.Count} base type edit(s) across {touchedFiles.Count} file(s).";
-        var summary = new AppliedChangeSummary(apply.ChangeId, touchedFiles, description, apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId);
+        var summary = new AppliedChangeSummary(apply.ChangeId, touchedFiles, description, apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings);
         return new SentinelCallToolResult<AppliedChangeSummary>() { IsError = false, StatusMessage = description, SuccessData = summary };
     }
 
@@ -644,7 +644,7 @@ public class RefactoringStructuralImpl
             var enumReplaceApply = await ValidateAndApplyAsync(enumReplaceChanges, $"Replaced '{memberName}' in enum '{replaceEnumName}'.", "Member", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
             if (enumReplaceApply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = enumReplaceApply.Error };
-            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(enumReplaceApply.ChangeId, [filePathResolved], $"Replaced '{memberName}' in enum '{replaceEnumName}' in {Path.GetFileName(filePathResolved)}.", enumReplaceApply.DryRun, enumReplaceApply.Diff, ChangedContentResultId: enumReplaceApply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = $"Replaced '{memberName}' in enum '{replaceEnumName}' in {Path.GetFileName(filePathResolved)}." };
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(enumReplaceApply.ChangeId, [filePathResolved], $"Replaced '{memberName}' in enum '{replaceEnumName}' in {Path.GetFileName(filePathResolved)}.", enumReplaceApply.DryRun, enumReplaceApply.Diff, ChangedContentResultId: enumReplaceApply.ChangedContentResultId, Findings: enumReplaceApply.Findings), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = $"Replaced '{memberName}' in enum '{replaceEnumName}' in {Path.GetFileName(filePathResolved)}." };
         }
 
         var result = await _memberRefactoringEngine.ReplaceMemberAsync(filePathResolved, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
@@ -654,7 +654,7 @@ public class RefactoringStructuralImpl
         var apply = await ValidateAndApplyAsync(changes, $"Replace member '{memberName}'.", "Member", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
         if (apply.Error is not null)
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
-        var replaceEnvelope = new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Replaced '{memberName}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = $"Replaced '{memberName}' in {Path.GetFileName(filePathResolved)}." };
+        var replaceEnvelope = new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Replaced '{memberName}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = $"Replaced '{memberName}' in {Path.GetFileName(filePathResolved)}." };
         return replaceEnvelope with { WarningDetails = result.Warnings is { Count: > 0 } ? string.Join(" ", result.Warnings) : null };
     }
 
@@ -723,7 +723,7 @@ public class RefactoringStructuralImpl
             var enumRemoveApply = await ValidateAndApplyAsync(enumRemoveChanges, $"Removed '{memberName}' from enum '{removeEnumName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (enumRemoveApply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = enumRemoveApply.Error };
-            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(enumRemoveApply.ChangeId, [filePathResolved], $"Removed '{memberName}' from enum '{removeEnumName}' in {Path.GetFileName(filePathResolved)}.", enumRemoveApply.DryRun, enumRemoveApply.Diff, _workspaceManager.WorkspaceVersion, ChangedContentResultId: enumRemoveApply.ChangedContentResultId) };
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(enumRemoveApply.ChangeId, [filePathResolved], $"Removed '{memberName}' from enum '{removeEnumName}' in {Path.GetFileName(filePathResolved)}.", enumRemoveApply.DryRun, enumRemoveApply.Diff, _workspaceManager.WorkspaceVersion, ChangedContentResultId: enumRemoveApply.ChangedContentResultId, Findings: enumRemoveApply.Findings) };
         }
 
         var result = await _memberRefactoringEngine.RemoveMemberAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken: cancellationToken);
@@ -747,7 +747,7 @@ public class RefactoringStructuralImpl
                 removeMessage += " " + removeWarning;
             }
         }
-        return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], removeMessage, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContentResultId: apply.ChangedContentResultId), WarningDetails = removeWarning };
+        return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], removeMessage, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings), WarningDetails = removeWarning };
     }
 
     // Used by the addMember / addTopLevelType paths of Member (a generated typed property/field is the TypedMember tool).
@@ -803,7 +803,7 @@ public class RefactoringStructuralImpl
         var topLevelApply = await ValidateAndApplyAsync(topLevelChanges, topLevelDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
         if (topLevelApply.Error is not null)
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = topLevelApply.Error };
-        return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(topLevelApply.ChangeId, [filePathResolved], topLevelDescription, topLevelApply.DryRun, topLevelApply.Diff, Validated: true, LineChanges: topLevelApply.LineChanges, ChangedContentResultId: topLevelApply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = topLevelDescription };
+        return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(topLevelApply.ChangeId, [filePathResolved], topLevelDescription, topLevelApply.DryRun, topLevelApply.Diff, Validated: true, LineChanges: topLevelApply.LineChanges, ChangedContentResultId: topLevelApply.ChangedContentResultId, Findings: topLevelApply.Findings), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = topLevelDescription };
     }
 
     private async Task<SentinelCallToolResult<object>> MemberAddEnumMemberAsync(
@@ -864,7 +864,7 @@ public class RefactoringStructuralImpl
         var enumAddApply = await ValidateAndApplyAsync(enumAddChanges, enumAddDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
         if (enumAddApply.Error is not null)
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = enumAddApply.Error };
-        return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(enumAddApply.ChangeId, [filePathResolved], enumAddDescription, enumAddApply.DryRun, enumAddApply.Diff, Validated: true, LineChanges: enumAddApply.LineChanges, ChangedContentResultId: enumAddApply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = enumAddDescription };
+        return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(enumAddApply.ChangeId, [filePathResolved], enumAddDescription, enumAddApply.DryRun, enumAddApply.Diff, Validated: true, LineChanges: enumAddApply.LineChanges, ChangedContentResultId: enumAddApply.ChangedContentResultId, Findings: enumAddApply.Findings), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = enumAddDescription };
     }
 
     private async Task<SentinelCallToolResult<object>> MemberAddToContainerAsync(
@@ -942,7 +942,7 @@ public class RefactoringStructuralImpl
         var addApply = await ValidateAndApplyAsync(addChanges, description, operationName, dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
         if (addApply.Error is not null)
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = addApply.Error };
-        return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(addApply.ChangeId, [filePathResolved], description, addApply.DryRun, addApply.Diff, Validated: true, LineChanges: addApply.LineChanges, ChangedContentResultId: addApply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = description };
+        return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(addApply.ChangeId, [filePathResolved], description, addApply.DryRun, addApply.Diff, Validated: true, LineChanges: addApply.LineChanges, ChangedContentResultId: addApply.ChangedContentResultId, Findings: addApply.Findings), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = description };
     }
 
     /// <summary>
@@ -1059,7 +1059,7 @@ public class RefactoringStructuralImpl
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = apply.Error };
             // ChangedContent is dropped centrally by AppliedChangeSummary for a real apply: the new member list is just the caller-supplied `values` string
             // already passed in verbatim -> same reasoning as ChangeAccessibilityTool/ModifyModifierTool.
-            return new SentinelCallToolResult<AppliedChangeSummary>() { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId) };
+            return new SentinelCallToolResult<AppliedChangeSummary>() { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings) };
         }
         catch (Exception ex)
         {
@@ -1183,7 +1183,7 @@ public class RefactoringStructuralImpl
             if (apply.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = apply.Error };
             var description = $"{(action == AttributeModifyAction.add ? "Added" : action == AttributeModifyAction.replace ? "Replaced" : "Removed")} '{existingAttribute}' attribute on '{targetName}' in {Path.GetFileName(filePathResolved)}.";
-            var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId);
+            var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings);
 
             // add/replace: existingAttribute (add) or newAttribute (replace) already holds the
             // exact attribute source the caller composed -> echoed back verbatim, same reasoning
@@ -1310,7 +1310,7 @@ public class RefactoringStructuralImpl
             // ChangedContent is dropped centrally by AppliedChangeSummary for a real apply: the only "new" text is the single modifier keyword the caller
             // already passed in -> same reasoning as ChangeAccessibilityTool.
             var description = $"{(action == AddRemoveAction.add ? "Added" : "Removed")} '{modifierText}' modifier on '{targetName}' in {Path.GetFileName(filePathResolved)}.";
-            var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId);
+            var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings);
             return new SentinelCallToolResult<AppliedChangeSummary>() { IsError = false, StatusMessage = description, SuccessData = summary };
         }
         catch (Exception ex)
@@ -1416,7 +1416,7 @@ public class RefactoringStructuralImpl
             // ChangedContent is dropped centrally by AppliedChangeSummary for a real apply: the only "new" text is the base type name the caller already
             // passed in -> same reasoning as ChangeAccessibilityTool/ModifyModifierTool.
             var description = $"{(action == AddRemoveAction.add ? "Added" : "Removed")} '{baseTypeName}' on '{typeName}' in {Path.GetFileName(filePathResolved)}.";
-            var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId);
+            var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings);
             return new SentinelCallToolResult<AppliedChangeSummary>() { IsError = false, StatusMessage = description, SuccessData = summary };
         }
         catch (Exception ex)
@@ -1467,12 +1467,12 @@ public class RefactoringStructuralImpl
             // preview as-is.
             if (apply.DryRun)
             {
-                return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved, newPath], $"[DryRun] Would rename '{Path.GetFileName(filePathResolved)}' to '{Path.GetFileName(newPath)}'.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId) };
+                return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved, newPath], $"[DryRun] Would rename '{Path.GetFileName(filePathResolved)}' to '{Path.GetFileName(newPath)}'.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings) };
             }
 
             // No ChangedContent: this only moves a file to a new name -> the file's content is
             // byte-for-byte unchanged, so there is no new text to show beyond the summary.
-            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved, newPath], $"Renamed '{Path.GetFileName(filePathResolved)}' to '{Path.GetFileName(newPath)}'.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId) };
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved, newPath], $"Renamed '{Path.GetFileName(filePathResolved)}' to '{Path.GetFileName(newPath)}'.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings) };
         }
         catch (Exception ex)
         {

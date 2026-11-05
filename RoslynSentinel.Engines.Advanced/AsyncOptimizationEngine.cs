@@ -2293,7 +2293,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         // supplied a path that doesn't exist in the solution -> surface this as an actionable error.
         if (normalizedFilter != null && totalFilteredDocs == 0)
         {
-            throw new ArgumentException(
+            throw new ToolInvalidArgumentException(
                 $"filePath '{filePath}' matched no documents in solution");
         }
 

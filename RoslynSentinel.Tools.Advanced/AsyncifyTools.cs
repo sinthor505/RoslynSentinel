@@ -144,7 +144,7 @@ public class AsyncifyTools
                 summaryFindings = await _asyncOptimizationEngine
                     .FindMigrationCandidatesAsync(filePath, scopedProjectName, pattern?.ToString(), cancellationToken: cancellationToken);
             }
-            catch (ArgumentException ex)
+            catch (ToolInvalidArgumentException ex)
             {
                 return new SentinelCallToolResult<object>
                 {
@@ -244,7 +244,7 @@ public class AsyncifyTools
                 allFindings = await _asyncOptimizationEngine
                     .FindMigrationCandidatesAsync(filePath, scopedProjectName, pattern?.ToString(), cancellationToken: cancellationToken);
             }
-            catch (ArgumentException ex)
+            catch (ToolInvalidArgumentException ex)
             {
                 return new SentinelCallToolResult<object>
                 {
