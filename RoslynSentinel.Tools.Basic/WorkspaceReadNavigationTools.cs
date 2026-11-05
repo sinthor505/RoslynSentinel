@@ -124,31 +124,28 @@ public class WorkspaceReadNavigationTools
     public Task<SentinelCallToolResult<object>> SearchSolutionTool(
     [Description(ToolParams.Reason)] ToolCallReason reason,
     SearchMode mode,
-    [Description("text: literal or regex, case-insensitive, per line (| alternates). symbol/references/callers/implementations/attribute: the name. Declaration-kind modes: optional name filter (see exactMatch). Required except in declaration-kind modes.")]
+    [Description("text: regex/literal (| alternates). Symbol modes: required name. Declaration-kind modes: optional name filter.")]
         string? query = null,
-    [Description("mode text only. Glob on file paths: '*', '**', '?', '{a,b}'. With '/' it matches the solution-relative path (e.g. 'MyProj/**/*.cs'); without '/' the bare filename (e.g. 'Foo.cs').")]
+    [Description("Text mode glob, e.g. 'MyProj/**/*.cs'.")]
         [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
-    [Description("mode: text only. Caps total matches scanned.")]
-        [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200,
-    [Description("mode: symbol only. Restricts to one kind of symbol.")]
-        [ExternalInputRequired(DataTag.SymbolKind)] SymbolKindFilter symbolKind = SymbolKindFilter.any,
-    [Description("mode: symbol only. Restricts to symbols declared inside this type.")]
+    [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200,
+    [ExternalInputRequired(DataTag.SymbolKind)] SymbolKindFilter symbolKind = SymbolKindFilter.any,
+    [Description("symbol mode.")]
         [ExternalInputRequired(DataTag.ContainingType)] string? containingType = null,
-    [Description("mode: symbol only. Restricts to symbols declared inside this namespace.")]
+    [Description("symbol mode.")]
         [ExternalInputRequired(DataTag.ContainingNamespace)] string? containingNamespace = null,
-    [Description("Restricts to one project (symbol/all/declaration-kind/attribute modes).")]
-        [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
-    [Description("mode: symbol and declaration-kind modes. true (default) = exact name match; false = substring (contains) match.")]
+    [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
+    [Description("false = substring.")]
         [ToolOption(ToolOptionTag.MatchType)] bool exactMatch = true,
-    [Description("mode: symbol/references/callers/implementations/attribute only. Pins resolution when the name is ambiguous across files. Ignored in text and declaration-kind modes - use fileGlob in text mode.")]
+    [Description("Pins the symbol when its name is ambiguous across files.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
-    [Description("mode: references/callers/implementations only. Optional; use when the name is ambiguous. " + ToolParams.ContextSnippet)]
+    [Description("Verbatim source line near the symbol, to disambiguate.")]
         [Consumes(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
-    [Description("mode: references/callers/implementations only. " + ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
-    [Description("mode: references/callers/implementations only. " + ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-    [Description("false (default) = skip test projects (mode text still scans them and only counts hidden hits in the status message); true = include. A test project named in projectName/filePath or as fileGlob's first path segment is included.")] bool includeTests = false,
-    [Description("mode: attribute only. Owner must also carry this attribute.")] string? hasAttribute = null,
-    [Description("mode: text only. Lines (0-10, default 0) of source before and after each match, returned in contextBefore/contextAfter. Use instead of a follow-up ReadFile.")] int contextLines = 0,
+    [Description("Adjacent line.")][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+    [Description("Adjacent line.")][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
+    [Description("true = include test projects.")] bool includeTests = false,
+    [Description("attribute mode: owner also carries this attribute.")] string? hasAttribute = null,
+    [Description("text mode: 0-10 lines around each match.")] int contextLines = 0,
     CancellationToken cancellationToken = default)
     => DispatchSearch(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, contextLines, cancellationToken);
 
@@ -227,51 +224,70 @@ public class WorkspaceReadNavigationTools
             };
         }
 
-        var result = await DispatchSearchCore(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, contextLines, cancellationToken);
-
-        var ignored = FindIgnoredSearchParameters(mode, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, hasAttribute, contextLines);
-        if (ignored.Count == 0)
+        var misplaced = FindMisplacedSearchParameters(mode, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, hasAttribute, contextLines);
+        if (misplaced is not null)
         {
-            return result;
+            return new SentinelCallToolResult<object>
+            {
+                IsError = true,
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, misplaced)
+            };
         }
 
-        var priorWarning = string.IsNullOrEmpty(result.WarningDetails) ? string.Empty : result.WarningDetails + " ";
-        return result with { WarningDetails = priorWarning + $"Ignored parameter(s) for mode {mode}: {string.Join(", ", ignored)}." };
+        return await DispatchSearchCore(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, contextLines, cancellationToken);
     }
 
-    private static List<string> FindIgnoredSearchParameters(SearchMode mode, string? fileGlob, int maxResults, SymbolKindFilter symbolKind, string? containingType, string? containingNamespace, string? projectName, bool exactMatch, string? filePath, string? contextSnippet, string? lineBefore, string? lineAfter, string? hasAttribute, int contextLines)
+    /// <summary>
+    /// Returns a one-line InvalidArgument message when a parameter that the chosen mode ignores was explicitly supplied
+    /// with a non-default value, or null when nothing is misplaced. Null, blank and default values (maxResults 200,
+    /// contextLines 0, symbolKind any, exactMatch true) count as "not supplied" because clients send defaults.
+    /// </summary>
+    private static string? FindMisplacedSearchParameters(SearchMode mode, string? fileGlob, int maxResults, SymbolKindFilter symbolKind, string? containingType, string? containingNamespace, string? projectName, bool exactMatch, string? filePath, string? contextSnippet, string? lineBefore, string? lineAfter, string? hasAttribute, int contextLines)
     {
-        var used = mode switch
-        {
-            SearchMode.text => new[] { "fileGlob", "maxResults", "contextLines" },
-            SearchMode.symbol => new[] { "symbolKind", "containingType", "containingNamespace", "projectName", "exactMatch", "filePath" },
-            SearchMode.references or SearchMode.callers or SearchMode.implementations => new[] { "filePath", "contextSnippet", "lineBefore", "lineAfter" },
-            SearchMode.attribute => new[] { "projectName", "filePath", "hasAttribute" },
-            _ => new[] { "projectName", "exactMatch" }
-        };
+        var isUsageMode = mode is SearchMode.references or SearchMode.callers or SearchMode.implementations;
+        var isDeclarationKind = mode is not (SearchMode.text or SearchMode.symbol or SearchMode.attribute) && !isUsageMode;
+        var misplaced = new List<string>();
 
-        var ignored = new List<string>();
-        void Check(string name, bool supplied)
+        void Check(string name, bool supplied, bool applies, string appliesTo)
         {
-            if (supplied && !used.Contains(name))
+            if (supplied && !applies)
             {
-                ignored.Add(name);
+                misplaced.Add($"{name} ({appliesTo})");
             }
         }
 
-        Check("fileGlob", fileGlob is not null);
-        Check("maxResults", maxResults != 200);
-        Check("contextLines", contextLines != 0);
-        Check("symbolKind", symbolKind != SymbolKindFilter.any);
-        Check("containingType", containingType is not null);
-        Check("containingNamespace", containingNamespace is not null);
-        Check("projectName", projectName is not null);
-        Check("exactMatch", !exactMatch);
-        Check("filePath", filePath is not null);
-        Check("contextSnippet", contextSnippet is not null);
-        Check("lineBefore", lineBefore is not null);
-        Check("lineAfter", lineAfter is not null);
-        Check("hasAttribute", hasAttribute is not null);
-        return ignored;
+        Check("fileGlob", !string.IsNullOrWhiteSpace(fileGlob), mode == SearchMode.text, "mode text only");
+        Check("maxResults", maxResults != 200, mode == SearchMode.text, "mode text only");
+        Check("contextLines", contextLines != 0, mode == SearchMode.text, "mode text only");
+        Check("symbolKind", symbolKind != SymbolKindFilter.any, mode == SearchMode.symbol, "mode symbol only");
+        Check("containingType", !string.IsNullOrWhiteSpace(containingType), mode == SearchMode.symbol, "mode symbol only");
+        Check("containingNamespace", !string.IsNullOrWhiteSpace(containingNamespace), mode == SearchMode.symbol, "mode symbol only");
+        Check("hasAttribute", !string.IsNullOrWhiteSpace(hasAttribute), mode == SearchMode.attribute, "mode attribute only");
+        Check("contextSnippet", !string.IsNullOrWhiteSpace(contextSnippet), isUsageMode, "modes references, callers, implementations only");
+        Check("lineBefore", !string.IsNullOrWhiteSpace(lineBefore), isUsageMode, "modes references, callers, implementations only");
+        Check("lineAfter", !string.IsNullOrWhiteSpace(lineAfter), isUsageMode, "modes references, callers, implementations only");
+        Check("exactMatch", !exactMatch, mode == SearchMode.symbol || isDeclarationKind, "mode symbol and declaration-kind modes only");
+        Check("filePath", !string.IsNullOrWhiteSpace(filePath), mode is SearchMode.symbol or SearchMode.attribute || isUsageMode, "modes symbol, references, callers, implementations, attribute only");
+        Check("projectName", !string.IsNullOrWhiteSpace(projectName), mode is SearchMode.symbol or SearchMode.attribute || isDeclarationKind, "modes symbol, attribute and declaration-kind only");
+
+        if (misplaced.Count == 0)
+        {
+            return null;
+        }
+
+        var fix = string.Empty;
+        if (!string.IsNullOrWhiteSpace(fileGlob) && mode != SearchMode.text)
+        {
+            fix = " To restrict by path use filePath in the symbol, references, callers, implementations and attribute modes, or projectName in the symbol, attribute and declaration-kind modes.";
+        }
+        else if (!string.IsNullOrWhiteSpace(filePath) && mode == SearchMode.text)
+        {
+            fix = " To restrict text mode by path use fileGlob.";
+        }
+
+        var example = mode == SearchMode.text
+            ? RoslynSentinel.Common.ToolCallHint.Call("Search", ("mode", "text"), ("query", "TODO"), ("fileGlob", "MyProj/**/*.cs"))
+            : RoslynSentinel.Common.ToolCallHint.Call("Search", ("mode", mode.ToString()), ("query", "MyType"));
+        return $"Search mode {mode} ignores: {string.Join(", ", misplaced)}. Remove it or change mode.{fix} For example {example}.";
     }
 }

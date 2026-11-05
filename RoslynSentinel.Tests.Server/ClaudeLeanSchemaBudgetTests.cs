@@ -23,15 +23,18 @@ public class ClaudeLeanSchemaBudgetTests
 {
     // Measured on 2026-10-18 (core claude-lean surface, after the trim in proposal_trim_claude_lean_core_surface.md):
     // Advanced and Basic both 19 tools, 27752 chars total on 2026-10-18, now about 28117 after the RunTest environment parameter (TODO #39); largest tool Git at 4157 chars. Raised to 29000 on 2026-10-24: measured 28868 after the optional GetMethodSource containerName parameter (~330 chars; plan_unknown_parameter_rejection_reduction.md Step 4) on top of other additions since 2026-10-18. Raised to 29500 on 2026-10-25: measured 29229 after the optional Search contextLines parameter (~361 chars, commit 36e51f0c). Each constant is the
-    // measurement rounded up to the next 500. Raise a constant only when the growth is intended.
-    private const int AdvancedTotalBudget = 29500;
-    private const int BasicTotalBudget = 29500;
+    // measurement rounded up to the next 500. Raise a constant only when the growth is intended. Lowered on 2026-11-05 (W8 Search schema trim): total 27996 chars, Search 3815 -> 2329 chars (inputSchema 3215 -> 1729); total budget now 28500 (28000 left 4 chars headroom), Search budget 2450 (5% headroom).
+    private const int AdvancedTotalBudget = 28500;
+    private const int BasicTotalBudget = 28500;
     private const int AdvancedMaxToolBudget = 4500;
     private const int BasicMaxToolBudget = 4500;
+    // Search per-tool budget.
+    private const int AdvancedSearchToolBudget = 2450;
+    private const int BasicSearchToolBudget = 2450;
 
     private const string RaiseHint = "if this growth is intended, raise the constant in ClaudeLeanSchemaBudgetTests and note why in the commit message";
 
-    private static List<(string Name, int Chars)> Measure(bool advanced)
+    private static List<(string Name, int Chars, int InputSchemaChars)> Measure(bool advanced)
     {
         var services = new ServiceCollection();
         if (advanced)
@@ -65,14 +68,15 @@ public class ClaudeLeanSchemaBudgetTests
         var collection = host.Services.GetRequiredService<IOptions<McpServerOptions>>().Value.ToolCollection!;
         return collection
             .Select(tool => (
-                tool.ProtocolTool.Name,
-                JsonSerializer.Serialize(tool.ProtocolTool, ModelContextProtocol.McpJsonUtilities.DefaultOptions).Length))
-            .OrderByDescending(t => t.Length)
+                Name: tool.ProtocolTool.Name,
+                Chars: JsonSerializer.Serialize(tool.ProtocolTool, ModelContextProtocol.McpJsonUtilities.DefaultOptions).Length,
+                InputSchemaChars: JsonSerializer.Serialize(tool.ProtocolTool.InputSchema, ModelContextProtocol.McpJsonUtilities.DefaultOptions).Length))
+            .OrderByDescending(t => t.Chars)
             .ThenBy(t => t.Name, StringComparer.Ordinal)
             .ToList();
     }
 
-    private static string Failure(string what, bool advanced, int measured, int budget, List<(string Name, int Chars)> tools) =>
+    private static string Failure(string what, bool advanced, int measured, int budget, List<(string Name, int Chars, int InputSchemaChars)> tools) =>
         $"claude-lean ({(advanced ? "Advanced" : "Basic")}) {what} is {measured} chars, budget {budget}. Five largest tools: "
         + string.Join(", ", tools.Take(5).Select(t => $"{t.Name}={t.Chars}"))
         + $". {RaiseHint}";
@@ -97,5 +101,17 @@ public class ClaudeLeanSchemaBudgetTests
         TestContext.Out.WriteLine($"claude-lean {(advanced ? "Advanced" : "Basic")}: largest tool {largest.Name}={largest.Chars} chars");
 
         Assert.That(largest.Chars, Is.LessThanOrEqualTo(budget), Failure($"largest tool ({largest.Name}) schema size", advanced, largest.Chars, budget, tools));
+    }
+
+    [TestCase(true, AdvancedSearchToolBudget)]
+    [TestCase(false, BasicSearchToolBudget)]
+    public void CoreSurface_SearchToolSchema_IsWithinBudget(bool advanced, int budget)
+    {
+        var tools = Measure(advanced);
+        var search = tools.FirstOrDefault(t => t.Name == "Search");
+        Assert.That(search.Name, Is.EqualTo("Search"), $"claude-lean ({(advanced ? "Advanced" : "Basic")}) surface has no Search tool. Tools: {string.Join(", ", tools.Select(t => t.Name))}");
+        TestContext.Out.WriteLine($"claude-lean {(advanced ? "Advanced" : "Basic")}: Search entry {search.Chars} chars, inputSchema {search.InputSchemaChars} chars");
+
+        Assert.That(search.Chars, Is.LessThanOrEqualTo(budget), Failure($"Search tool schema (entry {search.Chars} chars, inputSchema {search.InputSchemaChars} chars)", advanced, search.Chars, budget, tools));
     }
 }

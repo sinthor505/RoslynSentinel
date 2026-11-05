@@ -8,7 +8,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 /// <summary>
 /// Tool-level coverage for the <c>Search</c> tool's modes: the blank-query rejection, the
-/// "Ignored parameter(s)" warning for parameters that do not apply to a mode, the callers and
+/// InvalidArgument rejection of parameters that do not apply to a mode, the callers and
 /// implementations modes, and the syntax-only attribute mode (including includeTests).
 /// </summary>
 [TestFixture]
@@ -103,19 +103,20 @@ public class SearchModeTests
     }
 
     [Test]
-    public async Task Search_TextMode_WithIrrelevantParameter_SucceedsAndWarnsIgnoredParameter()
+    public async Task Search_TextMode_WithIrrelevantParameter_IsInvalidArgumentError()
     {
         using var h = await CreateHarnessAsync();
 
         var result = await h.Tools.SearchSolutionTool(
-            reason: "search ignored parameter warning regression",
+            reason: "search irrelevant parameter rejection regression",
             SearchMode.text,
             query: "Target",
             symbolKind: SymbolKindFilter.method);
 
-        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
-        Assert.That(result.WarningDetails, Does.Contain("Ignored parameter"),
-            "A symbol-only parameter passed to mode text must be reported as ignored, not rejected.");
+        Assert.That(result.IsError, Is.True, "A symbol-only parameter passed to mode text must be rejected.");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("ignores"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("symbolKind"));
     }
 
     [Test]
@@ -180,19 +181,20 @@ public class SearchModeTests
     }
 
     [Test]
-    public async Task Search_SymbolMode_WithContextLines_SucceedsAndWarnsIgnoredParameter()
+    public async Task Search_SymbolMode_WithContextLines_IsInvalidArgumentError()
     {
         using var h = await CreateHarnessAsync();
 
         var result = await h.Tools.SearchSolutionTool(
-            reason: "search symbol ignored contextLines warning regression",
+            reason: "search symbol contextLines rejection regression",
             SearchMode.symbol,
             query: "SearchModeProbeImpl",
             contextLines: 2);
 
-        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
-        Assert.That(result.WarningDetails, Does.Contain("Ignored parameter"));
-        Assert.That(result.WarningDetails, Does.Contain("contextLines"));
+        Assert.That(result.IsError, Is.True, "A text-only parameter passed to mode symbol must be rejected.");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("ignores"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("contextLines"));
     }
 
     [Test]
@@ -366,19 +368,20 @@ public class SearchModeTests
     }
 
     [Test]
-    public async Task Search_SymbolMode_WithHasAttribute_SucceedsAndWarnsIgnoredParameter()
+    public async Task Search_SymbolMode_WithHasAttribute_IsInvalidArgumentError()
     {
         using var h = await CreateHarnessAsync();
 
         var result = await h.Tools.SearchSolutionTool(
-            reason: "search symbol ignored hasAttribute warning regression",
+            reason: "search symbol hasAttribute rejection regression",
             SearchMode.symbol,
             query: "SearchModeProbeImpl",
             hasAttribute: "CoBar");
 
-        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
-        Assert.That(result.WarningDetails, Does.Contain("Ignored parameter"));
-        Assert.That(result.WarningDetails, Does.Contain("hasAttribute"));
+        Assert.That(result.IsError, Is.True, "An attribute-only parameter passed to mode symbol must be rejected.");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("ignores"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("hasAttribute"));
     }
 
     [Test]
@@ -419,5 +422,175 @@ public class SearchModeTests
         var withTests = await engine.FindTypesByAttributeAsync("TestOnlyMarker", includeTests: true);
         Assert.That(withTests.Select(r => r.MemberName), Does.Contain("TestOnlyUsage"),
             "includeTests=true must report the type decorated in the test project.");
+    }
+
+    [Test]
+    public async Task Search_SymbolMode_WithFileGlob_IsInvalidArgumentError()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search symbol fileGlob rejection regression",
+            SearchMode.symbol,
+            query: "SearchModeProbeImpl",
+            fileGlob: "**/*.cs");
+
+        Assert.That(result.IsError, Is.True, "A text-only fileGlob passed to mode symbol must be rejected.");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("ignores"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("fileGlob"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("filePath"));
+    }
+
+    [Test]
+    public async Task Search_ReferencesMode_WithMaxResults_IsInvalidArgumentError()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search references maxResults rejection regression",
+            SearchMode.references,
+            query: "Target",
+            maxResults: 5);
+
+        Assert.That(result.IsError, Is.True, "A text-only maxResults of 5 passed to mode references must be rejected.");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("ignores"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("maxResults"));
+    }
+
+    [Test]
+    public async Task Search_TextMode_WithContainingType_IsInvalidArgumentError()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search text containingType rejection regression",
+            SearchMode.text,
+            query: "Target",
+            containingType: "SearchModeProbeImpl");
+
+        Assert.That(result.IsError, Is.True, "A symbol-only containingType passed to mode text must be rejected.");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("ignores"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("containingType"));
+    }
+
+    [Test]
+    public async Task Search_SymbolMode_WithContextSnippet_IsInvalidArgumentError()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search symbol contextSnippet rejection regression",
+            SearchMode.symbol,
+            query: "SearchModeProbeImpl",
+            contextSnippet: "public class SearchModeProbeImpl");
+
+        Assert.That(result.IsError, Is.True, "A references-only contextSnippet passed to mode symbol must be rejected.");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("ignores"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("contextSnippet"));
+    }
+
+    [Test]
+    public async Task Search_TextMode_WithExactMatchFalse_IsInvalidArgumentError()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search text exactMatch rejection regression",
+            SearchMode.text,
+            query: "Target",
+            exactMatch: false);
+
+        Assert.That(result.IsError, Is.True, "exactMatch false passed to mode text must be rejected.");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("ignores"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("exactMatch"));
+    }
+
+    [Test]
+    public async Task Search_TextMode_WithFilePath_IsInvalidArgumentError()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search text filePath rejection regression",
+            SearchMode.text,
+            query: "Target",
+            filePath: ProbeFilePath(h));
+
+        Assert.That(result.IsError, Is.True, "A symbol-only filePath passed to mode text must be rejected.");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("ignores"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("filePath"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("fileGlob"));
+    }
+
+    [Test]
+    public async Task Search_ReferencesMode_WithProjectName_IsInvalidArgumentError()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search references projectName rejection regression",
+            SearchMode.references,
+            query: "Target",
+            projectName: "ContosoOrders.Core");
+
+        Assert.That(result.IsError, Is.True, "projectName passed to mode references must be rejected.");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("ignores"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("projectName"));
+    }
+
+    [Test]
+    public async Task Search_TextMode_ExplicitDefaults_AreNotRejected()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search text explicit default values not rejected regression",
+            SearchMode.text,
+            query: "Target",
+            maxResults: 200,
+            contextLines: 0,
+            symbolKind: SymbolKindFilter.any,
+            exactMatch: true,
+            filePath: null,
+            fileGlob: "");
+
+        Assert.That(result.IsError, Is.Not.True, "Default or blank values of mode-irrelevant parameters must not be rejected.");
+    }
+
+    [Test]
+    public async Task Search_SymbolMode_ExplicitDefaults_AreNotRejected()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search symbol explicit default values not rejected regression",
+            SearchMode.symbol,
+            query: "Target",
+            maxResults: 200,
+            contextLines: 0);
+
+        Assert.That(result.IsError, Is.Not.True, "Default values of text-only parameters must not be rejected in mode symbol.");
+    }
+
+    [Test]
+    public async Task Search_TextMode_FileGlobAndContextLines_AreNotRejected()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search text fileGlob and contextLines positive control regression",
+            SearchMode.text,
+            query: "Target",
+            fileGlob: "**/*.cs",
+            contextLines: 1);
+
+        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
     }
 }
