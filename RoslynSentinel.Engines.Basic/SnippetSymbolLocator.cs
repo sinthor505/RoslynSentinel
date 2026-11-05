@@ -43,8 +43,6 @@ public static class SnippetSymbolLocator
         var pos = SkipLeadingWhitespace(text, SnippetLookup.ResolveOrThrow(text, contextSnippet, lineBefore, lineAfter).Start);
         var node = root.FindNode(new TextSpan(pos, 0));
 
-        // TODO the failure message omits record parameters from its candidate list
-        // (SymbolNavigationEngine.DescribeNameOnlyCandidates filters to MemberDeclarationSyntax).
         return MapRecordParameterToProperty(model.GetDeclaredSymbol(node, cancellationToken)
                ?? model.GetSymbolInfo(node, cancellationToken).Symbol
                ?? node.DescendantNodes().OfType<VariableDeclaratorSyntax>()

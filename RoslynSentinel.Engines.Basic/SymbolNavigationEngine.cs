@@ -1527,7 +1527,7 @@ public class SymbolNavigationEngine
                     throw new ToolNotFoundException(
                         $"contextSnippet did not resolve to a symbol in '{filePath}'. " +
                         $"This is NOT a confirmed zero-references result for '{symbolName}' - the lookup " +
-                        "never ran. " + DescribeNameOnlyCandidates(decls, symbolName) +
+                        "never ran. " + DescribeNameOnlyCandidates(decls.Cast<SyntaxNode>().Concat(FindPositionalRecordParameters(root, symbolName)).ToList(), symbolName) +
                         "Re-check the snippet against GetMethodSource/GetFileOutline output, " +
                         "or omit contextSnippet if the symbolName is unambiguous in this file." +
                         (positionalRecord != null
@@ -1791,16 +1791,25 @@ public class SymbolNavigationEngine
     /// </summary>
     private static IPropertySymbol? FindPositionalRecordProperty(SemanticModel model, SyntaxNode root, string name)
     {
-        var record = root.DescendantNodes().OfType<ParameterSyntax>()
-            .Where(p => p.Identifier.ValueText == name && p.Parent is ParameterListSyntax { Parent: RecordDeclarationSyntax })
-            .Select(p => (RecordDeclarationSyntax)p.Parent!.Parent!)
-            .FirstOrDefault();
-        if (record == null || model.GetDeclaredSymbol(record) is not INamedTypeSymbol recordSymbol)
+        var parameter = FindPositionalRecordParameters(root, name).FirstOrDefault();
+        if (parameter == null || model.GetDeclaredSymbol((RecordDeclarationSyntax)parameter.Parent!.Parent!) is not INamedTypeSymbol recordSymbol)
         {
             return null;
         }
 
         return recordSymbol.GetMembers(name).OfType<IPropertySymbol>().FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Finds the positional record parameters named `name` (e.g. `Detail` in `record R(string Detail)`).
+    /// They are not MemberDeclarationSyntax, so declaration-based candidate lookups cannot see them.
+    /// Returns an empty list when none exist in the file.
+    /// </summary>
+    private static List<ParameterSyntax> FindPositionalRecordParameters(SyntaxNode root, string name)
+    {
+        return root.DescendantNodes().OfType<ParameterSyntax>()
+            .Where(p => p.Identifier.ValueText == name && p.Parent is ParameterListSyntax { Parent: RecordDeclarationSyntax })
+            .ToList();
     }
 
     /// <summary>
@@ -1866,9 +1875,15 @@ public class SymbolNavigationEngine
                         var nameOnlyCandidates = SyntaxTargetResolver.ResolveCandidates(root, nameOnlyText, symbolName, cancellationToken)
                             .Select(c => c.Node)
                             .OfType<MemberDeclarationSyntax>()
+                            .Cast<SyntaxNode>()
+                            .Concat(FindPositionalRecordParameters(root, symbolName))
                             .ToList();
+                        var positionalRecord = FindPositionalRecordProperty(model, root, symbolName);
                         scopedResolutionFailure = $"contextSnippet did not resolve to a symbol in '{filePath}'. " +
-                            DescribeNameOnlyCandidates(nameOnlyCandidates, symbolName);
+                            DescribeNameOnlyCandidates(nameOnlyCandidates, symbolName) +
+                            (positionalRecord != null
+                                ? $" '{symbolName}' is a positional parameter of record {positionalRecord.ContainingType.Name}; point contextSnippet at that line or omit it to resolve the property by name."
+                                : string.Empty);
                     }
                 }
                 else
@@ -1913,6 +1928,7 @@ public class SymbolNavigationEngine
                                 .FirstOrDefault(s => s != null);
                     }
 
+                    symbol ??= FindPositionalRecordProperty(model, root, symbolName);
                     if (symbol == null)
                     {
                         scopedResolutionFailure = $"symbolName '{symbolName}' was not found declared in '{filePath}'.";
@@ -2440,7 +2456,7 @@ public class SymbolNavigationEngine
     /// BasicRefactoringEngine mutation tools. Returns an empty string (not a sentence fragment) when
     /// symbolName itself doesn't resolve to anything nearby, since there's nothing to list.
     /// </summary>
-    public static string DescribeNameOnlyCandidates(List<MemberDeclarationSyntax> candidates, string symbolName)
+    public static string DescribeNameOnlyCandidates(IReadOnlyList<SyntaxNode> candidates, string symbolName)
     {
         if (candidates.Count == 0)
         {

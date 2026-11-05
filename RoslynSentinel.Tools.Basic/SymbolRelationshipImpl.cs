@@ -35,9 +35,9 @@ public class SymbolRelationshipImpl
     private async Task<List<object>> RunRelationshipQueryAsync(FindUsagesSearchKind searchKind, string name, string? projectName, string filePath, bool sortByFrequency, bool includeTests, string? hasAttribute, List<string> hiddenTestProjects, CancellationToken cancellationToken)
     {
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
-        // attributeUsages with includeTests false and no project/file scope is a view filter: scan every
+        // attributeUsages, implementorsOf, objectCreations, extensionsFor and methodsByReturnType with includeTests false and no project/file scope are view filters: scan every
         // document, then drop test-project hits here and record their project names in hiddenTestProjects.
-        var hideTestHits = searchKind == FindUsagesSearchKind.attributeUsages && !includeTests && string.IsNullOrEmpty(projectName) && string.IsNullOrEmpty(filePath);
+        var hideTestHits = (searchKind is FindUsagesSearchKind.attributeUsages or FindUsagesSearchKind.implementorsOf or FindUsagesSearchKind.objectCreations or FindUsagesSearchKind.extensionsFor or FindUsagesSearchKind.methodsByReturnType) && !includeTests && string.IsNullOrEmpty(projectName) && string.IsNullOrEmpty(filePath);
         object result = searchKind switch
         {
             FindUsagesSearchKind.implementorsOf => await _symbolNavigationEngine.FindAllImplementationsAsync(name, projectName, cancellationToken),
@@ -51,7 +51,15 @@ public class SymbolRelationshipImpl
         if (hideTestHits)
         {
             var testDocProjects = await BuildTestDocumentMapAsync(filePathResolved.Absolute, cancellationToken);
-            result = ExcludeTestHits((List<AttributeUsageSite>)result, s => s.FilePath.Absolute, testDocProjects, hiddenTestProjects);
+            result = searchKind switch
+            {
+                FindUsagesSearchKind.attributeUsages => (object)ExcludeTestHits((List<AttributeUsageSite>)result, s => s.FilePath.Absolute, testDocProjects, hiddenTestProjects),
+                FindUsagesSearchKind.implementorsOf => (object)ExcludeTestHits((List<ImplementationInfo>)result, i => AbsolutePathOrNull(i.FilePath), testDocProjects, hiddenTestProjects),
+                FindUsagesSearchKind.objectCreations => (object)ExcludeTestHits((List<ObjectCreationSite>)result, s => s.FilePath.Absolute, testDocProjects, hiddenTestProjects),
+                FindUsagesSearchKind.extensionsFor => (object)ExcludeTestHits((List<ExtensionMethodInfo>)result, e => AbsolutePathOrNull(e.FilePath), testDocProjects, hiddenTestProjects),
+                FindUsagesSearchKind.methodsByReturnType => (object)ExcludeTestHits((List<SearchResult>)result, r => AbsolutePathOrNull(r.FilePath), testDocProjects, hiddenTestProjects),
+                _ => result
+            };
         }
         // Every FindUsagesSearchKind backing method returns some IEnumerable<T> -> normalize to
         // List<object> so broaden-on-empty can report a count and label results uniformly
@@ -98,7 +106,7 @@ public class SymbolRelationshipImpl
                     IsError = false,
                     SuccessData = results,
                     TotalRecords = 0,
-                    StatusMessage = $"0 results for '{searchKind}' with hasAttribute '{hasAttribute}'. Broaden-on-empty was skipped because it cannot apply the hasAttribute filter; drop hasAttribute to broaden."
+                    StatusMessage = $"0 results for '{searchKind}' with hasAttribute '{hasAttribute}'. Broaden-on-empty was skipped because it cannot apply the hasAttribute filter; drop hasAttribute to broaden." + HiddenTestHitsHint(hiddenTestProjects)
                 };
             }
 
@@ -112,7 +120,7 @@ public class SymbolRelationshipImpl
             {
                 try
                 {
-                    var otherResults = await RunRelationshipQueryAsync(otherKind, name, projectName, filePathResolved, sortByFrequency, includeTests, null, new List<string>(), cancellationToken);
+                    var otherResults = await RunRelationshipQueryAsync(otherKind, name, projectName, filePathResolved, sortByFrequency, includeTests, null, hiddenTestProjects, cancellationToken);
                     if (otherResults.Count > 0)
                     {
                         broadened[otherKind.ToString()] = otherResults;
@@ -143,7 +151,7 @@ public class SymbolRelationshipImpl
             var broadenedResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = broadened, TotalRecords = totalFound };
             return broadenedResult with
             {
-                WarningDetails = $"0 results for '{searchKind}'. Broadened search across all relationship kinds - " + $"found {totalFound} result(s): {summary}."
+                WarningDetails = $"0 results for '{searchKind}'. Broadened search across all relationship kinds - " + $"found {totalFound} result(s): {summary}." + HiddenTestHitsHint(hiddenTestProjects)
             };
         }
         catch (Exception ex)
@@ -202,6 +210,15 @@ public class SymbolRelationshipImpl
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PreviewRenameImpact")
             };
         }
+    }
+
+    private string? AbsolutePathOrNull(string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            return null;
+        }
+        return Path.IsPathRooted(path) ? path : _workspaceManager.ResolveFromWire(path).Absolute;
     }
 
     // Maps every test-project document path (OrdinalIgnoreCase) to its project name. An explicit filePath that

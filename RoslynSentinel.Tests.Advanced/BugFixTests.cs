@@ -1962,6 +1962,40 @@ public class Foo : IFoo
             Assert.That(ex!.Message, Does.Contain("Did you mean"));
             Assert.That(ex.Message, Does.Contain("Calculator"));
         }
+
+        // -- Positional record parameter: FindImplementations with no contextSnippet does not throw 'was not found declared'. Asserts only the no-throw outcome (returned list contents not checked) --
+        [Test]
+        public async Task FindImplementationsForMemberAsync_PositionalRecordParameter_NoSnippet_DoesNotThrow()
+        {
+            SetSource(@"public interface IHasName { string Name { get; } }
+public record Person(string Name) : IHasName;", "Person.cs");
+            var results = await _navigationEngine.FindImplementationsForMemberAsync("Person.cs", "Name", contextSnippet: null);
+            Assert.That(results, Is.Not.Null, "Resolving the positional record parameter by name must not throw");
+        }
+
+        // -- Positional record parameter: a contextSnippet that lands on no symbol named Name reports the parameter line and the record it belongs to --
+        [Test]
+        public async Task FindImplementationsForMemberAsync_PositionalRecordParameter_SnippetMiss_ListsParameterCandidate()
+        {
+            SetSource(@"using System;
+public interface IHasName { string Name { get; } }
+public record Person(string Name) : IHasName;", "Person.cs");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindImplementationsForMemberAsync("Person.cs", "Name", contextSnippet: "using System;"));
+            Assert.That(ex!.Message, Does.Contain("WAS found declared at"), "The snippet miss must list the declarations named Name that exist in the file");
+            Assert.That(ex.Message, Does.Contain("line 3"), "The positional record parameter sits on line 3 of the source");
+            Assert.That(ex.Message, Does.Contain("positional parameter of record Person"), "The message must name the record that owns the positional parameter");
+        }
+
+        // -- Positional record parameter: DescribeNameOnlyCandidates lists the ParameterSyntax with its line --
+        [Test]
+        public void DescribeNameOnlyCandidates_PositionalRecordParameter_ListsParameterLine()
+        {
+            var tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText("public record R(string Detail);");
+            var param = tree.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ParameterSyntax>().Single();
+            var description = SymbolNavigationEngine.DescribeNameOnlyCandidates(new List<SyntaxNode> { param }, "Detail");
+            Assert.That(description, Does.Contain("WAS found declared at"));
+            Assert.That(description, Does.Contain("line 1"));
+        }
     }
 
     [TestFixture]

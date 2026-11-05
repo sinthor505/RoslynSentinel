@@ -885,5 +885,192 @@ public class AttributedTarget { }
         }
     }
 
+    private (string Dir, SymbolRelationshipImpl Impl) BuildAppAndTestsSolution(string appSource, string testSource)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "SymRelIncludeTests_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "AppProj"));
+        Directory.CreateDirectory(Path.Combine(dir, "TestsProj"));
+        var appCsproj = Path.Combine(dir, "AppProj", "AppProj.csproj");
+        var testCsproj = Path.Combine(dir, "TestsProj", "TestsProj.csproj");
+        File.WriteAllText(appCsproj, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+        File.WriteAllText(testCsproj, "<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup><PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"18.10.1\" /></ItemGroup></Project>");
+
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("AppProj", appCsproj,
+            [("App.cs", appSource, Path.Combine(dir, "AppProj", "App.cs"))]);
+        var appProjectId = solution.Projects.Single(p => p.Name == "AppProj").Id;
+        var testProjectId = ProjectId.CreateNewId();
+        solution = solution.AddProject(ProjectInfo.Create(testProjectId, VersionStamp.Default, "TestsProj", "TestsProj", LanguageNames.CSharp)
+                .WithFilePath(testCsproj))
+            .AddDocument(DocumentId.CreateNewId(testProjectId, "Tests.cs"), "Tests.cs",
+                Microsoft.CodeAnalysis.Text.SourceText.From(testSource), filePath: Path.Combine(dir, "TestsProj", "Tests.cs"))
+            // Deviation from the neighbouring test: TestsProj references AppProj so app types resolve in the test project.
+            .AddProjectReference(testProjectId, new Microsoft.CodeAnalysis.ProjectReference(appProjectId));
+        _workspaceManager.SetTestSolution(solution);
+
+        var impl = Battery.Basic.TestTools.SymbolRelationshipImpl(_discoveryEngine, _symbolNavigationEngine, _workspaceManager, NullLogger<SymbolRelationshipImpl>.Instance);
+        return (dir, impl);
+    }
+
+    [Test]
+    [Category("SymbolRelationshipTools")]
+    public async Task QuerySymbolRelationships_AttributeUsagesWithHasAttribute_IncludeTestsFalse_HintInStatusMessage()
+    {
+        var (dir, impl) = BuildAppAndTestsSolution(
+            "public class ProbeAttribute : System.Attribute { }\npublic class MarkerAttribute : System.Attribute { }\n[Probe]\npublic class AppTarget { }\n",
+            "[Probe, Marker]\npublic class TestTarget { }\n");
+        try
+        {
+            var hidden = await impl.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.attributeUsages, includeTests: false, hasAttribute: "Marker");
+            Assert.That(hidden.IsError, Is.False, hidden.ErrorData?.Message);
+            Assert.That(hidden.TotalRecords, Is.EqualTo(0));
+            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests is false").And.Contain("TestsProj"));
+
+            var all = await impl.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.attributeUsages, includeTests: true, hasAttribute: "Marker");
+            Assert.That(all.IsError, Is.False, all.ErrorData?.Message);
+            var allSites = (all.SuccessData as System.Collections.IEnumerable)?.Cast<AttributeUsageSite>().ToList();
+            Assert.That(allSites, Is.Not.Null.And.Count.EqualTo(1));
+            Assert.That(allSites![0].ProjectName, Is.EqualTo("TestsProj"));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Test]
+    [Category("SymbolRelationshipTools")]
+    public async Task QuerySymbolRelationships_ImplementorsOfEmptyBroadens_IncludeTestsFalse_HintInWarningDetails()
+    {
+        var (dir, impl) = BuildAppAndTestsSolution(
+            "public class ProbeAttribute : System.Attribute { }\n[Probe]\npublic class AppTarget { }\n",
+            "[Probe]\npublic class TestTarget { }\n");
+        try
+        {
+            var hidden = await impl.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.implementorsOf, includeTests: false);
+            Assert.That(hidden.IsError, Is.False, hidden.ErrorData?.Message);
+            Assert.That(hidden.WarningDetails, Does.Contain("hidden because includeTests is false").And.Contain("TestsProj"));
+            var hiddenBroadened = hidden.SuccessData as System.Collections.IDictionary;
+            Assert.That(hiddenBroadened, Is.Not.Null);
+            Assert.That(hiddenBroadened!.Contains("attributeUsages"), Is.True);
+            var hiddenSites = (hiddenBroadened["attributeUsages"] as System.Collections.IEnumerable)?.Cast<AttributeUsageSite>().ToList();
+            Assert.That(hiddenSites, Is.Not.Null.And.Count.EqualTo(1));
+            Assert.That(hiddenSites![0].ProjectName, Is.EqualTo("AppProj"));
+
+            var all = await impl.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.implementorsOf, includeTests: true);
+            Assert.That(all.IsError, Is.False, all.ErrorData?.Message);
+            var allBroadened = all.SuccessData as System.Collections.IDictionary;
+            Assert.That(allBroadened, Is.Not.Null);
+            var allSites = (allBroadened!["attributeUsages"] as System.Collections.IEnumerable)?.Cast<AttributeUsageSite>().ToList();
+            Assert.That(allSites, Is.Not.Null.And.Count.EqualTo(2));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Test]
+    [Category("SymbolRelationshipTools")]
+    public async Task QuerySymbolRelationships_ImplementorsOf_IncludeTestsFalse_HidesTestImplementorAndNamesIt()
+    {
+        var (dir, impl) = BuildAppAndTestsSolution(
+            "public interface IThing { }\npublic class AppImpl : IThing { }\n",
+            "public class TestImpl : IThing { }\n");
+        try
+        {
+            var hidden = await impl.QuerySymbolRelationships(reason: "test message", "IThing", FindUsagesSearchKind.implementorsOf, includeTests: false);
+            Assert.That(hidden.IsError, Is.False, hidden.ErrorData?.Message);
+            var hiddenList = (hidden.SuccessData as System.Collections.IEnumerable)?.Cast<object>().ToList();
+            Assert.That(hiddenList, Is.Not.Null.And.Count.EqualTo(1));
+            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests is false").And.Contain("TestsProj"));
+
+            var all = await impl.QuerySymbolRelationships(reason: "test message", "IThing", FindUsagesSearchKind.implementorsOf, includeTests: true);
+            Assert.That(all.IsError, Is.False, all.ErrorData?.Message);
+            var allList = (all.SuccessData as System.Collections.IEnumerable)?.Cast<object>().ToList();
+            Assert.That(allList, Is.Not.Null.And.Count.EqualTo(2));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Test]
+    [Category("SymbolRelationshipTools")]
+    public async Task QuerySymbolRelationships_ObjectCreations_IncludeTestsFalse_HidesTestSiteAndNamesIt()
+    {
+        var (dir, impl) = BuildAppAndTestsSolution(
+            "public class Widget { }\npublic class AppMaker { public object Make() => new Widget(); }\n",
+            "public class TestMaker { public object Make() => new Widget(); }\n");
+        try
+        {
+            var hidden = await impl.QuerySymbolRelationships(reason: "test message", "Widget", FindUsagesSearchKind.objectCreations, includeTests: false);
+            Assert.That(hidden.IsError, Is.False, hidden.ErrorData?.Message);
+            var hiddenSites = (hidden.SuccessData as System.Collections.IEnumerable)?.Cast<object>().ToList();
+            Assert.That(hiddenSites, Is.Not.Null.And.Count.EqualTo(1));
+            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests is false").And.Contain("TestsProj"));
+
+            var all = await impl.QuerySymbolRelationships(reason: "test message", "Widget", FindUsagesSearchKind.objectCreations, includeTests: true);
+            Assert.That(all.IsError, Is.False, all.ErrorData?.Message);
+            var allSites = (all.SuccessData as System.Collections.IEnumerable)?.Cast<object>().ToList();
+            Assert.That(allSites, Is.Not.Null.And.Count.EqualTo(2));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Test]
+    [Category("SymbolRelationshipTools")]
+    public async Task QuerySymbolRelationships_ExtensionsFor_IncludeTestsFalse_HintInResultOrWarning()
+    {
+        var (dir, impl) = BuildAppAndTestsSolution(
+            "public class Widget { }\n",
+            "public static class Ext { public static int Twice(this Widget w) => 2; }\n");
+        try
+        {
+            var hidden = await impl.QuerySymbolRelationships(reason: "test message", "Widget", FindUsagesSearchKind.extensionsFor, includeTests: false);
+            Assert.That(hidden.IsError, Is.False, hidden.ErrorData?.Message);
+            var hiddenText = $"{hidden.StatusMessage}{hidden.WarningDetails}";
+            Assert.That(hiddenText, Does.Contain("hidden because includeTests is false").And.Contain("TestsProj"));
+
+            var all = await impl.QuerySymbolRelationships(reason: "test message", "Widget", FindUsagesSearchKind.extensionsFor, includeTests: true);
+            Assert.That(all.IsError, Is.False, all.ErrorData?.Message);
+            var allList = (all.SuccessData as System.Collections.IEnumerable)?.Cast<object>().ToList();
+            Assert.That(allList, Is.Not.Null.And.Count.EqualTo(1));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Test]
+    [Category("SymbolRelationshipTools")]
+    public async Task QuerySymbolRelationships_MethodsByReturnType_IncludeTestsFalse_HidesTestMethodAndNamesIt()
+    {
+        var (dir, impl) = BuildAppAndTestsSolution(
+            "public class Widget { }\npublic class AppFactory { public Widget Make() => new Widget(); }\n",
+            "public class TestFactory { public Widget Make() => null; }\n");
+        try
+        {
+            var hidden = await impl.QuerySymbolRelationships(reason: "test message", "Widget", FindUsagesSearchKind.methodsByReturnType, includeTests: false);
+            Assert.That(hidden.IsError, Is.False, hidden.ErrorData?.Message);
+            var hiddenList = (hidden.SuccessData as System.Collections.IEnumerable)?.Cast<object>().ToList();
+            Assert.That(hiddenList, Is.Not.Null.And.Count.EqualTo(1));
+            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests is false").And.Contain("TestsProj"));
+
+            var all = await impl.QuerySymbolRelationships(reason: "test message", "Widget", FindUsagesSearchKind.methodsByReturnType, includeTests: true);
+            Assert.That(all.IsError, Is.False, all.ErrorData?.Message);
+            var allList = (all.SuccessData as System.Collections.IEnumerable)?.Cast<object>().ToList();
+            Assert.That(allList, Is.Not.Null.And.Count.EqualTo(2));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
     public AntiPatternEngine _antiPatternEngine;
 }
