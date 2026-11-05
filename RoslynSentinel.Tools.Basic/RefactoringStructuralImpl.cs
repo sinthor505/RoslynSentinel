@@ -548,184 +548,17 @@ public class RefactoringStructuralImpl
         try
         {
             if (operation == MemberAction.view)
-            {
-                if (!string.IsNullOrEmpty(memberName))
-                {
-                    // TODO Member(view) keeps the lenient container fallback; Step 5e of plan_unknown_parameter_rejection_reduction flips the flag to true and removes this
-                    // TODO: GetMemberSourceAsync still returns a 4-tuple; return MemberSourceInfo directly (S3 item h, callers: this, WorkspaceFileEditImpl, 11 test sites in MemberRefactoringTests)
-                    var (_, _, _, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, contextSnippet, lineBefore, lineAfter, false, cancellationToken);
-                    return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source!) };
-                }
-
-                if (string.IsNullOrEmpty(containerName))
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "Member: containerName is required for operation 'view' when memberName is not given.") };
-
-                var (_, _, members) = await _symbolNavigationEngine.GetContainerMembersAsync(filePathResolved, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberViewResult(members) };
-            }
+                return await MemberViewAsync(filePathResolved, containerName, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
 
             if (operation == MemberAction.replace)
-            {
-                if (string.IsNullOrEmpty(memberName) || string.IsNullOrEmpty(newMemberSource))
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "Member: memberName and newMemberSource are required for operation 'replace'.") };
-
-                ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
-                IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = msg.Progress, Total = msg.Total, Message = msg.Message }, null, cancellationToken));
-
-                var replaceEnumName = await _symbolNavigationEngine.TryGetEnumMemberContainerNameAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (replaceEnumName != null)
-                {
-                    var enumReplaceHint = $"Retry using {ToolCallHint.Call("ModifyEnum", ("enumName", replaceEnumName))} directly with the full desired member list if this keeps failing.";
-                    DocumentEditResult enumReplaced;
-                    try
-                    {
-                        enumReplaced = await _memberRefactoringEngine.ReplaceEnumMemberAsync(filePathResolved, replaceEnumName, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                    }
-                    catch (ToolException toolEx)
-                    {
-                        var mappedError = ToolErrorMapper.ToResultError(toolEx, _workspaceManager, "Member");
-                        return new SentinelCallToolResult<object> { IsError = true, ErrorData = mappedError with { Message = $"{mappedError.Message} {enumReplaceHint}" } };
-                    }
-                    if (RefactoringToolHelpers.RequireUpdatedText(enumReplaced, "Member", filePathResolved, recoveryHint: enumReplaceHint) is { } enumReplaceError)
-                        return enumReplaceError;
-
-                    var enumReplaceChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumReplaced.UpdatedText };
-                    var enumReplaceApply = await ValidateAndApplyAsync(enumReplaceChanges, $"Replaced '{memberName}' in enum '{replaceEnumName}'.", "Member", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
-                    if (enumReplaceApply.Error is not null)
-                        return new SentinelCallToolResult<object> { IsError = true, ErrorData = enumReplaceApply.Error };
-                    return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(enumReplaceApply.ChangeId, [filePathResolved], $"Replaced '{memberName}' in enum '{replaceEnumName}' in {Path.GetFileName(filePathResolved)}.", enumReplaceApply.DryRun, enumReplaceApply.Diff, ChangedContentResultId: enumReplaceApply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = $"Replaced '{memberName}' in enum '{replaceEnumName}' in {Path.GetFileName(filePathResolved)}." };
-                }
-
-                var result = await _memberRefactoringEngine.ReplaceMemberAsync(filePathResolved, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
-                if (result.Outcome == EditOutcome.AlreadyInTargetState && RefactoringToolHelpers.RequireUpdatedText(result, "Member", filePathResolved) is { } replaceAlreadyInStateResult)
-                    return replaceAlreadyInStateResult;
-                var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
-                var apply = await ValidateAndApplyAsync(changes, $"Replace member '{memberName}'.", "Member", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
-                if (apply.Error is not null)
-                    return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
-                var replaceEnvelope = new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Replaced '{memberName}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = $"Replaced '{memberName}' in {Path.GetFileName(filePathResolved)}." };
-                return replaceEnvelope with { WarningDetails = result.Warnings is { Count: > 0 } ? string.Join(" ", result.Warnings) : null };
-            }
+                return await MemberReplaceAsync(filePathResolved, containerName, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, dryRun, returnDiff, requestParams, cancellationToken);
 
             if (operation == MemberAction.remove)
-            {
-                if (string.IsNullOrEmpty(memberName))
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "Member: memberName is required for operation 'remove'.") };
-
-                if (!skipPrecheck)
-                {
-                    var callers = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, memberName, contextSnippet: contextSnippet, lineBefore: lineBefore, lineAfter: lineAfter, cancellationToken: cancellationToken);
-                    var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, memberName, contextSnippet: contextSnippet, lineBefore: lineBefore, lineAfter: lineAfter, cancellationToken: cancellationToken);
-                    if (callers.Count > 0 || implementations.Count > 0)
-                    {
-                        var parts = new List<string>();
-                        if (callers.Count > 0) parts.Add($"{callers.Count} caller(s)");
-                        if (implementations.Count > 0) parts.Add($"{implementations.Count} implementation(s)");
-                        return new SentinelCallToolResult<object>
-                        {
-                            IsError = true,
-                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                                $"Member: '{memberName}' has {string.Join(" and ", parts)} - refusing to remove. " +
-                                "Pass skipPrecheck: true to remove anyway, or resolve the callers/implementations first. " +
-                                $"Callers: {System.Text.Json.JsonSerializer.Serialize(callers)}. " +
-                                $"Implementations: {System.Text.Json.JsonSerializer.Serialize(implementations)}.")
-                        };
-                    }
-                }
-
-                var removeEnumName = await _symbolNavigationEngine.TryGetEnumMemberContainerNameAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (removeEnumName != null)
-                {
-                    var enumRemoveHint = $"Retry using {ToolCallHint.Call("ModifyEnum", ("enumName", removeEnumName))} directly with the full desired member list if this keeps failing.";
-                    DocumentEditResult enumRemoved;
-                    try
-                    {
-                        enumRemoved = await _memberRefactoringEngine.RemoveEnumMemberAsync(filePathResolved, removeEnumName, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                    }
-                    catch (ToolException toolEx)
-                    {
-                        var mappedError = ToolErrorMapper.ToResultError(toolEx, _workspaceManager, "Member");
-                        return new SentinelCallToolResult<object> { IsError = true, ErrorData = mappedError with { Message = $"{mappedError.Message} {enumRemoveHint}" } };
-                    }
-                    if (RefactoringToolHelpers.RequireUpdatedText(enumRemoved, "Member", filePathResolved, recoveryHint: enumRemoveHint) is { } enumRemoveError)
-                        return enumRemoveError;
-
-                    var enumRemoveChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumRemoved.UpdatedText };
-                    var enumRemoveApply = await ValidateAndApplyAsync(enumRemoveChanges, $"Removed '{memberName}' from enum '{removeEnumName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
-                    if (enumRemoveApply.Error is not null)
-                        return new SentinelCallToolResult<object> { IsError = true, ErrorData = enumRemoveApply.Error };
-                    return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(enumRemoveApply.ChangeId, [filePathResolved], $"Removed '{memberName}' from enum '{removeEnumName}' in {Path.GetFileName(filePathResolved)}.", enumRemoveApply.DryRun, enumRemoveApply.Diff, _workspaceManager.WorkspaceVersion, ChangedContentResultId: enumRemoveApply.ChangedContentResultId) };
-                }
-
-                var result = await _memberRefactoringEngine.RemoveMemberAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken: cancellationToken);
-
-                var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
-                var apply = await ValidateAndApplyAsync(changes, $"Remove member '{memberName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
-                if (apply.Error is not null)
-                    return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
-                var removeMessage = $"Removed '{memberName}' from {Path.GetFileName(filePathResolved)}.";
-                string? removeWarning = null;
-                if (!apply.DryRun)
-                {
-                    var stillPresent = await _memberRefactoringEngine.IsDeclarationStillPresentAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
-                    if (stillPresent == false)
-                    {
-                        removeMessage += $" Verified: a repeat lookup for '{memberName}' finds no declaration. To double-check, call {ToolCallHint.Call("GetFileOutline")} on the file.";
-                    }
-                    else if (stillPresent == true)
-                    {
-                        removeWarning = $"A declaration named '{memberName}' still resolves after removal (possibly an overload or another member of the same name); check with {ToolCallHint.Call("GetFileOutline")} on the file.";
-                        removeMessage += " " + removeWarning;
-                    }
-                }
-                return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], removeMessage, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContentResultId: apply.ChangedContentResultId), WarningDetails = removeWarning };
-            }
+                return await MemberRemoveAsync(filePathResolved, containerName, memberName, skipPrecheck, contextSnippet, lineBefore, lineAfter, dryRun, returnDiff, cancellationToken);
 
             // operation is addMember or addTopLevelType below (a generated typed property/field is the TypedMember tool).
-            static string RequiredParamsHint(MemberAction op) => op switch
-            {
-                MemberAction.addMember => "Required params for addMember: containerName, newMemberSource. Optional: position.",
-                MemberAction.addTopLevelType => "Required params for addTopLevelType: newMemberSource (the full type declaration). Optional: namespaceName.",
-                _ => throw new ArgumentOutOfRangeException(nameof(op))
-            };
-
             if (operation == MemberAction.addTopLevelType)
-            {
-                if (containerName != null)
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: containerName is not used for operation 'addTopLevelType' (there is no container - the type is added at the top level). {RequiredParamsHint(operation)} If you meant to add a member to an existing container, use {ToolCallHint.Call("Member", ("operation", "addMember"))} instead.") };
-                if (position != null)
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: position is not used for operation 'addTopLevelType' (the type is always appended). {RequiredParamsHint(operation)}") };
-                if (string.IsNullOrEmpty(newMemberSource))
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: newMemberSource is required for operation 'addTopLevelType'. {RequiredParamsHint(operation)}") };
-
-                var topLevelResult = await _memberRefactoringEngine.AddTopLevelTypeAsync(filePathResolved, newMemberSource, namespaceName, cancellationToken);
-                if (!autoStage)
-                {
-                    var topLevelNoStageDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
-                    var topLevelNoStageChanges = string.IsNullOrEmpty(topLevelResult.UpdatedText)
-                        ? new Dictionary<FilePathWrapper, string>()
-                        : new Dictionary<FilePathWrapper, string> { [filePathResolved] = topLevelResult.UpdatedText };
-                    return new SentinelCallToolResult<object>()
-                    {
-                        IsError = false,
-                        SuccessData = new AppliedChangeSummary(
-                            ChangeId: null,
-                            AffectedFiles: topLevelNoStageChanges.Keys.ToList(),
-                            Description: topLevelNoStageDescription,
-                            DryRun: false,
-                            Diff: null,
-                            ChangedContent: topLevelNoStageChanges.Count == 0 ? null : topLevelNoStageChanges,
-                            Validated: false)
-                    };
-                }
-                var topLevelDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
-
-                var topLevelChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = topLevelResult.UpdatedText };
-                var topLevelApply = await ValidateAndApplyAsync(topLevelChanges, topLevelDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
-                if (topLevelApply.Error is not null)
-                    return new SentinelCallToolResult<object> { IsError = true, ErrorData = topLevelApply.Error };
-                return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(topLevelApply.ChangeId, [filePathResolved], topLevelDescription, topLevelApply.DryRun, topLevelApply.Diff, Validated: true, LineChanges: topLevelApply.LineChanges, ChangedContentResultId: topLevelApply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = topLevelDescription };
-            }
+                return await MemberAddTopLevelTypeAsync(filePathResolved, operation, containerName, namespaceName, newMemberSource, position, autoStage, dryRun, returnDiff, cancellationToken);
 
             if (operation == MemberAction.addMember)
             {
@@ -736,104 +569,360 @@ public class RefactoringStructuralImpl
             }
 
             if (await _symbolNavigationEngine.IsEnumContainerAsync(filePathResolved, containerName!, contextSnippet, lineBefore, lineAfter, cancellationToken))
-            {
-                string? afterName = position != null && position.StartsWith("after:", StringComparison.OrdinalIgnoreCase) ? position.Substring("after:".Length) : null;
-                string? beforeName = position != null && position.StartsWith("before:", StringComparison.OrdinalIgnoreCase) ? position.Substring("before:".Length) : null;
-                if (position != null && afterName == null && beforeName == null && position != "end")
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
+                return await MemberAddEnumMemberAsync(filePathResolved, containerName, newMemberSource, position, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
 
-                var enumAddHint = $"Retry using {ToolCallHint.Call("ModifyEnum", ("enumName", containerName!))} directly with the full desired member list if this keeps failing.";
-                DocumentEditResult enumAdded;
-                try
-                {
-                    enumAdded = await _memberRefactoringEngine.AddEnumMemberAsync(filePathResolved, containerName!, newMemberSource!, afterName, beforeName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                }
-                catch (ToolException toolEx)
-                {
-                    var mappedError = ToolErrorMapper.ToResultError(toolEx, _workspaceManager, "Member");
-                    return new SentinelCallToolResult<object> { IsError = true, ErrorData = mappedError with { Message = $"{mappedError.Message} {enumAddHint}" } };
-                }
-                var enumAddError = RefactoringToolHelpers.RequireUpdatedText(enumAdded, "Member", filePathResolved, recoveryHint: enumAddHint);
-                if (enumAddError is not null)
-                    return enumAddError;
-
-                if (!autoStage)
-                {
-                    var enumAddNoStageDescription = $"Added member to enum '{containerName}' in {Path.GetFileName(filePathResolved)}.";
-                    var enumAddNoStageChanges = string.IsNullOrEmpty(enumAdded.UpdatedText)
-                        ? new Dictionary<FilePathWrapper, string>()
-                        : new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumAdded.UpdatedText };
-                    return new SentinelCallToolResult<object>()
-                    {
-                        IsError = false,
-                        SuccessData = new AppliedChangeSummary(
-                            ChangeId: null,
-                            AffectedFiles: enumAddNoStageChanges.Keys.ToList(),
-                            Description: enumAddNoStageDescription,
-                            DryRun: false,
-                            Diff: null,
-                            ChangedContent: enumAddNoStageChanges.Count == 0 ? null : enumAddNoStageChanges,
-                            Validated: false)
-                    };
-                }
-
-                var enumAddDescription = $"Added member to enum '{containerName}' in {Path.GetFileName(filePathResolved)}.";
-                var enumAddChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumAdded.UpdatedText };
-                var enumAddApply = await ValidateAndApplyAsync(enumAddChanges, enumAddDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
-                if (enumAddApply.Error is not null)
-                    return new SentinelCallToolResult<object> { IsError = true, ErrorData = enumAddApply.Error };
-                return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(enumAddApply.ChangeId, [filePathResolved], enumAddDescription, enumAddApply.DryRun, enumAddApply.Diff, Validated: true, LineChanges: enumAddApply.LineChanges, ChangedContentResultId: enumAddApply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = enumAddDescription };
-            }
-
-            DocumentEditResult updated;
-            string description;
-            if (string.IsNullOrEmpty(position) || position == "end")
-            {
-                updated = await _memberRefactoringEngine.AddMemberAsync(filePathResolved, containerName!, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
-                description = $"{DescribeMemberOutcome(updated, "Added new member")} to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
-            }
-            else if (position.StartsWith("after:", StringComparison.OrdinalIgnoreCase))
-            {
-                var afterMemberName = position.Substring("after:".Length);
-                updated = await _memberRefactoringEngine.InsertMemberAfterAsync(filePathResolved, containerName!, afterMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
-                description = $"{DescribeMemberOutcome(updated, "Inserted new member")} after '{afterMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
-            }
-            else if (position.StartsWith("before:", StringComparison.OrdinalIgnoreCase))
-            {
-                var beforeMemberName = position.Substring("before:".Length);
-                updated = await _memberRefactoringEngine.InsertMemberBeforeAsync(filePathResolved, containerName!, beforeMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
-                description = $"{DescribeMemberOutcome(updated, "Inserted new member")} before '{beforeMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
-            }
-            else
-            {
-                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
-            }
-
-            if (!autoStage)
-            {
-                var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
-                    ? new Dictionary<FilePathWrapper, string>()
-                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
-                return new SentinelCallToolResult<object>()
-                {
-                    IsError = false,
-                    SuccessData = new AppliedChangeSummary(
-                        ChangeId: null,
-                        AffectedFiles: noStageChanges.Keys.ToList(),
-                        Description: description,
-                        DryRun: false,
-                        Diff: null,
-                        ChangedContent: noStageChanges.Count == 0 ? null : noStageChanges,
-                        Validated: false)
-                };
-            }
-            return await ApplyAddedMemberAsync(updated, description, filePathResolved, "Member", dryRun, returnDiff, cancellationToken);
+            return await MemberAddToContainerAsync(filePathResolved, containerName, newMemberSource, position, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Member ({Operation}) failed for '{ContainerOrMemberName}' in '{FilePathWrapper}'", operation, containerName ?? memberName, filePathResolved);
             return new SentinelCallToolResult<object>() { IsError = true, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Member") };
         }
+    }
+
+    private async Task<SentinelCallToolResult<object>> MemberViewAsync(
+    FilePathWrapper filePathResolved,
+    string? containerName,
+    string? memberName,
+    string? contextSnippet,
+    string? lineBefore,
+    string? lineAfter,
+    CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrEmpty(memberName))
+        {
+            // TODO Member(view) keeps the lenient container fallback; Step 5e of plan_unknown_parameter_rejection_reduction flips the flag to true and removes this
+            // TODO: GetMemberSourceAsync still returns a 4-tuple; return MemberSourceInfo directly (S3 item h, callers: this, WorkspaceFileEditImpl, 11 test sites in MemberRefactoringTests)
+            var (_, _, _, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, contextSnippet, lineBefore, lineAfter, false, cancellationToken);
+            return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source!) };
+        }
+
+        if (string.IsNullOrEmpty(containerName))
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "Member: containerName is required for operation 'view' when memberName is not given.") };
+
+        var (_, _, members) = await _symbolNavigationEngine.GetContainerMembersAsync(filePathResolved, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberViewResult(members) };
+    }
+
+    private async Task<SentinelCallToolResult<object>> MemberReplaceAsync(
+    FilePathWrapper filePathResolved,
+    string? containerName,
+    string? memberName,
+    string? newMemberSource,
+    string? contextSnippet,
+    string? lineBefore,
+    string? lineAfter,
+    bool dryRun,
+    bool returnDiff,
+    RequestContext<CallToolRequestParams>? requestParams,
+    CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(memberName) || string.IsNullOrEmpty(newMemberSource))
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "Member: memberName and newMemberSource are required for operation 'replace'.") };
+
+        ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
+        IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = msg.Progress, Total = msg.Total, Message = msg.Message }, null, cancellationToken));
+
+        var replaceEnumName = await _symbolNavigationEngine.TryGetEnumMemberContainerNameAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        if (replaceEnumName != null)
+        {
+            var enumReplaceHint = $"Retry using {ToolCallHint.Call("ModifyEnum", ("enumName", replaceEnumName))} directly with the full desired member list if this keeps failing.";
+            DocumentEditResult enumReplaced;
+            try
+            {
+                enumReplaced = await _memberRefactoringEngine.ReplaceEnumMemberAsync(filePathResolved, replaceEnumName, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
+            }
+            catch (ToolException toolEx)
+            {
+                var mappedError = ToolErrorMapper.ToResultError(toolEx, _workspaceManager, "Member");
+                return new SentinelCallToolResult<object> { IsError = true, ErrorData = mappedError with { Message = $"{mappedError.Message} {enumReplaceHint}" } };
+            }
+            if (RefactoringToolHelpers.RequireUpdatedText(enumReplaced, "Member", filePathResolved, recoveryHint: enumReplaceHint) is { } enumReplaceError)
+                return enumReplaceError;
+
+            var enumReplaceChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumReplaced.UpdatedText };
+            var enumReplaceApply = await ValidateAndApplyAsync(enumReplaceChanges, $"Replaced '{memberName}' in enum '{replaceEnumName}'.", "Member", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
+            if (enumReplaceApply.Error is not null)
+                return new SentinelCallToolResult<object> { IsError = true, ErrorData = enumReplaceApply.Error };
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(enumReplaceApply.ChangeId, [filePathResolved], $"Replaced '{memberName}' in enum '{replaceEnumName}' in {Path.GetFileName(filePathResolved)}.", enumReplaceApply.DryRun, enumReplaceApply.Diff, ChangedContentResultId: enumReplaceApply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = $"Replaced '{memberName}' in enum '{replaceEnumName}' in {Path.GetFileName(filePathResolved)}." };
+        }
+
+        var result = await _memberRefactoringEngine.ReplaceMemberAsync(filePathResolved, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
+        if (result.Outcome == EditOutcome.AlreadyInTargetState && RefactoringToolHelpers.RequireUpdatedText(result, "Member", filePathResolved) is { } replaceAlreadyInStateResult)
+            return replaceAlreadyInStateResult;
+        var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
+        var apply = await ValidateAndApplyAsync(changes, $"Replace member '{memberName}'.", "Member", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
+        if (apply.Error is not null)
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
+        var replaceEnvelope = new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Replaced '{memberName}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = $"Replaced '{memberName}' in {Path.GetFileName(filePathResolved)}." };
+        return replaceEnvelope with { WarningDetails = result.Warnings is { Count: > 0 } ? string.Join(" ", result.Warnings) : null };
+    }
+
+    /// <summary>Serializes at most 10 entries (keeps the Member(remove) refusal bounded for heavily used members) and appends " (+N more)" outside the JSON when truncated.</summary>
+    private static string SerializeCapped<T>(IReadOnlyList<T> items)
+    {
+        const int cap = 10;
+        var json = System.Text.Json.JsonSerializer.Serialize(items.Take(cap));
+        return items.Count > cap ? $"{json} (+{items.Count - cap} more)" : json;
+    }
+
+    private async Task<SentinelCallToolResult<object>> MemberRemoveAsync(
+    FilePathWrapper filePathResolved,
+    string? containerName,
+    string? memberName,
+    bool skipPrecheck,
+    string? contextSnippet,
+    string? lineBefore,
+    string? lineAfter,
+    bool dryRun,
+    bool returnDiff,
+    CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(memberName))
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "Member: memberName is required for operation 'remove'.") };
+
+        if (!skipPrecheck)
+        {
+            var callers = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, memberName, contextSnippet: contextSnippet, lineBefore: lineBefore, lineAfter: lineAfter, cancellationToken: cancellationToken);
+            var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, memberName, contextSnippet: contextSnippet, lineBefore: lineBefore, lineAfter: lineAfter, cancellationToken: cancellationToken);
+            if (callers.Count > 0 || implementations.Count > 0)
+            {
+                var parts = new List<string>();
+                if (callers.Count > 0) parts.Add($"{callers.Count} caller(s)");
+                if (implementations.Count > 0) parts.Add($"{implementations.Count} implementation(s)");
+                return new SentinelCallToolResult<object>
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
+                        $"Member: '{memberName}' has {string.Join(" and ", parts)} - refusing to remove. " +
+                        "Pass skipPrecheck: true to remove anyway, or resolve the callers/implementations first. " +
+                        $"Callers: {SerializeCapped(callers)}. " +
+                        $"Implementations: {SerializeCapped(implementations)}.")
+                };
+            }
+        }
+
+        var removeEnumName = await _symbolNavigationEngine.TryGetEnumMemberContainerNameAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        if (removeEnumName != null)
+        {
+            var enumRemoveHint = $"Retry using {ToolCallHint.Call("ModifyEnum", ("enumName", removeEnumName))} directly with the full desired member list if this keeps failing.";
+            DocumentEditResult enumRemoved;
+            try
+            {
+                enumRemoved = await _memberRefactoringEngine.RemoveEnumMemberAsync(filePathResolved, removeEnumName, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+            }
+            catch (ToolException toolEx)
+            {
+                var mappedError = ToolErrorMapper.ToResultError(toolEx, _workspaceManager, "Member");
+                return new SentinelCallToolResult<object> { IsError = true, ErrorData = mappedError with { Message = $"{mappedError.Message} {enumRemoveHint}" } };
+            }
+            if (RefactoringToolHelpers.RequireUpdatedText(enumRemoved, "Member", filePathResolved, recoveryHint: enumRemoveHint) is { } enumRemoveError)
+                return enumRemoveError;
+
+            var enumRemoveChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumRemoved.UpdatedText };
+            var enumRemoveApply = await ValidateAndApplyAsync(enumRemoveChanges, $"Removed '{memberName}' from enum '{removeEnumName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
+            if (enumRemoveApply.Error is not null)
+                return new SentinelCallToolResult<object> { IsError = true, ErrorData = enumRemoveApply.Error };
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(enumRemoveApply.ChangeId, [filePathResolved], $"Removed '{memberName}' from enum '{removeEnumName}' in {Path.GetFileName(filePathResolved)}.", enumRemoveApply.DryRun, enumRemoveApply.Diff, _workspaceManager.WorkspaceVersion, ChangedContentResultId: enumRemoveApply.ChangedContentResultId) };
+        }
+
+        var result = await _memberRefactoringEngine.RemoveMemberAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken: cancellationToken);
+
+        var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
+        var apply = await ValidateAndApplyAsync(changes, $"Remove member '{memberName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
+        if (apply.Error is not null)
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
+        var removeMessage = $"Removed '{memberName}' from {Path.GetFileName(filePathResolved)}.";
+        string? removeWarning = null;
+        if (!apply.DryRun)
+        {
+            var stillPresent = await _memberRefactoringEngine.IsDeclarationStillPresentAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
+            if (stillPresent == false)
+            {
+                removeMessage += $" Verified: a repeat lookup for '{memberName}' finds no declaration. To double-check, call {ToolCallHint.Call("GetFileOutline")} on the file.";
+            }
+            else if (stillPresent == true)
+            {
+                removeWarning = $"A declaration named '{memberName}' still resolves after removal (possibly an overload or another member of the same name); check with {ToolCallHint.Call("GetFileOutline")} on the file.";
+                removeMessage += " " + removeWarning;
+            }
+        }
+        return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], removeMessage, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContentResultId: apply.ChangedContentResultId), WarningDetails = removeWarning };
+    }
+
+    // Used by the addMember / addTopLevelType paths of Member (a generated typed property/field is the TypedMember tool).
+    private static string RequiredParamsHint(MemberAction op) => op switch
+    {
+        MemberAction.addMember => "Required params for addMember: containerName, newMemberSource. Optional: position.",
+        MemberAction.addTopLevelType => "Required params for addTopLevelType: newMemberSource (the full type declaration). Optional: namespaceName.",
+        _ => throw new ArgumentOutOfRangeException(nameof(op))
+    };
+
+    private async Task<SentinelCallToolResult<object>> MemberAddTopLevelTypeAsync(
+    FilePathWrapper filePathResolved,
+    MemberAction operation,
+    string? containerName,
+    string? namespaceName,
+    string? newMemberSource,
+    string? position,
+    bool autoStage,
+    bool dryRun,
+    bool returnDiff,
+    CancellationToken cancellationToken)
+    {
+        if (containerName != null)
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: containerName is not used for operation 'addTopLevelType' (there is no container - the type is added at the top level). {RequiredParamsHint(operation)} If you meant to add a member to an existing container, use {ToolCallHint.Call("Member", ("operation", "addMember"))} instead.") };
+        if (position != null)
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: position is not used for operation 'addTopLevelType' (the type is always appended). {RequiredParamsHint(operation)}") };
+        if (string.IsNullOrEmpty(newMemberSource))
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: newMemberSource is required for operation 'addTopLevelType'. {RequiredParamsHint(operation)}") };
+
+        var topLevelResult = await _memberRefactoringEngine.AddTopLevelTypeAsync(filePathResolved, newMemberSource, namespaceName, cancellationToken);
+        if (!autoStage)
+        {
+            var topLevelNoStageDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
+            var topLevelNoStageChanges = string.IsNullOrEmpty(topLevelResult.UpdatedText)
+                ? new Dictionary<FilePathWrapper, string>()
+                : new Dictionary<FilePathWrapper, string> { [filePathResolved] = topLevelResult.UpdatedText };
+            return new SentinelCallToolResult<object>()
+            {
+                IsError = false,
+                SuccessData = new AppliedChangeSummary(
+                    ChangeId: null,
+                    AffectedFiles: topLevelNoStageChanges.Keys.ToList(),
+                    Description: topLevelNoStageDescription,
+                    DryRun: false,
+                    Diff: null,
+                    ChangedContent: topLevelNoStageChanges.Count == 0 ? null : topLevelNoStageChanges,
+                    Validated: false)
+            };
+        }
+        var topLevelDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
+
+        var topLevelChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = topLevelResult.UpdatedText };
+        var topLevelApply = await ValidateAndApplyAsync(topLevelChanges, topLevelDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
+        if (topLevelApply.Error is not null)
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = topLevelApply.Error };
+        return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(topLevelApply.ChangeId, [filePathResolved], topLevelDescription, topLevelApply.DryRun, topLevelApply.Diff, Validated: true, LineChanges: topLevelApply.LineChanges, ChangedContentResultId: topLevelApply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = topLevelDescription };
+    }
+
+    private async Task<SentinelCallToolResult<object>> MemberAddEnumMemberAsync(
+    FilePathWrapper filePathResolved,
+    string? containerName,
+    string? newMemberSource,
+    string? position,
+    string? contextSnippet,
+    string? lineBefore,
+    string? lineAfter,
+    bool autoStage,
+    bool dryRun,
+    bool returnDiff,
+    CancellationToken cancellationToken)
+    {
+        string? afterName = position != null && position.StartsWith("after:", StringComparison.OrdinalIgnoreCase) ? position.Substring("after:".Length) : null;
+        string? beforeName = position != null && position.StartsWith("before:", StringComparison.OrdinalIgnoreCase) ? position.Substring("before:".Length) : null;
+        if (position != null && afterName == null && beforeName == null && position != "end")
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
+
+        var enumAddHint = $"Retry using {ToolCallHint.Call("ModifyEnum", ("enumName", containerName!))} directly with the full desired member list if this keeps failing.";
+        DocumentEditResult enumAdded;
+        try
+        {
+            enumAdded = await _memberRefactoringEngine.AddEnumMemberAsync(filePathResolved, containerName!, newMemberSource!, afterName, beforeName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        }
+        catch (ToolException toolEx)
+        {
+            var mappedError = ToolErrorMapper.ToResultError(toolEx, _workspaceManager, "Member");
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = mappedError with { Message = $"{mappedError.Message} {enumAddHint}" } };
+        }
+        var enumAddError = RefactoringToolHelpers.RequireUpdatedText(enumAdded, "Member", filePathResolved, recoveryHint: enumAddHint);
+        if (enumAddError is not null)
+            return enumAddError;
+
+        if (!autoStage)
+        {
+            var enumAddNoStageDescription = $"Added member to enum '{containerName}' in {Path.GetFileName(filePathResolved)}.";
+            var enumAddNoStageChanges = string.IsNullOrEmpty(enumAdded.UpdatedText)
+                ? new Dictionary<FilePathWrapper, string>()
+                : new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumAdded.UpdatedText };
+            return new SentinelCallToolResult<object>()
+            {
+                IsError = false,
+                SuccessData = new AppliedChangeSummary(
+                    ChangeId: null,
+                    AffectedFiles: enumAddNoStageChanges.Keys.ToList(),
+                    Description: enumAddNoStageDescription,
+                    DryRun: false,
+                    Diff: null,
+                    ChangedContent: enumAddNoStageChanges.Count == 0 ? null : enumAddNoStageChanges,
+                    Validated: false)
+            };
+        }
+
+        var enumAddDescription = $"Added member to enum '{containerName}' in {Path.GetFileName(filePathResolved)}.";
+        var enumAddChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumAdded.UpdatedText };
+        var enumAddApply = await ValidateAndApplyAsync(enumAddChanges, enumAddDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
+        if (enumAddApply.Error is not null)
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = enumAddApply.Error };
+        return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(enumAddApply.ChangeId, [filePathResolved], enumAddDescription, enumAddApply.DryRun, enumAddApply.Diff, Validated: true, LineChanges: enumAddApply.LineChanges, ChangedContentResultId: enumAddApply.ChangedContentResultId), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = enumAddDescription };
+    }
+
+    private async Task<SentinelCallToolResult<object>> MemberAddToContainerAsync(
+    FilePathWrapper filePathResolved,
+    string? containerName,
+    string? newMemberSource,
+    string? position,
+    string? contextSnippet,
+    string? lineBefore,
+    string? lineAfter,
+    bool autoStage,
+    bool dryRun,
+    bool returnDiff,
+    CancellationToken cancellationToken)
+    {
+        DocumentEditResult updated;
+        string description;
+        if (string.IsNullOrEmpty(position) || position == "end")
+        {
+            updated = await _memberRefactoringEngine.AddMemberAsync(filePathResolved, containerName!, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+            description = $"{DescribeMemberOutcome(updated, "Added new member")} to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
+        }
+        else if (position.StartsWith("after:", StringComparison.OrdinalIgnoreCase))
+        {
+            var afterMemberName = position.Substring("after:".Length);
+            updated = await _memberRefactoringEngine.InsertMemberAfterAsync(filePathResolved, containerName!, afterMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+            description = $"{DescribeMemberOutcome(updated, "Inserted new member")} after '{afterMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
+        }
+        else if (position.StartsWith("before:", StringComparison.OrdinalIgnoreCase))
+        {
+            var beforeMemberName = position.Substring("before:".Length);
+            updated = await _memberRefactoringEngine.InsertMemberBeforeAsync(filePathResolved, containerName!, beforeMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+            description = $"{DescribeMemberOutcome(updated, "Inserted new member")} before '{beforeMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
+        }
+        else
+        {
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
+        }
+
+        if (!autoStage)
+        {
+            var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
+                ? new Dictionary<FilePathWrapper, string>()
+                : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
+            return new SentinelCallToolResult<object>()
+            {
+                IsError = false,
+                SuccessData = new AppliedChangeSummary(
+                    ChangeId: null,
+                    AffectedFiles: noStageChanges.Keys.ToList(),
+                    Description: description,
+                    DryRun: false,
+                    Diff: null,
+                    ChangedContent: noStageChanges.Count == 0 ? null : noStageChanges,
+                    Validated: false)
+            };
+        }
+        return await ApplyAddedMemberAsync(updated, description, filePathResolved, "Member", dryRun, returnDiff, cancellationToken);
     }
 
     /// <summary>

@@ -96,6 +96,25 @@ public sealed class MemberRemoveTests
 
     [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task RemoveMember_ManyCallers_RefusalListsAtMostTenAndMarksTheRest()
+    {
+        // The refusal embeds the caller list; a heavily used member must not produce an unbounded error.
+        const int callerCount = 12;
+        var callers = string.Join("\r\n", Enumerable.Range(0, callerCount).Select(i => $"    public void Use{i}() {{ var n = GetName(); }}"));
+        var source = "namespace TestProj;\r\n\r\npublic class Helper\r\n{\r\n    public string GetName() => \"Test\";\r\n\r\n" + callers + "\r\n}\r\n";
+        using var workspace = InMemoryWorkspace.Create(("Helper.cs", source));
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Helper.cs"), MemberAction.remove, memberName: "GetName");
+        Assert.That(result.IsError, Is.True, "A member with callers must be refused by default.");
+        var message = result.ErrorData!.Message;
+        Assert.That(message, Does.Contain($"{callerCount} caller(s)"), "The count in the message stays the full count.");
+        Assert.That(message, Does.Contain("(+2 more)"), "Callers beyond the first 10 are summarized as a count.");
+        Assert.That(System.Text.RegularExpressions.Regex.Matches(message, "\"CallerMethod\"").Count, Is.EqualTo(10), "Only the first 10 callers are serialized.");
+        Assert.That(message.Length, Is.LessThan(4000), "The refusal stays bounded.");
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task RemoveMember_HasCaller_SkipPrecheckTrue_StillRefusedByEngineCallerCheck()
     {
         // skipPrecheck: true bypasses only the tool-level (callers+implementations) precheck ->
