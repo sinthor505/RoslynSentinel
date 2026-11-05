@@ -529,3 +529,9 @@ child Build/RunTest result being offloaded to a file so `SubAgentEvalResult` rea
 Known limits kept: `SubAgentEval` runs the child's full `RunTest` (slow, ~10 min observed), and both tools
 only work when the loaded solution is the RoslynSentinel repo. The unexplained 1-test failure in the
 child's suite is tracked separately in TODO.md.
+
+## RenameSymbol namespace follow-ups: residualMentions summary and Search namespace docCommentId - resolved (2026-11-05)
+
+Owner ruling D2. A namespace rename of N:RoslynSentinel.Engines.Basic returned 1363 residual hits (~340 KB). Now the scan matches the full old qualified name for namespaces (dotted-token boundary: Basic.Sub matches, BasicX and Other.Basic do not), scans .csproj/.props/.targets/.json/.md/.ps1/.slnx/.sln too (skipping bin, obj, .git, .roslynsentinel, Worktree, generated files), buckets hits (code, comment, string, pathLike, nonSource) and the tool returns only a summary (`residualMentions` = total, byBucket, topFiles max 10, examples max 5 per bucket, details = one ready-to-run GetLargeResult hint per bucket). `Search(mode: namespace)` rows carry `docCommentId` `N:Full.Name`. Cross-segment moves (D2c) stay rejected.
+Evidence: ResidualMentionScannerTests (6), ResidualMentionSummarizerTests (18), ResidualMentionDetailPagingTests (2), SearchNamespaceDocCommentIdTests (8); full RunTest 6673 tests, only new failure was the regenerated architecture_tools.md (fixed).
+
