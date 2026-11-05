@@ -75,12 +75,18 @@ Ground truth for "does this tool exist / is it gated": `McpServerStatus(toolList
 
 ### Request pipeline (`WithRequestFilters` in `AddRoslynSentinelToolsBasic`)
 
-First added is outermost. In registration order:
+First added is outermost (csharp-sdk `McpServerImpl.BuildFilterPipeline` folds from the last filter inward). The order is
+the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (12 filters), pinned by
+`ToolTelemetryFilterOrderTests` via `CallToolFilterNames`. In registration order:
 
 1. `AddToolCallEchoFilter`: stamps call id/tool/args onto the first text block (outermost, sees final content).
-2. `AddArgumentValidationFilter` (`Server.Advanced/ToolArgumentValidator.cs`): repairs parameter-name case,
+2. `AddToolTelemetryFilter` (`Server.Advanced/ToolTelemetryRecorder.cs`, `Common/ToolTelemetry.cs`): counts every call per
+   tool (success / error / error code / duration) for `McpServerStatus.toolTelemetry`. Second on purpose, so it wraps the
+   argument-validation and breaker refusals and sees the `IsError` that the ToolError filter (item 6) copied from the body.
+   Records after `next` returns, so a status call is counted only from the following call on.
+3. `AddArgumentValidationFilter` (`Server.Advanced/ToolArgumentValidator.cs`): repairs parameter-name case,
    rejects unknown/missing parameters before the SDK binder runs.
-3. `AddHaltStampFilter` (`Server.Advanced/HaltStamp.cs`): while any breaker is tripped or the drift latch is set, inserts
+4. `AddHaltStampFilter` (`Server.Advanced/HaltStamp.cs`): while any breaker is tripped or the drift latch is set, inserts
    four top-level properties into the first text block of the response: `isSessionHalted`, `sessionHaltKind`,
    `sessionHaltReason`, `sessionHaltRecovery`, so the model learns the recovery call without a discovery call. The
    single source of truth is `HaltInfo.From(...)` in `Common/HaltInfo.cs`. Four kinds, first match wins (the others
@@ -96,16 +102,19 @@ First added is outermost. In registration order:
    is not a JSON object (for example the plain-text refusal from the breaker filters) is wrapped as
    `{"isSessionHalted":...,"message":"<original text>"}`. Any failure is swallowed (a diagnostic aid never breaks a
    call); nothing is stamped when nothing is tripped.
-4. `AddToolErrorFilter` domain-failure sync: response JSON with top-level `isError:true` -> protocol-level
+5. `AddWorkspaceStaleStampFilter`: while a workspace reload has failed and not yet succeeded, stamps `workspaceStale`,
+   `workspaceStaleReason`, `workspaceStaleRecovery` onto the first text block (state read after `next`).
+6. `AddToolErrorFilter` domain-failure sync: response JSON with top-level `isError:true` -> protocol-level
    `CallToolResult.IsError=true` (same name and polarity).
-5. `AddWorkspaceNotLoadedFilter` exception catch-all: `SolutionNotLoadedException` -> its message with
-   `IsError=true`; any other escaped exception -> a "Tool call failed unexpectedly" message with `IsError=true`.
-6. Post-call drift diagnostic (`AddDriftFilter`, `GetContentExternalFileChangesAsync`, log only).
-7. Large-result offload (`Common/LargeResultHelper.cs`): over `OffloadThresholdBytes` the body goes to disk and the
+7. `AddWorkspaceNotLoadedFilter` exception catch-all (`CallToolFailureHandler`): an escaped exception becomes a structured
+   failure body (`ToolErrorMapper.ToResultError`: `SolutionNotLoadedException` keeps its actionable message, a typed
+   `ToolException` keeps its code) with `IsError=true`; a client abort is rethrown.
+8. Post-call drift diagnostic (`AddDriftFilter`, `GetContentExternalFileChangesAsync`, log only).
+9. Large-result offload (`Common/LargeResultHelper.cs`): over `OffloadThresholdBytes` the body goes to disk and the
    caller gets a `resultId` for `GetLargeResult` (which is exempt, to avoid a re-offload loop).
-8. `AddWirePathRelativizeFilter`: when `WirePathOptions.Enabled`, rewrites solution-root absolute paths in JSON
+10. `AddWirePathRelativizeFilter`: when `WirePathOptions.Enabled`, rewrites solution-root absolute paths in JSON
    text bodies to relative ones (`WirePathRewriter.RewriteJsonText`).
-9. Orientation (automatic) breaker, then the unrecoverable breaker. The latter refuses every tool that is not
+11. Orientation (automatic) breaker, then the unrecoverable breaker (filters 11 and 12). The latter refuses every tool that is not
    marked `[UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]` on its method
    (`Common/UnrecoverableBreakerAttribute.cs`, resolved by `UnrecoverableBreakerPolicy.IsAllowed` via reflection).
    Absent attribute = refused. Currently 8 names are allowed: `ReadFile`, `ListAll`, `ListSolutionItems`,
@@ -153,7 +162,7 @@ outside `FileIoHelper` (allowlist of non-workspace writes); `WriteChokepointGuar
 cover EOL/line-count behaviour of the shared path.
 
 **Session halt and acknowledge.** The drift latch is `_sessionHalted` in `PersistentWorkspaceManager`; the halt-stamp
-filter (pipeline item 3) shows it, and any tripped breaker, on every response. `ExternalFileDrift(operation:
+filter (pipeline item 4) shows it, and any tripped breaker, on every response. `ExternalFileDrift(operation:
 Acknowledge)` (`Tools.Basic/AdminTools.cs`) clears the latch even when only some files are named. Files not named stay
 in `_externalChanges` and re-trip the halt on the next write that touches them; clearing everything needs
 `acknowledgeScope: ConfirmAll`. `LoadSolution(forceReload)` does not drain `_externalChanges` (see the comment in

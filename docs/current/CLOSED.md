@@ -8,6 +8,11 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Server-side telemetry for tool call counts and error rates - built per owner ruling D5 (2026-11-05)
+
+Was: "Server-side telemetry/metrics for tool call counts and error rates (2026-09-05) - idea, not implemented; owner decision pending on exposure and persistence" ([idea](ideas/server_telemetry_idea.md)).
+Evidence: `ToolTelemetry` singleton (Common) updated by one call-tool filter (`ToolTelemetryRecorder`, registered 2nd, right after Echo, so it wraps ToolError and both breakers); exposed as `toolTelemetry` on `McpServerStatus`; `ToolTelemetryFlushService` writes `server-telemetry_<instanceId>.json` in place into explicit instance folders every 60 s when dirty and on shutdown; `roslynsentinel-mcp-launch.ps1` copies it to `<root>\telemetry\` before sweeping a stale instance; guidance-adherence counters (issued/followed/succeeded/ignored) via `ToolCallHint`; `scripts/Get-TelemetryRollup.ps1`. Tests: `ToolTelemetryTests`, `ToolTelemetryFlusherTests`, `ToolGuidanceTrackingTests`, `ToolTelemetryFilterOrderTests` (pins the filter order); `RoslynSentinel.Tests.Server` 617 passed, 0 failed, 9 skipped; `scripts/Test-TelemetryRollup.ps1` 109 checks on PS 5.1 and 7; Build 0 errors. Doc: [reference_server_telemetry.md](references/reference_server_telemetry.md). Live check (restart, status field, StopServer flush) still pending for the main session.
+
 ## `SyntaxTargetResolver` extraction follow-ups - closed by owner rulings (2026-11-05)
 
 Was: "RenameSymbol cannot merge into an existing signature (design: a merge mode retargeting callers to the existing member; owner decision); `Describe*` formatters unification; `Member(remove)` refusal list size; keyword-resolution symptom" ([proposal](proposals/proposal_syntax_target_resolver_extraction.md)).

@@ -1,6 +1,8 @@
 # Idea: server-side telemetry for tool-call counts and error rates
 
-Status: **raised, not implemented**. Filed 2026-09-05.
+**Status:** IMPLEMENTED 2026-11-05 (owner ruling D5; uncommitted at the time of writing, live check pending). Counters, `toolTelemetry` status field, disk flush, launch-script copy, guidance-adherence counters and the rollup script are built; see [reference_server_telemetry.md](../references/reference_server_telemetry.md). The text below is the original idea; its file paths are stale.
+
+Filed 2026-09-05.
 
 ## Context
 

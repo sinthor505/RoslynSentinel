@@ -21,6 +21,8 @@ The lower-frequency conventions. Consult when touching tests, docs, scripts or t
   quotes, `<=`/`>=`); non-ASCII becomes mojibake across the file -> server -> MCP -> harness chain.
 - **Scripts:** before hand-rolling a shell loop for a repeated task, check `scripts/` for a front-door
   `.ps1` (`roslynsentinel-modeleval.ps1`, `roslynsentinel-planstep.ps1`, `build.ps1`, ...).
+  `Get-TelemetryRollup.ps1` rolls the per-instance tool telemetry up per tool; see
+  [reference_server_telemetry.md](reference_server_telemetry.md).
 - **Solution:** `RoslynSentinel.slnx` (there is no root `.sln`).
 
 ## Gotchas
