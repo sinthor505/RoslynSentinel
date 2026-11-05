@@ -294,9 +294,12 @@ public static class SyntaxTargetResolver
         string Expand(string container, bool topLevel)
         {
             var text = topLevel
-                ? System.Text.RegularExpressions.Regex.Replace(retryCallTemplate, @", \w+: '\{container\}'", string.Empty)
+                ? System.Text.RegularExpressions.Regex.Replace(retryCallTemplate, @", \w+: ['""]\{container\}['""]", string.Empty)
                 : retryCallTemplate;
-            return text.Replace("{file}", filePath).Replace("{member}", memberName).Replace("{container}", container);
+            // ToolCallHint renders string values double-quoted with JSON escapes, so escape the substituted values to match.
+            var escape = retryCallTemplate.Contains("\"{file}\"");
+            string Fit(string value) => escape ? value.Replace("\\", "\\\\").Replace("\"", "\\\"") : value;
+            return text.Replace("{file}", Fit(filePath)).Replace("{member}", Fit(memberName)).Replace("{container}", Fit(container));
         }
 
         if (listed.Count > 0)

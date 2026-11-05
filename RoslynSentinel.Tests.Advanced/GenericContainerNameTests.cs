@@ -633,9 +633,9 @@ public class SyntaxTargetResolverTests
 
         var (message, _) = await SyntaxTargetResolver.BuildContainerMissDetailAsync(compilation,
             root, sourceText, "Run", "B", "Sample.cs",
-            "GetMethodSource(filePath: '{file}', methodName: '{member}', containerName: '{container}')", methodsOnly: false);
+            "GetMethodSource(filePath: \"{file}\", methodName: \"{member}\", containerName: \"{container}\")", methodsOnly: false);
 
-        Assert.That(message, Does.Contain("Retry GetMethodSource(filePath: 'Sample.cs', methodName: 'Run', containerName: 'A')."));
+        Assert.That(message, Does.Contain("Retry GetMethodSource(filePath: \"Sample.cs\", methodName: \"Run\", containerName: \"A\")."));
         Assert.That(message, Does.Not.Contain("{file}"));
         Assert.That(message, Does.Not.Contain("{member}"));
         Assert.That(message, Does.Not.Contain("{container}"));
@@ -652,13 +652,13 @@ public class SyntaxTargetResolverTests
 
         var (message, candidates) = await SyntaxTargetResolver.BuildContainerMissDetailAsync(compilation,
             root, sourceText, "Run", "Missing", "Sample.cs",
-            "ReadFile(filePath: '{file}', memberName: '{member}', containerName: '{container}')", methodsOnly: false, includeTypeKinds: true);
+            "ReadFile(filePath: \"{file}\", memberName: \"{member}\", containerName: \"{container}\")", methodsOnly: false, includeTypeKinds: true);
 
         Assert.That(candidates, Has.Count.EqualTo(1));
         Assert.That(candidates[0].ContainingType, Is.Empty);
         Assert.That(message, Does.Contain("the declaration is top level, so omit the container"));
-        Assert.That(message, Does.Contain("Retry ReadFile(filePath: 'Sample.cs', memberName: 'Run'); the declaration is top level"));
-        Assert.That(message, Does.Not.Contain("Retry ReadFile(filePath: 'Sample.cs', memberName: 'Run', containerName:"));
+        Assert.That(message, Does.Contain("Retry ReadFile(filePath: \"Sample.cs\", memberName: \"Run\"); the declaration is top level"));
+        Assert.That(message, Does.Not.Contain("Retry ReadFile(filePath: \"Sample.cs\", memberName: \"Run\", containerName:"));
     }
 
     [Test]

@@ -389,8 +389,8 @@ public class ReadFileTests
         Assert.That(message, Does.Contain("declares no member named 'Value'"));
         Assert.That(message, Does.Contain("First."));
         Assert.That(message, Does.Contain("lines"));
-        Assert.That(message, Does.Contain("ReadFile(filePath:"));
-        Assert.That(message, Does.Contain("containerName: 'First'"));
+        Assert.That(message, Does.Contain("ReadFile(reason:"));
+        Assert.That(message, Does.Contain("containerName: \"First\""));
         Assert.That(result.ErrorData!.StructuredDetail, Has.Count.EqualTo(1));
         var candidate = result.ErrorData!.StructuredDetail!.Cast<AmbiguousCandidate>().Single();
         Assert.That(candidate.ContainingType, Is.EqualTo("First"));
@@ -433,8 +433,8 @@ public class ReadFileTests
         var message = result.ErrorData!.Message;
         Assert.That(message, Does.Contain("First"));
         Assert.That(message, Does.Contain("Third"));
-        Assert.That(message, Does.Contain("containerName: 'First'"));
-        Assert.That(message, Does.Contain("containerName: 'Third'"));
+        Assert.That(message, Does.Contain("containerName: \"First\""));
+        Assert.That(message, Does.Contain("containerName: \"Third\""));
         Assert.That(result.ErrorData!.StructuredDetail, Has.Count.EqualTo(2));
         var candidates = result.ErrorData!.StructuredDetail!.Cast<AmbiguousCandidate>().ToList();
         Assert.That(candidates.Select(c => c.ContainingType), Is.EquivalentTo(new[] { "First", "Third" }));
