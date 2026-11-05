@@ -8,6 +8,11 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Read-tool metadata envelope for other tools - closed by owner decision (2026-11-05)
+
+Was: "Read-tool metadata envelope (`isComplete`/truncation flag) for the read tools other than `ReadFile`/`GetMethodSource`/`GetFileOutline` ... owner decision pending on the `GetMethodSource` not-found contract and any other tool."
+Evidence: owner ruling D4 (decisions_autonomous_run_2026-11-05.md "Owner rulings"): no further tools get `ReadEnvelope` (Search/ListAll already report `hasMoreData`/`totalRecords`), and `GetMethodSource` not-found stays an `isError` `MethodNotFound` result with candidates; the old spec's `MethodFound=false` success shape is rejected because it would hide misses from `isError`-based handling and telemetry.
+
 ## `MoveType` could not lift a nested type to top level - resolved (2026-11-05)
 
 `MoveType(destination: ownFile)` on a nested type now rewrites the qualified `Outer.Nested` references (member access, qualified names, crefs, fully qualified forms) solution-wide in the same atomic change, via `SymbolFinder` and the semantic model (`NestedTypeReferenceLifter`, called from `BasicRefactoringEngine.MoveTypeToFileAsync`), and adds the namespace using where needed. Known limits: references through a derived type, `global::`-qualified names and generic containing types are not rewritten; a private/protected nested type is not widened.
