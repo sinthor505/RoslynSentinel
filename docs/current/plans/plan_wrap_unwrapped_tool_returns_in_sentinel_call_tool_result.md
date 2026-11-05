@@ -1,6 +1,8 @@
 # Plan: Move the 9 unwrapped [McpServerTool] methods to SentinelCallToolResult<T>
 
-**Status:** DRAFT 2026-10-17. Not started; another session is implementing. Do not begin until the user says so.
+**Status:** IN PROGRESS 2026-11-05 (autonomous run; user authorized). Steps 0-8 implemented in the working tree, uncommitted; full solution tests 6542 total / 0 failed. Live server check of Step 8 is pending (main session: restart, `StopServer` without the confirm param still refuses, `ExternalFileDrift(List)` still works). Decisions: `docs/current/decisions_autonomous_run_2026-11-05.md`.
+
+Done so far (checkboxes): [x] Step 0, [x] Step 1, [x] Step 2, [x] Step 3, [x] Step 4, [x] Step 5, [x] Step 6 (NoFurtherDocumentation = success with StatusMessage), [x] Step 7 (ProjectDocCore + wrapper), [x] Step 8a ExternalFileDrift, [x] Step 8b McpServerControl, [ ] Step 8 live check (also confirm ListTestInstances/GetServerStatus payloads over the wire: JsonElement under successData). Follow-ups left as code TODOs: remove delegating `AcknowledgeDrift`/`ControlServer` string wrappers once their tests move; ProjectDoc missing-file code is Exception not NotFound.
 
 ## Problem
 Of 141 `[McpServerTool]` methods in the Tools.* projects, 9 do not return `SentinelCallToolResult<...>`
