@@ -1529,6 +1529,9 @@ public class WorkspaceReadNavigationImpl
         SentinelCallToolResult<object> Wrap(SequencePage built)
         {
             bool more = built.NextOffset is not null;
+            // The page record is the only cursor: the stored tool's own hasMoreData/nextOffset/totalRecords and any re-query hint
+            // in its statusMessage would contradict it, so the inner envelope copy carries none of them.
+            SequenceMessages.StripToolPaging(built.Page);
             string message = SequenceMessages.ForPage(full, sequence, built, built.NextOffset is { } next ? FetchHint(next) : null);
             if (!string.IsNullOrWhiteSpace(path))
             {

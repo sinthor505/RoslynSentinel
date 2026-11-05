@@ -312,4 +312,101 @@ public class SequenceLargeResultPagingTests
         var files = Directory.GetFiles(Path.Combine(_tempDir, ".roslynsentinel", "largeresults"), "largeresult_*.json");
         Assert.That(files, Has.Length.EqualTo(1));
     }
+
+    // Every value of every property called name, anywhere in the tree.
+    private static List<JsonNode?> Occurrences(JsonNode? node, string name)
+    {
+        var found = new List<JsonNode?>();
+        void Walk(JsonNode? current)
+        {
+            switch (current)
+            {
+                case JsonObject obj:
+                    foreach (var (key, value) in obj)
+                    {
+                        if (key == name)
+                        {
+                            found.Add(value);
+                        }
+
+                        Walk(value);
+                    }
+
+                    break;
+                case JsonArray array:
+                    foreach (var item in array)
+                    {
+                        Walk(item);
+                    }
+
+                    break;
+            }
+        }
+
+        Walk(node);
+        return found;
+    }
+
+    [Test]
+    public async Task SequencePage_CarriesOneConsistentCursor_AndNoReQueryHintFromTheStoredTool()
+    {
+        const string toolHint = "File is 9000 lines, over the inline limit. For a slice call ReadFile(reason: \"<why you call this>\", startLine: 1, endLine: 200).";
+        var original = new SentinelCallToolResult<TwoLists>
+        {
+            IsError = false,
+            SuccessData = BigTwoLists(),
+            HasMoreData = false,
+            TotalRecords = 5,
+            StatusMessage = toolHint,
+            WarningDetails = "keep this warning",
+        };
+        var (resultId, first) = await MarshalAsync(original);
+
+        // First response: the tool's re-query hint is gone, its warning stays, and the one hasMoreData agrees with largeResult.nextOffset.
+        Assert.That(first["statusMessage"], Is.Null);
+        Assert.That(first["nextOffset"], Is.Null);
+        Assert.That(first["totalRecords"]!.GetValue<int>(), Is.EqualTo(5), "the tool's own count is data, not a paging instruction");
+        Assert.That(first["warningDetails"]!.GetValue<string>(), Is.EqualTo("keep this warning"));
+        Assert.That(Occurrences(first, "hasMoreData").Select(n => n!.GetValue<bool>()), Is.All.True);
+        Assert.That(first["largeResult"]!["nextOffset"], Is.Not.Null);
+        Assert.That(first.ToJsonString(), Does.Not.Contain("ReadFile(reason"));
+
+        // A middle page: every hasMoreData in the whole response is equal, exactly one nextOffset, nothing of the tool's own paging inside.
+        int nextOffset = first["largeResult"]!["nextOffset"]!.GetValue<int>();
+        var result = await PageAsync(resultId, nextOffset);
+        EnvelopePageResult page = PageOf(result);
+        Assert.That(page.HasMoreData, Is.True, "the fixture needs a middle page");
+        JsonNode wire = JsonSerializer.SerializeToNode(result, Wire.GetTypeInfo(typeof(object)))!;
+        var flags = Occurrences(wire, "hasMoreData").Select(n => n!.GetValue<bool>()).ToList();
+        Assert.That(flags, Has.Count.EqualTo(2), "the wrapper and the page record, nothing inside the envelope");
+        Assert.That(flags.Distinct().Count(), Is.EqualTo(1), "all hasMoreData flags agree");
+        Assert.That(Occurrences(wire, "nextOffset"), Has.Count.EqualTo(1), "exactly one nextOffset");
+        Assert.That(result.TotalRecords, Is.Null, "the wrapper repeats no count");
+        JsonObject inner = page.Envelope!;
+        Assert.That(inner["statusMessage"], Is.Null, "the stored tool's re-query hint is dropped");
+        Assert.That(inner["warningDetails"]!.GetValue<string>(), Is.EqualTo("keep this warning"));
+        Assert.That(wire.ToJsonString(), Does.Not.Contain("ReadFile(reason"));
+
+        // The last page: still consistent (all false, no nextOffset at all).
+        var last = await PageAsync(resultId, offset: 195);
+        JsonNode lastWire = JsonSerializer.SerializeToNode(last, Wire.GetTypeInfo(typeof(object)))!;
+        Assert.That(Occurrences(lastWire, "hasMoreData").Select(n => n!.GetValue<bool>()), Is.All.False);
+        Assert.That(Occurrences(lastWire, "nextOffset").Where(n => n is not null), Is.Empty);
+    }
+
+    [Test]
+    public async Task StatusMessageWithoutACallHint_IsKeptOnTheCutPages()
+    {
+        var original = new SentinelCallToolResult<TwoLists>
+        {
+            IsError = false,
+            SuccessData = BigTwoLists(),
+            StatusMessage = "3 hidden test hits were not counted.",
+        };
+        var (resultId, first) = await MarshalAsync(original);
+        Assert.That(first["statusMessage"]!.GetValue<string>(), Is.EqualTo("3 hidden test hits were not counted."));
+
+        var page = PageOf(await PageAsync(resultId, first["largeResult"]!["nextOffset"]!.GetValue<int>()));
+        Assert.That(page.Envelope!["statusMessage"]!.GetValue<string>(), Is.EqualTo("3 hidden test hits were not counted."));
+    }
 }

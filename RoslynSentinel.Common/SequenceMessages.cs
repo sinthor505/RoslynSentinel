@@ -50,4 +50,28 @@ public static class SequenceMessages
             : string.Empty;
         return $"{prefix} lines {first}-{last} of {page.Total} returned{fileRange}.{continues}{suffix}";
     }
+
+    /// <summary>
+    /// Removes the stored tool's own paging fields from the envelope copy of a sequence page that was cut, so the only paging
+    /// instruction left is the sequence pager's (<c>largeResult</c> on the first response, the page record on later ones):
+    /// the envelope-level <c>hasMoreData</c> and <c>nextOffset</c>, and the <c>statusMessage</c> when it carries a tool-call
+    /// hint (for example ReadFile's "call ReadFile(startLine, endLine) for the rest"). A <c>statusMessage</c> without a call
+    /// hint is information about the result and stays, as does <c>totalRecords</c> (the tool's own count, not an instruction);
+    /// data, findings and warnings are never touched.
+    /// </summary>
+    public static void StripToolPaging(JsonObject envelope)
+    {
+        ArgumentNullException.ThrowIfNull(envelope);
+        foreach (string key in envelope.Select(kv => kv.Key).ToList())
+        {
+            bool tool = key.Equals("hasMoreData", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("nextOffset", StringComparison.OrdinalIgnoreCase);
+            bool hint = key.Equals("statusMessage", StringComparison.OrdinalIgnoreCase)
+                && envelope[key] is JsonValue value && value.TryGetValue(out string? text) && System.Text.RegularExpressions.Regex.IsMatch(text, @"\w+\(reason:");
+            if (tool || hint)
+            {
+                envelope.Remove(key);
+            }
+        }
+    }
 }

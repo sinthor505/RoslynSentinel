@@ -61,7 +61,7 @@ public class LargeResultPagingAgentTests
     // Same template, but the objective is the ReadFile tool itself: the model must page the whole file through
     // GetLargeResult. Efficiency is explicitly irrelevant.
     private const string LargeResultReadFileOnlyPromptTemplate = """
-        The objective of this session is to test the ReadFile tool. Read the whole file `{0}/FixtureHelpers/TierRates.cs` with ReadFile (no line range). If the result says it is INCOMPLETE, follow its GetLargeResult call and keep paging until you find the method that handles the Platinum annual contract tier, then report its method name and its rate value. Efficiency is irrelevant and no other tools are available. Do not edit anything.
+        Read the whole file `{0}/FixtureHelpers/TierRates.cs` with ReadFile (no line range). If the result says it is INCOMPLETE, follow its GetLargeResult call for the next page. Read each page carefully for the method that handles the Platinum annual contract tier. If it is not on the page, call the next page. Continue until you find it, then stop and report the method name, its rate value, and the offset of the page that contains it. Do not edit anything. The objective of this session is to test the ReadFile tool; efficiency is irrelevant and only ReadFile and GetLargeResult are available.
         """;
 
     // Read-only find-by-name tools, blocked on top of BlockedToolNames for the ReadFile-only scenario. ReadFile stays
@@ -72,6 +72,10 @@ public class LargeResultPagingAgentTests
         "Search", "GetFileOutline", "GetMethodSource", "Member", "ListAll", "FindReferences", "InspectSymbol",
         "LocateSymbol", "QuerySymbolRelationships",
     };
+
+    // The ReadFile-only scenario lists exactly these two tools (everything else is hidden from tools/list and refused at call time),
+    // so the prompt's "only ReadFile and GetLargeResult are available" is true.
+    private static readonly HashSet<string> ReadFileOnlyAllowedToolNames = new(StringComparer.Ordinal) { "ReadFile", "GetLargeResult" };
 
     private IHost _host = null!;
     private McpClient _mcpClient = null!;
@@ -194,10 +198,13 @@ public class LargeResultPagingAgentTests
 
     /// <summary>
     /// Starts the in-memory MCP server and the agent host for one scenario. blockedToolNames are refused by the
-    /// request filter; blockReadFileMemberLookup also refuses ReadFile calls that name a member.
+    /// request filter and hidden from tools/list; blockReadFileMemberLookup also refuses ReadFile calls that name a member.
+    /// allowedToolNames, when given, is an allow-list instead: every other tool is hidden from tools/list and refused at call time.
     /// </summary>
-    private async Task StartHarnessAsync(IReadOnlySet<string> blockedToolNames, bool blockReadFileMemberLookup)
+    private async Task StartHarnessAsync(IReadOnlySet<string> blockedToolNames, bool blockReadFileMemberLookup, IReadOnlySet<string>? allowedToolNames = null)
     {
+        bool IsHidden(string toolName) => allowedToolNames is not null ? !allowedToolNames.Contains(toolName) : blockedToolNames.Contains(toolName);
+
         _fixture = new RoslynSentinel.Tests.TestSolutionFixture();
 
         var clientToServer = new Pipe();
@@ -236,7 +243,7 @@ public class LargeResultPagingAgentTests
                         };
                     }
 
-                    if (context.Params?.Name is { } toolName && blockedToolNames.Contains(toolName))
+                    if (context.Params?.Name is { } toolName && IsHidden(toolName))
                     {
                         return new CallToolResult
                         {
@@ -255,6 +262,17 @@ public class LargeResultPagingAgentTests
 
                     return await next(context, cancellationToken);
                 }));
+
+            // The model must not be offered tools it will be refused: hide them from tools/list (the call-time refusal above stays as a safety net).
+            filters.AddListToolsFilter(next => async (context, cancellationToken) =>
+            {
+                var listed = await next(context, cancellationToken);
+                return new ListToolsResult
+                {
+                    Tools = listed.Tools.Where(t => !IsHidden(t.Name)).ToList(),
+                    NextCursor = listed.NextCursor,
+                };
+            });
         });
 
         _runDirectory = Path.Combine(
@@ -493,7 +511,7 @@ public class LargeResultPagingAgentTests
     [Test]
     public async Task Model_PagesLargeResultToFindNeedle_ReadFileOnly()
     {
-        await StartHarnessAsync(ReadFileOnlyBlockedToolNames, blockReadFileMemberLookup: true);
+        await StartHarnessAsync(ReadFileOnlyBlockedToolNames, blockReadFileMemberLookup: true, allowedToolNames: ReadFileOnlyAllowedToolNames);
         var userPrompt = string.Format(LargeResultReadFileOnlyPromptTemplate, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
         var (result, calls, finalMessage) = await RunPagingScenarioAsync(userPrompt);
 

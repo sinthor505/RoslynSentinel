@@ -177,6 +177,12 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
             return null;
         }
 
+        // The sequence pager cut this result, so the tool's own re-query hint (ReadFile's "call ReadFile(startLine..endLine)")
+        // and its paging fields must not sit beside the largeResult offset call; the envelope-level hasMoreData is set to
+        // true to agree with largeResult.nextOffset. The stored full text keeps the tool's original fields.
+        SequenceMessages.StripToolPaging(page.Page);
+        page.Page["hasMoreData"] = true;
+
         var (resultId, filePath, storeFailure) = await TryStoreAsync(toolName, text, omitted: null, sequence, cancellationToken).ConfigureAwait(false);
 
         JsonNode pointerNode;
