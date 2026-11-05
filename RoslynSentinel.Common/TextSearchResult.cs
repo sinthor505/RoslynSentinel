@@ -1,5 +1,6 @@
 namespace RoslynSentinel.Common;
 
+// TODO [ResultRecords] marks only LiteralResults; for a regex query the hits are in RegexResults, LiteralResults is empty and the pager falls back to inference (inferred: true) - both lists are records.
 /// <summary>
 /// Return payload for <c>SearchSolutionText</c>: the literal substring matches (always the
 /// complete set) and the regex matches not already present in <see cref="LiteralResults"/> (empty

@@ -660,21 +660,60 @@ public class WorkspaceReadNavigationImpl
             return false;
         }
 
-        var normalizedGlob = fileGlob.Replace('\\', '/');
-        var slashIndex = normalizedGlob.IndexOf('/');
-        if (slashIndex <= 0)
+        var names = testProjectNames.ToList();
+        return FirstGlobSegments(fileGlob.Replace('\\', '/')).Any(firstSegment =>
         {
-            return false;
+            var segmentRegex = "^" + GlobToRegex(firstSegment) + "$";
+            return names.Any(name => Regex.IsMatch(name, segmentRegex, RegexOptions.IgnoreCase));
+        });
+    }
+
+    // The first path segment of each glob a brace list expands to, skipping any '/' inside {...}: "{A,B}/x.cs" gives
+    // "{A,B}", "{A/x.cs,B/y.cs}" gives "A" and "B". No '/' outside a brace list, a leading '/', a segment made only of
+    // '*', and an unterminated '{' give nothing; GlobToRegex still reports a malformed glob when the full glob is matched.
+    private static IEnumerable<string> FirstGlobSegments(string glob)
+    {
+        if (!glob.Contains('/'))
+        {
+            return [];
         }
 
-        var firstSegment = normalizedGlob[..slashIndex];
-        if (firstSegment.All(c => c == '*'))
+        int depth = 0;
+        int groupStart = -1;
+        int groupEnd = -1;
+        for (int i = 0; i < glob.Length; i++)
         {
-            return false;
+            switch (glob[i])
+            {
+                case '{':
+                    if (depth++ == 0 && groupStart < 0)
+                    {
+                        groupStart = i;
+                    }
+
+                    break;
+                case '}' when depth > 0:
+                    if (--depth == 0 && groupEnd < 0)
+                    {
+                        groupEnd = i;
+                    }
+
+                    break;
+                case '/' when depth == 0:
+                    var segment = glob[..i];
+                    return segment.Length == 0 || segment.All(c => c == '*') ? [] : [segment];
+            }
         }
 
-        var segmentRegex = "^" + GlobToRegex(firstSegment) + "$";
-        return testProjectNames.Any(name => Regex.IsMatch(name, segmentRegex, RegexOptions.IgnoreCase));
+        if (groupEnd < 0)
+        {
+            return [];
+        }
+
+        var prefix = glob[..groupStart];
+        var suffix = glob[(groupEnd + 1)..];
+        return SplitTopLevelCommas(glob[(groupStart + 1)..groupEnd])
+            .SelectMany(alternative => FirstGlobSegments(prefix + alternative + suffix));
     }
 
     // Cap on hidden (test-project) match lines counted per project when includeTests is false. These

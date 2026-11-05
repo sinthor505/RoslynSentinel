@@ -164,6 +164,22 @@ public class SearchSolutionTextIncludeTestsTests
     }
 
     [Test]
+    [Description("A '/' inside a brace list must not end the glob's first path segment: the test-project check cut " +
+             "'{TestsProj/**/*.cs,AppProj/**/*.cs}' to '{TestsProj' and rejected it as an unterminated '{'.")]
+    public async Task IncludeTestsFalse_BraceListOfProjectGlobs_MatchesBothAndImpliesIncludeTests()
+    {
+        var result = await _impl.SearchSolutionText(reason: "test message", pattern: SharedPattern,
+            fileGlob: "{TestsProj/**/*.cs,AppProj/**/*.cs}", includeTests: false);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var paths = PathsOf((TextSearchResult)result.SuccessData!).ToList();
+        Assert.That(paths.Any(p => p.EndsWith("App.cs", StringComparison.OrdinalIgnoreCase)), Is.True,
+            "the AppProj alternative must match");
+        Assert.That(paths.Any(p => p.EndsWith("UnitTest1.cs", StringComparison.OrdinalIgnoreCase)), Is.True,
+            "an alternative whose first segment names a test project implies includeTests");
+    }
+
+    [Test]
     public async Task IncludeTestsFalse_GlobWithWildcardFirstSegment_StillHidesTestProject()
     {
         var result = await _impl.SearchSolutionText(reason: "test message", pattern: SharedPattern,

@@ -39,6 +39,7 @@ public class WorkspaceFileEditTools
         => _impl.UndoLastApply(reason, changeId, cancellationToken);
 
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
+    // TODO Description is stale: an oversized whole-file read now returns the first part inline plus a largeResult pointer, not only a resultId; the served description also differs from this text.
     [McpServerTool(Name = "ReadFile")]
     [Produces(DataTag.SourceCode)]
     [Description("Returns the raw text of a file in the loaded solution, verbatim (no reformatting). Pass startLine/endLine (1-based, inclusive) to read a slice instead of the whole file - useful once GetFileOutline or a search result gives you a line range. Whole-file reads past the size threshold are written to .roslynsentinel/largeresults and returned as a resultId (see GetMethodSource) instead of inline text. To read a single member, pass memberName (optionally containerName).")]
