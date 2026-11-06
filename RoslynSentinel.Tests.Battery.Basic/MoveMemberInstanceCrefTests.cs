@@ -258,7 +258,8 @@ public class MoveMemberInstanceCrefTests
         Assert.That(source, Does.Contain("<see cref=\"Count\"/>"));
         Assert.That(source, Does.Contain("<see cref=\"A.Count(string)\"/>"));
 
-        var result = await MoveInstanceAsync(workspace, engine, new[] { "Count" });
+        // Overloads are listed by signature: a bare overloaded name is refused as Ambiguous (MemberSelection).
+        var result = await MoveInstanceAsync(workspace, engine, new[] { "Count(string)", "Count(int)" });
 
         // Two adjacent members leave one blank line after the class brace: the existing member-removal whitespace.
         Assert.That(NewText(result, "Source.cs"), Is.EqualTo(Lines(eol,
@@ -314,7 +315,8 @@ public class MoveMemberInstanceCrefTests
         // Vacuity guard: the bare cref sits inside an overload that moves, and the other overload moves too.
         Assert.That(source, Does.Contain("    /// <summary>Counts ints, see <see cref=\"Count\"/>.</summary>"));
 
-        var result = await MoveInstanceAsync(workspace, engine, new[] { "Count" });
+        // Overloads are listed by signature: a bare overloaded name is refused as Ambiguous (MemberSelection).
+        var result = await MoveInstanceAsync(workspace, engine, new[] { "Count(string)", "Count(int)" });
 
         Assert.That(NewText(result, "Target.cs"), Does.Contain("    /// <summary>Counts ints, see <see cref=\"Count\"/>.</summary>"));
         var notes = result.Notes ?? Array.Empty<string>();
@@ -371,7 +373,8 @@ public class MoveMemberInstanceCrefTests
         Assert.That(sourceOffset, Is.GreaterThan(0));
         Assert.That(caller.IndexOf("<see cref=\"A.Count\"/>", StringComparison.Ordinal), Is.EqualTo(sourceOffset));
 
-        var result = await MoveInstanceAsync(workspace, engine, new[] { "Count" });
+        // Overloads are listed by signature: a bare overloaded name is refused as Ambiguous (MemberSelection).
+        var result = await MoveInstanceAsync(workspace, engine, new[] { "Count(string)", "Count(int)" });
 
         Assert.That(result.Notes, Is.EqualTo(new[]
         {

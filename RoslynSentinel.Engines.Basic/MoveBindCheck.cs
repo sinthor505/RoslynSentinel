@@ -167,6 +167,14 @@ public static class MoveBindCheck
         if (info.CandidateSymbols.Length > 0)
         {
             var anyMoved = info.CandidateSymbols.Any(moved.Matches);
+            // Moving ONE overload leaves the others on the source type: a call meant for the moved overload then fails overload
+            // resolution against them (candidates, none of them the moved member). That is the same "no longer binds" case as when no
+            // overload stays, so it falls through to receiver classification instead of being reported unverifiable.
+            if (!anyMoved && info.CandidateReason == CandidateReason.OverloadResolutionFailure)
+            {
+                return new MoveBindCheckResult(MoveBindOutcome.BindFailed, null, 0, false, bound.Span, $"'{name.Identifier.Text}' does not bind to the moved member: the {info.CandidateSymbols.Length} remaining candidate(s) of that name do not accept this call.");
+            }
+
             return new MoveBindCheckResult(MoveBindOutcome.BindAmbiguous, null, info.CandidateSymbols.Length, anyMoved, bound.Span, $"No single symbol ({info.CandidateReason}); {info.CandidateSymbols.Length} candidate(s).");
         }
 

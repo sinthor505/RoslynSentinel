@@ -2768,6 +2768,11 @@ public class MemberRefactoringEngine
     /// otherwise fails the write-path chokepoint's per-write compiler check (source ends up with
     /// dangling references before the add lands).
     ///
+    /// memberNames: each entry is a bare name (a method, property, field variable or nested type) or, for ONE overload, a signature
+    /// such as "Save(int)". A bare name matching several overloads is refused as ambiguous, and an entry matching nothing as not found,
+    /// before anything is written; listing every overload's signature moves the whole group. See <see cref="MemberSelection"/> for the
+    /// signature rule; the dry-run preview uses the same selection.
+    ///
     /// Three destination modes, chosen automatically from targetClassName:
     ///  - Existing base type of the source class: reuses PullUpMember's modifier adjustment
     ///    (removes override, adds virtual) and skips call-site rewriting -> virtual dispatch means
@@ -2806,54 +2811,10 @@ public class MemberRefactoringEngine
             throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'.");
         }
 
-        var membersToMove = classNode.Members.Where(m =>
-        {
-            if (m is MethodDeclarationSyntax meth)
-            {
-                return memberNames.Contains(meth.Identifier.Text);
-            }
-
-            if (m is PropertyDeclarationSyntax prop)
-            {
-                return memberNames.Contains(prop.Identifier.Text);
-            }
-
-            if (m is FieldDeclarationSyntax field)
-            {
-                return field.Declaration.Variables.Any(v => memberNames.Contains(v.Identifier.Text));
-            }
-
-            if (m is BaseTypeDeclarationSyntax nestedType)
-            {
-                return memberNames.Contains(nestedType.Identifier.Text);
-            }
-
-            return false;
-        }).ToList();
-        if (membersToMove.Count == 0)
-        {
-            throw new ToolNotFoundException($"None of the requested member(s) [{string.Join(", ", memberNames)}] were found in class '{className}'.");
-        }
-
-        // Names declared by one class member, using the same identifier rules as the membersToMove predicate above.
-        static IEnumerable<string> MemberDeclaredNames(MemberDeclarationSyntax m) => m switch
-        {
-            MethodDeclarationSyntax meth => new[] { meth.Identifier.Text },
-            PropertyDeclarationSyntax prop => new[] { prop.Identifier.Text },
-            FieldDeclarationSyntax field => field.Declaration.Variables.Select(v => v.Identifier.Text),
-            BaseTypeDeclarationSyntax nestedType => new[] { nestedType.Identifier.Text },
-            _ => Array.Empty<string>()
-        };
-
-        // A requested name that matches no member in this file is otherwise dropped silently while the
-        // rest moves (e.g. the member lives in another part of a partial class). Refuse before any write.
-        var matchedMemberNames = membersToMove.SelectMany(MemberDeclaredNames).ToHashSet(StringComparer.Ordinal);
-        var missingMemberNames = memberNames.Where(n => !matchedMemberNames.Contains(n)).Distinct(StringComparer.Ordinal).ToList();
-        if (missingMemberNames.Count > 0)
-        {
-            var foundNames = classNode.Members.SelectMany(MemberDeclaredNames).Distinct(StringComparer.Ordinal);
-            throw new ToolNotFoundException($"Requested member(s) [{string.Join(", ", missingMemberNames)}] were not found in class '{className}' in this file (found: [{string.Join(", ", foundNames)}]). Nothing was moved. If the class is partial, the member may be declared in another part; pass that file's path.");
-        }
+        // memberNames entries are bare names or signatures like "Save(int)" (see MemberSelection). One shared selection, also used by
+        // the dry-run preview, so the two cannot disagree: an overloaded bare name is refused as ambiguous and an entry matching nothing
+        // is refused as not found, all before any write.
+        var membersToMove = MemberSelection.SelectMembers(classNode.Members, memberNames, className);
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var classSymbol = semanticModel?.GetDeclaredSymbol(classNode, cancellationToken) as INamedTypeSymbol;
@@ -2901,7 +2862,7 @@ public class MemberRefactoringEngine
         if (classSymbol != null && semanticModel != null)
         {
             ValidateFieldMap(classSymbol, semanticModel, membersToMove, className, targetClassName, targetIsBaseType, targetClassSymbol, fieldMap);
-            alreadySatisfiedFields = RequireNoUnmovedDependencies(classSymbol, semanticModel, membersToMove, memberNames, className, targetClassName, targetClassSymbol, fieldMap);
+            alreadySatisfiedFields = RequireNoUnmovedDependencies(classSymbol, semanticModel, membersToMove, MovedSymbolsOf(membersToMove, semanticModel, cancellationToken), className, targetClassName, targetClassSymbol, fieldMap);
             RequireCtorAssignedFieldsNotMoved(classNode, classSymbol, semanticModel, membersToMove, alreadySatisfiedFields, className);
         }
 
@@ -2999,6 +2960,54 @@ public class MemberRefactoringEngine
     }
 
     /// <summary>
+    /// The symbols (original definitions) of the declarations a move actually relocates: one per method, property or nested
+    /// type, one per field VARIABLE, plus both parts of a partial method. Used to tell a moved overload from a same-named
+    /// member that stays, which a name comparison cannot.
+    /// </summary>
+    private static HashSet<ISymbol> MovedSymbolsOf(IEnumerable<MemberDeclarationSyntax> membersToMove, SemanticModel semanticModel, CancellationToken cancellationToken)
+    {
+        var moved = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        void AddSymbol(ISymbol? symbol)
+        {
+            if (symbol == null)
+            {
+                return;
+            }
+
+            moved.Add(symbol.OriginalDefinition);
+            if (symbol is IMethodSymbol method)
+            {
+                if (method.PartialDefinitionPart != null)
+                {
+                    moved.Add(method.PartialDefinitionPart.OriginalDefinition);
+                }
+
+                if (method.PartialImplementationPart != null)
+                {
+                    moved.Add(method.PartialImplementationPart.OriginalDefinition);
+                }
+            }
+        }
+
+        foreach (var member in membersToMove)
+        {
+            if (member is BaseFieldDeclarationSyntax field)
+            {
+                foreach (var variable in field.Declaration.Variables)
+                {
+                    AddSymbol(semanticModel.GetDeclaredSymbol(variable, cancellationToken));
+                }
+            }
+            else
+            {
+                AddSymbol(semanticModel.GetDeclaredSymbol(member, cancellationToken));
+            }
+        }
+
+        return moved;
+    }
+
+    /// <summary>
     /// MoveMember into a STATIC target class (keep modes supported: the source keeps an instance forwarder to the static
     /// target): every moved instance method/property must be convertible to static
     /// (see <see cref="StaticConversionEdits"/>) and must use no instance state. Runs before
@@ -3054,10 +3063,10 @@ public class MemberRefactoringEngine
     /// only fails to compile afterward, as an unexplained CS0246/CS0103 pointing at the target file
     /// rather than at the real cause (an un-moved dependency back in the source class).
     /// </summary>
-    private static HashSet<string> RequireNoUnmovedDependencies(INamedTypeSymbol classSymbol, SemanticModel semanticModel, List<MemberDeclarationSyntax> membersToMove, string[] memberNames, string className, string targetClassName, INamedTypeSymbol? targetClassSymbol, IReadOnlyDictionary<string, string>? fieldMap)
+    private static HashSet<string> RequireNoUnmovedDependencies(INamedTypeSymbol classSymbol, SemanticModel semanticModel, List<MemberDeclarationSyntax> membersToMove, HashSet<ISymbol> movedSymbols, string className, string targetClassName, INamedTypeSymbol? targetClassSymbol, IReadOnlyDictionary<string, string>? fieldMap)
     {
         var alreadySatisfiedFields = new HashSet<string>(StringComparer.Ordinal);
-        var siblingsByName = classSymbol.GetMembers().Where(s => s.DeclaredAccessibility is Accessibility.Private or Accessibility.Internal or Accessibility.NotApplicable).Where(s => !memberNames.Contains(s.Name)).ToLookup(s => s.Name, StringComparer.Ordinal);
+        var siblingsByName = classSymbol.GetMembers().Where(s => s.DeclaredAccessibility is Accessibility.Private or Accessibility.Internal or Accessibility.NotApplicable).Where(s => !movedSymbols.Contains(s.OriginalDefinition)).ToLookup(s => s.Name, StringComparer.Ordinal);
         if (siblingsByName.Count == 0)
         {
             return alreadySatisfiedFields;
@@ -3079,7 +3088,8 @@ public class MemberRefactoringEngine
 
                 var symbolInfo = semanticModel.GetSymbolInfo(identifier);
                 var resolved = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
-                if (resolved == null || !SymbolEqualityComparer.Default.Equals(resolved.ContainingType, classSymbol))
+                // A name shared with a moved overload stays in siblingsByName when another overload stays behind, so the symbol itself decides.
+                if (resolved == null || !SymbolEqualityComparer.Default.Equals(resolved.ContainingType, classSymbol) || movedSymbols.Contains(resolved.OriginalDefinition))
                 {
                     continue;
                 }
@@ -3736,6 +3746,43 @@ public class MemberRefactoringEngine
             // Keep modes leave every caller untouched: no receiver rewrites and no pending ledger entries for caller sites.
             rows = rows.Take(0).ToList();
         }
+        // Call-site matching below is by the moved declarations' names (memberNames may hold signatures like "Save(int)") and, for a name
+        // a member that stays behind also carries (an overload), by binding: name plus line cannot tell `a.Save(1)` from `a.Save("x")` on
+        // one line, so only a site that binds to a MOVED symbol is rewritten. A name with no staying namesake keeps the name-and-line match.
+        var movedNames = membersToMove.SelectMany(MemberSelection.DeclaredNames).ToHashSet(StringComparer.Ordinal);
+        var callSiteSourceDocument = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).First()!;
+        var callSiteSourceModel = await callSiteSourceDocument.GetSemanticModelAsync(cancellationToken);
+        var movedSymbolSet = callSiteSourceModel == null ? new HashSet<ISymbol>(SymbolEqualityComparer.Default) : MovedSymbolsOf(membersToMove, callSiteSourceModel, cancellationToken);
+        var overloadSharedNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var movedSymbol in movedSymbolSet)
+        {
+            if (movedSymbol.ContainingType != null && movedSymbol.ContainingType.GetMembers(movedSymbol.Name).Any(other => !movedSymbolSet.Contains(other.OriginalDefinition)))
+            {
+                overloadSharedNames.Add(movedSymbol.Name);
+            }
+        }
+
+        bool BindsToMovedSymbol(SemanticModel? model, SyntaxNode site, string name)
+        {
+            if (!overloadSharedNames.Contains(name))
+            {
+                return true;
+            }
+
+            if (model == null)
+            {
+                return false;
+            }
+
+            var info = model.GetSymbolInfo(site, cancellationToken);
+            if (info.Symbol != null)
+            {
+                return movedSymbolSet.Contains(((info.Symbol as IMethodSymbol)?.ReducedFrom ?? info.Symbol).OriginalDefinition);
+            }
+
+            return info.CandidateSymbols.Length > 0 && info.CandidateSymbols.All(c => movedSymbolSet.Contains(((c as IMethodSymbol)?.ReducedFrom ?? c).OriginalDefinition));
+        }
+
         var fixups = CallSiteFixupMap.Parse(callSiteFixups, _workspaceManager.GetSolutionRoot());
         // Caller-supplied fixups actually applied, keyed by CallerFixupSiteKey(file, original line).
         // Auto-resolved (Valid) rows are deliberately absent: only a caller's own value can be blamed
@@ -3787,7 +3834,7 @@ public class MemberRefactoringEngine
                 : new List<string>();
             foreach (var row in rows.Where(r => (r.Status == CallSiteStatus.NoCandidateIntroducible || r.Status == CallSiteStatus.Valid || r.Status == CallSiteStatus.Ambiguous) && solution.GetDocumentIdsWithFilePath(r.FilePath).Contains(sameClassDocument.Id)))
             {
-                var invocation = sameClassRoot.DescendantNodes().OfType<InvocationExpressionSyntax>().FirstOrDefault(inv => inv.Expression is IdentifierNameSyntax callName && memberNames.Contains(callName.Identifier.Text) && callName.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == row.Line);
+                var invocation = sameClassRoot.DescendantNodes().OfType<InvocationExpressionSyntax>().FirstOrDefault(inv => inv.Expression is IdentifierNameSyntax callName && movedNames.Contains(callName.Identifier.Text) && callName.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == row.Line && BindsToMovedSymbol(sameClassModel, inv, callName.Identifier.Text));
                 if (invocation == null
                     || invocation.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault() != sameClassNode
                     || invocation.Ancestors().OfType<MemberDeclarationSyntax>().FirstOrDefault()?.Modifiers.Any(SyntaxKind.StaticKeyword) == true
@@ -3867,7 +3914,8 @@ public class MemberRefactoringEngine
             // A preview row's line is the line of the referenced member NAME (the reference identifier), so sites are matched by
             // the name's line, not the member access's start line: for a wrapped call (`a` on one line, `.Count(x)` on the next)
             // those differ and the receiver would never be rewritten.
-            var memberAccesses = docRoot.DescendantNodes().OfType<MemberAccessExpressionSyntax>().Where(ma => memberNames.Contains(ma.Name.Identifier.Text) && linesToFix.ContainsKey(ma.Name.GetLocation().GetLineSpan().StartLinePosition.Line + 1)).ToList();
+            var docSemanticModel = overloadSharedNames.Count > 0 ? await doc.GetSemanticModelAsync(cancellationToken) : null;
+            var memberAccesses = docRoot.DescendantNodes().OfType<MemberAccessExpressionSyntax>().Where(ma => movedNames.Contains(ma.Name.Identifier.Text) && linesToFix.ContainsKey(ma.Name.GetLocation().GetLineSpan().StartLinePosition.Line + 1) && BindsToMovedSymbol(docSemanticModel, ma.Parent is InvocationExpressionSyntax callInvocation && callInvocation.Expression == ma ? callInvocation : ma, ma.Name.Identifier.Text)).ToList();
             foreach (var memberAccess in memberAccesses)
             {
                 var line = memberAccess.Name.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
@@ -4481,29 +4529,8 @@ public class MemberRefactoringEngine
             throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'.");
         }
 
-        var membersToMove = classNode.Members.Where(m =>
-        {
-            if (m is MethodDeclarationSyntax meth)
-            {
-                return memberNames.Contains(meth.Identifier.Text);
-            }
-
-            if (m is PropertyDeclarationSyntax prop)
-            {
-                return memberNames.Contains(prop.Identifier.Text);
-            }
-
-            if (m is FieldDeclarationSyntax field)
-            {
-                return field.Declaration.Variables.Any(v => memberNames.Contains(v.Identifier.Text));
-            }
-
-            return false;
-        }).ToList();
-        if (membersToMove.Count == 0)
-        {
-            throw new ToolNotFoundException($"None of the requested member(s) [{string.Join(", ", memberNames)}] were found in class '{className}'.");
-        }
+        // The same selection MoveMemberAsync makes (bare names and signatures like "Save(int)"), so a dry run refuses exactly what the real move refuses.
+        var membersToMove = MemberSelection.SelectMembers(classNode.Members, memberNames, className);
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (semanticModel == null)
