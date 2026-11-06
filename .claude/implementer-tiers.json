@@ -2,7 +2,7 @@
   "_comment": "Slice limits for the Haiku implementer lanes. 'tier' is the highest tier a dispatch may use; edit it by hand after reviewing .claude/journal/implementer-ledger.md. Thresholds: docs/current/plans/plan_implementer_lanes_tiers_and_tool_gap_reporting.md",
   "depth": {
     "agent": "implementer",
-    "tier": 0,
+    "tier": 1,
     "tiers": [
       { "maxFiles": 3, "maxEdits": 10, "maxAcceptance": 1, "maxToolCalls": 25 },
       { "maxFiles": 3, "maxEdits": 15, "maxAcceptance": 1, "maxToolCalls": 35 },

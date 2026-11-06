@@ -22,8 +22,13 @@ tier currently allowed). Read it before briefing and copy the chosen tier's numb
 - Straight to `implementer-senior`: new algorithms, public API shape changes, cross-project type
   relocation, or work where you cannot name the files up front.
 
-Default to the lowest tier that fits. Going below the lane's current tier is always allowed; going
-above is refused by the hook.
+Default to the lowest tier that fits, except the depth lane: brief `Tier: D1` unless the slice is tiny.
+Going below the lane's current tier is always allowed; going above is refused by the hook.
+
+**D1 is on trial.** D0 ran hundreds of dispatches and nearly all issues were the caps (tool calls, edits),
+not Haiku failures. Watch at D1: tool calls approaching 35, a `RESCOPE:` or `NEED-ADVICE` from a brief
+omission (fix the brief, not the tier), edits outside the named symbols, a half-applied change. Log each
+D1 run as `T1` in the ledger. Normal demotion rules apply (2 failures in the last 5 at the tier).
 
 ## Brief template
 
