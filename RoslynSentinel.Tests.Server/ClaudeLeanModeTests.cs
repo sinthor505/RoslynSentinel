@@ -60,7 +60,7 @@ public class ClaudeLeanModeTests
         "UsingDirective", "WrapRange", "WriteFile",
     ];
 
-    private static async Task<string[]> ListToolNamesAsync(string mode)
+    private static async Task<string[]> ListToolNamesAsync(string mode, IReadOnlySet<string>? hideTools = null)
     {
         var activeModes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { mode };
         var clientToServer = new Pipe();
@@ -71,7 +71,7 @@ public class ClaudeLeanModeTests
 
         var mcpBuilder = services.AddMcpServer();
         mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
-        mcpBuilder.AddRoslynSentinelToolsAdvanced(services, activeModes);
+        mcpBuilder.AddRoslynSentinelToolsAdvanced(services, activeModes, hideTools: hideTools);
 
         var hostBuilder = Host.CreateApplicationBuilder();
         foreach (var descriptor in services)
@@ -114,6 +114,25 @@ public class ClaudeLeanModeTests
         var names = await ListToolNamesAsync("claude");
 
         Assert.That(names, Is.EquivalentTo(ClaudeAdvancedBaseline));
+    }
+
+    [Test]
+    public async Task ClaudeLean_HideTools_RemovesOnlyTheNamedTool()
+    {
+        var baseline = await ListToolNamesAsync("claude-lean");
+        var names = await ListToolNamesAsync("claude-lean", new HashSet<string>(["DeleteFile"], StringComparer.OrdinalIgnoreCase));
+
+        Assert.That(names, Does.Not.Contain("DeleteFile"));
+        Assert.That(names, Is.EquivalentTo(baseline.Where(n => n != "DeleteFile")));
+    }
+
+    [Test]
+    public async Task ClaudeLean_HideTools_UnknownName_ChangesNothing()
+    {
+        // A name may be passed before it is a core tool (WriteFile today), so an unknown name must be a no-op.
+        var names = await ListToolNamesAsync("claude-lean", new HashSet<string>(["NoSuchTool"], StringComparer.OrdinalIgnoreCase));
+
+        Assert.That(names, Is.EquivalentTo(CoreTools));
     }
 
     // ---- registry and startup parsing ----
@@ -161,6 +180,23 @@ public class ClaudeLeanModeTests
         ServerStartupHelpers.ParseArgs([$"--mode={modeArg}"], allModes, out _, out var activeModes, out _, out _, out _, out _, out _);
 
         Assert.That(activeModes, Does.Contain("claude-lean"));
+    }
+
+    [Test]
+    [Category("ServerStartupHelpers")] // sentinel:auto-category
+    public void ParseHideTools_SplitsTrimsDropsEmptyEntries_AndIsCaseInsensitive()
+    {
+        var hidden = ServerStartupHelpers.ParseHideTools(["--hide-tools=A, b ,,C"]);
+
+        Assert.That(hidden, Is.EquivalentTo(new[] { "A", "b", "C" }));
+        Assert.That(hidden.Contains("a"), Is.True);
+    }
+
+    [Test]
+    [Category("ServerStartupHelpers")] // sentinel:auto-category
+    public void ParseHideTools_NoArgument_IsEmpty()
+    {
+        Assert.That(ServerStartupHelpers.ParseHideTools([]), Is.Empty);
     }
 
     [Test]
@@ -260,5 +296,28 @@ public class ClaudeLeanModeTests
         var helper = new WriteToolAdviceHelper(ToolClassRegistry.ModeToToolClasses["Claude"]);
 
         Assert.That(helper.IsExposed("ApplyDiff"), Is.True);
+    }
+
+    [Test]
+    public void WriteToolAdvice_HiddenMember_IsNotNamedByTheRegisteredHelper()
+    {
+        // Resolve the DI-registered helper so the test covers the claude-lean hideTools wiring, not a hand-built set.
+        var baseline = ResolveClaudeLeanAdviceHelper(hideTools: null);
+        Assert.That(baseline.AdviseForOversizedEdit("ReplaceSnippet").ToolNames, Does.Contain("Member"), "baseline must name Member, or the test proves nothing");
+
+        var hidden = ResolveClaudeLeanAdviceHelper(new HashSet<string>(["Member"], StringComparer.OrdinalIgnoreCase));
+        Assert.That(hidden.IsExposed("Member"), Is.False);
+        Assert.That(hidden.AdviseForOversizedEdit("ReplaceSnippet").ToolNames, Does.Not.Contain("Member"));
+    }
+
+    private static WriteToolAdviceHelper ResolveClaudeLeanAdviceHelper(IReadOnlySet<string>? hideTools)
+    {
+        var services = new ServiceCollection();
+        services.AddRoslynSentinelEnginesAdvanced();
+        var mcpBuilder = services.AddMcpServer();
+        mcpBuilder.AddRoslynSentinelToolsAdvanced(services, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "claude-lean" }, hideTools: hideTools);
+
+        using var provider = services.BuildServiceProvider();
+        return provider.GetRequiredService<WriteToolAdviceHelper>();
     }
 }

@@ -189,6 +189,20 @@ public class SubAgentLaunchTests
         });
     }
 
+    [Test]
+    [Category("SubAgentChildServerLauncher")] // sentinel:auto-category
+    public void ChildServerArguments_HideWriteFile_AndStayClaudeLeanWithSubAgentExcluded()
+    {
+        var args = SubAgentChildServerLauncher.BuildServerArguments(@"C:\wt", "some-model", @"C:\logs", "run-1", replaceSnippetMaxOldLines: 200, replaceSnippetMaxNewLines: 200, replaceSnippetMaxOldChars: 4000, replaceSnippetMaxNewChars: 4000);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(args, Does.Contain("--hide-tools=WriteFile"), "WriteFile shares a class with DeleteFile, so only a per-tool hide removes it");
+            Assert.That(args, Does.Contain("--mode=Claude-Lean"));
+            Assert.That(args, Does.Contain("--exclude-tools=SubAgentTools,SubAgentEvalTools"));
+        });
+    }
+
     // ── Reading a child tool result ─────────────────────────────────────────────
 
     private static CallToolResult Result(string text, bool? isError = null) =>

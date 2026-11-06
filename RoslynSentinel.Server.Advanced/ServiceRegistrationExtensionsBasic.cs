@@ -41,7 +41,8 @@ public static class RoslynSentinelServiceExtensionsBasic
         IServiceCollection services,
         HashSet<string> activeModes,
         HashSet<string>? includeTools = null,
-        HashSet<string>? excludeTools = null)
+        HashSet<string>? excludeTools = null,
+        IReadOnlySet<string>? hideTools = null)
     {
         // Wire result marshaller (plan_wire_result_marshaller.md Step 2). Registered unless the switch is off (the default is on),
         // so with ROSLYNSENTINEL_RESULT_MARSHALLER=off there is no IToolResultMarshaller and MarshalResult stays the SDK's identity.
@@ -62,7 +63,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             sp.GetRequiredService<ToolTelemetry>(), logger: sp.GetService<ILogger<ToolTelemetryFlusher>>()));
         services.AddHostedService(sp => new ToolTelemetryFlushService(sp.GetRequiredService<ToolTelemetryFlusher>()));
 
-        RegisterRoslynSentinelToolsBasic(services, mcpBuilder, activeModes, includeTools, excludeTools);
+        RegisterRoslynSentinelToolsBasic(services, mcpBuilder, activeModes, includeTools, excludeTools, hideTools);
 
         // Add centralized error filters, in CallToolFilterRegistrations order (the first registered is the outermost).
         mcpBuilder.WithRequestFilters(filters =>
@@ -107,7 +108,7 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// <summary>Names of the call-tool filters in the order <see cref="AddRoslynSentinelToolsBasic"/> registers them (outermost first).</summary>
     public static IReadOnlyList<string> CallToolFilterNames => CallToolFilterRegistrations.Select(r => r.Name).ToArray();
 
-    private static void RegisterRoslynSentinelToolsBasic(IServiceCollection services, IMcpServerBuilder mcpBuilder, HashSet<string> activeModes, HashSet<string>? includeTools = null, HashSet<string>? excludeTools = null)
+    private static void RegisterRoslynSentinelToolsBasic(IServiceCollection services, IMcpServerBuilder mcpBuilder, HashSet<string> activeModes, HashSet<string>? includeTools = null, HashSet<string>? excludeTools = null, IReadOnlySet<string>? hideTools = null)
     {
         var resolvedIncludeTools = includeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var resolvedExcludeTools = excludeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -126,8 +127,12 @@ public static class RoslynSentinelServiceExtensionsBasic
         // The exclusive claude-lean mode also restricts WHICH tools of its classes are registered.
         // Registered here, before any WithSentinelTools call, because WithSentinelTools reads it from
         // the service collection at registration time. Absent for every other mode.
+        // Per-tool hiding (--hide-tools) exists because WriteFile shares a class with DeleteFile, so the
+        // per-class --exclude-tools cannot hide it alone. WriteToolAdviceHelper and ActiveToolSurface read
+        // toolAllowList.ToolNames, so advice and status follow the filtered list automatically.
+        // hideTools is ignored outside claude-lean (no allow-list).
         var toolAllowList = activeModes.Contains(ToolClassRegistry.ClaudeLeanMode)
-            ? new ToolAllowList(ToolClassRegistry.ClaudeLeanToolNames)
+            ? new ToolAllowList(ToolClassRegistry.ClaudeLeanToolNames.Where(n => hideTools is null || !hideTools.Contains(n)))
             : null;
         if (toolAllowList is not null)
         {

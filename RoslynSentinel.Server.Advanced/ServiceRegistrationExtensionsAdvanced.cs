@@ -52,7 +52,8 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         IServiceCollection services,
         HashSet<string> activeModes,
         HashSet<string>? includeTools = null,
-        HashSet<string>? excludeTools = null)
+        HashSet<string>? excludeTools = null,
+        IReadOnlySet<string>? hideTools = null)
     {
         var resolvedIncludeTools = includeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var resolvedExcludeTools = excludeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -62,7 +63,7 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         // Basic's registration only acts on the Basic tool classes in ModeToToolClasses, so an
         // Advanced-only --include-tools name (e.g. AsyncifyTools) is inert there -> it's
         // handled below against the same map instead.
-        mcpBuilder.AddRoslynSentinelToolsBasic(services, activeModes, resolvedIncludeTools, resolvedExcludeTools);
+        mcpBuilder.AddRoslynSentinelToolsBasic(services, activeModes, resolvedIncludeTools, resolvedExcludeTools, hideTools);
 
         // Unconditional, mode-independent dependencies of the Advanced tool classes (ToolGraph, FailureRouter).
         services.AddRoslynSentinelToolImplsAdvanced();

@@ -39,6 +39,7 @@ namespace RoslynSentinel.Server.Advanced
         {
             // ── Arg parsing ──────────────────────────────────────────────────────
             ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools, out var operatingMode);
+            var hideTools = ServerStartupHelpers.ParseHideTools(args);
             LlmOptions.Configure(args);
             ReplaceSnippetOptions.Configure(args);
             OrientationBreakerOptions.Configure(args);
@@ -50,7 +51,7 @@ namespace RoslynSentinel.Server.Advanced
             if (ServerStartupHelpers.HandleListTools(
                     args,
                     activeModes,
-                    (mcpBuilder, services) => mcpBuilder.AddRoslynSentinelToolsAdvanced(services, activeModes, includeTools, excludeTools),
+                    (mcpBuilder, services) => mcpBuilder.AddRoslynSentinelToolsAdvanced(services, activeModes, includeTools, excludeTools, hideTools),
                     includeTools,
                     excludeTools))
             {
@@ -122,7 +123,7 @@ namespace RoslynSentinel.Server.Advanced
                     new InMemoryMcpTaskStore(),
                     o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
 
-                mcpBuilder.AddRoslynSentinelToolsAdvanced(builder.Services, activeModes, includeTools, excludeTools);
+                mcpBuilder.AddRoslynSentinelToolsAdvanced(builder.Services, activeModes, includeTools, excludeTools, hideTools);
 
                 using var host = builder.Build();
                 var logger = host.Services.GetRequiredService<ILogger<ServerStdio>>();

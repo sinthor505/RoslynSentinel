@@ -30,6 +30,14 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
     public static readonly IReadOnlyList<string> ExcludedToolClasses = ["SubAgentTools", "SubAgentEvalTools"];
 
     /// <summary>
+    /// Individual tools the child's Claude-Lean surface hides (passed as <c>--hide-tools</c>). Per tool,
+    /// not per class: WriteFile shares the WholeFileWriteTools class with the core DeleteFile, so
+    /// <c>--exclude-tools</c> cannot hide WriteFile alone. WriteFile is hidden because self-hosted models
+    /// misused whole-file writes (they overwrote files they should have edited); Claude Code keeps it.
+    /// </summary>
+    public static readonly IReadOnlyList<string> HiddenTools = ["WriteFile"];
+
+    /// <summary>
     /// Mode giving the dispatched model the same tool surface Claude Code itself drives with.
     /// <c>--mode</c> (not <c>--include-tools</c>) because "Claude-Lean" is a mode name, and
     /// <c>--include-tools</c> takes tool-class names.
@@ -45,6 +53,8 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
         "--mode=" + ChildToolMode,
         // --exclude-tools always wins over --mode, so this holds even if a mode ever lists them.
         "--exclude-tools=" + string.Join(",", ExcludedToolClasses),
+        // Per-tool hiding: WriteFile is not reachable through --exclude-tools (see HiddenTools).
+        "--hide-tools=" + string.Join(",", HiddenTools),
         // --testing puts ProjectDoc on docs/testing/: the worktree is a copy of this very repo, so
         // runner-specific docs and production docs share basenames (see PlanStepRunner/Program.cs).
         "--testing",

@@ -24,6 +24,7 @@ public class ServerHttp
     {
         // ── Arg parsing ──────────────────────────────────────────────────────
         ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools, out var operatingMode);
+        var hideTools = ServerStartupHelpers.ParseHideTools(args);
         var port = ServerStartupHelpers.ParsePort(args, defaultPort: 5100);
         var bind = ServerStartupHelpers.ParseBind(args);
         var respawn = ServerStartupHelpers.ParseRespawn(args, "http");
@@ -38,7 +39,7 @@ public class ServerHttp
         if (ServerStartupHelpers.HandleListTools(
                 args,
                 activeModes,
-                (mcpBuilder, services) => mcpBuilder.AddRoslynSentinelToolsAdvanced(services, activeModes, includeTools, excludeTools),
+                (mcpBuilder, services) => mcpBuilder.AddRoslynSentinelToolsAdvanced(services, activeModes, includeTools, excludeTools, hideTools),
                 includeTools,
                 excludeTools))
         {
@@ -84,7 +85,7 @@ public class ServerHttp
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
             o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
-        mcpBuilder.AddRoslynSentinelToolsAdvanced(builder.Services, activeModes, includeTools, excludeTools);
+        mcpBuilder.AddRoslynSentinelToolsAdvanced(builder.Services, activeModes, includeTools, excludeTools, hideTools);
 
         var app = builder.Build();
         app.MapMcp("/mcp");

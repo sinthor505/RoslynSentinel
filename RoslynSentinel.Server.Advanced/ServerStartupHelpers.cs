@@ -103,6 +103,15 @@ public static class ServerStartupHelpers
             : value.Split(',').Select(n => n.Trim()).Where(n => n.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Reads the comma-separated <c>--hide-tools</c> list: individual tool names (MCP tool names, not
+    /// class names) to drop from the exclusive claude-lean allow-list. Needed because a tool such as
+    /// WriteFile shares its class with another core tool, so <c>--exclude-tools</c> (per class) cannot
+    /// hide it alone. Applies only in claude-lean (the only mode with an allow-list); unknown names are
+    /// ignored, so a name may be passed before it is a core tool.
+    /// </summary>
+    public static HashSet<string> ParseHideTools(string[] args) => ParseNameList(GetArgValue(args, "--hide-tools"));
+
+    /// <summary>
     /// Every tool-class name the registry knows about (the single mode map), used to resolve a
     /// user-typed --include-tools/--exclude-tools name to the exact registered spelling.
     /// </summary>
