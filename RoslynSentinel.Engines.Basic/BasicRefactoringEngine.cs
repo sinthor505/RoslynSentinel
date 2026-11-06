@@ -50,8 +50,11 @@ public record ResidualMention(FilePathWrapper FilePath, int LineNumber, string L
 /// <paramref name="WrapperSignature"/> is the kept old signature and <paramref name="ReplacementSignature"/> the new one. All three are null when the old signature was removed.
 /// <paramref name="OldSignatureOutcome"/> is what actually happened to the old signature (remove or keepAsDeprecatedWrapper, never auto): oldSignature auto resolves to one
 /// of them from the planned call sites before anything is written, so a dry run and the real apply report the same outcome. Null on an error.
+/// <paramref name="ReflectiveConstructionSites"/> (constructor changes only; null otherwise) lists calls such as ActivatorUtilities.CreateInstance that name the changed
+/// constructor's type and pass its arguments for runtime resolution: they are neither rewritten nor skipped call sites (they compile and fail at runtime), so they are
+/// reported for a manual check. LineNumber is 1-based in the ORIGINAL text; Reason names the API.
 /// </summary>
-public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, string? Error = null, List<RewrittenCallSite>? MigratedCallSites = null, string? WrapperSignature = null, string? ReplacementSignature = null, ChangeSignatureOldSignature? OldSignatureOutcome = null) : IOperationResult
+public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, string? Error = null, List<RewrittenCallSite>? MigratedCallSites = null, string? WrapperSignature = null, string? ReplacementSignature = null, ChangeSignatureOldSignature? OldSignatureOutcome = null, List<SkippedCallSite>? ReflectiveConstructionSites = null) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;
@@ -215,6 +218,11 @@ public class BasicRefactoringEngine
 
         if (methodDecl == null)
         {
+            if (root.DescendantNodes().OfType<TypeDeclarationSyntax>().Any(type => type.Identifier.Text == methodName && type.ParameterList != null))
+            {
+                return Refuse($"'{methodName}' is a type with a primary constructor, and ChangeSignature does not edit primary constructors (there is no constructor declaration to rewrite or to put a wrapper beside). Nothing was changed. Edit the type's parameter list and its construction sites directly, or add an ordinary constructor and change that one."); // hint-ok: names the tool in prose, not a call to make
+            }
+
             return Refuse($"Method or constructor '{methodName}' was not found in '{filePath}' (a constructor is matched by its class name). Nothing was changed.");
         }
 
@@ -264,6 +272,11 @@ public class BasicRefactoringEngine
         }
 
         var originalParams = methodDecl.ParameterList.Parameters.ToList();
+        if (methodDecl is ConstructorDeclarationSyntax staticConstructor && staticConstructor.Modifiers.Any(SyntaxKind.StaticKeyword))
+        {
+            return Refuse($"'{methodName}' is a static constructor: it takes no parameters, so there is no signature to change. Nothing was changed. Narrow the target to an instance constructor with contextSnippet.");
+        }
+
         if (originalParams.Count == 0)
         {
             return Refuse($"'{methodName}' declares no parameters, and ChangeSignature cannot add a parameter to a parameterless method. Nothing was changed. Edit the declaration and its call sites directly."); // hint-ok: names the tool in prose, not a call to make
@@ -281,6 +294,12 @@ public class BasicRefactoringEngine
             return Refuse($"parameters contains an originalIndex that is out of range or used more than once. '{methodName}' has {originalParams.Count} parameter(s), so valid originalIndex values are 0..{originalParams.Count - 1}, each used at most once. Nothing was changed.");
         }
 
+        // A removed parameter (an existing one absent from the new list) the body still uses would leave CS0103 behind: refuse before anything is planned, in every oldSignature mode.
+        if (RefuseWhenRemovedParameterIsStillUsed(semanticModel, methodDecl, originalParams, existingIndexes, methodName, cancellationToken) is { } removedParameterStillUsed)
+        {
+            return Refuse(removedParameterStillUsed);
+        }
+
         // remove and auto hand every call site the new parameter's defaultValue as its fill-in argument, so a new parameter without one is refused up front
         // (keepAsDeprecatedWrapper refuses it in Prepare with the wrapper-specific text).
         if (!keepRequested && parameters.OfType<NewParameterSpec>().FirstOrDefault(s => string.IsNullOrWhiteSpace(s.DefaultValueExpression)) is { } noDefault)
@@ -288,7 +307,7 @@ public class BasicRefactoringEngine
             return Refuse($"New parameter '{noDefault.Name}' has no defaultValue, and every migrated call site receives it as its fill-in argument. Nothing was changed. Pass defaultValue for '{noDefault.Name}'.");
         }
 
-        // keepAsDeprecatedWrapper and auto: every wrapper refusal (constructor, virtual/override/abstract/interface member, a new parameter without a default
+        // keepAsDeprecatedWrapper and auto: every wrapper refusal (partial/extern constructor, virtual/override/abstract/interface member, a new parameter without a default
         // value, old and new signature colliding) is decided here, before any call site is planned or anything is written. An explicit keep refuses on it;
         // auto only remembers it (wrapperRefusal): it matters only if some call site cannot be migrated, and then the change is refused like remove.
         var oldSignatureText = string.Empty;
@@ -312,7 +331,11 @@ public class BasicRefactoringEngine
             }
         }
 
-        var generator = SyntaxGenerator.GetGenerator(document);
+        // A new parameter's defaultValue that names something (_logger, Instance, DateTime.UtcNow) is copied into every call site as its fill-in argument, so it must bind in that
+        // site's scope; a site where it does not is unmigratable for this change (skipped below). One that is not a compile-time constant cannot be a declaration default either.
+        var newDefaults = ChangeSignatureWrapper.AnalyzeNewDefaults(semanticModel, methodDecl, parameters);
+        var scopeCheckedDefaults = newDefaults.Where(d => d.NeedsScopeCheck).ToList();
+        var nonConstantDefaultSlots = newDefaults.Where(d => !d.IsConstant).Select(d => d.Slot).ToHashSet();
 
         // Single pass: every edit in a file (the declaration's parameter list and all call sites) is planned against
         // ONE original root per file path and applied with one ReplaceNodes, so no edit can shift the span of another
@@ -330,18 +353,26 @@ public class BasicRefactoringEngine
 
         if (declaredSymbol != null)
         {
-            // TODO ChangeSignature: ActivatorUtilities.CreateInstance(..., args) argument lists are not seen as call sites (the change compiles but fails at runtime)
             var references = await SymbolFinder.FindReferencesAsync(declaredSymbol, solution, cancellationToken);
+            var referenceGroups = new List<List<(Document Document, Microsoft.CodeAnalysis.Text.TextSpan Span)>>();
             foreach (var reference in references)
             {
-                foreach (var location in reference.Locations)
-                {
-                    if (location.IsImplicit || location.Document?.FilePath == null)
-                    {
-                        continue;
-                    }
+                referenceGroups.Add(reference.Locations
+                    .Where(location => !location.IsImplicit && location.Document?.FilePath != null)
+                    .Select(location => (location.Document, location.Location.SourceSpan))
+                    .ToList());
+            }
 
-                    var refDoc = location.Document;
+            if (declaredSymbol.MethodKind == MethodKind.Constructor)
+            {
+                // SymbolFinder reports no location for a target-typed `new(...)` call of the constructor, so those calls are found by binding them.
+                referenceGroups.Add(await FindTargetTypedConstructorCallsAsync(solution, declaredSymbol, referenceGroups.SelectMany(group => group), cancellationToken));
+            }
+
+            foreach (var referenceGroup in referenceGroups)
+            {
+                foreach (var (refDoc, span) in referenceGroup)
+                {
                     var refDocPath = (FilePathWrapper)refDoc.FilePath!;
                     if (!rootByPath.TryGetValue(refDocPath, out var refRoot))
                     {
@@ -363,7 +394,6 @@ public class BasicRefactoringEngine
                         continue;
                     }
 
-                    var span = location.Location.SourceSpan;
                     var refLineNumber = refRoot.SyntaxTree.GetLineSpan(span, cancellationToken: cancellationToken).StartLinePosition.Line + 1;
                     var token = refRoot.FindToken(span.Start);
                     // A constructor reference has no InvocationExpressionSyntax - its call sites are
@@ -371,9 +401,17 @@ public class BasicRefactoringEngine
                     // (ImplicitObjectCreationExpressionSyntax). BaseObjectCreationExpressionSyntax
                     // covers both; ArgumentList is nullable there (e.g. `new Foo { X = 1 }`), unlike
                     // InvocationExpressionSyntax's non-nullable one.
-                    // TODO ChangeSignature: a target-typed `new(...)` constructor call produced no reference location in a probe (not rewritten, not skipped, result no longer compiles); find out why
-                    ExpressionSyntax? invocation = token.Parent?.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
-                    invocation ??= token.Parent?.AncestorsAndSelf().OfType<BaseObjectCreationExpressionSyntax>().FirstOrDefault(o => o.ArgumentList != null);
+                    // The nearest call-like ancestor decides: a constructor initializer (`: base(...)` / `: this(...)`) and a primary-constructor base call
+                    // (`class D(int x) : B(x)`) are call sites too. The reference must be that call's callee (or its `new` / type), otherwise it is an
+                    // argument such as a method group (`Run(Save)`) and the nearest call is some other member's.
+                    var nearestCall = FindNearestCall(token);
+                    if (nearestCall is InvocationExpressionSyntax possibleNameof && IsNameofInvocation(possibleNameof, refSemanticModel))
+                    {
+                        // nameof(Save) is a compile-time string, not a call: there is no argument list to migrate and nothing to skip, so the reference is left as written.
+                        continue;
+                    }
+
+                    SyntaxNode? invocation = nearestCall != null && IsCalleeToken(nearestCall, token) ? nearestCall : null;
                     if (invocation == null)
                     {
                         skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Reference is not a simple invocation or object-creation expression with an argument list (e.g. method group, delegate conversion, or object-initializer-only construction)."));
@@ -391,7 +429,16 @@ public class BasicRefactoringEngine
                     // site (null if the argument was omitted, relying on the parameter's own default).
                     // The null-forgiving ArgumentList access is safe: the object-creation branch above
                     // only matches nodes whose ArgumentList is non-null.
-                    // TODO ChangeSignature: a reduced extension call (receiver.M(a)) numbers boundMethod.Parameters without the receiver, so the ordinal mapping below is off by one for it unless boundMethod.ReducedFrom is used; only the expanded-params shape is refused so far (unverified for the other shapes)
+                    // A reduced extension call (receiver.M(a)) has no argument for the `this` receiver and numbers boundMethod.Parameters without it,
+                    // so every bound ordinal is shifted by one to land on the declaration's own parameter index (the receiver is parameter 0).
+                    // The receiver stays first and unchanged in a reduced call; any other treatment of it cannot be written in that form, so the site is skipped.
+                    var receiverOffset = boundMethod.ReducedFrom != null ? 1 : 0;
+                    if (receiverOffset == 1 && !(parameters.Count > 0 && parameters[0] is ExistingParameterSpec { OriginalIndex: 0 }))
+                    {
+                        skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Call is an extension method called on its receiver, and the change moves or removes the receiver (the 'this' parameter), so the call cannot keep that form."));
+                        continue;
+                    }
+
                     var argsByOriginalIndex = new ArgumentSyntax?[originalParams.Count];
                     // Expanded params call: the positional arguments past the last declared parameter all belong to the params parameter
                     // (the first one binds to it by ordinal below). They are carried right after that parameter's slot, in source order.
@@ -401,6 +448,8 @@ public class BasicRefactoringEngine
                     {
                         InvocationExpressionSyntax inv => inv.ArgumentList.Arguments,
                         BaseObjectCreationExpressionSyntax obj => obj.ArgumentList!.Arguments,
+                        ConstructorInitializerSyntax init => init.ArgumentList.Arguments,
+                        PrimaryConstructorBaseTypeSyntax primaryBase => primaryBase.ArgumentList.Arguments,
                         _ => throw new NotSupportedException($"ChangeSignatureAsync: unhandled call-site expression type {invocation.GetType().Name}.")
                     };
                     for (int i = 0; i < arguments.Count; i++)
@@ -410,11 +459,11 @@ public class BasicRefactoringEngine
                         if (arg.NameColon != null)
                         {
                             var namedParam = boundMethod.Parameters.FirstOrDefault(p => p.Name == arg.NameColon.Name.Identifier.Text);
-                            if (namedParam == null || namedParam.Ordinal >= originalParams.Count)
+                            if (namedParam == null || namedParam.Ordinal + receiverOffset >= originalParams.Count)
                             {
                                 continue;
                             }
-                            originalIndex = namedParam.Ordinal;
+                            originalIndex = namedParam.Ordinal + receiverOffset;
                         }
                         else
                         {
@@ -423,25 +472,23 @@ public class BasicRefactoringEngine
                             if (i >= boundMethod.Parameters.Length)
                             {
                                 // More positional arguments than declared parameters: the trailing arguments of an expanded params call.
-                                // A reduced extension call (receiver.M(...)) numbers its parameters without the receiver, so its ordinals do not
-                                // line up with the declaration; that shape is refused rather than guessed at.
-                                if (boundMethod.ReducedFrom == null && boundMethod.Parameters.Length > 0 && boundMethod.Parameters[boundMethod.Parameters.Length - 1].IsParams
-                                    && boundMethod.Parameters[boundMethod.Parameters.Length - 1].Ordinal < originalParams.Count)
+                                if (boundMethod.Parameters.Length > 0 && boundMethod.Parameters[boundMethod.Parameters.Length - 1].IsParams
+                                    && boundMethod.Parameters[boundMethod.Parameters.Length - 1].Ordinal + receiverOffset < originalParams.Count)
                                 {
                                     paramsExtraIndexes.Add(i);
                                     continue;
                                 }
 
-                                skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Call passes more positional arguments than the bound method declares parameters and is not a plain expanded params call (for example an extension method called on its receiver), so its arguments cannot be re-ordered safely."));
+                                skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Call passes more positional arguments than the bound method declares parameters and is not a plain expanded params call, so its arguments cannot be re-ordered safely."));
                                 unbindableArgument = true;
                                 break;
                             }
                             var boundParam = boundMethod.Parameters[i];
-                            if (boundParam.Ordinal >= originalParams.Count)
+                            if (boundParam.Ordinal + receiverOffset >= originalParams.Count)
                             {
                                 continue;
                             }
-                            originalIndex = boundParam.Ordinal;
+                            originalIndex = boundParam.Ordinal + receiverOffset;
                         }
                         argsByOriginalIndex[originalIndex] = arg;
                     }
@@ -460,6 +507,15 @@ public class BasicRefactoringEngine
                         continue;
                     }
 
+                    var unboundDefault = scopeCheckedDefaults
+                        .Select(d => (Default: d, Problem: ChangeSignatureWrapper.DefaultBindingProblem(refSemanticModel, invocation.SpanStart, d.Expression, d.ParameterType, ChangeSignatureWrapper.IsInstanceContext(invocation))))
+                        .FirstOrDefault(check => check.Problem is not null);
+                    if (unboundDefault.Problem is not null)
+                    {
+                        skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, $"defaultValue '{unboundDefault.Default.Text}' of new parameter '{unboundDefault.Default.Name}' does not bind in this scope: {unboundDefault.Problem}."));
+                        continue;
+                    }
+
                     // Build the new argument list in new-parameter order. A kept parameter whose argument
                     // was omitted at this call site only stays omitted if every slot after it is also
                     // omitted-or-newly-added-with-default (i.e. it's still a valid trailing-optional gap);
@@ -467,7 +523,8 @@ public class BasicRefactoringEngine
                     // call keeps compiling positionally.
                     var slotHasExplicitArg = new bool[parameters.Count];
                     var slotArgExpr = new ArgumentSyntax?[parameters.Count];
-                    for (int slot = 0; slot < parameters.Count; slot++)
+                    // A reduced extension call has no argument slot for the receiver (checked above to stay parameter 0).
+                    for (int slot = receiverOffset; slot < parameters.Count; slot++)
                     {
                         if (parameters[slot] is ExistingParameterSpec existing)
                         {
@@ -482,7 +539,7 @@ public class BasicRefactoringEngine
                         {
                             // Always fill in the literal default value at existing call sites when a
                             // parameter is added (decided: no per-call flag).
-                            // TODO ChangeSignature: a non-constant defaultValue such as _logger needs a per-call-site scope check (today a site where it does not bind fails validation, so the change fails closed)
+                            // (A defaultValue that names something was checked to bind at this site above.)
                             slotHasExplicitArg[slot] = true;
                             slotArgExpr[slot] = SyntaxFactory.Argument(SyntaxFactory.ParseExpression(added.DefaultValueExpression));
                         }
@@ -492,7 +549,7 @@ public class BasicRefactoringEngine
                     // also be materialized (can't leave a positional gap before a later real argument).
                     bool sawExplicitFromEnd = false;
                     bool unresolvableGap = false;
-                    for (int slot = parameters.Count - 1; slot >= 0; slot--)
+                    for (int slot = parameters.Count - 1; slot >= receiverOffset; slot--)
                     {
                         if (slotHasExplicitArg[slot])
                         {
@@ -525,7 +582,7 @@ public class BasicRefactoringEngine
                     // literal expression. Resolving carried arguments from the rewritten node at apply time keeps edits to
                     // call sites nested inside an argument (e.g. Process(Process(...), ...)).
                     var slotPlan = new List<(int SrcIndex, ExpressionSyntax? Literal)>();
-                    for (int slot = 0; slot < parameters.Count; slot++)
+                    for (int slot = receiverOffset; slot < parameters.Count; slot++)
                     {
                         var slotArg = slotArgExpr[slot];
                         if (slotArg == null)
@@ -552,9 +609,9 @@ public class BasicRefactoringEngine
                     if (callSitePlansByPath[refDocPath].TryAdd(invocation, slotPlan))
                     {
                         plannedCallSiteLines.Add((refDocPath.ToString(), refLineNumber));
-                        if (oldSignature != ChangeSignatureOldSignature.remove && invocation is InvocationExpressionSyntax migratedCall)
+                        if (oldSignature != ChangeSignatureOldSignature.remove)
                         {
-                            migratedCallSites.Add(ChangeSignatureWrapper.DescribeMigratedCall(refDocPath, refLineNumber, migratedCall, arguments, slotPlan));
+                            migratedCallSites.Add(ChangeSignatureWrapper.DescribeMigratedCall(refDocPath, refLineNumber, invocation, arguments, slotPlan));
                         }
                     }
                 }
@@ -610,7 +667,7 @@ public class BasicRefactoringEngine
                 {
                     laterParameterRequired |= !kept.Modifiers.Any(SyntaxKind.ParamsKeyword);
                 }
-                else if (wrapperMode && laterParameterRequired)
+                else if ((wrapperMode || nonConstantDefaultSlots.Count > 0) && laterParameterRequired)
                 {
                     kept = kept.WithDefault(null);
                 }
@@ -619,22 +676,41 @@ public class BasicRefactoringEngine
             }
             else if (parameters[slot] is NewParameterSpec addedSpec)
             {
-                var addedType = SyntaxFactory.ParseTypeName(addedSpec.Type);
-                var addedRequired = wrapperMode || laterParameterRequired;
-                newParameterSyntaxes[slot] = (ParameterSyntax)(addedRequired
-                    ? generator.ParameterDeclaration(addedSpec.Name, addedType)
-                    : generator.ParameterDeclaration(addedSpec.Name, addedType, SyntaxFactory.ParseExpression(addedSpec.DefaultValueExpression)));
+                var addedRequired = wrapperMode || laterParameterRequired || nonConstantDefaultSlots.Contains(slot);
+                // Built with its own whitespace (type, space, name, " = ", default), so a list that keeps its layout needs no formatter pass over it.
+                var addedParameter = SyntaxFactory.Parameter(SyntaxFactory.Identifier(addedSpec.Name))
+                    .WithType(SyntaxFactory.ParseTypeName(addedSpec.Type.Trim()).WithTrailingTrivia(SyntaxFactory.Space));
+                newParameterSyntaxes[slot] = addedRequired
+                    ? addedParameter
+                    : addedParameter.WithDefault(SyntaxFactory.EqualsValueClause(
+                        SyntaxFactory.Token(SyntaxKind.EqualsToken).WithLeadingTrivia(SyntaxFactory.Space).WithTrailingTrivia(SyntaxFactory.Space),
+                        SyntaxFactory.ParseExpression(addedSpec.DefaultValueExpression.Trim())));
                 laterParameterRequired |= addedRequired;
             }
         }
 
-        var newParameterList = methodDecl.ParameterList.WithParameters(SyntaxFactory.SeparatedList(newParameterSyntaxes));
+        // A multi-line parameter list keeps its layout (RebuildListKeepingLayout); a single-line one is rebuilt as before.
+        var newParameterList = methodDecl.ParameterList.WithParameters(RebuildListKeepingLayout(
+            methodDecl.ParameterList.Parameters,
+            newParameterSyntaxes.Select((syntax, slot) => (syntax, parameters[slot] is ExistingParameterSpec existingSpec ? existingSpec.OriginalIndex : -1)).ToList()));
 
-        // TODO ChangeSignature collapses rewritten multi-line calls and parameter lists onto one line
         static SeparatedSyntaxList<ArgumentSyntax> RebuildArguments(SeparatedSyntaxList<ArgumentSyntax> current, List<(int SrcIndex, ExpressionSyntax? Literal)> plan)
         {
-            // A carried argument keeps its ref/out/in keyword; dropping it would not compile.
-            return SyntaxFactory.SeparatedList(plan.Select(p => p.Literal != null ? SyntaxFactory.Argument(p.Literal) : SyntaxFactory.Argument(null, current[p.SrcIndex].RefKindKeyword, current[p.SrcIndex].Expression)));
+            // A carried argument keeps its ref/out/in keyword; dropping it would not compile. A multi-line call keeps its layout (RebuildListKeepingLayout).
+            return RebuildListKeepingLayout(current, plan.Select(p => p.Literal != null
+                ? (SyntaxFactory.Argument(p.Literal), -1)
+                : (SyntaxFactory.Argument(null, current[p.SrcIndex].RefKindKeyword, current[p.SrcIndex].Expression), p.SrcIndex)).ToList());
+        }
+
+        // A multi-line list (the declaration's parameter list, a `: this(...)` / `: base(...)` argument list) keeps its layout from RebuildListKeepingLayout and every token it
+        // adds carries its own whitespace, so it is not annotated for formatting: formatting a list that spans lines would also move a body brace on its closing line onto its
+        // own line. A single-line list still takes the formatter (its separators need it).
+        var parameterListKeepsLayout = ListKeepsLayout(methodDecl.ParameterList.Parameters);
+        static ConstructorInitializerSyntax RebuildInitializer(ConstructorInitializerSyntax initializer, List<(int SrcIndex, ExpressionSyntax? Literal)> plan)
+        {
+            var keepsLayout = ListKeepsLayout(initializer.ArgumentList.Arguments);
+            var rebuilt = initializer.WithArgumentList(initializer.ArgumentList.WithArguments(RebuildArguments(initializer.ArgumentList.Arguments, plan)));
+            return keepsLayout ? rebuilt : rebuilt.WithAdditionalAnnotations(Formatter.Annotation);
         }
 
         // Apply every planned edit per document in one ReplaceNodes pass, then format.
@@ -653,9 +729,11 @@ public class BasicRefactoringEngine
 
             var newRoot = rootByPath[path].ReplaceNodes(nodes, (original, rewritten) => rewritten switch
             {
-                ParameterListSyntax => newParameterList.WithAdditionalAnnotations(Formatter.Annotation, memberAnnotation),
+                ParameterListSyntax => parameterListKeepsLayout ? newParameterList.WithAdditionalAnnotations(memberAnnotation) : newParameterList.WithAdditionalAnnotations(Formatter.Annotation, memberAnnotation),
                 InvocationExpressionSyntax inv => inv.WithArgumentList(inv.ArgumentList.WithArguments(RebuildArguments(inv.ArgumentList.Arguments, plans[original]))).WithAdditionalAnnotations(Formatter.Annotation),
                 BaseObjectCreationExpressionSyntax obj => obj.WithArgumentList(obj.ArgumentList!.WithArguments(RebuildArguments(obj.ArgumentList.Arguments, plans[original]))).WithAdditionalAnnotations(Formatter.Annotation),
+                ConstructorInitializerSyntax init => RebuildInitializer(init, plans[original]),
+                PrimaryConstructorBaseTypeSyntax primaryBase => primaryBase.WithArgumentList(primaryBase.ArgumentList.WithArguments(RebuildArguments(primaryBase.ArgumentList.Arguments, plans[original]))).WithAdditionalAnnotations(Formatter.Annotation),
                 _ => rewritten
             });
             var eol = await _workspaceManager.ResolveEolAsync(documentByPath[path], cancellationToken);
@@ -663,9 +741,9 @@ public class BasicRefactoringEngine
             {
                 // The wrapper (old signature, [Obsolete], forwards to the new member) lands right after the member in the SAME edit set, so it is
                 // applied, validated and rolled back together with the call-site edits. A blank line before it and a line end after it come from the text.
-                var newMember = newRoot.GetAnnotatedNodes(memberAnnotation).Select(n => n.Parent).OfType<MethodDeclarationSyntax>().SingleOrDefault();
-                var wrapperText = ChangeSignatureWrapper.BuildWrapperText((MethodDeclarationSyntax)methodDecl, declaredSymbol!, parameters, originalParams, newSignatureText, eol);
-                if (newMember == null || SyntaxFactory.ParseMemberDeclaration(eol + wrapperText + eol) is not MethodDeclarationSyntax wrapperNode)
+                var newMember = newRoot.GetAnnotatedNodes(memberAnnotation).Select(n => n.Parent).OfType<BaseMethodDeclarationSyntax>().SingleOrDefault();
+                var wrapperText = ChangeSignatureWrapper.BuildWrapperText(methodDecl, declaredSymbol!, parameters, originalParams, newSignatureText, eol);
+                if (newMember == null || SyntaxFactory.ParseMemberDeclaration(eol + wrapperText + eol) is not BaseMethodDeclarationSyntax wrapperNode)
                 {
                     return Refuse($"Could not generate the deprecated wrapper for '{methodName}'. Nothing was changed. Retry with {ToolCallHint.Call("ChangeSignature", ("oldSignature", "remove"))}.");
                 }
@@ -684,16 +762,311 @@ public class BasicRefactoringEngine
             // line endings, and every line the rewrite changed takes the resolved line ending (IWorkspaceMutator.ResolveEol).
             var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(documentByPath[path], newRoot, eol, cancellationToken);
             var formattedText = (await formatted.GetTextAsync(cancellationToken)).ToString();
-            result[path.Equals(declPath) ? filePath : path] = formattedText;
+            // A file whose every call site was left alone (skipped, or kept on the wrapper) has nothing to write: it is not a change.
+            if (formattedText != (await documentByPath[path].GetTextAsync(cancellationToken)).ToString())
+            {
+                result[path.Equals(declPath) ? filePath : path] = formattedText;
+            }
+
             trialChanges[path] = formattedText;
         }
 
         // The final gate, before anything leaves the engine (so a dry run and the real apply refuse identically): no call may silently bind to a different method than the plan accounts for.
         await RequireSignatureChangeKeepsCallBindingsAsync(solution, declaredSymbol, methodName, newParameterList, declPath.ToString(), trialChanges, wrapperMode, plannedCallSiteLines, skippedCallSites, cancellationToken);
 
+        // ActivatorUtilities.CreateInstance(sp, args) and similar bind to no constructor, so they are not call sites above: they compile after the change and fail at runtime. Reported, never rewritten.
+        var reflectiveSites = declaredSymbol is { MethodKind: MethodKind.Constructor }
+            ? await FindReflectiveConstructionSitesAsync(solution, declaredSymbol.ContainingType, cancellationToken)
+            : null;
+
         return wrapperMode
-            ? new ChangeSignatureResult(result, skippedCallSites, null, migratedCallSites, oldSignatureText, newSignatureText, ChangeSignatureOldSignature.keepAsDeprecatedWrapper)
-            : new ChangeSignatureResult(result, skippedCallSites, OldSignatureOutcome: ChangeSignatureOldSignature.remove);
+            ? new ChangeSignatureResult(result, skippedCallSites, null, migratedCallSites, oldSignatureText, newSignatureText, ChangeSignatureOldSignature.keepAsDeprecatedWrapper, reflectiveSites)
+            : new ChangeSignatureResult(result, skippedCallSites, OldSignatureOutcome: ChangeSignatureOldSignature.remove, ReflectiveConstructionSites: reflectiveSites);
+    }
+
+    /// <summary>
+    /// Calls of Microsoft.Extensions.DependencyInjection.ActivatorUtilities (CreateInstance, CreateFactory, GetServiceOrCreateInstance, generic or not) and of
+    /// System.Activator.CreateInstance(Type, params object[] args) that name <paramref name="type"/> as a type argument or a typeof argument, matched by symbol. Line is 1-based.
+    /// </summary>
+    private static async Task<List<SkippedCallSite>> FindReflectiveConstructionSitesAsync(Solution solution, INamedTypeSymbol type, CancellationToken cancellationToken)
+    {
+        var sites = new List<SkippedCallSite>();
+        foreach (var document in solution.Projects.Where(project => project.Language == LanguageNames.CSharp).SelectMany(project => project.Documents))
+        {
+            if (document.FilePath == null || await document.GetSyntaxRootAsync(cancellationToken) is not { } root)
+            {
+                continue;
+            }
+
+            // Cheap syntactic pre-filter on the invoked name; the semantic model is only built for files that pass it.
+            var candidates = root.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                .Where(invocation => invocation.Expression switch
+                {
+                    MemberAccessExpressionSyntax access => IsReflectiveConstructionName(access.Name.Identifier.ValueText),
+                    SimpleNameSyntax name => IsReflectiveConstructionName(name.Identifier.ValueText),
+                    _ => false
+                })
+                .ToList();
+            if (candidates.Count == 0 || await document.GetSemanticModelAsync(cancellationToken) is not { } model)
+            {
+                continue;
+            }
+
+            foreach (var invocation in candidates)
+            {
+                if (model.GetSymbolInfo(invocation, cancellationToken).Symbol is not IMethodSymbol method)
+                {
+                    continue;
+                }
+
+                var api = method.ContainingType;
+                var isActivatorUtilities = api.Name == "ActivatorUtilities" && api.ContainingNamespace.ToDisplayString() == "Microsoft.Extensions.DependencyInjection";
+                var isActivatorWithArgs = api.Name == "Activator" && api.ContainingNamespace.ToDisplayString() == "System" && method.Name == "CreateInstance"
+                    && method.Parameters.Any(p => p.Name == "args");
+                if (!isActivatorUtilities && !isActivatorWithArgs)
+                {
+                    continue;
+                }
+
+                var namesType = method.TypeArguments.Any(t => SymbolEqualityComparer.Default.Equals(t.OriginalDefinition, type.OriginalDefinition))
+                    || invocation.ArgumentList.DescendantNodes().OfType<TypeOfExpressionSyntax>()
+                        .Any(typeOf => model.GetTypeInfo(typeOf.Type, cancellationToken).Type is { } named && SymbolEqualityComparer.Default.Equals(named.OriginalDefinition, type.OriginalDefinition));
+                if (namesType)
+                {
+                    var line = root.SyntaxTree.GetLineSpan(invocation.Span, cancellationToken: cancellationToken).StartLinePosition.Line + 1;
+                    sites.Add(new SkippedCallSite(document.FilePath, line, $"{api.Name}.{method.Name} names '{type.Name}'; its arguments are not rewritten and are resolved at runtime"));
+                }
+            }
+        }
+
+        return sites;
+    }
+
+    private static bool IsReflectiveConstructionName(string name) => name is "CreateInstance" or "CreateFactory" or "GetServiceOrCreateInstance";
+
+    private static bool IsCommentTrivia(SyntaxTrivia trivia) =>
+    trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) || trivia.IsKind(SyntaxKind.MultiLineCommentTrivia)
+    || trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) || trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia);
+
+    // True when a line end sits in an item's own trivia or in a separator's trivia, i.e. the list is laid out over several lines.
+    private static bool HasLineBreakBetweenItems<TNode>(SeparatedSyntaxList<TNode> list) where TNode : SyntaxNode
+    {
+        for (var index = 0; index < list.Count; index++)
+        {
+            if (list[index].GetLeadingTrivia().Any(SyntaxKind.EndOfLineTrivia) || list[index].GetTrailingTrivia().Any(SyntaxKind.EndOfLineTrivia))
+            {
+                return true;
+            }
+
+            if (index < list.Count - 1)
+            {
+                var separator = list.GetSeparator(index);
+                if (separator.LeadingTrivia.Any(SyntaxKind.EndOfLineTrivia) || separator.TrailingTrivia.Any(SyntaxKind.EndOfLineTrivia))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    // True when RebuildListKeepingLayout must carry the list's own trivia over: two or more items with a line break between them or after the open parenthesis, or one
+    // item after such a break (`f(\n    a)`). Anything else is a single-line list, rebuilt with the default separators and formatted.
+    private static bool ListKeepsLayout<TNode>(SeparatedSyntaxList<TNode> list) where TNode : SyntaxNode
+    {
+        var breaksAfterOpen = list.Count > 0 && list[0].GetFirstToken().GetPreviousToken().TrailingTrivia.Any(SyntaxKind.EndOfLineTrivia);
+        return list.Count >= 2 ? breaksAfterOpen || HasLineBreakBetweenItems(list) : breaksAfterOpen;
+    }
+
+    // The layout part of a trivia list: comments and the whitespace in front of them are removed; with dropFollowingLineEnd the line end that closed a
+    // single-line comment goes too (leading trivia, where that line end belongs to the comment's line); trailing trivia keeps its line end.
+    private static List<SyntaxTrivia> WithoutComments(SyntaxTriviaList trivia, bool dropFollowingLineEnd)
+    {
+        var kept = new List<SyntaxTrivia>();
+        for (var index = 0; index < trivia.Count; index++)
+        {
+            if (!IsCommentTrivia(trivia[index]))
+            {
+                kept.Add(trivia[index]);
+                continue;
+            }
+
+            while (kept.Count > 0 && kept[^1].IsKind(SyntaxKind.WhitespaceTrivia))
+            {
+                kept.RemoveAt(kept.Count - 1);
+            }
+
+            if (dropFollowingLineEnd && trivia[index].IsKind(SyntaxKind.SingleLineCommentTrivia) && index + 1 < trivia.Count && trivia[index + 1].IsKind(SyntaxKind.EndOfLineTrivia))
+            {
+                index++;
+            }
+        }
+
+        return kept;
+    }
+
+    // Collects each comment of a trailing trivia list together with the whitespace in front of it, so a comment can be re-attached after a comma.
+    private static void AddCommentsWithIndent(SyntaxTriviaList trivia, List<SyntaxTrivia> into)
+    {
+        for (var index = 0; index < trivia.Count; index++)
+        {
+            if (!IsCommentTrivia(trivia[index]))
+            {
+                continue;
+            }
+
+            if (index > 0 && trivia[index - 1].IsKind(SyntaxKind.WhitespaceTrivia))
+            {
+                into.Add(trivia[index - 1]);
+            }
+
+            into.Add(trivia[index]);
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds an argument or parameter list for ChangeSignatureAsync. A list that fits on one line (or has fewer than two items) is rebuilt with the default
+    /// ", " separators exactly as before. A multi-line list keeps its layout by position: the leading/trailing trivia and the separator layout of slot i
+    /// (indentation, line ends) go to the item now at position i, an unchanged slot keeps its trivia verbatim, a new item copies its neighbours' layout, and an
+    /// item's own comments travel with it. The line ends come from the existing trivia, never from a literal. <paramref name="items"/> pairs each new node with
+    /// the index it had in <paramref name="current"/>, or -1 for an added one.
+    /// </summary>
+    private static SeparatedSyntaxList<TNode> RebuildListKeepingLayout<TNode>(SeparatedSyntaxList<TNode> current, IReadOnlyList<(TNode Node, int SourceIndex)> items) where TNode : SyntaxNode
+    {
+        var oldCount = current.Count;
+        var newCount = items.Count;
+        if (!ListKeepsLayout(current))
+        {
+            return SyntaxFactory.SeparatedList(items.Select(item => item.Node));
+        }
+
+        var rebuilt = new List<SyntaxNodeOrToken>();
+        for (var position = 0; position < newCount; position++)
+        {
+            var (node, sourceIndex) = items[position];
+            var isLast = position == newCount - 1;
+            var bare = node.WithoutTrivia();
+            if (sourceIndex == position && isLast == (sourceIndex == oldCount - 1))
+            {
+                // The slot is unchanged: keep the original trivia and separator byte for byte.
+                rebuilt.Add(bare.WithLeadingTrivia(current[sourceIndex].GetLeadingTrivia()).WithTrailingTrivia(current[sourceIndex].GetTrailingTrivia()));
+                if (!isLast)
+                {
+                    rebuilt.Add(current.GetSeparator(sourceIndex));
+                }
+
+                continue;
+            }
+
+            // A list with one original item has no separator to copy: an added item follows on the same line (", " and no indentation).
+            var singleOld = oldCount == 1;
+            var ownLeading = sourceIndex >= 0 ? current[sourceIndex].GetLeadingTrivia() : default;
+            var leading = ownLeading.Any(IsCommentTrivia) ? ownLeading.ToList()
+                : singleOld && position > 0 ? new List<SyntaxTrivia>()
+                : WithoutComments(current[Math.Min(position, oldCount - 1)].GetLeadingTrivia(), dropFollowingLineEnd: true);
+            var tailComments = new List<SyntaxTrivia>();
+            if (sourceIndex >= 0)
+            {
+                AddCommentsWithIndent(current[sourceIndex].GetTrailingTrivia(), tailComments);
+                if (sourceIndex < oldCount - 1)
+                {
+                    AddCommentsWithIndent(current.GetSeparator(sourceIndex).TrailingTrivia, tailComments);
+                }
+            }
+
+            if (isLast)
+            {
+                // The last item carries the line end of the old last slot (the list's closing line), after any comment that used to follow its comma.
+                var trailing = tailComments.Concat(WithoutComments(current[oldCount - 1].GetTrailingTrivia(), dropFollowingLineEnd: false));
+                rebuilt.Add(bare.WithLeadingTrivia(leading).WithTrailingTrivia(trailing));
+            }
+            else
+            {
+                var separator = singleOld ? SyntaxFactory.Token(SyntaxKind.CommaToken).WithTrailingTrivia(SyntaxFactory.Space) : current.GetSeparator(Math.Min(position, oldCount - 2));
+                rebuilt.Add(bare.WithLeadingTrivia(leading));
+                rebuilt.Add(SyntaxFactory.Token(SyntaxKind.CommaToken)
+                    .WithLeadingTrivia(WithoutComments(separator.LeadingTrivia, dropFollowingLineEnd: false))
+                    .WithTrailingTrivia(tailComments.Concat(WithoutComments(separator.TrailingTrivia, dropFollowingLineEnd: false))));
+            }
+        }
+
+        return SyntaxFactory.SeparatedList<TNode>(rebuilt);
+    }
+
+    /// <summary>
+    /// Preflight for ChangeSignatureAsync: an existing parameter that is absent from the new list is removed, and a removed parameter the body still uses would
+    /// leave CS0103 behind after the apply. Finds the uses by symbol identity (a same-named local or member does not count; nameof, lambdas and local functions
+    /// capturing it do) in the body, expression body and constructor initializer, and returns a refusal naming the parameter and the 1-based lines, or null when
+    /// no removed parameter is used. A declaration without a body (abstract, interface, extern, partial) has no uses. Never rewrites anything.
+    /// </summary>
+    private static string? RefuseWhenRemovedParameterIsStillUsed(SemanticModel semanticModel, BaseMethodDeclarationSyntax methodDecl, IReadOnlyList<ParameterSyntax> originalParams, IReadOnlyCollection<int> keptIndexes, string methodName, CancellationToken cancellationToken)
+    {
+        var scopes = new List<SyntaxNode>();
+        if (methodDecl.Body is not null)
+        {
+            scopes.Add(methodDecl.Body);
+        }
+
+        if (methodDecl.ExpressionBody is not null)
+        {
+            scopes.Add(methodDecl.ExpressionBody);
+        }
+
+        if (methodDecl is ConstructorDeclarationSyntax { Initializer: { } initializer })
+        {
+            scopes.Add(initializer);
+        }
+
+        if (scopes.Count == 0)
+        {
+            return null;
+        }
+
+        var messages = new List<string>();
+        for (var index = 0; index < originalParams.Count; index++)
+        {
+            if (keptIndexes.Contains(index))
+            {
+                continue;
+            }
+
+            var parameterSymbol = semanticModel.GetDeclaredSymbol(originalParams[index], cancellationToken);
+            if (parameterSymbol is null)
+            {
+                continue;
+            }
+
+            var name = originalParams[index].Identifier.ValueText;
+            var lines = new SortedSet<int>();
+            var fileName = System.IO.Path.GetFileName(methodDecl.SyntaxTree.FilePath);
+            foreach (var scope in scopes)
+            {
+                foreach (var identifier in scope.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>())
+                {
+                    if (identifier.Identifier.ValueText != name)
+                    {
+                        continue;
+                    }
+
+                    if (SymbolEqualityComparer.Default.Equals(semanticModel.GetSymbolInfo(identifier, cancellationToken).Symbol, parameterSymbol))
+                    {
+                        lines.Add(identifier.GetLocation().GetLineSpan().StartLinePosition.Line + 1);
+                    }
+                }
+            }
+
+            if (lines.Count == 0)
+            {
+                continue;
+            }
+
+            var shown = string.Join(", ", lines.Take(10).Select(line => $"{fileName}:{line}"));
+            var more = lines.Count > 10 ? $" and {lines.Count - 10} more" : string.Empty;
+            messages.Add($"Cannot remove parameter '{name}' of '{methodName}': it is still used in the body at {shown}{more}. Make the body stop using it first, then retry the removal.");
+        }
+
+        return messages.Count == 0 ? null : string.Join(" ", messages);
     }
 
     /// <summary>
@@ -735,6 +1108,64 @@ public class BasicRefactoringEngine
                 : string.Empty;
             throw new ToolInvalidArgumentException(CallBindingCheck.FormatRefusal(check, $"change the signature of '{methodName}'") + fix);
         }
+    }
+
+    /// <summary>True for the nameof(...) operator (not a method that happens to be called nameof): the name is not bound to a symbol and the whole expression is a constant.</summary>
+    private static bool IsNameofInvocation(InvocationExpressionSyntax invocation, SemanticModel semanticModel)
+    {
+        return invocation.Expression is IdentifierNameSyntax { Identifier.ValueText: "nameof" } name
+            && semanticModel.GetSymbolInfo(name).Symbol == null
+            && semanticModel.GetConstantValue(invocation).HasValue;
+    }
+
+    /// <summary>The nearest enclosing node that carries an argument list a ChangeSignature call site could be: an invocation, an object creation (`new T(...)` or target-typed `new(...)`) with an argument list, a constructor initializer, or a primary-constructor base call.</summary>
+    private static SyntaxNode? FindNearestCall(SyntaxToken token) =>
+        token.Parent?.AncestorsAndSelf().FirstOrDefault(n => n is InvocationExpressionSyntax or BaseObjectCreationExpressionSyntax { ArgumentList: not null } or ConstructorInitializerSyntax or PrimaryConstructorBaseTypeSyntax);
+
+    /// <summary>True when <paramref name="token"/> names the thing <paramref name="call"/> calls (the callee of an invocation, the `new` keyword or type of a creation, the `this`/`base` keyword of an initializer, the base type of a primary-constructor base call), not one of its arguments.</summary>
+    private static bool IsCalleeToken(SyntaxNode call, SyntaxToken token) => call switch
+    {
+        InvocationExpressionSyntax invocation => invocation.Expression.Span.Contains(token.Span),
+        ObjectCreationExpressionSyntax creation => token == creation.NewKeyword || creation.Type.Span.Contains(token.Span),
+        ImplicitObjectCreationExpressionSyntax implicitCreation => token == implicitCreation.NewKeyword,
+        ConstructorInitializerSyntax initializer => token == initializer.ThisOrBaseKeyword,
+        PrimaryConstructorBaseTypeSyntax primaryBase => primaryBase.Type.Span.Contains(token.Span),
+        _ => false,
+    };
+
+    /// <summary>
+    /// The target-typed `new(...)` calls (their `new` keyword) that bind to <paramref name="constructor"/>, in C# documents where
+    /// SymbolFinder did not already report a location (<paramref name="alreadyFound"/>).
+    /// </summary>
+    private static async Task<List<(Document Document, Microsoft.CodeAnalysis.Text.TextSpan Span)>> FindTargetTypedConstructorCallsAsync(Solution solution, IMethodSymbol constructor, IEnumerable<(Document Document, Microsoft.CodeAnalysis.Text.TextSpan Span)> alreadyFound, CancellationToken cancellationToken)
+    {
+        var seen = new HashSet<(string Path, int Start)>(alreadyFound.Select(found => (found.Document.FilePath!, found.Span.Start)));
+        var calls = new List<(Document Document, Microsoft.CodeAnalysis.Text.TextSpan Span)>();
+        foreach (var document in solution.Projects.Where(project => project.Language == LanguageNames.CSharp).SelectMany(project => project.Documents))
+        {
+            if (document.FilePath == null || await document.GetSyntaxRootAsync(cancellationToken) is not { } root)
+            {
+                continue;
+            }
+
+            var creations = root.DescendantNodes().OfType<ImplicitObjectCreationExpressionSyntax>().ToList();
+            if (creations.Count == 0 || await document.GetSemanticModelAsync(cancellationToken) is not { } model)
+            {
+                continue;
+            }
+
+            foreach (var creation in creations)
+            {
+                if (model.GetSymbolInfo(creation, cancellationToken).Symbol is IMethodSymbol bound
+                    && SymbolEqualityComparer.Default.Equals(bound.OriginalDefinition, constructor.OriginalDefinition)
+                    && seen.Add((document.FilePath, creation.NewKeyword.SpanStart)))
+                {
+                    calls.Add((document, creation.NewKeyword.Span));
+                }
+            }
+        }
+
+        return calls;
     }
 
     public async Task<Dictionary<FilePathWrapper, string>> MoveTypeToFileAsync(FilePathWrapper filePath, string typeName, string? targetFolder = null, CancellationToken cancellationToken = default)

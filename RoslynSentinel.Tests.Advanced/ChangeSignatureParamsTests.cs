@@ -237,6 +237,7 @@ public class ChangeSignatureParamsTests
     public Totals(int seed, params int[] values) { }
     public static Totals Make() => new Totals(0, 1, 2, 3);
     public static Totals MakeOne() => new Totals(0, 4);
+    public static Totals MakeTargetTyped() { Totals t = new(0, 5, 6); return t; }
 }";
         SetFile("Totals.cs", source);
         var result = await Change("Totals.cs", "Totals", new ExistingParameterSpec(0), new NewParameterSpec("label", "string", "\"x\""), new ExistingParameterSpec(1));
@@ -245,14 +246,14 @@ public class ChangeSignatureParamsTests
         var after = result.Changes["Totals.cs"];
         Assert.That(after, Does.Contain("new Totals(0, \"x\", 1, 2, 3)"));
         Assert.That(after, Does.Contain("new Totals(0, \"x\", 4)"));
-        // TODO ChangeSignature: a target-typed new(...) constructor call is neither rewritten nor reported as skipped (verified with a non-params constructor too), so the result no longer compiles; add a case here once the engine handles it
+        Assert.That(after, Does.Contain("= new(0, \"x\", 5, 6)"));
         AssertCompiles(after);
     }
 
     [Test]
     [Category("BasicRefactoringEngine")] // sentinel:auto-category
     [Category("ChangeSignatureResult")] // sentinel:auto-category
-    public async Task ChangeSignature_ParamsExpandedExtensionCall_IsRefusedNotDropped()
+    public async Task ChangeSignature_ParamsExpandedExtensionCall_CarriesEveryExtraArgument()
     {
         const string source = @"public static class Exts
 {
@@ -262,8 +263,10 @@ public class ChangeSignatureParamsTests
         SetFile("Totals.cs", source);
         var result = await Change("Totals.cs", "Sum", new ExistingParameterSpec(0), new ExistingParameterSpec(1), new NewParameterSpec("label", "string", "\"x\""), new ExistingParameterSpec(2));
 
-        Assert.That(result.Error, Is.Not.Null.And.Contain("Nothing was changed"), "A call shape that cannot be carried is refused, never silently rewritten");
-        Assert.That(result.SkippedCallSites, Has.Count.EqualTo(1));
-        Assert.That(result.Changes, Is.Empty);
+        Assert.That(result.Error, Is.Null, result.Error);
+        Assert.That(result.SkippedCallSites, Is.Empty);
+        var after = result.Changes["Totals.cs"];
+        Assert.That(after, Does.Contain("\"a\".Sum(0, \"x\", 1, 2, 3)"), "The reduced call keeps its receiver and carries every expanded params argument after the new parameter");
+        AssertCompiles(after);
     }
 }

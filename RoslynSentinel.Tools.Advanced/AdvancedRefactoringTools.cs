@@ -102,7 +102,7 @@ public class AdvancedRefactoringTools
     [Description("Reorders, adds, or removes method parameters and updates all call sites solution-wide. Refuses across an interface/implementer boundary - edit each side directly.")]
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> ChangeSignatureTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string methodName, [Description("The desired end-state parameter list, in order. Each entry is {originalIndex: N} to keep an existing 0-based-index parameter, or {name, type, defaultValue} to insert a new one. Omit an originalIndex to remove that parameter.")][ExternalInputRequired(DataTag.Order, required: true)] ChangeSignatureParameterInput[] parameters, // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           // [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [Description(ToolParams.ContextSnippet)] string? contextSnippet = null, [Description(ToolParams.LineBefore)] string? lineBefore = null, [Description(ToolParams.LineAfter)] string? lineAfter = null, [Description("auto (default): old signature removed if every caller migrates, else kept as an [Obsolete] wrapper and the remaining callers listed. remove: refuses if any caller cannot migrate. keepAsDeprecatedWrapper: always keep. No wrapper (refused) for constructors, virtual/override/abstract/interface members, identical parameter types.")] ChangeSignatureOldSignature oldSignature = ChangeSignatureOldSignature.auto, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [Description(ToolParams.ContextSnippet)] string? contextSnippet = null, [Description(ToolParams.LineBefore)] string? lineBefore = null, [Description(ToolParams.LineAfter)] string? lineAfter = null, [Description("auto (default): old signature removed if every caller migrates, else kept as an [Obsolete] wrapper and the remaining callers listed. remove: refuses if any caller cannot migrate. keepAsDeprecatedWrapper: always keep. No wrapper (refused) for virtual/override/abstract/interface members, identical parameter types.")] ChangeSignatureOldSignature oldSignature = ChangeSignatureOldSignature.auto, // RequestContext<CallToolRequestParams> requestParams = null,
  CancellationToken cancellationToken = default)
     {
         // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
@@ -140,12 +140,23 @@ public class AdvancedRefactoringTools
                     ErrorData = new ResultError(ToolErrorCode.Exception, result.Error)
                 };
             var changes = result.Changes;
+            // Reflection-style construction (ActivatorUtilities.CreateInstance and friends) compiles after a constructor change and fails at runtime: a Caution per site, in every outcome mode.
+            var reflectiveSites = result.ReflectiveConstructionSites ?? [];
+            var reflectiveFindings = reflectiveSites.Take(25)
+                .Select(s => new Finding("ChangeSignature", $"{s.Reason}: check {Path.GetFileName(s.FilePath)}:{s.LineNumber}", FindingSeverity.Caution))
+                .ToList();
+            if (reflectiveSites.Count > 25)
+            {
+                reflectiveFindings.Add(new Finding("ChangeSignature", $"Reflective construction listing capped at 25: {reflectiveSites.Count} site(s) in total.", FindingSeverity.Caution));
+            }
+
             if (!autoStage)
             {
                 var noStageSummaryNote = $"Reorders parameters of '{methodName}' in {Path.GetFileName(resolvedFilePath)}.";
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
                     IsError = false,
+                    Findings = reflectiveFindings,
                     SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: changes.Keys.ToList(), Description: noStageSummaryNote, DryRun: false, Diff: null, ChangedContent: changes, Validated: false)
                 };
             }
@@ -188,6 +199,7 @@ public class AdvancedRefactoringTools
                 }
             }
 
+            wrapperFindings.AddRange(reflectiveFindings);
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = false,

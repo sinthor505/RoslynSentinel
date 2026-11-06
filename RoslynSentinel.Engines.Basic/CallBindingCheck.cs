@@ -272,7 +272,6 @@ public static class CallBindingCheck
         var candidates = new List<(SyntaxNode Anchor, SyntaxNode BindNode, string? Name)>();
 
         // DescendantNodes() does not enter trivia, so doc-comment crefs are never captured. Declarations are tokens, not names.
-        // TODO CallBindingCheck: primary-constructor base calls (class D(int x) : B(x)) are not captured
         foreach (var node in root.DescendantNodes())
         {
             switch (node)
@@ -299,6 +298,10 @@ public static class CallBindingCheck
                     break;
                 case ConstructorInitializerSyntax initializer when mentionsName:
                     candidates.Add((initializer, initializer, null));
+                    break;
+                case PrimaryConstructorBaseTypeSyntax primaryBase when mentionsName:
+                    // class D(int x) : B(x): the call is bound on the base-type node; like an initializer its type is only known once bound.
+                    candidates.Add((primaryBase, primaryBase, null));
                     break;
             }
         }

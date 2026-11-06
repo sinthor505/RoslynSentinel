@@ -478,7 +478,8 @@ public class ChangeSignatureWrapperTests
         SetFiles(("Box.cs", "public class Box { public Box(int a, int b) { } }"));
         var result = await KeepWrapper("Box.cs", "Box", new ExistingParameterSpec(1), new ExistingParameterSpec(0));
 
-        AssertRefused(result, "does not support constructors yet");
+        // Constructors are wrapped now; swapping two same-typed parameters still leaves wrapper and constructor the same overload.
+        AssertRefused(result, "cannot keep 'Box': the old and the new signature both take (int, int)");
     }
 
     [Test]
@@ -666,7 +667,7 @@ public class ChangeSignatureWrapperTests
         Assert.That(result.SkippedCallSites, Has.Count.EqualTo(1), "The method-group caller is left on the wrapper");
         Assert.That(result.Changes["Saver.cs"], Does.Contain("int id, string name, int scale)"), "The new member declares the added parameter");
         Assert.That(result.Changes["Saver.cs"], Does.Not.Contain("scale ="), "The new member has no default: a defaulted overload would compete with the wrapper");
-        Assert.That(result.Changes["Caller.cs"], Does.Contain("System.Func<string, int, int> f = s.Save;"), "The old-shaped caller text is unchanged");
+        Assert.That(result.Changes.ContainsKey("Caller.cs"), Is.False, "The old-shaped caller stays on the wrapper, so its file is unchanged and is not reported as a change");
 
         var compilation = CompileFiles(AfterChange(result.Changes, ("Saver.cs", saverSource), ("Caller.cs", callerSource)));
         AssertCompiles(compilation);

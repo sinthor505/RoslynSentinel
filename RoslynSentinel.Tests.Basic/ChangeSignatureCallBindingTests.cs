@@ -218,10 +218,6 @@ public class ChangeSignatureCallBindingTests
         AssertCompiles(AfterChange(result, files));
     }
 
-    // FINDING (candidate production bug, left red): in remove mode the planner refuses nameof(Save) before the W20 check runs:
-    // "Could not resolve the bound overload for this call site via the semantic model." The wrapper-mode twin below passes.
-    // TODO ChangeSignature remove mode refuses a nameof(Save) reference as an unrewritable call site, though nameof stays valid after the change; predates the call-binding check
-    [Ignore("ChangeSignature remove mode refuses a nameof reference; see the TODO above")]
     [Test]
     public async Task RemoveMode_NameofTarget_Succeeds()
     {
@@ -375,5 +371,263 @@ public class ChangeSignatureCallBindingTests
         Assert.That(text, Does.Contain("Nothing was written."));
         Assert.That(text, Does.Not.Contain("\\").And.Not.Contain(".cs"));
         AssertNothingWritten(workspace, files);
+    }
+
+    [Test]
+    public async Task NameofTarget_AutoMode_NoSkippedSites_ResolvesToRemove_NameofUnchanged_Succeeds()
+    {
+        var files = new (string Name, string Content)[]
+        {
+            ("Saver.cs", Lines("namespace Example;", "", "public class Saver", "{", "    public int Save(int a, int b) => a;", "    public string Label => nameof(Save);", "}")),
+            ("Caller.cs", Lines("namespace Example;", "", "public class Caller", "{", "    public void Run(Saver s) { s.Save(1, 2); }", "}")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var engine = CreateEngine(workspace);
+
+        var result = await ChangeAsync(engine, workspace, "Saver.cs", "Save", null, ChangeSignatureOldSignature.auto, new ExistingParameterSpec(0));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        Assert.That(result.SkippedCallSites, Is.Empty);
+        Assert.That(ChangedText(result, "Caller.cs"), Does.Contain("s.Save(1);"), "The call is migrated to the reduced signature");
+        var saver = ChangedText(result, "Saver.cs");
+        Assert.That(saver, Does.Contain("nameof(Save)"), "The nameof text is not rewritten");
+        Assert.That(saver, Does.Not.Contain("Obsolete"), "Auto with no skipped sites resolves to remove, so no wrapper is kept");
+        AssertCompiles(AfterChange(result, files));
+    }
+
+    [Test]
+    public async Task NameofTarget_WrapperMode_NameofTextUnchanged_Succeeds()
+    {
+        var files = new (string Name, string Content)[]
+        {
+            ("Saver.cs", Lines("namespace Example;", "", "public class Saver", "{", "    public int Save(int a, int b) => a;", "    public string Label => nameof(Save);", "}")),
+            ("Caller.cs", Lines("namespace Example;", "", "public class Caller", "{", "    public void Run(Saver s)", "    {", "        var r = s.Save(1, 2);", "    }", "}")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var engine = CreateEngine(workspace);
+
+        var result = await ChangeAsync(engine, workspace, "Saver.cs", "Save", null, ChangeSignatureOldSignature.keepAsDeprecatedWrapper, new ExistingParameterSpec(0), new ExistingParameterSpec(1), new NewParameterSpec("c", "int", "0"));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        var saver = ChangedText(result, "Saver.cs");
+        Assert.That(saver, Does.Contain("nameof(Save)"), "The nameof text is not rewritten");
+        Assert.That(saver, Does.Contain("public string Label => nameof(Save);"), "The nameof declaration line is unchanged");
+        AssertCompiles(AfterChange(result, files));
+    }
+
+    [Test]
+    public async Task NameofMemberAccess_AsArgumentOfAnotherCall_Succeeds()
+    {
+        var files = new (string Name, string Content)[]
+        {
+            ("Saver.cs", Lines("namespace Example;", "", "public class Saver", "{", "    public int Save(int a, int b) => a;", "}")),
+            ("Caller.cs", Lines("namespace Example;", "", "public class Caller", "{", "    public string Run(Saver s) => Describe(nameof(s.Save), s.Save(1, 2));", "    private static string Describe(string name, int value) => name + value;", "}")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var engine = CreateEngine(workspace);
+
+        var result = await ChangeAsync(engine, workspace, "Saver.cs", "Save", null, ChangeSignatureOldSignature.remove, new ExistingParameterSpec(0));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        var caller = ChangedText(result, "Caller.cs");
+        Assert.That(caller, Does.Contain("Describe(nameof(s.Save), s.Save(1));"), "The nameof argument is unchanged and the sibling call is migrated");
+        AssertCompiles(AfterChange(result, files));
+    }
+
+    // Maker holds the four target-typed forms: a field initializer, a return, a local initializer and a method argument.
+    private static (string Name, string Content)[] TargetTypedFixture(string widgetConstructor, string arguments) => new[]
+    {
+        ("Widget.cs", Lines("namespace Example;", "", "public class Widget", "{", "    " + widgetConstructor, "}")),
+        ("Maker.cs", Lines("namespace Example;", "", "public class Maker", "{",
+            "    public Widget Field = new(" + arguments + ");",
+            "    public void Use(Widget w) { }",
+            "    public Widget Ret() { return new(" + arguments + "); }",
+            "    public void Local() { Widget w = new(" + arguments + "); Use(w); }",
+            "    public void Arg() { Use(new(" + arguments + ")); }",
+            "}")),
+    };
+
+    [Test]
+    public async Task TargetTypedNew_ReorderOfConstructor_RewritesEveryForm_Succeeds()
+    {
+        var files = TargetTypedFixture("public Widget(int a, string b) { }", "1, \"a\"");
+        using var workspace = InMemoryWorkspace.Create(files);
+        var engine = CreateEngine(workspace);
+
+        var result = await ChangeAsync(engine, workspace, "Widget.cs", "Widget", null, ChangeSignatureOldSignature.remove, new ExistingParameterSpec(1), new ExistingParameterSpec(0));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        var maker = ChangedText(result, "Maker.cs");
+        Assert.That(maker, Does.Contain("public Widget Field = new(\"a\", 1);"), "The field initializer is rewritten");
+        Assert.That(maker, Does.Contain("return new(\"a\", 1);"), "The return is rewritten");
+        Assert.That(maker, Does.Contain("Widget w = new(\"a\", 1);"), "The local initializer is rewritten");
+        Assert.That(maker, Does.Contain("Use(new(\"a\", 1));"), "The argument is rewritten");
+        AssertCompiles(AfterChange(result, files));
+    }
+
+    [Test]
+    public async Task TargetTypedNew_AddParameterWithDefault_RewritesEveryForm_Succeeds()
+    {
+        var files = TargetTypedFixture("public Widget(int a, string b) { }", "1, \"a\"");
+        using var workspace = InMemoryWorkspace.Create(files);
+        var engine = CreateEngine(workspace);
+
+        var result = await ChangeAsync(engine, workspace, "Widget.cs", "Widget", null, ChangeSignatureOldSignature.remove, new ExistingParameterSpec(0), new ExistingParameterSpec(1), new NewParameterSpec("c", "int", "7"));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        var maker = ChangedText(result, "Maker.cs");
+        Assert.That(maker, Does.Contain("public Widget Field = new(1, \"a\", 7);"), "The field initializer carries the default");
+        Assert.That(maker, Does.Contain("return new(1, \"a\", 7);"), "The return carries the default");
+        Assert.That(maker, Does.Contain("Widget w = new(1, \"a\", 7);"), "The local initializer carries the default");
+        Assert.That(maker, Does.Contain("Use(new(1, \"a\", 7));"), "The argument carries the default");
+        AssertCompiles(AfterChange(result, files));
+    }
+
+    [Test]
+    public async Task TargetTypedNew_RemoveParameter_RewritesEveryForm_Succeeds()
+    {
+        var files = TargetTypedFixture("public Widget(int a, string b, long c) { }", "1, \"a\", 2L");
+        using var workspace = InMemoryWorkspace.Create(files);
+        var engine = CreateEngine(workspace);
+
+        var result = await ChangeAsync(engine, workspace, "Widget.cs", "Widget", null, ChangeSignatureOldSignature.remove, new ExistingParameterSpec(0), new ExistingParameterSpec(1));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        var maker = ChangedText(result, "Maker.cs");
+        Assert.That(maker, Does.Contain("public Widget Field = new(1, \"a\");"), "The field initializer drops the removed argument");
+        Assert.That(maker, Does.Contain("return new(1, \"a\");"), "The return drops the removed argument");
+        Assert.That(maker, Does.Contain("Widget w = new(1, \"a\");"), "The local initializer drops the removed argument");
+        Assert.That(maker, Does.Contain("Use(new(1, \"a\"));"), "The argument drops the removed argument");
+        AssertCompiles(AfterChange(result, files));
+    }
+
+    [Test]
+    public async Task NestedNewInsideCall_ConstructorReorder_RewritesInnerNewOnly_Succeeds()
+    {
+        var files = new (string Name, string Content)[]
+        {
+            ("Widget.cs", Lines("namespace Example;", "", "public class Widget", "{", "    public Widget(int a, string b) { }", "}")),
+            ("Maker.cs", Lines("namespace Example;", "", "public class Maker", "{", "    public static void Use(int x, Widget w) { }", "    public void Run() { Use(5, new Widget(1, \"a\")); }", "}")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var engine = CreateEngine(workspace);
+
+        var result = await ChangeAsync(engine, workspace, "Widget.cs", "Widget", null, ChangeSignatureOldSignature.remove, new ExistingParameterSpec(1), new ExistingParameterSpec(0));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        Assert.That(ChangedText(result, "Maker.cs"), Does.Contain("Use(5, new Widget(\"a\", 1));"), "Only the inner new is rewritten; the outer call keeps its arguments");
+        AssertCompiles(AfterChange(result, files));
+    }
+
+    [Test]
+    public async Task BaseInitializer_ReorderOfBaseConstructor_RewritesEveryBaseCall_Succeeds()
+    {
+        var files = new (string Name, string Content)[]
+        {
+            ("Types.cs", Lines("namespace Example;", "", "public class Base", "{", "    public Base(int a, string b) { }", "}", "", "public class Derived : Base", "{", "    public Derived() : base(1, \"a\") { }", "    public Derived(int x) : base(x, \"b\") { }", "}")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var engine = CreateEngine(workspace);
+
+        var result = await ChangeAsync(engine, workspace, "Types.cs", "Base", null, ChangeSignatureOldSignature.remove, new ExistingParameterSpec(1), new ExistingParameterSpec(0));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        var types = ChangedText(result, "Types.cs");
+        Assert.That(types, Does.Contain(": base(\"a\", 1) { }"), "The parameterless base call is rewritten");
+        Assert.That(types, Does.Contain(": base(\"b\", x) { }"), "The base call with an argument is rewritten");
+        AssertCompiles(AfterChange(result, files));
+    }
+
+    [Test]
+    public async Task BaseInitializer_RemoveOfBaseConstructorParameter_RewritesEveryBaseCall_Succeeds()
+    {
+        var files = new (string Name, string Content)[]
+        {
+            ("Types.cs", Lines("namespace Example;", "", "public class Base", "{", "    public Base(int a, string b, long c) { }", "}", "", "public class Derived : Base", "{", "    public Derived() : base(1, \"a\", 2L) { }", "    public Derived(int x) : base(x, \"b\", 3L) { }", "}")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var engine = CreateEngine(workspace);
+
+        var result = await ChangeAsync(engine, workspace, "Types.cs", "Base", null, ChangeSignatureOldSignature.remove, new ExistingParameterSpec(0), new ExistingParameterSpec(1));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        var types = ChangedText(result, "Types.cs");
+        Assert.That(types, Does.Contain(": base(1, \"a\") { }"), "The parameterless base call drops the removed argument");
+        Assert.That(types, Does.Contain(": base(x, \"b\") { }"), "The base call with an argument drops the removed argument");
+        AssertCompiles(AfterChange(result, files));
+    }
+
+    [Test]
+    public async Task ThisInitializer_RemoveOfChainedConstructorParameter_RewritesThisCall_Succeeds()
+    {
+        var files = new (string Name, string Content)[]
+        {
+            ("Types.cs", Lines("namespace Example;", "", "public class Derived", "{", "    public Derived() : this(1, \"a\", 2L) { }", "    public Derived(int x, string y, long z) { }", "}")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var engine = CreateEngine(workspace);
+
+        var result = await ChangeAsync(engine, workspace, "Types.cs", "Derived", "public Derived(int x, string y, long z)", ChangeSignatureOldSignature.remove, new ExistingParameterSpec(0), new ExistingParameterSpec(1));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        Assert.That(ChangedText(result, "Types.cs"), Does.Contain(": this(1, \"a\") { }"), "The this initializer drops the removed argument");
+        AssertCompiles(AfterChange(result, files));
+    }
+
+    [Test]
+    public async Task PrimaryConstructorBaseCall_ReorderOfBaseConstructor_RewritesBaseArgument_Succeeds()
+    {
+        var files = new (string Name, string Content)[]
+        {
+            ("Types.cs", Lines("namespace Example;", "", "public class B", "{", "    public B(int a, string b) { }", "}", "", "public class D(int x) : B(x, \"b\") { }")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var engine = CreateEngine(workspace);
+
+        var result = await ChangeAsync(engine, workspace, "Types.cs", "B", null, ChangeSignatureOldSignature.remove, new ExistingParameterSpec(1), new ExistingParameterSpec(0));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        var types = ChangedText(result, "Types.cs");
+        Assert.That(types, Does.Contain("public class D(int x) : B(\"b\", x) { }"), "The primary-constructor base call is rewritten to the new order");
+        AssertCompiles(AfterChange(result, files));
+    }
+
+    [Test]
+    public async Task MethodGroupArguments_WrapperMode_NotRewrittenAsCalls_Succeeds()
+    {
+        var files = new (string Name, string Content)[]
+        {
+            ("Saver.cs", Lines("namespace Example;", "", "public class Saver", "{", "    public int Save() => 0;", "    public int Save(int a, int b) => a;", "    public System.Func<int> Getter() => new System.Func<int>(Save);", "}")),
+            ("Caller.cs", Lines("namespace Example;", "", "public class Caller", "{", "    public void Run(Saver s)", "    {", "        Take(s.Save);", "    }", "", "    public void Take(System.Func<int, int, int> f) { }", "}")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var engine = CreateEngine(workspace);
+
+        var result = await ChangeAsync(engine, workspace, "Saver.cs", "Save", "public int Save(int a, int b)", ChangeSignatureOldSignature.keepAsDeprecatedWrapper, new ExistingParameterSpec(0), new ExistingParameterSpec(1), new NewParameterSpec("c", "int", "0"));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        var after = AfterChange(result, files);
+        Assert.That(after.Single(f => f.Name == "Caller.cs").Text, Is.EqualTo(files[1].Content), "Method groups are not call sites: the caller text is identical");
+        AssertCompiles(after);
+    }
+
+    [Test]
+    public async Task TargetTypedNew_ToDifferentConstructor_IsUntouched_Succeeds()
+    {
+        var files = new (string Name, string Content)[]
+        {
+            ("Widget.cs", Lines("namespace Example;", "", "public class Widget", "{", "    public Widget(int a, string b) { }", "    public Widget(long z) { }", "}")),
+            ("Maker.cs", Lines("namespace Example;", "", "public class Maker", "{", "    public Widget Make()", "    {", "        Widget other = new(5L);", "        return new(1, \"a\");", "    }", "}")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var engine = CreateEngine(workspace);
+
+        var result = await ChangeAsync(engine, workspace, "Widget.cs", "Widget", "public Widget(int a, string b)", ChangeSignatureOldSignature.remove, new ExistingParameterSpec(1), new ExistingParameterSpec(0));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        var maker = ChangedText(result, "Maker.cs");
+        Assert.That(maker, Does.Contain("Widget other = new(5L);"), "The target-typed new of the other constructor is untouched");
+        Assert.That(maker, Does.Contain("return new(\"a\", 1);"), "The changed constructor's target-typed new is rewritten");
+        AssertCompiles(AfterChange(result, files));
     }
 }
