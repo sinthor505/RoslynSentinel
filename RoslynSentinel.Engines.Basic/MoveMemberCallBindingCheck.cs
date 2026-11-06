@@ -10,7 +10,7 @@ namespace RoslynSentinel.Engines.Basic;
 /// moved member's name before and after. Whatever the move rewrites (a receiver, a qualification) is expected to bind to the moved
 /// member's new location; keep modes also accept the old location, where a forwarder stays; everything else must keep its binding.
 /// <para>
-/// Limits: a moved nested type is mapped member by member by replacing its qualified name (not verified against the trial). The
+/// Limits: a moved nested type is mapped member by member by replacing its qualified name, and every mapped id is verified against the trial symbols (an id with no symbol there fails the check closed). The
 /// caller skips the check when the trial has compile errors (the write's compile gate reports those).
 /// </para>
 /// </summary>
@@ -85,7 +85,12 @@ public static class MoveMemberCallBindingCheck
                     return Fail($"the moved type '{moved.Name}' was not found in the target after the move");
                 }
 
-                MapTypeTree(movedType, newType, oldToNew);
+                var mapFailure = MapTypeTree(movedType, newType, oldToNew);
+                if (mapFailure != null)
+                {
+                    return Fail(mapFailure);
+                }
+
                 continue;
             }
 
@@ -144,7 +149,17 @@ public static class MoveMemberCallBindingCheck
             }
         }
 
-        return found.Count == 1 ? (found[0], project, null) : (null, null, found.Count == 0 ? $"the target type '{targetClassName}' was not found in the files the move changes" : $"the target type '{targetClassName}' is declared more than once in the files the move changes");
+        if (found.Count == 0)
+        {
+            // A new file is only compiled in the trial when it lies under a project's directory (ValidationEngine adds it to that project);
+            // otherwise the new class is never seen and the move cannot be verified. Name the file (not its path) and the fix.
+            var uncompiled = changedPaths.FirstOrDefault(p => !trial.GetDocumentIdsWithFilePath(p).Any());
+            return (null, null, uncompiled is null
+                ? $"the target type '{targetClassName}' was not found in the files the move changes"
+                : $"the target type '{targetClassName}' was not found in the files the move changes: the new file '{Path.GetFileName(uncompiled)}' is not under any project's directory, so it is not compiled. Create the class inside a project folder first, then move into it");
+        }
+
+        return found.Count == 1 ? (found[0], project, null) : (null, null, $"the target type '{targetClassName}' is declared more than once in the files the move changes");
     }
 
     /// <summary>The member of the target that is the moved member after the move: same name and kind, preferring the same parameter types.</summary>
@@ -173,22 +188,24 @@ public static class MoveMemberCallBindingCheck
     }
 
     /// <summary>Maps a moved nested type and everything inside it by replacing the type's qualified name in each documentation id.</summary>
-    private static void MapTypeTree(INamedTypeSymbol oldType, INamedTypeSymbol newType, Dictionary<string, string> map)
+    private static string? MapTypeTree(INamedTypeSymbol oldType, INamedTypeSymbol newType, Dictionary<string, string> map)
     {
-        // TODO MoveMember call-binding check: the mapped ids of a moved nested type's members are not verified against the trial symbols (and no existing test moves a nested type with affected-name calls)
         var oldQualified = oldType.OriginalDefinition.GetDocumentationCommentId()?[2..];
         var newQualified = newType.OriginalDefinition.GetDocumentationCommentId()?[2..];
         if (oldQualified is null || newQualified is null)
         {
-            return;
+            return $"the moved type '{oldType.Name}' or its copy in the target has no documentation id";
         }
 
+        var mapped = new List<string>();
         void Visit(ISymbol symbol)
         {
             var id = symbol.OriginalDefinition.GetDocumentationCommentId();
             if (id != null)
             {
-                map.TryAdd(id, id.Replace(oldQualified, newQualified, StringComparison.Ordinal));
+                var newId = id.Replace(oldQualified, newQualified, StringComparison.Ordinal);
+                map.TryAdd(id, newId);
+                mapped.Add(newId);
             }
 
             if (symbol is INamedTypeSymbol type)
@@ -201,6 +218,29 @@ public static class MoveMemberCallBindingCheck
         }
 
         Visit(oldType);
+
+        // The ids that exist in the trial: the target's copy of the type and everything inside it.
+        var trialIds = new HashSet<string>(StringComparer.Ordinal);
+        void Collect(ISymbol symbol)
+        {
+            var id = symbol.OriginalDefinition.GetDocumentationCommentId();
+            if (id != null)
+            {
+                trialIds.Add(id);
+            }
+
+            if (symbol is INamedTypeSymbol type)
+            {
+                foreach (var member in type.GetMembers())
+                {
+                    Collect(member);
+                }
+            }
+        }
+
+        Collect(newType);
+        var missing = mapped.FirstOrDefault(id => !trialIds.Contains(id));
+        return missing is null ? null : $"the moved type '{oldType.Name}' could not be mapped member by member: '{missing}' has no symbol in the target after the move";
     }
 
     /// <summary>

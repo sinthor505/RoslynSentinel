@@ -223,7 +223,8 @@ public static class MemberSelection
         return false;
     }
 
-    private static ToolAmbiguousMatchException BuildAmbiguous(IReadOnlyList<(string Name, IReadOnlyList<string> Signatures)> overloaded, string[] memberNames, string className)
+    // The error wording follows the calling tool: toolName is the tool the retry hint names, verb is its action ("move"/"extract").
+    private static ToolAmbiguousMatchException BuildAmbiguous(IReadOnlyList<(string Name, IReadOnlyList<string> Signatures)> overloaded, string[] memberNames, string className, string toolName, string verb)
     {
         var descriptions = overloaded.Select(o => $"Method '{o.Name}' has {o.Signatures.Count} overloads in class '{className}': {string.Join("; ", o.Signatures)}.");
         var firstSignatureByName = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -235,24 +236,28 @@ public static class MemberSelection
         // The retry names the first overload of each ambiguous name and keeps every other requested entry as given.
         var retryNames = memberNames.Select(n => firstSignatureByName.TryGetValue(n, out var first) ? first : n).Distinct(StringComparer.Ordinal);
         var retryArray = "[" + string.Join(", ", retryNames.Select(n => "\"" + n.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"")) + "]";
-        var retry = ToolCallHint.Next("MoveMember", string.Empty, ("memberNames", retryArray));
+        var retry = ToolCallHint.Next(toolName, string.Empty, ("memberNames", retryArray));
         var example = firstSignatureByName[overloaded[0].Name];
-        return new ToolAmbiguousMatchException($"{string.Join(" ", descriptions)} A bare name selects every overload, so it is refused and nothing was moved. To move one overload pass its signature in memberNames, for example \"{example}\"; listing every signature moves the whole group. {retry}");
+        return new ToolAmbiguousMatchException($"{string.Join(" ", descriptions)} A bare name selects every overload, so it is refused and nothing was {PastTense(verb)}. To {verb} one overload pass its signature in memberNames, for example \"{example}\"; listing every signature {verb}s the whole group. {retry}");
     }
+
+    private static string PastTense(string verb) => verb.EndsWith('e') ? verb + "d" : verb + "ed";
 
     /// <summary>
     /// Selects the class members named by memberNames, in declaration order (methods, properties, field declarations
     /// holding a requested variable, nested types). Every entry is validated before anything is returned, so a caller that
     /// writes only after this returns writes nothing on a refusal: bare names matching several overloads throw
     /// ToolAmbiguousMatchException (all ambiguous names in one error); an entry matching nothing throws ToolNotFoundException.
+    /// toolName and verb only word the errors (the retry hint's tool and the action); MoveMember is the default,
+    /// ExtractMembers passes ("ExtractMembers", "extract") and its own method/property subset of the class members.
     /// </summary>
-    public static List<MemberDeclarationSyntax> SelectMembers(IEnumerable<MemberDeclarationSyntax> classMembers, string[] memberNames, string className)
+    public static List<MemberDeclarationSyntax> SelectMembers(IEnumerable<MemberDeclarationSyntax> classMembers, string[] memberNames, string className, string toolName = "MoveMember", string verb = "move")
     {
         var members = classMembers.ToList();
         var overloaded = FindOverloadedNames(members, memberNames);
         if (overloaded.Count > 0)
         {
-            throw BuildAmbiguous(overloaded, memberNames, className);
+            throw BuildAmbiguous(overloaded, memberNames, className, toolName, verb);
         }
 
         var selected = new HashSet<MemberDeclarationSyntax>();
@@ -287,7 +292,7 @@ public static class MemberSelection
         // so the caller can copy one.
         if (missing.Count > 0)
         {
-            throw new ToolNotFoundException($"Requested member(s) [{string.Join(", ", missing)}] were not found in class '{className}' in this file (found: [{string.Join(", ", DescribeAvailable(members))}]). Nothing was moved. If the class is partial, the member may be declared in another part; pass that file's path.");
+            throw new ToolNotFoundException($"Requested member(s) [{string.Join(", ", missing)}] were not found in class '{className}' in this file (found: [{string.Join(", ", DescribeAvailable(members))}]). Nothing was {PastTense(verb)}. If the class is partial, the member may be declared in another part; pass that file's path.");
         }
 
         return result;

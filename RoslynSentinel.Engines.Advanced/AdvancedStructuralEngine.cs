@@ -1077,23 +1077,14 @@ public class StructuralRefactoringEngine
 
     // The members ExtractMembers newType=partial moves: the methods and properties named in memberNames. Shared by
     // ExtractMembersToPartialAsync (builds the new file) and ExtractMembersToPartialWithSourceAsync (removes them from the source).
+    // Each entry is a bare name or a signature such as "Save(int)", resolved by MemberSelection exactly as MoveMember does: a bare
+    // name of an overloaded method is refused as Ambiguous (candidates printed as copyable signatures), an entry matching nothing
+    // is refused as NotFound, and either refusal happens before anything is written. Only methods and properties are
+    // selectable here, so fields and nested types are not offered and are reported as not found.
     private static List<MemberDeclarationSyntax> SelectMembersToMove(ClassDeclarationSyntax classNode, string[] memberNames)
     {
-        // TODO ExtractMembers: accept signature selection like MoveMember
-        var overloaded = MemberSelection.FindOverloadedNames(classNode.Members, memberNames);
-        if (overloaded.Count > 0)
-        {
-            var sentences = overloaded.Select(o => $"Method '{o.Name}' has {o.Signatures.Count} overloads in class '{classNode.Identifier.Text}': {string.Join("; ", o.Signatures)}. ");
-            throw new ToolAmbiguousMatchException(string.Concat(sentences) + "ExtractMembers cannot extract overloaded methods yet, so nothing was extracted. To move one overload into another class use the MoveMember tool with its signature in memberNames (for example \"Save(int)\"); otherwise leave the overloaded name out of memberNames.");
-        }
-
-        var signatureEntries = memberNames.Where(MemberSelection.IsSignatureEntry).ToList();
-        if (signatureEntries.Count > 0)
-        {
-            throw new ToolInvalidArgumentException($"ExtractMembers selects by bare name only and cannot select one overload by signature yet: {string.Join(", ", signatureEntries)}. Use the bare method name, or the MoveMember tool to move a single overload.");
-        }
-
-        return classNode.Members.Where(m => (m is MethodDeclarationSyntax meth && memberNames.Contains(meth.Identifier.Text)) || (m is PropertyDeclarationSyntax prop && memberNames.Contains(prop.Identifier.Text))).ToList();
+        var extractable = classNode.Members.Where(m => m is MethodDeclarationSyntax or PropertyDeclarationSyntax);
+        return MemberSelection.SelectMembers(extractable, memberNames, classNode.Identifier.Text, "ExtractMembers", "extract");
     }
 
     // Returns the class with the 'partial' modifier added directly before the 'class' keyword (the only position C# accepts);

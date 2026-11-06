@@ -660,6 +660,35 @@ public class CallBindingCheckTests
     }
 
     [Test]
+    public async Task Constructor_PrimaryConstructorBaseCall_RebindingReportedAsNewBaseAsync()
+    {
+        // class Derived(int x) : Base(x) is a PrimaryConstructorBaseTypeSyntax, not a ConstructorInitializerSyntax.
+        using var workspace = new AdhocWorkspace();
+        var original = Build(workspace, (MainProject, PathMain, Lines(
+            "namespace N",
+            "{",
+            "    public class Base { public Base(long x) { } }",
+            "    public class Derived(int x) : Base(1) { }",
+            "}")));
+        var trial = Build(workspace, (MainProject, PathMain, Lines(
+            "namespace N",
+            "{",
+            "    public class Base { public Base(long x) { } public Base(int x) { } }",
+            "    public class Derived(int x) : Base(1) { }",
+            "}")));
+
+        var result = await CallBindingCheck.CheckAsync(original, trial, new CallBindingScope(new[] { "Base" }));
+
+        Assert.That(result.Status, Is.EqualTo(CallBindingCheckStatus.Discrepancies));
+        Assert.That(result.Discrepancies, Has.Count.EqualTo(1));
+        var discrepancy = result.Discrepancies[0];
+        Assert.That(discrepancy.Kind, Is.EqualTo(CallBindingDiscrepancyKind.BindsElsewhere));
+        Assert.That(discrepancy.Name, Is.EqualTo("new Base"));
+        Assert.That(discrepancy.CallText, Does.Contain("Base(1)"));
+        Assert.That(discrepancy.ExpectedIds, Is.EqualTo(new[] { "M:N.Base.#ctor(System.Int64)" }));
+    }
+
+    [Test]
     public async Task FormatRefusal_DefaultCap_ShowsTenOfTwelveWithOverflowLineAsync()
     {
         using var workspace = new AdhocWorkspace();

@@ -1992,13 +1992,15 @@ public class MemberRefactoringEngine
         var insertedDescription = DescribeParsedMember(newMember);
         //newMember = newMember.WithAddedByComment("InsertMemberAfter");
         var insertIndex = ResolveInsertAnchorIndex(filePath, typeDecl, containerName, "insertAfterMemberName", afterMemberName) + 1;
+        var updatedText = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(document, root!, typeDecl, insertIndex, newMember, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
+        await AddMemberCallBindingCheck.RequireKeepsBindingsAsync(solution, document, typeDecl, newMember, insertIndex, updatedText, cancellationToken);
 
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = $"// Added {insertedDescription}.",
-            UpdatedText = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(document, root!, typeDecl, insertIndex, newMember, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
+            UpdatedText = updatedText
         };
     }
 
@@ -2050,13 +2052,15 @@ public class MemberRefactoringEngine
         var insertedDescription = DescribeParsedMember(newMember);
         //newMember = newMember.WithAddedByComment("InsertMemberBefore");
         var insertIndex = ResolveInsertAnchorIndex(filePath, typeDecl, containerName, "insertBeforeMemberName", beforeMemberName);
+        var updatedText = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(document, root!, typeDecl, insertIndex, newMember, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
+        await AddMemberCallBindingCheck.RequireKeepsBindingsAsync(solution, document, typeDecl, newMember, insertIndex, updatedText, cancellationToken);
 
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = $"// Added {insertedDescription}.",
-            UpdatedText = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(document, root!, typeDecl, insertIndex, newMember, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
+            UpdatedText = updatedText
         };
     }
 
@@ -2438,15 +2442,16 @@ public class MemberRefactoringEngine
             throw new ToolInvalidArgumentException($"newMemberSource is invalid: {trailingIssue}");
         }
 
-        // TODO Member addMember could use CallBindingCheck: a new overload can capture existing calls
         var addedDescription = DescribeParsedMember(newMember);
         //newMember = newMember.WithAddedByComment("AddMember");
+        var updatedText = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(document, root!, typeContainer, typeContainer.Members.Count, newMember, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
+        await AddMemberCallBindingCheck.RequireKeepsBindingsAsync(solution, document, typeContainer, newMember, typeContainer.Members.Count, updatedText, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = $"// Added {addedDescription}.",
-            UpdatedText = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(document, root!, typeContainer, typeContainer.Members.Count, newMember, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
+            UpdatedText = updatedText
         };
     }
 
@@ -2687,8 +2692,8 @@ public class MemberRefactoringEngine
 
     /// <summary>
     /// Refuses oldMember keep-mode requests this slice cannot honour, before any route runs or any write.
-    /// With oldMember remove it only rejects a forwarderReceiver, which would otherwise be a silent no-op.
-    /// Generic methods are eligible; extension methods, virtual/abstract/override and interface-implementing methods are refused.
+    /// With oldMember remove it rejects a forwarderReceiver (which would otherwise be a silent no-op) and any extension method.
+    /// Generic methods are eligible; extension methods (every mode), virtual/abstract/override and interface-implementing methods are refused.
     /// </summary>
     private static void RequireKeepModeEligible(MoveMemberOldMember oldMember, string? forwarderReceiver, IReadOnlyList<MemberDeclarationSyntax> membersToMove, string className, string targetClassName, bool targetIsBaseType, INamedTypeSymbol? classSymbol, SemanticModel? semanticModel, CancellationToken cancellationToken)
     {
@@ -2697,6 +2702,14 @@ public class MemberRefactoringEngine
             if (forwarderReceiver != null)
             {
                 throw new ToolInvalidArgumentException("forwarderReceiver needs oldMember keepDelegator or keepAsDeprecatedWrapper. With oldMember remove the source member is deleted and there is no forwarder to receive it. Omit forwarderReceiver or choose a keep mode.");
+            }
+
+            // D7: extension methods are refused in every mode. A reduced call ("a".Foo(1)) has no class qualifier to retarget, so the
+            // static-move call-site rewrite would turn it into Target.Foo(1) and drop the receiver (CS7036). Syntactic check, no model needed.
+            var extension = membersToMove.OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.ParameterList.Parameters.Count > 0 && m.ParameterList.Parameters[0].Modifiers.Any(SyntaxKind.ThisKeyword));
+            if (extension != null)
+            {
+                throw new ToolNotImplementedException($"MoveMember does not support extension method '{extension.Identifier.Text}': its reduced calls (receiver.{extension.Identifier.Text}(...)) have no class qualifier to retarget, so the call-site rewrite would drop the receiver. Nothing was written. Move a non-extension method, or " + ToolCallHint.Next("MoveType", "to move the whole extension class instead."));
             }
 
             return;
