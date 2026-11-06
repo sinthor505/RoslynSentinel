@@ -481,6 +481,7 @@ public class LargeResultPagingAgentTests
     /// server, and the model must follow the largeResult pointer with GetLargeResult to find the needle.
     /// </summary>
     [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_PagesLargeResultToFindNeedle()
     {
         await StartHarnessAsync(BlockedToolNames, blockReadFileMemberLookup: false);
