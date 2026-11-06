@@ -165,6 +165,14 @@ public static class ToolErrorCode
     public const string ScopedLedgerBlocked = "ScopedLedgerBlocked";
 
     /// <summary>
+    /// The write chokepoint refused a batch because a different agent wrote one of the target files after this call
+    /// started (see EditAttributionLedger). Nothing was written. The message names the writer. Distinct from
+    /// <see cref="ScopedLedgerBlocked"/> (an open scoped operation ledger) and <see cref="SessionHalted"/> (the whole
+    /// session is halted).
+    /// </summary>
+    public const string ConcurrentEditRefused = "ConcurrentEditRefused";
+
+    /// <summary>
     /// The operation was cancelled before it finished.
     /// </summary>
     public const string Cancelled = "Cancelled";

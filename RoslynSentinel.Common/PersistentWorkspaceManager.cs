@@ -1848,6 +1848,13 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 throw new SolutionNotLoadedException("Solution not loaded.");
             }
 
+            // Another agent wrote a target after this call started: refuse the whole batch before any write.
+            var conflict = CheckConcurrentEditConflict(changes.Keys.Concat(deletePaths).Select(p => (string)p), exactRestore);
+            if (conflict is not null)
+            {
+                return conflict;
+            }
+
             // ── Pre-image capture ─────────────────────────────────────────────
             // Read every file BEFORE writing. null means the file did not previously
             // exist (undo should delete it rather than restore content).
@@ -2156,6 +2163,76 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     }
                 });
             }
+        }
+    }
+
+    /// <summary>
+    /// Refuses a batch when a different agent wrote one of its targets after the current call started (see
+    /// <see cref="EditAttributionLedger"/>). Returns null when the write may proceed. A check failure is logged and the
+    /// write proceeds, so this check never blocks a write on its own.
+    /// </summary>
+    private ApplyChangesResult? CheckConcurrentEditConflict(IEnumerable<string> targets, bool exactRestore)
+    {
+        try
+        {
+            // Undo restores a pre-image rather than a new agent edit; a later step handles it.
+            if (exactRestore)
+            {
+                return null;
+            }
+
+            var ctx = ToolCallContext.Current;
+            if (ctx is null || ctx.AgentId is null)
+            {
+                return null;
+            }
+
+            var conflicts = new Dictionary<FilePathWrapper, string>();
+            string? firstPath = null;
+            foreach (var target in targets)
+            {
+                var latest = _editAttributions.GetLatest(target);
+                if (latest is null
+                    || latest.Seq <= ctx.StartSeq
+                    || latest.AgentId is null
+                    || string.Equals(latest.AgentId, ctx.AgentId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var writer = $"Written by agent '{latest.AgentId}'"
+                    + (string.IsNullOrEmpty(latest.AgentType) ? string.Empty : $" ({latest.AgentType})")
+                    + $" via {latest.Tool ?? "an unknown tool"} at {latest.UtcTime:HH:mm:ss}Z"
+                    + (string.IsNullOrEmpty(latest.Reason) ? string.Empty : $": \"{latest.Reason}\"");
+                conflicts[(FilePathWrapper)target] = writer;
+                firstPath ??= target;
+            }
+
+            if (conflicts.Count == 0 || firstPath is null)
+            {
+                return null;
+            }
+
+            var writers = string.Join("; ", conflicts.Values);
+            return new ApplyChangesResult(
+                true,
+                [],
+                conflicts,
+                $"Refused - {conflicts.Count} target file(s) were changed by another agent after this call started; nothing was written. " +
+                $"{writers}. Next: re-read the file with {ToolCallHint.Call("ReadFile", ("filePath", firstPath))}, check that your change still applies, then retry. " +
+                "If your change conflicts with the other agent's slice, stop and report to your dispatcher with a line starting MULTI-AGENT: and the writer named above.",
+                WorkspaceInSync: true,
+                WorkspaceVersion: _workspaceVersion,
+                RefusalCode: ToolErrorCode.ConcurrentEditRefused);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning(ex, "Concurrent edit check failed; the write proceeds.");
+            }
+
+            return null;
         }
     }
 
