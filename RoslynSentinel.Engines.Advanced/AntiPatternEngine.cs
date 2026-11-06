@@ -2789,7 +2789,7 @@ public class AntiPatternEngine
         return false;
     }
 
-    public async Task<DocumentEditResult> GenerateCallTreeAsync(FilePathWrapper filePath, string methodName, int depth = 3, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> GenerateCallTreeAsync(FilePathWrapper filePath, string methodName, int depth = 3, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
@@ -2836,7 +2836,14 @@ public class AntiPatternEngine
             });
         }
 
-        var methodNode = candidateMethods.FirstOrDefault();
+        // Same resolution as GetCallGraph forward/reverse: a snippet selects the overload, several declarations without one are ambiguous.
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        var matchingNodes = candidateMethods.ToHashSet();
+        var candidates = root is null
+            ? []
+            : SyntaxTargetResolver.ResolveCandidates(root, sourceText, actualMethodName, cancellationToken)
+                .Where(c => c.Kind == CandidateKind.Method && c.Node is MethodDeclarationSyntax m && matchingNodes.Contains(m)).ToList();
+        var methodNode = SymbolNavigationEngine.ResolveCallGraphMethod(candidates, sourceText, filePath, methodName, "tree", contextSnippet, lineBefore, lineAfter);
         if (methodNode == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations named '{actualMethodName}' with class filter '{className}'. Next: {ToolCallHint.Call("Search", ("mode", "method"), ("query", actualMethodName))} to locate it.", "method", actualMethodName);

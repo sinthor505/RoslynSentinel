@@ -174,9 +174,10 @@ public class Svc { public void Foo() {} }";
     {
         const string source = "public class C { public void M() {} }";
         SetSource(source, "C.cs");
-        var result = await _refactoringEngine.ChangeSignatureAsync("C.cs", "M", new SignatureParameterSpec[] { new NewParameterSpec("x", "int", "0") });
-        Assert.That(result.Changes, Is.Empty);
-        Assert.That(result.Error, Does.Contain("declares no parameters"));
+        // A deliberate refusal of the target: thrown (maps to TargetIneligible) before anything is planned or written.
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => _refactoringEngine.ChangeSignatureAsync("C.cs", "M", new SignatureParameterSpec[] { new NewParameterSpec("x", "int", "0") }));
+        Assert.That(ex!.Message, Does.Contain("declares no parameters"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
     }
 
     [Test]

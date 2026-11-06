@@ -1166,6 +1166,15 @@ public class SymbolNavigationEngine
     {
         var candidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, methodName, cancellationToken)
             .Where(c => c.Kind == CandidateKind.Method).ToList();
+        return ResolveCallGraphMethod(candidates, sourceText, filePath, methodName, direction, contextSnippet, lineBefore, lineAfter);
+    }
+
+    /// <summary>
+    /// Candidate-list form of <c>ResolveCallGraphMethod</c> (public so the tree direction in Engines.Advanced shares it): the caller
+    /// supplies the method candidates already filtered (for example by class); <paramref name="methodName"/> only feeds the retry hint.
+    /// </summary>
+    public static MethodDeclarationSyntax? ResolveCallGraphMethod(List<SyntaxNodeCandidate> candidates, SourceText sourceText, FilePathWrapper filePath, string methodName, string direction, string? contextSnippet, string? lineBefore, string? lineAfter)
+    {
         if (!string.IsNullOrWhiteSpace(contextSnippet) || !string.IsNullOrWhiteSpace(lineBefore) || !string.IsNullOrWhiteSpace(lineAfter))
         {
             return SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,

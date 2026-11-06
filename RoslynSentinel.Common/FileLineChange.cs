@@ -10,15 +10,20 @@ namespace RoslynSentinel.Common;
 /// <param name="LinesRemoved">Lines present before but not after.</param>
 public record FileLineChange(string FilePath, int LinesAdded, int LinesRemoved)
 {
-    private const long MaxLcsCells = 16_000_000;
+    // Ceiling on the line edit distance (removed + added) that is still counted exactly. The exact count costs
+    // O((N + M) * D) time and O(D) memory, so this bounds the work (~D^2/2 diagonal steps plus the matching runs).
+    private const int MaxEditDistance = 8_000;
 
     /// <summary>
     /// Counts added/removed lines between <paramref name="before"/> and <paramref name="after"/>
     /// (null before = new file, so every line is added). Lines are compared INCLUDING their line
     /// terminator, so a CRLF to LF rewrite or a lost final newline shows up as changed lines instead
-    /// of being invisible. A pure LCS over the differing middle (common prefix/suffix lines are
-    /// trimmed first); when that middle is too large for the LCS table the whole middle is counted
-    /// as removed and re-added, which over-reports rather than hides a large rewrite.
+    /// of being invisible. The count is the minimal line edit (the diff behind a longest common
+    /// subsequence), computed with Myers' O(ND) algorithm over the differing middle (common
+    /// prefix/suffix lines are trimmed first), so it is exact for sparse edits at any file size: a
+    /// few changed lines in a 10,000 line file report a few lines. Only when the edit distance
+    /// (removed + added) exceeds <see cref="MaxEditDistance"/> is the whole middle counted as removed
+    /// and re-added, which over-reports rather than hides a large rewrite.
     /// </summary>
     public static FileLineChange Compute(string filePath, string? before, string? after)
     {
@@ -43,10 +48,15 @@ public record FileLineChange(string FilePath, int LinesAdded, int LinesRemoved)
         var oldMiddle = oldLines[prefix..(oldLines.Length - suffix)];
         var newMiddle = newLines[prefix..(newLines.Length - suffix)];
 
-        int common = (long)oldMiddle.Length * newMiddle.Length <= MaxLcsCells
-            ? LcsLength(oldMiddle, newMiddle)
-            : 0;
+        int editDistance = EditDistance(oldMiddle, newMiddle, MaxEditDistance);
+        if (editDistance < 0)
+        {
+            // Too different to count exactly within the work bound: over-report the whole middle.
+            return new FileLineChange(filePath, newMiddle.Length, oldMiddle.Length);
+        }
 
+        // removed + added = D and 2 * common = N + M - D, so the matched line count follows from D alone.
+        int common = (oldMiddle.Length + newMiddle.Length - editDistance) / 2;
         return new FileLineChange(filePath, newMiddle.Length - common, oldMiddle.Length - common);
     }
 
@@ -72,23 +82,68 @@ public record FileLineChange(string FilePath, int LinesAdded, int LinesRemoved)
         return lines.ToArray();
     }
 
-    private static int LcsLength(string[] a, string[] b)
+    /// <summary>
+    /// Minimal edit distance (lines removed + lines added) between two line sequences, by the forward pass of
+    /// Myers' O(ND) diff: each round d extends, on every diagonal k = x - y, the furthest point reachable with d
+    /// edits, sliding along runs of equal lines for free. Only the distance is needed, so no trace is kept and
+    /// memory is O(D). Returns -1 when the distance exceeds <paramref name="maxDistance"/>.
+    /// </summary>
+    private static int EditDistance(string[] oldLines, string[] newLines, int maxDistance)
     {
-        var previous = new int[b.Length + 1];
-        var current = new int[b.Length + 1];
-        for (int i = a.Length - 1; i >= 0; i--)
+        int n = oldLines.Length;
+        int m = newLines.Length;
+        if (n == 0 || m == 0)
         {
-            for (int j = b.Length - 1; j >= 0; j--)
-            {
-                current[j] = a[i] == b[j]
-                    ? previous[j + 1] + 1
-                    : Math.Max(previous[j], current[j + 1]);
-            }
-
-            (previous, current) = (current, previous);
-            Array.Clear(current);
+            return n + m <= maxDistance ? n + m : -1;
         }
 
-        return previous[0];
+        // Intern each distinct line to an int once, so the inner loop compares ints rather than strings.
+        var ids = new Dictionary<string, int>(StringComparer.Ordinal);
+        var a = Intern(oldLines, ids);
+        var b = Intern(newLines, ids);
+
+        int max = Math.Min(n + m, maxDistance);
+        int offset = max + 1;
+        var furthestX = new int[2 * max + 3];
+        for (int d = 0; d <= max; d++)
+        {
+            for (int k = -d; k <= d; k += 2)
+            {
+                int x = k == -d || (k != d && furthestX[offset + k - 1] < furthestX[offset + k + 1])
+                    ? furthestX[offset + k + 1]
+                    : furthestX[offset + k - 1] + 1;
+                int y = x - k;
+                while (x < n && y < m && a[x] == b[y])
+                {
+                    x++;
+                    y++;
+                }
+
+                furthestX[offset + k] = x;
+                if (x >= n && y >= m)
+                {
+                    return d;
+                }
+            }
+        }
+
+        return -1;
+    }
+
+    private static int[] Intern(string[] lines, Dictionary<string, int> ids)
+    {
+        var result = new int[lines.Length];
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (!ids.TryGetValue(lines[i], out int id))
+            {
+                id = ids.Count;
+                ids[lines[i]] = id;
+            }
+
+            result[i] = id;
+        }
+
+        return result;
     }
 }

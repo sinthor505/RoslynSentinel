@@ -174,17 +174,7 @@ public class IntelligenceTools
 
             if (direction == "tree")
             {
-                // TODO tree direction (AntiPatternEngine.GenerateCallTreeAsync) has no overload selection; it still picks by name alone
-                if (!string.IsNullOrWhiteSpace(contextSnippet) || !string.IsNullOrWhiteSpace(lineBefore) || !string.IsNullOrWhiteSpace(lineAfter))
-                {
-                    return new SentinelCallToolResult<object>
-                    {
-                        IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "contextSnippet, lineBefore and lineAfter apply to direction forward and reverse only; direction tree does not select an overload.")
-                    };
-                }
-
-                var result = await _antiPatternEngine.GenerateCallTreeAsync(resolvedFilePath, methodName, maxDepth, cancellationToken);
+                var result = await _antiPatternEngine.GenerateCallTreeAsync(resolvedFilePath, methodName, maxDepth, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 return new SentinelCallToolResult<object>
                 {
                     IsError = false,

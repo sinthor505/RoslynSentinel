@@ -97,6 +97,42 @@ public class AdvancedRefactoringTools
     private Task<ApplyOutcome> ValidateAndApplyAsync(Dictionary<FilePathWrapper, string> changes, string description, string operationName, bool dryRun = false, bool returnDiff = false, IProgress<EngineProgress>? progress = default, IReadOnlyCollection<FilePathWrapper>? removePaths = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null, IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits = null) => ValidateAndApplyHelper.ValidateAndApplyAsync(_validationEngine, _workspaceManager, _logger, changes, operationName, dryRun, returnDiff, progress, removePaths, cancellationToken: cancellationToken, deletePaths, describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct), expectedEdits: expectedEdits);
     private Task<string> BuildDiffAsync(Dictionary<FilePathWrapper, string> changes, CancellationToken cancellationToken = default) => ValidateAndApplyHelper.BuildDiffAsync(_workspaceManager, changes, cancellationToken);
     private static string BuildDiffFromPreImages(Dictionary<FilePathWrapper, string> changes, IReadOnlyDictionary<string, string?>? preImages) => ValidateAndApplyHelper.BuildDiffFromPreImages(changes, preImages);
+
+    /// <summary>
+    /// The ChangeSignature summary sentence, worded from what the new parameter list does to the old one: "Adds", "Removes" and/or "Reorders" (a new entry is an add;
+    /// an existing parameter missing from the list is a remove; kept parameters out of ascending index order is a reorder). Falls back to "Changes" when none of
+    /// those is detectable, e.g. the declaration could not be read.
+    /// </summary>
+    private static string DescribeSignatureChange(string methodName, IReadOnlyList<SignatureParameterSpec> specs, (int ParameterCount, bool IsConstructor)? targetShape, string fileName)
+    {
+        var keptIndexes = specs.OfType<ExistingParameterSpec>().Select(s => s.OriginalIndex).ToList();
+        var verbs = new List<string>();
+        if (specs.OfType<NewParameterSpec>().Any())
+        {
+            verbs.Add("adds");
+        }
+
+        if (targetShape is { } shape && keptIndexes.Count < shape.ParameterCount)
+        {
+            verbs.Add("removes");
+        }
+
+        if (keptIndexes.Zip(keptIndexes.Skip(1), (previous, next) => previous > next).Any(outOfOrder => outOfOrder))
+        {
+            verbs.Add("reorders");
+        }
+
+        var what = verbs.Count switch
+        {
+            0 => "Changes",
+            1 => verbs[0],
+            _ => string.Join(", ", verbs.Take(verbs.Count - 1)) + " and " + verbs[^1]
+        };
+        what = char.ToUpperInvariant(what[0]) + what[1..];
+        var target = targetShape is { IsConstructor: true } ? $"the '{methodName}' constructor" : $"'{methodName}'";
+        return $"{what} parameters of {target} in {fileName}.";
+    }
+
     [McpServerTool(Name = "ChangeSignature")]
     [Produces(DataTag.ResultOnly)]
     [Description("Reorders, adds, or removes method parameters and updates all call sites solution-wide. Refuses across an interface/implementer boundary - edit each side directly.")]
@@ -140,6 +176,8 @@ public class AdvancedRefactoringTools
                     ErrorData = new ResultError(ToolErrorCode.Exception, result.Error)
                 };
             var changes = result.Changes;
+            // Read before ValidateAndApplyAsync writes: after an apply the committed declaration already has the new parameter list.
+            var targetShape = await _refactoringEngine.GetChangeSignatureTargetShapeAsync(resolvedFilePath, methodName, contextSnippet, lineBefore, lineAfter, cancellationToken);
             // Reflection-style construction (ActivatorUtilities.CreateInstance and friends) compiles after a constructor change and fails at runtime: a Caution per site, in every outcome mode.
             var reflectiveSites = result.ReflectiveConstructionSites ?? [];
             var reflectiveFindings = reflectiveSites.Take(25)
@@ -152,7 +190,7 @@ public class AdvancedRefactoringTools
 
             if (!autoStage)
             {
-                var noStageSummaryNote = $"Reorders parameters of '{methodName}' in {Path.GetFileName(resolvedFilePath)}.";
+                var noStageSummaryNote = DescribeSignatureChange(methodName, specs, targetShape, Path.GetFileName(resolvedFilePath));
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
                     IsError = false,
@@ -168,7 +206,7 @@ public class AdvancedRefactoringTools
                     IsError = true,
                     ErrorData = apply.Error
                 };
-            var summaryNote = $"Reorders parameters of '{methodName}' in {Path.GetFileName(resolvedFilePath)}.";
+            var summaryNote = DescribeSignatureChange(methodName, specs, targetShape, Path.GetFileName(resolvedFilePath));
             var wrapperFindings = new List<Finding>();
             if (result.OldSignatureOutcome == ChangeSignatureOldSignature.remove)
             {

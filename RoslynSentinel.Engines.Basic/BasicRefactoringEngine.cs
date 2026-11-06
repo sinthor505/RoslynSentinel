@@ -167,6 +167,57 @@ public class BasicRefactoringEngine
         };
     }
 
+    /// <summary>
+    /// The method or constructor ChangeSignatureAsync would edit for these arguments (null when none matches), resolved exactly as ChangeSignatureAsync does:
+    /// an ambiguous name or an unmatched snippet throws the usual typed error.
+    /// </summary>
+    private static async Task<BaseMethodDeclarationSyntax?> FindChangeSignatureTargetAsync(Document document, CompilationUnitSyntax root, FilePathWrapper filePath, string methodName, string? contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken)
+    {
+        // BaseMethodDeclarationSyntax covers both ordinary methods and constructors, so a
+        // constructor target (matched by its class name, same as GetMethodSource/LocateSymbol
+        // already do for ctors) is found here too instead of silently falling through to
+        // emptyResult - see blocking_error_changesignature_silent_noop_on_valid_constructor.md.
+        var methodMatches = root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>()
+            .Where(m => m switch
+            {
+                MethodDeclarationSyntax method => method.Identifier.Text == methodName,
+                ConstructorDeclarationSyntax ctor => ctor.Identifier.Text == methodName,
+                _ => false
+            })
+            .ToList();
+        if (string.IsNullOrWhiteSpace(contextSnippet) && string.IsNullOrWhiteSpace(lineBefore) && string.IsNullOrWhiteSpace(lineAfter))
+        {
+            // No snippet: an ambiguous name stays Ambiguous, and the retry hint names the real narrowing parameter.
+            return RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName,
+                retryCall: firstLine => ToolCallHint.Call("ChangeSignature", ("filePath", filePath.ToString()), ("methodName", methodName), ("contextSnippet", firstLine)));
+        }
+
+        // A snippet selects the overload/constructor whose declaration contains it; none or several is the usual snippet error, never a first pick.
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        var candidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, methodName, cancellationToken)
+            .Where(c => c.Kind is CandidateKind.Method or CandidateKind.Constructor).ToList();
+        return SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode))?.Node as BaseMethodDeclarationSyntax;
+    }
+
+    /// <summary>
+    /// How many parameters the method or constructor ChangeSignatureAsync would edit declares today (null when the target is not found), read from the committed
+    /// solution. Call it before the change is applied; the tool uses it to say whether a change removed a parameter.
+    /// </summary>
+    public async Task<(int ParameterCount, bool IsConstructor)?> GetChangeSignatureTargetShapeAsync(FilePathWrapper filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
+        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var document = DocumentLookup.RequireDocument(solution, filePath);
+        if (await document.GetSyntaxRootAsync(cancellationToken) is not CompilationUnitSyntax root)
+        {
+            return null;
+        }
+
+        var target = await FindChangeSignatureTargetAsync(document, root, filePath, methodName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        return target is null ? null : (target.ParameterList.Parameters.Count, target is ConstructorDeclarationSyntax);
+    }
+
     public async Task<ChangeSignatureResult> ChangeSignatureAsync(FilePathWrapper filePath, string methodName, IReadOnlyList<SignatureParameterSpec> parameters, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default, ChangeSignatureOldSignature oldSignature = ChangeSignatureOldSignature.auto)
     {
         // oldSignature auto is resolved to remove or keepAsDeprecatedWrapper (wrapperMode, below) once the call sites are planned and BEFORE anything is
@@ -187,34 +238,7 @@ public class BasicRefactoringEngine
             return Refuse($"Could not load the syntax tree or semantic model for '{filePath}'. Nothing was changed.");
         }
 
-        // BaseMethodDeclarationSyntax covers both ordinary methods and constructors, so a
-        // constructor target (matched by its class name, same as GetMethodSource/LocateSymbol
-        // already do for ctors) is found here too instead of silently falling through to
-        // emptyResult - see blocking_error_changesignature_silent_noop_on_valid_constructor.md.
-        var methodMatches = root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>()
-            .Where(m => m switch
-            {
-                MethodDeclarationSyntax method => method.Identifier.Text == methodName,
-                ConstructorDeclarationSyntax ctor => ctor.Identifier.Text == methodName,
-                _ => false
-            })
-            .ToList();
-        BaseMethodDeclarationSyntax? methodDecl;
-        if (string.IsNullOrWhiteSpace(contextSnippet) && string.IsNullOrWhiteSpace(lineBefore) && string.IsNullOrWhiteSpace(lineAfter))
-        {
-            // No snippet: an ambiguous name stays Ambiguous, and the retry hint names the real narrowing parameter.
-            methodDecl = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName,
-                retryCall: firstLine => ToolCallHint.Call("ChangeSignature", ("filePath", filePath.ToString()), ("methodName", methodName), ("contextSnippet", firstLine)));
-        }
-        else
-        {
-            // A snippet selects the overload/constructor whose declaration contains it; none or several is the usual snippet error, never a first pick.
-            var sourceText = await document.GetTextAsync(cancellationToken);
-            var candidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, methodName, cancellationToken)
-                .Where(c => c.Kind is CandidateKind.Method or CandidateKind.Constructor).ToList();
-            methodDecl = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode))?.Node as BaseMethodDeclarationSyntax;
-        }
+        var methodDecl = await FindChangeSignatureTargetAsync(document, root, filePath, methodName, contextSnippet, lineBefore, lineAfter, cancellationToken);
 
         if (methodDecl == null)
         {
@@ -279,12 +303,13 @@ public class BasicRefactoringEngine
 
         if (originalParams.Count == 0)
         {
-            return Refuse($"'{methodName}' declares no parameters, and ChangeSignature cannot add a parameter to a parameterless method. Nothing was changed. Edit the declaration and its call sites directly."); // hint-ok: names the tool in prose, not a call to make
+            // Thrown, not returned: a deliberate refusal of this target maps to TargetIneligible (nothing has been planned or written yet).
+            throw new ToolTargetIneligibleException($"'{methodName}' declares no parameters, and ChangeSignature cannot add a parameter to a parameterless method. Nothing was changed. Edit the declaration and its call sites directly."); // hint-ok: names the tool in prose, not a call to make
         }
 
         if (parameters.Count == 0)
         {
-            return Refuse("The parameters list is empty, and ChangeSignature does not remove every parameter in one call. Nothing was changed. Edit the declaration and its call sites directly."); // hint-ok: names the tool in prose, not a call to make
+            throw new ToolTargetIneligibleException("The parameters list is empty, and ChangeSignature does not remove every parameter in one call. Nothing was changed. Edit the declaration and its call sites directly."); // hint-ok: names the tool in prose, not a call to make
         }
 
         // Validate: every ExistingParameterSpec.OriginalIndex must be in range and referenced at most once.
@@ -297,7 +322,7 @@ public class BasicRefactoringEngine
         // A removed parameter (an existing one absent from the new list) the body still uses would leave CS0103 behind: refuse before anything is planned, in every oldSignature mode.
         if (RefuseWhenRemovedParameterIsStillUsed(semanticModel, methodDecl, originalParams, existingIndexes, methodName, cancellationToken) is { } removedParameterStillUsed)
         {
-            return Refuse(removedParameterStillUsed);
+            throw new ToolTargetIneligibleException(removedParameterStillUsed);
         }
 
         // remove and auto hand every call site the new parameter's defaultValue as its fill-in argument, so a new parameter without one is refused up front
@@ -1106,6 +1131,7 @@ public class BasicRefactoringEngine
             var fix = check.Status == CallBindingCheckStatus.Discrepancies
                 ? " Fix for this change: pick a parameter list that does not make those calls applicable to another overload, rename or remove the competing overload first, or update those calls by hand before changing the signature."
                 : string.Empty;
+            // TODO rebind refusals show file paths with backslashes, unlike other results (paths come from declPath.ToString() and skippedSites FilePath.ToString())
             throw new ToolInvalidArgumentException(CallBindingCheck.FormatRefusal(check, $"change the signature of '{methodName}'") + fix);
         }
     }
@@ -2474,7 +2500,7 @@ public class BasicRefactoringEngine
         var docTrivia = target.GetLeadingTrivia().FirstOrDefault(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
         if (docTrivia == default)
         {
-            return (EditOutcome.NoCandidatesFound, $"No summary comment present on '{targetName}' in '{filePath}'. Next: AddSummaryComment to add one.", null);
+            return (EditOutcome.NoCandidatesFound, $"No summary comment present on '{targetName}' in '{filePath}'. Next: {ToolCallHint.Call("SummaryComment", ("operation", "add"), ("targetName", targetName), ("filePath", filePath))} to add one.", null);
         }
 
         var lines = docTrivia.ToFullString().Split('\n')

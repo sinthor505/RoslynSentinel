@@ -588,4 +588,87 @@ public class ChangeSignatureLayoutTests
         AssertNoBareLineFeed(after);
         AssertCompiles(after);
     }
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    public async Task ChangeSignatureLayout_CrlfConstructor_AddParameterWithDefault_OnlyDeclarationAndCallLinesChange()
+    {
+        var original = Lines(
+            "using System;",
+            "#nullable enable",
+            "",
+            "// Unrelated header comment.",
+            "public class Widget",
+            "{",
+            "    private readonly string _name;",
+            "",
+            "    public Widget(string name) { _name = name; }",
+            "",
+            "    // Factories.",
+            "    public static Widget A() => new Widget(\"a\");",
+            "    public static Widget B() => new Widget(\"b\");",
+            "    public static Widget C() => new Widget(",
+            "        \"c\");",
+            "",
+            "    public string Describe() => \"Widget \" + _name;",
+            "    public int Other(int x) => x + 1;",
+            "}");
+        // Zero-based indices of the lines the edit must change: the declaration and one line per call site.
+        int[] expectedChanged = [8, 11, 12, 14];
+        SetFile("Widget.cs", original);
+        var result = await ChangeAt("Widget.cs", "Widget", "public Widget(string name)", new ExistingParameterSpec(0), new NewParameterSpec("hint", "string?", "null"));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        Assert.That(result.SkippedCallSites, Is.Empty);
+        var after = result.Changes["Widget.cs"];
+        AssertNoBareLineFeed(after);
+        AssertCompiles(after);
+
+        var beforeLines = original.Split("\r\n");
+        var afterLines = after.Split("\r\n");
+        Assert.That(afterLines, Has.Length.EqualTo(beforeLines.Length), "The edit adds no lines");
+        var changed = Enumerable.Range(0, beforeLines.Length).Where(i => beforeLines[i] != afterLines[i]).ToArray();
+        Assert.That(changed, Is.EqualTo(expectedChanged), "Only the declaration and the call lines may differ; every other line stays byte-identical");
+
+        var change = FileLineChange.Compute("Widget.cs", original, after);
+        Assert.That(change.LinesAdded, Is.EqualTo(expectedChanged.Length));
+        Assert.That(change.LinesRemoved, Is.EqualTo(expectedChanged.Length));
+    }
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    public async Task ChangeSignatureLayout_CrlfConstructor_LargeFileWithDistantCallSites_ReportsOnlyTheEditedLines()
+    {
+        // A ~6000 line file with call sites near both ends: the differing middle is thousands of lines wide, which the
+        // line counter once reported in full (the whole span as removed and re-added).
+        var lines = new List<string> { "public class Widget", "{", "    public Widget(string name) { }", "    public static Widget First() => new Widget(\"first\");" };
+        for (int i = 0; i < 2900; i++)
+        {
+            lines.Add($"    public int Filler{i}() => {i};");
+            lines.Add(string.Empty);
+        }
+
+        lines.Add("    public static Widget Last() => new Widget(\"last\");");
+        lines.Add("}");
+        var original = Lines(lines.ToArray());
+        SetFile("Widget.cs", original);
+        var result = await ChangeAt("Widget.cs", "Widget", "public Widget(string name)", new ExistingParameterSpec(0), new NewParameterSpec("hint", "string?", "null"));
+
+        Assert.That(result.Error, Is.Null, result.Error);
+        Assert.That(result.SkippedCallSites, Is.Empty);
+        var after = result.Changes["Widget.cs"];
+        AssertNoBareLineFeed(after);
+
+        var beforeLines = original.Split("\r\n");
+        var afterLines = after.Split("\r\n");
+        Assert.That(afterLines, Has.Length.EqualTo(beforeLines.Length), "The edit adds no lines");
+        var changed = Enumerable.Range(0, beforeLines.Length).Where(i => beforeLines[i] != afterLines[i]).ToArray();
+        Assert.That(changed, Is.EqualTo(new[] { 2, 3, beforeLines.Length - 2 }), "Only the declaration and the two call lines may differ");
+
+        var change = FileLineChange.Compute("Widget.cs", original, after);
+        Assert.That(change.LinesAdded, Is.EqualTo(3));
+        Assert.That(change.LinesRemoved, Is.EqualTo(3));
+    }
 }

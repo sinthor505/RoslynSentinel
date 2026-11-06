@@ -64,10 +64,10 @@ public class ChangeSignatureRemovedParameterUseTests
             }
             """;
         SetFiles(("Foo.cs", source));
-        var result = await _refactoringEngine.ChangeSignatureAsync("Foo.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(0) });
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => _refactoringEngine.ChangeSignatureAsync("Foo.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(0) }));
 
-        Assert.That(result.Error, Is.EqualTo("Cannot remove parameter 'b' of 'M': it is still used in the body at Foo.cs:6. Make the body stop using it first, then retry the removal."));
-        Assert.That(result.Changes, Is.Empty, "A refused removal writes nothing");
+        Assert.That(ex!.Message, Is.EqualTo("Cannot remove parameter 'b' of 'M': it is still used in the body at Foo.cs:6. Make the body stop using it first, then retry the removal."));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible), "A refused removal throws before anything is planned or written");
     }
 
     [Test]
@@ -82,10 +82,10 @@ public class ChangeSignatureRemovedParameterUseTests
             }
             """;
         SetFiles(("Foo.cs", source));
-        var result = await _refactoringEngine.ChangeSignatureAsync("Foo.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(0) });
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => _refactoringEngine.ChangeSignatureAsync("Foo.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(0) }));
 
-        Assert.That(result.Error, Is.EqualTo("Cannot remove parameter 'b' of 'M': it is still used in the body at Foo.cs:3. Make the body stop using it first, then retry the removal."));
-        Assert.That(result.Changes, Is.Empty, "A refused removal writes nothing");
+        Assert.That(ex!.Message, Is.EqualTo("Cannot remove parameter 'b' of 'M': it is still used in the body at Foo.cs:3. Make the body stop using it first, then retry the removal."));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible), "A refused removal throws before anything is planned or written");
     }
 
     [Test]
@@ -104,10 +104,10 @@ public class ChangeSignatureRemovedParameterUseTests
             }
             """;
         SetFiles(("Foo.cs", source));
-        var result = await _refactoringEngine.ChangeSignatureAsync("Foo.cs", "Foo", new SignatureParameterSpec[] { new ExistingParameterSpec(0) });
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => _refactoringEngine.ChangeSignatureAsync("Foo.cs", "Foo", new SignatureParameterSpec[] { new ExistingParameterSpec(0) }));
 
-        Assert.That(result.Error, Is.EqualTo("Cannot remove parameter 'b' of 'Foo': it is still used in the body at Foo.cs:7. Make the body stop using it first, then retry the removal."));
-        Assert.That(result.Changes, Is.Empty, "A refused removal writes nothing");
+        Assert.That(ex!.Message, Is.EqualTo("Cannot remove parameter 'b' of 'Foo': it is still used in the body at Foo.cs:7. Make the body stop using it first, then retry the removal."));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible), "A refused removal throws before anything is planned or written");
     }
 
     [Test]
@@ -128,10 +128,10 @@ public class ChangeSignatureRemovedParameterUseTests
             }
             """;
         SetFiles(("Foo.cs", source));
-        var result = await _refactoringEngine.ChangeSignatureAsync("Foo.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(0) });
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => _refactoringEngine.ChangeSignatureAsync("Foo.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(0) }));
 
-        Assert.That(result.Error, Is.EqualTo("Cannot remove parameter 'b' of 'M': it is still used in the body at Foo.cs:6, Foo.cs:7. Make the body stop using it first, then retry the removal."));
-        Assert.That(result.Changes, Is.Empty, "A refused removal writes nothing");
+        Assert.That(ex!.Message, Is.EqualTo("Cannot remove parameter 'b' of 'M': it is still used in the body at Foo.cs:6, Foo.cs:7. Make the body stop using it first, then retry the removal."));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible), "A refused removal throws before anything is planned or written");
     }
 
     [Test]
@@ -146,10 +146,10 @@ public class ChangeSignatureRemovedParameterUseTests
             }
             """;
         SetFiles(("Foo.cs", source));
-        var result = await _refactoringEngine.ChangeSignatureAsync("Foo.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(0) });
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => _refactoringEngine.ChangeSignatureAsync("Foo.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(0) }));
 
-        Assert.That(result.Error, Is.EqualTo("Cannot remove parameter 'b' of 'M': it is still used in the body at Foo.cs:3. Make the body stop using it first, then retry the removal."));
-        Assert.That(result.Changes, Is.Empty, "A refused removal writes nothing");
+        Assert.That(ex!.Message, Is.EqualTo("Cannot remove parameter 'b' of 'M': it is still used in the body at Foo.cs:3. Make the body stop using it first, then retry the removal."));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible), "A refused removal throws before anything is planned or written");
     }
 
     [Test]
@@ -209,11 +209,11 @@ public class ChangeSignatureRemovedParameterUseTests
             }
             """;
         SetFiles(("Foo.cs", source));
-        var result = await _refactoringEngine.ChangeSignatureAsync("Foo.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(0) });
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => _refactoringEngine.ChangeSignatureAsync("Foo.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(0) }));
 
         var shown = string.Join(", ", Enumerable.Range(6, 10).Select(line => $"Foo.cs:{line}"));
-        Assert.That(result.Error, Is.EqualTo($"Cannot remove parameter 'b' of 'M': it is still used in the body at {shown} and 2 more. Make the body stop using it first, then retry the removal."));
-        Assert.That(result.Changes, Is.Empty, "A refused removal writes nothing");
+        Assert.That(ex!.Message, Is.EqualTo($"Cannot remove parameter 'b' of 'M': it is still used in the body at {shown} and 2 more. Make the body stop using it first, then retry the removal."));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible), "A refused removal throws before anything is planned or written");
     }
 
     [Test]
@@ -281,10 +281,10 @@ public class ChangeSignatureRemovedParameterUseTests
             }
             """;
         SetFiles(("Foo.cs", source));
-        var result = await _refactoringEngine.ChangeSignatureAsync("Foo.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(0) }, oldSignature: oldSignature);
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => _refactoringEngine.ChangeSignatureAsync("Foo.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(0) }, oldSignature: oldSignature));
 
-        Assert.That(result.Error, Is.EqualTo("Cannot remove parameter 'b' of 'M': it is still used in the body at Foo.cs:6. Make the body stop using it first, then retry the removal."));
-        Assert.That(result.Changes, Is.Empty, "A refused removal writes nothing");
+        Assert.That(ex!.Message, Is.EqualTo("Cannot remove parameter 'b' of 'M': it is still used in the body at Foo.cs:6. Make the body stop using it first, then retry the removal."));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible), "A refused removal throws before anything is planned or written");
     }
 
     [Test]

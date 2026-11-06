@@ -192,6 +192,7 @@ public sealed class AmbiguousNameTargetToolTests
     [Category("IntelligenceTools")]
     [TestCase("forward")]
     [TestCase("reverse")]
+    [TestCase("tree")]
     public async Task GetCallGraph_OverloadsWithoutSnippet_AmbiguousHintIsAValidGetCallGraphCall(string direction)
     {
         var original = "public class Worker\n{\n    public int Run(int a) => Add(a);\n    public int Run(string s) => Add(s.Length);\n    private int Add(int x) => x + 1;\n}\n".ReplaceLineEndings("\r\n");
@@ -219,6 +220,45 @@ public sealed class AmbiguousNameTargetToolTests
         Assert.That(node, Is.Not.Null);
         var callees = node!.Callees.Select(c => c.MethodName).ToList();
         Assert.That(callees, Is.EquivalentTo(new[] { "Measure" }), "Only the selected overload's callees belong in the graph.");
+    }
+
+    [Test]
+    [Category("IntelligenceTools")]
+    public async Task GetCallGraph_TreeOverloadsWithContextSnippet_ReturnsTheTreeOfThatOverloadOnly()
+    {
+        var original = "public class Worker\n{\n    public int Run(int a) => AddOne(a);\n    public int Run(string s) => Measure(s);\n    private int AddOne(int x) => x + 1;\n    private int Measure(string s) => s.Length;\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateIntelligenceTools(workspace.Manager);
+        var result = await tools.GetCallGraphTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Run", "tree", contextSnippet: "public int Run(string s)");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        var tree = (result.SuccessData as DocumentEditResult)?.UpdatedText ?? string.Empty;
+        Assert.That(tree, Does.Contain("Measure"), "The selected overload's callee belongs in the tree.");
+        Assert.That(tree, Does.Not.Contain("AddOne"), "The other overload's callee must not appear.");
+    }
+
+    [Test]
+    [Category("IntelligenceTools")]
+    public async Task GetCallGraph_TreeOverloadsWithUnmatchedContextSnippet_ReturnsSnippetNotFound()
+    {
+        var original = "public class Worker\n{\n    public int Run(int a) => AddOne(a);\n    public int Run(string s) => Measure(s);\n    private int AddOne(int x) => x + 1;\n    private int Measure(string s) => s.Length;\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateIntelligenceTools(workspace.Manager);
+        var result = await tools.GetCallGraphTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Run", "tree", contextSnippet: "public int Run(double d)");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData?.Message, Does.Contain("contextSnippet"));
+    }
+
+    [Test]
+    [Category("IntelligenceTools")]
+    public async Task GetCallGraph_TreeSingleMethodWithoutSnippet_StillReturnsItsTree()
+    {
+        var original = "public class Worker\n{\n    public int Run(int a) => AddOne(a);\n    private int AddOne(int x) => x + 1;\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateIntelligenceTools(workspace.Manager);
+        var result = await tools.GetCallGraphTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Run", "tree");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That((result.SuccessData as DocumentEditResult)?.UpdatedText, Does.Contain("AddOne"));
     }
 
     [Test]

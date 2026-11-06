@@ -172,8 +172,8 @@ public class RefactoringExtractionDocsImpl
         {
             if (operation == AddRemoveViewAction.view)
             {
-                var (_, _, text) = await _refactoringEngine.GetSummaryCommentAsync(filePathResolved, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken, preferredTarget: preferredTarget);
-                return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new SummaryCommentViewResult(text) };
+                var (_, message, text) = await _refactoringEngine.GetSummaryCommentAsync(filePathResolved, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken, preferredTarget: preferredTarget);
+                return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new SummaryCommentViewResult(text, message) };
             }
 
             if (operation == AddRemoveViewAction.add && string.IsNullOrEmpty(summaryText))
@@ -210,6 +210,8 @@ public class RefactoringExtractionDocsImpl
             if (RefactoringToolHelpers.RequireUpdatedText(updated, "SummaryComment", filePathResolved) is { } guardResult)
                 return guardResult;
 
+            // TODO SummaryComment dry run reports "Added XML summary comment" in statusMessage although nothing was written; word it "Would add" when dryRun
+            // TODO SummaryComment names only "to 'X'" (targetName), not the class or constructor the summary landed on; include the resolved target kind and containing type
             var description = operation == AddRemoveViewAction.add
                 ? $"Added XML summary comment to '{targetName}' in {Path.GetFileName(filePathResolved)}."
                 : $"Removed XML summary comment from '{targetName}' in {Path.GetFileName(filePathResolved)}.";

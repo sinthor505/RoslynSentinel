@@ -1,3 +1,4 @@
+using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tests.Support;
 using RoslynSentinel.Tools.Advanced;
@@ -52,6 +53,37 @@ public sealed class UsingDocsTypedMemberTests
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Is.EqualTo(CrlfSimpleSource));
         Assert.That(result.StatusMessage, Does.Not.Contain("Removed"));
+    }
+
+    [Test]
+    [Category("RefactoringExtractionDocsTools")]
+    public async Task SummaryComment_ViewConstructorWithNoSummary_ReturnsExplanationNotAnEmptyObject()
+    {
+        var original = "public class Widget\n{\n    public Widget(int x) { }\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Widget.cs", original));
+        var tools = BatteryToolFactory.CreateRefactoringExtractionDocsTools(workspace.Manager);
+        var result = await tools.SummaryCommentTool(reason: "test message", workspace.PathOf("Widget.cs"), AddRemoveViewAction.view, "Widget");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        var view = result.SuccessData as SummaryCommentViewResult;
+        Assert.That(view, Is.Not.Null);
+        Assert.That(view!.SummaryText, Is.Null);
+        Assert.That(view.Message, Does.Contain("No summary comment present").And.Contain("Widget"), "A missing summary must say so, not serialize as {}.");
+        Assert.That(workspace.ReadText("Widget.cs"), Is.EqualTo(original), "A view must not write.");
+    }
+
+    [Test]
+    [Category("RefactoringExtractionDocsTools")]
+    public async Task SummaryComment_ViewMemberWithSummary_ReturnsTextAndNoMessage()
+    {
+        var original = "public class Widget\n{\n    /// <summary>Builds a widget.</summary>\n    public Widget(int x) { }\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Widget.cs", original));
+        var tools = BatteryToolFactory.CreateRefactoringExtractionDocsTools(workspace.Manager);
+        var result = await tools.SummaryCommentTool(reason: "test message", workspace.PathOf("Widget.cs"), AddRemoveViewAction.view, "Widget");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        var view = result.SuccessData as SummaryCommentViewResult;
+        Assert.That(view, Is.Not.Null);
+        Assert.That(view!.SummaryText, Is.EqualTo("Builds a widget."));
+        Assert.That(view.Message, Is.Null);
     }
 
     // --- ExtractLocalVariableTool ---

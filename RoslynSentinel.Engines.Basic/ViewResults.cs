@@ -26,9 +26,10 @@ public record UsingDirectiveViewResult(IReadOnlyList<UsingDirectiveInfo> Usings)
 
 /// <summary>
 /// Result shape for SummaryComment(operation: view) - the XML summary comment text for a target,
-/// or null if it has none.
+/// or null if it has none. When there is none, Message carries the engine's explanation (and next step) so the
+/// serialized result is never an empty object; it is null (omitted) when a summary exists.
 /// </summary>
-public record SummaryCommentViewResult(string? SummaryText);
+public record SummaryCommentViewResult(string? SummaryText, string? Message = null);
 
 /// <summary>
 /// Result shape for MethodSignature(operation: view) - lists a method's parameters. NOT shared
