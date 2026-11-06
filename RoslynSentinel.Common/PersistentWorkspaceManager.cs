@@ -1768,6 +1768,17 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             }
         }
 
+        // Single-agent opener check: only the agent that opened the open ledger may write (see ScopedLedgerOpenerConflict).
+        if (!exactRestore && ScopedLedgerOpenerConflict() is { } openerConflict)
+        {
+            return new ApplyChangesResult(
+                IsError: true,
+                SucceededFiles: [],
+                FailedFiles: changes.Keys.Concat(deletePaths).Distinct().ToDictionary(t => t, _ => openerConflict),
+                Summary: $"Refused - {openerConflict}",
+                RefusalCode: ToolErrorCode.ScopedLedgerBlocked);
+        }
+
         // Scoped operation ledger (see docs/current/proposal_scoped_operation_ledger.md, Decision 2):
         // while a ledger is open, a target is refused unless it is one of the ledger's own tracked
         // files (IsBlocked deliberately allows those through, since that's exactly where RecordFix's
@@ -2822,10 +2833,68 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     }
 
     private readonly IScopedOperationLedger _ledger;
+    // Who opened the open scoped operation ledger, for the SingleAgent opener check; only meaningful while `_ledger.OpenOperationName` is not null.
+    private string? _ledgerOpenerAgentId;
+    private string? _ledgerOpenerAgentType;
+    private string? _ledgerOpenerTool;
+
+    // Single-agent opener check: while a ledger is open, only the agent that opened it may write.
+    private string? ScopedLedgerOpenerConflict()
+    {
+        try
+        {
+            if (AgentOperatingModeOptions.Effective != AgentOperatingMode.SingleAgent)
+            {
+                return null;
+            }
+
+            if (_ledger.OpenOperationName is null)
+            {
+                return null;
+            }
+
+            var ctx = ToolCallContext.Current;
+            if (_ledgerOpenerAgentId is null || ctx?.AgentId is null)
+            {
+                return null;
+            }
+
+            if (string.Equals(_ledgerOpenerAgentId, ctx.AgentId, StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            var openerType = string.IsNullOrEmpty(_ledgerOpenerAgentType) ? string.Empty : $" ({_ledgerOpenerAgentType})";
+            return $"The scoped operation ledger for '{_ledger.OpenOperationName}' was opened by agent '{_ledgerOpenerAgentId}'" + openerType + $" via {_ledgerOpenerTool ?? "an unknown tool"}; only that agent may write until it resolves the unresolved call sites. Wait for it, or if you must edit now, stop and report to your dispatcher with a line starting MULTI-AGENT: and the opener named above.";
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Scoped ledger opener check failed; allowing the write");
+            return null;
+        }
+    }
 
     // -- IScopedOperationLedger -- pass-through to the injected engine; see ScopedOperationLedgerEngine.
 
-    public bool TryOpen(string operationName, IReadOnlyList<LedgerEntryBase> entries, out string? rejectionReason, string? openingChangeId = null) => _ledger.TryOpen(operationName, entries, out rejectionReason, openingChangeId);
+    public bool TryOpen(string operationName, IReadOnlyList<LedgerEntryBase> entries, out string? rejectionReason, string? openingChangeId = null)
+    {
+        if (AgentOperatingModeOptions.Effective == AgentOperatingMode.MultiAgent)
+        {
+            rejectionReason = "Multi-step edits through a scoped operation ledger are refused in MultiAgent mode, because another agent could be editing the same files. Resolve the unresolved call sites in one step, or restart the server with --operating-mode=single-agent.";
+            return false;
+        }
+
+        var opened = _ledger.TryOpen(operationName, entries, out rejectionReason, openingChangeId);
+        if (opened)
+        {
+            var ctx = ToolCallContext.Current;
+            _ledgerOpenerAgentId = ctx?.AgentId;
+            _ledgerOpenerAgentType = ctx?.AgentType;
+            _ledgerOpenerTool = ctx?.ToolName;
+        }
+
+        return opened;
+    }
     public bool IsBlocked(FilePathWrapper filePath, out string? blockReason) => _ledger.IsBlocked(filePath, out blockReason);
     public void RecordFix(IReadOnlyList<string> entryIds, string changeId) => _ledger.RecordFix(entryIds, changeId);
     public void RecordUndo(string changeId) => _ledger.RecordUndo(changeId);

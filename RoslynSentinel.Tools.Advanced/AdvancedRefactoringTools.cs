@@ -496,6 +496,13 @@ public class AdvancedRefactoringTools
                 };
             }
 
+            // In MultiAgent mode another agent could edit the unresolved files between the steps of a multi-step
+            // edit, so refuse before anything is written. dryRun is unchanged.
+            if (!dryRun && AgentOperatingModeOptions.Effective == AgentOperatingMode.MultiAgent && result.PendingLedgerEntries is { Count: > 0 } multiAgentPending)
+            {
+                return UnresolvedCallSitesResult(multiAgentPending, "MultiAgent mode: a move that leaves call sites unresolved needs a multi-step edit, which is refused here, so nothing was written. ");
+            }
+
             var apply = await ValidateAndApplyAsync(result.Changes, $"Move [{string.Join(", ", memberNames)}] from '{className}' to '{targetClassName}'.", "MoveMember", dryRun, returnDiff, cancellationToken: cancellationToken, expectedEdits: result.AppliedEdits);
             if (apply.Error is not null)
             {
@@ -517,15 +524,7 @@ public class AdvancedRefactoringTools
                 // caller can retry with a correct callSiteFixups entry rather than guessing.
                 if (result.PendingLedgerEntries is { Count: > 0 } unresolvedEntries)
                 {
-                    // Detail must echo e.FilePath verbatim (not Path.GetFileName): that full path is the
-                    // literal callSiteFixups key MoveInstanceMembersAsync matches against
-                    // ("{row.FilePath}:{row.Line}") - a bare filename here would silently never match.
-                    var detail = string.Join("; ", unresolvedEntries.Select(e => $"{e.FilePath}:{e.Line} [{e.BrokenExpression}] {e.Status} ({e.BlockReason})" + (e.CandidatesInScope.Count > 0 ? $" - candidates in scope: {string.Join(", ", e.CandidatesInScope)}" : "") + (e.SuggestedFix != null ? $" - suggested fix: {e.SuggestedFix}" : "")));
-                    return new SentinelCallToolResult<AppliedChangeSummary>
-                    {
-                        IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.UnresolvedCallSites, $"{unresolvedEntries.Count} call site(s) could not be automatically rewritten, so the move was rejected. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) for each site, or \"FilePath:*\" / \"*\" to apply one value to every unresolved site in a file / everywhere.", detail, unresolvedEntries.Cast<object>().ToList())
-                    };
+                    return UnresolvedCallSitesResult(unresolvedEntries, string.Empty);
                 }
 
                 if (result.SkippedCallSites.Count > 0)
@@ -588,6 +587,23 @@ public class AdvancedRefactoringTools
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "MoveMember")
             };
         }
+    }
+
+    /// <summary>
+    /// Builds the UnresolvedCallSites refusal for a move whose call sites the engine could not rewrite.
+    /// messagePrefix is prepended to the standard message (empty for the default refusal).
+    /// </summary>
+    private static SentinelCallToolResult<AppliedChangeSummary> UnresolvedCallSitesResult(IReadOnlyList<CallSiteLedgerEntry> unresolvedEntries, string messagePrefix)
+    {
+        // Detail must echo e.FilePath verbatim (not Path.GetFileName): that full path is the
+        // literal callSiteFixups key MoveInstanceMembersAsync matches against
+        // ("{row.FilePath}:{row.Line}") - a bare filename here would silently never match.
+        var detail = string.Join("; ", unresolvedEntries.Select(e => $"{e.FilePath}:{e.Line} [{e.BrokenExpression}] {e.Status} ({e.BlockReason})" + (e.CandidatesInScope.Count > 0 ? $" - candidates in scope: {string.Join(", ", e.CandidatesInScope)}" : "") + (e.SuggestedFix != null ? $" - suggested fix: {e.SuggestedFix}" : "")));
+        return new SentinelCallToolResult<AppliedChangeSummary>
+        {
+            IsError = true,
+            ErrorData = new ResultError(ToolErrorCode.UnresolvedCallSites, messagePrefix + $"{unresolvedEntries.Count} call site(s) could not be automatically rewritten, so the move was rejected. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) for each site, or \"FilePath:*\" / \"*\" to apply one value to every unresolved site in a file / everywhere.", detail, unresolvedEntries.Cast<object>().ToList())
+        };
     }
 
     /// <summary>
