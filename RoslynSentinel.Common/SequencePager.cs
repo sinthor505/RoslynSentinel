@@ -7,8 +7,9 @@ using Microsoft.Extensions.Logging;
 namespace RoslynSentinel.Common;
 
 /// <summary>
-/// Pure sequence pager for a tool result's wire envelope (proposal_sequence_pager.md, slices 3, 4 and the type part of
-/// 7; not wired into the marshaller or <c>GetLargeResult</c> yet). Every pageable result is one ordered sequence of
+/// Pure sequence pager for a tool result's wire envelope, used by <see cref="ToolResultMarshaller"/> for the first page and
+/// by <c>GetLargeResult</c> for later ones (docs/current/references/reference_tool_response_pipeline.md;
+/// design: proposal_sequence_pager.md). Every pageable result is one ordered sequence of
 /// units (array elements, or lines of the one large string) and every unit fits under the size cap.
 /// <see cref="ResolveSequence"/> picks the sequence, <see cref="BuildPage"/> builds one page of it. The input envelope
 /// is never modified.

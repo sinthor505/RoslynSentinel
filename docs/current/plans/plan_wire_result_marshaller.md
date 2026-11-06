@@ -1,44 +1,11 @@
 # Plan: one result marshaller at the SDK MarshalResult seam owns offload, paging, metadata and serialization
 
-**Status:** APPROVED 2026-11-02. In progress. Step 0 package bump landed (3ed8568d; SDK 2.3.0, MEAI 10.11.0, build and
-suite verified 2026-11-02, live restart checks pending). Step 1 implemented 2026-11-02 (switch default `off`; `MarshalResult`
-receives the awaited value and declared `T` on MEAI 10.11.0). Step 2 implemented 2026-11-02 (`MarshalAsync` gained a `serializerOptions` parameter; live passthrough
-check pending). Step 3 implemented 2026-11-02 (pager and synthetic goldens, not wired). Step 4 implemented 2026-11-02 (mode `on` store, pointer, Envelope reader; `GetLargeResult` cannot read
-Envelope files until Step 5). Step 5 implemented 2026-11-02 (`GetLargeResult` `path`; needs restart for live use).
-Step 6 implemented 2026-11-02 (default `on`; verified live on a LaunchTestInstance copy: Git diff cut to 150/477 lines
-with a pointer, paged by path in 4 pages and concatenated equal to the stored node; small results and legacy-offloaded
-Search unchanged; ModelEval smoke run and restart-on-own-instance pending). Step 7 mostly implemented 2026-11-03 (helpers obsolete
-pass-throughs; 26 `ForPossiblyLargeDataAsync` and 4 `ForPossiblyLargeDetailAsync` callers converted; Asyncify scan and
-`GetPublicApiSurface` stores removed; `[ResultRecords]` on `TextSearchResult.LiteralResults`). Step 7 slice 1 landed
-2026-11-03 (01e569e1): the `ReadFile` whole-file and `GetMethodSource` direct stores are gone (source returned inline,
-marshaller cuts it); `TrimRangeToInlineBudget` and the ranged-read branch are deliberately KEPT (user decision: ranged
-reads keep their deterministic `startLine` continuation and a truthful `endLine`). Live after restart: `Git(diff)` 710
-lines cut to 174, `Search(text)` 1387 items cut to 30 (declared hint), `GetLargeResult` paged both by path;
-`GetMethodSource` of a 366-line method cut to 137 lines. Open observation: a whole-file `ReadFile` of a 312 KB file
-returns only 15 source lines because the attached `fileOutline` (~13 KB) uses the budget; decide whether to drop the
-outline or let the pager cut it. Step 7 still open: `[ResultRecords]` for Search references/callers/implementations
-(anonymous objects need a named record, a wire-shape decision) and bare-list tools (pager infers); Step 6 ModelEval
-smoke run DONE 2026-11-03 with the dedicated test `LargeResultPaging` (`Model_PagesLargeResultToFindNeedle`, 300-method
-file, `qwen3.5-9b-coder`, host 113; `SizeThreshold -Size 60` on 112 was inconclusive: an 8 KB target never overflowed).
-Before slice 2 the model ignored the pointer (pointer was the last key, vague text, `fileOutline` left 1 of 2105 source
-lines) and invented a rate; slice 2 (df2d912b: pointer first key, `INCOMPLETE:` message with a ready `GetLargeResult(...,
-path: ...)` call, no outline on a large `ReadFile`) gave 3/3 passes: the first `ReadFile` keeps 308 lines, every run
-followed the pointer and answered correctly, but none reached the needle by paging (pages of 50-200 lines; they switched
-to `Search`). Slice 3 (a88a8a79): `GetLargeResult` `limit` defaults to null, so an Envelope page fills the size budget
-(160 lines live vs 50; a given `limit` stays an upper bound; legacy stored types keep 50; no "Page shrunk" warning
-without a `limit`); the first test run failed because the `WorkspaceTools.GetLargeResultTool` delegator kept its own
-`limit = 50`. Constrained test `LargeResultPagingReadFileOnly` (c29f5ff5; Search, GetFileOutline, GetMethodSource and
-other lookups refused by the request filter) passed 3/3 on host 113: the model paged to the needle page every run
-(offsets 884/900/908). Both ModelEval tests always passed `limit` (100-500, clipped to ~288 lines by the budget), so
-the omitted-`limit` path is covered by unit tests T18-T20 only. Step 6 live checks 2026-11-04: a large ERROR result
-(156 KB `Member` ValidationFailed) is cut with a pointer (`errorData.detail` 1/600 lines, `errorData.structuredDetail`
-35/200 items, `inferred`) and pages with no `limit` (89 lines); `Build` with 60 errors is ~7 KB (errors capped at 20 by
-`maxDetails`), so it never reaches the marshaller; its `errorSummary.byProject` reads "(unknown)" (separate issue).
-Still not run: SemanticFindReplace preview (tool hidden in the same session after `McpToolsetControl(moveExtract)`;
-needs a fresh session). Step 7's remaining `[ResultRecords]` item for Search callers/implementations/references is now
-a design proposal: [proposal_search_relationship_result_dtos.md](../proposals/proposal_search_relationship_result_dtos.md)
-(inference already gives the same message and counts; the open question is named DTOs for identification). Supersedes
-[plan_typed_large_result_offload.md](plan_typed_large_result_offload.md) and
+**Status:** APPROVED 2026-11-02. In progress: Steps 0-6 done with the marshaller on by default, Step 7 mostly done; next are Step 7's remainder and Step 8.
+
+How it works now, including `SequencePager` (built later from
+[proposal_sequence_pager.md](../proposals/proposal_sequence_pager.md), and running before `ResultPager.Fit`):
+[reference_tool_response_pipeline.md](../references/reference_tool_response_pipeline.md). Step history and live checks:
+[Progress log](#progress-log). Supersedes [plan_typed_large_result_offload.md](plan_typed_large_result_offload.md) and
 [proposal_central_large_result_offload.md](../proposals/proposal_central_large_result_offload.md), and subsumes
 change #5 of `proposal_envelope_field_promotion.md` (inline first page plus `resultId`).
 
@@ -270,7 +237,7 @@ enum value.
   obsolete helpers, the bare id fields, `SentinelCallToolResult.LargeResult` (the marshaller writes the key) and
   the filter's `GetLargeResult` name exemption. The filter stays as a backstop that only fires on bodies the
   marshaller never saw (exception catch-all, refusals), logged at error level.
-- Done when: Build 0 errors, no CS0618 from this plan, full suite green; plan closed with `Closes:` and the two
+- Done when: Build 0 errors, no CS0618 from this plan, full suite green; the "Migration state" section of `reference_tool_response_pipeline.md` removed; plan closed with `Closes:` and the two
   superseded docs moved to `closed/`.
 
 ### Step 11 - DTO ratchet (G4, independent of offload)
@@ -314,3 +281,49 @@ enum value.
   wraps the call, so the hook runs inside it; verify one task-mode call and the HTTP host in Step 1 / Step 6.
 - **Wire compatibility.** `SubAgentEvalResult.ResolveOffloadedResult`, `ModelAgentRunner` (`_offloaded` stub) and
   key-pinning tests read today's shapes; all changes before Step 10 are additive.
+
+## Progress log
+
+The former Status text, kept as written (dates are in the text).
+
+**Status:** APPROVED 2026-11-02. In progress. Step 0 package bump landed (3ed8568d; SDK 2.3.0, MEAI 10.11.0, build and
+suite verified 2026-11-02, live restart checks pending). Step 1 implemented 2026-11-02 (switch default `off`; `MarshalResult`
+receives the awaited value and declared `T` on MEAI 10.11.0). Step 2 implemented 2026-11-02 (`MarshalAsync` gained a `serializerOptions` parameter; live passthrough
+check pending). Step 3 implemented 2026-11-02 (pager and synthetic goldens, not wired). Step 4 implemented 2026-11-02 (mode `on` store, pointer, Envelope reader; `GetLargeResult` cannot read
+Envelope files until Step 5). Step 5 implemented 2026-11-02 (`GetLargeResult` `path`; needs restart for live use).
+Step 6 implemented 2026-11-02 (default `on`; verified live on a LaunchTestInstance copy: Git diff cut to 150/477 lines
+with a pointer, paged by path in 4 pages and concatenated equal to the stored node; small results and legacy-offloaded
+Search unchanged; ModelEval smoke run and restart-on-own-instance pending). Step 7 mostly implemented 2026-11-03 (helpers obsolete
+pass-throughs; 26 `ForPossiblyLargeDataAsync` and 4 `ForPossiblyLargeDetailAsync` callers converted; Asyncify scan and
+`GetPublicApiSurface` stores removed; `[ResultRecords]` on `TextSearchResult.LiteralResults`). Step 7 slice 1 landed
+2026-11-03 (01e569e1): the `ReadFile` whole-file and `GetMethodSource` direct stores are gone (source returned inline,
+marshaller cuts it); `TrimRangeToInlineBudget` and the ranged-read branch are deliberately KEPT (user decision: ranged
+reads keep their deterministic `startLine` continuation and a truthful `endLine`). Live after restart: `Git(diff)` 710
+lines cut to 174, `Search(text)` 1387 items cut to 30 (declared hint), `GetLargeResult` paged both by path;
+`GetMethodSource` of a 366-line method cut to 137 lines. Open observation: a whole-file `ReadFile` of a 312 KB file
+returns only 15 source lines because the attached `fileOutline` (~13 KB) uses the budget; decide whether to drop the
+outline or let the pager cut it. Step 7 still open: `[ResultRecords]` for Search references/callers/implementations
+(anonymous objects need a named record, a wire-shape decision) and bare-list tools (pager infers); Step 6 ModelEval
+smoke run DONE 2026-11-03 with the dedicated test `LargeResultPaging` (`Model_PagesLargeResultToFindNeedle`, 300-method
+file, `qwen3.5-9b-coder`, host 113; `SizeThreshold -Size 60` on 112 was inconclusive: an 8 KB target never overflowed).
+Before slice 2 the model ignored the pointer (pointer was the last key, vague text, `fileOutline` left 1 of 2105 source
+lines) and invented a rate; slice 2 (df2d912b: pointer first key, `INCOMPLETE:` message with a ready `GetLargeResult(...,
+path: ...)` call, no outline on a large `ReadFile`) gave 3/3 passes: the first `ReadFile` keeps 308 lines, every run
+followed the pointer and answered correctly, but none reached the needle by paging (pages of 50-200 lines; they switched
+to `Search`). Slice 3 (a88a8a79): `GetLargeResult` `limit` defaults to null, so an Envelope page fills the size budget
+(160 lines live vs 50; a given `limit` stays an upper bound; legacy stored types keep 50; no "Page shrunk" warning
+without a `limit`); the first test run failed because the `WorkspaceTools.GetLargeResultTool` delegator kept its own
+`limit = 50`. Constrained test `LargeResultPagingReadFileOnly` (c29f5ff5; Search, GetFileOutline, GetMethodSource and
+other lookups refused by the request filter) passed 3/3 on host 113: the model paged to the needle page every run
+(offsets 884/900/908). Both ModelEval tests always passed `limit` (100-500, clipped to ~288 lines by the budget), so
+the omitted-`limit` path is covered by unit tests T18-T20 only. Step 6 live checks 2026-11-04: a large ERROR result
+(156 KB `Member` ValidationFailed) is cut with a pointer (`errorData.detail` 1/600 lines, `errorData.structuredDetail`
+35/200 items, `inferred`) and pages with no `limit` (89 lines); `Build` with 60 errors is ~7 KB (errors capped at 20 by
+`maxDetails`), so it never reaches the marshaller; its `errorSummary.byProject` reads "(unknown)" (separate issue).
+Still not run: SemanticFindReplace preview (tool hidden in the same session after `McpToolsetControl(moveExtract)`;
+needs a fresh session). Step 7's remaining `[ResultRecords]` item for Search callers/implementations/references is now
+a design proposal: [proposal_search_relationship_result_dtos.md](../proposals/proposal_search_relationship_result_dtos.md)
+(inference already gives the same message and counts; the open question is named DTOs for identification). Supersedes
+[plan_typed_large_result_offload.md](plan_typed_large_result_offload.md) and
+[proposal_central_large_result_offload.md](../proposals/proposal_central_large_result_offload.md), and subsumes
+change #5 of `proposal_envelope_field_promotion.md` (inline first page plus `resultId`).

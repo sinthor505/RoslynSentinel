@@ -75,54 +75,11 @@ Ground truth for "does this tool exist / is it gated": `McpServerStatus(toolList
 
 ### Request pipeline (`WithRequestFilters` in `AddRoslynSentinelToolsBasic`)
 
-First added is outermost (csharp-sdk `McpServerImpl.BuildFilterPipeline` folds from the last filter inward). The order is
-the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (13 filters), pinned by
-`ToolTelemetryFilterOrderTests` via `CallToolFilterNames`. In registration order:
-
-1. `AddAgentIdentityFilter` (`Server.Advanced/AgentIdentityCapture.cs`): strips `_agentId`/`_agentType` from the arguments,
-   latches the operating mode and sets the ambient `ToolCallContext` (`Common/ToolCallContext.cs`). Outermost so the echo
-   and the argument validator never see the keys. Never refuses or throws; on failure the call runs with a null context.
-2. `AddToolCallEchoFilter`: stamps call id/tool/args onto the first text block (sees final content).
-3. `AddToolTelemetryFilter` (`Server.Advanced/ToolTelemetryRecorder.cs`, `Common/ToolTelemetry.cs`): counts every call per
-   tool (success / error / error code / duration) for `McpServerStatus.toolTelemetry`. Third on purpose, so it wraps the
-   argument-validation and breaker refusals and sees the `IsError` that the ToolError filter (item 7) copied from the body.
-   Records after `next` returns, so a status call is counted only from the following call on.
-4. `AddArgumentValidationFilter` (`Server.Advanced/ToolArgumentValidator.cs`): repairs parameter-name case,
-   rejects unknown/missing parameters before the SDK binder runs.
-5. `AddHaltStampFilter` (`Server.Advanced/HaltStamp.cs`): while any breaker is tripped or the drift latch is set, inserts
-   four top-level properties into the first text block of the response: `isSessionHalted`, `sessionHaltKind`,
-   `sessionHaltReason`, `sessionHaltRecovery`, so the model learns the recovery call without a discovery call. The
-   single source of truth is `HaltInfo.From(...)` in `Common/HaltInfo.cs`. Four kinds, first match wins (the others
-   show once it clears): `unrecoverable`, `externalDrift`, `orientation`, `mutation`. The property is named
-   `isSessionHalted` for all four kinds, which overstates it for `orientation` and `mutation` (other tools still
-   run); `sessionHaltKind` and the reason text carry the precision. State is read after `next` returns (so a breaker an
-   inner filter just reset is not stamped). Skipped for a call to `ExternalFileDrift` when the active kind is
-   `externalDrift` (its own reply carries the state), and for any body that already contains an `isSessionHalted`
-   key. For `mutation`, the recovery text names `ResetMutationBreaker` only if that tool is live right now: the
-   filter asks the server's tool collection (`IOptions<McpServerOptions>` -> `ToolCollection.TryGetPrimitive`, the
-   same collection `ToolsetService` mutates), which is correct for static modes, claude-lean and tools switched on
-   by `McpToolsetControl`; failure to resolve counts as "not active" (recovery says to stop and report). A body that
-   is not a JSON object (for example the plain-text refusal from the breaker filters) is wrapped as
-   `{"isSessionHalted":...,"message":"<original text>"}`. Any failure is swallowed (a diagnostic aid never breaks a
-   call); nothing is stamped when nothing is tripped.
-6. `AddWorkspaceStaleStampFilter`: while a workspace reload has failed and not yet succeeded, stamps `workspaceStale`,
-   `workspaceStaleReason`, `workspaceStaleRecovery` onto the first text block (state read after `next`).
-7. `AddToolErrorFilter` domain-failure sync: response JSON with top-level `isError:true` -> protocol-level
-   `CallToolResult.IsError=true` (same name and polarity).
-8. `AddWorkspaceNotLoadedFilter` exception catch-all (`CallToolFailureHandler`): an escaped exception becomes a structured
-   failure body (`ToolErrorMapper.ToResultError`: `SolutionNotLoadedException` keeps its actionable message, a typed
-   `ToolException` keeps its code) with `IsError=true`; a client abort is rethrown.
-9. Post-call drift diagnostic (`AddDriftFilter`, `GetContentExternalFileChangesAsync`, log only).
-10. Large-result offload (`Common/LargeResultHelper.cs`): over `OffloadThresholdBytes` the body goes to disk and the
-   caller gets a `resultId` for `GetLargeResult` (which is exempt, to avoid a re-offload loop).
-11. `AddWirePathRelativizeFilter`: when `WirePathOptions.Enabled`, rewrites solution-root absolute paths in JSON
-   text bodies to relative ones (`WirePathRewriter.RewriteJsonText`).
-12. Orientation (automatic) breaker, then the unrecoverable breaker (filters 12 and 13). The latter refuses every tool that is not
-   marked `[UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]` on its method
-   (`Common/UnrecoverableBreakerAttribute.cs`, resolved by `UnrecoverableBreakerPolicy.IsAllowed` via reflection).
-   Absent attribute = refused. Currently 8 names are allowed: `ReadFile`, `ListAll`, `ListSolutionItems`,
-   `GetFileOutline`, `GetOperationDetail`, `GetWorkspaceHealth`, `ExternalFileDrift`, `Git`. A tool name declared by
-   both a facade (`WorkspaceTools`) and its own class needs the attribute on both.
+Every tool call runs through 13 call-tool filters (`CallToolFilterRegistrations` in
+`Server.Advanced/ServiceRegistrationExtensionsBasic.cs`, first registered is outermost), which see only the request and
+serialized text. Inside them, `ToolResultMarshaller` turns the typed result into the response text at the SDK's
+`MarshalResult` hook, and owns the size budget, offload and paging. The filter list, the marshaller's decisions and
+`GetLargeResult` paging are in [reference_tool_response_pipeline.md](reference_tool_response_pipeline.md).
 
 Tools themselves return `SentinelCallToolResult<T>` (`Common/SentinelCallToolResult.cs`) with `IsError=true`
 instead of throwing; see the CLAUDE.md rule on `ResultError`.
@@ -189,12 +146,12 @@ prerequisite for staged writes: see `docs/current/design_read_chokepoint.md`, `d
 | Expose a tool in claude-lean | `ClaudeLeanToolNames` (always on) or `ToolsetCatalog.ToolsBySet` (on demand) |
 | Persist a source edit | `ValidateAndApplyHelper.ValidateAndApplyAsync` -> `ApplyProposedChangesAsync` |
 | Get the line ending for engine-built text | `IEolResolver.ResolveEol(path, preImageText)` / `await workspace.ResolveEolAsync(document, ct)`; never a `"\n"` literal or `DetectDominantEol` on the source |
-| Add request-level behaviour | A filter in `AddRoslynSentinelToolsBasic`; mind the order above |
+| Add request-level behaviour, or change a tool response or its paging | [reference_tool_response_pipeline.md](reference_tool_response_pipeline.md): a filter sees text only, the marshaller sees the typed result |
 | Let a new read-only tool run during an unrecoverable halt | Put `[UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]` on the tool method; update the golden set in `Tests.Server/UnrecoverableBreakerPolicyTests.cs` |
 | See every tool, its class, modes and breaker status | `docs/generated/architecture_tools.md` (generated; do not edit) |
 | See project-to-project references | `docs/generated/architecture_projects.md` (generated; do not edit) |
 | Add a startup option | Static options class in `Common` + `Configure(args)` at every `ServerStdio`/`ServerHttp` entry point |
-| Understand a tool's result/error shape | `Common/SentinelCallToolResult.cs`, `ToolErrorCode` |
+| Understand a tool's result/error shape | `Common/SentinelCallToolResult.cs`, `ToolErrorCode`; size and `largeResult`: [reference_tool_response_pipeline.md](reference_tool_response_pipeline.md) |
 | See what the server exposes right now | `McpServerStatus(toolListing: all)` or the `tool_list_<mode>.json` in the server bin folder |
 
 ## Gotchas

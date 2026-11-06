@@ -83,8 +83,10 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// keys never reach the echo or the argument validator and every other filter can read the context; it never refuses.
     /// ToolTelemetry sits third, right inside the echo filter, so it wraps every filter that can refuse: argument validation
     /// and the breakers (which refuse without calling next), and ToolError, which copies the body's isError onto
-    /// CallToolResult.IsError before the telemetry filter reads it.
+    /// CallToolResult.IsError before the telemetry filter reads it. What each filter does, and how they fit with the result
+    /// marshaller: docs/current/references/reference_tool_response_pipeline.md.
     /// </summary>
+    // TODO generate the filter order into docs/generated from CallToolFilterNames so ArchitectureDocFreshnessTests catches a stale filter list in the reference doc.
     private static readonly (string Name, Action<IMcpRequestFilterBuilder> Add)[] CallToolFilterRegistrations =
     [
         ("AgentIdentity", AddAgentIdentityFilter),
@@ -498,18 +500,16 @@ public static class RoslynSentinelServiceExtensionsBasic
     private static void AddLargeResultOffloadFilter(IMcpRequestFilterBuilder filters)
     {
 
-        // Generic large-result offload backstop (see
-        // docs/current/proposal_centralized_large_result_filter.md): sums the length of text
+        // Generic large-result offload backstop (docs/current/references/reference_tool_response_pipeline.md;
+        // origin: docs/current/proposal_centralized_large_result_filter.md): sums the length of text
         // content blocks in the response (no JSON re-serialization) and, above
         // LargeResultHelper.OffloadThresholdBytes, writes the raw response text verbatim to disk
         // via LargeResultHelper.StoreRawJsonAsync and replaces the response with a small pointer
-        // (resultId) instead of just logging. This is deliberately shape-agnostic -> it exists
-        // because most tool result types aren't individually wired into the typed
-        // ForPossiblyLargeDataAsync/LargeResultInfo path, so this is the only offload available
-        // for those tools. It coexists with, and does not replace, that typed per-caller path:
-        // a tool already offloaded via ForPossiblyLargeDataAsync has a small response by the
-        // time it reaches here and this filter is a no-op for it. Grep the log for "Large tool
-        // result" to review offenders without parsing full payloads.
+        // (resultId) instead of just logging. This is deliberately shape-agnostic: the result marshaller
+        // does the offloading, so this only catches text it did not cut (plain string or content-block
+        // returns, non-object JSON, nothing pageable, or a marshaller set to off or passthrough). A result
+        // the marshaller fitted has a small response by the time it reaches here and this filter is a
+        // no-op for it. Grep the log for "Large tool result" to review offenders without parsing full payloads.
         filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
             ModelContextProtocol.Protocol.CallToolRequestParams,
             ModelContextProtocol.Protocol.CallToolResult>(

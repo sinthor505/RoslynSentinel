@@ -17,7 +17,7 @@ public static class LargeResultHelper
     /// The inline size budget in characters of the final wire text: the length the generic offload filter
     /// (<c>AddLargeResultOffloadFilter</c>) compares a response's text against, which is <see cref="OffloadThresholdBytes"/>
     /// read as a character count. Introduced by plan_wire_result_marshaller.md Step 4 as the one named chars constant;
-    /// Step 9 makes it the only size constant.
+    /// Step 9 makes it the only size constant. Who measures what: docs/current/references/reference_tool_response_pipeline.md.
     /// </summary>
     public const int InlineBudgetChars = OffloadThresholdBytes;
 

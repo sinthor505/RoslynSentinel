@@ -20,7 +20,8 @@ namespace RoslynSentinel.Common;
 /// <see cref="AIFunctionFactoryOptions.MarshalResult"/> hook is ours. The SDK sets that hook to identity and does not
 /// expose it on <see cref="McpServerToolCreateOptions"/>; the result is still the SDK's own
 /// <c>AIFunctionMcpServerTool</c> (made by the public <c>McpServerTool.Create(AIFunction, options)</c>), so
-/// invocation, result conversion, structured content and the output schema stay SDK-owned.
+/// invocation, result conversion, structured content and the output schema stay SDK-owned. The whole response path:
+/// docs/current/references/reference_tool_response_pipeline.md.
 /// </summary>
 /// <remarks>
 /// <para>

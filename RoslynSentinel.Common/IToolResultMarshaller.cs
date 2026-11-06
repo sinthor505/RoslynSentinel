@@ -13,7 +13,7 @@ namespace RoslynSentinel.Common;
 /// <remarks>
 /// Implementations must not throw: on any failure they return <paramref name="result"/> unchanged, so the SDK
 /// serializes it exactly as it does without a marshaller, and log the failure server-side. Nothing about the failure
-/// may reach the tool-visible output. See plan_wire_result_marshaller.md.
+/// may reach the tool-visible output. See docs/current/references/reference_tool_response_pipeline.md.
 /// </remarks>
 public interface IToolResultMarshaller
 {

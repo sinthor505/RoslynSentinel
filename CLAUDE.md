@@ -168,6 +168,8 @@ and fix the map.
   `[McpServerToolType]` class in a `Tools.*` project; an entry in `Server.Advanced/ToolClassRegistry.cs`; an
   `if (activeToolClasses.Contains("..."))` DI block in `ServiceRegistrationExtensions{Basic,Advanced}.cs`.
   A new `Tools.*` project also needs a `<ProjectReference>` from `Server.Advanced`.
+- **Tool responses:** tools return DTOs and never measure, store or trim them. Before changing response shape, size,
+  paging, `GetLargeResult` or a call-tool filter, read `docs/current/references/reference_tool_response_pipeline.md`.
 - The `*Tools` suffix is reserved for classes declaring `[McpServerTool]` methods.
 
 ## Commits

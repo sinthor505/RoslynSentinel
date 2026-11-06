@@ -9,7 +9,9 @@ using BulkNode = (string Path, System.Text.Json.Nodes.JsonNode Node, System.Text
 namespace RoslynSentinel.Common;
 
 /// <summary>
-/// Pure pager for a tool result's wire envelope (plan_wire_result_marshaller.md Step 3; not wired into any tool yet).
+/// Pure pager for a tool result's wire envelope. <see cref="ToolResultMarshaller"/> uses it for a result with no
+/// <see cref="SequencePager"/> sequence, and <c>GetLargeResult</c> to page such a result by path
+/// (docs/current/references/reference_tool_response_pipeline.md).
 /// <see cref="Fit(JsonNode, int, JsonSerializerOptions, string?, IReadOnlyCollection{string})"/> takes the
 /// envelope as a <see cref="JsonNode"/>, a budget in characters and the wire <see cref="JsonSerializerOptions"/>, and
 /// returns a fitted copy plus one <see cref="OmittedPart"/> per cut. The input is never modified.

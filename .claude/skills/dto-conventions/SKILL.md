@@ -75,6 +75,8 @@ still expose them as its own properties). Use a DTO for 2+ fields; deriving from
 - `LargeResultInfo(resultType: typeof(X).Name)` emits the type's short name, so renaming a type can change
   output too.
 - Moving a DTO to another namespace or assembly is wire-safe (no `$type`, no polymorphic metadata).
+- Size and paging are not the DTO's job: return the whole payload and the result marshaller cuts it. Add `[ResultRecords]`
+  only when the default sequence would page the wrong list. Detail: `docs/current/references/reference_tool_response_pipeline.md`.
 
 ## 6. Build a DTO from another in one place
 
