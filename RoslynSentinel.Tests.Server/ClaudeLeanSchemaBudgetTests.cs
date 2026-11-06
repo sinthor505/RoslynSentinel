@@ -23,9 +23,9 @@ public class ClaudeLeanSchemaBudgetTests
 {
     // Measured on 2026-10-18 (core claude-lean surface, after the trim in proposal_trim_claude_lean_core_surface.md):
     // Advanced and Basic both 19 tools, 27752 chars total on 2026-10-18, now about 28117 after the RunTest environment parameter (TODO #39); largest tool Git at 4157 chars. Raised to 29000 on 2026-10-24: measured 28868 after the optional GetMethodSource containerName parameter (~330 chars; plan_unknown_parameter_rejection_reduction.md Step 4) on top of other additions since 2026-10-18. Raised to 29500 on 2026-10-25: measured 29229 after the optional Search contextLines parameter (~361 chars, commit 36e51f0c). Each constant is the
-    // measurement rounded up to the next 500. Raise a constant only when the growth is intended. Lowered on 2026-11-05 (W8 Search schema trim): total 27996 chars, Search 3815 -> 2329 chars (inputSchema 3215 -> 1729); total budget now 28500 (28000 left 4 chars headroom), Search budget 2450 (5% headroom).
-    private const int AdvancedTotalBudget = 28500;
-    private const int BasicTotalBudget = 28500;
+    // measurement rounded up to the next 500. Raise a constant only when the growth is intended. Lowered on 2026-11-05 (W8 Search schema trim): total 27996 chars, Search 3815 -> 2329 chars (inputSchema 3215 -> 1729); total budget now 28500 (28000 left 4 chars headroom), Search budget 2450 (5% headroom). Raised to 29000 on 2026-11-05: measured 28877 after the McpServerStatus operatingMode, operatingModeSource and callerAgentId result fields plus a description clause (plan_edit_attribution_ledger.md Step 6) and a ReadFile showLineEndings parameter added by another session.
+    private const int AdvancedTotalBudget = 29000;
+    private const int BasicTotalBudget = 29000;
     private const int AdvancedMaxToolBudget = 4500;
     private const int BasicMaxToolBudget = 4500;
     // Search per-tool budget.
@@ -76,6 +76,38 @@ public class ClaudeLeanSchemaBudgetTests
             .ToList();
     }
 
+    // RunTest keeps output only for failed tests, so this file is how headroom is read after a passing run.
+    private static void WriteSizeReport(bool advanced, int total, int budget, List<(string Name, int Chars, int InputSchemaChars)> tools)
+    {
+        try
+        {
+            var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
+            {
+                dir = dir.Parent;
+            }
+
+            if (dir == null)
+            {
+                return;
+            }
+
+            var outDir = System.IO.Path.Combine(dir.FullName, ".roslynsentinel", "schema-sizes");
+            System.IO.Directory.CreateDirectory(outDir);
+            var lines = new List<string> { $"total={total} budget={budget} headroom={budget - total} tools={tools.Count}" };
+            lines.AddRange(tools.Select(t => $"{t.Name} {t.Chars} inputSchema={t.InputSchemaChars}"));
+            System.IO.File.WriteAllLines(System.IO.Path.Combine(outDir, advanced ? "claude-lean-Advanced.txt" : "claude-lean-Basic.txt"), lines);
+        }
+        catch (System.IO.IOException)
+        {
+            // Best effort: a report problem must never fail the budget test.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best effort: a report problem must never fail the budget test.
+        }
+    }
+
     private static string Failure(string what, bool advanced, int measured, int budget, List<(string Name, int Chars, int InputSchemaChars)> tools) =>
         $"claude-lean ({(advanced ? "Advanced" : "Basic")}) {what} is {measured} chars, budget {budget}. Five largest tools: "
         + string.Join(", ", tools.Take(5).Select(t => $"{t.Name}={t.Chars}"))
@@ -87,6 +119,7 @@ public class ClaudeLeanSchemaBudgetTests
     {
         var tools = Measure(advanced);
         int total = tools.Sum(t => t.Chars);
+        WriteSizeReport(advanced, total, budget, tools);
         TestContext.Out.WriteLine($"claude-lean {(advanced ? "Advanced" : "Basic")}: {tools.Count} tools, total {total} chars, largest {tools[0].Name}={tools[0].Chars}");
 
         Assert.That(total, Is.LessThanOrEqualTo(budget), Failure("total schema size", advanced, total, budget, tools));

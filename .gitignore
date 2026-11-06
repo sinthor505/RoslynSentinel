@@ -64,3 +64,4 @@ docs/known-build-warnings.Solution.txt
 *.tmp
 /.scratch
 /.roslynsentinel/build/
+/.roslynsentinel/schema-sizes/

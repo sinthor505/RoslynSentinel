@@ -37,7 +37,8 @@ public class ServerStatusTools
         "Tools are gated per mode: before concluding a tool does not exist, call with toolListing=inactive." +
         " solutionLoadStatus = NotLoaded | Loading | Loaded | Failed; tool calls wait up to 30 s for a Loading solution." +
         " workspaceStale = a workspace reload failed and the loaded solution may not match disk (see reloadFailure; recover with LoadSolution forceReload: true); lastLoadFailure = text of the last failed load." +
-        " lastLaunch = the launcher's last build of source HEAD (buildFailed = it fell back to the older servedSha; firstErrors and hint say why).")]
+        " lastLaunch = the launcher's last build of source HEAD (buildFailed = it fell back to the older servedSha; firstErrors and hint say why)." +
+        " operatingMode/operatingModeSource = SingleAgent or MultiAgent and why; callerAgentId = agent id of this call (null if none).")]
     public SentinelCallToolResult<McpServerStatusResult> McpServerStatusTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("inactive: declared tools not active in this mode, with an enabledBy hint. all: every declared tool.")]
@@ -150,7 +151,11 @@ public class ServerStatusTools
             LastLaunch: LaunchBuildMarker.Current,
             // Only once a call has been recorded; the call that produces this status is not counted yet (the telemetry
             // filter records after the call completes), so the very first status of a process omits the field.
-            ToolTelemetry: _toolTelemetry is { HasCalls: true } ? _toolTelemetry.Snapshot() : null
+            ToolTelemetry: _toolTelemetry is { HasCalls: true } ? _toolTelemetry.Snapshot() : null,
+            // The mode is fixed per process (see AgentOperatingModeOptions), so the main session can read it here.
+            OperatingMode: AgentOperatingModeOptions.Effective.ToString(),
+            OperatingModeSource: AgentOperatingModeOptions.Source,
+            CallerAgentId: ToolCallContext.Current?.AgentId
         )
         };
     }
@@ -250,7 +255,12 @@ public sealed record McpServerStatusResult(
     string? BuildSha = null,
     string? Respawn = null,
     LaunchBuildResult? LastLaunch = null,
-    ToolTelemetrySnapshot? ToolTelemetry = null);
+    ToolTelemetrySnapshot? ToolTelemetry = null,
+    // OperatingMode: effective agent operating mode (Auto, SingleAgent, MultiAgent).
+    // OperatingModeSource: where it came from. CallerAgentId: agent id of the call that asked (null when the host supplies none).
+    string? OperatingMode = null,
+    string? OperatingModeSource = null,
+    string? CallerAgentId = null);
 /// <summary>
 /// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
 /// by McpServerStatusTool's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this
