@@ -2942,6 +2942,7 @@ public class SymbolNavigationEngine
             throw new ToolNotFoundException($"Member '{memberName}' not found");
         }
 
+        // TODO overload ambiguity here still gets the generic contextSnippet hint: this method is shared by Member(view) and the ReadFile memberName read, so use SyntaxTargetResolver.BuildOverloadHintForCandidates once the calling tool is passed in
         var resolved = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
             (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode), filePath: document.FilePath ?? string.Empty);
 

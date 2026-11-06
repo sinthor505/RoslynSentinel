@@ -180,6 +180,20 @@ public static class MoveMemberTextEdits
     public static TextChange BuildInsertion(SourceText targetText, ClassDeclarationSyntax targetClass, string block, string eol)
     {
         var hasMembers = targetClass.Members.Count > 0;
+        if (!hasMembers)
+        {
+            // A one-line empty body ("class T { }" or "class T {}") has its open brace's trailing space inside FullSpan, so inserting after
+            // FullSpan.End would leave "{ " dangling at the end of the line. Replace the whitespace gap between the braces instead. The edit
+            // still starts where a zero-length insertion would (just after the open brace), which is what MovePositionMap keys on.
+            var gap = TextSpan.FromBounds(targetClass.OpenBraceToken.Span.End, targetClass.CloseBraceToken.SpanStart);
+            var gapText = targetText.ToString(gap);
+            if (gapText.All(c => c == ' ' || c == '\t'))
+            {
+                var classIndent = LeadingWhitespaceOfLine(targetText, targetClass.SpanStart);
+                return new TextChange(gap, eol + block + eol + classIndent);
+            }
+        }
+
         var position = hasMembers ? targetClass.Members[^1].FullSpan.End : targetClass.OpenBraceToken.FullSpan.End;
         var sb = new StringBuilder();
         if (position > 0 && targetText[position - 1] != '\n')

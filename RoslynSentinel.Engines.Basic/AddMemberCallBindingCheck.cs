@@ -7,27 +7,33 @@ using RoslynSentinel.Common;
 namespace RoslynSentinel.Engines.Basic;
 
 /// <summary>
-/// Member addMember's (and insertAfter/insertBefore's) use of <see cref="CallBindingCheck"/>: a new method or property can capture a
-/// call that bound elsewhere before (an overload that fits an argument better, an instance member that beats an extension method or
-/// an outer member of the same name). The add introduces no moved id, so the expectation is plain: every existing site keeps its
-/// binding; the new member and the occurrences in its own body are the only additions.
+/// Member addMember's (and insertAfter/insertBefore's) use of <see cref="CallBindingCheck"/>: a new method, property or instance
+/// constructor can capture a call that bound elsewhere before (an overload that fits an argument better, an instance member that
+/// beats an extension method or an outer member of the same name, a constructor that fits a `new T("x")`, a target-typed `new("x")`,
+/// a `: this("x")` or a derived class's `: base("x")` better than the one it bound). The add introduces no moved id, so the
+/// expectation is plain: every existing site keeps its binding; the new member and the occurrences in its own body are the only additions.
+/// A constructor is checked under the type name (the scope CallBindingCheck captures as "new TypeName").
 /// <para>
-/// Cost control, in order: a member that is not a method or property is not checked; a name that appears in no document of the
+/// Cost control, in order: a member that is not a method, property or instance constructor is not checked; a name that appears in no document of the
 /// solution cannot be called anywhere (the new member is not in the original), so the check is skipped; a name that is only
 /// declared or mentioned, never bound, is cleared after one capture of the original; only then is the trial built and captured.
 /// A trial whose new member has compile errors of its own is not compared (the write's compile gate reports those). Limits: those
-/// of <see cref="CallBindingCheck"/>; constructors, operators, indexers, fields and nested types are not checked.
+/// of <see cref="CallBindingCheck"/>; static constructors, operators, indexers, fields and nested types are not checked, and a
+/// derived class's IMPLICIT base() call (no written initializer) is not a syntax node, so it is not captured.
 /// </para>
 /// </summary>
 public static class AddMemberCallBindingCheck
 {
     private const string CandidatesPrefix = "candidates:";
 
-    /// <summary>The name whose bindings an add of <paramref name="member"/> can change; null for a kind that is not checked.</summary>
+    /// <summary>The name whose bindings an add of <paramref name="member"/> can change (the type name for an instance constructor); null for a kind that is not checked.</summary>
     public static string? CheckedNameOf(MemberDeclarationSyntax member) => member switch
     {
         MethodDeclarationSyntax method => method.Identifier.ValueText,
         PropertyDeclarationSyntax property => property.Identifier.ValueText,
+        // A static constructor cannot be called, so it cannot capture a call.
+        // TODO a derived class's implicit base() call (no written initializer) can rebind to a new all-optional base constructor; it is not a syntax node, so CallBindingCheck does not capture it
+        ConstructorDeclarationSyntax constructor when !constructor.Modifiers.Any(SyntaxKind.StaticKeyword) => constructor.Identifier.ValueText,
         _ => null,
     };
 
@@ -75,6 +81,12 @@ public static class AddMemberCallBindingCheck
         var check = await CheckAsync(solution, document.Id, container, newMember, insertIndex, updatedText, cancellationToken);
         if (check.IsRefusal)
         {
+            if (newMember is ConstructorDeclarationSyntax)
+            {
+                // Rename does not apply to a constructor (it must carry the type's name): the fix is the argument or the parameters.
+                throw new ToolInvalidArgumentException(CallBindingCheck.FormatRefusal(check, $"add a constructor to '{container.Identifier.ValueText}'", bindsElsewhereFix: "cast the captured call's argument to the original parameter type, or change the new constructor's parameters", unmatchedFix: "review that call by hand before retrying, or change the new constructor's parameters"));
+            }
+
             var kind = newMember is PropertyDeclarationSyntax ? "property" : "method";
             throw new ToolInvalidArgumentException(CallBindingCheck.FormatRefusal(check, $"add {kind} '{name}' to '{container.Identifier.ValueText}'", bindsElsewhereFix: "rename the new member, or cast the captured call's argument to the original parameter type", unmatchedFix: "review that call by hand before retrying, or rename the new member"));
         }

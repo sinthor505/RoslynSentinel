@@ -312,7 +312,7 @@ public class MoveMemberCallBindingTests
         using var workspace = InMemoryWorkspace.Create(files);
         var (engine, _) = CreateEngine(workspace);
 
-        var error = await Assert.ThrowsAsync<ToolNotImplementedException>(async () => await MoveAsync(engine, workspace, "Source.cs", "Source", new[] { "Foo" }, "Target", "Target.cs"));
+        var error = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await MoveAsync(engine, workspace, "Source.cs", "Source", new[] { "Foo" }, "Target", "Target.cs"));
 
         Assert.That(error!.Message, Does.Contain("extension method 'Foo'"), "The refusal names the method");
         Assert.That(error.Message, Does.Contain("drop the receiver"), "The refusal names the reason");
@@ -374,7 +374,7 @@ public class MoveMemberCallBindingTests
         using var workspace = InMemoryWorkspace.Create(files);
         var (engine, _) = CreateEngine(workspace);
 
-        var error = await Assert.ThrowsAsync<ToolNotImplementedException>(async () => await MoveAsync(engine, workspace, "Source.cs", "Source", new[] { "Foo" }, "Target", "Target.cs", MoveMemberOldMember.keepDelegator));
+        var error = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await MoveAsync(engine, workspace, "Source.cs", "Source", new[] { "Foo" }, "Target", "Target.cs", MoveMemberOldMember.keepDelegator));
 
         Assert.That(error!.Message, Does.Contain("extension method 'Foo'"), "The refusal names the method");
         AssertNothingWritten(workspace, files);

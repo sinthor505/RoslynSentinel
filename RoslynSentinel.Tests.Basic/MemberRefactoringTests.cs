@@ -387,6 +387,29 @@ public class C
     }
 
     [Test]
+    [Category("MemberRefactoringEngine")]
+    public async Task ReplaceMember_BareOverloadedName_MessageNamesMemberCallWithDeclarationLineAsContextSnippet()
+    {
+        SetSource(@"
+public class C
+{
+    public void Foo(int x) { }
+    public void Foo(string x) { }
+}", "C.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () =>
+        {
+            await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(double x) { }");
+        });
+
+        // Member reads memberName as a bare identifier, so the hint must select the overload through contextSnippet, not a signature.
+        Assert.That(ex.Message, Does.Contain("Next: Member("));
+        Assert.That(ex.Message, Does.Contain("operation: replace"));
+        Assert.That(ex.Message, Does.Contain("memberName: \"Foo\""));
+        Assert.That(ex.Message, Does.Contain("contextSnippet: \"public void Foo(int x) { }\""));
+    }
+
+    [Test]
     [Category("MemberSourceInfo")] // sentinel:auto-category
     [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task GetMemberSource_OverloadsWithSnippet_ReturnsMatchingOverload()

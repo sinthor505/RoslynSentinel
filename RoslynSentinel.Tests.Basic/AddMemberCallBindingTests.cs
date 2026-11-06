@@ -260,4 +260,128 @@ public class AddMemberCallBindingTests
 
         Assert.That(result.UpdatedText, Does.Contain("public int Total { get; set; }"), "The property is added");
     }
+
+    // The constructor refusal wording: rename does not apply, so the fix offers the cast or a different parameter list.
+    private static void AssertConstructorRefusal(ToolInvalidArgumentException error, string callText, string oldBinding, string newBinding)
+    {
+        Assert.That(error.Message, Does.Contain(callText), "The refusal quotes the existing call");
+        Assert.That(error.Message, Does.Contain("T.cs:"), "The site is reported with its file and line");
+        Assert.That(error.Message, Does.Contain(oldBinding), "The old binding is named");
+        Assert.That(error.Message, Does.Contain(newBinding), "The new binding is named");
+        Assert.That(error.Message, Does.Contain("cast the captured call's argument to the original parameter type, or change the new constructor's parameters"), "The fix offers the cast or a different parameter list");
+        Assert.That(error.Message, Does.Not.Contain("rename the new member"), "A constructor cannot be renamed");
+        Assert.That(error.Message, Does.Contain("Nothing was written."));
+    }
+
+    [Test]
+    public async Task AddConstructor_RebindsExistingObjectCreation_RefusedAndNothingWrittenAsync()
+    {
+        var source = Lines(
+            "public class CtorRb",
+            "{",
+            "    public CtorRb(object o) { }",
+            "    public static CtorRb Make() => new CtorRb(\"x\");",
+            "}");
+        SetFiles(("T.cs", source));
+
+        var error = await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () => await _memberRefactoringEngine.AddMemberAsync("T.cs", "CtorRb", "public CtorRb(string s) { }"));
+
+        AssertConstructorRefusal(error!, "new CtorRb(\"x\")", "CtorRb(object)", "CtorRb(string)");
+        Assert.That(await CurrentTextAsync("T.cs"), Is.EqualTo(source), "The document must be unchanged after a refused add");
+    }
+
+    [Test]
+    public async Task AddConstructor_RebindsTargetTypedNew_RefusedAndNothingWrittenAsync()
+    {
+        var source = Lines(
+            "public class CtorRb",
+            "{",
+            "    public CtorRb(object o) { }",
+            "    public static CtorRb Make()",
+            "    {",
+            "        CtorRb x = new(\"x\");",
+            "        return x;",
+            "    }",
+            "}");
+        SetFiles(("T.cs", source));
+
+        var error = await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () => await _memberRefactoringEngine.AddMemberAsync("T.cs", "CtorRb", "public CtorRb(string s) { }"));
+
+        AssertConstructorRefusal(error!, "new(\"x\")", "CtorRb(object)", "CtorRb(string)");
+        Assert.That(await CurrentTextAsync("T.cs"), Is.EqualTo(source), "The document must be unchanged after a refused add");
+    }
+
+    [Test]
+    public async Task AddConstructor_RebindsThisInitializer_RefusedAndNothingWrittenAsync()
+    {
+        var source = Lines(
+            "public class CtorRb",
+            "{",
+            "    public CtorRb(object o) { }",
+            "    public CtorRb() : this(\"x\") { }",
+            "}");
+        SetFiles(("T.cs", source));
+
+        var error = await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () => await _memberRefactoringEngine.AddMemberAsync("T.cs", "CtorRb", "public CtorRb(string s) { }"));
+
+        AssertConstructorRefusal(error!, "this(\"x\")", "CtorRb(object)", "CtorRb(string)");
+        Assert.That(await CurrentTextAsync("T.cs"), Is.EqualTo(source), "The document must be unchanged after a refused add");
+    }
+
+    [Test]
+    public async Task AddConstructor_RebindsDerivedBaseInitializer_RefusedAndNothingWrittenAsync()
+    {
+        var source = Lines(
+            "public class CtorRb",
+            "{",
+            "    public CtorRb(object o) { }",
+            "}",
+            "public class Derived : CtorRb",
+            "{",
+            "    public Derived() : base(\"x\") { }",
+            "}");
+        SetFiles(("T.cs", source));
+
+        var error = await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () => await _memberRefactoringEngine.AddMemberAsync("T.cs", "CtorRb", "public CtorRb(string s) { }"));
+
+        AssertConstructorRefusal(error!, "base(\"x\")", "CtorRb(object)", "CtorRb(string)");
+        Assert.That(await CurrentTextAsync("T.cs"), Is.EqualTo(source), "The document must be unchanged after a refused add");
+    }
+
+    [Test]
+    public async Task AddConstructor_UnrelatedArity_SucceedsAsync()
+    {
+        SetFiles(("T.cs", Lines(
+            "public class CtorRb",
+            "{",
+            "    public CtorRb(object o) { }",
+            "    public CtorRb() : this(\"x\") { }",
+            "    public static CtorRb Make() => new CtorRb(\"y\");",
+            "}",
+            "public class Derived : CtorRb",
+            "{",
+            "    public Derived() : base(\"z\") { }",
+            "}")));
+
+        var result = await _memberRefactoringEngine.AddMemberAsync("T.cs", "CtorRb", "public CtorRb(int a, int b) { }");
+
+        Assert.That(result.UpdatedText, Does.Contain("public CtorRb(int a, int b) { }"), "The constructor is added");
+        Assert.That(result.UpdatedText, Does.Contain("new CtorRb(\"y\")"), "The existing creation is untouched");
+    }
+
+    [Test]
+    public async Task AddConstructor_NotCapturingTheExistingCall_SucceedsAsync()
+    {
+        SetFiles(("T.cs", Lines(
+            "public class CtorRb",
+            "{",
+            "    public CtorRb(object o) { }",
+            "    public static CtorRb Make() => new CtorRb(1);",
+            "}")));
+
+        // new CtorRb(1) binds CtorRb(object) both before and after: CtorRb(string) does not accept an int.
+        var result = await _memberRefactoringEngine.AddMemberAsync("T.cs", "CtorRb", "public CtorRb(string s) { }");
+
+        Assert.That(result.UpdatedText, Does.Contain("public CtorRb(string s) { }"), "The constructor is added");
+    }
 }

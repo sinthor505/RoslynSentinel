@@ -377,6 +377,56 @@ public static class SyntaxTargetResolver
         return $"contextSnippet {failureMode} ({count} candidates): {string.Join(", ", previews)}{suffix}. " + "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
     }
 
+    /// <summary>
+    /// <see cref="BuildHintForCandidates"/> plus, for an "ambiguous" outcome over plain overloads or constructors of one type, the working next
+    /// call. Member does not read a signature out of memberName (the lookup compares the bare identifier), so the call it names selects the
+    /// overload by passing that overload's declaration line as contextSnippet. Falls back to the plain hint when the candidates are not all
+    /// methods/constructors of one type, or no declaration line picks out a single candidate.
+    /// </summary>
+    public static string BuildOverloadHintForCandidates(List<SyntaxNodeCandidate> candidates, List<int> matches, string failureMode, SourceText sourceText, string filePath, string operation, string memberName)
+    {
+        var hint = BuildHintForCandidates(candidates, matches, failureMode);
+        if (failureMode != "ambiguous" || candidates.Count < 2)
+        {
+            return hint;
+        }
+
+        if (!candidates.All(c => c.Node is MethodDeclarationSyntax or ConstructorDeclarationSyntax) || candidates.Select(c => c.ContainingTypeName).Distinct().Count() != 1)
+        {
+            return hint;
+        }
+
+        // The snippet lookup ignores whitespace and case, so compare the declaration lines the same way.
+        var lines = candidates.Select(c => DeclarationLine(c.Node, sourceText)).ToList();
+        var squeezed = lines.Select(l => string.Concat(l.Where(ch => !char.IsWhiteSpace(ch))).ToLowerInvariant()).ToList();
+        if (squeezed.Any(s => s.Length == 0) || squeezed.Distinct().Count() != squeezed.Count)
+        {
+            return hint;
+        }
+
+        // The first candidate whose line is not contained in another candidate's line (Foo(int a) is inside Foo(int a, int b) only without the closing paren).
+        var pick = Enumerable.Range(0, squeezed.Count).FirstOrDefault(i => !squeezed.Where((_, j) => j != i).Any(other => other.Contains(squeezed[i], StringComparison.Ordinal)), -1);
+        if (pick < 0)
+        {
+            return hint;
+        }
+
+        var next = ToolCallHint.Next("Member", "to act on that overload; use another candidate's declaration line as contextSnippet for a different one.",
+            ("filePath", filePath), ("operation", operation), ("memberName", memberName), ("contextSnippet", lines[pick]));
+        return $"{hint} These {candidates.Count} candidates are overloads of '{memberName}' that differ by signature. A signature in memberName is not matched, so select one by passing its declaration line as contextSnippet. {next}";
+    }
+
+    private static string DeclarationLine(SyntaxNode node, SourceText sourceText)
+    {
+        var identifier = node switch
+        {
+            MethodDeclarationSyntax m => m.Identifier,
+            ConstructorDeclarationSyntax c => c.Identifier,
+            _ => default,
+        };
+        return identifier == default ? string.Empty : sourceText.Lines.GetLineFromPosition(identifier.SpanStart).ToString().Trim();
+    }
+
     public static string? GetMemberName(MemberDeclarationSyntax member)
     {
         return member switch

@@ -65,28 +65,28 @@ public sealed class MoveMemberRefusalTests
 
     [Test]
     [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_ExtensionMethod_ReturnsNotImplemented()
+    public async Task MoveMember_KeepDelegator_ExtensionMethod_ReturnsTargetIneligible()
     {
         var original = "public static class Source\n{\n    public static int Get(this string s) => 1;\n}\n\npublic static class Target\n{\n}\n".ReplaceLineEndings("\r\n");
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
         var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Get"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotImplemented));
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
         Assert.That(result.ErrorData?.Message, Does.Contain("extension method"));
         Assert.That(workspace.ReadText("Refactor.cs"), Is.EqualTo(original), "A refused keep-mode move must not write.");
     }
 
     [Test]
     [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepAsDeprecatedWrapper_ExtensionMethod_ReturnsNotImplemented()
+    public async Task MoveMember_KeepAsDeprecatedWrapper_ExtensionMethod_ReturnsTargetIneligible()
     {
         var original = "public static class Source\n{\n    public static int Get(this string s) => 1;\n}\n\npublic static class Target\n{\n}\n".ReplaceLineEndings("\r\n");
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
         var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Get"], "Target", oldMember: MoveMemberOldMember.keepAsDeprecatedWrapper);
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotImplemented));
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
         Assert.That(result.ErrorData?.Message, Does.Contain("extension method"));
         Assert.That(workspace.ReadText("Refactor.cs"), Is.EqualTo(original), "A refused keep-mode move must not write.");
     }

@@ -97,7 +97,7 @@ scan: reads of the report script's own docstring also match a loose `Unknown par
   `LoadSolution(reason, solutionPath, baseRepoDir, forceReload, timeoutSeconds)` (`WorkspaceProjectManagementTools.cs`);
   `Git(reason, operation, count, paths, maxBytes, message, scope, noCommit, amend, mode, repoPath, maxEntries, nameOnly, stat, mainline,
   ref, hunkIds, hunkFingerprint, lineRange, pickaxe, pickaxeRegex, follow)` (`GitTools.cs`);
-  `Member(reason, filePath, operation, containerName, namespaceName, memberName, newMemberSource, position, skipPrecheck,
+  `Member(reason, filePath, operation, containerName, namespaceName, memberName, newMemberSource, insertBeforeMemberName, insertAfterMemberName, skipPrecheck,
   contextSnippet, lineBefore, lineAfter, dryRun, returnDiff)` (`RefactoringStructuralTools.cs:108-132`);
   `Search(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch,
   filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute)` (`WorkspaceReadNavigationTools.cs`);

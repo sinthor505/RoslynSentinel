@@ -546,7 +546,9 @@ public sealed class MovePositionMap
         for (var i = 0; i < target.Edits.Length; i++)
         {
             var edit = target.Edits[i];
-            if (edit.Span.Length != 0 || edit.Span.Start != region.TargetInsertionOffset || edit.NewText == null)
+            // Not required to be zero-length: BuildInsertion into a one-line empty class replaces the whitespace gap between the braces
+            // (it starts at the insertion offset). The block-text search below still identifies the right edit.
+            if (edit.Span.Start != region.TargetInsertionOffset || edit.NewText == null)
             {
                 continue;
             }

@@ -54,7 +54,9 @@ Set `ROSLYNSENTINEL_INSTANCES_ROOT` (or flip `$UseDefaultInstancesRootWhenUnset`
 - A restart picks up new commits **only if they build**: `StopServer`, then the launcher builds the new SHA
   once for all windows. If that build fails it falls back to the newest complete build (an OLDER server) and
   records `instances\<id>\launch-outcome.json`. `McpServerStatus.lastLaunch` shows it (`buildFailed`,
-  `attemptedSha`, `servedSha`, `firstErrors`, `hint`) and the first response after start carries a one-shot
+  `attemptedSha`, `servedSha`, `firstErrors`, `hint`, and `pullOk`/`pullError` - `pullOk: false` means the launcher's
+  `git pull` of `<root>\source` failed and the server may be OLDER than the dev repo even though `buildFailed` is false;
+  a missing `pullOk` is unknown; the launcher self-heals a stale `.git\index.lock` + half-applied files and retries once) and the first response after start carries a one-shot
   `launchWarning`. Full detail: `instances\<id>\launch.log`. `StopServer` also warns when server source is
   uncommitted, since a restart builds committed code only.
 

@@ -347,6 +347,28 @@ public class ChangeSignatureCallBindingTests
     }
 
     [Test]
+    public async Task ConstructorOptionalParameterAdded_UntouchedCallRebindsToChangedConstructor_RefusedNamingCallAndBindings()
+    {
+        // new Widget(5) binds Widget(long, int) today (Widget(int, int) needs two arguments). Giving Widget(int, int) an optional
+        // second parameter makes it applicable and a better match for the int argument, so the untouched call would move to it.
+        var files = new (string Name, string Content)[]
+        {
+            ("Widget.cs", Lines("namespace Example;", "", "public class Widget", "{", "    public Widget(int a, int b) { }", "    public Widget(long a, int c = 0) { }", "}")),
+            ("Maker.cs", Lines("namespace Example;", "", "public static class Maker", "{", "    public static Widget Make() => new Widget(5);", "}")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var engine = CreateEngine(workspace);
+
+        var message = await RefusalMessageAsync(engine, workspace, "Widget.cs", "Widget", "public Widget(int a, int b)", ChangeSignatureOldSignature.remove, new ExistingParameterSpec(0), new NewParameterSpec("d", "int", "0"));
+
+        Assert.That(message, Does.Contain("Maker.cs:5"), "The untouched constructor call is reported at its line");
+        Assert.That(message, Does.Contain("`new Widget(5)`"), "The refusal quotes the constructor call");
+        Assert.That(message, Does.Contain("binds to 'Example.Widget.Widget(long, int)' today but would bind to 'Example.Widget.Widget(int, int)'"), "Both constructor bindings are named");
+        Assert.That(message, Does.Contain("Nothing was written."));
+        AssertNothingWritten(workspace, files);
+    }
+
+    [Test]
     public async Task FailClosed_ChangedMemberNotFoundInTrial_ReturnsCheckFailedWithoutPathsOrStackTrace()
     {
         var files = new (string Name, string Content)[]

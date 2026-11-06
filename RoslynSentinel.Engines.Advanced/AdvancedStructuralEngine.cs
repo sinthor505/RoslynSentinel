@@ -977,11 +977,9 @@ public class StructuralRefactoringEngine
     public async Task<Dictionary<FilePathWrapper, string>> ExtractMembersToPartialAsync(FilePathWrapper filePath, string className, string[] memberNames, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            return new Dictionary<FilePathWrapper, string>();
-        }
+        // A missing source file throws ToolNotFoundException (closest real paths in the message) instead of returning an
+        // empty change set, which the tool layer would otherwise report as dry_run_ok / no_changes.
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
@@ -1038,7 +1036,7 @@ public class StructuralRefactoringEngine
     /// rewritten with the moved members removed and 'partial' added to the class (an already-partial class is left as is).
     /// The new file is the one <see cref="ExtractMembersToPartialAsync"/> builds (same member selection, usings, namespace and
     /// formatting), with its declaration aligned to the original class (modifiers, type parameters, constraints) so the two
-    /// parts agree. Returns an empty dictionary when the file or class is not found, like the single-file method.
+    /// parts agree. A missing file or class throws ToolNotFoundException, like the single-file method.
     /// </summary>
     public async Task<Dictionary<FilePathWrapper, string>> ExtractMembersToPartialWithSourceAsync(FilePathWrapper filePath, string className, string[] memberNames, CancellationToken cancellationToken = default)
     {

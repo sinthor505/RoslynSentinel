@@ -122,7 +122,8 @@
         per-instance, one step per line (sweep, build start, build result, launch) from the moment its
         instance ID is known onward.
       - <instance folder>\launch-outcome.json: rewritten on every prod launch; the build served (servedSha),
-        the HEAD attempted (attemptedSha), buildFailed and up to 3 first compile errors.
+        the HEAD attempted (attemptedSha), buildFailed and up to 3 first compile errors, plus pullOk / pullError
+        (capped ASCII; absent when unknown) so a failed source pull that left the server on an old HEAD is visible.
 
     If VS Code never seems to launch this script at all (no entry appears in
     launch-startup.log, not even a "Script launched" line), the fault is usually one
@@ -491,16 +492,30 @@ $exePath = $null
 
 # --- source clone: clone on first use, fast-forward on every launch (unless the shim just did) ---
 $sha = $null
+# Result of the source pull for launch-outcome.json: $null = unknown (reported as absent), $true/$false = known.
+$script:syncPullOk = $null
+$script:syncPullError = $null
 try {
     if ($SkipSourceSync) {
         $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $sourceDir, 'rev-parse', 'HEAD')
         $sha = $r.Output.Trim()
         if ($r.ExitCode -ne 0 -or $sha -notmatch '^[0-9a-f]{40}$') { throw "git rev-parse HEAD failed in '$sourceDir' (exit $($r.ExitCode)): $($r.Output)" }
         Write-LaunchLog "Source: sync done by the caller; HEAD is $sha."
+        # The shim hands its pull result over in these two variables (consumed here so the server process does
+        # not inherit them). Absent (older shim, direct -SkipSourceSync call) = unknown.
+        if ($env:ROSLYNSENTINEL_SYNC_PULL_OK -eq 'true') { $script:syncPullOk = $true }
+        elseif ($env:ROSLYNSENTINEL_SYNC_PULL_OK -eq 'false') {
+            $script:syncPullOk = $false
+            $script:syncPullError = ConvertTo-PullErrorText $env:ROSLYNSENTINEL_SYNC_PULL_ERROR
+        }
+        Remove-Item Env:\ROSLYNSENTINEL_SYNC_PULL_OK, Env:\ROSLYNSENTINEL_SYNC_PULL_ERROR -ErrorAction SilentlyContinue
+        if ($script:syncPullOk -eq $false) { Write-LaunchLog "Source: the caller's pull FAILED, so this server may be older than the dev repo. $($script:syncPullError)" }
     }
     else {
         $sync = Sync-RoslynSentinelSource -SourceDir $sourceDir -DevRepo $devRepoRoot -Branch $Branch -Log { param($m) Write-LaunchLog $m }
         $sha = $sync.Sha
+        $script:syncPullOk = [bool]$sync.PullOk
+        if (-not $sync.PullOk) { $script:syncPullError = ConvertTo-PullErrorText $sync.PullError }
     }
 }
 catch {
@@ -622,9 +637,15 @@ function Write-LaunchOutcome {
             buildFailed  = $BuildFailed
             firstErrors  = $firstErrors
         }
+        # pullOk/pullError: only written when the pull result is known; an absent pullOk reads as "unknown" in the
+        # server (never as a failure). pullError is flattened ASCII, at most 300 chars.
+        if ($null -ne $script:syncPullOk) {
+            $outcome['pullOk'] = [bool]$script:syncPullOk
+            if (-not $script:syncPullOk -and $script:syncPullError) { $outcome['pullError'] = $script:syncPullError }
+        }
         $json = ConvertTo-Json -InputObject $outcome -Compress
         Set-Content -LiteralPath (Join-Path $instanceDir 'launch-outcome.json') -Value $json -Encoding ASCII
-        Write-LaunchLog "Launch outcome written: buildFailed=$($BuildFailed.ToString().ToLower()) served=$servedSha"
+        Write-LaunchLog "Launch outcome written: buildFailed=$($BuildFailed.ToString().ToLower()) served=$servedSha pullOk=$(if ($null -eq $script:syncPullOk) { 'unknown' } else { $script:syncPullOk.ToString().ToLower() })"
     }
     catch {
         Write-LaunchLog "Launch outcome marker not written: $($_.Exception.Message)"

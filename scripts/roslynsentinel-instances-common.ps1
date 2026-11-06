@@ -156,11 +156,79 @@ function Get-NewestCompleteBuild {
         Select-Object -First 1
 }
 
+# Flattens a (possibly multi-line, non-ASCII) git error to one ASCII line of at most $MaxLength chars, for
+# launch-outcome.json and the env hand-off from the shim. $null/empty in -> $null out.
+function ConvertTo-PullErrorText {
+    param([string]$Text, [int]$MaxLength = 300)
+
+    if (-not $Text -or -not $Text.Trim()) { return $null }
+    $flat = ($Text -replace '\s+', ' ').Trim()
+    $flat = $flat -replace '[^\x20-\x7E]', '?'
+    if ($flat.Length -gt $MaxLength) { $flat = $flat.Substring(0, $MaxLength) }
+    return $flat
+}
+
+# Heals the launcher-owned source clone after an interrupted git operation: removes a STALE .git\index.lock and
+# discards half-applied tracked-file changes. Returns { FreshLock; Healed; Actions }.
+#   - A lock younger than $LockMaxAge may belong to another launch that is pulling right now: heal NOTHING
+#     (FreshLock = $true).
+#   - `git reset --hard HEAD` is safe here ONLY because <root>\source is owned by the launcher and never edited by
+#     hand (it is a clone that is only ever fast-forwarded), so any tracked-file difference from HEAD is debris of an
+#     interrupted pull, never someone's work. Untracked files are left alone. NEVER point this at the dev repo.
+# Does not throw; each step is logged through $Log (scriptblock taking one string).
+function Repair-RoslynSentinelSourceClone {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$SourceDir,
+        [TimeSpan]$LockMaxAge = [TimeSpan]::FromMinutes(10),
+        [scriptblock]$Log
+    )
+
+    function Write-HealLog([string]$Message) { if ($Log) { & $Log $Message } }
+
+    $actions = New-Object System.Collections.Generic.List[string]
+    $result = { param($fresh) [pscustomobject]@{ FreshLock = $fresh; Healed = ($actions.Count -gt 0); Actions = @($actions) } }
+
+    $gitDir = Join-Path $SourceDir '.git'
+    if (-not (Test-Path -LiteralPath $gitDir -PathType Container)) {
+        Write-HealLog "Source heal: '$SourceDir' has no .git folder; nothing to heal."
+        return (& $result $false)
+    }
+
+    $lock = Join-Path $gitDir 'index.lock'
+    $lockItem = Get-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue
+    if ($lockItem) {
+        $age = [DateTime]::UtcNow - $lockItem.LastWriteTimeUtc
+        if ($age -lt $LockMaxAge) {
+            Write-HealLog "Source heal: index.lock is only $([int]$age.TotalSeconds)s old (< $([int]$LockMaxAge.TotalSeconds)s); another launch may be pulling, healing nothing."
+            return (& $result $true)
+        }
+        try {
+            Remove-Item -LiteralPath $lock -Force -ErrorAction Stop
+            $actions.Add('removed stale index.lock')
+            Write-HealLog "Source heal: removed stale index.lock ($([int]$age.TotalMinutes) min old)."
+        }
+        catch {
+            Write-HealLog "Source heal: could not remove stale index.lock: $($_.Exception.Message)"
+        }
+    }
+
+    $st = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $SourceDir, 'status', '--porcelain', '--untracked-files=no')
+    if ($st.ExitCode -ne 0 -or $st.Output.Trim()) {
+        Write-HealLog "Source heal: tracked files differ from HEAD (status exit $($st.ExitCode)); running git reset --hard HEAD."
+        $rs = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $SourceDir, 'reset', '--hard', 'HEAD')
+        if ($rs.ExitCode -eq 0) { $actions.Add('reset --hard HEAD') }
+        else { Write-HealLog "Source heal: git reset --hard HEAD failed (exit $($rs.ExitCode)): $(ConvertTo-PullErrorText $rs.Output)" }
+    }
+    return (& $result $false)
+}
+
 # Clones the dev repo into $SourceDir on first use, then fast-forwards it to origin/$Branch.
 # - Clone goes to a sibling temp folder and is renamed into place, so two windows racing on a first
 #   launch cannot corrupt each other (first rename wins, the loser deletes its own copy).
 # - A failed pull (dev repo mid-rebase, no network equivalent, diverged history) is NOT fatal: the
-#   current HEAD is kept and the failure is returned in PullError.
+#   current HEAD is kept and the failure is returned in PullError. Before giving up, a failed pull triggers
+#   Repair-RoslynSentinelSourceClone (stale index.lock / half-applied files) and one retry.
 # Returns { Sha; PullOk; PullError; Cloned }. Throws only when no usable source clone exists afterwards.
 # $Log is an optional scriptblock taking one message string.
 function Sync-RoslynSentinelSource {
@@ -202,22 +270,37 @@ function Sync-RoslynSentinelSource {
         }
     }
 
-    $pullOk = $true
-    $pullError = $null
-    $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $SourceDir, 'rev-parse', '--abbrev-ref', 'HEAD')
-    $currentBranch = if ($r.ExitCode -eq 0) { $r.Output.Trim() } else { '' }
-    if ($currentBranch -ne $Branch) {
-        $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $SourceDir, 'checkout', $Branch)
-        if ($r.ExitCode -ne 0) {
-            $pullOk = $false
-            $pullError = "checkout of '$Branch' failed (current '$currentBranch'): $($r.Output)"
+    # One checkout-if-needed + ff-only pull attempt. Returns { Ok; Error }. Nested so it sees $SourceDir/$Branch.
+    function Invoke-SyncPullAttempt {
+        $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $SourceDir, 'rev-parse', '--abbrev-ref', 'HEAD')
+        $currentBranch = if ($r.ExitCode -eq 0) { $r.Output.Trim() } else { '' }
+        if ($currentBranch -ne $Branch) {
+            $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $SourceDir, 'checkout', $Branch)
+            if ($r.ExitCode -ne 0) {
+                return [pscustomobject]@{ Ok = $false; Error = "checkout of '$Branch' failed (current '$currentBranch'): $($r.Output)" }
+            }
         }
-    }
-    if ($pullOk) {
         $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $SourceDir, 'pull', '--ff-only', 'origin', $Branch)
         if ($r.ExitCode -ne 0) {
-            $pullOk = $false
-            $pullError = "git pull --ff-only origin $Branch failed (exit $($r.ExitCode)): $($r.Output)"
+            return [pscustomobject]@{ Ok = $false; Error = "git pull --ff-only origin $Branch failed (exit $($r.ExitCode)): $($r.Output)" }
+        }
+        return [pscustomobject]@{ Ok = $true; Error = $null }
+    }
+
+    $attempt = Invoke-SyncPullAttempt
+    $pullOk = $attempt.Ok
+    $pullError = $attempt.Error
+    if (-not $pullOk) {
+        # Self-heal (an interrupted pull leaves .git\index.lock and half-applied tracked files in this clone,
+        # and every later pull then fails the same way), then retry once. Only retried when the heal actually
+        # changed something: a plain failure (diverged history, no network) would just fail again.
+        Write-SyncLog "Source: pull failed, checking the clone for an interrupted-pull leftover. $pullError"
+        $heal = Repair-RoslynSentinelSourceClone -SourceDir $SourceDir -Log $Log
+        if ($heal.Healed) {
+            $attempt = Invoke-SyncPullAttempt
+            $pullOk = $attempt.Ok
+            $pullError = $attempt.Error
+            if ($pullOk) { Write-SyncLog 'Source: pull succeeded after healing the clone.' }
         }
     }
     if (-not $pullOk) { Write-SyncLog "Source: PULL FAILED, continuing on current HEAD. $pullError" }

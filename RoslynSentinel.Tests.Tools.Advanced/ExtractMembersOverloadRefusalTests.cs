@@ -121,4 +121,25 @@ public sealed class ExtractMembersOverloadRefusalTests
         Assert.That(source, Does.Not.Contain("public int Count"));
         Assert.That(source, Does.Contain("Save(string s)"));
     }
+
+    // A path that is not a document of the workspace must be refused as NotFound (naming the path) for both extract kinds, on
+    // a dry run and on apply; it used to come back as dry_run_ok / no_changes because the engine returned an empty change set.
+    [TestCase(ExtractAsType.partialClass, true)]
+    [TestCase(ExtractAsType.partialClass, false)]
+    [TestCase(ExtractAsType.@interface, true)]
+    [TestCase(ExtractAsType.@interface, false)]
+    [Category("AdvancedRefactoringTools")]
+    public async Task ExtractMembers_MissingSourceFile_ReturnsNotFoundAndWritesNothing(ExtractAsType newType, bool dryRun)
+    {
+        var original = SourceFixture();
+        using var workspace = InMemoryWorkspace.Create(("Source.cs", original));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var missing = workspace.PathOf("Missing.cs");
+        var result = await tools.ExtractMembersTool(reason: "test message", missing, "Source", newType, newTypeName: newType == ExtractAsType.@interface ? "ISource" : null, memberNames: newType == ExtractAsType.partialClass ? ["Get"] : null, dryRun: dryRun);
+        Assert.That(result.IsError, Is.True, "A missing source file must be an error, not dry_run_ok / no_changes.");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData?.Message, Does.Contain("Missing.cs"));
+        Assert.That(workspace.ReadText("Source.cs"), Is.EqualTo(original), "A refused call must not write.");
+        Assert.That(() => workspace.ReadText("Source.Partial.cs"), Throws.TypeOf<FileNotFoundException>(), "A refused call must not create the partial file.");
+    }
 }

@@ -2330,7 +2330,7 @@ public class MemberRefactoringEngine
             .ToList());
         memberCandidates = SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName);
         var resolved = SyntaxTargetResolver.ResolveBySnippetWithWarning(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode), trustSingleCandidate: true, filePath: document.FilePath ?? string.Empty);
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildOverloadHintForCandidates(candidates, matches, failureMode, sourceText, document.FilePath ?? string.Empty, "replace", memberName), trustSingleCandidate: true, filePath: document.FilePath ?? string.Empty);
         member = resolved.Candidate?.Node;
         snippetWarning = resolved.Warning;
 
@@ -2561,7 +2561,7 @@ public class MemberRefactoringEngine
             .ToList());
         memberCandidates = SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName);
         member = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildOverloadHintForCandidates(candidates, matches, failureMode, sourceText, document.FilePath ?? string.Empty, "remove", memberName))?.Node;
 
         // Member(remove) only ever operates on class-level members (methods, properties,
         // fields, etc.) -- Class/Interface/Struct/Record/Enum/EnumMember are excluded from
@@ -2736,7 +2736,7 @@ public class MemberRefactoringEngine
                 || (method.ParameterList.Parameters.Count > 0 && method.ParameterList.Parameters[0].Modifiers.Any(SyntaxKind.ThisKeyword));
             if (isExtension)
             {
-                throw new ToolNotImplementedException($"oldMember '{oldMember}' does not support extension method '{method.Identifier.Text}': a forwarder would have to call a static target with the receiver as first argument, which keep modes do not generate. Use oldMember remove.");
+                throw new ToolTargetIneligibleException($"oldMember '{oldMember}' does not support extension method '{method.Identifier.Text}': a forwarder would have to call a static target with the receiver as first argument, which keep modes do not generate. Use oldMember remove.");
             }
 
             if (methodSymbol != null && (methodSymbol.IsVirtual || methodSymbol.IsAbstract || methodSymbol.IsOverride))
@@ -2809,7 +2809,7 @@ public class MemberRefactoringEngine
 
             var listed = string.Join("; ", sites.Take(MaxSitesListed));
             var more = sites.Count > MaxSitesListed ? $" and {sites.Count - MaxSitesListed} more" : string.Empty;
-            throw new ToolNotImplementedException($"MoveMember does not support extension method '{method.Identifier.Text}' while it has reduced calls (receiver.{method.Identifier.Text}(...)): {sites.Count} call site(s) have no class qualifier to retarget, so the call-site rewrite would drop the receiver. Sites: {listed}{more}. Nothing was written. Rewrite those calls to the static form ({symbol.ContainingType.Name}.{method.Identifier.Text}(receiver, ...)) and retry, move a non-extension method, or " + ToolCallHint.Next("MoveType", "to move the whole extension class instead."));
+            throw new ToolTargetIneligibleException($"MoveMember does not support extension method '{method.Identifier.Text}' while it has reduced calls (receiver.{method.Identifier.Text}(...)): {sites.Count} call site(s) have no class qualifier to retarget, so the call-site rewrite would drop the receiver. Sites: {listed}{more}. Nothing was written. Rewrite those calls to the static form ({symbol.ContainingType.Name}.{method.Identifier.Text}(receiver, ...)) and retry, move a non-extension method, or " + ToolCallHint.Next("MoveType", "to move the whole extension class instead."));
         }
     }
 

@@ -76,7 +76,7 @@ not measured.
     (`McpToolSchemaPatcher.cs:227`, `:291`) that removes properties marked hidden; the C# method keeps
     the parameters, so runtime binding is unchanged.
 - **Step 3 keep list:** per-operation required params (once, in `operation`), non-guessable formats
-  (`callSiteFixups` keys, CSV-or-array `paths`, `position: "after:X"`), hard limits (ReplaceSnippet
+  (`callSiteFixups` keys, CSV-or-array `paths`), hard limits (ReplaceSnippet
   300 lines / 4000 chars), the `reason` rule (an empty description was tried and models omitted the
   field; see the comment at `ToolParams.cs:90`), one batch-semantics sentence (edits resolve against
   the original file, apply atomically), and the "use `nullDefault`, not the string null" clause.

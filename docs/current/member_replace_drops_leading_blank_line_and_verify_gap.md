@@ -93,7 +93,7 @@ redesign (design written, not yet implemented) are the correct fixes — not fur
 engineering.
 
 **2026-09-28 related instances, both FIXED same day:**
-- Doubled-blank-line bug on `Member(addMember, position: "after:X")` - root cause confirmed
+- Doubled-blank-line bug on `Member(addMember, insertAfterMemberName: "X")` (then `position: "after:X"`) - root cause confirmed
   DIFFERENT mechanism from this file's original dropped-blank-line bug: doubling came from
   `RoslynFormattingHelper.cs` `InsertMemberFormattedAsync` hand-constructing `[CRLF, CRLF]` trivia
   on top of trivia the neighboring member already carried (2 separate sites: blankLineBefore ~line

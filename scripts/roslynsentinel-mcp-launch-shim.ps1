@@ -104,6 +104,12 @@ try {
         throw "Source launcher '$sourceLauncher' predates the prod-instances layout (no -SkipSourceSync parameter)."
     }
 
+    # The shim did the pull, so the launcher (-SkipSourceSync) cannot see its result. Carry it through the
+    # environment (inherited by the child launcher, which consumes and removes both): an older source launcher
+    # simply ignores them, and a launcher started without them reports pullOk as unknown.
+    $env:ROSLYNSENTINEL_SYNC_PULL_OK = if ($sync.PullOk) { 'true' } else { 'false' }
+    $env:ROSLYNSENTINEL_SYNC_PULL_ERROR = if ($sync.PullOk) { '' } else { [string](ConvertTo-PullErrorText $sync.PullError) }
+
     Write-ShimLog "Handing off to $sourceLauncher"
     $handedOff = $true
     & $sourceLauncher -InstancesRoot $prodRoot -Branch $Branch -DevRepo $devRepoRoot -SkipSourceSync @ServerArgs
