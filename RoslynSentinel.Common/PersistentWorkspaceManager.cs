@@ -22,7 +22,7 @@ namespace RoslynSentinel.Common;
 /// <c>RoslynSentinel.Tests.TestSolutionFixture</c>, which stands up a disposable on-disk copy of
 /// the Samples/ContosoOrders scenario and loads it through this class.
 /// </summary>
-public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader, IWorkspaceReloadFailureProvider
+public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader, IWorkspaceReloadFailureProvider, IEditAttributionLedgerProvider
 {
     private readonly ILogger<IWorkspaceManager> _logger;
     private MSBuildWorkspace? _workspace;
@@ -72,6 +72,13 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
     /// <summary>Per-instance EOL mode override; the effective mode is this, else <see cref="EolPolicyOptions.Mode"/>. Lets tests pick a mode without touching the static.</summary>
     public EolMode? EolModeOverride { get; set; }
+
+    // Edit attribution ledger, not the scoped operation ledger. Owned here and deliberately not registered in DI,
+    // so there is only one live instance; ScopedOperationLedgerEngine has a DI copy that differs from the live one.
+    private EditAttributionLedger _editAttributions = new();
+
+    /// <inheritdoc/>
+    public EditAttributionLedger EditAttributions => _editAttributions;
 
     // Content-hash baseline: path (normalized via FilePathWrapper's own case-insensitive, separator-
     // canonicalized equality/hashing) -> SHA-256 of the last content RoslynSentinel itself wrote or
@@ -1611,6 +1618,12 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         return DocumentLookup.GetDocuments(solution, scope);
     }
 
+    /// <summary>Replaces the edit attribution ledger so a test can make recording throw.</summary>
+    public void SetTestEditAttributionLedger(EditAttributionLedger ledger)
+    {
+        _editAttributions = ledger;
+    }
+
     /// <summary>
     /// Forces an in-memory solution for testing purposes, bypassing disk loading.
     /// </summary>
@@ -2056,6 +2069,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 succeeded.Clear();
             }
 
+            RecordEditAttributions(succeeded, noOp, deletePaths, preImages);
+
             // --- Proactive Workspace Sync ---
             bool workspaceInSync = false;
             if (succeeded.Count > 0)
@@ -2140,6 +2155,48 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         RecordReloadFailure(WorkspaceReloadTriggerKind.PostWriteReload, null, ex, oldWorkspaceKept: true);
                     }
                 });
+            }
+        }
+    }
+
+    // Records this batch in the edit attribution ledger. Caller holds _solutionLock. Never fails the write: the files are
+    // already on disk, so a recording problem only costs attribution. No-op files are in `succeeded` but were not written;
+    // recording them would make a later writer look like it conflicts with a write that never happened.
+    private void RecordEditAttributions(
+        List<string> succeeded,
+        List<string> noOp,
+        IReadOnlyCollection<FilePathWrapper> deletePaths,
+        Dictionary<string, string?> preImages)
+    {
+        try
+        {
+            var context = ToolCallContext.Current;
+            foreach (var filePath in succeeded)
+            {
+                if (noOp.Contains(filePath, PathComparison.Comparer))
+                {
+                    continue;
+                }
+
+                if (deletePaths.Any(deleted => PathComparison.Comparer.Equals(deleted, filePath)))
+                {
+                    _editAttributions.Append(filePath, context, EditAttributionOp.Delete, hashAfter: null);
+                    continue;
+                }
+
+                // A failed pre-image read is also null, so that rare case is labelled Create.
+                var op = preImages.TryGetValue(filePath, out var preImage) && preImage is null
+                    ? EditAttributionOp.Create
+                    : EditAttributionOp.Write;
+                _knownFileHashes.TryGetValue(filePath, out var hashAfter);
+                _editAttributions.Append(filePath, context, op, hashAfter);
+            }
+        }
+        catch (Exception ex)
+        {
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning(ex, "Edit attribution recording failed; the write itself succeeded.");
             }
         }
     }

@@ -1,6 +1,6 @@
 # Plan: Edit attribution ledger naming the agent behind each write, with a same-file conflict refusal and a fixed per-process operating mode
 
-**Status:** APPROVED 2026-11-05. Design rulings from the owner are recorded under Decision; Step 0 spike done (results under that step); no server code built yet. Citations checked at commit b3b90a26; the request pipeline, `AsyncLocal` and telemetry points were rechecked at bab9599b, which added per-tool telemetry. Between those commits `PersistentWorkspaceManager.cs`, `ToolArgumentValidator.cs`, `ValidateAndApplyHelper.cs` and `AdminTools.cs` did not change, so their line citations still hold.
+**Status:** APPROVED 2026-11-05. Design rulings from the owner are recorded under Decision; Steps 0-2 done (Step 0 results under that step); writes are recorded but nothing reads the record yet. Citations checked at commit b3b90a26; the request pipeline, `AsyncLocal` and telemetry points were rechecked at bab9599b, which added per-tool telemetry. Between those commits `PersistentWorkspaceManager.cs`, `ToolArgumentValidator.cs`, `ValidateAndApplyHelper.cs` and `AdminTools.cs` did not change, so their line citations still hold.
 
 ## Problem
 
@@ -82,7 +82,9 @@ ledger.
 5. **An in-memory `EditAttributionLedger` per server.** Each `EditAttribution` holds `Seq`, `AgentId`,
    `AgentType`, `Tool`, `Reason` (capped to 200 chars, ASCII-sanitised), `UtcTime`, `Op`
    (write|create|delete) and `HashAfter`. Keyed by path, last 8 per file, global monotonic `Seq`. Appended
-   inside `_solutionLock` from the post-rollback succeeded and deleted lists. Not persisted. Any failure
+   inside `_solutionLock` from the post-rollback succeeded and deleted lists, minus no-ops: `succeeded` includes
+   files whose content did not change, and recording those would make a later writer conflict with a write that never
+   happened. Not persisted. Any failure
    degrades to a logged warning and never blocks a write.
 6. **Conflict refusal at the chokepoint, inside the lock.** If a target's latest entry has
    `Seq > ctx.StartSeq` and came from a different known agent, refuse the whole batch. Refuse only when both
@@ -169,7 +171,8 @@ in place. Findings reuse `Finding`.
   The manager owns the single instance and exposes it through the provider interface, read with an `as` cast as
   `IWorkspaceReloadFailureProvider` is (`ServerStatusTools.cs`). Do not also register it in DI: the
   `ScopedOperationLedgerEngine` in DI is a different object from the live one (comment in `AdminTools.cs`), and
-  this plan must not repeat that split.
+  this plan must not repeat that split. Tests swap in a throwing ledger with `SetTestEditAttributionLedger`, beside
+  `SetTestSolution`, so the constructor and DI stay unchanged.
 - Done when tests show: a write records the expected entry; a rolled-back write records nothing; a thrown ledger
   failure does not fail the apply.
 
