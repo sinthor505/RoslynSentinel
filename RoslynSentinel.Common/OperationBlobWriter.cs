@@ -97,6 +97,16 @@ public static class OperationBlobWriter
 
         try
         {
+            // Stamped here so every blob writer gets it; the apply blob is written inside the applying tool call, so the ambient context is the applier.
+            var applierId = ToolCallContext.Current?.AgentId;
+            if (applierId is not null)
+            {
+                foreach (var item in items)
+                {
+                    item.AppliedByAgentId ??= applierId;
+                }
+            }
+
             var dir = Path.Combine(solutionRoot, ".roslynsentinel", "operations");
             Directory.CreateDirectory(dir);
 

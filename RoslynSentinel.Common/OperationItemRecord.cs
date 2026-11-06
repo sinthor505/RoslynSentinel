@@ -26,4 +26,10 @@ public class OperationItemRecord
     }
     /// <summary>Structured Roslyn diagnostics that caused a validation failure. Null when outcome is not a compiler error.</summary>
     public List<DiagnosticInfo>? CompilerDiagnostics { get; set; }
+
+    /// <summary>Agent id of the call that applied this change, from ToolCallContext; null when the call carried no identity. Used by the undo guard.</summary>
+    public string? AppliedByAgentId
+    {
+        get; set;
+    }
 }

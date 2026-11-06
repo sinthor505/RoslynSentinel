@@ -108,6 +108,16 @@ public class WorkspaceFileEditImpl
                 };
             }
 
+            var undoConflict = UndoConcurrentEditConflict(revertable);
+            if (undoConflict is not null)
+            {
+                return new SentinelCallToolResult<object>()
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.ConcurrentEditRefused, undoConflict)
+                };
+            }
+
             var failed = new List<string>();
             var revertChanges = new Dictionary<FilePathWrapper, string>();
             foreach (var item in revertable)
@@ -173,6 +183,72 @@ public class WorkspaceFileEditImpl
                 IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UndoLastApply")
             };
+        }
+    }
+
+    /// <summary>
+    /// Step 7 undo guard. Refuses the whole undo when a file it would revert was changed after this change was applied,
+    /// by an agent other than the caller, per the edit attribution ledger (EditAttributionLedger, not the scoped
+    /// operation ledger). The refusal covers the whole undo, never a single file, because the revert result reports
+    /// failures as IsError=false and RecordUndo runs unconditionally. Calls with no agent id are never refused.
+    /// </summary>
+    private string? UndoConcurrentEditConflict(IReadOnlyList<OperationItemRecord> items)
+    {
+        try
+        {
+            var callerId = ToolCallContext.Current?.AgentId;
+            if (callerId is null)
+            {
+                return null;
+            }
+
+            var ledger = (_workspaceManager as IEditAttributionLedgerProvider)?.EditAttributions;
+            if (ledger is null)
+            {
+                return null;
+            }
+
+            var clauses = new List<string>();
+            string? firstPath = null;
+            foreach (var item in items)
+            {
+                var applierId = item.AppliedByAgentId;
+                if (applierId is null)
+                {
+                    continue;
+                }
+
+                var latest = ledger.GetLatest(item.FilePath);
+                if (latest is null
+                    || latest.AgentId is null
+                    || string.Equals(latest.AgentId, applierId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var agentType = latest.AgentType ?? "unknown";
+                var tool = latest.Tool ?? "unknown";
+                clauses.Add($"{item.FilePath} was changed by agent '{latest.AgentId}' (type {agentType}, tool {tool}) after agent '{applierId}' applied this change");
+                firstPath ??= item.FilePath;
+            }
+
+            if (clauses.Count == 0 || firstPath is null)
+            {
+                return null;
+            }
+
+            return $"Undo refused, nothing was reverted: {string.Join("; ", clauses)}. Reverting would overwrite that work. Next: "
+                + ToolCallHint.Call("ReadFile", ("filePath", firstPath))
+                + " to see the current content, then edit by hand. MULTI-AGENT: if you did not expect another agent to touch this file, report it.";
+        }
+        catch (Exception ex)
+        {
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning(ex, "Undo concurrent edit check failed; the undo proceeds.");
+            }
+
+            return null;
         }
     }
 

@@ -1,6 +1,6 @@
 # Plan: Edit attribution ledger naming the agent behind each write, with a same-file conflict refusal and a fixed per-process operating mode
 
-**Status:** APPROVED 2026-11-05. Design rulings from the owner are recorded under Decision; Steps 0-6 done (Step 0 results under that step); writes are recorded, the filter sets identity and the chokepoint refuses same-file conflicts between two known agents, but no id reaches the server until the hook is installed (Step 8). Citations checked at commit b3b90a26; the request pipeline, `AsyncLocal` and telemetry points were rechecked at bab9599b, which added per-tool telemetry. Between those commits `PersistentWorkspaceManager.cs`, `ToolArgumentValidator.cs`, `ValidateAndApplyHelper.cs` and `AdminTools.cs` did not change, so their line citations still hold.
+**Status:** APPROVED 2026-11-05. Design rulings from the owner are recorded under Decision; Steps 0-7 done (Step 0 results under that step); writes are recorded, the filter sets identity, the chokepoint refuses same-file conflicts between two known agents and `UndoLastApply` refuses an undo over another agent's later write, but no id reaches the server until the hook is installed (Step 8). Citations checked at commit b3b90a26; the request pipeline, `AsyncLocal` and telemetry points were rechecked at bab9599b, which added per-tool telemetry. Between those commits `PersistentWorkspaceManager.cs`, `ToolArgumentValidator.cs`, `ValidateAndApplyHelper.cs` and `AdminTools.cs` did not change, so their line citations still hold.
 
 ## Problem
 
@@ -318,8 +318,8 @@ in place. Findings reuse `Finding`.
   writers meanwhile. It also relies on `ValidateAndApplyHelper` being the main gate path; other gate paths were not traced.
 - **Batch tools lose the name.** `AsyncBatchEngine` surfaces only `RefusalCode` (`AsyncBatchEngine.cs:836`), so those agents see
   the code without the writer. Known limitation. Multi-apply tools can also be refused part-way; check whether they roll back.
-- **Undo after-state (Step 7).** Assumes `OperationItemRecord` holds after-content or a hash per item. Not verified. If absent,
-  compare with the edit attribution ledger's latest `HashAfter`, which a restart clears.
+- **Undo after-state (Step 7) - resolved.** Checked while building Step 7: nothing ever writes `OperationItemRecord.AfterSource`, so the after-state compare was dropped. The owner chose an applier id instead: `OperationBlobWriter.WriteAsync` stamps `AppliedByAgentId` on each item, and the undo is refused when the edit attribution ledger's latest writer is a different known agent. (Original note: assumed after-content or a hash per item. If absent,
+  the fallback was the edit attribution ledger's latest `HashAfter`, which a restart clears.) Blobs written without an agent id carry no applier id, so their undo is never refused.
 - **Writes outside the chokepoint** (`docs/current/reference-code-file-write-paths-v1.md:122-128`) and Git mutations are not
   attributed. Whether `Git` writes the working tree was not checked.
 - **`LaunchTestInstance` children.** Whether they inherit `ROSLYNSENTINEL_OPERATING_MODE` or receive the arg was not checked.
