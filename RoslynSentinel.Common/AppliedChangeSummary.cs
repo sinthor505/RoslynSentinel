@@ -45,9 +45,13 @@ public record AppliedChangeSummary(
     /// </summary>
     private bool NotWritten => !DryRun && !Validated && ChangedContent != null && ChangeId == null;
 
-    /// <summary>Inline only for dry runs, no-stage results (Validated false) and when ChangedContentOptions.InlineOnApply is on; otherwise null for a real apply - see ChangedContentResultId.</summary>
+    /// <summary>
+    /// Inline only for no-stage results (Validated false) and when ChangedContentOptions.InlineOnApply is on; otherwise null.
+    /// A dry run is compact too: lineChanges say what would change and the diff (returnDiff: true) shows it, never the whole file.
+    /// A real apply stays null - see ChangedContentResultId.
+    /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public Dictionary<FilePathWrapper, string>? ChangedContent { get; init; } = Validated && !DryRun && !ChangedContentOptions.InlineOnApply ? null : ChangedContent;
+    public Dictionary<FilePathWrapper, string>? ChangedContent { get; init; } = (DryRun || Validated) && !ChangedContentOptions.InlineOnApply ? null : ChangedContent;
 
     public string Note
     {
@@ -55,7 +59,13 @@ public record AppliedChangeSummary(
         {
             if (DryRun)
             {
-                return "Validated - introduces no new compiler errors. Not written to disk (dryRun=true). Re-call with dryRun=false to apply.";
+                // returnDiff may be hidden from the lean schema profile, but the server still accepts it at call time.
+                var preview = ChangedContent != null
+                    ? "The proposed file contents are in changedContent."
+                    : !string.IsNullOrEmpty(Diff)
+                        ? "The diff is the preview."
+                        : "Compact preview: lineChanges lists the per-file changes. To see the diff, re-call the same tool with the same arguments plus returnDiff: true (keep dryRun=true).";
+                return $"Validated - introduces no new compiler errors. Not written to disk (dryRun=true). {preview} Re-call with dryRun=false to apply.";
             }
 
             if (NotWritten)

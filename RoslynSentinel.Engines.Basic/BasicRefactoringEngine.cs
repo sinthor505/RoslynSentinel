@@ -2477,8 +2477,13 @@ public class BasicRefactoringEngine
             return (EditOutcome.NoCandidatesFound, $"No summary comment present on '{targetName}' in '{filePath}'. Next: AddSummaryComment to add one.", null);
         }
 
-        // TODO a one-line summary (/// <summary>X</summary>) is dropped by the StartsWith("<summary>") filter below, so view returns empty text with Outcome Modified; strip the tags instead of dropping the line.
-        var lines = docTrivia.ToFullString().Split('\n').Select(l => l.Trim().TrimStart('/').Trim()).Where(l => l.Length > 0 && !l.StartsWith("<summary>") && !l.StartsWith("</summary>")).ToList();
+        var lines = docTrivia.ToFullString().Split('\n')
+            .Select(l => l.Trim().TrimStart('/').Trim())
+            .Select(l => l.StartsWith("<summary>", StringComparison.Ordinal) ? l.Substring("<summary>".Length) : l)
+            .Select(l => l.EndsWith("</summary>", StringComparison.Ordinal) ? l.Substring(0, l.Length - "</summary>".Length) : l)
+            .Select(l => l.Trim())
+            .Where(l => l.Length > 0)
+            .ToList();
         return (EditOutcome.Modified, null, string.Join(" ", lines));
     }
 

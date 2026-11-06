@@ -1,3 +1,9 @@
+using System.Collections.Concurrent;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Xml;
+using System.Xml.Linq;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
@@ -285,7 +291,7 @@ public class WorkspaceProjectManagementImpl
             }
         }
 
-        var unrestored = BuildUnrestoredHint(FindUnrestoredProjects(projectFilePaths));
+        var unrestored = BuildUnrestoredHint(FindUnadvisedUnrestoredProjects(projectFilePaths, AdvisedRestoreStates));
         if (unrestored.Length > 0)
         {
             parts.Add(unrestored);
@@ -297,54 +303,7 @@ public class WorkspaceProjectManagementImpl
     // Flags projects whose obj/project.assets.json is missing or older than the .csproj or the nearest
     // Directory.Packages.props. Cheap file-system checks only; a project whose files cannot be read is skipped.
     internal static IReadOnlyList<string> FindUnrestoredProjects(IEnumerable<string> csprojPaths)
-    {
-        var flagged = new List<string>();
-        foreach (var csproj in csprojPaths)
-        {
-            try
-            {
-                if (!File.Exists(csproj) || Path.GetDirectoryName(csproj) is not { } projectDir)
-                {
-                    continue;
-                }
-
-                var name = Path.GetFileNameWithoutExtension(csproj);
-                var assets = Path.Combine(projectDir, "obj", "project.assets.json");
-                if (!File.Exists(assets))
-                {
-                    flagged.Add(name);
-                    continue;
-                }
-
-                var assetsTime = File.GetLastWriteTimeUtc(assets);
-                if (assetsTime < File.GetLastWriteTimeUtc(csproj))
-                {
-                    flagged.Add(name);
-                    continue;
-                }
-
-                for (var dir = new DirectoryInfo(projectDir); dir is not null; dir = dir.Parent)
-                {
-                    var props = Path.Combine(dir.FullName, "Directory.Packages.props");
-                    if (File.Exists(props))
-                    {
-                        if (File.GetLastWriteTimeUtc(props) > assetsTime)
-                        {
-                            flagged.Add(name);
-                        }
-
-                        break;
-                    }
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-            {
-                // Unreadable project: no hint for it rather than failing the load response.
-            }
-        }
-
-        return flagged;
-    }
+        => AnalyzeRestoreState(csprojPaths).Select(f => f.Name).ToList();
 
     // Empty string when nothing is flagged. Names up to 3 projects, then "(+N more)".
     internal static string BuildUnrestoredHint(IReadOnlyList<string> names)
@@ -358,6 +317,360 @@ public class WorkspaceProjectManagementImpl
         var more = names.Count > 3 ? $" (+{names.Count - 3} more)" : "";
         return $"Unrestored project(s) (no current obj/project.assets.json): {shown}{more}. Run {ToolCallHint.Call("Build", ("level", "fullBuild"))} then {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))}.";
     }
+
+    // "1.2" -> "1.2.0", "1.2.3.0" -> "1.2.3", prerelease lower-cased; null for floating/range/property versions,
+    // which are not comparable and so never count as a mismatch.
+    private static string? NormalizePlainVersion(string text)
+    {
+        var match = PlainVersionRegex.Match(text.Trim());
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var parts = new List<int>();
+        foreach (var part in match.Groups[1].Value.Split('.'))
+        {
+            if (!int.TryParse(part, out var number))
+            {
+                return null;
+            }
+
+            parts.Add(number);
+        }
+
+        while (parts.Count < 3)
+        {
+            parts.Add(0);
+        }
+
+        if (parts.Count == 4 && parts[3] == 0)
+        {
+            parts.RemoveAt(3);
+        }
+
+        return string.Join('.', parts) + match.Groups[2].Value.ToLowerInvariant();
+    }
+
+    // Only unconditional items are compared: a Condition may exclude the item from this restore, so its absence
+    // from project.assets.json proves nothing.
+    private static bool IsUnconditional(XElement element)
+        => element.AncestorsAndSelf().All(e => e.Attribute("Condition") is null);
+
+    // PackageVersion Include -> Version from Directory.Packages.props (unconditional entries only; an id declared
+    // twice maps to null = not comparable). Empty when the file is absent or not parseable.
+    private static Dictionary<string, string?> ReadCentralVersions(string? propsPath)
+    {
+        var versions = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        if (propsPath is null)
+        {
+            return versions;
+        }
+
+        try
+        {
+            foreach (var element in XDocument.Load(propsPath).Descendants().Where(e => e.Name.LocalName == "PackageVersion" && IsUnconditional(e)))
+            {
+                var id = (string?)element.Attribute("Include");
+                if (string.IsNullOrWhiteSpace(id))
+                {
+                    continue;
+                }
+
+                var version = (string?)element.Attribute("Version");
+                versions[id] = versions.ContainsKey(id) ? null : version;
+            }
+        }
+        catch (XmlException)
+        {
+            versions.Clear();
+        }
+
+        return versions;
+    }
+
+    // projectFileDependencyGroups: { "<tfm>": [ "<id> >= <version>", ... ] } -> id -> the range strings seen across TFMs.
+    private static Dictionary<string, List<string>> ReadAssetPackageRanges(JsonElement root)
+    {
+        var ranges = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        if (!root.TryGetProperty("projectFileDependencyGroups", out var groups) || groups.ValueKind != JsonValueKind.Object)
+        {
+            return ranges;
+        }
+
+        foreach (var group in groups.EnumerateObject().Where(g => g.Value.ValueKind == JsonValueKind.Array))
+        {
+            foreach (var entry in group.Value.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String))
+            {
+                var text = entry.GetString() ?? "";
+                var space = text.IndexOf(' ');
+                var id = space < 0 ? text : text[..space];
+                if (!ranges.TryGetValue(id, out var list))
+                {
+                    ranges[id] = list = [];
+                }
+
+                list.Add(space < 0 ? "" : text[(space + 1)..].Trim());
+            }
+        }
+
+        return ranges;
+    }
+
+    // Target framework monikers the restore recorded: project.frameworks keys and project.restore.originalTargetFrameworks.
+    private static List<string> ReadAssetFrameworks(JsonElement root)
+    {
+        var frameworks = new List<string>();
+        if (!root.TryGetProperty("project", out var project) || project.ValueKind != JsonValueKind.Object)
+        {
+            return frameworks;
+        }
+
+        if (project.TryGetProperty("frameworks", out var keyed) && keyed.ValueKind == JsonValueKind.Object)
+        {
+            frameworks.AddRange(keyed.EnumerateObject().Select(p => p.Name));
+        }
+
+        if (project.TryGetProperty("restore", out var restore) && restore.ValueKind == JsonValueKind.Object
+            && restore.TryGetProperty("originalTargetFrameworks", out var original) && original.ValueKind == JsonValueKind.Array)
+        {
+            frameworks.AddRange(original.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString() ?? ""));
+        }
+
+        return frameworks;
+    }
+
+    // project.restore.frameworks.<tfm>.projectReferences keys are absolute project paths; compare by file name so a
+    // path-spelling difference (8.3 names, drive aliases) can never keep a project flagged forever.
+    private static HashSet<string> ReadAssetProjectReferenceNames(JsonElement root)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (root.TryGetProperty("project", out var project) && project.ValueKind == JsonValueKind.Object
+            && project.TryGetProperty("restore", out var restore) && restore.ValueKind == JsonValueKind.Object
+            && restore.TryGetProperty("frameworks", out var frameworks) && frameworks.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var framework in frameworks.EnumerateObject().Where(f => f.Value.ValueKind == JsonValueKind.Object))
+            {
+                if (framework.Value.TryGetProperty("projectReferences", out var references) && references.ValueKind == JsonValueKind.Object)
+                {
+                    names.UnionWith(references.EnumerateObject().Select(r => Path.GetFileName(r.Name.Replace('\\', '/'))));
+                }
+            }
+        }
+
+        return names;
+    }
+
+    // Every unconditional PackageReference must be recorded by the restore, at the same plain version when both
+    // versions are comparable (csproj Version / VersionOverride, else the Directory.Packages.props PackageVersion).
+    // Only additions and version changes are checked; packages the restore recorded that the csproj does not list
+    // (Directory.Build.props, SDK-implicit) are not evidence of staleness.
+    private static string? FindPackageMismatch(XDocument project, Dictionary<string, string?> central, Dictionary<string, List<string>> assetRanges)
+    {
+        foreach (var reference in project.Descendants().Where(e => e.Name.LocalName == "PackageReference" && IsUnconditional(e)))
+        {
+            var id = (string?)reference.Attribute("Include");
+            if (string.IsNullOrWhiteSpace(id) || id.IndexOfAny(['$', '@', '*', ';']) >= 0)
+            {
+                continue;
+            }
+
+            if (!assetRanges.TryGetValue(id, out var ranges))
+            {
+                return $"package {id} added";
+            }
+
+            var wanted = (string?)reference.Attribute("Version")
+                ?? reference.Elements().FirstOrDefault(e => e.Name.LocalName == "Version")?.Value
+                ?? (string?)reference.Attribute("VersionOverride")
+                ?? (central.TryGetValue(id, out var centralVersion) ? centralVersion : null);
+            var wantedNormalized = wanted is null ? null : NormalizePlainVersion(wanted);
+            if (wantedNormalized is null)
+            {
+                continue;
+            }
+
+            var recorded = ranges.Select(r => r.StartsWith(">=", StringComparison.Ordinal) ? NormalizePlainVersion(r[2..]) : null).ToList();
+            if (recorded.Count > 0 && recorded.All(r => r is not null) && !recorded.Contains(wantedNormalized))
+            {
+                return $"package {id} version changed";
+            }
+        }
+
+        return null;
+    }
+
+    // Unconditional TargetFramework(s) must be among the frameworks the restore recorded (prefix match covers
+    // net8.0-windows -> net8.0-windows7.0), and unconditional ProjectReferences among the recorded project files.
+    // Skipped when the assets file records no frameworks at all (nothing to compare against).
+    private static string? FindFrameworkOrProjectReferenceMismatch(XDocument project, JsonElement assetsRoot)
+    {
+        var assetFrameworks = ReadAssetFrameworks(assetsRoot);
+        if (assetFrameworks.Count > 0)
+        {
+            var wanted = project.Descendants()
+                .Where(e => e.Name.LocalName is "TargetFramework" or "TargetFrameworks" && IsUnconditional(e))
+                .SelectMany(e => e.Value.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                .Where(t => !t.Contains('$'));
+            foreach (var framework in wanted)
+            {
+                if (!assetFrameworks.Any(a => a.StartsWith(framework, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return $"framework {framework} added";
+                }
+            }
+        }
+
+        var assetProjects = ReadAssetProjectReferenceNames(assetsRoot);
+        foreach (var reference in project.Descendants().Where(e => e.Name.LocalName == "ProjectReference" && IsUnconditional(e)))
+        {
+            var include = (string?)reference.Attribute("Include");
+            if (string.IsNullOrWhiteSpace(include) || include.IndexOfAny(['$', '@', '*', ';']) >= 0)
+            {
+                continue;
+            }
+
+            var fileName = Path.GetFileName(include.Replace('\\', '/'));
+            if (!assetProjects.Contains(fileName))
+            {
+                return $"project reference {fileName} added";
+            }
+        }
+
+        return null;
+    }
+
+    // Why the restore recorded in project.assets.json no longer describes the project, or null when it still does.
+    // A csproj that cannot be parsed is skipped (null); an assets file that cannot be parsed counts as unrestored.
+    private static string? FindRestoreInputMismatch(string csproj, string? packagesPropsPath, string assetsPath)
+    {
+        XDocument project;
+        try
+        {
+            project = XDocument.Load(csproj);
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+
+        JsonDocument assets;
+        try
+        {
+            using var stream = File.OpenRead(assetsPath);
+            assets = JsonDocument.Parse(stream);
+        }
+        catch (JsonException)
+        {
+            return "assets file unreadable";
+        }
+
+        using (assets)
+        {
+            var root = assets.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return "assets file unreadable";
+            }
+
+            return FindPackageMismatch(project, ReadCentralVersions(packagesPropsPath), ReadAssetPackageRanges(root))
+                ?? FindFrameworkOrProjectReferenceMismatch(project, root);
+        }
+    }
+
+    // Flags a project when obj/project.assets.json is missing, or when it is older than the csproj / nearest
+    // Directory.Packages.props AND its recorded restore inputs (package ids and versions, target frameworks, project
+    // references) no longer match the project. The timestamp alone is not enough: a restore whose inputs are
+    // unchanged is a no-op that never rewrites project.assets.json, so after a csproj touch without an input change
+    // (checkout, non-package edit) no Build can ever make the assets file newer. Cheap in the common case: an assets
+    // file newer than both files is accepted without being parsed. A project whose files cannot be read is skipped.
+    // State is a signature of the flagged condition (file times + reason) used to avoid repeating advice.
+    private static List<(string Name, string Path, string State)> AnalyzeRestoreState(IEnumerable<string> csprojPaths)
+    {
+        var flagged = new List<(string Name, string Path, string State)>();
+        foreach (var csproj in csprojPaths)
+        {
+            try
+            {
+                if (!File.Exists(csproj) || Path.GetDirectoryName(csproj) is not { } projectDir)
+                {
+                    continue;
+                }
+
+                var name = Path.GetFileNameWithoutExtension(csproj);
+                var assets = Path.Combine(projectDir, "obj", "project.assets.json");
+                if (!File.Exists(assets))
+                {
+                    flagged.Add((name, csproj, "assets missing"));
+                    continue;
+                }
+
+                var assetsTime = File.GetLastWriteTimeUtc(assets);
+                var csprojTime = File.GetLastWriteTimeUtc(csproj);
+                string? propsPath = null;
+                for (var dir = new DirectoryInfo(projectDir); dir is not null && propsPath is null; dir = dir.Parent)
+                {
+                    var candidate = Path.Combine(dir.FullName, "Directory.Packages.props");
+                    propsPath = File.Exists(candidate) ? candidate : null;
+                }
+
+                var propsTime = propsPath is null ? DateTime.MinValue : File.GetLastWriteTimeUtc(propsPath);
+                if (assetsTime >= csprojTime && assetsTime >= propsTime)
+                {
+                    continue;
+                }
+
+                var mismatch = FindRestoreInputMismatch(csproj, propsPath, assets);
+                if (mismatch is not null)
+                {
+                    flagged.Add((name, csproj, $"{csprojTime.Ticks}|{propsTime.Ticks}|{assetsTime.Ticks}|{mismatch}"));
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                // Unreadable project: no hint for it rather than failing the load response.
+            }
+        }
+
+        return flagged;
+    }
+
+    // Unrestored projects not yet advised about in their current state. A project already advised in an identical
+    // state (same file times and reason) is dropped: the advised Build ran and changed nothing, so repeating it
+    // cannot change the outcome. Entries for projects no longer flagged are forgotten, so a later change to the
+    // project (new times) is advised again.
+    internal static IReadOnlyList<string> FindUnadvisedUnrestoredProjects(IEnumerable<string> csprojPaths, ConcurrentDictionary<string, string> advised)
+    {
+        var paths = csprojPaths.ToList();
+        var flagged = AnalyzeRestoreState(paths);
+        var flaggedPaths = flagged.Select(f => f.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var path in paths.Where(p => !flaggedPaths.Contains(p)))
+        {
+            advised.TryRemove(path, out _);
+        }
+
+        var fresh = new List<string>();
+        foreach (var (name, path, state) in flagged)
+        {
+            if (advised.TryGetValue(path, out var previous) && previous == state)
+            {
+                continue;
+            }
+
+            advised[path] = state;
+            fresh.Add(name);
+        }
+
+        return fresh;
+    }
+
+    private static readonly Regex PlainVersionRegex = new(@"^(\d+(?:\.\d+){0,3})(-[0-9A-Za-z.\-]+)?$", RegexOptions.Compiled);
+
+    // Restore state already advised about, keyed by csproj path -> state signature (mtimes + mismatch reason).
+    // Deliberate deviation from the stateless hint helpers: a project that is still flagged in an identical state
+    // after the advised Build (a restore that rewrites nothing) must not make every LoadSolution repeat the
+    // same advice. Process-wide because the workspace manager is a singleton per server process.
+    private static readonly ConcurrentDictionary<string, string> AdvisedRestoreStates = new(StringComparer.OrdinalIgnoreCase);
 
     public async Task<SentinelCallToolResult<object>> LoadSolution(ToolCallReason reason, string solutionPath, string? baseRepoDir = null,
         bool forceReload = false, int timeoutSeconds = 30, CancellationToken cancellationToken = default)

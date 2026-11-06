@@ -1,5 +1,7 @@
 using System.Text.RegularExpressions;
 
+using Microsoft.CodeAnalysis;
+
 namespace RoslynSentinel.Common;
 
 /// <summary>What started a workspace reload attempt.</summary>
@@ -122,5 +124,74 @@ public static class WorkspaceStaleText
 public interface IWorkspaceReloadFailureProvider
 {
     /// <summary>The last failed reload, cleared by the next successful full load or reload; null when none is recorded.</summary>
-    WorkspaceReloadFailure? ReloadFailure { get; }
+    WorkspaceReloadFailure? ReloadFailure
+    {
+        get;
+    }
+}
+/// <summary>
+/// Raised when a workspace open completed but one or more projects failed to load (see ProjectLoadFailureCollector),
+/// so the resulting solution would not match disk. Its type name is part of the recorded cause. DTO-EXEMPT: exception, not a DTO.
+/// </summary>
+internal sealed class ProjectLoadFailedException(string message) : Exception(message);
+/// <summary>
+/// Collects the WorkspaceDiagnosticKind.Failure diagnostics an MSBuildWorkspace raises while opening a solution
+/// that name a .NET project file (.csproj, .vbproj, .fsproj): an unparseable or missing project file, or a project
+/// MSBuild could not evaluate. MSBuildWorkspace reports those through its WorkspaceFailed event and still returns a
+/// solution in which the project is present with no documents, so the open does not throw. Warnings and failures
+/// that do not name a .NET project file (for example an unsupported project type) are ignored, so a healthy load
+/// stays clean.
+/// </summary>
+internal sealed class ProjectLoadFailureCollector
+{
+    private static readonly string[] ProjectFileExtensions = [".csproj", ".vbproj", ".fsproj"];
+
+    private readonly object _sync = new();
+    private readonly List<string> _messages = new();
+
+    /// <summary>True when at least one project-load failure was observed.</summary>
+    public bool HasFailures
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _messages.Count > 0;
+            }
+        }
+    }
+
+    /// <summary>Records the diagnostic when it is a Failure that names a .NET project file; other diagnostics are ignored.</summary>
+    public void Observe(WorkspaceDiagnostic diagnostic)
+    {
+        ArgumentNullException.ThrowIfNull(diagnostic);
+        if (diagnostic.Kind != WorkspaceDiagnosticKind.Failure)
+        {
+            return;
+        }
+
+        var message = diagnostic.Message;
+        // TODO this keys on the project file extension in the (localised) message text because WorkspaceDiagnostic carries no project id; a diagnostic that names no project file is missed rather than falsely flagged.
+        if (!ProjectFileExtensions.Any(extension => message.Contains(extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        lock (_sync)
+        {
+            if (!_messages.Contains(message))
+            {
+                _messages.Add(message);
+            }
+        }
+    }
+
+    /// <summary>The first distinct failure message (it names the project file); empty when nothing was observed.</summary>
+    public string Describe()
+    {
+        lock (_sync)
+        {
+            return _messages.Count == 0 ? string.Empty : _messages[0];
+        }
+    }
 }

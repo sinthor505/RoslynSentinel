@@ -621,6 +621,61 @@ public class Widget { }
     }
 
     [Test]
+    public async Task GetSummaryComment_OneLineSummary_ReturnsText()
+    {
+        SetSource(@"
+namespace N;
+/// <summary>Does the thing.</summary>
+public class Foo
+{
+}
+", "Foo.cs");
+
+        var viewed = await _basicRefactoringEngine.GetSummaryCommentAsync("Foo.cs", "Foo");
+
+        Assert.That(viewed.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(viewed.SummaryText, Is.EqualTo("Does the thing."));
+    }
+
+    [Test]
+    public async Task GetSummaryComment_MultiLineSummary_ReturnsJoinedText()
+    {
+        SetSource(@"
+namespace N;
+/// <summary>
+/// First line.
+/// Second line.
+/// </summary>
+public class Foo
+{
+}
+", "Foo.cs");
+
+        var viewed = await _basicRefactoringEngine.GetSummaryCommentAsync("Foo.cs", "Foo");
+
+        Assert.That(viewed.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(viewed.SummaryText, Is.EqualTo("First line. Second line."));
+    }
+
+    [Test]
+    public async Task GetSummaryComment_MixedSummaryForm_ReturnsJoinedText()
+    {
+        SetSource(@"
+namespace N;
+/// <summary>First line.
+/// Second line.</summary>
+public class Foo
+{
+}
+", "Foo.cs");
+
+        var viewed = await _basicRefactoringEngine.GetSummaryCommentAsync("Foo.cs", "Foo");
+
+        Assert.That(viewed.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(viewed.SummaryText, Is.EqualTo("First line. Second line."));
+    }
+
+    [Test]
     public async Task AddSummaryComment_SnippetMatchesNothing_ThrowsNotFound()
     {
         SetSource(@"

@@ -14,7 +14,8 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 /// Full-pipeline regression tests for the mutating-tool compact-result default
 /// (docs/current/plans/plan_mutating_tools_compact_result_default.md, Step 7): a real apply through a real tool
 /// (ModifyModifierTool -> ValidateAndApplyHelper -> AppliedChangeSummary) must not echo the whole file in
-/// changedContent, while dry runs and autoStage=false results still do.
+/// changedContent and neither does a dry run (it carries lineChanges, plus the diff with returnDiff: true), while
+/// autoStage=false results still do.
 /// Runs on an InMemoryWorkspace (no MSBuild load). That workspace has no solution root by default, so the offload to a
 /// large-result file cannot happen there (fail-closed: ChangedContentResultId is null and the Note falls back to
 /// ReadFileTool). The offload end-to-end test sets FakeWorkspaceManager.SolutionPath to a temp directory, which is the
@@ -50,14 +51,15 @@ public class CompactResultDefaultTests
     }
 
     private static Task<SentinelCallToolResult<AppliedChangeSummary>> AddVirtualAsync(
-        RefactoringStructuralTools tools, InMemoryWorkspace workspace, bool dryRun = false) =>
+        RefactoringStructuralTools tools, InMemoryWorkspace workspace, bool dryRun = false, bool returnDiff = false) =>
         tools.ModifyModifierTool(
             reason: "test compact result default",
             filePath: workspace.PathOf(FixtureRelativePath),
             targetName: "Target",
             modifier: NonAccessibilityModifier.@virtual,
             action: AddRemoveAction.add,
-            dryRun: dryRun);
+            dryRun: dryRun,
+            returnDiff: returnDiff);
 
     [Test]
     public async Task ModifyModifier_Applied_ResultHasNoChangedContentHasLineChangesAndNoteAsync()
@@ -103,7 +105,7 @@ public class CompactResultDefaultTests
     }
 
     [Test]
-    public async Task ModifyModifier_DryRun_StillReturnsChangedContentAsync()
+    public async Task ModifyModifier_DryRun_IsCompactByDefaultAndNoteNamesReturnDiffAsync()
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = BuildTools(workspace.Manager);
@@ -117,8 +119,32 @@ public class CompactResultDefaultTests
         {
             Assert.That(summary.DryRun, Is.True);
             Assert.That(summary.Status, Is.EqualTo("dry_run_ok"));
-            Assert.That(summary.ChangedContent, Is.Not.Null.And.Not.Empty);
-            Assert.That(summary.ChangedContent!.Values.Single(), Does.Contain("public virtual int Target()"));
+            Assert.That(summary.ChangedContent, Is.Null, "a dry run must not echo the whole file by default");
+            Assert.That(summary.Diff, Is.Null, "no diff unless returnDiff is asked for");
+            Assert.That(summary.LineChanges, Is.Not.Null.And.Not.Empty);
+            Assert.That(summary.Note, Does.Contain("returnDiff: true"));
+            Assert.That(summary.Note, Does.Contain("Re-call with dryRun=false to apply."));
+        });
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "a dry run must not write");
+    }
+
+    [Test]
+    public async Task ModifyModifier_DryRun_ReturnDiffShowsTheChangeWithoutTheWholeFileAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var before = workspace.ReadText(FixtureRelativePath);
+
+        var result = await AddVirtualAsync(tools, workspace, dryRun: true, returnDiff: true);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var summary = result.SuccessData!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(summary.DryRun, Is.True);
+            Assert.That(summary.Diff, Does.Contain("public virtual int Target()"));
+            Assert.That(summary.ChangedContent, Is.Null, "the diff is the preview, never the diff and the whole file");
+            Assert.That(summary.Note, Does.Contain("The diff is the preview."));
         });
         Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "a dry run must not write");
     }

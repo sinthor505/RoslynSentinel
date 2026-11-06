@@ -24,10 +24,11 @@ public class AppliedChangeSummaryTests
     }
 
     [Test]
-    public void DryRun_KeepsChangedContent()
+    public void DryRun_DropsChangedContent_KeepsLineChanges()
     {
         var filePath = new FilePathWrapper("test.cs");
         var content = new Dictionary<FilePathWrapper, string> { { filePath, "content" } };
+        var lineChanges = new List<FileLineChange> { FileLineChange.Compute(filePath, "old", "content") };
         var summary = new AppliedChangeSummary(
             ChangeId: null,
             AffectedFiles: new List<FilePathWrapper> { filePath },
@@ -35,9 +36,12 @@ public class AppliedChangeSummaryTests
             DryRun: true,
             ChangedContent: content,
             Validated: true,
+            LineChanges: lineChanges,
             ChangedContentResultId: null);
 
-        Assert.That(summary.ChangedContent, Is.EqualTo(content));
+        Assert.That(summary.ChangedContent, Is.Null, "a dry run is compact by default: no whole-file content");
+        Assert.That(summary.LineChanges, Is.EqualTo(lineChanges));
+        Assert.That(summary.Status, Is.EqualTo("dry_run_ok"));
     }
 
     [Test]
@@ -142,7 +146,7 @@ public class AppliedChangeSummaryTests
     }
 
     [Test]
-    public void DryRun_SerializedJsonKeepsChangedContent()
+    public void DryRun_SerializedJsonOmitsChangedContent_KeepsLineChanges()
     {
         var filePath = new FilePathWrapper("test.cs");
         var content = new Dictionary<FilePathWrapper, string> { { filePath, "content" } };
@@ -153,11 +157,100 @@ public class AppliedChangeSummaryTests
             DryRun: true,
             ChangedContent: content,
             Validated: true,
+            LineChanges: new List<FileLineChange> { FileLineChange.Compute(filePath, "old", "content") },
             ChangedContentResultId: null);
 
         var json = JsonSerializer.Serialize(summary, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        using var doc = JsonDocument.Parse(json);
 
-        Assert.That(json, Does.Contain("changedContent"));
+        Assert.That(doc.RootElement.TryGetProperty("changedContent", out _), Is.False);
+        Assert.That(doc.RootElement.TryGetProperty("lineChanges", out _), Is.True);
+    }
+
+    [Test]
+    public void DryRun_WithDiff_SerializedJsonCarriesDiffNotChangedContent()
+    {
+        var filePath = new FilePathWrapper("test.cs");
+        var summary = new AppliedChangeSummary(
+            ChangeId: null,
+            AffectedFiles: new List<FilePathWrapper> { filePath },
+            Description: "test",
+            DryRun: true,
+            Diff: "--- test.cs\n-old\n+content",
+            ChangedContent: new Dictionary<FilePathWrapper, string> { { filePath, "content" } },
+            Validated: true,
+            ChangedContentResultId: null);
+
+        var json = JsonSerializer.Serialize(summary, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        using var doc = JsonDocument.Parse(json);
+
+        Assert.That(doc.RootElement.TryGetProperty("diff", out var diff) && diff.GetString()!.Contains("+content"), Is.True, "the diff is the preview");
+        Assert.That(doc.RootElement.TryGetProperty("changedContent", out _), Is.False, "never both the diff and the whole file");
+    }
+
+    [Test]
+    [NonParallelizable]
+    public void DryRun_InlineOptionOn_KeepsChangedContent()
+    {
+        var originalValue = ChangedContentOptions.InlineOnApply;
+        try
+        {
+            ChangedContentOptions.InlineOnApply = true;
+
+            var filePath = new FilePathWrapper("test.cs");
+            var content = new Dictionary<FilePathWrapper, string> { { filePath, "content" } };
+            var summary = new AppliedChangeSummary(
+                ChangeId: null,
+                AffectedFiles: new List<FilePathWrapper> { filePath },
+                Description: "test",
+                DryRun: true,
+                ChangedContent: content,
+                Validated: true,
+                ChangedContentResultId: null);
+
+            Assert.That(summary.ChangedContent, Is.EqualTo(content));
+            Assert.That(summary.Note, Does.Contain("changedContent"));
+        }
+        finally
+        {
+            ChangedContentOptions.InlineOnApply = originalValue;
+        }
+    }
+
+    [Test]
+    public void DryRun_WithoutDiff_NoteNamesReturnDiffAndApply()
+    {
+        var filePath = new FilePathWrapper("test.cs");
+        var summary = new AppliedChangeSummary(
+            ChangeId: null,
+            AffectedFiles: new List<FilePathWrapper> { filePath },
+            Description: "test",
+            DryRun: true,
+            ChangedContent: new Dictionary<FilePathWrapper, string> { { filePath, "content" } },
+            Validated: true,
+            ChangedContentResultId: null);
+
+        Assert.That(summary.Note, Does.Contain("returnDiff: true"));
+        Assert.That(summary.Note, Does.Contain("lineChanges"));
+        Assert.That(summary.Note, Does.Contain("Re-call with dryRun=false to apply."));
+    }
+
+    [Test]
+    public void DryRun_WithDiff_NoteSaysDiffIsThePreview()
+    {
+        var filePath = new FilePathWrapper("test.cs");
+        var summary = new AppliedChangeSummary(
+            ChangeId: null,
+            AffectedFiles: new List<FilePathWrapper> { filePath },
+            Description: "test",
+            DryRun: true,
+            Diff: "--- test.cs\n-old\n+content",
+            Validated: true,
+            ChangedContentResultId: null);
+
+        Assert.That(summary.Note, Does.Contain("The diff is the preview."));
+        Assert.That(summary.Note, Does.Not.Contain("returnDiff"));
+        Assert.That(summary.Note, Does.Contain("Re-call with dryRun=false to apply."));
     }
 
     [Test]

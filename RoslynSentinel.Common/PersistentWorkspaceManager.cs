@@ -601,6 +601,29 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         }
     }
 
+    // A reload that failed because a project file did not load keeps the old workspace, whose baseline hashes are the
+    // previous good file content. Without re-baselining, restoring exactly that content is hash-confirmed as a no-op
+    // by OnFileSystemChanged, no reload runs, and the sticky failure never clears. Re-hash the project and solution
+    // files as they are on disk now (the broken content), so any later edit - including a revert - triggers the
+    // reload that clears it. Called with _solutionLock held, from the debounce handler's catch (must not throw).
+    private void RebaselineStructuralFileHashesAfterProjectLoadFailure()
+    {
+        try
+        {
+            if (CurrentSolution is { } solution)
+            {
+                RecordStructuralFileHashes(solution);
+            }
+        }
+        catch (Exception ex)
+        {
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning(ex, "Re-baselining project file hashes after a failed reload did not complete.");
+            }
+        }
+    }
+
     /// <summary>
     /// Returns true if the file at the given path starts with a UTF-8 BOM (0xEF 0xBB 0xBF).
     /// </summary>
@@ -717,6 +740,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     { "NuGetAuditLevel", "critical" }
                 });
                 _workspaceLoadErrors.Clear();
+                var projectFailures = new ProjectLoadFailureCollector();
                 newWorkspace.RegisterWorkspaceFailedHandler((d) =>
                 {
                     if (_logger.IsEnabled(LogLevel.Warning))
@@ -724,6 +748,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         _logger.LogWarning("Workspace error: {Message}", d.Diagnostic.Message);
                     }
                     _workspaceLoadErrors.Add(d.Diagnostic.Message);
+                    projectFailures.Observe(d.Diagnostic);
                 });
 
                 var hadUsableSolution = CurrentSolution is { ProjectIds.Count: > 0 };
@@ -766,6 +791,16 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     {
                         _workspaceLoadErrors.Add($"Solution '{solutionPath}' opened but no projects were found. This often indicates MSBuild errors. Check server logs for details.");
                     }
+                }
+
+                if (!failureRecorded && projectFailures.HasFailures)
+                {
+                    // The open returned a solution in which at least one project failed to load (no throw, that project has
+                    // no documents). An explicit load still swaps it in, like any partial load, but reports the failure so
+                    // the workspace is flagged stale; the next fully clean load clears it. The debounce reload keeps the old
+                    // workspace instead (OpenFreshWorkspaceAsync), because there nobody asked to replace a good solution.
+                    RecordReloadFailure(WorkspaceReloadTriggerKind.ExplicitLoad, Path.GetFileName(solutionPath), new ProjectLoadFailedException(projectFailures.Describe()), oldWorkspaceKept: false);
+                    failureRecorded = true;
                 }
 
                 // SolutionPath must be set before the swap: RecordStructuralFileHashes reads it.
@@ -1386,6 +1421,10 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 _debounceRetryCount = 0;
                 var trigger = ClassifyReloadTrigger(changes, watcherErrored, overflowed, out var triggerFile);
                 RecordReloadFailure(trigger, triggerFile, ex, oldWorkspaceKept: true);
+                if (ex is ProjectLoadFailedException)
+                {
+                    RebaselineStructuralFileHashesAfterProjectLoadFailure();
+                }
             }
         }
         finally
@@ -2490,6 +2529,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             {
                 _logger.LogError(ex, "Background MSBuild reload failed for {SlnPath}", slnPath);
             }
+            // TODO a ProjectLoadFailedException here does not re-baseline the structural file hashes (the debounce path does, under the lock), so reverting a broken project file to its previous content is hash-confirmed as a no-op and the failure stays until a LoadSolution(forceReload) or another edit.
             RecordReloadFailure(WorkspaceReloadTriggerKind.PostWriteReload, slnPath, ex, oldWorkspaceKept: true);
             return;
         }
@@ -2536,17 +2576,28 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             { "NuGetAudit", "false" },
             { "NuGetAuditLevel", "critical" }
         });
+        var projectFailures = new ProjectLoadFailureCollector();
         workspace.RegisterWorkspaceFailedHandler(d =>
         {
             if (_logger.IsEnabled(LogLevel.Warning))
             {
                 _logger.LogWarning("Refresh error: {Message}", d.Diagnostic.Message);
             }
+            projectFailures.Observe(d.Diagnostic);
         });
 
         try
         {
             var solution = await OpenSolutionOverride(workspace, solutionPath, cancellationToken);
+            if (projectFailures.HasFailures)
+            {
+                // MSBuildWorkspace reports an unparseable or missing project file only through WorkspaceFailed and still
+                // returns a solution in which that project has no documents, so the open does not throw. Fail the reload
+                // here instead: the callers keep the previous (complete) workspace, record the failure, and the debounce
+                // path retries once. A swap would silently drop the project's documents.
+                throw new ProjectLoadFailedException(projectFailures.Describe());
+            }
+
             return (workspace, solution);
         }
         catch

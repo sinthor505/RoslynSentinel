@@ -185,9 +185,11 @@ public class MoveMemberToolCollateralRefusalTests
         var summary = (AppliedChangeSummary)result.SuccessData!;
         Assert.That(summary.DryRun, Is.True);
         Assert.That(summary.EditSpans, Is.Not.Null.And.Not.Empty, "A dry run must report the edit spans it validated");
-        Assert.That(summary.ChangedContent, Is.Not.Null, "A dry run must report the proposed file contents");
+        Assert.That(summary.ChangedContent, Is.Null, "A dry run is compact by default: it must not echo the whole proposed files");
+        Assert.That(summary.LineChanges, Is.Not.Null.And.Not.Empty, "A dry run must report per-file line counts instead");
+        Assert.That(summary.Note, Does.Contain("returnDiff: true"), "The note must say how to get the diff");
 
-        var touchedFiles = summary.ChangedContent!.Keys.Select(f => f.ToString()).ToList();
+        var touchedFiles = summary.AffectedFiles.Select(f => f.ToString()).ToList();
         foreach (var span in summary.EditSpans!)
         {
             Assert.That(touchedFiles, Does.Contain(span.FilePath), "Every span must belong to a touched file");
@@ -200,16 +202,41 @@ public class MoveMemberToolCollateralRefusalTests
         // The move touches only Refactor.cs. Replaying the spans against the ORIGINAL text, last span first,
         // must reproduce the proposed content.
         Assert.That(summary.EditSpans!.All(s => s.FilePath == FileName), Is.True, "This single-file move must only report spans for Refactor.cs");
-        var proposed = summary.ChangedContent!.Single(kv => System.IO.Path.GetFileName(kv.Key.ToString()) == FileName).Value;
         var replayed = OriginalText;
         foreach (var span in summary.EditSpans!.OrderByDescending(s => s.Start))
         {
             replayed = replayed.Remove(span.Start, span.Length).Insert(span.Start, span.NewText);
         }
-        Assert.That(replayed, Is.EqualTo(proposed), "Applying the spans to the original text must reproduce the proposed content");
 
         Assert.That(System.IO.File.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), FileName)), Is.False,
             "A dry run must not write Refactor.cs to disk");
+        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(OriginalText), "A dry run must not change the committed text");
+
+        // The dry run no longer carries the proposed content, so the replayed spans are checked against what the same move
+        // really writes: applying the spans to the original text must reproduce the committed text after a real apply.
+        var applied = await tools.MoveMemberTool(reason: "test message", FileName, "Src", ["Foo"], "Target", dryRun: false, oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(applied.IsError, Is.False, $"{applied.ErrorData?.ErrorCode}: {applied.ErrorData?.Message}");
+        Assert.That(replayed, Is.EqualTo(await ReadCommittedRefactorText()), "Applying the spans to the original text must reproduce the content a real apply writes");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_DryRun_ReturnDiffShowsTheDiffNotTheWholeFileAndWritesNothing()
+    {
+        SetRefactorSource();
+        var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validation = Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var engine = Battery.Basic.TestEngines.MemberRefactoringEngine(_workspaceManager, symbolNav, validation);
+        var tools = CreateTools(engine, symbolNav, validation);
+
+        var result = await tools.MoveMemberTool(reason: "test message", FileName, "Src", ["Foo"], "Target", dryRun: true, returnDiff: true, oldMember: MoveMemberOldMember.keepDelegator);
+
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message} | Detail: {result.ErrorData?.Detail}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.DryRun, Is.True);
+        Assert.That(summary.Diff, Is.Not.Null.And.Not.Empty, "returnDiff: true must return the diff on a dry run");
+        Assert.That(summary.ChangedContent, Is.Null, "the diff is the preview, never the diff and the whole file");
+        Assert.That(summary.Note, Does.Contain("The diff is the preview."));
         Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(OriginalText), "A dry run must not change the committed text");
     }
 
