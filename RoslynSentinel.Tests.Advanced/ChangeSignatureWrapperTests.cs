@@ -287,7 +287,7 @@ public class ChangeSignatureWrapperTests
     [Test]
     [Category("BasicRefactoringEngine")] // sentinel:auto-category
     [Category("ChangeSignatureResult")] // sentinel:auto-category
-    public async Task ChangeSignature_KeepAsDeprecatedWrapper_ParamsParameter_ExpandedCallStaysOnWrapper()
+    public async Task ChangeSignature_KeepAsDeprecatedWrapper_ParamsParameter_ExpandedCallMigratesWithEveryArgument()
     {
         const string totalsSource = @"public class Totals
 {
@@ -302,13 +302,15 @@ public class ChangeSignatureWrapperTests
         var result = await KeepWrapper("Totals.cs", "Total", new NewParameterSpec("label", "string", "\"x\""), new ExistingParameterSpec(0));
 
         Assert.That(result.Error, Is.Null);
-        Assert.That(result.SkippedCallSites, Has.Count.EqualTo(1), "The expanded params call stays on the wrapper");
-        Assert.That(result.SkippedCallSites[0].Reason, Does.Contain("expanded form"));
-        Assert.That(result.SkippedCallSites[0].LineNumber, Is.EqualTo(4));
+        Assert.That(result.SkippedCallSites, Is.Empty, "The expanded params call is migrated, not left on the wrapper");
+        Assert.That(result.MigratedCallSites, Has.Count.EqualTo(2));
         var totalsAfter = result.Changes["Totals.cs"];
         Assert.That(totalsAfter, Does.Contain("this.Total(\"x\", values);"), "The wrapper passes the default for the new leading parameter");
-        Assert.That(totalsAfter, Does.Contain("Total(1, 2, 3)"), "The expanded call is left as written");
+        Assert.That(totalsAfter, Does.Contain("Total(\"x\", 1, 2, 3)"), "The expanded call keeps all three params arguments after the new parameter");
         Assert.That(result.Changes["Caller.cs"], Does.Contain("t.Total(\"x\", new[] { 4, 5 })"), "The array-form call is migrated");
+        var expanded = result.MigratedCallSites.Single(site => site.OldText.Contains("Total(1, 2, 3)"));
+        Assert.That(expanded.NewText, Does.Contain("Total(\"x\", 1, 2, 3)"), "The reported migrated call shows every argument");
+        Assert.That(expanded.Line, Is.EqualTo(4));
 
         var compilation = CompileFiles(AfterChange(result.Changes, ("Totals.cs", totalsSource), ("Caller.cs", callerSource)));
         AssertCompiles(compilation);

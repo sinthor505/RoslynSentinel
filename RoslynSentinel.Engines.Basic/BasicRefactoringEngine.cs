@@ -368,6 +368,7 @@ public class BasicRefactoringEngine
                     // (ImplicitObjectCreationExpressionSyntax). BaseObjectCreationExpressionSyntax
                     // covers both; ArgumentList is nullable there (e.g. `new Foo { X = 1 }`), unlike
                     // InvocationExpressionSyntax's non-nullable one.
+                    // TODO ChangeSignature: a target-typed `new(...)` constructor call produced no reference location in a probe (not rewritten, not skipped, result no longer compiles); find out why
                     ExpressionSyntax? invocation = token.Parent?.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
                     invocation ??= token.Parent?.AncestorsAndSelf().OfType<BaseObjectCreationExpressionSyntax>().FirstOrDefault(o => o.ArgumentList != null);
                     if (invocation == null)
@@ -387,8 +388,12 @@ public class BasicRefactoringEngine
                     // site (null if the argument was omitted, relying on the parameter's own default).
                     // The null-forgiving ArgumentList access is safe: the object-creation branch above
                     // only matches nodes whose ArgumentList is non-null.
+                    // TODO ChangeSignature: a reduced extension call (receiver.M(a)) numbers boundMethod.Parameters without the receiver, so the ordinal mapping below is off by one for it unless boundMethod.ReducedFrom is used; only the expanded-params shape is refused so far (unverified for the other shapes)
                     var argsByOriginalIndex = new ArgumentSyntax?[originalParams.Count];
-                    var expandedParams = false;
+                    // Expanded params call: the positional arguments past the last declared parameter all belong to the params parameter
+                    // (the first one binds to it by ordinal below). They are carried right after that parameter's slot, in source order.
+                    var paramsExtraIndexes = new List<int>();
+                    var unbindableArgument = false;
                     var arguments = invocation switch
                     {
                         InvocationExpressionSyntax inv => inv.ArgumentList.Arguments,
@@ -414,10 +419,19 @@ public class BasicRefactoringEngine
                             // (each expanded element binds to the same trailing params parameter).
                             if (i >= boundMethod.Parameters.Length)
                             {
-                                // More positional arguments than declared parameters: the trailing arguments of an expanded params call. They are
-                                // skipped here (remove mode keeps only the first params argument), so flag the call for wrapper mode to leave alone.
-                                expandedParams |= boundMethod.Parameters.Length > 0 && boundMethod.Parameters[boundMethod.Parameters.Length - 1].IsParams;
-                                continue;
+                                // More positional arguments than declared parameters: the trailing arguments of an expanded params call.
+                                // A reduced extension call (receiver.M(...)) numbers its parameters without the receiver, so its ordinals do not
+                                // line up with the declaration; that shape is refused rather than guessed at.
+                                if (boundMethod.ReducedFrom == null && boundMethod.Parameters.Length > 0 && boundMethod.Parameters[boundMethod.Parameters.Length - 1].IsParams
+                                    && boundMethod.Parameters[boundMethod.Parameters.Length - 1].Ordinal < originalParams.Count)
+                                {
+                                    paramsExtraIndexes.Add(i);
+                                    continue;
+                                }
+
+                                skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Call passes more positional arguments than the bound method declares parameters and is not a plain expanded params call (for example an extension method called on its receiver), so its arguments cannot be re-ordered safely."));
+                                unbindableArgument = true;
+                                break;
                             }
                             var boundParam = boundMethod.Parameters[i];
                             if (boundParam.Ordinal >= originalParams.Count)
@@ -426,16 +440,20 @@ public class BasicRefactoringEngine
                             }
                             originalIndex = boundParam.Ordinal;
                         }
-                        expandedParams |= argsByOriginalIndex[originalIndex] != null;
                         argsByOriginalIndex[originalIndex] = arg;
                     }
 
-                    // An expanded params call (several arguments for one params parameter) would lose all but one of those arguments in the rebuild
-                    // below, so wrapper mode leaves such a call on the wrapper (it binds to the old params signature as before).
-                    // TODO ChangeSignature: remove mode still drops all but the first params argument of an expanded params call; carry every argument of the params slot
-                    if (expandedParams && wrapperMode)
+                    if (unbindableArgument)
                     {
-                        skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Call passes several arguments to one params parameter (expanded form), which cannot be re-ordered safely; it stays on the deprecated wrapper."));
+                        continue;
+                    }
+
+                    // Extra params arguments need the params parameter's own first argument to follow; without it (a named argument claimed the slot
+                    // or the call is malformed) their place in the new list is not known, so the call is left alone instead of guessed at.
+                    var paramsOrdinal = originalParams.Count - 1;
+                    if (paramsExtraIndexes.Count > 0 && argsByOriginalIndex[paramsOrdinal] == null)
+                    {
+                        skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Call passes extra positional arguments to a params parameter whose own argument could not be identified, so its arguments cannot be re-ordered safely."));
                         continue;
                     }
 
@@ -514,6 +532,12 @@ public class BasicRefactoringEngine
                         if (parameters[slot] is ExistingParameterSpec boundSpec && argsByOriginalIndex[boundSpec.OriginalIndex] is { } boundSrc)
                         {
                             slotPlan.Add((arguments.IndexOf(boundSrc), null));
+                            if (boundSpec.OriginalIndex == paramsOrdinal)
+                            {
+                                // The rest of an expanded params call follows its slot; when the params parameter is removed this branch is never
+                                // reached, so all of its arguments go with it.
+                                slotPlan.AddRange(paramsExtraIndexes.Select(index => (index, (ExpressionSyntax?)null)));
+                            }
                         }
                         else
                         {
