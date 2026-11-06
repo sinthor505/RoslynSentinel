@@ -109,7 +109,7 @@ public sealed class MemberAddReplaceViewTests
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
         var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
-        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.addMember, "Order", newMemberSource: "public string Description => \"\";", position: "after:GetLabel");
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.addMember, "Order", newMemberSource: "public string Description => \"\";", insertAfterMemberName: "GetLabel");
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var text = workspace.ReadText("Order.cs");
         Assert.That(text, Does.Contain("public string Description => \"\";"));
@@ -123,7 +123,7 @@ public sealed class MemberAddReplaceViewTests
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
         var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
-        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.addMember, "Order", newMemberSource: "public string Tag => \"\";", position: "before:GetLabel");
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.addMember, "Order", newMemberSource: "public string Tag => \"\";", insertBeforeMemberName: "GetLabel");
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var text = workspace.ReadText("Order.cs");
         Assert.That(text, Does.Contain("public string Tag => \"\";"));

@@ -238,6 +238,12 @@ public enum AddRemoveViewAction
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PreferredTarget
+{
+    constructor, @class
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum MemberAction
 {
     addMember,

@@ -533,7 +533,8 @@ public class RefactoringStructuralImpl
         string? namespaceName = null,
         string? memberName = null,
         string? newMemberSource = null,
-        string? position = null,
+        string? insertAfterMemberName = null,
+        string? insertBeforeMemberName = null,
         bool skipPrecheck = false,
         string? contextSnippet = null,
         string? lineBefore = null,
@@ -547,6 +548,14 @@ public class RefactoringStructuralImpl
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
+            // An empty anchor is the same as none (models often send ""). All anchor validation happens here, before any write.
+            insertAfterMemberName = string.IsNullOrEmpty(insertAfterMemberName) ? null : insertAfterMemberName;
+            insertBeforeMemberName = string.IsNullOrEmpty(insertBeforeMemberName) ? null : insertBeforeMemberName;
+            if (insertAfterMemberName != null && insertBeforeMemberName != null)
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: insertAfterMemberName and insertBeforeMemberName cannot both be set; pass one anchor member name, or neither to append. {RequiredParamsHint(MemberAction.addMember)}") };
+            if ((insertAfterMemberName != null || insertBeforeMemberName != null) && operation != MemberAction.addMember)
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: insertAfterMemberName/insertBeforeMemberName apply only to operation 'addMember', not '{operation}'{(operation == MemberAction.addTopLevelType ? " (the type is always appended)" : string.Empty)}. Nothing was written; omit them for '{operation}'.") };
+
             if (operation == MemberAction.view)
                 return await MemberViewAsync(filePathResolved, containerName, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
 
@@ -558,7 +567,7 @@ public class RefactoringStructuralImpl
 
             // operation is addMember or addTopLevelType below (a generated typed property/field is the TypedMember tool).
             if (operation == MemberAction.addTopLevelType)
-                return await MemberAddTopLevelTypeAsync(filePathResolved, operation, containerName, namespaceName, newMemberSource, position, autoStage, dryRun, returnDiff, cancellationToken);
+                return await MemberAddTopLevelTypeAsync(filePathResolved, operation, containerName, namespaceName, newMemberSource, autoStage, dryRun, returnDiff, cancellationToken);
 
             if (operation == MemberAction.addMember)
             {
@@ -569,9 +578,9 @@ public class RefactoringStructuralImpl
             }
 
             if (await _symbolNavigationEngine.IsEnumContainerAsync(filePathResolved, containerName!, contextSnippet, lineBefore, lineAfter, cancellationToken))
-                return await MemberAddEnumMemberAsync(filePathResolved, containerName, newMemberSource, position, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
+                return await MemberAddEnumMemberAsync(filePathResolved, containerName, newMemberSource, insertAfterMemberName, insertBeforeMemberName, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
 
-            return await MemberAddToContainerAsync(filePathResolved, containerName, newMemberSource, position, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
+            return await MemberAddToContainerAsync(filePathResolved, containerName, newMemberSource, insertAfterMemberName, insertBeforeMemberName, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -753,7 +762,7 @@ public class RefactoringStructuralImpl
     // Used by the addMember / addTopLevelType paths of Member (a generated typed property/field is the TypedMember tool).
     private static string RequiredParamsHint(MemberAction op) => op switch
     {
-        MemberAction.addMember => "Required params for addMember: containerName, newMemberSource. Optional: position.",
+        MemberAction.addMember => "Required params for addMember: containerName, newMemberSource. Optional: insertAfterMemberName or insertBeforeMemberName.",
         MemberAction.addTopLevelType => "Required params for addTopLevelType: newMemberSource (the full type declaration). Optional: namespaceName.",
         _ => throw new ArgumentOutOfRangeException(nameof(op))
     };
@@ -764,7 +773,6 @@ public class RefactoringStructuralImpl
     string? containerName,
     string? namespaceName,
     string? newMemberSource,
-    string? position,
     bool autoStage,
     bool dryRun,
     bool returnDiff,
@@ -772,8 +780,6 @@ public class RefactoringStructuralImpl
     {
         if (containerName != null)
             return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: containerName is not used for operation 'addTopLevelType' (there is no container - the type is added at the top level). {RequiredParamsHint(operation)} If you meant to add a member to an existing container, use {ToolCallHint.Call("Member", ("operation", "addMember"))} instead.") };
-        if (position != null)
-            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: position is not used for operation 'addTopLevelType' (the type is always appended). {RequiredParamsHint(operation)}") };
         if (string.IsNullOrEmpty(newMemberSource))
             return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: newMemberSource is required for operation 'addTopLevelType'. {RequiredParamsHint(operation)}") };
 
@@ -810,7 +816,8 @@ public class RefactoringStructuralImpl
     FilePathWrapper filePathResolved,
     string? containerName,
     string? newMemberSource,
-    string? position,
+    string? insertAfterMemberName,
+    string? insertBeforeMemberName,
     string? contextSnippet,
     string? lineBefore,
     string? lineAfter,
@@ -819,16 +826,11 @@ public class RefactoringStructuralImpl
     bool returnDiff,
     CancellationToken cancellationToken)
     {
-        string? afterName = position != null && position.StartsWith("after:", StringComparison.OrdinalIgnoreCase) ? position.Substring("after:".Length) : null;
-        string? beforeName = position != null && position.StartsWith("before:", StringComparison.OrdinalIgnoreCase) ? position.Substring("before:".Length) : null;
-        if (position != null && afterName == null && beforeName == null && position != "end")
-            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
-
         var enumAddHint = $"Retry using {ToolCallHint.Call("ModifyEnum", ("enumName", containerName!))} directly with the full desired member list if this keeps failing.";
         DocumentEditResult enumAdded;
         try
         {
-            enumAdded = await _memberRefactoringEngine.AddEnumMemberAsync(filePathResolved, containerName!, newMemberSource!, afterName, beforeName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+            enumAdded = await _memberRefactoringEngine.AddEnumMemberAsync(filePathResolved, containerName!, newMemberSource!, insertAfterMemberName, insertBeforeMemberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
         }
         catch (ToolException toolEx)
         {
@@ -871,7 +873,8 @@ public class RefactoringStructuralImpl
     FilePathWrapper filePathResolved,
     string? containerName,
     string? newMemberSource,
-    string? position,
+    string? insertAfterMemberName,
+    string? insertBeforeMemberName,
     string? contextSnippet,
     string? lineBefore,
     string? lineAfter,
@@ -882,26 +885,21 @@ public class RefactoringStructuralImpl
     {
         DocumentEditResult updated;
         string description;
-        if (string.IsNullOrEmpty(position) || position == "end")
+        if (insertAfterMemberName is null && insertBeforeMemberName is null)
         {
             updated = await _memberRefactoringEngine.AddMemberAsync(filePathResolved, containerName!, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
             description = $"{DescribeMemberOutcome(updated, "Added new member")} to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
         }
-        else if (position.StartsWith("after:", StringComparison.OrdinalIgnoreCase))
+        else if (insertAfterMemberName is not null)
         {
-            var afterMemberName = position.Substring("after:".Length);
-            updated = await _memberRefactoringEngine.InsertMemberAfterAsync(filePathResolved, containerName!, afterMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
-            description = $"{DescribeMemberOutcome(updated, "Inserted new member")} after '{afterMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
-        }
-        else if (position.StartsWith("before:", StringComparison.OrdinalIgnoreCase))
-        {
-            var beforeMemberName = position.Substring("before:".Length);
-            updated = await _memberRefactoringEngine.InsertMemberBeforeAsync(filePathResolved, containerName!, beforeMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
-            description = $"{DescribeMemberOutcome(updated, "Inserted new member")} before '{beforeMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
+            updated = await _memberRefactoringEngine.InsertMemberAfterAsync(filePathResolved, containerName!, insertAfterMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+            description = $"{DescribeMemberOutcome(updated, "Inserted new member")} after '{insertAfterMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
         }
         else
         {
-            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
+            // Member has already rejected the both-set case, so only the before anchor is left.
+            updated = await _memberRefactoringEngine.InsertMemberBeforeAsync(filePathResolved, containerName!, insertBeforeMemberName!, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+            description = $"{DescribeMemberOutcome(updated, "Inserted new member")} before '{insertBeforeMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
         }
 
         if (!autoStage)

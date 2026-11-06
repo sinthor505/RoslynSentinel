@@ -39,8 +39,8 @@ a brand-new `.cs` file always means a two-step sequence:
    staticClass` gives `public static class`; the others give a plain `public {kind}`). It cannot
    take free-form content — there is no content parameter. It fails if the file already exists.
 2. `Member(add)` — populate the stub, one call per method/property/field/nested-type. Each call
-   takes a full `newMemberSource` (including its own XML doc comment) and a `position`
-   (`"end"`/`"after:X"`/`"before:X"`).
+   takes a full `newMemberSource` (including its own XML doc comment) and optionally
+   `insertAfterMemberName: "X"` or `insertBeforeMemberName: "X"` (omit both to append).
 
 Additional small tools for the same workflow: `UsingDirective(add)` for imports the stub doesn't
 carry; `ModifyModifier` for any other modifier `CreateFile`'s `typeKind` options don't cover.

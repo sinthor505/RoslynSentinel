@@ -6,7 +6,7 @@ using RoslynSentinel.Tests.Fakes;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 /// <summary>
-/// MemberTool(addMember, position: "after:X") (BasicRefactoringEngine.InsertMemberAfterAsync) must separate
+/// MemberTool(addMember, insertAfterMemberName: "X") (BasicRefactoringEngine.InsertMemberAfterAsync) must separate
 /// the inserted member from its neighbors by exactly one blank line, and must not change the file's
 /// existing line-ending convention or introduce mixed CRLF/LF. Covers LF-only and CRLF fixtures,
 /// inserting after a middle member and after the last member.

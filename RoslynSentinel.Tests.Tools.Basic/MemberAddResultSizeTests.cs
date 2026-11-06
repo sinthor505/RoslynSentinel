@@ -53,7 +53,6 @@ public class MemberAddResultSizeTests
             operation: MemberAction.addMember,
             filePath: workspace.PathOf(FixtureRelativePath),
             containerName: "MemberAddTarget",
-            position: "end",
             newMemberSource: "public int Added() => 42;",
             dryRun: dryRun);
 

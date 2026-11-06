@@ -1626,13 +1626,13 @@ public class BasicRefactoringEngine
         return root.Usings.Select(u => new UsingDirectiveInfo(Name: u.Name?.ToString() ?? "", IsStatic: u.StaticKeyword.IsKind(SyntaxKind.StaticKeyword), Alias: u.Alias?.Name.ToString())).ToList();
     }
 
-    public async Task<DocumentEditResult> AddSummaryCommentAsync(FilePathWrapper filePath, string targetName, string summaryText, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containingTypeName = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddSummaryCommentAsync(FilePathWrapper filePath, string targetName, string summaryText, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containingTypeName = null, CancellationToken cancellationToken = default, PreferredTarget preferredTarget = PreferredTarget.constructor)
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
-        return await AddSummaryCommentCoreAsync(document, filePath, targetName, summaryText, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken);
+        return await AddSummaryCommentCoreAsync(document, filePath, targetName, summaryText, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken, preferredTarget);
     }
 
     /// <summary>
@@ -1642,7 +1642,7 @@ public class BasicRefactoringEngine
     /// (e.g. <c>CommentingEngine</c> commenting several members in the same file before a single
     /// disk write) reuse this logic without each call reading back the workspace's committed state.
     /// </summary>
-    public async Task<DocumentEditResult> AddSummaryCommentCoreAsync(Document document, FilePathWrapper filePath, string targetName, string summaryText, string? contextSnippet, string? lineBefore, string? lineAfter, string? containingTypeName, CancellationToken cancellationToken)
+    public async Task<DocumentEditResult> AddSummaryCommentCoreAsync(Document document, FilePathWrapper filePath, string targetName, string summaryText, string? contextSnippet, string? lineBefore, string? lineAfter, string? containingTypeName, CancellationToken cancellationToken, PreferredTarget preferredTarget = PreferredTarget.constructor)
     {
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -1652,7 +1652,7 @@ public class BasicRefactoringEngine
         }
 
         SyntaxNode? target = null;
-        var candidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.PreferConstructorOverType(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)));
+        var candidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.PreferKind(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken), preferredTarget));
         candidates = SyntaxTargetResolver.FilterByContainingType(candidates, containingTypeName);
         target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
             (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode))?.Node;
@@ -1783,7 +1783,7 @@ public class BasicRefactoringEngine
         return joined.Trim();
     }
 
-    public async Task<DocumentEditResult> RemoveSummaryCommentAsync(FilePathWrapper filePath, string targetName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containingTypeName = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveSummaryCommentAsync(FilePathWrapper filePath, string targetName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containingTypeName = null, CancellationToken cancellationToken = default, PreferredTarget preferredTarget = PreferredTarget.constructor)
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -1797,7 +1797,7 @@ public class BasicRefactoringEngine
         }
 
         SyntaxNode? target;
-        var candidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.PreferConstructorOverType(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)));
+        var candidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.PreferKind(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken), preferredTarget));
         candidates = SyntaxTargetResolver.FilterByContainingType(candidates, containingTypeName);
         target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
             (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode))?.Node;
@@ -1827,7 +1827,7 @@ public class BasicRefactoringEngine
         };
     }
 
-    public async Task<(EditOutcome Outcome, string? Message, string? SummaryText)> GetSummaryCommentAsync(FilePathWrapper filePath, string targetName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containingTypeName = null, CancellationToken cancellationToken = default)
+    public async Task<(EditOutcome Outcome, string? Message, string? SummaryText)> GetSummaryCommentAsync(FilePathWrapper filePath, string targetName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containingTypeName = null, CancellationToken cancellationToken = default, PreferredTarget preferredTarget = PreferredTarget.constructor)
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -1841,7 +1841,7 @@ public class BasicRefactoringEngine
         }
 
         SyntaxNode? target;
-        var candidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.PreferConstructorOverType(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)));
+        var candidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.PreferKind(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken), preferredTarget));
         candidates = SyntaxTargetResolver.FilterByContainingType(candidates, containingTypeName);
         target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
             (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode))?.Node;
@@ -1857,6 +1857,7 @@ public class BasicRefactoringEngine
             return (EditOutcome.NoCandidatesFound, $"No summary comment present on '{targetName}' in '{filePath}'. Next: AddSummaryComment to add one.", null);
         }
 
+        // TODO a one-line summary (/// <summary>X</summary>) is dropped by the StartsWith("<summary>") filter below, so view returns empty text with Outcome Modified; strip the tags instead of dropping the line.
         var lines = docTrivia.ToFullString().Split('\n').Select(l => l.Trim().TrimStart('/').Trim()).Where(l => l.Length > 0 && !l.StartsWith("<summary>") && !l.StartsWith("</summary>")).ToList();
         return (EditOutcome.Modified, null, string.Join(" ", lines));
     }

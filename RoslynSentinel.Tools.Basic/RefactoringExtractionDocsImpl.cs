@@ -161,6 +161,7 @@ public class RefactoringExtractionDocsImpl
         string? lineBefore = null,
         string? lineAfter = null,
         string? containingTypeName = null,
+        PreferredTarget preferredTarget = PreferredTarget.constructor,
         bool autoStage = true,
         bool dryRun = false,
         bool returnDiff = false,
@@ -171,7 +172,7 @@ public class RefactoringExtractionDocsImpl
         {
             if (operation == AddRemoveViewAction.view)
             {
-                var (_, _, text) = await _refactoringEngine.GetSummaryCommentAsync(filePathResolved, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken);
+                var (_, _, text) = await _refactoringEngine.GetSummaryCommentAsync(filePathResolved, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken, preferredTarget: preferredTarget);
                 return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new SummaryCommentViewResult(text) };
             }
 
@@ -181,8 +182,8 @@ public class RefactoringExtractionDocsImpl
             }
 
             var updated = operation == AddRemoveViewAction.add
-                ? await _refactoringEngine.AddSummaryCommentAsync(filePathResolved, targetName, summaryText!, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken: cancellationToken)
-                : await _refactoringEngine.RemoveSummaryCommentAsync(filePathResolved, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken: cancellationToken);
+                ? await _refactoringEngine.AddSummaryCommentAsync(filePathResolved, targetName, summaryText!, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken: cancellationToken, preferredTarget: preferredTarget)
+                : await _refactoringEngine.RemoveSummaryCommentAsync(filePathResolved, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken: cancellationToken, preferredTarget: preferredTarget);
 
             if (!autoStage)
             {

@@ -1,6 +1,10 @@
 using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tests.Support;
 using RoslynSentinel.Tools.Advanced;
+using RoslynSentinel.Tools.Basic;
+using RoslynSentinel.Common;
+
+using System.Text.Json;
 
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
@@ -114,5 +118,65 @@ public sealed class UsingDocsTypedMemberTests
         var result = await tools.TypedMemberTool(reason: "test message", workspace.PathOf("Order.cs"), containerName: "Order", typedKind: TypedMemberKind.field, typedName: "_tag", typedType: "string");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("string _tag"));
+    }
+
+    // --- SummaryComment preferredTarget default (W15 part B) ---
+    [Test]
+    [Category("RefactoringExtractionDocsTools")]
+    public void SummaryCommentTool_PreferredTargetParameter_IsEnumDefaultingToConstructor()
+    {
+        var parameter = typeof(RefactoringExtractionDocsTools).GetMethod(nameof(RefactoringExtractionDocsTools.SummaryCommentTool))!
+            .GetParameters().Single(p => p.Name == "preferredTarget");
+        Assert.That(parameter.ParameterType, Is.EqualTo(typeof(PreferredTarget)));
+        Assert.That(parameter.HasDefaultValue, Is.True);
+        Assert.That(parameter.DefaultValue, Is.EqualTo(PreferredTarget.constructor));
+    }
+
+    [Test]
+    [Category("RefactoringExtractionDocsTools")]
+    public void SummaryCommentImpl_PreferredTargetParameter_IsEnumDefaultingToConstructor()
+    {
+        var parameter = typeof(RefactoringExtractionDocsImpl).GetMethod(nameof(RefactoringExtractionDocsImpl.SummaryComment))!
+            .GetParameters().Single(p => p.Name == "preferredTarget");
+        Assert.That(parameter.ParameterType, Is.EqualTo(typeof(PreferredTarget)));
+        Assert.That(parameter.HasDefaultValue, Is.True);
+        Assert.That(parameter.DefaultValue, Is.EqualTo(PreferredTarget.constructor));
+    }
+
+    [Test]
+    [Category("RefactoringExtractionDocsTools")]
+    public async Task SummaryComment_PreferredTargetOmitted_AddsToConstructor()
+    {
+        var source = "namespace N;\npublic class Foo\n{\n    public Foo(int x) { }\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Foo.cs", source));
+        var tools = BatteryToolFactory.CreateRefactoringExtractionDocsTools(workspace.Manager);
+
+        var result = await tools.SummaryCommentTool(reason: "test message", workspace.PathOf("Foo.cs"), AddRemoveViewAction.add, "Foo", "Foo summary text.");
+
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        var text = workspace.ReadText("Foo.cs");
+        Assert.That(text.IndexOf("Foo summary text.", StringComparison.Ordinal), Is.GreaterThan(text.IndexOf("public class Foo", StringComparison.Ordinal)).And.LessThan(text.IndexOf("public Foo(", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    [Category("RefactoringExtractionDocsTools")]
+    public async Task SummaryComment_PreferredTargetClass_AddsToClass()
+    {
+        var source = "namespace N;\npublic class Foo\n{\n    public Foo(int x) { }\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Foo.cs", source));
+        var tools = BatteryToolFactory.CreateRefactoringExtractionDocsTools(workspace.Manager);
+
+        var result = await tools.SummaryCommentTool(reason: "test message", workspace.PathOf("Foo.cs"), AddRemoveViewAction.add, "Foo", "Foo summary text.", preferredTarget: PreferredTarget.@class);
+
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        var text = workspace.ReadText("Foo.cs");
+        Assert.That(text.IndexOf("Foo summary text.", StringComparison.Ordinal), Is.LessThan(text.IndexOf("public class Foo", StringComparison.Ordinal)));
+    }
+
+    [TestCase(PreferredTarget.constructor, "\"constructor\"")]
+    [TestCase(PreferredTarget.@class, "\"class\"")]
+    public void PreferredTarget_SerializesToStringName(PreferredTarget value, string expectedJson)
+    {
+        Assert.That(JsonSerializer.Serialize(value), Is.EqualTo(expectedJson));
     }
 }

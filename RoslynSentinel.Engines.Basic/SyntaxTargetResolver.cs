@@ -62,6 +62,28 @@ public static class SyntaxTargetResolver
     }
 
     /// <summary>
+    /// Disambiguation helper: with <see cref="PreferredTarget.constructor"/> delegates to <see cref="PreferConstructorOverType"/>; with <see cref="PreferredTarget.class"/> keeps only the type declarations when a constructor and its enclosing type are both candidates.
+    /// </summary>
+    public static List<SyntaxNodeCandidate> PreferKind(List<SyntaxNodeCandidate> candidates, PreferredTarget preferred)
+    {
+        if (preferred == PreferredTarget.constructor)
+        {
+            return PreferConstructorOverType(candidates);
+        }
+
+        if (candidates.Count > 1 && candidates.Any(c => c.Kind == CandidateKind.Constructor))
+        {
+            var types = candidates.Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum).ToList();
+            if (types.Count > 0)
+            {
+                return types;
+            }
+        }
+
+        return candidates;
+    }
+
+    /// <summary>
     /// Disambiguation helper: when an interface member and a same-named implementer member both
     /// match, prefer the implementer -- mirrors the inline check previously duplicated across the
     /// same two resolvers as PreferConstructorOverType.

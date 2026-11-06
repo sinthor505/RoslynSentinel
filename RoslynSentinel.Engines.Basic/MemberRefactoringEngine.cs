@@ -786,7 +786,7 @@ public class MemberRefactoringEngine
             var idx = existing.FindIndex(m => m.Name == afterMemberName);
             if (idx < 0)
             {
-                throw new ToolNotFoundException($"Cannot edit: member '{afterMemberName}' not found in enum '{enumName}'.", "enum member", afterMemberName);
+                throw new ToolNotFoundException(BuildInsertAnchorNotFoundMessage("insertAfterMemberName", afterMemberName, "enum", enumName, existing.Select(m => m.Name).OfType<string>().ToList(), 0), "enum member", afterMemberName);
             }
 
             names.Insert(idx + 1, newToken);
@@ -796,7 +796,7 @@ public class MemberRefactoringEngine
             var idx = existing.FindIndex(m => m.Name == beforeMemberName);
             if (idx < 0)
             {
-                throw new ToolNotFoundException($"Cannot edit: member '{beforeMemberName}' not found in enum '{enumName}'.", "enum member", beforeMemberName);
+                throw new ToolNotFoundException(BuildInsertAnchorNotFoundMessage("insertBeforeMemberName", beforeMemberName, "enum", enumName, existing.Select(m => m.Name).OfType<string>().ToList(), 0), "enum member", beforeMemberName);
             }
 
             names.Insert(idx, newToken);
@@ -1991,9 +1991,7 @@ public class MemberRefactoringEngine
 
         var insertedDescription = DescribeParsedMember(newMember);
         //newMember = newMember.WithAddedByComment("InsertMemberAfter");
-        var membersList = typeDecl.Members.ToList();
-        var idx = membersList.FindIndex(m => SyntaxTargetResolver.GetMemberName(m) == afterMemberName);
-        var insertIndex = idx < 0 ? membersList.Count : idx + 1;
+        var insertIndex = ResolveInsertAnchorIndex(filePath, typeDecl, containerName, "insertAfterMemberName", afterMemberName) + 1;
 
         return new DocumentEditResult
         {
@@ -2051,9 +2049,7 @@ public class MemberRefactoringEngine
 
         var insertedDescription = DescribeParsedMember(newMember);
         //newMember = newMember.WithAddedByComment("InsertMemberBefore");
-        var membersList = typeDecl.Members.ToList();
-        var idx = membersList.FindIndex(m => SyntaxTargetResolver.GetMemberName(m) == beforeMemberName);
-        var insertIndex = idx < 0 ? membersList.Count : idx;
+        var insertIndex = ResolveInsertAnchorIndex(filePath, typeDecl, containerName, "insertBeforeMemberName", beforeMemberName);
 
         return new DocumentEditResult
         {
@@ -2062,6 +2058,70 @@ public class MemberRefactoringEngine
             Message = $"// Added {insertedDescription}.",
             UpdatedText = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(document, root!, typeDecl, insertIndex, newMember, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
         };
+    }
+
+    /// <summary>
+    /// Not-found message for an addMember insert anchor (insertAfterMemberName / insertBeforeMemberName): names the anchor
+    /// and the container, states what was searched, lists the usable anchors and gives the listing call to make next.
+    /// An anchor is always a literal member name; a value such as "after:Foo" is looked up as that exact name.
+    /// </summary>
+    private static string BuildInsertAnchorNotFoundMessage(string anchorParam, string anchorName, string containerKind, string containerName, IReadOnlyList<string> anchorNames, int unnamedMemberCount)
+    {
+        const int listCap = 25;
+        var listed = anchorNames.Count == 0
+            ? "none"
+            : string.Join(", ", anchorNames.Take(listCap)) + (anchorNames.Count > listCap ? $" (+{anchorNames.Count - listCap} more)" : string.Empty);
+        var unnamedNote = unnamedMemberCount > 0
+            ? $" {unnamedMemberCount} member(s) have no matchable name (operators, indexers, events, delegates) and cannot be an anchor."
+            : string.Empty;
+        return $"Cannot edit: member '{anchorName}' ({anchorParam}) not found in {containerKind} '{containerName}'. "
+            + $"Searched: the direct members of that {containerKind} by exact name ('{anchorName}' is taken as a literal member name, not a prefixed value such as 'after:Name'). "
+            + $"Anchors available: {listed}.{unnamedNote} "
+            + $"Next: {ToolCallHint.Call("Member", ("operation", "view"), ("containerName", containerName))} lists its members with signatures; retry with one of them as {anchorParam}, or omit both anchors to append.";
+    }
+
+    /// <summary>
+    /// Index in <paramref name="typeDecl"/>'s direct members of the insert anchor named <paramref name="anchorName"/>.
+    /// Throws <see cref="ToolNotFoundException"/> when no direct member has that name and <see cref="ToolAmbiguousMatchException"/>
+    /// (with candidates) when several do: addMember's contextSnippet/lineBefore/lineAfter locate the container, so an overloaded
+    /// anchor cannot be narrowed. Nothing is written in either case.
+    /// </summary>
+    private static int ResolveInsertAnchorIndex(FilePathWrapper filePath, TypeDeclarationSyntax typeDecl, string containerName, string anchorParam, string anchorName)
+    {
+        var members = typeDecl.Members;
+        var matches = Enumerable.Range(0, members.Count)
+            .Where(i => SyntaxTargetResolver.GetMemberName(members[i]) == anchorName)
+            .ToList();
+        if (matches.Count == 1)
+        {
+            return matches[0];
+        }
+
+        if (matches.Count == 0)
+        {
+            var names = members.Select(SyntaxTargetResolver.GetMemberName).OfType<string>().Distinct().ToList();
+            var unnamed = members.Count(m => SyntaxTargetResolver.GetMemberName(m) is null);
+            throw new ToolNotFoundException(BuildInsertAnchorNotFoundMessage(anchorParam, anchorName, "container", containerName, names, unnamed), "member", anchorName);
+        }
+
+        var candidates = new List<AmbiguousCandidate>();
+        foreach (var index in matches.Take(10))
+        {
+            var member = members[index];
+            var lines = member.ToString().Split('\n').Select(l => l.Trim()).ToList();
+            var headerIndex = Math.Max(0, lines.FindIndex(l => l.Length > 0 && !l.StartsWith('[')));
+            var header = lines[headerIndex];
+            var shown = header.Length > 100 ? header.Substring(0, 100) + "..." : header;
+            var line = member.GetLocation().GetLineSpan().StartLinePosition.Line + 1 + headerIndex;
+            candidates.Add(new AmbiguousCandidate(filePath.ToString(), line, member.Kind().ToString().Replace("Declaration", string.Empty).ToLowerInvariant(), shown, containerName, shown, null, true));
+        }
+
+        var described = string.Join("; ", candidates.Select(c => $"line {c.Line} `{c.Signature}`"));
+        throw new ToolAmbiguousMatchException(
+            $"Cannot edit: member '{anchorName}' ({anchorParam}) matches {matches.Count} members of container '{containerName}': {described}. "
+            + "An insert anchor must be a unique member name, and addMember cannot narrow an overloaded anchor (contextSnippet/lineBefore/lineAfter locate the container, not the anchor). "
+            + $"Next: pick a uniquely named neighbouring member as the anchor ({ToolCallHint.Call("Member", ("operation", "view"), ("containerName", containerName))} lists the members), or omit both anchors to append.",
+            candidates);
     }
 
     private static string DescribeParsedMember(MemberDeclarationSyntax member)
@@ -2123,11 +2183,11 @@ public class MemberRefactoringEngine
             var target = string.IsNullOrEmpty(targetMemberName) ? "the target member" : $"'{targetMemberName}'";
             return $"newMemberSource contains {members.Count} member declarations ({described}), but replace takes exactly one member - the single declaration that replaces {target}. " +
                 $"Recovery: call {ToolCallHint.Call("Member", ("operation", "replace"))} once per existing member you want to replace, passing just that member's full declaration, " +
-                $"and call {ToolCallHint.Call("Member", ("operation", "addMember"), ("containerName", "<ContainerName>"), ("position", "after:<MemberName>"))} once for each member that is new.";
+                $"and call {ToolCallHint.Call("Member", ("operation", "addMember"), ("containerName", "<ContainerName>"), ("insertAfterMemberName", "<MemberName>"))} once for each member that is new.";
         }
 
         return $"newMemberSource contains {members.Count} member declarations ({described}), but {operation} takes exactly one member per call. " +
-            $"Recovery: call {ToolCallHint.Call("Member", ("operation", operation))} once per member, passing one full declaration each time; to keep them in order, give each call after the first position: \"after:<previous member's name>\".";
+            $"Recovery: call {ToolCallHint.Call("Member", ("operation", operation))} once per member, passing one full declaration each time; to keep them in order, make each call after the first as {ToolCallHint.Call("Member", ("operation", operation), ("insertAfterMemberName", "<previous member's name>"))}.";
     }
 
     public async Task<DocumentEditResult> AddFieldAsync(FilePathWrapper filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)

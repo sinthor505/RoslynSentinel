@@ -53,6 +53,7 @@ public class RefactoringExtractionDocsTools
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
         [Description(ToolParams.ContainingTypeName)] string? containingTypeName = null,
+        PreferredTarget preferredTarget = PreferredTarget.constructor,
         // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
         // [Description(ToolParams.AutoStage)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
@@ -61,7 +62,7 @@ public class RefactoringExtractionDocsTools
     {
         // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
         bool autoStage = true;
-        return _impl.SummaryComment(reason, filePath, operation, targetName, summaryText, contextSnippet, lineBefore, lineAfter, containingTypeName, autoStage, dryRun, returnDiff, cancellationToken);
+        return _impl.SummaryComment(reason, filePath, operation, targetName, summaryText, contextSnippet, lineBefore, lineAfter, containingTypeName, preferredTarget, autoStage, dryRun, returnDiff, cancellationToken);
     }
 
     [McpServerTool(Name = "ExtractLocalVariable")]

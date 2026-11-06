@@ -533,6 +533,93 @@ public enum OrderStatus
         Assert.That(removed.UpdatedText, Does.Not.Contain("The order has shipped."));
     }
 
+    private static string BothSummariesSource => @"
+namespace N;
+/// <summary>
+/// Class summary.
+/// </summary>
+public class Foo
+{
+    /// <summary>
+    /// Ctor summary.
+    /// </summary>
+    public Foo(int x) { }
+}
+";
+
+    // Returns the declaration line that directly follows the doc comment carrying summaryText.
+    private static string DeclarationFollowingSummary(string text, string summaryText)
+    {
+        var lines = text.Split('\n').Select(l => l.Trim()).ToList();
+        var textIndex = lines.FindIndex(l => l.Contains(summaryText));
+        Assert.That(textIndex, Is.GreaterThanOrEqualTo(0), $"summary text '{summaryText}' not found in:\n{text}");
+        var closeIndex = lines.FindIndex(textIndex, l => l.StartsWith("/// </summary>"));
+        Assert.That(closeIndex, Is.GreaterThanOrEqualTo(0), $"no closing summary tag after '{summaryText}' in:\n{text}");
+        var declarationIndex = closeIndex + 1;
+        while (lines[declarationIndex].StartsWith("///"))
+        {
+            declarationIndex++;
+        }
+        return lines[declarationIndex];
+    }
+
+    [TestCase(PreferredTarget.constructor, "public Foo(")]
+    [TestCase(PreferredTarget.@class, "public class Foo")]
+    public async Task AddSummaryComment_PreferredTarget_PlacesSummaryOnChosenDeclaration(PreferredTarget preferredTarget, string expectedDeclarationPrefix)
+    {
+        SetSource(@"
+namespace N;
+public class Foo
+{
+    public Foo(int x) { }
+}
+", "Foo.cs");
+
+        var result = await _basicRefactoringEngine.AddSummaryCommentAsync("Foo.cs", "Foo", "Foo summary text.", preferredTarget: preferredTarget);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(DeclarationFollowingSummary(result.UpdatedText, "Foo summary text."), Does.StartWith(expectedDeclarationPrefix));
+    }
+
+    [Test]
+    public async Task AddSummaryComment_PreferredTargetConstructor_NoConstructor_TargetsClass()
+    {
+        SetSource(@"
+public class Widget { }
+", "Widget.cs");
+
+        var result = await _basicRefactoringEngine.AddSummaryCommentAsync("Widget.cs", "Widget", "A reusable widget.", preferredTarget: PreferredTarget.constructor);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(DeclarationFollowingSummary(result.UpdatedText, "A reusable widget."), Does.StartWith("public class Widget"));
+    }
+
+    [TestCase(PreferredTarget.@class, "Class summary.", "Ctor summary.")]
+    [TestCase(PreferredTarget.constructor, "Ctor summary.", "Class summary.")]
+    public async Task RemoveSummaryComment_PreferredTarget_RemovesOnlyChosenDeclarationSummary(PreferredTarget preferredTarget, string removedText, string keptText)
+    {
+        SetSource(BothSummariesSource, "Foo.cs");
+
+        var removed = await _basicRefactoringEngine.RemoveSummaryCommentAsync("Foo.cs", "Foo", preferredTarget: preferredTarget);
+
+        Assert.That(removed.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(removed.UpdatedText, Does.Not.Contain(removedText));
+        Assert.That(removed.UpdatedText, Does.Contain(keptText));
+    }
+
+    [TestCase(PreferredTarget.@class, "Class summary.", "Ctor summary.")]
+    [TestCase(PreferredTarget.constructor, "Ctor summary.", "Class summary.")]
+    public async Task GetSummaryComment_PreferredTarget_ReturnsOnlyChosenDeclarationSummary(PreferredTarget preferredTarget, string expectedText, string otherText)
+    {
+        SetSource(BothSummariesSource, "Foo.cs");
+
+        var viewed = await _basicRefactoringEngine.GetSummaryCommentAsync("Foo.cs", "Foo", preferredTarget: preferredTarget);
+
+        Assert.That(viewed.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(viewed.SummaryText, Does.Contain(expectedText));
+        Assert.That(viewed.SummaryText, Does.Not.Contain(otherText));
+    }
+
     [Test]
     public async Task AddSummaryComment_SnippetMatchesNothing_ThrowsNotFound()
     {

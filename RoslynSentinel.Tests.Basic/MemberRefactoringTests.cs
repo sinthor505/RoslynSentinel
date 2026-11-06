@@ -58,6 +58,12 @@ public class MemberRefactoringTests
         _workspaceManager.SetTestSolution(solution);
     }
 
+    private async Task<string> CurrentTextAsync(string fileName)
+    {
+        var document = _workspaceManager.CurrentSolution!.Projects.SelectMany(p => p.Documents).Single(d => d.Name == fileName);
+        return (await document.GetTextAsync()).ToString();
+    }
+
     [TearDown]
     public void TearDown() => _workspaceManager.Dispose();
 
@@ -1482,20 +1488,24 @@ public class Service
     }
 
     [Test]
-    public async Task InsertMemberAfter_AppendsWhenAfterMemberNotFound()
+    public async Task InsertMemberAfter_ThrowsNotFoundWhenAfterMemberNotFound()
     {
-        SetSource(@"
+        const string source = @"
 public class Repo
 {
     public void Save() { }
 }
-", "Repo.cs");
+";
+        SetSource(source, "Repo.cs");
 
-        var result = await _memberRefactoringEngine.InsertMemberAfterAsync("Repo.cs", "Repo", "NonExistent",
-            "public void Delete() { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.InsertMemberAfterAsync("Repo.cs", "Repo", "NonExistent", "public void Delete() { }");
+        });
 
-        Assert.That(result.UpdatedText, Does.Contain("Delete"), "Member should be appended when anchor not found.");
-        Assert.That(result.UpdatedText, Does.Contain("Save"), "Existing member should remain.");
+        Assert.That(ex!.Message, Does.Contain("NonExistent"), "The message must name the missing anchor.");
+        Assert.That(ex.Message, Does.Contain("Repo"), "The message must name the container.");
+        Assert.That(await CurrentTextAsync("Repo.cs"), Is.EqualTo(source), "A missing anchor must write nothing.");
     }
 
     [Test]
@@ -1606,19 +1616,24 @@ public class Controller
     }
 
     [Test]
-    public async Task InsertMemberBefore_AppendsWhenBeforeMemberNotFound()
+    public async Task InsertMemberBefore_ThrowsNotFoundWhenBeforeMemberNotFound()
     {
-        SetSource(@"
+        const string source = @"
 public class Cache
 {
     public void Set() { }
 }
-", "Cache.cs");
+";
+        SetSource(source, "Cache.cs");
 
-        var result = await _memberRefactoringEngine.InsertMemberBeforeAsync("Cache.cs", "Cache", "NonExistent",
-            "public void Evict() { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.InsertMemberBeforeAsync("Cache.cs", "Cache", "NonExistent", "public void Evict() { }");
+        });
 
-        Assert.That(result.UpdatedText, Does.Contain("Evict"), "Member should be appended when anchor not found.");
+        Assert.That(ex!.Message, Does.Contain("NonExistent"), "The message must name the missing anchor.");
+        Assert.That(ex.Message, Does.Contain("Cache"), "The message must name the container.");
+        Assert.That(await CurrentTextAsync("Cache.cs"), Is.EqualTo(source), "A missing anchor must write nothing.");
     }
 
     [Test]

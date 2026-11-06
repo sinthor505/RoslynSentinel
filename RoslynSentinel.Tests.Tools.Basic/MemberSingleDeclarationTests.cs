@@ -93,10 +93,10 @@ public class MemberSingleDeclarationTests
         });
     }
 
-    [TestCase(null)]
-    [TestCase("after:Alpha")]
-    [TestCase("before:Beta")]
-    public async Task AddMember_WithTwoMembers_ReportsCountNamesAndOneCallPerMemberAsync(string? position)
+    [TestCase(null, null)]
+    [TestCase("Alpha", null)]
+    [TestCase(null, "Beta")]
+    public async Task AddMember_WithTwoMembers_ReportsCountNamesAndOneCallPerMemberAsync(string? insertAfterMemberName, string? insertBeforeMemberName)
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = BuildTools(workspace.Manager);
@@ -106,7 +106,8 @@ public class MemberSingleDeclarationTests
             operation: MemberAction.addMember,
             filePath: workspace.PathOf(FixtureRelativePath),
             containerName: "SingleDeclTarget",
-            position: position,
+            insertAfterMemberName: insertAfterMemberName,
+            insertBeforeMemberName: insertBeforeMemberName,
             newMemberSource: "public int Gamma() => 3;\n\npublic string Name { get; set; } = \"\";");
 
         Assert.That(!result.IsError, Is.False);

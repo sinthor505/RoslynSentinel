@@ -170,7 +170,7 @@ public class MemberOutcomeFollowsCauseTests
             filePath: workspace.PathOf(FixtureRelativePath),
             containerName: "OrderTarget",
             newMemberSource: "public int Broken( =>",
-            position: "after:Existing");
+            insertAfterMemberName: "Existing");
 
         Assert.Multiple(() =>
         {

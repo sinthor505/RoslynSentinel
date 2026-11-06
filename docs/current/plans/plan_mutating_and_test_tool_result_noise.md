@@ -54,7 +54,7 @@ Hypothesis to prove first (see step 3): existing tests assert `Does.Contain("bat
 
 ### Step 2 - Test: applied Member add returns line changes, not the file
 - Files: `C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Tools.Basic\MemberAddResultSizeTests.cs` (new)
-- Change: model on `MemberSingleDeclarationTests.cs` (`InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource))`, `BuildTools(workspace.Manager)`, `tools.Member(reason: ..., operation: MemberAction.addMember, filePath: workspace.PathOf(...), containerName: ..., position: "end", newMemberSource: ...)`). Fixture: a class of about 200 lines. Tests:
+- Change: model on `MemberSingleDeclarationTests.cs` (`InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource))`, `BuildTools(workspace.Manager)`, `tools.Member(reason: ..., operation: MemberAction.addMember, filePath: workspace.PathOf(...), containerName: ..., newMemberSource: ...)`). Fixture: a class of about 200 lines. Tests:
   - `Member_AddMember_AppliedResultDoesNotEchoWholeFileAsync` - assert `((AppliedChangeSummary)result.SuccessData!).ChangedContent` is null, `LineChanges` is non-null/non-empty, `Note` contains `ReadFile`, `result.LargeResult` is null; and, when the fixture manager has a solution root, `ChangedContentResultId` is non-null (if the in-memory workspace has no root the id is null by design: fail-closed offload).
   - `Member_AddMember_DryRunStillReturnsChangedContentAsync` - `dryRun: true`, assert `ChangedContent` is non-null.
   - `Member_AddTopLevelType_AppliedResultDoesNotEchoWholeFileAsync` - same for `MemberAction.addTopLevelType`.

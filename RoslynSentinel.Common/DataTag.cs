@@ -57,7 +57,6 @@ public enum DataTag
     Order,
     SourceCode,
     Modifier,
-    Position,
     HasSetter,
     IsInit,
     IsReadonly,

@@ -114,7 +114,7 @@ public class RefactoringStructuralTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         //[Description("addMember: adds raw member source into an existing container (requires containerName + newMemberSource). addTopLevelType: adds a brand-new top-level type declaration - no container (requires newMemberSource as the full type source; optional namespaceName). remove: deletes a member - by default checks for callers/implementations first (see skipPrecheck); for a zero-usages-only contract use DeleteUnusedSymbolTool instead. replace: replaces a member's full source, including for small in-member batchEdits. view: lists a container's direct members (name, kind, signature, line range) to find the exact memberName/contextSnippet to pass to remove or replace.")]
         //[Description("Add, remove, replace, or view a raw source member, a typed property/field, or a brand-new top-level type. Also views constructors.")]
-        [Description("Required params per operation. addMember: containerName+newMemberSource (optional position). addTopLevelType: newMemberSource (optional namespaceName). remove: memberName. replace: memberName+newMemberSource. view: containerName (lists its members) or memberName (returns that member's full source).")]
+        [Description("Required params per operation. addMember: containerName+newMemberSource (optional insertAfterMemberName or insertBeforeMemberName). addTopLevelType: newMemberSource (optional namespaceName). remove: memberName. replace: memberName+newMemberSource. view: containerName (lists its members) or memberName (returns that member's full source).")]
         [Consumes(DataTag.Action, required: true)] MemberAction operation,
         [Description("The type that holds the member.")]
         [Consumes(DataTag.SymbolName, required: false)] string? containerName = null,
@@ -124,8 +124,9 @@ public class RefactoringStructuralTools
         [Consumes(DataTag.SymbolName, required: false)] string? memberName = null,
         [Description("Exactly one member declaration (full trivia, signature and body); for addTopLevelType, the full type declaration.")]
         [Consumes(DataTag.SourceCode, required: false)] string? newMemberSource = null,
-        [Description("addMember: where to insert - null/\"end\" to append, \"after:MemberName\", or \"before:MemberName\".")]
-        [ExternalInputRequired(DataTag.Position)] string? position = null,
+        // No [Description] on the two anchor names by design (owner ruling): the names say they are member names, not line numbers.
+        [ExternalInputRequired(DataTag.SymbolName, required: false)] string? insertAfterMemberName = null,
+        [ExternalInputRequired(DataTag.SymbolName, required: false)] string? insertBeforeMemberName = null,
         [Description("Forcefully removes the member, skipping any precheck for callers or implementations.")] bool skipPrecheck = false,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
@@ -139,7 +140,7 @@ public class RefactoringStructuralTools
     {
         // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
         bool autoStage = true;
-        return _impl.Member(reason, filePath, operation, containerName, namespaceName, memberName, newMemberSource, position,
+        return _impl.Member(reason, filePath, operation, containerName, namespaceName, memberName, newMemberSource, insertAfterMemberName, insertBeforeMemberName,
             skipPrecheck, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff,
             requestParams, cancellationToken);
     }
