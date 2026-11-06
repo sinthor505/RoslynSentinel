@@ -1,6 +1,16 @@
+using System.Text.Json.Serialization;
 using Microsoft.CodeAnalysis.Text;
 
 namespace RoslynSentinel.Common;
+
+/// <summary>How ReadFile renders line endings: none leaves the output unchanged, summary adds a lineEndings field, all also annotates every source line with its terminator.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum LineEndingDisplay
+{
+    None,
+    Summary,
+    All,
+}
 
 public static class EolUtilities
 {
@@ -107,6 +117,97 @@ public static class EolUtilities
         return $"Line endings are mixed: {counts.Crlf} CRLF, {counts.Lf} LF, {counts.Cr} CR. " +
             $"Lines not ending in the dominant style ({dominant}): {string.Join(", ", listed)}{more}. " +
             "The next write through the server converts the whole file to the configured EOL policy.";
+    }
+
+    /// <summary>
+    /// Describes the line endings of a whole text for the ReadFile lineEndings field: per-style counts, the dominant
+    /// style, whether the text ends with a line break and, for a mixed text, the 1-based numbers of up to 20 lines whose
+    /// terminator differs from the dominant style (followed by "(+N more)" when truncated).
+    /// </summary>
+    public static string DescribeLineEndings(string text)
+    {
+        var counts = EolChangeGuard.Count(text);
+        if (counts.Total == 0)
+        {
+            return "Line endings: none (no line breaks)";
+        }
+
+        var finalNewline = text.EndsWith('\n') || text.EndsWith('\r') ? "yes" : "no";
+        var countsText = $"Line endings: CRLF={counts.Crlf}, LF={counts.Lf}, CR={counts.Cr}";
+        if (counts.IsSingleStyle)
+        {
+            return $"{countsText}; uniform {counts.Dominant}; final newline: {finalNewline}";
+        }
+
+        const int maxListed = 20;
+        var dominant = counts.Dominant;
+        var listed = new List<int>();
+        int mismatched = 0;
+        int line = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            string? style = null;
+            if (c == '\r')
+            {
+                if (i + 1 < text.Length && text[i + 1] == '\n')
+                {
+                    style = "CRLF";
+                    i++;
+                }
+                else
+                {
+                    style = "CR";
+                }
+            }
+            else if (c == '\n')
+            {
+                style = "LF";
+            }
+
+            if (style is null)
+            {
+                continue;
+            }
+
+            line++;
+            if (style != dominant)
+            {
+                mismatched++;
+                if (listed.Count < maxListed)
+                {
+                    listed.Add(line);
+                }
+            }
+        }
+
+        var more = mismatched > listed.Count ? $" (+{mismatched - listed.Count} more)" : string.Empty;
+        return $"{countsText}; dominant {dominant}; final newline: {finalNewline}; " +
+            $"lines not ending in {dominant}: {string.Join(", ", listed)}{more}";
+    }
+
+    /// <summary>
+    /// Renders each line of a text as its own text followed by a marker for the terminator it really has (CRLF, LF or
+    /// CR, or EOF for a final line with no terminator), then a line break. The result is for reading only and is not
+    /// verbatim source.
+    /// </summary>
+    public static string AnnotateLineEndings(string text)
+    {
+        var builder = new System.Text.StringBuilder(text.Length + 16);
+        foreach (var (lineText, eol) in SplitLinesWithEol(text))
+        {
+            var marker = eol switch
+            {
+                "\r\n" => "<CRLF>",
+                "\n" => "<LF>",
+                "\r" => "<CR>",
+                _ => "<EOF>",
+            };
+            builder.Append(lineText).Append(marker);
+            builder.AppendLine();
+        }
+
+        return builder.ToString();
     }
 
     /// <summary>

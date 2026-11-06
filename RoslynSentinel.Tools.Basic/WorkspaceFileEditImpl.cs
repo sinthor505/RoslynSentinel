@@ -256,7 +256,7 @@ public class WorkspaceFileEditImpl
     }
 
     public async Task<SentinelCallToolResult<object>> ReadFile(ToolCallReason reason, string filePath, int? startLine = null,
-        int? endLine = null, string? memberName = null, string? containerName = null, CancellationToken cancellationToken = default)
+        int? endLine = null, string? memberName = null, string? containerName = null, LineEndingDisplay showLineEndings = LineEndingDisplay.None, CancellationToken cancellationToken = default)
     {
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         if (!string.IsNullOrEmpty(memberName))
@@ -267,6 +267,14 @@ public class WorkspaceFileEditImpl
                 {
                     IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ReadFile: memberName cannot be combined with startLine/endLine. Pass either memberName (optionally containerName) or a line range.")
+                };
+            }
+            if (showLineEndings != LineEndingDisplay.None)
+            {
+                return new SentinelCallToolResult<object>()
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ReadFile: showLineEndings cannot be combined with memberName. Read the file by startLine/endLine instead (use GetFileOutline or Search for the line range).")
                 };
             }
             try
@@ -285,6 +293,7 @@ public class WorkspaceFileEditImpl
             && !string.IsNullOrWhiteSpace(filePath)
             && Path.IsPathRooted(filePath))
         {
+            // TODO showLineEndings is ignored on the no-solution ReadFile path
             return await ReadFileWithoutSolutionAsync(filePath, startLine, endLine, cancellationToken);
         }
         try
@@ -332,19 +341,37 @@ public class WorkspaceFileEditImpl
                 var end = sourceText.Lines[to - 1].EndIncludingLineBreak;
                 var slice = sourceText.ToString(TextSpan.FromBounds(start, end));
                 var sliceMixedEol = EolUtilities.DescribeMixedLineEndings(sourceText.ToString());
-                return new SentinelCallToolResult<object>()
+                var rangeLineEndings = showLineEndings == LineEndingDisplay.None ? null : EolUtilities.DescribeLineEndings(sourceText.ToString());
+                if (showLineEndings == LineEndingDisplay.All)
                 {
-                    IsError = false,
-                    SuccessData = new
+                    slice = EolUtilities.AnnotateLineEndings(slice);
+                }
+
+                object rangeData = showLineEndings == LineEndingDisplay.None
+                    ? new
                     {
                         filePath = (string)filePathResolved,
                         startLine = from,
                         endLine = to,
                         totalLines,
                         source = slice
-                    },
+                    }
+                    : new
+                    {
+                        filePath = (string)filePathResolved,
+                        startLine = from,
+                        endLine = to,
+                        totalLines,
+                        lineEndings = rangeLineEndings,
+                        source = slice
+                    };
+                return new SentinelCallToolResult<object>()
+                {
+                    IsError = false,
+                    SuccessData = rangeData,
                     Findings = sliceMixedEol is null ? [] : [new Finding("ReadFile", sliceMixedEol)],
                     HasMoreData = to < totalLines,
+                    StatusMessage = showLineEndings == LineEndingDisplay.All ? "source is annotated with line-ending markers and is not verbatim." : null,
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
                 };
             }
@@ -353,6 +380,27 @@ public class WorkspaceFileEditImpl
             var mixedEol = EolUtilities.DescribeMixedLineEndings(fullText);
             var textBytes = System.Text.Encoding.UTF8.GetByteCount(fullText);
             const int thresholdBytes = LargeResultHelper.OffloadThresholdBytes;
+            var wholeLineEndings = showLineEndings == LineEndingDisplay.None ? null : EolUtilities.DescribeLineEndings(fullText);
+            var wholeSource = showLineEndings == LineEndingDisplay.All ? EolUtilities.AnnotateLineEndings(fullText) : fullText;
+            var statusNote = showLineEndings == LineEndingDisplay.All ? "source is annotated with line-ending markers and is not verbatim." : null;
+            object wholeData = showLineEndings == LineEndingDisplay.None
+                ? new
+                {
+                    filePath = (string)filePathResolved,
+                    startLine = 1,
+                    endLine = totalLines,
+                    totalLines,
+                    source = fullText
+                }
+                : new
+                {
+                    filePath = (string)filePathResolved,
+                    startLine = 1,
+                    endLine = totalLines,
+                    totalLines,
+                    lineEndings = wholeLineEndings,
+                    source = wholeSource
+                };
             if (textBytes > thresholdBytes)
             {
                 // Over the threshold the marshaller cuts the payload and stores the rest; the source gets the
@@ -360,17 +408,10 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsError = false,
-                    SuccessData = new
-                    {
-                        filePath = (string)filePathResolved,
-                        startLine = 1,
-                        endLine = totalLines,
-                        totalLines,
-                        source = fullText
-                    },
+                    SuccessData = wholeData,
                     Findings = mixedEol is null ? [] : [new Finding("ReadFile", mixedEol)],
                     HasMoreData = false,
-                    StatusMessage = $"File is {totalLines} lines ({textBytes} bytes), over the inline limit: the first part is returned and the rest is stored (see largeResult). For a structure overview call {ToolCallHint.Call("GetFileOutline")}; for a slice call {ToolCallHint.Call("ReadFile", ("startLine", "1"), ("endLine", "200"))}.",
+                    StatusMessage = $"File is {totalLines} lines ({textBytes} bytes), over the inline limit: the first part is returned and the rest is stored (see largeResult). For a structure overview call {ToolCallHint.Call("GetFileOutline")}; for a slice call {ToolCallHint.Call("ReadFile", ("startLine", "1"), ("endLine", "200"))}." + (statusNote is null ? string.Empty : " " + statusNote),
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
                 };
             }
@@ -378,16 +419,10 @@ public class WorkspaceFileEditImpl
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
-                SuccessData = new
-                {
-                    filePath = (string)filePathResolved,
-                    startLine = 1,
-                    endLine = totalLines,
-                    totalLines,
-                    source = fullText
-                },
+                SuccessData = wholeData,
                 Findings = mixedEol is null ? [] : [new Finding("ReadFile", mixedEol)],
                 HasMoreData = false,
+                StatusMessage = statusNote,
                 WorkspaceVersion = _workspaceManager.WorkspaceVersion,
             };
         }

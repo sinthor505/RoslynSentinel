@@ -202,4 +202,50 @@ public class EolUtilitiesTests
             message!,
             Does.Contain("(CRLF): 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50 (+5 more)."));
     }
+
+    [Test]
+    public void DescribeLineEndings_UniformCrlf_ReportsCountUniformStyleAndFinalNewline()
+    {
+        var text = "a\r\nb\r\nc\r\n";
+
+        var description = EolUtilities.DescribeLineEndings(text);
+
+        Assert.That(description, Does.Contain("CRLF=3"));
+        Assert.That(description, Does.Contain("uniform CRLF"));
+        Assert.That(description, Does.Contain("final newline: yes"));
+    }
+
+    [Test]
+    public void DescribeLineEndings_MixedStyles_ReportsCountsDominantStyleAndUnmatchedLine()
+    {
+        var description = EolUtilities.DescribeLineEndings("a\r\nb\nc\r\n");
+
+        Assert.That(description, Is.EqualTo("Line endings: CRLF=2, LF=1, CR=0; dominant CRLF; final newline: yes; lines not ending in CRLF: 2"));
+    }
+
+    [Test]
+    public void DescribeLineEndings_NoTrailingNewline_ReportsFinalNewlineNo()
+    {
+        var description = EolUtilities.DescribeLineEndings("a\r\nb");
+
+        Assert.That(description, Does.Contain("final newline: no"));
+    }
+
+    [TestCase("", TestName = "DescribeLineEndings_EmptyText_ReportsNoLineBreaks")]
+    [TestCase("no line breaks", TestName = "DescribeLineEndings_NoLineBreaks_ReportsNoLineBreaks")]
+    public void DescribeLineEndings_NoLineBreaks_ReportsNone(string text)
+    {
+        Assert.That(EolUtilities.DescribeLineEndings(text), Is.EqualTo("Line endings: none (no line breaks)"));
+    }
+
+    [Test]
+    public void AnnotateLineEndings_MixedTerminators_MarksEachLineAndUnterminatedLastLine()
+    {
+        var newline = Environment.NewLine;
+
+        var annotated = EolUtilities.AnnotateLineEndings("a\r\nb\nc\rd");
+
+        Assert.That(annotated, Is.EqualTo($"a<CRLF>{newline}b<LF>{newline}c<CR>{newline}d<EOF>{newline}"));
+        Assert.That(annotated.Replace(newline, string.Empty), Does.Not.Contain("\r").And.Not.Contain("\n"));
+    }
 }

@@ -8,6 +8,7 @@ using System.Reflection;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tools.Basic;
@@ -46,6 +47,9 @@ public class ReadFileTests
 
     private static object? GetProp(object data, string name) =>
         data.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance)!.GetValue(data);
+
+    private static bool HasProp(object data, string name) =>
+    data.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance) != null;
 
     [Test]
     public async Task ReadFile_WholeFile_ReturnsFullSourceAsync()
@@ -106,6 +110,72 @@ public class ReadFileTests
         Assert.That((string)GetProp(data, "source")!, Does.Not.Contain("line4"));
         Assert.That((int)GetProp(data, "startLine")!, Is.EqualTo(2));
         Assert.That((int)GetProp(data, "endLine")!, Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task ReadFile_ShowLineEndingsNone_OmitsLineEndingsAndKeepsSourceVerbatimAsync()
+    {
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath);
+
+        Assert.That(result.IsError, Is.False);
+        var data = result.SuccessData!;
+        Assert.That(HasProp(data, "lineEndings"), Is.False);
+        Assert.That((string)GetProp(data, "source")!, Is.EqualTo("line1\nline2\nline3\nline4\nline5\n"));
+    }
+
+    [Test]
+    public async Task ReadFile_ShowLineEndingsSummary_WholeFile_AddsLineEndingsAndKeepsSourceVerbatimAsync()
+    {
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, showLineEndings: LineEndingDisplay.Summary);
+
+        Assert.That(result.IsError, Is.False);
+        var data = result.SuccessData!;
+        Assert.That(GetProp(data, "lineEndings") as string, Does.Contain("uniform LF"));
+        Assert.That((string)GetProp(data, "source")!, Is.EqualTo("line1\nline2\nline3\nline4\nline5\n"));
+    }
+
+    [Test]
+    public async Task ReadFile_ShowLineEndingsSummary_WithLineRange_DescribesWholeFileAndKeepsSliceVerbatimAsync()
+    {
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, startLine: 2, endLine: 3, showLineEndings: LineEndingDisplay.Summary);
+
+        Assert.That(result.IsError, Is.False);
+        var data = result.SuccessData!;
+        Assert.That(GetProp(data, "lineEndings") as string, Does.Contain("LF=5"));
+        Assert.That((string)GetProp(data, "source")!, Is.EqualTo("line2\nline3\n"));
+    }
+
+    [Test]
+    public async Task ReadFile_ShowLineEndingsAll_WholeFile_AnnotatesSourceAndSaysNotVerbatimAsync()
+    {
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, showLineEndings: LineEndingDisplay.All);
+
+        Assert.That(result.IsError, Is.False);
+        var data = result.SuccessData!;
+        Assert.That(GetProp(data, "lineEndings"), Is.Not.Null);
+        Assert.That((string)GetProp(data, "source")!, Does.Contain("line1<LF>").And.Contain("line5<LF>"));
+        Assert.That(result.StatusMessage, Does.Contain("not verbatim"));
+    }
+
+    [Test]
+    public async Task ReadFile_ShowLineEndingsAll_WithLineRange_AnnotatesOnlyTheSliceAsync()
+    {
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, startLine: 2, endLine: 3, showLineEndings: LineEndingDisplay.All);
+
+        Assert.That(result.IsError, Is.False);
+        var source = (string)GetProp(result.SuccessData!, "source")!;
+        Assert.That(source, Does.Contain("line2<LF>").And.Contain("line3<LF>"));
+        Assert.That(source, Does.Not.Contain("line1").And.Not.Contain("line4"));
+    }
+
+    [Test]
+    public async Task ReadFile_ShowLineEndingsSummary_WithMemberName_ReturnsInvalidArgumentAsync()
+    {
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Run", showLineEndings: LineEndingDisplay.Summary);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.Message, Does.Contain("startLine/endLine"));
     }
 
     [Test]
