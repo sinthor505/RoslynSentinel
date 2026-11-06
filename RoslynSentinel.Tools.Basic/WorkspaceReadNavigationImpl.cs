@@ -335,9 +335,12 @@ public class WorkspaceReadNavigationImpl
             var fileText = await document.GetTextAsync(cancellationToken);
             var fileLineCount = fileText.Lines.Count;
             var methodSpan = method.GetLocation().GetLineSpan();
+            // Source is ToFullString() (leading comments and attributes' trivia included), so the reported range starts where that text
+            // starts, not where the method token span does: returnedFromLine, returnedToLine and lineCount then describe Source exactly.
+            var sourceStartLine = fileText.Lines.GetLineFromPosition(method.FullSpan.Start).LineNumber + 1;
             var envelope = ReadEnvelopeBuilder.BuildForMember(
                 fileLineCount,
-                memberFromLine: methodSpan.StartLinePosition.Line + 1,
+                memberFromLine: sourceStartLine,
                 memberToLine: methodSpan.EndLinePosition.Line + 1,
                 memberByteCount: methodBytes);
 
@@ -1526,7 +1529,7 @@ public class WorkspaceReadNavigationImpl
     // minus EchoReserveChars, minus a small digits margin) for the WHOLE response: the wrapper around the page is measured and the
     // page budget reduced by the excess, so the marshaller finds the response within budget and neither re-pages it nor gives it
     // a new resultId. No ResultPager.Fit refit: the page is already built to the budget.
-    private static SentinelCallToolResult<object> PageSequence(
+    private SentinelCallToolResult<object> PageSequence(
         ResultWrapper stored, string? path, int offset, int? limit, string? resultId, string? filePath)
     {
         const int safetyMarginChars = 64;
@@ -1574,8 +1577,11 @@ public class WorkspaceReadNavigationImpl
                 HasMoreData = more,
                 StatusMessage = message,
                 WarningDetails = built.ContractViolation
-                    ? $"One unit is larger than a page ({built.ViolationDetail}); it is returned alone and may be cut by the size limit."
+                    ? $"One unit is larger than a page ({built.ViolationDetail}); it is returned alone, whole, and paging continues after it."
                     : null,
+                // Server-side marker (never serialized): this page is already cut to the budget, so the marshaller must neither
+                // re-page it nor store it under a new resultId when one oversize unit leaves it over budget.
+                Paging = new PagingHints([], PagingOrder.Interleaved, AlreadyPaged: true),
             };
         }
 
@@ -1596,6 +1602,16 @@ public class WorkspaceReadNavigationImpl
             innerBudget -= excess;
             page = SequencePager.BuildPage(full, sequence, offset, unitLimit, innerBudget, wire);
             response = Wrap(page);
+        }
+
+        if (page.ContractViolation)
+        {
+            // A stored page is the one place a violation can be seen after the first response, and the static builder has no logger of
+            // its own, so the server log gets it here (the marshaller logs the same page again when it sees it over budget).
+            _logger.LogWarning(
+                "Tool GetLargeResult page of result {ResultId} breaks the paging unit contract: {Detail}",
+                resultId ?? filePath ?? "(unknown)",
+                page.ViolationDetail);
         }
 
         return response;
@@ -1689,6 +1705,9 @@ public class WorkspaceReadNavigationImpl
                 HasMoreData = more,
                 NextOffset = more ? next : null,
                 WarningDetails = warning,
+                // This path-based page is already fitted to the budget by the loop below (an element larger than a page is stepped
+                // over, never returned), so the marshaller must not cut or store it again.
+                Paging = new PagingHints([], PagingOrder.Interleaved, AlreadyPaged: true),
             };
         }
 

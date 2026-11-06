@@ -190,7 +190,7 @@ public class ToolResultMarshallerOnModeTests
         var sequence = wrapper["Sequence"]!.AsObject();
         Assert.That(sequence["Kind"]!.GetValue<string>(), Is.EqualTo("Lists"));
         Assert.That(sequence["Order"]!.GetValue<string>(), Is.EqualTo("Interleaved"));
-        Assert.That(sequence["Paths"]!.AsArray().Select(p => p!.GetValue<string>()), Is.EqualTo(new[] { "successData.literalResults", "successData.regexResults" }));
+        Assert.That(sequence["Paths"]!.AsArray().Select(p => p!.GetValue<string>()), Is.EqualTo(new[] { "successData.regexResults" }), "the empty literalResults list no longer joins the default sequence");
         var descriptor = wrapper["Sequence"].Deserialize<SequenceDescriptor>(SharedJsonOptions.Default)!;
         Assert.That(descriptor.Kind, Is.EqualTo(SequenceKind.Lists));
         Assert.That(descriptor.Paths, Is.EqualTo(sequence["Paths"]!.AsArray().Select(p => p!.GetValue<string>())));
@@ -415,6 +415,76 @@ public class ToolResultMarshallerOnModeTests
         Assert.That(envelope["largeResult"]!["nextOffset"]!.GetValue<int>(), Is.EqualTo(1));
         var warning = logger.Entries.Single(e => e.Level == LogLevel.Warning);
         Assert.That(warning.Message, Does.Contain("Probe").And.Contain("successData.items[0]"));
+    }
+
+    // Decided 4 (G2): a sequence that is exactly one oversize unit is returned alone, whole - no cut, no omitted, no new resultId.
+    [Test]
+    public async Task On_OneOversizeRecord_FirstResponseIsReturnedAlone_WithoutOmittedOrAStore()
+    {
+        var result = new SentinelCallToolResult<object>
+        {
+            IsError = false,
+            SuccessData = new { items = new[] { new { id = "huge", file = "x.cs", preview = new string('p', 20_000) } } },
+        };
+        var logger = new CapturingLogger<ToolResultMarshaller>();
+        using var signal = OversizeUnitSignal.Open();
+
+        object? marshalled = await MarshalAsync(On(_root, logger), result);
+
+        Assert.That(marshalled, Is.EqualTo(FullText(result)), "the text is returned unchanged");
+        Assert.That(marshalled as string, Does.Not.Contain("largeResult").And.Not.Contain("omitted"));
+        Assert.That(signal.Raised, Is.True, "the offload filter is told to leave it alone");
+        var warning = logger.Entries.Single(e => e.Level == LogLevel.Warning);
+        Assert.That(warning.Message, Does.Contain("Probe").And.Contain("successData.items[0]"));
+        Assert.That(Directory.Exists(Path.Combine(_root, ".roslynsentinel", "largeresults")), Is.False, "nothing was stored");
+    }
+
+    // Stage 1 item 3: a GetLargeResult page (AlreadyPaged hint) that one oversize unit leaves over budget is never re-paged.
+    [Test]
+    public async Task On_APageMarkedAlreadyPaged_IsReturnedUnchanged_EvenOverBudget_WithoutANewResultId()
+    {
+        var result = new SentinelCallToolResult<object>
+        {
+            IsError = false,
+            SuccessData = new { path = "successData.items", offset = 3, returned = 1, total = 40, unit = "records", items = Hits("r", 200) },
+            Paging = new PagingHints([], PagingOrder.Interleaved, AlreadyPaged: true),
+        };
+        Assert.That(FullText(result).Length, Is.GreaterThan(LargeResultHelper.InlineBudgetChars), "fixture sanity");
+        using var signal = OversizeUnitSignal.Open();
+
+        object? marshalled = await MarshalAsync(On(_root), result);
+
+        Assert.That(marshalled, Is.EqualTo(FullText(result)));
+        Assert.That(signal.Raised, Is.True);
+        Assert.That(Directory.Exists(Path.Combine(_root, ".roslynsentinel", "largeresults")), Is.False, "no second resultId is minted");
+    }
+
+    // G12 end to end through the marshaller: an empty attributes list beside a large source no longer wins the sequence.
+    [Test]
+    public async Task On_MethodSourceLikeResult_WithAnEmptyAttributesList_PagesByLines_WithFileRangeFromTheEnvelope()
+    {
+        string source = string.Concat(Enumerable.Range(1, 1500).Select(i => $"    var value{i} = Compute({i});\r\n"));
+        var result = new SentinelCallToolResult<object>
+        {
+            IsError = false,
+            SuccessData = new
+            {
+                envelope = new { lineCount = 1500, returnedFromLine = 1540, returnedToLine = 3039, isComplete = true },
+                signature = "void Big()",
+                source,
+                attributes = new List<string>(),
+            },
+        };
+
+        var (envelope, pointer, _) = await MarshalPagedAsync(result);
+
+        int lines = pointer["returned"]!.GetValue<int>();
+        Assert.That(lines, Is.InRange(1, 1499));
+        Assert.That(pointer["nextOffset"]!.GetValue<int>(), Is.EqualTo(lines));
+        Assert.That(pointer["totalRecords"]!.GetValue<int>(), Is.EqualTo(1500));
+        Assert.That(pointer.ContainsKey("omitted"), Is.False);
+        Assert.That(pointer["message"]!.GetValue<string>(), Does.Contain($"(file lines 1540-{1539 + lines})"));
+        Assert.That(source, Does.StartWith(envelope["successData"]!["source"]!.GetValue<string>()));
     }
 
     // ---- the second reader ----

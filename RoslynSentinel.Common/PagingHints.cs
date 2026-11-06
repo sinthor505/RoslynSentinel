@@ -24,4 +24,9 @@ public enum PagingOrder
 /// not resolve to an array in the serialized result is ignored.
 /// </param>
 /// <param name="Order">How the lists are walked into one sequence.</param>
-public sealed record PagingHints(IReadOnlyList<string> RecordsPaths, PagingOrder Order = PagingOrder.Interleaved);
+/// <param name="AlreadyPaged">
+/// True on a page that <c>GetLargeResult</c> built from a stored sequence: the page is already cut to the budget by
+/// <see cref="SequencePager"/>, so the marshaller returns it unchanged even when one oversize unit leaves it over budget
+/// (never a new <c>resultId</c> and never a second cut). <see cref="RecordsPaths"/> is empty on such a page.
+/// </param>
+public sealed record PagingHints(IReadOnlyList<string> RecordsPaths, PagingOrder Order = PagingOrder.Interleaved, bool AlreadyPaged = false);

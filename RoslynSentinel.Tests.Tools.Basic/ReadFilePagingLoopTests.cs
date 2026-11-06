@@ -227,4 +227,46 @@ public class ReadFilePagingLoopTests
         Assert.That(needlePages, Is.EqualTo(new[] { PinnedNeedlePageOffset }), "the needle sits on one page, at the pinned offset");
         Assert.That(responses.Select(r => r.Offset).ToArray(), Is.EqualTo(PinnedPageOffsets), $"pinned offsets chain without gap or overlap; actual {string.Join(", ", responses.Select(r => r.Offset))}");
     }
+
+    // G11: a ranged read bigger than the budget used to be trimmed to a shorter endLine with a "Range shortened... call ReadFile(startLine)"
+    // status that the sequence pager then stripped, so lines past the trimmed end had no instruction pointing at them. Now the requested
+    // range is returned whole and the marshaller pages it by lines to exactly the requested endLine.
+    [Test]
+    public async Task LargeRange_PagesThroughToTheRequestedEndLine_WithNothingShortened()
+    {
+        const int requestedEnd = 1500;
+        string source = BuildTierRatesSource();
+        string path = Path.Combine(_tempDir, "TierRates.cs");
+        await File.WriteAllTextAsync(path, source);
+        List<string> sourceLines = ResultPager.SplitLines(source);
+        Assert.That(sourceLines.Count, Is.GreaterThan(requestedEnd), "fixture sanity: the range ends inside the file");
+
+        var read = await _tools.ReadFileTool(reason: "test message", path, startLine: 1, endLine: requestedEnd);
+        Assert.That(read.IsError, Is.False, read.ErrorData?.Message);
+        var marshaller = new ToolResultMarshaller(NullLogger<ToolResultMarshaller>.Instance, () => _tempDir, () => ResultMarshallerMode.On);
+        object? marshalled = await marshaller.MarshalAsync("ReadFile", AnyMethod, read, typeof(object), Wire, CancellationToken.None);
+        var first = JsonNode.Parse((string)marshalled!)!;
+        JsonNode pointer = first["largeResult"]!;
+        string resultId = pointer["resultId"]!.GetValue<string>();
+
+        Assert.That(first["successData"]!["endLine"]!.GetValue<int>(), Is.EqualTo(requestedEnd), "the requested endLine is reported, not a trimmed one");
+        Assert.That(first.ToJsonString(), Does.Not.Contain("shortened"));
+        Assert.That(pointer["totalRecords"]!.GetValue<int>(), Is.EqualTo(requestedEnd), "the sequence is the requested lines only");
+
+        var collected = new StringBuilder(first["successData"]!["source"]!.GetValue<string>());
+        string lastMessage = pointer["message"]!.GetValue<string>();
+        int? next = pointer["nextOffset"]?.GetValue<int>();
+        for (int guard = 0; next is int offset && guard < 100; guard++)
+        {
+            var result = await _tools.GetLargeResultTool(reason: "test message", resultId: resultId, offset: offset);
+            Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+            var page = (EnvelopePageResult)result.SuccessData!;
+            collected.Append(page.Envelope!["successData"]!["source"]!.GetValue<string>());
+            lastMessage = result.StatusMessage!;
+            next = page.NextOffset;
+        }
+
+        Assert.That(collected.ToString(), Is.EqualTo(string.Concat(sourceLines.Take(requestedEnd))), "pages cover lines 1..requestedEnd exactly, no gap and no line beyond");
+        Assert.That(lastMessage, Does.StartWith("COMPLETE:").And.Contain($"-{requestedEnd})"), "the last page ends at the requested line");
+    }
 }

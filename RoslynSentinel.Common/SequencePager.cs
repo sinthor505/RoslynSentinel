@@ -43,10 +43,11 @@ public static class SequencePager
     /// <item><description>The <see cref="ResultRecordsAttribute"/> list on <paramref name="successDataType"/>, one list, when it
     /// resolves to a non-empty array (an empty declared list falls through, so a regex search whose declared literal list is
     /// empty still pages its other list).</description></item>
-    /// <item><description>Every array directly under <c>successData</c>, in document order (a bare-array <c>successData</c> is one
-    /// list).</description></item>
-    /// <item><description>The longest non-empty string directly under <c>successData</c> (or <c>successData</c> itself when it is a
-    /// string): <see cref="SequenceKind.Lines"/>.</description></item>
+    /// <item><description>The default rule. A bare-array <c>successData</c> is one list; a string <c>successData</c> is its lines.
+    /// For an object, EMPTY arrays are ignored, then the longest string directly under <c>successData</c> is compared with the
+    /// combined serialized size of the non-empty arrays: the larger wins (a tie goes to the lists). Lists: every non-empty array
+    /// directly under <c>successData</c>, in document order. <see cref="SequenceKind.Lines"/>: that longest string. A diff or
+    /// source text that is the tool's main output therefore pages by lines even beside empty or small lists (Decided 9).</description></item>
     /// <item><description>Otherwise <see cref="SequenceDescriptor.None"/>: the caller keeps using
     /// <see cref="ResultPager.Fit(JsonNode, int, JsonSerializerOptions, Type?)"/>.</description></item>
     /// </list>
@@ -117,12 +118,10 @@ public static class SequencePager
                 return new SequenceDescriptor(SequenceKind.Lists, [SuccessKey], PagingOrder.Interleaved, 0);
 
             case JsonObject obj:
-                var arrays = obj.Where(p => p.Value is JsonArray).Select(p => SuccessKey + "." + p.Key).ToList();
-                if (arrays.Count > 0)
-                {
-                    return new SequenceDescriptor(SequenceKind.Lists, arrays, PagingOrder.Interleaved, 0);
-                }
-
+                // Default rule only (hints and [ResultRecords] were handled above): empty arrays are not a sequence (an empty
+                // "attributes": [] must not win over a 20 KB "source"). The larger of the longest string and the combined
+                // serialized size of the non-empty arrays is what is over budget, so it is what pages; a tie goes to the lists.
+                var arrays = obj.Where(p => p.Value is JsonArray { Count: > 0 }).ToList();
                 string? longest = null;
                 int longestLength = 0;
                 foreach (KeyValuePair<string, JsonNode?> property in obj)
@@ -132,6 +131,12 @@ public static class SequencePager
                         longest = property.Key;
                         longestLength = text.Length;
                     }
+                }
+
+                int arraysSize = arrays.Count == 0 ? 0 : arrays.Sum(p => p.Value!.ToJsonString(wireOptions).Length);
+                if (arrays.Count > 0 && (longest is null || longestLength <= arraysSize))
+                {
+                    return new SequenceDescriptor(SequenceKind.Lists, arrays.Select(p => SuccessKey + "." + p.Key).ToList(), PagingOrder.Interleaved, 0);
                 }
 
                 return longest is null

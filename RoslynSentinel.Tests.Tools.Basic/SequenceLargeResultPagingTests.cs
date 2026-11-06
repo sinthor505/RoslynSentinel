@@ -313,6 +313,94 @@ public class SequenceLargeResultPagingTests
         Assert.That(files, Has.Length.EqualTo(1));
     }
 
+    // G1: one unit larger than a page on a GetLargeResult page used to be re-cut by the marshaller (omitted, NEW resultId) and the
+    // result fed back into GetLargeResult forever. Now the page is returned as is, under the same resultId, and paging goes on.
+    [Test]
+    public async Task OversizeRecord_OnAGetLargeResultPage_KeepsTheResultId_AndPagingAdvancesPastIt()
+    {
+        const int hugeIndex = 5;
+        List<string> alphaSource = Enumerable.Range(0, 40).Select(i => i == hugeIndex ? "HUGE-" + new string('h', 20_000) : Record("a", i)).ToList();
+        List<string> betaSource = Enumerable.Range(0, 40).Select(i => Record("b", i)).ToList();
+        var (resultId, first) = await MarshalAsync(new SentinelCallToolResult<TwoLists> { IsError = false, SuccessData = new TwoLists(alphaSource, betaSource) });
+        JsonNode pointer = first["largeResult"]!;
+        var alpha = Strings(first["successData"]!["alpha"]);
+        var beta = Strings(first["successData"]!["beta"]);
+        int nextOffset = pointer["nextOffset"]!.GetValue<int>();
+        Assert.That(nextOffset, Is.EqualTo(2 * hugeIndex), "the first page stops before the oversize unit (interleaved: alpha5 is unit 10)");
+
+        bool sawOversizePage = false;
+        for (int guard = 0; guard < 100; guard++)
+        {
+            var result = await PageAsync(resultId, nextOffset);
+            EnvelopePageResult page = PageOf(result);
+            string expected = JsonSerializer.Serialize(result, Wire.GetTypeInfo(typeof(object)));
+            object? marshalled = await Marshaller().MarshalAsync("GetLargeResult", AnyMethod, result, typeof(object), Wire, CancellationToken.None);
+
+            Assert.That(marshalled, Is.EqualTo(expected), $"offset {nextOffset}: the marshaller must return a GetLargeResult page unchanged");
+            if (expected.Length > PageBudget)
+            {
+                sawOversizePage = true;
+                Assert.That(page.Returned, Is.EqualTo(1), "an oversize unit goes alone");
+                Assert.That(page.NextOffset, Is.EqualTo(nextOffset + 1), "paging advances past it");
+                Assert.That(result.WarningDetails, Does.Contain("larger than a page").And.Not.Contain("may be cut"));
+            }
+
+            JsonNode shape = page.Envelope!["successData"]!;
+            alpha.AddRange(Strings(shape["alpha"]));
+            beta.AddRange(Strings(shape["beta"]));
+            if (!page.HasMoreData)
+            {
+                break;
+            }
+
+            nextOffset = page.NextOffset!.Value;
+        }
+
+        Assert.That(sawOversizePage, Is.True, "fixture sanity: the chain met the oversize unit");
+        Assert.That(alpha, Is.EqualTo(alphaSource));
+        Assert.That(beta, Is.EqualTo(betaSource));
+        var files = Directory.GetFiles(Path.Combine(_tempDir, ".roslynsentinel", "largeresults"), "largeresult_*.json");
+        Assert.That(files, Has.Length.EqualTo(1), "no second resultId was minted while paging past the oversize unit");
+    }
+
+    // G12 + G6: GetMethodSource over budget pages by lines (the empty attributes list no longer wins), and the message names the file
+    // lines of the text actually returned, which starts at the method's leading comments, not at the method token.
+    [Test]
+    public async Task GetMethodSource_OverBudget_PagesByLines_WithCorrectFileLinesWhenTheMethodHasLeadingComments()
+    {
+        string body = string.Concat(Enumerable.Range(0, 1200).Select(i => $"        x += {i} * factor;\n"));
+        string fileText = "namespace N;\npublic class Big\n{\n    // leading comment one\n    // leading comment two\n    /// <summary>docs</summary>\n"
+            + "    public int Huge(int x, int factor)\n    {\n" + body + "        return x;\n    }\n}\n";
+        string docPath = Path.Combine(_tempDir, "Big.cs");
+        _workspaceManager.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            Path.Combine(_tempDir, "TestProj.csproj"),
+            new[] { ("Big.cs", fileText, docPath) }));
+
+        var read = await _tools.GetMethodSourceTool(reason: "test message", docPath, "Huge");
+        Assert.That(read.IsError, Is.False, read.ErrorData?.Message);
+        var data = (MethodSourceResult)read.SuccessData!;
+        Assert.That(data.Source, Does.StartWith("    // leading comment one"), "fixture sanity: Source begins at the leading comments");
+        Assert.That(data.Envelope.ReturnedFromLine, Is.EqualTo(4), "the reported range starts where Source starts (G6), not at line 7 where the method token is");
+        Assert.That(data.Envelope.LineCount, Is.EqualTo(data.Source.Count(c => c == '\n') + (data.Source.EndsWith('\n') ? 0 : 1)).Or.EqualTo(data.Envelope.ReturnedToLine - 4 + 1));
+        Assert.That(data.Attributes, Is.Empty);
+
+        var (resultId, first) = await MarshalAsync(read);
+        JsonNode pointer = first["largeResult"]!;
+
+        Assert.That(pointer["returned"]!.GetValue<int>(), Is.GreaterThan(0));
+        Assert.That(pointer["nextOffset"]!.GetValue<int>(), Is.EqualTo(pointer["returned"]!.GetValue<int>()));
+        Assert.That(pointer.AsObject().ContainsKey("omitted"), Is.False, "paged by sequence, not cut by Fit");
+        Assert.That(first.ToJsonString(), Does.Not.Contain("INCOMPLETE ... path"));
+        int lines = pointer["returned"]!.GetValue<int>();
+        Assert.That(pointer["message"]!.GetValue<string>(), Does.Contain($"(file lines 4-{3 + lines})"));
+        Assert.That(first["successData"]!["attributes"]!.AsArray(), Is.Empty);
+
+        var next = await PageAsync(resultId, lines);
+        EnvelopePageResult page = PageOf(next);
+        Assert.That(next.StatusMessage, Does.Contain($"(file lines {4 + lines}-{3 + lines + page.Returned})"));
+    }
+
     // Every value of every property called name, anywhere in the tree.
     private static List<JsonNode?> Occurrences(JsonNode? node, string name)
     {

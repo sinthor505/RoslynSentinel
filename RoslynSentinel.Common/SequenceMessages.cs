@@ -7,7 +7,7 @@ public static class SequenceMessages
 {
     /// <summary>
     /// The model-facing text of one page of a sequence: what came back, out of how many, and the full next call. A line
-    /// sequence names the line range, and the file line range when <c>successData.startLine</c> is present and no
+    /// sequence names the line range, and the file line range when <c>successData.startLine</c> (or, absent that, <c>successData.envelope.returnedFromLine</c>) is present and no
     /// overlong line was chunked (a chunk is a unit, not a file line).
     /// </summary>
     /// <param name="full">The full wire envelope the sequence was resolved on.</param>
@@ -40,7 +40,10 @@ public static class SequenceMessages
         string text = ResultPager.SelectNode(full, sequence.Paths[0]) is JsonValue value && value.TryGetValue(out string? s) ? s : string.Empty;
         bool chunked = ResultPager.SplitLines(text).Count != page.Total;
         string fileRange = string.Empty;
-        if (!chunked && page.Returned > 0 && full["successData"]?["startLine"] is JsonValue start && start.TryGetValue(out int startLine))
+        // ReadFile reports startLine; GetMethodSource reports the same thing as envelope.returnedFromLine (the line its source begins on).
+        var dataObject = full["successData"] as JsonObject;
+        JsonNode? startNode = dataObject?["startLine"] ?? (dataObject?["envelope"] as JsonObject)?["returnedFromLine"];
+        if (!chunked && page.Returned > 0 && startNode is JsonValue start && start.TryGetValue(out int startLine))
         {
             fileRange = $" (file lines {startLine + page.Offset}-{startLine + page.Offset + page.Returned - 1})";
         }

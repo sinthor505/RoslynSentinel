@@ -97,6 +97,20 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
                 return text;
             }
 
+            // A GetLargeResult page of a stored sequence was built to the budget by SequencePager; when it is still over, one
+            // unit alone is larger than a page (Decided 4). Cutting it again would store a NEW resultId and start the re-offload
+            // loop, so it goes out as is (the server log names the tool) and the offload filter is told to leave it alone.
+            if (PagingHintsOf(result) is { AlreadyPaged: true })
+            {
+                _logger.LogWarning(
+                    "Tool {ToolName} returned a stored-sequence page of {Chars} chars, over the {Budget} budget (one unit is larger than a page); returned unchanged, not re-paged or re-stored.",
+                    toolName,
+                    text.Length,
+                    budget);
+                OversizeUnitSignal.Raise();
+                return text;
+            }
+
             return await FitAndStoreAsync(toolName, result, text, serializerOptions, budget, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -200,16 +214,41 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
         string toolName, JsonObject parsed, string text, SequenceDescriptor sequence, JsonSerializerOptions options, int budget, CancellationToken cancellationToken)
     {
         SequencePage page = SequencePager.BuildPage(parsed, sequence, 0, 0, budget, options);
+
+        // The parts outside the sequence are over budget by themselves: only Fit can cut those (stage 2 moves such results to
+        // [NeverInline] / bounded shapes). Named in the server log so the offenders can be found.
+        if (page.PartsOutsideOverBudget)
+        {
+            _logger.LogWarning(
+                "Tool {ToolName} breaks the paging unit contract: {Detail}; falling back to ResultPager.Fit (parts outside the sequence must stay bounded).",
+                toolName,
+                page.ViolationDetail);
+            return null;
+        }
+
         if (page.ContractViolation)
         {
             _logger.LogWarning("Tool {ToolName} breaks the paging unit contract: {Detail}", toolName, page.ViolationDetail);
         }
 
-        // No page to offer: the sequence already fits whole, or the parts outside it are over budget by themselves and
-        // only Fit can cut those.
-        if (page.NextOffset is null || page.PartsOutsideOverBudget)
+        if (page.NextOffset is null)
         {
+            // The whole sequence is one unit and that unit is larger than a page (Decided 4): it is returned alone, whole, with
+            // no cut and no omitted entry, and nothing is stored (there is no second page to fetch). The offload filter is told
+            // to leave the text alone. A sequence with no violation here fits whole by estimate or is empty; Fit handles those.
+            if (page.ContractViolation && page.Total > 0)
+            {
+                OversizeUnitSignal.Raise();
+                return text;
+            }
+
             return null;
+        }
+
+        // An oversize first unit goes alone on a page that advances (Decided 4); the page is over budget on purpose.
+        if (page.ContractViolation)
+        {
+            OversizeUnitSignal.Raise();
         }
 
         // The sequence pager cut this result, so the tool's own re-query hint (ReadFile's "call ReadFile(startLine..endLine)")

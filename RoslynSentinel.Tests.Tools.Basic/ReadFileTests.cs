@@ -143,10 +143,10 @@ public class ReadFileTests
     }
 
     [Test]
-    public async Task ReadFile_RangeLargerThanInlineBudget_IsShortenedNotOffloadedAsync()
+    public async Task ReadFile_RangeLargerThanInlineBudget_IsReturnedWholeForTheMarshallerToPageAsync()
     {
-        // Create a large document with ~800 lines of code-like content (~60 chars per line).
-        // TrimRangeToInlineBudget should shorten the requested range to stay under the inline budget.
+        // ~800 lines of code-like content (~60 chars per line), more than the inline budget. The tool no longer trims the range
+        // (G11): it returns exactly the requested lines and the result marshaller pages them by lines (see ReadFilePagingLoopTests).
         var bigDocPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "BigRanged.cs");
         var lines = new List<string>();
         for (int i = 0; i < 820; i++)
@@ -169,18 +169,14 @@ public class ReadFileTests
         var startLine = (int)GetProp(data, "startLine")!;
         var endLine = (int)GetProp(data, "endLine")!;
         var source = (string)GetProp(data, "source")!;
-        var statusMessage = (string?)GetProp(result, "StatusMessage");
-        var hasMoreData = (bool?)GetProp(result, "HasMoreData") ?? false;
 
-        // Should be shortened, not offloaded.
+        // The whole requested range, no shortened status that would point at a re-query, no offload at the tool level.
         Assert.That(result.LargeResult, Is.Null);
-        Assert.That(endLine, Is.LessThan(800));
-        Assert.That(hasMoreData, Is.True);
-        Assert.That(statusMessage, Does.Contain("startLine:"));
-
-        // Verify the result fits under the inline budget when serialized.
-        var jsonSerialized = System.Text.Json.JsonSerializer.Serialize(result.SuccessData, RoslynSentinel.Common.SharedJsonOptions.Default);
-        Assert.That(jsonSerialized.Length, Is.LessThan(RoslynSentinel.Common.LargeResultHelper.OffloadThresholdBytes));
+        Assert.That(startLine, Is.EqualTo(1));
+        Assert.That(endLine, Is.EqualTo(800));
+        Assert.That(source.Count(c => c == '\n'), Is.EqualTo(800));
+        Assert.That(result.StatusMessage, Is.Null);
+        Assert.That(result.HasMoreData, Is.True, "lines 801-821 of the file remain past the requested range");
     }
 
     [Test]

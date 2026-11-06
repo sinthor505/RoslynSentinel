@@ -514,7 +514,16 @@ public static class RoslynSentinelServiceExtensionsBasic
             ModelContextProtocol.Protocol.CallToolResult>(
             async (context, cancellationToken) =>
             {
+                // The marshaller raises this when it returns a response over budget on purpose (proposal_sequence_pager.md
+                // Decided 4: one unit larger than a page goes out alone). Re-wrapping that under a Raw resultId would hand the
+                // model a second pointer next to the marshaller's own (or replace a result with nothing left to page), so the
+                // text passes through; the marshaller has already written the contract violation to the server log.
+                using var oversizeSignal = OversizeUnitSignal.Open();
                 var result = await next(context, cancellationToken);
+                if (oversizeSignal.Raised)
+                {
+                    return result;
+                }
 
                 // GetLargeResultTool's own switch branches (WorkspaceReadNavigationImpl.cs) already
                 // shrink-and-verify every list-shaped page against this exact threshold before

@@ -523,7 +523,7 @@ public class SequencePagerTests
 
         SequenceDescriptor sequence = Resolve(envelope, null, typeof(DeclaredProbeData));
 
-        Assert.That(sequence.Paths, Is.EqualTo(new[] { "successData.declared", "successData.other" }));
+        Assert.That(sequence.Paths, Is.EqualTo(new[] { "successData.other" }), "empty arrays are ignored by the default rule (Stage 1)");
         Assert.That(SequencePager.CountUnits(envelope, sequence), Is.EqualTo(3));
     }
 
@@ -545,15 +545,83 @@ public class SequencePagerTests
     }
 
     [Test]
-    public void ArraysWinOverStrings_AndTheLongestStringWinsWithoutArrays()
+    public void ArraysWinOverStrings_WhenTheyAreTheLargerPart_AndTheLongestStringWinsWithoutArrays()
     {
-        JsonObject withArray = Envelope(new JsonObject { ["source"] = new string('s', 500), ["items"] = Recs("i", 2) });
+        // 20 records serialize to well over the 500-char string, so the lists are what is over budget (a smaller array than the
+        // string would lose: see LargeStringPlusSmallNonEmptyArray_PagesByLines_WithTheArrayIntact).
+        JsonObject withArray = Envelope(new JsonObject { ["source"] = new string('s', 500), ["items"] = Recs("i", 20) });
         JsonObject withStrings = Envelope(new JsonObject { ["filePath"] = "a.cs", ["source"] = "long text\nhere\n", ["signature"] = "void M()" });
 
         Assert.That(Resolve(withArray).Kind, Is.EqualTo(SequenceKind.Lists));
         SequenceDescriptor lines = Resolve(withStrings);
         Assert.That(lines.Kind, Is.EqualTo(SequenceKind.Lines));
         Assert.That(lines.Paths, Is.EqualTo(new[] { "successData.source" }));
+    }
+
+    // G12: GetMethodSource on a 19.7 KB method has "attributes": [] beside "source"; the empty array used to win and the page
+    // held the whole empty sequence, so nothing could be paged.
+    [Test]
+    public void LargeStringPlusAnEmptyArray_PagesByLines()
+    {
+        string text = Numbered(2000);
+        JsonObject envelope = Envelope(new JsonObject { ["signature"] = "void M()", ["source"] = text, ["attributes"] = new JsonArray() });
+
+        SequenceDescriptor sequence = Resolve(envelope);
+        SequencePage page = SequencePager.BuildPage(envelope, sequence, 0, 0, 3000, Wire);
+
+        Assert.That(sequence.Kind, Is.EqualTo(SequenceKind.Lines));
+        Assert.That(sequence.Paths, Is.EqualTo(new[] { "successData.source" }));
+        Assert.That(page.Total, Is.EqualTo(2000));
+        Assert.That(page.Returned, Is.GreaterThan(0).And.LessThan(2000));
+        Assert.That(page.NextOffset, Is.EqualTo(page.Returned), "paging advances through the lines");
+        Assert.That(page.ContractViolation, Is.False);
+        Assert.That((JsonArray)page.Page["successData"]!["attributes"]!, Is.Empty);
+    }
+
+    [Test]
+    public void LargeStringPlusASmallNonEmptyArray_PagesByLines_WithTheArrayIntact()
+    {
+        string text = Numbered(2000);
+        JsonArray small = Recs("a", 2);
+        JsonObject envelope = Envelope(new JsonObject { ["source"] = text, ["attributes"] = small });
+
+        SequenceDescriptor sequence = Resolve(envelope);
+        SequencePage page = SequencePager.BuildPage(envelope, sequence, 0, 0, 3000, Wire);
+
+        Assert.That(sequence.Kind, Is.EqualTo(SequenceKind.Lines));
+        Assert.That(page.NextOffset, Is.Not.Null);
+        Assert.That(JsonNode.DeepEquals(page.Page["successData"]!["attributes"], small), Is.True, "the small list stays whole on every page");
+        Assert.That(Len(page.Page), Is.LessThanOrEqualTo(3000));
+    }
+
+    [Test]
+    public void LargeArraysBesideASmallString_StillPageAsLists()
+    {
+        JsonObject envelope = Envelope(new JsonObject { ["signature"] = "void M()", ["callers"] = Recs("c", 300), ["implementations"] = Recs("i", 250) });
+
+        SequenceDescriptor sequence = Resolve(envelope);
+
+        Assert.That(sequence.Kind, Is.EqualTo(SequenceKind.Lists));
+        Assert.That(sequence.Paths, Is.EqualTo(new[] { "successData.callers", "successData.implementations" }));
+    }
+
+    [Test]
+    public void EmptyArraysAndNoString_ResolveToNone_SoTheCallerKeepsFit()
+    {
+        JsonObject envelope = Envelope(new JsonObject { ["count"] = 3, ["items"] = new JsonArray(), ["more"] = new JsonArray() });
+
+        Assert.That(Resolve(envelope).Kind, Is.EqualTo(SequenceKind.None));
+    }
+
+    [Test]
+    public void EmptyArrays_DoNotJoinTheListSequence()
+    {
+        JsonObject envelope = Envelope(new JsonObject { ["callers"] = Recs("c", 30), ["warnings"] = new JsonArray(), ["implementations"] = Recs("i", 30) });
+
+        SequenceDescriptor sequence = Resolve(envelope);
+
+        Assert.That(sequence.Kind, Is.EqualTo(SequenceKind.Lists));
+        Assert.That(sequence.Paths, Is.EqualTo(new[] { "successData.callers", "successData.implementations" }));
     }
 
     [Test]

@@ -181,8 +181,6 @@ public class WorkspaceFileEditImpl
     internal static ResultError BuildFileNotFoundError(Microsoft.CodeAnalysis.Solution solution, string normalizedPath, Func<string, bool>? isCallable = null)
         => new("FileNotFound", FileNotFoundMessage.Build(normalizedPath, DocumentLookup.FindClosestPaths(solution, normalizedPath), solution.Projects.Count(), isCallable));
 
-    private const int RangedReadInlineBudgetChars = LargeResultHelper.OffloadThresholdBytes - 2048;
-
     private async Task<SentinelCallToolResult<object>> ReadFileWithoutSolutionAsync(string absolutePath, int? startLine, int? endLine, CancellationToken cancellationToken)
     {
         try
@@ -215,15 +213,14 @@ public class WorkspaceFileEditImpl
                     };
                 }
 
-                int requestedTo = to;
-                to = TrimRangeToInlineBudget(sourceText, from, to);
+                // The requested range is returned whole; an over-budget range is paged by lines by the result marshaller.
                 var slice = sourceText.ToString(TextSpan.FromBounds(sourceText.Lines[from - 1].Start, sourceText.Lines[to - 1].EndIncludingLineBreak));
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
                     SuccessData = new { filePath = absolutePath, startLine = from, endLine = to, totalLines, source = slice },
                     HasMoreData = to < totalLines,
-                    StatusMessage = explanation + (to < requestedTo ? $"Range shortened to lines {from}-{to} of {totalLines} to stay under the {LargeResultHelper.OffloadThresholdBytes}-byte inline limit. Call {ToolCallHint.Call("ReadFile", ("startLine", (to + 1).ToString()))} for the rest." : string.Empty),
+                    StatusMessage = explanation.TrimEnd(),
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
                 };
             }
@@ -234,7 +231,7 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"File is {totalLines} lines; it is over the inline limit and results cannot be offloaded while no solution is loaded. Pass startLine/endLine (ranges are shortened to fit) or call {ToolCallHint.Call("LoadSolution")} first.")
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"File is {totalLines} lines; it is over the inline limit and results cannot be offloaded while no solution is loaded. Pass a small startLine/endLine range (a range over the limit cannot be paged while no solution is loaded) or call {ToolCallHint.Call("LoadSolution")} first.")
                 };
             }
 
@@ -256,39 +253,6 @@ public class WorkspaceFileEditImpl
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReadFile")
             };
         }
-    }
-
-    // TODO plan_wire_result_marshaller Step 7: retire with the ReadFile direct store; ReadFileTests.ReadFile_RangeLargerThanInlineBudget_IsShortenedNotOffloadedAsync pins today's behaviour.
-    private static int TrimRangeToInlineBudget(SourceText sourceText, int from, int to)
-    {
-        bool Fits(int candidateTo)
-        {
-            var span = TextSpan.FromBounds(sourceText.Lines[from - 1].Start, sourceText.Lines[candidateTo - 1].EndIncludingLineBreak);
-            return System.Text.Json.JsonSerializer.Serialize(sourceText.ToString(span), RoslynSentinel.Common.SharedJsonOptions.Default).Length <= RangedReadInlineBudgetChars;
-        }
-
-        if (Fits(to))
-        {
-            return to;
-        }
-
-        // Binary search: lo always acceptable (a single over-long line is returned as-is), hi never fits.
-        int lo = from;
-        int hi = to;
-        while (hi - lo > 1)
-        {
-            int mid = lo + ((hi - lo) / 2);
-            if (Fits(mid))
-            {
-                lo = mid;
-            }
-            else
-            {
-                hi = mid;
-            }
-        }
-
-        return lo;
     }
 
     public async Task<SentinelCallToolResult<object>> ReadFile(ToolCallReason reason, string filePath, int? startLine = null,
@@ -363,10 +327,7 @@ public class WorkspaceFileEditImpl
                     };
                 }
 
-                int requestedTo = to;
-                to = TrimRangeToInlineBudget(sourceText, from, to);
-                bool shortened = to < requestedTo;
-
+                // The requested range is returned whole; an over-budget range is paged by lines by the result marshaller.
                 var start = sourceText.Lines[from - 1].Start;
                 var end = sourceText.Lines[to - 1].EndIncludingLineBreak;
                 var slice = sourceText.ToString(TextSpan.FromBounds(start, end));
@@ -384,9 +345,6 @@ public class WorkspaceFileEditImpl
                     },
                     Findings = sliceMixedEol is null ? [] : [new Finding("ReadFile", sliceMixedEol)],
                     HasMoreData = to < totalLines,
-                    StatusMessage = shortened
-                        ? $"Range shortened to lines {from}-{to} of {totalLines} to stay under the {LargeResultHelper.OffloadThresholdBytes}-byte inline limit. Call {ToolCallHint.Call("ReadFile", ("startLine", (to + 1).ToString()))} for the rest."
-                        : null,
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
                 };
             }
