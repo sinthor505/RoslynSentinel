@@ -2438,6 +2438,7 @@ public class MemberRefactoringEngine
             throw new ToolInvalidArgumentException($"newMemberSource is invalid: {trailingIssue}");
         }
 
+        // TODO Member addMember could use CallBindingCheck: a new overload can capture existing calls
         var addedDescription = DescribeParsedMember(newMember);
         //newMember = newMember.WithAddedByComment("AddMember");
         return new DocumentEditResult
@@ -2875,14 +2876,19 @@ public class MemberRefactoringEngine
             membersToMove = membersToMove.Where(m => !(m is FieldDeclarationSyntax fd && fd.Declaration.Variables.Any(v => alreadySatisfiedFields.Contains(v.Identifier.Text)))).ToList();
         }
 
+        // Every route below ends in this check on its planned changes, before anything is written (the tool writes only what
+        // MoveMemberAsync returns, and a dry run takes the same path): a call that would silently bind to a different method is refused.
+        Task<MoveMemberResult> CheckedAsync(MoveMemberResult planned) => RequireMoveKeepsCallBindingsAsync(solution, planned, semanticModel, membersToMove, className, targetClassName, memberNames, oldMember, cancellationToken);
+
         if (targetIsBaseType)
         {
+            // The staying-overload pull-up check below stays: it gives that case its own refusal text; CheckedAsync covers the rest.
             if (classSymbol != null && semanticModel != null)
             {
                 await RequireBaseTypePullUpKeepsCallBindingsAsync(filePath, className, memberNames, targetClassName, classSymbol, semanticModel, membersToMove, cancellationToken);
             }
 
-            return await MoveMembersToBaseTypeAsync(solution, filePath, root, classNode, membersToMove, baseType!, _workspaceManager, cancellationToken);
+            return await CheckedAsync(await MoveMembersToBaseTypeAsync(solution, filePath, root, classNode, membersToMove, baseType!, _workspaceManager, cancellationToken));
         }
 
         // Moving an INSTANCE member to anywhere other than an existing base class requires rewriting
@@ -2934,7 +2940,7 @@ public class MemberRefactoringEngine
             var staticTargetMemberSymbols = membersToMove.Select(m => semanticModel?.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m)).Where(s => s != null).Cast<ISymbol>().ToList();
             var conversionNotes = new List<string>();
             var moved = await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, staticTargetMemberSymbols, instanceMembersToConvert, conversionNotes, oldMember, _workspaceManager, cancellationToken);
-            return moved with { Notes = conversionNotes };
+            return await CheckedAsync(moved with { Notes = conversionNotes });
         }
 
         if (nonStaticMembers.Count > 0)
@@ -2951,17 +2957,17 @@ public class MemberRefactoringEngine
                 throw new ToolNotFoundException($"Cannot move instance member(s) [{names}] to '{targetClassName}': it is not an existing base class of '{className}'. " + "Moving an instance member elsewhere requires rewriting every call site's receiver expression. Pass " + "autoResolveCallSites:true (the default) to have this resolved automatically where unambiguous, or " + "make the member(s) static first, or move to an existing base class of the source type.");
             }
 
-            return await MoveInstanceMembersAsync(solution, filePath, className, membersToMove, targetClassName, memberNames, targetFilePath, targetDoc, targetClassNode, callSiteFixups, fieldMap, oldMember, forwarderReceiver, cancellationToken);
+            return await CheckedAsync(await MoveInstanceMembersAsync(solution, filePath, className, membersToMove, targetClassName, memberNames, targetFilePath, targetDoc, targetClassNode, callSiteFixups, fieldMap, oldMember, forwarderReceiver, cancellationToken));
         }
 
         if (targetDoc?.FilePath != null && targetClassNode != null)
         {
             var existingClassMemberSymbols = membersToMove.Select(m => semanticModel?.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m)).Where(s => s != null).Cast<ISymbol>().ToList();
-            return await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, existingClassMemberSymbols, null, null, oldMember, _workspaceManager, cancellationToken);
+            return await CheckedAsync(await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, existingClassMemberSymbols, null, null, oldMember, _workspaceManager, cancellationToken));
         }
 
         var newClassMemberSymbols = membersToMove.Select(m => semanticModel?.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m)).Where(s => s != null).Cast<ISymbol>().ToList();
-        return await MoveMembersToNewClassAsync(solution, filePath, root, classNode, membersToMove, targetClassName, newClassMemberSymbols, oldMember, _workspaceManager, cancellationToken);
+        return await CheckedAsync(await MoveMembersToNewClassAsync(solution, filePath, root, classNode, membersToMove, targetClassName, newClassMemberSymbols, oldMember, _workspaceManager, cancellationToken));
     }
 
     /// <summary>
@@ -4504,6 +4510,53 @@ public class MemberRefactoringEngine
     }
 
     /// <summary>
+    /// The final gate of every MoveMember route: applies the planned changes to a trial solution, captures every call of the moved
+    /// members' names there and in the original, and refuses the whole move (before anything is written) when a call would bind to a
+    /// different method than the move accounts for, or when the check itself cannot run. Skipped only when the trial has compile errors
+    /// of its own: the write's compile gate reports those with their real cause, and unbound calls would only add noise.
+    /// </summary>
+    private static async Task<MoveMemberResult> RequireMoveKeepsCallBindingsAsync(Solution solution, MoveMemberResult planned, SemanticModel? semanticModel, List<MemberDeclarationSyntax> membersToMove, string className, string targetClassName, string[] memberNames, MoveMemberOldMember oldMember, CancellationToken cancellationToken)
+    {
+        var operation = $"move [{string.Join(", ", memberNames)}] from '{className}' to '{targetClassName}'";
+        if (membersToMove.Count == 0 || planned.Changes.Count == 0)
+        {
+            return planned;
+        }
+
+        CallBindingCheckResult check;
+        if (semanticModel == null)
+        {
+            check = CallBindingCheckResult.Failed("the source file has no semantic model");
+        }
+        else
+        {
+            try
+            {
+                var movedSymbols = MovedSymbolsOf(membersToMove, semanticModel, cancellationToken).ToList();
+                var trial = await ValidationEngine.ValidateChangesWithCandidateAsync(solution, planned.Changes, null, cancellationToken);
+                if (trial.Report.IsError)
+                {
+                    return planned;
+                }
+
+                check = await MoveMemberCallBindingCheck.CheckAsync(solution, trial.Candidate, movedSymbols, targetClassName, planned.Changes.Keys.Select(k => k.ToString()).ToList(), oldMember != MoveMemberOldMember.remove, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Fails closed. Only the exception type is echoed: its text can carry file paths.
+                check = CallBindingCheckResult.Failed($"the trial solution could not be built ({ex.GetType().Name})");
+            }
+        }
+
+        if (check.IsRefusal)
+        {
+            throw new ToolInvalidArgumentException(CallBindingCheck.FormatRefusal(check, operation));
+        }
+
+        return planned;
+    }
+
+    /// <summary>
     /// A pull-up to the base type rewrites no call site, so a call that bound to a pulled-up METHOD must still bind to it. It does not
     /// when the class keeps a same-named overload: a method declared on the more derived type wins overload resolution whenever it is
     /// applicable, so `d.Save(1)` would silently run the overload that stays. Binds every reference in the move's trial text (the
@@ -4773,7 +4826,7 @@ public class MemberRefactoringEngine
                         }
                     }
 
-                    // TODO MoveMember: an unverifiable site (BindAmbiguous, unmappable position) with a staying same-named overload stays a skipped call site and may also bind silently
+                    // An unverifiable site that is left unrewritten and still compiles is caught by MoveMemberAsync's final CallBindingCheck (it compares the planned result with the original).
                     if (unverifiableReason != null)
                     {
                         results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.Ambiguous, $"Could not confirm how this call site resolves after the move ({Path.GetFileName(refDoc.FilePath!)} line {lineSpan.StartLinePosition.Line + 1}): {unverifiableReason}. Specify the receiver via callSiteFixups if it needs one.", null, []));

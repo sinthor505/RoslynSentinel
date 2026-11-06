@@ -325,6 +325,8 @@ public class BasicRefactoringEngine
         var callSitePlansByPath = new Dictionary<FilePathWrapper, Dictionary<SyntaxNode, List<(int SrcIndex, ExpressionSyntax? Literal)>>> { [declPath] = new() };
         var skippedCallSites = new List<SkippedCallSite>();
         var migratedCallSites = new List<RewrittenCallSite>();
+        // File and line of every call site this change plans to rewrite; with skippedCallSites (the ones it leaves alone) it is the plan the call-binding check holds the result to.
+        var plannedCallSiteLines = new List<(string FilePath, int Line)>();
 
         if (declaredSymbol != null)
         {
@@ -547,9 +549,13 @@ public class BasicRefactoringEngine
                         }
                     }
 
-                    if (callSitePlansByPath[refDocPath].TryAdd(invocation, slotPlan) && oldSignature != ChangeSignatureOldSignature.remove && invocation is InvocationExpressionSyntax migratedCall)
+                    if (callSitePlansByPath[refDocPath].TryAdd(invocation, slotPlan))
                     {
-                        migratedCallSites.Add(ChangeSignatureWrapper.DescribeMigratedCall(refDocPath, refLineNumber, migratedCall, arguments, slotPlan));
+                        plannedCallSiteLines.Add((refDocPath.ToString(), refLineNumber));
+                        if (oldSignature != ChangeSignatureOldSignature.remove && invocation is InvocationExpressionSyntax migratedCall)
+                        {
+                            migratedCallSites.Add(ChangeSignatureWrapper.DescribeMigratedCall(refDocPath, refLineNumber, migratedCall, arguments, slotPlan));
+                        }
                     }
                 }
             }
@@ -633,6 +639,8 @@ public class BasicRefactoringEngine
 
         // Apply every planned edit per document in one ReplaceNodes pass, then format.
         var result = new Dictionary<FilePathWrapper, string>();
+        // The same texts keyed by the documents' own paths (result is keyed by the caller-supplied path for the declaration file), for the trial solution.
+        var trialChanges = new Dictionary<FilePathWrapper, string>();
         var wrapperAnnotation = new SyntaxAnnotation();
         var memberAnnotation = new SyntaxAnnotation();
         foreach (var (path, plans) in callSitePlansByPath)
@@ -677,11 +685,56 @@ public class BasicRefactoringEngine
             var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(documentByPath[path], newRoot, eol, cancellationToken);
             var formattedText = (await formatted.GetTextAsync(cancellationToken)).ToString();
             result[path.Equals(declPath) ? filePath : path] = formattedText;
+            trialChanges[path] = formattedText;
         }
+
+        // The final gate, before anything leaves the engine (so a dry run and the real apply refuse identically): no call may silently bind to a different method than the plan accounts for.
+        await RequireSignatureChangeKeepsCallBindingsAsync(solution, declaredSymbol, methodName, newParameterList, declPath.ToString(), trialChanges, wrapperMode, plannedCallSiteLines, skippedCallSites, cancellationToken);
 
         return wrapperMode
             ? new ChangeSignatureResult(result, skippedCallSites, null, migratedCallSites, oldSignatureText, newSignatureText, ChangeSignatureOldSignature.keepAsDeprecatedWrapper)
             : new ChangeSignatureResult(result, skippedCallSites, OldSignatureOutcome: ChangeSignatureOldSignature.remove);
+    }
+
+    /// <summary>
+    /// The final gate of ChangeSignatureAsync: applies the planned file texts to a trial solution, captures every call of the changed
+    /// member's name there and in the original, and refuses the whole change (before anything is written) when a call would bind to a
+    /// different method than the plan accounts for, or when the check itself cannot run. Skipped only when the trial has compile errors of
+    /// its own: the write's compile gate reports those with their real cause, and unbound calls would only add noise.
+    /// </summary>
+    private static async Task RequireSignatureChangeKeepsCallBindingsAsync(Solution solution, IMethodSymbol? changedMethod, string methodName, ParameterListSyntax newParameterList, string declarationPath, Dictionary<FilePathWrapper, string> trialChanges, bool wrapperMode, IReadOnlyCollection<(string FilePath, int Line)> plannedSites, IReadOnlyCollection<SkippedCallSite> skippedSites, CancellationToken cancellationToken)
+    {
+        CallBindingCheckResult check;
+        if (changedMethod is null)
+        {
+            check = CallBindingCheckResult.Failed("the changed member could not be resolved to a symbol");
+        }
+        else
+        {
+            try
+            {
+                var trial = await ValidationEngine.ValidateChangesWithCandidateAsync(solution, trialChanges, null, cancellationToken);
+                if (trial.Report.IsError)
+                {
+                    return;
+                }
+
+                check = await ChangeSignatureCallBindingCheck.CheckAsync(solution, trial.Candidate, changedMethod, methodName, newParameterList, declarationPath, wrapperMode, plannedSites, skippedSites.Select(s => (s.FilePath.ToString(), s.LineNumber)).ToList(), cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Fails closed. Only the exception type is echoed: its text can carry file paths.
+                check = CallBindingCheckResult.Failed($"the trial solution could not be built ({ex.GetType().Name})");
+            }
+        }
+
+        if (check.IsRefusal)
+        {
+            var fix = check.Status == CallBindingCheckStatus.Discrepancies
+                ? " Fix for this change: pick a parameter list that does not make those calls applicable to another overload, rename or remove the competing overload first, or update those calls by hand before changing the signature."
+                : string.Empty;
+            throw new ToolInvalidArgumentException(CallBindingCheck.FormatRefusal(check, $"change the signature of '{methodName}'") + fix);
+        }
     }
 
     public async Task<Dictionary<FilePathWrapper, string>> MoveTypeToFileAsync(FilePathWrapper filePath, string typeName, string? targetFolder = null, CancellationToken cancellationToken = default)
