@@ -21,6 +21,8 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // A. BasicRefactoringEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 [Category("BasicRefactoringEngine")] // sentinel:auto-category
 public class BasicRefactoringEngineTests
 {
@@ -29,6 +31,7 @@ public class BasicRefactoringEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _basicRefactoringEngine = new BasicRefactoringEngine(_workspaceManager);
         var navEngine = Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
@@ -36,7 +39,11 @@ public class BasicRefactoringEngineTests
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -60,6 +67,8 @@ public class BasicRefactoringEngineTests
 // B. SemanticSearchEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 [Category("DiscoveryEngine")] // sentinel:auto-category
 [Category("SearchResult")] // sentinel:auto-category
 public class SemanticSearchEngineTests
@@ -69,12 +78,17 @@ public class SemanticSearchEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = Basic.TestEngines.DiscoveryEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -212,6 +226,8 @@ namespace App
 // C. AdvancedTypeEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 [Category("StructuralRefactoringEngine")] // sentinel:auto-category
 public class AdvancedTypeEngineTests
 {
@@ -219,11 +235,16 @@ public class AdvancedTypeEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -308,6 +329,8 @@ public class Factory
 // D. MemberRefactoringEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 [Category("MemberRefactoringEngine")] // sentinel:auto-category
 public class MemberRefactoringEngineTests
 {
@@ -316,6 +339,7 @@ public class MemberRefactoringEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var navEngine = Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var validationEngine = Basic.TestEngines.ValidationEngine(_workspaceManager, Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);
@@ -323,7 +347,11 @@ public class MemberRefactoringEngineTests
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);

@@ -76,7 +76,7 @@ public static class AddMemberCallBindingCheck
         if (check.IsRefusal)
         {
             var kind = newMember is PropertyDeclarationSyntax ? "property" : "method";
-            throw new ToolInvalidArgumentException(CallBindingCheck.FormatRefusal(check, $"add {kind} '{name}' to '{container.Identifier.ValueText}'"));
+            throw new ToolInvalidArgumentException(CallBindingCheck.FormatRefusal(check, $"add {kind} '{name}' to '{container.Identifier.ValueText}'", bindsElsewhereFix: "rename the new member, or cast the captured call's argument to the original parameter type", unmatchedFix: "review that call by hand before retrying, or rename the new member"));
         }
     }
 

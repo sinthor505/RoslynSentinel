@@ -2692,8 +2692,10 @@ public class MemberRefactoringEngine
 
     /// <summary>
     /// Refuses oldMember keep-mode requests this slice cannot honour, before any route runs or any write.
-    /// With oldMember remove it rejects a forwarderReceiver (which would otherwise be a silent no-op) and any extension method.
-    /// Generic methods are eligible; extension methods (every mode), virtual/abstract/override and interface-implementing methods are refused.
+    /// With oldMember remove it rejects a forwarderReceiver (which would otherwise be a silent no-op). A plain move of an extension
+    /// method is refused only when a reduced call site exists (<see cref="RequireNoReducedExtensionCallsAsync"/>, which needs the solution).
+    /// Generic methods are eligible; extension methods in the keep modes (owner ruling D7), virtual/abstract/override and
+    /// interface-implementing methods are refused.
     /// </summary>
     private static void RequireKeepModeEligible(MoveMemberOldMember oldMember, string? forwarderReceiver, IReadOnlyList<MemberDeclarationSyntax> membersToMove, string className, string targetClassName, bool targetIsBaseType, INamedTypeSymbol? classSymbol, SemanticModel? semanticModel, CancellationToken cancellationToken)
     {
@@ -2704,14 +2706,8 @@ public class MemberRefactoringEngine
                 throw new ToolInvalidArgumentException("forwarderReceiver needs oldMember keepDelegator or keepAsDeprecatedWrapper. With oldMember remove the source member is deleted and there is no forwarder to receive it. Omit forwarderReceiver or choose a keep mode.");
             }
 
-            // D7: extension methods are refused in every mode. A reduced call ("a".Foo(1)) has no class qualifier to retarget, so the
-            // static-move call-site rewrite would turn it into Target.Foo(1) and drop the receiver (CS7036). Syntactic check, no model needed.
-            var extension = membersToMove.OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.ParameterList.Parameters.Count > 0 && m.ParameterList.Parameters[0].Modifiers.Any(SyntaxKind.ThisKeyword));
-            if (extension != null)
-            {
-                throw new ToolNotImplementedException($"MoveMember does not support extension method '{extension.Identifier.Text}': its reduced calls (receiver.{extension.Identifier.Text}(...)) have no class qualifier to retarget, so the call-site rewrite would drop the receiver. Nothing was written. Move a non-extension method, or " + ToolCallHint.Next("MoveType", "to move the whole extension class instead."));
-            }
-
+            // D7 (plain move): an extension method is refused only when a reduced call site exists; that needs the solution, so it is
+            // checked by RequireNoReducedExtensionCallsAsync, called right after this method. Keep modes refuse every extension method below.
             return;
         }
 
@@ -2757,6 +2753,63 @@ public class MemberRefactoringEngine
         if (forwarderReceiver != null && membersToMove.All(IsStaticMember))
         {
             throw new ToolInvalidArgumentException("forwarderReceiver applies only to instance moves, and the moved members are static. Omit forwarderReceiver for a static move.");
+        }
+    }
+
+    /// <summary>
+    /// D7 for a plain move (oldMember remove): an extension method is refused only when at least one REDUCED call site exists
+    /// anywhere in the solution (<c>"a".Foo(1)</c>, bound to the method in reduced form). Such a call has no class qualifier to
+    /// retarget, so the static-move call-site rewrite would turn it into <c>Target.Foo(1)</c> and drop the receiver (CS7036).
+    /// Callers that use the static form (<c>Ext.Foo("a", 1)</c>) or no callers at all move through the normal static path.
+    /// Names up to three sites (file:line and the call text). Nothing has been written when this throws.
+    /// </summary>
+    private static async Task RequireNoReducedExtensionCallsAsync(Solution solution, MoveMemberOldMember oldMember, IReadOnlyList<MemberDeclarationSyntax> membersToMove, SemanticModel? semanticModel, CancellationToken cancellationToken)
+    {
+        const int MaxSitesListed = 3;
+        if (oldMember != MoveMemberOldMember.remove || semanticModel == null)
+        {
+            return;
+        }
+
+        foreach (var method in membersToMove.OfType<MethodDeclarationSyntax>())
+        {
+            if (semanticModel.GetDeclaredSymbol(method, cancellationToken) is not IMethodSymbol { IsExtensionMethod: true } symbol)
+            {
+                continue;
+            }
+
+            var sites = new List<string>();
+            var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
+            foreach (var location in references.SelectMany(r => r.Locations).Where(l => !l.IsCandidateLocation))
+            {
+                var document = location.Document;
+                var root = await document.GetSyntaxRootAsync(cancellationToken);
+                var model = await document.GetSemanticModelAsync(cancellationToken);
+                var name = root?.FindNode(location.Location.SourceSpan, getInnermostNodeForTie: true).AncestorsAndSelf().OfType<SimpleNameSyntax>().FirstOrDefault();
+                if (name == null || model == null || model.GetSymbolInfo(name, cancellationToken).Symbol is not IMethodSymbol { ReducedFrom: not null })
+                {
+                    continue;
+                }
+
+                var call = (SyntaxNode?)name.Ancestors().OfType<InvocationExpressionSyntax>().FirstOrDefault() ?? name.Parent ?? name;
+                var callText = string.Join(" ", call.ToString().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+                if (callText.Length > 80)
+                {
+                    callText = callText[..80] + "...";
+                }
+
+                var line = location.Location.GetLineSpan().StartLinePosition.Line + 1;
+                sites.Add($"{document.FilePath}:{line} `{callText}`");
+            }
+
+            if (sites.Count == 0)
+            {
+                continue;
+            }
+
+            var listed = string.Join("; ", sites.Take(MaxSitesListed));
+            var more = sites.Count > MaxSitesListed ? $" and {sites.Count - MaxSitesListed} more" : string.Empty;
+            throw new ToolNotImplementedException($"MoveMember does not support extension method '{method.Identifier.Text}' while it has reduced calls (receiver.{method.Identifier.Text}(...)): {sites.Count} call site(s) have no class qualifier to retarget, so the call-site rewrite would drop the receiver. Sites: {listed}{more}. Nothing was written. Rewrite those calls to the static form ({symbol.ContainingType.Name}.{method.Identifier.Text}(receiver, ...)) and retry, move a non-extension method, or " + ToolCallHint.Next("MoveType", "to move the whole extension class instead."));
         }
     }
 
@@ -2835,6 +2888,7 @@ public class MemberRefactoringEngine
         var baseType = classSymbol?.BaseType;
         bool targetIsBaseType = baseType != null && baseType.SpecialType != SpecialType.System_Object && baseType.Name == targetClassName;
         RequireKeepModeEligible(oldMember, forwarderReceiver, membersToMove, className, targetClassName, targetIsBaseType, classSymbol, semanticModel, cancellationToken);
+        await RequireNoReducedExtensionCallsAsync(solution, oldMember, membersToMove, semanticModel, cancellationToken);
         // Resolved BEFORE RequireNoUnmovedDependencies so that guardrail can tell "must move with
         // this member" apart from "already satisfied by an existing same-name/compatible-type field
         // on the target" -> see RequireNoUnmovedDependencies's own doc comment for why this ordering

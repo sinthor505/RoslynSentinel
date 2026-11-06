@@ -850,7 +850,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
-                SuccessData = new AppliedChangeSummary(changeId, [filePathResolved], $"Deleted unused symbol in {Path.GetFileName(filePathResolved)}.", false)
+                SuccessData = new AppliedChangeSummary(changeId, [filePathResolved], $"Deleted unused symbol in {Path.GetFileName(filePathResolved)}.", false, Findings: apply.Findings)
             };
         }
 

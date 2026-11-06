@@ -301,7 +301,7 @@ public class MoveMemberCallBindingTests
     [Test]
     public async Task ExtensionMethodWithReducedCallSite_IsRefusedNamingTheReasonAndWritesNothingAsync()
     {
-        // Owner ruling D7: extension methods are refused. A reduced call ("a".Foo(1)) has no class qualifier to retarget, so the static-move
+        // Owner ruling D7 (narrowed): an extension method with a reduced call site is refused. A reduced call ("a".Foo(1)) has no class qualifier to retarget, so the static-move
         // call-site rewrite used to turn it into Target.Foo(1), drop the receiver and fail the compile gate with CS7036.
         var files = new (string Name, string Content)[]
         {
@@ -317,6 +317,66 @@ public class MoveMemberCallBindingTests
         Assert.That(error!.Message, Does.Contain("extension method 'Foo'"), "The refusal names the method");
         Assert.That(error.Message, Does.Contain("drop the receiver"), "The refusal names the reason");
         Assert.That(error.Message, Does.Contain("Nothing was written."));
+        Assert.That(error.Message, Does.Contain("Caller.cs:"), "The refusal names the file and line of the reduced call");
+        Assert.That(error.Message, Does.Contain("`\"a\".Foo(1)`"), "The refusal quotes the reduced call");
+        Assert.That(error.Message, Does.Contain("MoveType"), "The refusal suggests moving the whole extension class instead");
+        AssertNothingWritten(workspace, files);
+    }
+
+    [Test]
+    public async Task ExtensionMethodWithOnlyStaticFormCallers_MovesAndAppliesCleanlyAsync()
+    {
+        // Owner ruling D7 is narrowed: only a reduced call ("a".Foo(1)) blocks an extension move. A caller that already uses the
+        // static form (Source.Foo("a", 1)) keeps its receiver argument, so the normal static-move rewrite (Source.Foo -> Target.Foo) is safe.
+        var files = new (string Name, string Content)[]
+        {
+        ("Source.cs", Lines("namespace Example;", "", "public static class Source", "{", "    public static void Foo(this string s, int x) { }", "}")),
+        ("Target.cs", Lines("namespace Example;", "", "public static class Target", "{", "}")),
+        ("Caller.cs", Lines("namespace Example;", "", "public static class Caller", "{", "    public static void Run() => Source.Foo(\"a\", 1);", "}")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var (engine, validation) = CreateEngine(workspace);
+
+        var result = await MoveAsync(engine, workspace, "Source.cs", "Source", new[] { "Foo" }, "Target", "Target.cs");
+
+        Assert.That(TextOf(result, "Target.cs"), Does.Contain("Foo(this string s, int x)"), "The extension method lands in the target");
+        Assert.That(TextOf(result, "Source.cs"), Does.Not.Contain("Foo("), "The extension method leaves the source");
+        Assert.That(TextOf(result, "Caller.cs"), Does.Contain("Target.Foo(\"a\", 1)"), "The static-form caller is retargeted");
+        await AssertAppliesCleanlyAsync(workspace, validation, files, result);
+    }
+
+    [Test]
+    public async Task ExtensionMethodWithNoCallers_MovesAndAppliesCleanlyAsync()
+    {
+        var files = new (string Name, string Content)[]
+        {
+        ("Source.cs", Lines("namespace Example;", "", "public static class Source", "{", "    public static void Foo(this string s, int x) { }", "}")),
+        ("Target.cs", Lines("namespace Example;", "", "public static class Target", "{", "}")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var (engine, validation) = CreateEngine(workspace);
+
+        var result = await MoveAsync(engine, workspace, "Source.cs", "Source", new[] { "Foo" }, "Target", "Target.cs");
+
+        Assert.That(TextOf(result, "Target.cs"), Does.Contain("Foo(this string s, int x)"), "The extension method lands in the target");
+        await AssertAppliesCleanlyAsync(workspace, validation, files, result);
+    }
+
+    [Test]
+    public async Task ExtensionMethodWithKeepMode_IsStillRefusedEvenWithoutReducedCallersAsync()
+    {
+        // Owner ruling D7 (kept): the keep modes never support an extension method, with or without reduced callers.
+        var files = new (string Name, string Content)[]
+        {
+        ("Source.cs", Lines("namespace Example;", "", "public static class Source", "{", "    public static void Foo(this string s, int x) { }", "}")),
+        ("Target.cs", Lines("namespace Example;", "", "public static class Target", "{", "}")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var (engine, _) = CreateEngine(workspace);
+
+        var error = await Assert.ThrowsAsync<ToolNotImplementedException>(async () => await MoveAsync(engine, workspace, "Source.cs", "Source", new[] { "Foo" }, "Target", "Target.cs", MoveMemberOldMember.keepDelegator));
+
+        Assert.That(error!.Message, Does.Contain("extension method 'Foo'"), "The refusal names the method");
         AssertNothingWritten(workspace, files);
     }
 

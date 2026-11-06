@@ -283,6 +283,22 @@ public class WholeFileWriteTools
     }
 
     /// <summary>
+    /// Envelope findings for a diff-hunk apply: the write chokepoint's findings (EOL attribution) plus the
+    /// hunk analyzer's warning when it has one. An explicit envelope list replaces the AppliedChangeSummary lift,
+    /// and this tool's payload is not an AppliedChangeSummary, so both sources must be merged here.
+    /// </summary>
+    private static IReadOnlyList<Finding> MergeDiffApplyFindings(IReadOnlyList<Finding>? applyFindings, DiffHunkAnalyzer.DiffReport diffReport)
+    {
+        var merged = new List<Finding>(applyFindings ?? []);
+        if (diffReport.HasFindings)
+        {
+            merged.Add(new Finding("DiffHunkAnalyzer", diffReport.Describe(), FindingSeverity.Warning));
+        }
+
+        return merged.Distinct().ToList();
+    }
+
+    /// <summary>
     /// A files-format apply where any file would lose more than this fraction of its line count
     /// (see <see cref="PercentLinesRemoved"/>), or of its active C# code lines (see
     /// <see cref="PercentActiveCodeLinesRemoved"/>), is rejected (see
@@ -538,7 +554,8 @@ public class WholeFileWriteTools
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
-                            SuccessData = diffResponseData
+                            SuccessData = diffResponseData,
+                            Findings = result.Findings ?? []
                         };
                     }
                     catch (Exception ex)
@@ -673,9 +690,7 @@ public class WholeFileWriteTools
                     {
                         IsError = false,
                         SuccessData = diffResponseData,
-                        Findings = diffReport.HasFindings
-                            ? new[] { new Finding("DiffHunkAnalyzer", diffReport.Describe(), FindingSeverity.Warning) }
-                            : Array.Empty<Finding>(),
+                        Findings = MergeDiffApplyFindings(result.Findings, diffReport),
                     };
                 }
                 catch (Exception ex)

@@ -1051,4 +1051,76 @@ public class CreateFileDeleteFileTests
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(result.Findings.Any(f => f.Source == "WriteChokepoint"), Is.True, "the mixed pre-image finding must reach the Member tool response");
     }
+
+    [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
+    public async Task DeleteUnusedSymbol_MixedPreImageUnderCrlf_FindingReachesToolResponseAsync()
+    {
+        // DeleteUnusedSymbol builds its AppliedChangeSummary by hand; it must carry ApplyOutcome.Findings so the chokepoint attribution reaches the envelope.
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        workspaceManager.EolModeOverride = EolMode.Crlf;
+        var existingProjectDir = Path.GetDirectoryName(Directory.EnumerateFiles(fixture.SolutionDirectory, "*.csproj", SearchOption.AllDirectories).First())!;
+        var sourceFile = Path.Combine(existingProjectDir, "EolDeleteUnusedFindingSource.cs");
+        await File.WriteAllTextAsync(sourceFile, "namespace MyApp.Eol;\r\npublic class Foo\n{\r\n    private int DeadHelper() { return 1; }\n}\r\n");
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var result = await workspaceTools.DeleteUnusedSymbolTool(reason: "test message", sourceFile, symbolName: "DeadHelper");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(result.Findings.Any(f => f.Source == "WriteChokepoint"), Is.True, "the mixed pre-image finding must reach the DeleteUnusedSymbol tool response");
+    }
+
+    private static WholeFileWriteTools BuildWholeFileWriteTools(IWorkspaceManager workspaceManager)
+    {
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = Basic.TestEngines.DiffEngine();
+        var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        return Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+    }
+
+    [Test]
+    [Category("WholeFileWriteTools")] // sentinel:auto-category
+    public async Task ApplyUnifiedDiff_MixedPreImageUnderCrlf_ChokepointAndHunkFindingsBothReachToolResponseAsync()
+    {
+        // ApplyUnifiedDiff sets explicit envelope findings (hunk analyzer); that list replaces the AppliedChangeSummary lift,
+        // so the chokepoint finding must be merged in explicitly. The "\ No newline" marker line is an unrecognized hunk line -> a DiffHunkAnalyzer finding.
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        workspaceManager.EolModeOverride = EolMode.Crlf;
+        var existingProjectDir = Path.GetDirectoryName(Directory.EnumerateFiles(fixture.SolutionDirectory, "*.csproj", SearchOption.AllDirectories).First())!;
+        var sourceFile = Path.Combine(existingProjectDir, "EolUnifiedDiffFindingSource.cs");
+        await File.WriteAllTextAsync(sourceFile, "namespace MyApp.Eol;\r\npublic class Foo\n{\r\n}\n");
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var wholeFileWriteTools = BuildWholeFileWriteTools(workspaceManager);
+        var diff = "--- a/EolUnifiedDiffFindingSource.cs\n+++ b/EolUnifiedDiffFindingSource.cs\n@@ -1,4 +1,4 @@\n namespace MyApp.Eol;\n-public class Foo\n+public class Foo2\n {\n }\n\\ No newline at end of file\n";
+
+        var result = await wholeFileWriteTools.ApplyUnifiedDiffTool(reason: "test message", ProposedChangeAction.apply, sourceFile, diff);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(result.Findings.Count(f => f.Source == "WriteChokepoint"), Is.EqualTo(1), "the mixed pre-image finding must reach the ApplyUnifiedDiff response exactly once");
+        Assert.That(result.Findings.Count(f => f.Source == "DiffHunkAnalyzer"), Is.EqualTo(1), "the existing hunk-analyzer finding must still be present");
+    }
+
+    [Test]
+    [Category("WholeFileWriteTools")] // sentinel:auto-category
+    public async Task ApplyDiff_DiffFormat_MixedPreImageUnderCrlf_FindingReachesToolResponseAsync()
+    {
+        // ApplyDiff's diff branch returns an ApplyChangesResult payload (not an AppliedChangeSummary), so the envelope Findings must be set explicitly from result.Findings.
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        workspaceManager.EolModeOverride = EolMode.Crlf;
+        var existingProjectDir = Path.GetDirectoryName(Directory.EnumerateFiles(fixture.SolutionDirectory, "*.csproj", SearchOption.AllDirectories).First())!;
+        var sourceFile = Path.Combine(existingProjectDir, "EolApplyDiffFindingSource.cs");
+        await File.WriteAllTextAsync(sourceFile, "namespace MyApp.Eol;\r\npublic class Foo\n{\r\n}\n");
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var wholeFileWriteTools = BuildWholeFileWriteTools(workspaceManager);
+        var diff = "--- a/EolApplyDiffFindingSource.cs\n+++ b/EolApplyDiffFindingSource.cs\n@@ -1,4 +1,4 @@\n namespace MyApp.Eol;\n-public class Foo\n+public class Foo2\n {\n }\n";
+
+        var result = await wholeFileWriteTools.ApplyDiffTool(reason: "test message", ChangesetFormat.diff, ProposedChangeAction.apply, filePath: sourceFile, unifiedDiff: diff);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(result.Findings.Any(f => f.Source == "WriteChokepoint"), Is.True, "the mixed pre-image finding must reach the ApplyDiff (diff format) response");
+    }
 }

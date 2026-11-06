@@ -20,6 +20,8 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("InventoryEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class InventoryEngineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -27,12 +29,17 @@ public class InventoryEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = Basic.TestEngines.InventoryEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -80,17 +87,24 @@ namespace ExpressRecipe.Services
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("SyntaxModernizationEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class ModernizationUpgradeEngineTests
 {
     private IWorkspaceManager _workspaceManager;
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -136,17 +150,24 @@ public class Guard
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("DependencyEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class DependencyEngineTests
 {
     private IWorkspaceManager _workspaceManager;
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task GetProjectDependencies_KnownInMemoryProject_ReturnsEmptyLists()
     {
@@ -183,17 +204,24 @@ public class DependencyEngineTests
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("SyntaxModernizationEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class ModernLoggingEngineTests
 {
     private IWorkspaceManager _workspaceManager;
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -248,6 +276,8 @@ public class UserService
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("IDEStyleEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class IDEStyleEngineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -255,12 +285,17 @@ public class IDEStyleEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.IDEStyleEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);

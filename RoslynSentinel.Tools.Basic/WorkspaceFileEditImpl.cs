@@ -350,7 +350,7 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ReadFile: showLineEndings cannot be combined with memberName. Read the file by startLine/endLine instead (use GetFileOutline or Search for the line range).")
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"ReadFile: showLineEndings cannot be combined with memberName. Read the file by startLine/endLine instead (use {ToolCallHint.Call("GetFileOutline")} or {ToolCallHint.Call("Search")} for the line range).")
                 };
             }
             try

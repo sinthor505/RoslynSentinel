@@ -213,6 +213,21 @@ public class QualifyCrefsToolTests
         Assert.That(await TextAsync(AlphaPath), Is.EqualTo(afterFirst));
     }
 
+    [Test]
+    public async Task Scope_ProjectWithNoDocuments_ReportsNoChangesNotAnError()
+    {
+        // A project with no documents is valid input: the scope resolves to nothing to qualify.
+        _workspaceManager.SetTestSolution(new AdhocWorkspace().CurrentSolution
+            .AddProject("Empty", "Empty", LanguageNames.CSharp).Solution);
+
+        var summary = Summary(await QualifyAsync(ToolScope.solution, dryRun: false));
+
+        Assert.That(summary.Status, Is.EqualTo("no_changes"));
+        Assert.That(summary.ChangeId, Is.Null);
+        Assert.That(summary.ChangeIds, Is.Empty);
+        Assert.That(summary.Projects, Is.Empty);
+    }
+
     [TestCase(ToolScope.file)]
     [TestCase(ToolScope.project)]
     public async Task ScopeFileOrProject_WithoutScopeName_ReturnsInvalidArgument(ToolScope scope)

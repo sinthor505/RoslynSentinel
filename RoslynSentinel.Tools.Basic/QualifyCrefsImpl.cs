@@ -69,10 +69,10 @@ public class QualifyCrefsImpl
                 .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+            // A scope with no documents (an empty project or solution) is valid input: nothing to qualify, so no_changes.
             if (groups.Count == 0)
             {
-                return Error(ToolErrorCode.InvalidArgument,
-                    $"scope '{scope}' matched no documents in the loaded solution. Check scopeName (a file path or project name), or reload the solution if the file was just added.");
+                return Success(QualifyCrefsReport.Build(Array.Empty<QualifyCrefsProjectOutcome>(), dryRun, _workspaceManager.WorkspaceVersion));
             }
 
             var filter = BuildFilter(containingType);

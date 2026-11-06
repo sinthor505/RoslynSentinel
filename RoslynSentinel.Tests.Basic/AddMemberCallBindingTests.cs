@@ -71,7 +71,9 @@ public class AddMemberCallBindingTests
         Assert.That(error.Message, Does.Contain("T.cs:"), "The site is reported with its file and line");
         Assert.That(error.Message, Does.Contain("Save(long)"), "The old binding is named");
         Assert.That(error.Message, Does.Contain("Save(int)"), "The new binding is named");
-        Assert.That(error.Message, Does.Contain("cast the argument"), "The fix hint offers a cast");
+        Assert.That(error.Message, Does.Contain("cast the captured call's argument to the original parameter type"), "The fix hint offers a cast");
+        Assert.That(error.Message, Does.Contain("rename the new member, or cast the captured call's argument to the original parameter type"), "The add refusal offers the add-specific fix");
+        Assert.That(error.Message, Does.Not.Contain("leave the member where it is"), "The add refusal must not offer the default leave-in-place fix");
         Assert.That(error.Message, Does.Contain("Nothing was written."));
         Assert.That(await CurrentTextAsync("T.cs"), Is.EqualTo(source), "The document must be unchanged after a refused add");
     }

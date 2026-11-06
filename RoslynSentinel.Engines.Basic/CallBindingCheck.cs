@@ -509,7 +509,9 @@ public static class CallBindingCheck
     /// <paramref name="maxListed"/> discrepancies and states the total. <paramref name="operation"/> completes "Cannot ...",
     /// for example "move 'Save' to 'Target'".
     /// </summary>
-    public static string FormatRefusal(CallBindingCheckResult result, string operation, int maxListed = DefaultMaxListed)
+    /// <param name="bindsElsewhereFix">Optional fix text (no trailing period) for a call that would re-point to another method; null keeps the default text.</param>
+    /// <param name="unmatchedFix">Optional fix text (no trailing period) for every other discrepancy kind; null keeps the default text.</param>
+    public static string FormatRefusal(CallBindingCheckResult result, string operation, int maxListed = DefaultMaxListed, string? bindsElsewhereFix = null, string? unmatchedFix = null)
     {
         if (!result.IsRefusal)
         {
@@ -522,7 +524,7 @@ public static class CallBindingCheck
         }
 
         var shown = result.Discrepancies.Take(Math.Max(1, maxListed)).ToList();
-        var entries = string.Join(" | ", shown.Select((d, index) => $"{index + 1}) {DescribeDiscrepancy(d)}"));
+        var entries = string.Join(" | ", shown.Select((d, index) => $"{index + 1}) {DescribeDiscrepancy(d, bindsElsewhereFix, unmatchedFix)}"));
         var more = result.TotalDiscrepancies > shown.Count ? $" ... {result.TotalDiscrepancies - shown.Count} more not shown." : string.Empty;
         var first = shown[0];
         var culture = System.Globalization.CultureInfo.InvariantCulture;
@@ -530,15 +532,17 @@ public static class CallBindingCheck
         return $"Cannot {operation}: {result.TotalDiscrepancies} call site(s) would silently change which method they bind to (the code would still compile) or could not be matched against the original. Nothing was written. Showing {shown.Count} of {result.TotalDiscrepancies}: {entries}{more} {hint}";
     }
 
-    private static string DescribeDiscrepancy(CallBindingDiscrepancy d)
+    private static string DescribeDiscrepancy(CallBindingDiscrepancy d, string? bindsElsewhereFix = null, string? unmatchedFix = null)
     {
         var where = $"{d.FilePath}:{d.Line} in {ReadableId(d.EnclosingMemberId)}";
         if (d.Kind == CallBindingDiscrepancyKind.BindsElsewhere)
         {
-            return $"{where}: `{d.CallText}` binds to '{d.BindsNow}' today but would bind to '{d.WouldBind}'. Fix: keep the call on '{d.BindsNow}' (for an argument capture, cast the argument to that method's parameter type), use a different name for the new member, or leave the member where it is.";
+            var bindsFix = bindsElsewhereFix ?? $"keep the call on '{d.BindsNow}' (for an argument capture, cast the argument to that method's parameter type), use a different name for the new member, or leave the member where it is";
+            return $"{where}: `{d.CallText}` binds to '{d.BindsNow}' today but would bind to '{d.WouldBind}'. Fix: {bindsFix}.";
         }
 
-        return $"{where}: {d.Detail}. Fix: review that member by hand before retrying, or leave the member where it is.";
+        var unmatchedText = unmatchedFix ?? "review that member by hand before retrying, or leave the member where it is";
+        return $"{where}: {d.Detail}. Fix: {unmatchedText}.";
     }
 
     private static string ReadableId(string id) => id.Length > 2 && id[1] == ':' ? id[2..] : id.TrimStart('~');
