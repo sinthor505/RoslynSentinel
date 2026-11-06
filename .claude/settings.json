@@ -54,6 +54,16 @@
             ]
           }
         ]
+      },
+      {
+        "matcher": "mcp__.*roslyn_sentinel.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/bin/agent-identity-hook.exe",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
