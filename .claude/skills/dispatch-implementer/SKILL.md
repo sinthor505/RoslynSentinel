@@ -82,6 +82,12 @@ view and CS errors); only one may run `Build`/`RunTest`. If an error, stale-view
 looks caused by the second agent, first treat it as a trial finding: report it (`MULTI-AGENT:` plus what
 collided), drop back to one subagent and continue. Do not write a blocker doc or halt for it.
 
+## Briefing an orchestrator
+
+When the dispatcher is an `orchestrator`, brief it to run its own subagents in the foreground. Nested
+background reports arrive at the main session, not at the orchestrator that spawned them, and can stall
+it; if that happens, resume the orchestrator with `SendMessage`.
+
 ## Replies and what to do with them
 
 | Reply | Meaning | Dispatcher action |
