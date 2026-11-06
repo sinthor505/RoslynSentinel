@@ -44,7 +44,12 @@ public enum ResidualBucket
 }
 /// <summary>MatchColumn is the 0-based index of the match inside the trimmed <paramref name="LineText"/> (0 when unknown).</summary>
 public record ResidualMention(FilePathWrapper FilePath, int LineNumber, string LineText, ResidualBucket Bucket = ResidualBucket.Code, int MatchColumn = 0);
-public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, string? Error = null) : IOperationResult
+/// <summary>
+/// Outcome of ChangeSignatureAsync. In oldSignature keepAsDeprecatedWrapper mode, <paramref name="SkippedCallSites"/> are the call sites LEFT on the
+/// wrapper (not an error), <paramref name="MigratedCallSites"/> are the ones rewritten to the new signature (Line is 1-based in the ORIGINAL text),
+/// <paramref name="WrapperSignature"/> is the kept old signature and <paramref name="ReplacementSignature"/> the new one. All three are null in remove mode.
+/// </summary>
+public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, string? Error = null, List<RewrittenCallSite>? MigratedCallSites = null, string? WrapperSignature = null, string? ReplacementSignature = null) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;
@@ -157,8 +162,9 @@ public class BasicRefactoringEngine
         };
     }
 
-    public async Task<ChangeSignatureResult> ChangeSignatureAsync(FilePathWrapper filePath, string methodName, IReadOnlyList<SignatureParameterSpec> parameters, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<ChangeSignatureResult> ChangeSignatureAsync(FilePathWrapper filePath, string methodName, IReadOnlyList<SignatureParameterSpec> parameters, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default, ChangeSignatureOldSignature oldSignature = ChangeSignatureOldSignature.remove)
     {
+        var wrapperMode = oldSignature == ChangeSignatureOldSignature.keepAsDeprecatedWrapper;
         // Every early exit names its reason: an empty result with no Error reads to the caller as a successful no-op.
         static ChangeSignatureResult Refuse(string error) => new(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>(), error);
 
@@ -270,6 +276,21 @@ public class BasicRefactoringEngine
             return Refuse($"parameters contains an originalIndex that is out of range or used more than once. '{methodName}' has {originalParams.Count} parameter(s), so valid originalIndex values are 0..{originalParams.Count - 1}, each used at most once. Nothing was changed.");
         }
 
+        // Wrapper mode: every refusal (constructor, virtual/override/abstract/interface member, a new parameter without a default value,
+        // old and new signature colliding) is decided here, before any call site is planned or anything is written.
+        var oldSignatureText = string.Empty;
+        var newSignatureText = string.Empty;
+        if (wrapperMode)
+        {
+            var prepared = ChangeSignatureWrapper.Prepare(semanticModel, methodDecl, declaredSymbol, parameters, originalParams, methodName);
+            if (prepared.Error is not null)
+            {
+                return Refuse(prepared.Error);
+            }
+
+            (oldSignatureText, newSignatureText) = (prepared.OldSignature, prepared.NewSignature);
+        }
+
         var generator = SyntaxGenerator.GetGenerator(document);
 
         // Build the new parameter list (declaration side) and, in parallel, a per-call-site rewrite plan:
@@ -303,6 +324,7 @@ public class BasicRefactoringEngine
         var documentByPath = new Dictionary<FilePathWrapper, Document> { [declPath] = document };
         var callSitePlansByPath = new Dictionary<FilePathWrapper, Dictionary<SyntaxNode, List<(int SrcIndex, ExpressionSyntax? Literal)>>> { [declPath] = new() };
         var skippedCallSites = new List<SkippedCallSite>();
+        var migratedCallSites = new List<RewrittenCallSite>();
 
         if (declaredSymbol != null)
         {
@@ -366,6 +388,7 @@ public class BasicRefactoringEngine
                     // The null-forgiving ArgumentList access is safe: the object-creation branch above
                     // only matches nodes whose ArgumentList is non-null.
                     var argsByOriginalIndex = new ArgumentSyntax?[originalParams.Count];
+                    var expandedParams = false;
                     var arguments = invocation switch
                     {
                         InvocationExpressionSyntax inv => inv.ArgumentList.Arguments,
@@ -391,6 +414,9 @@ public class BasicRefactoringEngine
                             // (each expanded element binds to the same trailing params parameter).
                             if (i >= boundMethod.Parameters.Length)
                             {
+                                // More positional arguments than declared parameters: the trailing arguments of an expanded params call. They are
+                                // skipped here (remove mode keeps only the first params argument), so flag the call for wrapper mode to leave alone.
+                                expandedParams |= boundMethod.Parameters.Length > 0 && boundMethod.Parameters[boundMethod.Parameters.Length - 1].IsParams;
                                 continue;
                             }
                             var boundParam = boundMethod.Parameters[i];
@@ -400,7 +426,17 @@ public class BasicRefactoringEngine
                             }
                             originalIndex = boundParam.Ordinal;
                         }
+                        expandedParams |= argsByOriginalIndex[originalIndex] != null;
                         argsByOriginalIndex[originalIndex] = arg;
+                    }
+
+                    // An expanded params call (several arguments for one params parameter) would lose all but one of those arguments in the rebuild
+                    // below, so wrapper mode leaves such a call on the wrapper (it binds to the old params signature as before).
+                    // TODO ChangeSignature: remove mode still drops all but the first params argument of an expanded params call; carry every argument of the params slot
+                    if (expandedParams && wrapperMode)
+                    {
+                        skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Call passes several arguments to one params parameter (expanded form), which cannot be re-ordered safely; it stays on the deprecated wrapper."));
+                        continue;
                     }
 
                     // Build the new argument list in new-parameter order. A kept parameter whose argument
@@ -485,15 +521,18 @@ public class BasicRefactoringEngine
                         }
                     }
 
-                    callSitePlansByPath[refDocPath].TryAdd(invocation, slotPlan);
+                    if (callSitePlansByPath[refDocPath].TryAdd(invocation, slotPlan) && wrapperMode && invocation is InvocationExpressionSyntax migratedCall)
+                    {
+                        migratedCallSites.Add(ChangeSignatureWrapper.DescribeMigratedCall(refDocPath, refLineNumber, migratedCall, arguments, slotPlan));
+                    }
                 }
             }
         }
 
         // Refuse if any call sites could not be rewritten: report them and do not apply a partial
         // change that would leave the code not compiling. The caller must fix or remove the skipped
-        // call sites first, or split the change into smaller steps.
-        if (skippedCallSites.Count > 0)
+        // call sites first, or split the change into smaller steps. Wrapper mode keeps them on the deprecated wrapper instead.
+        if (skippedCallSites.Count > 0 && !wrapperMode)
         {
             var lines = new List<string> { $"Nothing was changed. Could not rewrite {skippedCallSites.Count} call site(s)" };
             var count = 0;
@@ -518,11 +557,14 @@ public class BasicRefactoringEngine
 
         static SeparatedSyntaxList<ArgumentSyntax> RebuildArguments(SeparatedSyntaxList<ArgumentSyntax> current, List<(int SrcIndex, ExpressionSyntax? Literal)> plan)
         {
-            return SyntaxFactory.SeparatedList(plan.Select(p => SyntaxFactory.Argument(p.Literal ?? current[p.SrcIndex].Expression)));
+            // A carried argument keeps its ref/out/in keyword; dropping it would not compile.
+            return SyntaxFactory.SeparatedList(plan.Select(p => p.Literal != null ? SyntaxFactory.Argument(p.Literal) : SyntaxFactory.Argument(null, current[p.SrcIndex].RefKindKeyword, current[p.SrcIndex].Expression)));
         }
 
         // Apply every planned edit per document in one ReplaceNodes pass, then format.
         var result = new Dictionary<FilePathWrapper, string>();
+        var wrapperAnnotation = new SyntaxAnnotation();
+        var memberAnnotation = new SyntaxAnnotation();
         foreach (var (path, plans) in callSitePlansByPath)
         {
             var nodes = new List<SyntaxNode>(plans.Keys);
@@ -533,19 +575,43 @@ public class BasicRefactoringEngine
 
             var newRoot = rootByPath[path].ReplaceNodes(nodes, (original, rewritten) => rewritten switch
             {
-                ParameterListSyntax => newParameterList.WithAdditionalAnnotations(Formatter.Annotation),
+                ParameterListSyntax => newParameterList.WithAdditionalAnnotations(Formatter.Annotation, memberAnnotation),
                 InvocationExpressionSyntax inv => inv.WithArgumentList(inv.ArgumentList.WithArguments(RebuildArguments(inv.ArgumentList.Arguments, plans[original]))).WithAdditionalAnnotations(Formatter.Annotation),
                 BaseObjectCreationExpressionSyntax obj => obj.WithArgumentList(obj.ArgumentList!.WithArguments(RebuildArguments(obj.ArgumentList.Arguments, plans[original]))).WithAdditionalAnnotations(Formatter.Annotation),
                 _ => rewritten
             });
+            var eol = await _workspaceManager.ResolveEolAsync(documentByPath[path], cancellationToken);
+            if (wrapperMode && path.Equals(declPath))
+            {
+                // The wrapper (old signature, [Obsolete], forwards to the new member) lands right after the member in the SAME edit set, so it is
+                // applied, validated and rolled back together with the call-site edits. A blank line before it and a line end after it come from the text.
+                var newMember = newRoot.GetAnnotatedNodes(memberAnnotation).Select(n => n.Parent).OfType<MethodDeclarationSyntax>().SingleOrDefault();
+                var wrapperText = ChangeSignatureWrapper.BuildWrapperText((MethodDeclarationSyntax)methodDecl, declaredSymbol!, parameters, originalParams, newSignatureText, eol);
+                if (newMember == null || SyntaxFactory.ParseMemberDeclaration(eol + wrapperText + eol) is not MethodDeclarationSyntax wrapperNode)
+                {
+                    return Refuse($"Could not generate the deprecated wrapper for '{methodName}'. Nothing was changed. Retry with {ToolCallHint.Call("ChangeSignature", ("oldSignature", "remove"))}.");
+                }
+
+                newRoot = newRoot.InsertNodesAfter(newMember, new[] { wrapperNode.WithAdditionalAnnotations(Formatter.Annotation, wrapperAnnotation) });
+                // Prove the wrapper's call binds to the new member (never to itself) before anything leaves the engine.
+                var verifyDocument = documentByPath[path].WithSyntaxRoot(newRoot);
+                var bindingError = ChangeSignatureWrapper.VerifyBinding((await verifyDocument.GetSemanticModelAsync(cancellationToken))!, (await verifyDocument.GetSyntaxRootAsync(cancellationToken))!, wrapperAnnotation, memberAnnotation, newSignatureText);
+                if (bindingError is not null)
+                {
+                    return Refuse(bindingError);
+                }
+            }
+
             // Only the rewritten parameter list and call sites are formatted (C5c-3); the rest of the file keeps its text and
             // line endings, and every line the rewrite changed takes the resolved line ending (IWorkspaceMutator.ResolveEol).
-            var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(documentByPath[path], newRoot, await _workspaceManager.ResolveEolAsync(documentByPath[path], cancellationToken), cancellationToken);
+            var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(documentByPath[path], newRoot, eol, cancellationToken);
             var formattedText = (await formatted.GetTextAsync(cancellationToken)).ToString();
             result[path.Equals(declPath) ? filePath : path] = formattedText;
         }
 
-        return new ChangeSignatureResult(result, skippedCallSites);
+        return wrapperMode
+            ? new ChangeSignatureResult(result, skippedCallSites, null, migratedCallSites, oldSignatureText, newSignatureText)
+            : new ChangeSignatureResult(result, skippedCallSites);
     }
 
     public async Task<Dictionary<FilePathWrapper, string>> MoveTypeToFileAsync(FilePathWrapper filePath, string typeName, string? targetFolder = null, CancellationToken cancellationToken = default)

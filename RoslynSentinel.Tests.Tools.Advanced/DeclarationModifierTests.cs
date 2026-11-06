@@ -48,6 +48,20 @@ public sealed class DeclarationModifierTests
     }
 
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
+    [Category("ChangeSignatureParameterInput")] // sentinel:auto-category
+    public async Task ChangeSignature_KeepAsDeprecatedWrapper_DryRun_ReportsWrapperAndLeavesFileUnchanged()
+    {
+        using var workspace = InMemoryWorkspace.Create(("Calc.cs", "public class Calc\r\n{\r\n    public int Add(int a, string b) => a + b.Length;\r\n}"));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var before = workspace.ReadText("Calc.cs");
+        var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Calc.cs"), "Add", new[] { new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0) }, dryRun: true, oldSignature: ChangeSignatureOldSignature.keepAsDeprecatedWrapper);
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(result.SuccessData?.Description, Does.Contain("wrapper"));
+        Assert.That(workspace.ReadText("Calc.cs"), Is.EqualTo(before));
+    }
+
+    [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task ModifyEnum_AddsCancelledMember()
     {

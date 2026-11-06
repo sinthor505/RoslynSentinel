@@ -102,7 +102,7 @@ public class AdvancedRefactoringTools
     [Description("Reorders, adds, or removes method parameters and updates all call sites solution-wide. Refuses across an interface/implementer boundary - edit each side directly.")]
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> ChangeSignatureTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string methodName, [Description("The desired end-state parameter list, in order. Each entry is {originalIndex: N} to keep an existing 0-based-index parameter, or {name, type, defaultValue} to insert a new one. Omit an originalIndex to remove that parameter.")][ExternalInputRequired(DataTag.Order, required: true)] ChangeSignatureParameterInput[] parameters, // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           // [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [Description(ToolParams.ContextSnippet)] string? contextSnippet = null, [Description(ToolParams.LineBefore)] string? lineBefore = null, [Description(ToolParams.LineAfter)] string? lineAfter = null, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [Description(ToolParams.ContextSnippet)] string? contextSnippet = null, [Description(ToolParams.LineBefore)] string? lineBefore = null, [Description(ToolParams.LineAfter)] string? lineAfter = null, [Description("remove (default) refuses when a call site cannot be rewritten. keepAsDeprecatedWrapper applies the new signature, migrates what it can and keeps the old signature as an [Obsolete] wrapper for the rest; refused for constructors, virtual/override/abstract/interface members and identical parameter types.")] ChangeSignatureOldSignature oldSignature = ChangeSignatureOldSignature.remove, // RequestContext<CallToolRequestParams> requestParams = null,
  CancellationToken cancellationToken = default)
     {
         // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
@@ -117,9 +117,10 @@ public class AdvancedRefactoringTools
                 {
                     specs.Add(new ExistingParameterSpec(idx));
                 }
-                else if (!string.IsNullOrEmpty(p.name) && !string.IsNullOrEmpty(p.type) && !string.IsNullOrEmpty(p.defaultValue))
+                // In wrapper mode a new parameter without a defaultValue is passed through so the engine refuses it with its own explanation (the wrapper has nothing to pass).
+                else if (!string.IsNullOrEmpty(p.name) && !string.IsNullOrEmpty(p.type) && (!string.IsNullOrEmpty(p.defaultValue) || oldSignature == ChangeSignatureOldSignature.keepAsDeprecatedWrapper))
                 {
-                    specs.Add(new NewParameterSpec(p.name, p.type, p.defaultValue));
+                    specs.Add(new NewParameterSpec(p.name, p.type, p.defaultValue ?? string.Empty));
                 }
                 else
                 {
@@ -131,7 +132,7 @@ public class AdvancedRefactoringTools
                 }
             }
 
-            var result = await _refactoringEngine.ChangeSignatureAsync(resolvedFilePath, methodName, specs, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+            var result = await _refactoringEngine.ChangeSignatureAsync(resolvedFilePath, methodName, specs, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken, oldSignature: oldSignature);
             if (result.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
@@ -157,9 +158,29 @@ public class AdvancedRefactoringTools
                     ErrorData = apply.Error
                 };
             var summaryNote = $"Reorders parameters of '{methodName}' in {Path.GetFileName(resolvedFilePath)}.";
+            var wrapperFindings = new List<Finding>();
+            if (result.WrapperSignature is not null)
+            {
+                // Wrapper mode: say which call sites moved to the new signature and which stay on the deprecated wrapper.
+                IReadOnlyList<RewrittenCallSite> migrated = result.MigratedCallSites ?? [];
+                var leftOnWrapper = result.SkippedCallSites;
+                summaryNote = $"Changed '{methodName}' to {result.ReplacementSignature} in {Path.GetFileName(resolvedFilePath)}; migrated {migrated.Count} call site(s); kept {result.WrapperSignature} as an [Obsolete] wrapper"
+                    + (leftOnWrapper.Count > 0
+                        ? $", still used by {leftOnWrapper.Count} call site(s) left on it: " + string.Join("; ", leftOnWrapper.Take(10).Select(s => $"{Path.GetFileName(s.FilePath)}:{s.LineNumber} ({s.Reason})")) + (leftOnWrapper.Count > 10 ? $"; +{leftOnWrapper.Count - 10} more" : string.Empty)
+                        : ", with no call site left on it (callers outside the solution still compile)")
+                    + ".";
+                wrapperFindings.AddRange(leftOnWrapper.Take(25).Select(s => new Finding("ChangeSignature", $"Left on deprecated wrapper {result.WrapperSignature}: {Path.GetFileName(s.FilePath)}:{s.LineNumber} ({s.Reason})", FindingSeverity.Caution)));
+                wrapperFindings.AddRange(migrated.Take(25).Select(m => new Finding("ChangeSignature", $"Migrated {m.OldText} -> {m.NewText} ({Path.GetFileName(m.FilePath)}:{m.Line})")));
+                if (leftOnWrapper.Count > 25 || migrated.Count > 25)
+                {
+                    wrapperFindings.Add(new Finding("ChangeSignature", $"Listing capped at 25 per kind: {migrated.Count} migrated, {leftOnWrapper.Count} left on the wrapper."));
+                }
+            }
+
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = false,
+                Findings = wrapperFindings,
                 SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), summaryNote, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings)
             };
         }

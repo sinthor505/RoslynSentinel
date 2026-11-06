@@ -237,8 +237,11 @@ public static class MoveMemberTextEdits
     /// parameter attributes are not copied; ref/out/in are mirrored at the call. A generic method keeps its type parameters
     /// and constraint clauses and the call passes explicit type arguments. Starts at the member's Span start
     /// (no leading trivia); line breaks use <paramref name = "eol"/>.
+    /// ChangeSignature wrapper mode passes <paramref name = "callArguments"/> (the call's argument texts in the new order, instead of the
+    /// parameters' own names) and <paramref name = "obsoleteMessage"/> (a plain [Obsolete] with that message instead of the RSDEPRECATED one);
+    /// with both null the output is the MoveMember forwarder, unchanged.
     /// </summary>
-    public static string BuildForwarder(MethodDeclarationSyntax method, string qualifiedReceiver, bool deprecated, string targetDisplayName, string eol)
+    public static string BuildForwarder(MethodDeclarationSyntax method, string qualifiedReceiver, bool deprecated, string targetDisplayName, string eol, IReadOnlyList<string>? callArguments = null, string? obsoleteMessage = null)
     {
         var name = method.Identifier.ValueText;
         var parameters = method.ParameterList.Parameters;
@@ -263,13 +266,19 @@ public static class MoveMemberTextEdits
         signature.Append((method.ReturnType.ToString()).Trim()).Append(' ').Append(name).Append(typeParameterList).Append('(')
             .Append(string.Join(", ", parameters.Select(p => FormatForwarderParameter(p)))).Append(')').Append(constraints).Append(" => ")
             .Append(qualifiedReceiver).Append('.').Append(name).Append(typeArguments).Append('(')
-            .Append(string.Join(", ", parameters.Select(p => FormatForwarderArgument(p)))).Append(");");
+            .Append(string.Join(", ", callArguments ?? parameters.Select(p => FormatForwarderArgument(p)).ToList())).Append(");");
         if (!deprecated)
         {
             return signature.ToString();
         }
 
         var indent = LeadingWhitespaceOfLine(method.SyntaxTree.GetText(), method.SpanStart);
+        if (obsoleteMessage != null)
+        {
+            // Caller-supplied message (ChangeSignature wrapper): a plain [Obsolete] so callers see the ordinary CS0618 warning.
+            return "[global::System.Obsolete(\"" + obsoleteMessage.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\")]" + eol + indent + signature.ToString();
+        }
+
         return "[global::System.Obsolete(\"Deprecated wrapper: call " + targetDisplayName + "." + name + " instead.\", DiagnosticId = \"RSDEPRECATED\")]" + eol + indent + signature.ToString();
     }
 
@@ -290,7 +299,7 @@ public static class MoveMemberTextEdits
         return text.ToString();
     }
 
-    private static string FormatForwarderArgument(ParameterSyntax parameter)
+    internal static string FormatForwarderArgument(ParameterSyntax parameter)
     {
         var name = parameter.Identifier.ValueText;
         var passMode = parameter.Modifiers.FirstOrDefault(m => m.IsKind(SyntaxKind.RefKeyword) || m.IsKind(SyntaxKind.OutKeyword) || m.IsKind(SyntaxKind.InKeyword));

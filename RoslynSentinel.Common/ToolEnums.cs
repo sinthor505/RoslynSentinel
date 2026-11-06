@@ -46,6 +46,14 @@ public enum MoveMemberOldMember
     keepAsDeprecatedWrapper
 }
 
+/// <summary>How ChangeSignature treats the old signature: remove it (all-or-nothing, the default) or keep it as an [Obsolete] wrapper for call sites that cannot be migrated.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ChangeSignatureOldSignature
+{
+    remove,
+    keepAsDeprecatedWrapper
+}
+
 /// <summary>
 /// Which files a stage/commit operation acts on. Replaces the former <c>stageAll</c> boolean, which
 /// could silently override an explicit <c>files</c> list (a <c>files</c>+<c>stageAll:true</c> call
