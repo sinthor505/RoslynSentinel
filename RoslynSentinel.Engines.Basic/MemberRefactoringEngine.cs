@@ -2877,6 +2877,11 @@ public class MemberRefactoringEngine
 
         if (targetIsBaseType)
         {
+            if (classSymbol != null && semanticModel != null)
+            {
+                await RequireBaseTypePullUpKeepsCallBindingsAsync(filePath, className, memberNames, targetClassName, classSymbol, semanticModel, membersToMove, cancellationToken);
+            }
+
             return await MoveMembersToBaseTypeAsync(solution, filePath, root, classNode, membersToMove, baseType!, _workspaceManager, cancellationToken);
         }
 
@@ -3740,7 +3745,8 @@ public class MemberRefactoringEngine
 
     private async Task<MoveMemberResult> MoveInstanceMembersAsync(Solution solution, FilePathWrapper filePath, string className, List<MemberDeclarationSyntax> membersToMove, string targetClassName, string[] memberNames, FilePathWrapper? targetFilePath, Document? existingTargetDoc, ClassDeclarationSyntax? existingTargetClassNode, Dictionary<string, string>? callSiteFixups, IReadOnlyDictionary<string, string>? fieldMap, MoveMemberOldMember oldMember, string? forwarderReceiver, CancellationToken cancellationToken)
     {
-        var rows = await PreviewInstanceMoveCallSitesAsync(filePath, className, memberNames, targetClassName, targetFilePath, cancellationToken);
+        var silentFallbacks = new Dictionary<(string FilePath, int Line), string>();
+        var rows = await PreviewInstanceMoveCallSitesAsync(filePath, className, memberNames, targetClassName, targetFilePath, cancellationToken, silentFallbacks);
         if (oldMember != MoveMemberOldMember.remove)
         {
             // Keep modes leave every caller untouched: no receiver rewrites and no pending ledger entries for caller sites.
@@ -3859,6 +3865,15 @@ public class MemberRefactoringEngine
         }
 
         var unresolvedRows = rows.Where(r => sameClassAmbiguousReasons.ContainsKey((r.FilePath, r.Line)) || (r.Status != CallSiteStatus.Valid && !resolvedReceivers.ContainsKey((r.FilePath, r.Line)) && !sameClassRewriteKeys.Contains((r.FilePath, r.Line)))).Select(r => sameClassAmbiguousReasons.TryGetValue((r.FilePath, r.Line), out var ambiguousReason) ? r with { BlockReason = ambiguousReason } : r).ToList();
+        // A call that bound to a moved overload and would now silently bind to one that stays compiles, so the compile gate cannot
+        // catch it and skipping it (below) would leave it running a different method. Refuse the whole move instead, before any write.
+        var strandedFallbacks = unresolvedRows.Where(r => silentFallbacks.ContainsKey((r.FilePath, r.Line))).ToList();
+        if (strandedFallbacks.Count > 0)
+        {
+            var strandedSites = string.Join("; ", strandedFallbacks.Select(r => $"{r.FilePath}:{r.Line} [{r.CallExpression}] would bind to '{silentFallbacks[(r.FilePath, r.Line)]}'"));
+            throw new ToolInvalidArgumentException($"Cannot move [{string.Join(", ", memberNames)}] out of '{className}' to '{targetClassName}': {strandedFallbacks.Count} call(s) bind to the moved method today but would silently bind to a method that stays behind, and no single '{targetClassName}' receiver could be chosen to rewrite them: {strandedSites}. Nothing was written. " + ToolCallHint.Next("MoveMember", $"with a callSiteFixups entry for each site (key \"FilePath:Line\", value a receiver expression of type '{targetClassName}'), or also move the other overload(s) of that method in memberNames so they move together."));
+        }
+
         var skippedCallSites = new List<SkippedCallSite>();
         List<CallSiteLedgerEntry>? pendingLedgerEntries = null;
         string? pendingLedgerOperationName = null;
@@ -4489,6 +4504,66 @@ public class MemberRefactoringEngine
     }
 
     /// <summary>
+    /// A pull-up to the base type rewrites no call site, so a call that bound to a pulled-up METHOD must still bind to it. It does not
+    /// when the class keeps a same-named overload: a method declared on the more derived type wins overload resolution whenever it is
+    /// applicable, so `d.Save(1)` would silently run the overload that stays. Binds every reference in the move's trial text (the
+    /// same trial the instance preview uses) and refuses the whole move, before anything is written, when one would. Skipped only when no
+    /// same-named method stays behind (nothing to fall back to). When one does stay and the trial cannot run, the move is refused too:
+    /// the bindings could not be checked, and that is exactly when a silent fallback is possible.
+    /// </summary>
+    private async Task RequireBaseTypePullUpKeepsCallBindingsAsync(FilePathWrapper filePath, string className, string[] memberNames, string baseTypeName, INamedTypeSymbol classSymbol, SemanticModel semanticModel, List<MemberDeclarationSyntax> membersToMove, CancellationToken cancellationToken)
+    {
+        if (_validationEngine == null)
+        {
+            return;
+        }
+
+        var movedSymbols = MovedSymbolsOf(membersToMove, semanticModel, cancellationToken);
+        var hasStayingNamesake = movedSymbols.OfType<IMethodSymbol>().Any(moved => classSymbol.GetMembers(moved.Name).Any(other => other is IMethodSymbol && !movedSymbols.Contains(other.OriginalDefinition)));
+        if (!hasStayingNamesake)
+        {
+            return;
+        }
+
+        var silentFallbacks = new Dictionary<(string FilePath, int Line), string>();
+        List<PreviewCallSite> rows;
+        try
+        {
+            rows = await PreviewInstanceMoveCallSitesAsync(filePath, className, memberNames, baseTypeName, null, cancellationToken, silentFallbacks);
+        }
+        catch (ToolException ex)
+        {
+            // Fails closed: a same-named method stays, so an unchecked pull-up could silently rebind a call. Only the error code is
+            // echoed (the exception text can carry file paths); the usual cause is a base type name that is not unique in the solution.
+            throw new ToolInvalidArgumentException($"Cannot pull [{string.Join(", ", memberNames)}] up from '{className}' to '{baseTypeName}': a same-named method stays in '{className}' and the call bindings after the pull-up could not be checked (trial setup failed: {ex.ErrorCode}; a base type name that is not unique in the solution is the usual cause). Nothing was written. " + ToolCallHint.Next("MoveMember", "with memberNames listing every same-named overload of that method, so they all move together and no overload stays to capture a call."));
+        }
+
+        if (silentFallbacks.Count == 0)
+        {
+            return;
+        }
+
+        var sites = string.Join("; ", silentFallbacks.Select(kv => $"{kv.Key.FilePath}:{kv.Key.Line} [{string.Join(" / ", rows.Where(r => string.Equals(r.FilePath, kv.Key.FilePath, StringComparison.OrdinalIgnoreCase) && r.Line == kv.Key.Line).Select(r => r.CallExpression).Distinct())}] would bind to '{kv.Value}'"));
+        throw new ToolInvalidArgumentException($"Cannot pull [{string.Join(", ", memberNames)}] up from '{className}' to '{baseTypeName}': {silentFallbacks.Count} call(s) bind to the pulled-up method today but would silently bind to a method that stays in '{className}' (a method declared on the more derived type wins overload resolution): {sites}. Nothing was written. " + ToolCallHint.Next("MoveMember", "with memberNames listing every same-named overload of that method, so they all move together, or leave the method where it is."));
+    }
+
+    /// <summary>
+    /// When a reference to the moved METHOD <paramref name="movedSymbol"/> (so it bound to that method before the move) binds in the
+    /// trial text to a different method of the SAME NAME, the call still compiles but would silently run that method. Returns its
+    /// display string (the original definition behind an extension call); null for every other outcome, a different name, or a moved
+    /// member that is not a method, which keep their existing handling.
+    /// </summary>
+    private static string? SilentFallbackTarget(MoveBindCheckResult bind, ISymbol movedSymbol)
+    {
+        if (bind.Outcome != MoveBindOutcome.BindsToOtherSymbol || movedSymbol is not IMethodSymbol || bind.BoundSymbol is not IMethodSymbol boundMethod || !string.Equals(boundMethod.Name, movedSymbol.Name, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return (boundMethod.ReducedFrom ?? boundMethod).ToDisplayString();
+    }
+
+    /// <summary>
     /// Reporting-only preview for moving instance member(s) to a destination that is not an existing
     /// base type (the one case MoveMemberAsync itself still rejects outright). Does not write anything
     /// and does not lift MoveMemberAsync's static-only guard -> see
@@ -4502,8 +4577,14 @@ public class MemberRefactoringEngine
     /// in-scope fields/properties/parameters of the destination type via SemanticModel.LookupSymbols (which already
     /// respects C# shadowing). A site whose position cannot be mapped, or that binds to something unexpected, is
     /// reported Ambiguous with a note and never silently Valid.
+    ///
+    /// A call that bound to a moved METHOD before the move and binds to a same-named method that stays behind in the trial text
+    /// (a wider, nullable, base-typed, params or optional-parameter overload, an inherited or extension method) still compiles but
+    /// would run a different method. It is classified like a call that no longer binds (receiver candidates), and each such site is
+    /// recorded in <paramref name="silentFallbacks"/> (file, line) -> the method it would bind to, so the caller can refuse the move
+    /// when the site cannot be rewritten.
     /// </summary>
-    public async Task<List<PreviewCallSite>> PreviewInstanceMoveCallSitesAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default)
+    public async Task<List<PreviewCallSite>> PreviewInstanceMoveCallSitesAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default, Dictionary<(string FilePath, int Line), string>? silentFallbacks = null)
     {
         if (_validationEngine == null)
         {
@@ -4576,7 +4657,10 @@ public class MemberRefactoringEngine
         // dropped and every reference becomes Ambiguous with the reason (never silently Valid).
         MovePositionMap? positionMap = null;
         string? positionMapNote = null;
-        if (destinationType != null)
+        // A brand-new destination class has no type to bind against, but the trial text is then the removal-only text (the moved members
+        // are added nowhere), which is all that is needed to see whether an UNREWRITTEN call falls back to a member that stays. The map is
+        // only built for that (silentFallbacks != null) and has no moved regions: references inside the moved members stay unmapped.
+        if (destinationType != null || silentFallbacks != null)
         {
             var originalTexts = new Dictionary<FilePathWrapper, SourceText>();
             foreach (var (previewDocumentId, previewText) in previewTexts)
@@ -4588,11 +4672,11 @@ public class MemberRefactoringEngine
                 }
             }
 
-            if (movedRegions.Count != membersToMove.Count)
+            if (destinationType != null && movedRegions.Count != membersToMove.Count)
             {
                 positionMapNote = "the moved members' positions in the trial text are unavailable";
             }
-            else if (!MovePositionMap.TryBuild(originalTexts, previewAppliedEdits, movedRegions, out var builtMap, out var buildError))
+            else if (!MovePositionMap.TryBuild(originalTexts, previewAppliedEdits, destinationType == null ? new List<MovedMemberRegion>() : movedRegions, out var builtMap, out var buildError))
             {
                 positionMapNote = $"the position map for the trial text could not be built ({buildError})";
             }
@@ -4643,6 +4727,7 @@ public class MemberRefactoringEngine
                     continue;
                 }
 
+                string? fallbackNote = null;
                 if (movedIdentity != null)
                 {
                     string? unverifiableReason = null;
@@ -4667,18 +4752,48 @@ public class MemberRefactoringEngine
                                 continue;
                             }
 
-                            // BindFailed falls through to the receiver-candidate classification below; anything else is not trusted.
-                            if (bind.Outcome != MoveBindOutcome.BindFailed)
+                            // BindFailed falls through to the receiver-candidate classification below, and so does a METHOD call that
+                            // now binds to a same-named method (this reference was found for the moved method, so it bound to it before
+                            // the move): it compiles but would silently run the overload that stays, so it needs the same receiver
+                            // rewrite and is recorded for the caller to refuse when it cannot be rewritten. A different name or kind of
+                            // symbol, and every other outcome, is not trusted.
+                            var fellBackTo = SilentFallbackTarget(bind, symbol);
+                            if (fellBackTo != null)
+                            {
+                                fallbackNote = $" Without a rewrite this call would silently bind to '{fellBackTo}' instead of the moved '{symbol.Name}'.";
+                                if (silentFallbacks != null)
+                                {
+                                    silentFallbacks[(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1)] = fellBackTo;
+                                }
+                            }
+                            else if (bind.Outcome != MoveBindOutcome.BindFailed)
                             {
                                 unverifiableReason = $"after the move it is classified {bind.Outcome} ({bind.Note})";
                             }
                         }
                     }
 
+                    // TODO MoveMember: an unverifiable site (BindAmbiguous, unmappable position) with a staying same-named overload stays a skipped call site and may also bind silently
                     if (unverifiableReason != null)
                     {
                         results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.Ambiguous, $"Could not confirm how this call site resolves after the move ({Path.GetFileName(refDoc.FilePath!)} line {lineSpan.StartLinePosition.Line + 1}): {unverifiableReason}. Specify the receiver via callSiteFixups if it needs one.", null, []));
                         continue;
+                    }
+                }
+                else if (silentFallbacks != null && positionMap != null && !isMoveOrderDependent)
+                {
+                    // Brand-new destination class: every call site stays unresolved (below), but an unrewritten call that would silently
+                    // bind to a same-named method that stays behind is recorded so the move can be refused instead of leaving it there.
+                    var removalOnlyOffset = positionMap.MapOffset(refDoc.FilePath!, refLocation.Location.SourceSpan.Start);
+                    if (removalOnlyOffset.IsMapped)
+                    {
+                        var removalOnlyBind = await MoveBindCheck.CheckAsync(trialSolution, removalOnlyOffset.Document, removalOnlyOffset.Offset, new MovedMemberIdentity(string.Empty, symbol.Name, symbol.Kind, 0, Array.Empty<string>()), cancellationToken);
+                        var removalOnlyFellBackTo = SilentFallbackTarget(removalOnlyBind, symbol);
+                        if (removalOnlyFellBackTo != null)
+                        {
+                            fallbackNote = $" Without a rewrite this call would silently bind to '{removalOnlyFellBackTo}' instead of the moved '{symbol.Name}'.";
+                            silentFallbacks[(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1)] = removalOnlyFellBackTo;
+                        }
                     }
                 }
 
@@ -4690,7 +4805,7 @@ public class MemberRefactoringEngine
 
                 if (destinationType == null)
                 {
-                    results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.NoCandidateBlocked, $"Destination type '{targetClassName}' could not be resolved.", null, []));
+                    results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.NoCandidateBlocked, $"Destination type '{targetClassName}' could not be resolved.{fallbackNote}", null, []));
                     continue;
                 }
 
@@ -4807,7 +4922,7 @@ public class MemberRefactoringEngine
                     // SuggestedFix on a non-Valid row is human-facing prep-step prose, never a receiver
                     // expression: MoveInstanceMembersAsync only reads SuggestedFix as a receiver for
                     // Valid rows, and ledger entries merely echo it back to the caller.
-                    results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.NoCandidateIntroducible, $"No in-scope reference of type '{targetClassName}' found at this call site. Add a 'using' directive or introduce a field/parameter of that type.", BuildIntroduceFieldSuggestion(targetClassName, refNode, memberAccess), []));
+                    results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.NoCandidateIntroducible, $"No in-scope reference of type '{targetClassName}' found at this call site. Add a 'using' directive or introduce a field/parameter of that type.{fallbackNote}", BuildIntroduceFieldSuggestion(targetClassName, refNode, memberAccess), []));
                     continue;
                 }
 
@@ -4822,7 +4937,7 @@ public class MemberRefactoringEngine
                     continue;
                 }
 
-                results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.Ambiguous, $"Multiple in-scope references of type '{targetClassName}' found; specify which one via callSiteFixups.", null, candidates));
+                results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.Ambiguous, $"Multiple in-scope references of type '{targetClassName}' found; specify which one via callSiteFixups.{fallbackNote}", null, candidates));
             }
         }
 
