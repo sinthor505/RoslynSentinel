@@ -22,27 +22,22 @@ public static class TestTools
         ActivatorUtilities.CreateInstance<WorkspaceReadNavigationImpl>(TestEngines.CreateProvider(workspaceManager), workspaceManager, logger);
 
     /// <summary>
-    /// Short form: only the workspace manager is explicit; the engines and helpers the 15-parameter constructor needs
+    /// Short form: only the workspace manager is explicit; the engines and helpers the 13-parameter constructor needs
     /// resolve from the fresh container, which shares the caller's manager (see TestEngines.CreateProvider).
     /// </summary>
     public static WorkspaceTools WorkspaceTools(IWorkspaceManager workspaceManager) =>
         ActivatorUtilities.CreateInstance<WorkspaceTools>(TestEngines.CreateProvider(workspaceManager), workspaceManager);
 
     /// <summary>
-    /// The shape the BuildTools-style helpers use: all 15 constructor arguments explicit, so the test's own engines are
+    /// The shape the BuildTools-style helpers use: all 12 required constructor arguments explicit, so the test's own engines are
     /// the ones the tool class holds.
     /// </summary>
     public static WorkspaceTools WorkspaceTools(
-        IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine,
-        DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine,
-        StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine,
-        ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<WorkspaceTools> logger,
-        BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine, TestRunEngine testRunEngine,
-        WorkspaceReadNavigationImpl readNav, WriteToolAdviceHelper writeAdvice) =>
+        IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, StructuralRefinementEngine structuralRefinementEngine, SentinelConfiguration config, ILogger<WorkspaceTools> logger, BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine, TestRunEngine testRunEngine, WorkspaceReadNavigationImpl readNav, WriteToolAdviceHelper writeAdvice) =>
         ActivatorUtilities.CreateInstance<WorkspaceTools>(
             TestEngines.CreateProvider(workspaceManager),
-            workspaceManager, validationEngine, diffEngine, diagnosticEngine, solutionManagementEngine,
-            structuralRefinementEngine, dependencyEngine, projectConsistencyEngine, config, logger, buildEngine,
+            workspaceManager, validationEngine, diffEngine, diagnosticEngine,
+            structuralRefinementEngine, config, logger, buildEngine,
             symbolNavigationEngine, testRunEngine, readNav, writeAdvice);
 
     /// <summary>

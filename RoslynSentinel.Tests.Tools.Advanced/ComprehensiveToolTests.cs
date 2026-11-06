@@ -26,7 +26,6 @@ public class ComprehensiveToolTests
     private CodeStyleEngine _codeStyleEngine;
     private ControlFlowEngine _controlFlowEngine;
     private DeadCodeEngine _deadCodeEngine;
-    private DependencyEngine _dependencyEngine;
     private DependencyInjectionEngine _dependencyInjectionEngine;
     private DiagnosticEngine _diagnosticEngine;
     private DiffEngine _diffEngine;
@@ -53,7 +52,6 @@ public class ComprehensiveToolTests
     private SemanticRefactoringEngine _semanticRefactoringEngine;
     private DiscoveryEngine _semanticSearchEngine;
     private SentinelConfiguration _config;
-    private SolutionManagementEngine _solutionManagementEngine;
     private StructuralRefinementEngine _structuralRefinementEngine;
     private SymbolNavigationEngine _symbolNavigationEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
@@ -79,7 +77,6 @@ public class ComprehensiveToolTests
         _codeStyleEngine = Battery.Advanced.TestEnginesAdvanced.CodeStyleEngine(_workspaceManager, _config);
         _controlFlowEngine = Battery.Advanced.TestEnginesAdvanced.ControlFlowEngine(_workspaceManager);
         _deadCodeEngine = Battery.Advanced.TestEnginesAdvanced.DeadCodeEngine(_workspaceManager);
-        _dependencyEngine = Battery.Basic.TestEngines.DependencyEngine(_workspaceManager);
         _dependencyInjectionEngine = Battery.Advanced.TestEnginesAdvanced.DependencyInjectionEngine(_workspaceManager);
         _diagnosticEngine = Battery.Basic.TestEngines.DiagnosticEngine(_workspaceManager);
         _diffEngine = Battery.Basic.TestEngines.DiffEngine();
@@ -99,7 +96,6 @@ public class ComprehensiveToolTests
         _securityEngine = Battery.Advanced.TestEnginesAdvanced.SecurityEngine(_workspaceManager);
         _semanticRefactoringEngine = Battery.Basic.TestEngines.SemanticRefactoringEngine(_workspaceManager);
         _semanticSearchEngine = Battery.Basic.TestEngines.DiscoveryEngine(_workspaceManager);
-        _solutionManagementEngine = Battery.Basic.TestEngines.SolutionManagementEngine(_workspaceManager);
         _structuralRefinementEngine = Battery.Basic.TestEngines.StructuralRefinementEngine(_workspaceManager, _config);
         _discoveryEngine = Battery.Basic.TestEngines.DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
         _syntaxUpgradeEngine = Battery.Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, _config);
@@ -108,21 +104,7 @@ public class ComprehensiveToolTests
 
         _advancedRefactoringTools = Battery.Advanced.TestToolsAdvanced.AdvancedRefactoringTools(_workspaceManager);
 
-        _workspaceTools = Battery.Basic.TestTools.WorkspaceTools(_workspaceManager,
-            _validationEngine,
-            _diffEngine,
-            _diagnosticEngine,
-            _solutionManagementEngine,
-            _structuralRefinementEngine,
-            _dependencyEngine,
-            Battery.Basic.TestEngines.ProjectConsistencyEngine(_workspaceManager),
-            _config,
-            NullLogger<WorkspaceTools>.Instance,
-            Battery.Basic.TestEngines.BuildEngine(_workspaceManager, _diagnosticEngine),
-            _symbolNavigationEngine,
-            Battery.Basic.TestEngines.TestRunEngine(_workspaceManager),
-            Battery.Basic.TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
-            WriteToolAdviceHelper.WithAllToolsExposed());
+        _workspaceTools = Battery.Basic.TestTools.WorkspaceTools(_workspaceManager, _validationEngine, _diffEngine, _diagnosticEngine, _structuralRefinementEngine, _config, NullLogger<WorkspaceTools>.Instance, Battery.Basic.TestEngines.BuildEngine(_workspaceManager, _diagnosticEngine), _symbolNavigationEngine, Battery.Basic.TestEngines.TestRunEngine(_workspaceManager), Battery.Basic.TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance), WriteToolAdviceHelper.WithAllToolsExposed());
 
         // The tool classes resolve their own engines from the factory container (same wiring, fresh instances, shared manager).
         _intelligenceTools = Battery.Advanced.TestToolsAdvanced.IntelligenceTools(_workspaceManager);

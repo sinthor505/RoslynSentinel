@@ -139,12 +139,10 @@ public class Guard
 public class DependencyEngineTests
 {
     private IWorkspaceManager _workspaceManager;
-    private DependencyEngine _engine;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = Basic.TestEngines.DependencyEngine(_workspaceManager);
     }
 
     [TearDown]

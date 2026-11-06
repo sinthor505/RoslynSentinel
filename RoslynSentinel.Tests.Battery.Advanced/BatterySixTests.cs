@@ -11,7 +11,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 ///   B. SolutionStructureEngine   (5 tests) -> ConvertToBackgroundService, FindCircularDependencies
 ///   C. ApiGenerationEngine   (4 tests) -> GenerateHttpClientForController, return-type mapping
 ///
-/// SolutionManagementEngine is excluded (spawns real powershell.exe processes -> integration only).
+/// Solution-management operations (spawn real powershell.exe processes) are excluded -> integration only.
 ///
 /// Total: 13 tests. All workspace-based (SetSource / SetMultipleFiles).
 /// </summary>

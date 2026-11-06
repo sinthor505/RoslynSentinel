@@ -20,23 +20,15 @@ public record SolutionFileInfo(string Path, string Format);
 public class WorkspaceProjectManagementImpl
 {
     private readonly IWorkspaceManager _workspaceManager;
-    private readonly SolutionManagementEngine _solutionManagementEngine;
-    private readonly DependencyEngine _dependencyEngine;
-    private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly StructuralRefinementEngine _structuralRefinementEngine;
     private readonly SolutionStructureEngine _solutionStructureEngine;
     private readonly ILogger _logger;
 
     private const int ListWorkspaceSolutionsMaxFilesWalked = 5000;
 
-    public WorkspaceProjectManagementImpl(IWorkspaceManager workspaceManager, SolutionManagementEngine solutionManagementEngine,
-        DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine,
-        StructuralRefinementEngine structuralRefinementEngine, ILogger logger, SolutionStructureEngine solutionStructureEngine)
+    public WorkspaceProjectManagementImpl(IWorkspaceManager workspaceManager, StructuralRefinementEngine structuralRefinementEngine, ILogger logger, SolutionStructureEngine solutionStructureEngine)
     {
         _workspaceManager = workspaceManager;
-        _solutionManagementEngine = solutionManagementEngine;
-        _dependencyEngine = dependencyEngine;
-        _projectConsistencyEngine = projectConsistencyEngine;
         _structuralRefinementEngine = structuralRefinementEngine;
         _solutionStructureEngine = solutionStructureEngine;
         _logger = logger;

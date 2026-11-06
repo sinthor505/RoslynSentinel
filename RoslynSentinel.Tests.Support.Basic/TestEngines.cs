@@ -78,15 +78,6 @@ public static class TestEngines
     public static BuildEngine BuildEngine(IWorkspaceManager workspaceManager, DiagnosticEngine diagnosticEngine) =>
         ActivatorUtilities.CreateInstance<BuildEngine>(CreateProvider(workspaceManager), workspaceManager, diagnosticEngine);
 
-    public static SolutionManagementEngine SolutionManagementEngine(IWorkspaceManager workspaceManager) =>
-        ActivatorUtilities.CreateInstance<SolutionManagementEngine>(CreateProvider(workspaceManager), workspaceManager);
-
-    public static DependencyEngine DependencyEngine(IWorkspaceManager workspaceManager) =>
-        ActivatorUtilities.CreateInstance<DependencyEngine>(CreateProvider(workspaceManager), workspaceManager);
-
-    public static ProjectConsistencyEngine ProjectConsistencyEngine(IWorkspaceManager workspaceManager) =>
-        ActivatorUtilities.CreateInstance<ProjectConsistencyEngine>(CreateProvider(workspaceManager), workspaceManager);
-
     public static TestRunEngine TestRunEngine(IWorkspaceManager workspaceManager) =>
         ActivatorUtilities.CreateInstance<TestRunEngine>(CreateProvider(workspaceManager), workspaceManager);
 

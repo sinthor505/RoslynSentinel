@@ -24,7 +24,6 @@ public class BatteryTwentyTwoTests
     private InventoryEngine _inventoryEngine;
     private DeadCodeEngine _deadCodeEngine;
     private DocumentationEngine _documentationEngine;
-    private DependencyEngine _dependencyEngine;
     private SolutionStructureEngine _solutionStructureEngine;
     private AsyncAnalysisEngine _asyncSafetyEngine;
     private HealthOrchestrationEngine _healthOrchestrationEngine;
@@ -66,7 +65,6 @@ public class BatteryTwentyTwoTests
         _inventoryEngine = Battery.Basic.TestEngines.InventoryEngine(_workspaceManager);
         _deadCodeEngine = Battery.Advanced.TestEnginesAdvanced.DeadCodeEngine(_workspaceManager, _config);
         _documentationEngine = Battery.Advanced.TestEnginesAdvanced.DocumentationEngine(_workspaceManager);
-        _dependencyEngine = Battery.Basic.TestEngines.DependencyEngine(_workspaceManager);
         _solutionStructureEngine = Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, _config);
         _asyncSafetyEngine = Battery.Advanced.TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
         _healthOrchestrationEngine = Battery.Advanced.TestEnginesAdvanced.HealthOrchestrationEngine(_workspaceManager, _solutionStructureEngine, _config, Battery.Advanced.TestEnginesAdvanced.PerformanceEngine(_workspaceManager), Battery.Advanced.TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, _config));

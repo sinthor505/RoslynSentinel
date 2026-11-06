@@ -29,7 +29,6 @@ public class CreateProjectOwnWritesTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var engine = Basic.TestEngines.SolutionManagementEngine(workspaceManager);
 
         await Basic.TestEngines.SolutionStructureEngine(workspaceManager, Basic.TestEngines.SentinelConfiguration()).CreateProjectAsync("Extra", "classlib");
 
@@ -65,7 +64,6 @@ public class CreateProjectOwnWritesTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var engine = Basic.TestEngines.SolutionManagementEngine(workspaceManager);
 
         var unrelated = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         await File.WriteAllTextAsync(unrelated, await File.ReadAllTextAsync(unrelated) + "\n// unrelated external edit\n");
@@ -100,7 +98,6 @@ public class CreateProjectOwnWritesTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var engine = Basic.TestEngines.SolutionManagementEngine(workspaceManager);
 
         var wouldBeProjectDir = Path.Combine(fixture.SolutionDirectory, "Ghost");
         var ex = await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () =>

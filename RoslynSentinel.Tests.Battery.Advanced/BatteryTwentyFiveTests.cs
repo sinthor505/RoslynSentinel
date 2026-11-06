@@ -500,12 +500,10 @@ public class Calc {
 public class DependencyEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private DependencyEngine _engine = null!;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = Basic.TestEngines.DependencyEngine(_workspaceManager);
     }
 
     [TearDown]

@@ -30,9 +30,7 @@ public static class EngineServiceCollectionExtensionsBasic
         // TryAdd only so a caller that already registered StoppedByScriptMarker (e.g., ServerStdio.cs
         // or ServerHttp.cs from a real host) is not overwritten. Test fixtures without that context
         // get this default stub.
-        services.AddSingleton<BreakingChangeEngine>();
         services.AddSingleton<BuildEngine>();
-        services.AddSingleton<DependencyEngine>();
         services.AddSingleton<DiagnosticEngine>();
         services.AddSingleton<DiffEngine>();
         services.AddSingleton<DiscoveryEngine>();
@@ -43,7 +41,6 @@ public static class EngineServiceCollectionExtensionsBasic
         services.AddSingleton<IWorkspaceReader>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
         services.AddSingleton<MsToolAugmentEngine>();
         services.AddSingleton<PersistentWorkspaceManager>();
-        services.AddSingleton<ProjectConsistencyEngine>();
         services.AddSingleton<SolutionStructureEngine>();
         services.AddSingleton<BasicRefactoringEngine>();
         services.AddSingleton<SemanticRefactoringEngine>();
@@ -51,7 +48,6 @@ public static class EngineServiceCollectionExtensionsBasic
         services.AddSingleton<NamedArgumentsEngine>();
         services.AddSingleton<TestCategoryTaggingEngine>();
         services.AddSingleton<TestCategoryApplyEngine>();
-        services.AddSingleton<SolutionManagementEngine>();
         services.AddSingleton<MemberRefactoringEngine>();
         services.AddSingleton<StructuralRefinementEngine>();
         services.AddSingleton<SymbolNavigationEngine>();

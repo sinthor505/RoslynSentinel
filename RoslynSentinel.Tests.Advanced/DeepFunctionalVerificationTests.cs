@@ -17,7 +17,6 @@ public class DeepFunctionalVerificationTests
     private CodeHealingEngine _codeHealingEngine;
     private SolutionStructureEngine _solutionStructureEngine;
     private BasicRefactoringEngine _refactoringEngine;
-    private DependencyEngine _dependencyEngine;
     private SyntaxModernizationEngine _modernizationEngine;
     private StructuralRefinementEngine _structuralRefinementEngine;
 
@@ -31,7 +30,6 @@ public class DeepFunctionalVerificationTests
         _codeHealingEngine = Battery.Advanced.TestEnginesAdvanced.CodeHealingEngine(_workspaceManager, config);
         _solutionStructureEngine = Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, config);
         _refactoringEngine = Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, new NullLogger<BasicRefactoringEngine>(), config);
-        _dependencyEngine = Battery.Basic.TestEngines.DependencyEngine(_workspaceManager);
         _modernizationEngine = Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, config);
         _structuralRefinementEngine = Battery.Basic.TestEngines.StructuralRefinementEngine(_workspaceManager, config);
     }

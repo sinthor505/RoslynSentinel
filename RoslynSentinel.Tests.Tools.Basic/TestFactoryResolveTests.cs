@@ -167,30 +167,6 @@ public class TestFactoryResolveTests
     }
 
     [Test]
-    public void SolutionManagementEngine_ManagerOnly()
-    {
-        var engine = TestEngines.SolutionManagementEngine(_wm);
-        Assert.That(engine, Is.TypeOf<SolutionManagementEngine>());
-        Assert.That(Holds(engine, _wm), Is.True);
-    }
-
-    [Test]
-    public void DependencyEngine_ManagerOnly()
-    {
-        var engine = TestEngines.DependencyEngine(_wm);
-        Assert.That(engine, Is.TypeOf<DependencyEngine>());
-        Assert.That(Holds(engine, _wm), Is.True);
-    }
-
-    [Test]
-    public void ProjectConsistencyEngine_ManagerOnly()
-    {
-        var engine = TestEngines.ProjectConsistencyEngine(_wm);
-        Assert.That(engine, Is.TypeOf<ProjectConsistencyEngine>());
-        Assert.That(Holds(engine, _wm), Is.True);
-    }
-
-    [Test]
     public void WorkspaceReadNavigationImpl_ManagerOnly()
     {
         var impl = TestTools.WorkspaceReadNavigationImpl(_wm);
@@ -232,11 +208,7 @@ public class TestFactoryResolveTests
         var readNav = TestTools.WorkspaceReadNavigationImpl(_wm, NullLogger<WorkspaceReadNavigationImpl>.Instance);
 
         var tools = TestTools.WorkspaceTools(
-            _wm, validation, diff, diagnostic, TestEngines.SolutionManagementEngine(_wm),
-            TestEngines.StructuralRefinementEngine(_wm, config), TestEngines.DependencyEngine(_wm),
-            TestEngines.ProjectConsistencyEngine(_wm), config, NullLogger<WorkspaceTools>.Instance,
-            TestEngines.BuildEngine(_wm, diagnostic), navigation, TestEngines.TestRunEngine(_wm), readNav,
-            WriteToolAdviceHelper.WithAllToolsExposed());
+            _wm, validation, diff, diagnostic, TestEngines.StructuralRefinementEngine(_wm, config), config, NullLogger<WorkspaceTools>.Instance, TestEngines.BuildEngine(_wm, diagnostic), navigation, TestEngines.TestRunEngine(_wm), readNav, WriteToolAdviceHelper.WithAllToolsExposed());
 
         Assert.That(tools, Is.TypeOf<WorkspaceTools>());
         Assert.That(Holds(tools, validation), Is.True, "explicit engines must be the ones the tool class holds");

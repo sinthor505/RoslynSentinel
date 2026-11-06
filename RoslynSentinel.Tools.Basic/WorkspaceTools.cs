@@ -22,10 +22,7 @@ public class WorkspaceTools
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ValidationEngine _validationEngine;
     private readonly DiagnosticEngine _diagnosticEngine;
-    private readonly SolutionManagementEngine _solutionManagementEngine;
     private readonly StructuralRefinementEngine _structuralRefinementEngine;
-    private readonly DependencyEngine _dependencyEngine;
-    private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly SentinelConfiguration _config;
     private readonly ILogger<WorkspaceTools> _logger;
     private readonly WorkspaceReadNavigationImpl _readNav;
@@ -41,15 +38,12 @@ public class WorkspaceTools
 
     private readonly WorkspaceReadNavigationTools _readNavTools;
 
-    public WorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<WorkspaceTools> logger, BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine, TestRunEngine testRunEngine, WorkspaceReadNavigationImpl readNav, WriteToolAdviceHelper writeAdvice, ActiveToolSurface? activeToolSurface = null)
+    public WorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, StructuralRefinementEngine structuralRefinementEngine, SentinelConfiguration config, ILogger<WorkspaceTools> logger, BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine, TestRunEngine testRunEngine, WorkspaceReadNavigationImpl readNav, WriteToolAdviceHelper writeAdvice, ActiveToolSurface? activeToolSurface = null)
     {
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
         _diagnosticEngine = diagnosticEngine;
-        _solutionManagementEngine = solutionManagementEngine;
         _structuralRefinementEngine = structuralRefinementEngine;
-        _dependencyEngine = dependencyEngine;
-        _projectConsistencyEngine = projectConsistencyEngine;
         _config = config;
         _logger = logger;
         _buildEngine = buildEngine;
@@ -61,7 +55,7 @@ public class WorkspaceTools
         // Decision 7 step 2 (plan_split_workspace_refactoring_tools_for_di.md): WorkspaceTools
         // is now a legacy facade preserving its original constructor/tool signatures, delegating
         // internally to the newly-split *Tools classes.
-        _projectManagement = new WorkspaceProjectManagementTools(new WorkspaceProjectManagementImpl(workspaceManager, solutionManagementEngine, dependencyEngine, projectConsistencyEngine, structuralRefinementEngine, logger,
+        _projectManagement = new WorkspaceProjectManagementTools(new WorkspaceProjectManagementImpl(workspaceManager, structuralRefinementEngine, logger,
             // Built internally (not a WorkspaceTools ctor param) so the many `new WorkspaceTools(...)` test call sites need no update.
             new SolutionStructureEngine(workspaceManager, config)));
         _buildTest = new WorkspaceBuildTestTools(new WorkspaceBuildTestImpl(workspaceManager, diagnosticEngine, buildEngine, testRunEngine, logger));

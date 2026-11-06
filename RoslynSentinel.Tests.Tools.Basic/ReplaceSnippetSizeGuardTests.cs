@@ -44,19 +44,7 @@ public class ReplaceSnippetSizeGuardTests
         var diffEngine = TestEngines.DiffEngine();
         var diagnosticEngine = TestEngines.DiagnosticEngine(workspaceManager);
         return TestTools.WorkspaceTools(
-            workspaceManager,
-            TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
-            diffEngine, diagnosticEngine,
-            TestEngines.SolutionManagementEngine(workspaceManager),
-            TestEngines.StructuralRefinementEngine(workspaceManager, config),
-            TestEngines.DependencyEngine(workspaceManager),
-            TestEngines.ProjectConsistencyEngine(workspaceManager),
-            config, NullLogger<WorkspaceTools>.Instance,
-            TestEngines.BuildEngine(workspaceManager, diagnosticEngine),
-            TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            TestEngines.TestRunEngine(workspaceManager),
-            TestTools.WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
-            writeAdvice ?? WriteToolAdviceHelper.WithAllToolsExposed());
+            workspaceManager, TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance), diffEngine, diagnosticEngine, TestEngines.StructuralRefinementEngine(workspaceManager, config), config, NullLogger<WorkspaceTools>.Instance, TestEngines.BuildEngine(workspaceManager, diagnosticEngine), TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), TestEngines.TestRunEngine(workspaceManager), TestTools.WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance), writeAdvice ?? WriteToolAdviceHelper.WithAllToolsExposed());
     }
 
     [Test]

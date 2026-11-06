@@ -11,7 +11,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 ///   A. TestingEngine              (3 tests) -> CalculateComplexity, GenerateTestSkeleton, GenerateTestScaffold
 ///   B. PerformanceEngine          (3 tests) -> StringConcatInLoop detected, clean code, unknown file
 ///   C. StructuralRefinementEngine (3 tests) -> SyncTypeAndFilename match/mismatch/unknown
-///   D. SolutionManagementEngine   (2 tests) -> CreateProject null path, SplitProject propagates
+///   D. SolutionManagementEngineTests (2 tests; exercise SolutionStructureEngine) -> CreateProject null path, SplitProject propagates
 ///
 /// Total: 11 tests.
 /// </summary>
@@ -114,13 +114,11 @@ namespace MyApp
 public class SolutionManagementEngineTests
 {
     private IWorkspaceManager _workspaceManager;
-    private SolutionManagementEngine _engine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = Basic.TestEngines.SolutionManagementEngine(_workspaceManager);
         var solution = TestSolutionBuilder.CreateSolutionWithProject("Source", [("Foo.cs", "public class Foo { }")]);
         _workspaceManager.SetTestSolution(solution);
     }

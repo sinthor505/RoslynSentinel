@@ -545,3 +545,7 @@ child's suite is tracked separately in TODO.md.
 Owner ruling D2. A namespace rename of N:RoslynSentinel.Engines.Basic returned 1363 residual hits (~340 KB). Now the scan matches the full old qualified name for namespaces (dotted-token boundary: Basic.Sub matches, BasicX and Other.Basic do not), scans .csproj/.props/.targets/.json/.md/.ps1/.slnx/.sln too (skipping bin, obj, .git, .roslynsentinel, Worktree, generated files), buckets hits (code, comment, string, pathLike, nonSource) and the tool returns only a summary (`residualMentions` = total, byBucket, topFiles max 10, examples max 5 per bucket, details = one ready-to-run GetLargeResult hint per bucket). `Search(mode: namespace)` rows carry `docCommentId` `N:Full.Name`. Cross-segment moves (D2c) stay rejected.
 Evidence: ResidualMentionScannerTests (6), ResidualMentionSummarizerTests (18), ResidualMentionDetailPagingTests (2), SearchNamespaceDocCommentIdTests (8); full RunTest 6673 tests, only new failure was the regenerated architecture_tools.md (fixed).
 
+
+## MoveMember fold of engine-reorg group 6: empty engine classes removed - resolved (2026-11-05)
+
+The four empty classes (BreakingChange, Dependency, ProjectConsistency, SolutionManagement engines) are gone with their ctor params, DI registrations, test factories and dead test fields. The logic was already in SolutionStructureEngine. BreakingChangeEngine.cs and ProjectConsistencyEngine.cs remain for records they also hold. See decisions_autonomous_run_2026-11-05.md (W18).

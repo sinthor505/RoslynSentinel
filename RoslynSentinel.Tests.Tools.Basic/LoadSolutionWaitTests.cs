@@ -76,12 +76,6 @@ public class LoadSolutionWaitTests
     {
         var config = Battery.Basic.TestEngines.SentinelConfiguration();
         return new WorkspaceProjectManagementImpl(
-            workspaceManager,
-            Battery.Basic.TestEngines.SolutionManagementEngine(workspaceManager),
-            Battery.Basic.TestEngines.DependencyEngine(workspaceManager),
-            Battery.Basic.TestEngines.ProjectConsistencyEngine(workspaceManager),
-            Battery.Basic.TestEngines.StructuralRefinementEngine(workspaceManager, config),
-            NullLogger<WorkspaceProjectManagementImpl>.Instance,
-            Battery.Basic.TestEngines.SolutionStructureEngine(workspaceManager, config));
+            workspaceManager, Battery.Basic.TestEngines.StructuralRefinementEngine(workspaceManager, config), NullLogger<WorkspaceProjectManagementImpl>.Instance, Battery.Basic.TestEngines.SolutionStructureEngine(workspaceManager, config));
     }
 }

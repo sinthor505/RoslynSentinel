@@ -14,29 +14,25 @@ public class IntelligenceTools
     private readonly ImpactAnalyzer _impactAnalyzer;
     private readonly MetricsEngine _metricsEngine;
     private readonly InventoryEngine _inventoryEngine;
-    private readonly DependencyEngine _dependencyEngine;
     private readonly SolutionStructureEngine _solutionStructureEngine;
     private readonly AsyncAnalysisEngine _asyncSafetyEngine;
     private readonly HealthOrchestrationEngine _healthOrchestrationEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly DependencyInjectionEngine _dependencyInjectionEngine;
     private readonly DiscoveryEngine _discoveryEngine;
-    private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<IntelligenceTools> _logger;
-    public IntelligenceTools(ImpactAnalyzer impactAnalyzer, MetricsEngine metricsEngine, InventoryEngine inventoryEngine, DeadCodeEngine deadCodeEngine, DocumentationEngine documentationEngine, DependencyEngine dependencyEngine, SolutionStructureEngine solutionStructureEngine, AsyncAnalysisEngine asyncSafetyEngine, HealthOrchestrationEngine healthOrchestrationEngine, SymbolNavigationEngine symbolNavigationEngine, DependencyInjectionEngine dependencyInjectionEngine, DiscoveryEngine discoveryEngine, ProjectConsistencyEngine projectConsistencyEngine, ISolutionProvider workspaceManager, AntiPatternEngine antiPatternEngine, SentinelConfiguration config, ILogger<IntelligenceTools> logger)
+    public IntelligenceTools(ImpactAnalyzer impactAnalyzer, MetricsEngine metricsEngine, InventoryEngine inventoryEngine, DeadCodeEngine deadCodeEngine, DocumentationEngine documentationEngine, SolutionStructureEngine solutionStructureEngine, AsyncAnalysisEngine asyncSafetyEngine, HealthOrchestrationEngine healthOrchestrationEngine, SymbolNavigationEngine symbolNavigationEngine, DependencyInjectionEngine dependencyInjectionEngine, DiscoveryEngine discoveryEngine, ISolutionProvider workspaceManager, AntiPatternEngine antiPatternEngine, SentinelConfiguration config, ILogger<IntelligenceTools> logger)
     {
         _impactAnalyzer = impactAnalyzer;
         _metricsEngine = metricsEngine;
         _inventoryEngine = inventoryEngine;
-        _dependencyEngine = dependencyEngine;
         _solutionStructureEngine = solutionStructureEngine;
         _asyncSafetyEngine = asyncSafetyEngine;
         _healthOrchestrationEngine = healthOrchestrationEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
         _dependencyInjectionEngine = dependencyInjectionEngine;
         _discoveryEngine = discoveryEngine;
-        _projectConsistencyEngine = projectConsistencyEngine;
         _workspaceManager = workspaceManager;
         _logger = logger;
         _antiPatternEngine = antiPatternEngine;

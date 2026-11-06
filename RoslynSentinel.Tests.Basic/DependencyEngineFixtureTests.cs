@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.CSharp;
 namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
-/// Fixture-based tests for DependencyEngine using in-memory workspaces with seeded data
+/// Fixture-based tests for the dependency queries (SolutionStructureEngine) using in-memory workspaces with seeded data
 /// instead of real solutions. Replaces vacuous integration smoke tests.
 /// </summary>
 [TestFixture]
@@ -27,7 +27,6 @@ public class DependencyEngineFixtureTests
 
         var fake = FakeWorkspaceManager.ReadOnly();
         fake.SetTestSolution(solution);
-        var engine = Battery.Basic.TestEngines.DependencyEngine(fake);
 
         var downstreamProject = solution.Projects.FirstOrDefault(p => p.Name == "DownstreamApp");
         Assert.That(downstreamProject, Is.Not.Null, "Downstream project must exist in solution.");
@@ -54,7 +53,6 @@ public class DependencyEngineFixtureTests
 
         var fake = FakeWorkspaceManager.ReadOnly();
         fake.SetTestSolution(solution);
-        var engine = Battery.Basic.TestEngines.DependencyEngine(fake);
 
         var downstreamProject = solution.Projects.FirstOrDefault(p => p.Name == "DownstreamApp");
         Assert.That(downstreamProject, Is.Not.Null);
