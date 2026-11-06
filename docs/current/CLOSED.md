@@ -8,6 +8,21 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Malformed `.csproj` reload was silent - resolved (2026-11-06)
+
+Was: a syntax-broken `.csproj` reloaded with `workspaceStale: false`, `projectCount` unchanged and the project holding zero documents, because the reload-failure record only fired when the load threw, not when MSBuildWorkspace reported a failed project as a diagnostic ([doc](proposals/proposal_workspace_reload_failure_visibility.md)).
+Evidence: `ProjectLoadFailureCollector` (`Common/WorkspaceReloadFailure.cs`) and `PersistentWorkspaceManager.cs`, W22 commit `10179fa8f7cd2aef71630cc1f4549f38de22b654`. Live check on 2026-11-06 at `facc36f9`: `workspaceStale: true` with `reloadFailure` about 4.7 s after the bad write, cleared on its own after the repair. Left as code TODOs: the post-write reload does not re-baseline after reverting a broken project; the collector matches on message text.
+
+## `LoadSolution` unrestored-project hint looped - resolved (2026-11-06)
+
+Was: `BuildUnrestoredHint` flagged projects whose `obj/project.assets.json` was older than the `.csproj`; a no-op restore does not rewrite assets.json, so the advice repeated forever.
+Evidence: `FindUnrestoredProjects` compares restore inputs with `project.assets.json` and does not repeat advice, W22 commit `10179fa8f7cd2aef71630cc1f4549f38de22b654`. Live check on 2026-11-06: hint on a deleted `obj`, its advice worked, gone after restore. A project still unrestored on a repeat load gets no second hint, by design of the fix.
+
+## Dry runs returned the full changed file by default - resolved (2026-11-06)
+
+Was: `MoveMember(dryRun: true)` returned `changedContent` for a whole 3385-line file (190 KB), and `MoveType(dryRun, returnDiff: true)` returned both the diff and the full file.
+Evidence: `AppliedChangeSummary` dry runs are compact, W22 commit `10179fa8f7cd2aef71630cc1f4549f38de22b654`. Live check on 2026-11-06: `MoveMember` and `ExtractMembers` dry runs return `lineChanges` and a note with no diff unless `returnDiff` is true. `Member` add dry runs still return a diff by default.
+
 ## Server-side telemetry for tool call counts and error rates - built per owner ruling D5 (2026-11-05)
 
 Was: "Server-side telemetry/metrics for tool call counts and error rates (2026-09-05) - idea, not implemented; owner decision pending on exposure and persistence" ([idea](ideas/server_telemetry_idea.md)).
