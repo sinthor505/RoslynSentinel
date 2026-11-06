@@ -171,4 +171,19 @@ public sealed class MoveMemberRefusalTests
         Assert.That(result.ErrorData?.Message, Does.Contain("Missing"));
         Assert.That(workspace.ReadText("Refactor.cs"), Is.EqualTo(before), "A refused move must not write anything.");
     }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_StrandedOverloadFallbackWithNoReceiver_RefusalOffersKeepAsDeprecatedWrapperCall()
+    {
+        // Save(int) moves, Save(long) stays, and Caller has no Target receiver: `a.Save(1)` would silently bind to Save(long).
+        var original = "public class Source\n{\n    public int Save(int a) => 1;\n    public int Save(long a) => 2;\n}\n\npublic class Target\n{\n}\n\npublic class Caller\n{\n    private readonly Source a = new Source();\n\n    public int Run()\n    {\n        return a.Save(1);\n    }\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Save(int)"], "Target");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("oldMember: keepAsDeprecatedWrapper"), "The refusal names the keep-mode alternative as a rendered MoveMember call.");
+        Assert.That(workspace.ReadText("Refactor.cs"), Is.EqualTo(original), "A refused call must not write.");
+    }
 }

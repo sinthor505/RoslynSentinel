@@ -211,8 +211,34 @@ public class MoveMemberOverloadFallbackTests
             Assert.That(refusal.Message, Does.Contain("callSiteFixups"), "Names the next step.");
             Assert.That(refusal.Message, Does.Contain("also move the other overload"), "Names the alternative next step.");
             Assert.That(refusal.Message, Does.Contain("MoveMember"), "The hint is a tool call.");
+            Assert.That(refusal.Message, Does.Contain("Alternative that leaves every caller untouched"), "Names the keep-mode alternative.");
+            Assert.That(refusal.Message, Does.Contain("[Obsolete] forwarder"), "Says what the keep-mode alternative leaves behind.");
+            Assert.That(refusal.Message, Does.Contain("forwarderReceiver"), "Names the receiver parameter the keep mode may need.");
         });
         AssertNothingWritten(workspace, callerText);
+    }
+
+    [Test]
+    public async Task InstanceMove_FallbackCallWithNoReceiver_KeepAsDeprecatedWrapperAlternative_LeavesCallerCompilingAndBoundToSource()
+    {
+        // The same fixture the refusal above is raised for: the moved Save(int) has a staying overload Save(long) and the
+        // caller has no Target receiver. The refusal's alternative (oldMember keepAsDeprecatedWrapper) must really work here.
+        var (workspace, engine, callerText) = WideningFixture("", "        return a.Save(1);");
+
+        var result = await MoveAsync(workspace, engine, ["Save(int)"], oldMember: MoveMemberOldMember.keepAsDeprecatedWrapper, forwarderReceiver: "new Target()");
+
+        var newTexts = AllFiles.Select(f => TextOf(result, f, workspace.ReadText(f))).ToList();
+        var (errors, compilation) = Compile(newTexts);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.SkippedCallSites, Is.Empty, "A keep mode skips no caller.");
+            Assert.That(newTexts[2], Is.EqualTo(callerText), "The caller is left untouched.");
+            Assert.That(newTexts[0], Does.Contain("System.Obsolete("), "The moved overload stays behind as a deprecated forwarder.");
+            Assert.That(newTexts[0], Does.Contain("public int Save(long a) => 2;"), "The staying overload is untouched.");
+            Assert.That(newTexts[1], Does.Contain("public int Save(int a)"), "The moved overload sits on Target.");
+            Assert.That(errors, Is.Empty, "The kept forwarder code must compile.");
+            Assert.That(BoundContainers(compilation, "Save", "a"), Is.EqualTo(new[] { "Source" }), "The untouched caller still binds to Source.Save(int), now the forwarder.");
+        });
     }
 
     [Test]

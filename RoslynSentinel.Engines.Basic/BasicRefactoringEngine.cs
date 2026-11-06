@@ -47,9 +47,11 @@ public record ResidualMention(FilePathWrapper FilePath, int LineNumber, string L
 /// <summary>
 /// Outcome of ChangeSignatureAsync. In oldSignature keepAsDeprecatedWrapper mode, <paramref name="SkippedCallSites"/> are the call sites LEFT on the
 /// wrapper (not an error), <paramref name="MigratedCallSites"/> are the ones rewritten to the new signature (Line is 1-based in the ORIGINAL text),
-/// <paramref name="WrapperSignature"/> is the kept old signature and <paramref name="ReplacementSignature"/> the new one. All three are null in remove mode.
+/// <paramref name="WrapperSignature"/> is the kept old signature and <paramref name="ReplacementSignature"/> the new one. All three are null when the old signature was removed.
+/// <paramref name="OldSignatureOutcome"/> is what actually happened to the old signature (remove or keepAsDeprecatedWrapper, never auto): oldSignature auto resolves to one
+/// of them from the planned call sites before anything is written, so a dry run and the real apply report the same outcome. Null on an error.
 /// </summary>
-public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, string? Error = null, List<RewrittenCallSite>? MigratedCallSites = null, string? WrapperSignature = null, string? ReplacementSignature = null) : IOperationResult
+public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, string? Error = null, List<RewrittenCallSite>? MigratedCallSites = null, string? WrapperSignature = null, string? ReplacementSignature = null, ChangeSignatureOldSignature? OldSignatureOutcome = null) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;
@@ -162,9 +164,12 @@ public class BasicRefactoringEngine
         };
     }
 
-    public async Task<ChangeSignatureResult> ChangeSignatureAsync(FilePathWrapper filePath, string methodName, IReadOnlyList<SignatureParameterSpec> parameters, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default, ChangeSignatureOldSignature oldSignature = ChangeSignatureOldSignature.remove)
+    public async Task<ChangeSignatureResult> ChangeSignatureAsync(FilePathWrapper filePath, string methodName, IReadOnlyList<SignatureParameterSpec> parameters, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default, ChangeSignatureOldSignature oldSignature = ChangeSignatureOldSignature.auto)
     {
-        var wrapperMode = oldSignature == ChangeSignatureOldSignature.keepAsDeprecatedWrapper;
+        // oldSignature auto is resolved to remove or keepAsDeprecatedWrapper (wrapperMode, below) once the call sites are planned and BEFORE anything is
+        // written, so a dry run and the real apply (same planning pass) report the same outcome.
+        var keepRequested = oldSignature == ChangeSignatureOldSignature.keepAsDeprecatedWrapper;
+        var autoRequested = oldSignature == ChangeSignatureOldSignature.auto;
         // Every early exit names its reason: an empty result with no Error reads to the caller as a successful no-op.
         static ChangeSignatureResult Refuse(string error) => new(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>(), error);
 
@@ -276,43 +281,38 @@ public class BasicRefactoringEngine
             return Refuse($"parameters contains an originalIndex that is out of range or used more than once. '{methodName}' has {originalParams.Count} parameter(s), so valid originalIndex values are 0..{originalParams.Count - 1}, each used at most once. Nothing was changed.");
         }
 
-        // Wrapper mode: every refusal (constructor, virtual/override/abstract/interface member, a new parameter without a default value,
-        // old and new signature colliding) is decided here, before any call site is planned or anything is written.
+        // remove and auto hand every call site the new parameter's defaultValue as its fill-in argument, so a new parameter without one is refused up front
+        // (keepAsDeprecatedWrapper refuses it in Prepare with the wrapper-specific text).
+        if (!keepRequested && parameters.OfType<NewParameterSpec>().FirstOrDefault(s => string.IsNullOrWhiteSpace(s.DefaultValueExpression)) is { } noDefault)
+        {
+            return Refuse($"New parameter '{noDefault.Name}' has no defaultValue, and every migrated call site receives it as its fill-in argument. Nothing was changed. Pass defaultValue for '{noDefault.Name}'.");
+        }
+
+        // keepAsDeprecatedWrapper and auto: every wrapper refusal (constructor, virtual/override/abstract/interface member, a new parameter without a default
+        // value, old and new signature colliding) is decided here, before any call site is planned or anything is written. An explicit keep refuses on it;
+        // auto only remembers it (wrapperRefusal): it matters only if some call site cannot be migrated, and then the change is refused like remove.
         var oldSignatureText = string.Empty;
         var newSignatureText = string.Empty;
-        if (wrapperMode)
+        string? wrapperRefusal = null;
+        if (oldSignature != ChangeSignatureOldSignature.remove)
         {
-            var prepared = ChangeSignatureWrapper.Prepare(semanticModel, methodDecl, declaredSymbol, parameters, originalParams, methodName);
+            var prepared = ChangeSignatureWrapper.Prepare(semanticModel, methodDecl, declaredSymbol, parameters, originalParams, methodName, autoMode: autoRequested);
             if (prepared.Error is not null)
             {
-                return Refuse(prepared.Error);
-            }
+                if (keepRequested)
+                {
+                    return Refuse(prepared.Error);
+                }
 
-            (oldSignatureText, newSignatureText) = (prepared.OldSignature, prepared.NewSignature);
+                wrapperRefusal = prepared.Error;
+            }
+            else
+            {
+                (oldSignatureText, newSignatureText) = (prepared.OldSignature, prepared.NewSignature);
+            }
         }
 
         var generator = SyntaxGenerator.GetGenerator(document);
-
-        // Build the new parameter list (declaration side) and, in parallel, a per-call-site rewrite plan:
-        // for each new-position slot, either "carry over the bound argument for original index N" or
-        // "insert this literal default value expression" (for a NewParameterSpec).
-        var newParameterSyntaxes = new List<ParameterSyntax>();
-        foreach (var spec in parameters)
-        {
-            switch (spec)
-            {
-                case ExistingParameterSpec existing:
-                    newParameterSyntaxes.Add(originalParams[existing.OriginalIndex].WithoutTrivia());
-                    break;
-                case NewParameterSpec added:
-                    var defaultExpr = SyntaxFactory.ParseExpression(added.DefaultValueExpression);
-                    var generated = (ParameterSyntax)generator.ParameterDeclaration(added.Name, SyntaxFactory.ParseTypeName(added.Type), defaultExpr);
-                    newParameterSyntaxes.Add(generated);
-                    break;
-            }
-        }
-
-        var newParameterList = methodDecl.ParameterList.WithParameters(SyntaxFactory.SeparatedList(newParameterSyntaxes));
 
         // Single pass: every edit in a file (the declaration's parameter list and all call sites) is planned against
         // ONE original root per file path and applied with one ReplaceNodes, so no edit can shift the span of another
@@ -328,6 +328,7 @@ public class BasicRefactoringEngine
 
         if (declaredSymbol != null)
         {
+            // TODO ChangeSignature: ActivatorUtilities.CreateInstance(..., args) argument lists are not seen as call sites (the change compiles but fails at runtime)
             var references = await SymbolFinder.FindReferencesAsync(declaredSymbol, solution, cancellationToken);
             foreach (var reference in references)
             {
@@ -479,6 +480,7 @@ public class BasicRefactoringEngine
                         {
                             // Always fill in the literal default value at existing call sites when a
                             // parameter is added (decided: no per-call flag).
+                            // TODO ChangeSignature: a non-constant defaultValue such as _logger needs a per-call-site scope check (today a site where it does not bind fails validation, so the change fails closed)
                             slotHasExplicitArg[slot] = true;
                             slotArgExpr[slot] = SyntaxFactory.Argument(SyntaxFactory.ParseExpression(added.DefaultValueExpression));
                         }
@@ -545,7 +547,7 @@ public class BasicRefactoringEngine
                         }
                     }
 
-                    if (callSitePlansByPath[refDocPath].TryAdd(invocation, slotPlan) && wrapperMode && invocation is InvocationExpressionSyntax migratedCall)
+                    if (callSitePlansByPath[refDocPath].TryAdd(invocation, slotPlan) && oldSignature != ChangeSignatureOldSignature.remove && invocation is InvocationExpressionSyntax migratedCall)
                     {
                         migratedCallSites.Add(ChangeSignatureWrapper.DescribeMigratedCall(refDocPath, refLineNumber, migratedCall, arguments, slotPlan));
                     }
@@ -556,6 +558,9 @@ public class BasicRefactoringEngine
         // Refuse if any call sites could not be rewritten: report them and do not apply a partial
         // change that would leave the code not compiling. The caller must fix or remove the skipped
         // call sites first, or split the change into smaller steps. Wrapper mode keeps them on the deprecated wrapper instead.
+        // The old-signature decision, made here from the planned call sites and before any write (so a dry run decides identically): keepAsDeprecatedWrapper always
+        // keeps the wrapper; auto keeps it only when some call site cannot be migrated AND a wrapper is possible; otherwise the old signature is removed.
+        var wrapperMode = keepRequested || (autoRequested && skippedCallSites.Count > 0 && wrapperRefusal is null);
         if (skippedCallSites.Count > 0 && !wrapperMode)
         {
             var lines = new List<string> { $"Nothing was changed. Could not rewrite {skippedCallSites.Count} call site(s)" };
@@ -574,11 +579,52 @@ public class BasicRefactoringEngine
             {
                 lines.Add($"... and {skippedCallSites.Count - 5} more.");
             }
+            if (wrapperRefusal is not null)
+            {
+                lines.Add("oldSignature auto cannot keep the old signature for them because " + wrapperRefusal);
+            }
+
             lines.Add("Fix or remove those call sites first, or split the change.");
             var errorMessage = string.Join("; ", lines);
             return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), skippedCallSites, errorMessage);
         }
 
+        // The declaration side. A kept wrapper declares every new parameter REQUIRED (defaultValue only fills call sites and the wrapper body): an optional one
+        // would make the new signature compete with the wrapper for old-shaped calls. Without a wrapper a new parameter stays optional unless a later parameter has
+        // no default (an optional parameter before a required one is CS1737, and every call site receives the value anyway). Existing defaults in front of a
+        // required parameter are dropped on the new member in wrapper mode (migrated call sites pass them explicitly; the wrapper keeps the old list and its defaults).
+        var newParameterSyntaxes = new ParameterSyntax[parameters.Count];
+        var laterParameterRequired = false;
+        for (var slot = parameters.Count - 1; slot >= 0; slot--)
+        {
+            if (parameters[slot] is ExistingParameterSpec keptSpec)
+            {
+                var kept = originalParams[keptSpec.OriginalIndex].WithoutTrivia();
+                if (kept.Default == null)
+                {
+                    laterParameterRequired |= !kept.Modifiers.Any(SyntaxKind.ParamsKeyword);
+                }
+                else if (wrapperMode && laterParameterRequired)
+                {
+                    kept = kept.WithDefault(null);
+                }
+
+                newParameterSyntaxes[slot] = kept;
+            }
+            else if (parameters[slot] is NewParameterSpec addedSpec)
+            {
+                var addedType = SyntaxFactory.ParseTypeName(addedSpec.Type);
+                var addedRequired = wrapperMode || laterParameterRequired;
+                newParameterSyntaxes[slot] = (ParameterSyntax)(addedRequired
+                    ? generator.ParameterDeclaration(addedSpec.Name, addedType)
+                    : generator.ParameterDeclaration(addedSpec.Name, addedType, SyntaxFactory.ParseExpression(addedSpec.DefaultValueExpression)));
+                laterParameterRequired |= addedRequired;
+            }
+        }
+
+        var newParameterList = methodDecl.ParameterList.WithParameters(SyntaxFactory.SeparatedList(newParameterSyntaxes));
+
+        // TODO ChangeSignature collapses rewritten multi-line calls and parameter lists onto one line
         static SeparatedSyntaxList<ArgumentSyntax> RebuildArguments(SeparatedSyntaxList<ArgumentSyntax> current, List<(int SrcIndex, ExpressionSyntax? Literal)> plan)
         {
             // A carried argument keeps its ref/out/in keyword; dropping it would not compile.
@@ -634,8 +680,8 @@ public class BasicRefactoringEngine
         }
 
         return wrapperMode
-            ? new ChangeSignatureResult(result, skippedCallSites, null, migratedCallSites, oldSignatureText, newSignatureText)
-            : new ChangeSignatureResult(result, skippedCallSites);
+            ? new ChangeSignatureResult(result, skippedCallSites, null, migratedCallSites, oldSignatureText, newSignatureText, ChangeSignatureOldSignature.keepAsDeprecatedWrapper)
+            : new ChangeSignatureResult(result, skippedCallSites, OldSignatureOutcome: ChangeSignatureOldSignature.remove);
     }
 
     public async Task<Dictionary<FilePathWrapper, string>> MoveTypeToFileAsync(FilePathWrapper filePath, string typeName, string? targetFolder = null, CancellationToken cancellationToken = default)

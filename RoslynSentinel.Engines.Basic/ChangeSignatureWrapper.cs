@@ -20,36 +20,37 @@ internal static class ChangeSignatureWrapper
     /// Returns an error (nothing may be written) when wrapper mode cannot be honoured for this member and parameter list, otherwise the
     /// old and new signature display text ("Save(int, string)"). Every refusal names the reason and the next step.
     /// </summary>
-    internal static (string? Error, string OldSignature, string NewSignature) Prepare(SemanticModel semanticModel, BaseMethodDeclarationSyntax methodDecl, IMethodSymbol? symbol, IReadOnlyList<SignatureParameterSpec> parameters, IReadOnlyList<ParameterSyntax> originalParams, string methodName)
+    internal static (string? Error, string OldSignature, string NewSignature) Prepare(SemanticModel semanticModel, BaseMethodDeclarationSyntax methodDecl, IMethodSymbol? symbol, IReadOnlyList<SignatureParameterSpec> parameters, IReadOnlyList<ParameterSyntax> originalParams, string methodName, bool autoMode = false)
     {
-        static (string?, string, string) Refuse(string error) => (error, string.Empty, string.Empty);
+        // clause: what is wrong, starting with the verb ("cannot wrap 'M': ..."); advice: the next step for the explicit-wrapper caller.
+        (string?, string, string) Refuse(string clause, string advice) => (autoMode ? "a deprecated wrapper " + clause : $"oldSignature keepAsDeprecatedWrapper {clause} Nothing was changed. {advice}", string.Empty, string.Empty);
 
         if (methodDecl is ConstructorDeclarationSyntax)
         {
             // TODO ChangeSignature: wrapper mode for constructors
-            return Refuse($"oldSignature keepAsDeprecatedWrapper does not support constructors yet: '{methodName}' is a constructor. Nothing was changed. Retry with {RemoveHint}, or add the new constructor beside the old one and migrate its callers by hand.");
+            return Refuse($"does not support constructors yet: '{methodName}' is a constructor.", $"Retry with {RemoveHint}, or add the new constructor beside the old one and migrate its callers by hand.");
         }
 
         if (methodDecl is not MethodDeclarationSyntax method || symbol == null)
         {
-            return Refuse($"oldSignature keepAsDeprecatedWrapper could not resolve '{methodName}' to a method symbol. Nothing was changed. Retry with {RemoveHint}.");
+            return Refuse($"could not resolve '{methodName}' to a method symbol.", $"Retry with {RemoveHint}.");
         }
 
         if (symbol.IsVirtual || symbol.IsAbstract || symbol.IsOverride || symbol.ContainingType.TypeKind == TypeKind.Interface)
         {
-            return Refuse($"oldSignature keepAsDeprecatedWrapper cannot wrap '{methodName}': it is virtual, abstract, override or an interface member, and a wrapper beside it would change dispatch for overriding or implementing types. Nothing was changed. Retry with {RemoveHint}.");
+            return Refuse($"cannot wrap '{methodName}': it is virtual, abstract, override or an interface member, and a wrapper beside it would change dispatch for overriding or implementing types.", $"Retry with {RemoveHint}.");
         }
 
         if (symbol.IsExtensionMethod || method.ExplicitInterfaceSpecifier != null || method.Modifiers.Any(SyntaxKind.PartialKeyword) || symbol.IsExtern || symbol.ReturnsByRef || symbol.ReturnsByRefReadonly)
         {
-            return Refuse($"oldSignature keepAsDeprecatedWrapper cannot wrap '{methodName}': an extension, explicit-interface, partial, extern or ref-returning method has no safe generated wrapper. Nothing was changed. Retry with {RemoveHint}.");
+            return Refuse($"cannot wrap '{methodName}': an extension, explicit-interface, partial, extern or ref-returning method has no safe generated wrapper.", $"Retry with {RemoveHint}.");
         }
 
         foreach (var spec in parameters.OfType<NewParameterSpec>())
         {
             if (string.IsNullOrWhiteSpace(spec.DefaultValueExpression))
             {
-                return Refuse($"oldSignature keepAsDeprecatedWrapper needs a defaultValue for every new parameter, and '{spec.Name}' has none: the wrapper passes it to the new member and migrated callers receive it as their fill-in argument. Nothing was changed. Pass defaultValue for '{spec.Name}', or retry with {RemoveHint}.");
+                return Refuse($"needs a defaultValue for every new parameter, and '{spec.Name}' has none: the wrapper passes it to the new member and migrated callers receive it as their fill-in argument.", $"Pass defaultValue for '{spec.Name}', or retry with {RemoveHint}.");
             }
         }
 
@@ -81,7 +82,7 @@ internal static class ChangeSignatureWrapper
         var newSignature = $"{methodName}({string.Join(", ", newTypeTexts)})";
         if (oldKeys.Count == newKeys.Count && oldKeys.Zip(newKeys, SameParameter).All(same => same))
         {
-            return Refuse($"oldSignature keepAsDeprecatedWrapper cannot keep '{methodName}': the old and the new signature both take ({string.Join(", ", oldTypeTexts)}), so the wrapper and the member would be the same overload (renaming a parameter or changing a default value does not change the signature; ref, out and in count as one mode). Nothing was changed. Change a parameter type, the order or the count so the overloads differ, or retry with {RemoveHint}.");
+            return Refuse($"cannot keep '{methodName}': the old and the new signature both take ({string.Join(", ", oldTypeTexts)}), so the wrapper and the member would be the same overload (renaming a parameter or changing a default value does not change the signature; ref, out and in count as one mode).", "Change a parameter type, the order or the count so the overloads differ, or retry with " + RemoveHint + ".");
         }
 
         return (null, oldSignature, newSignature);

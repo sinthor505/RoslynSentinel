@@ -62,6 +62,35 @@ public sealed class DeclarationModifierTests
     }
 
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
+    [Category("ChangeSignatureParameterInput")] // sentinel:auto-category
+    public async Task ChangeSignature_AutoOldSignature_MethodGroupCaller_DryRunAndApplyAgree()
+    {
+        const string saverSource = "public class Saver { public int Save(int id, string name) => id; }";
+        const string callerSource = "public class Caller\r\n{\r\n    public void Run(Saver s) { System.Func<int, string, int> f = s.Save; }\r\n}";
+        var parameters = new[] { new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0) };
+
+        using var dryWorkspace = InMemoryWorkspace.Create(("Saver.cs", saverSource), ("Caller.cs", callerSource));
+        var dryTools = BatteryToolFactory.CreateAdvancedRefactoringTools(dryWorkspace.Manager);
+        var dryResult = await dryTools.ChangeSignatureTool(reason: "test message", dryWorkspace.PathOf("Saver.cs"), "Save", parameters, dryRun: true);
+
+        Assert.That(dryResult.IsError, Is.False, $"error: {dryResult.ErrorData?.Message}");
+        Assert.That(dryResult.SuccessData?.Description, Does.Contain("as an [Obsolete] wrapper"));
+        Assert.That(string.Join("\n", dryResult.Findings.Select(f => f.Message)), Does.Contain("Left on deprecated wrapper").And.Contain("Caller.cs:3"));
+        Assert.That(dryWorkspace.ReadText("Saver.cs"), Is.EqualTo(saverSource));
+        Assert.That(dryWorkspace.ReadText("Caller.cs"), Is.EqualTo(callerSource));
+
+        using var applyWorkspace = InMemoryWorkspace.Create(("Saver.cs", saverSource), ("Caller.cs", callerSource));
+        var applyTools = BatteryToolFactory.CreateAdvancedRefactoringTools(applyWorkspace.Manager);
+        var applyResult = await applyTools.ChangeSignatureTool(reason: "test message", applyWorkspace.PathOf("Saver.cs"), "Save", parameters, dryRun: false);
+
+        Assert.That(applyResult.IsError, Is.False, $"error: {applyResult.ErrorData?.Message}");
+        Assert.That(applyResult.SuccessData?.Description, Is.EqualTo(dryResult.SuccessData?.Description));
+        Assert.That(string.Join("\n", applyResult.Findings.Select(f => f.Message)), Does.Contain("Left on deprecated wrapper").And.Contain("Caller.cs:3"));
+        Assert.That(applyWorkspace.ReadText("Saver.cs"), Is.Not.EqualTo(saverSource));
+    }
+
+    [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task ModifyEnum_AddsCancelledMember()
     {

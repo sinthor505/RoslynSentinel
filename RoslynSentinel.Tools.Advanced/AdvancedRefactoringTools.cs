@@ -102,7 +102,7 @@ public class AdvancedRefactoringTools
     [Description("Reorders, adds, or removes method parameters and updates all call sites solution-wide. Refuses across an interface/implementer boundary - edit each side directly.")]
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> ChangeSignatureTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string methodName, [Description("The desired end-state parameter list, in order. Each entry is {originalIndex: N} to keep an existing 0-based-index parameter, or {name, type, defaultValue} to insert a new one. Omit an originalIndex to remove that parameter.")][ExternalInputRequired(DataTag.Order, required: true)] ChangeSignatureParameterInput[] parameters, // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           // [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [Description(ToolParams.ContextSnippet)] string? contextSnippet = null, [Description(ToolParams.LineBefore)] string? lineBefore = null, [Description(ToolParams.LineAfter)] string? lineAfter = null, [Description("remove (default) refuses when a call site cannot be rewritten. keepAsDeprecatedWrapper applies the new signature, migrates what it can and keeps the old signature as an [Obsolete] wrapper for the rest; refused for constructors, virtual/override/abstract/interface members and identical parameter types.")] ChangeSignatureOldSignature oldSignature = ChangeSignatureOldSignature.remove, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [Description(ToolParams.ContextSnippet)] string? contextSnippet = null, [Description(ToolParams.LineBefore)] string? lineBefore = null, [Description(ToolParams.LineAfter)] string? lineAfter = null, [Description("auto (default): old signature removed if every caller migrates, else kept as an [Obsolete] wrapper and the remaining callers listed. remove: refuses if any caller cannot migrate. keepAsDeprecatedWrapper: always keep. No wrapper (refused) for constructors, virtual/override/abstract/interface members, identical parameter types.")] ChangeSignatureOldSignature oldSignature = ChangeSignatureOldSignature.auto, // RequestContext<CallToolRequestParams> requestParams = null,
  CancellationToken cancellationToken = default)
     {
         // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
@@ -117,8 +117,8 @@ public class AdvancedRefactoringTools
                 {
                     specs.Add(new ExistingParameterSpec(idx));
                 }
-                // In wrapper mode a new parameter without a defaultValue is passed through so the engine refuses it with its own explanation (the wrapper has nothing to pass).
-                else if (!string.IsNullOrEmpty(p.name) && !string.IsNullOrEmpty(p.type) && (!string.IsNullOrEmpty(p.defaultValue) || oldSignature == ChangeSignatureOldSignature.keepAsDeprecatedWrapper))
+                // With oldSignature auto or keepAsDeprecatedWrapper a new parameter without a defaultValue is passed through so the engine refuses it with its own explanation (the call sites and the wrapper have nothing to pass).
+                else if (!string.IsNullOrEmpty(p.name) && !string.IsNullOrEmpty(p.type) && (!string.IsNullOrEmpty(p.defaultValue) || oldSignature != ChangeSignatureOldSignature.remove))
                 {
                     specs.Add(new NewParameterSpec(p.name, p.type, p.defaultValue ?? string.Empty));
                 }
@@ -159,8 +159,19 @@ public class AdvancedRefactoringTools
                 };
             var summaryNote = $"Reorders parameters of '{methodName}' in {Path.GetFileName(resolvedFilePath)}.";
             var wrapperFindings = new List<Finding>();
+            if (result.OldSignatureOutcome == ChangeSignatureOldSignature.remove)
+            {
+                // The outcome is stated for remove too (and for auto resolved to remove): the caller must not have to infer it from a missing wrapper.
+                summaryNote += " Old signature removed: every caller was migrated.";
+            }
+
             if (result.WrapperSignature is not null)
             {
+                if (oldSignature == ChangeSignatureOldSignature.auto)
+                {
+                    wrapperFindings.Add(new Finding("ChangeSignature", $"oldSignature auto kept the old signature as an [Obsolete] wrapper because {result.SkippedCallSites.Count} call site(s) could not be migrated; the compiler (CS0618) lists them.", FindingSeverity.Caution));
+                }
+
                 // Wrapper mode: say which call sites moved to the new signature and which stay on the deprecated wrapper.
                 IReadOnlyList<RewrittenCallSite> migrated = result.MigratedCallSites ?? [];
                 var leftOnWrapper = result.SkippedCallSites;

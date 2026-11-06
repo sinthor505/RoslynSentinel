@@ -46,12 +46,17 @@ public enum MoveMemberOldMember
     keepAsDeprecatedWrapper
 }
 
-/// <summary>How ChangeSignature treats the old signature: remove it (all-or-nothing, the default) or keep it as an [Obsolete] wrapper for call sites that cannot be migrated.</summary>
+/// <summary>
+/// How ChangeSignature treats the old signature: remove it (all-or-nothing), always keep it as an [Obsolete] wrapper, or auto (the default):
+/// remove it when every call site migrates, otherwise keep the wrapper for the call sites that cannot be migrated (refuse like remove when a wrapper is not possible).
+/// auto is declared last so the numeric values of the earlier members do not change.
+/// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ChangeSignatureOldSignature
 {
     remove,
-    keepAsDeprecatedWrapper
+    keepAsDeprecatedWrapper,
+    auto
 }
 
 /// <summary>

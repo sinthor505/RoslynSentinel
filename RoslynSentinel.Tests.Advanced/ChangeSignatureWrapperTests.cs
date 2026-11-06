@@ -164,7 +164,8 @@ public class ChangeSignatureWrapperTests
         Assert.That(result.SkippedCallSites, Is.Empty);
         Assert.That(result.ReplacementSignature, Is.EqualTo("Save(int, string, int)"));
         var saverAfter = result.Changes["Saver.cs"];
-        Assert.That(saverAfter, Does.Contain("int id, string name, int scale = 2"), "The new member declares the defaulted parameter");
+        Assert.That(saverAfter, Does.Contain("int id, string name, int scale)"), "The new member declares the new parameter required");
+        Assert.That(saverAfter, Does.Not.Contain("scale = 2"), "The default is only the value passed, never a declared default (it would compete with the wrapper)");
         Assert.That(saverAfter, Does.Contain("this.Save(id, name, 2);"), "The wrapper passes the default literal explicitly");
 
         var compilation = CompileFiles(AfterChange(result.Changes, ("Saver.cs", saverSource)));
@@ -177,8 +178,8 @@ public class ChangeSignatureWrapperTests
     [Category("ChangeSignatureResult")] // sentinel:auto-category
     public async Task ChangeSignature_KeepAsDeprecatedWrapper_OptionalParameter_PassesDefaultExplicitly()
     {
-        // The engine declares every new parameter with its default, so the new member's c is optional. The wrapper must still
-        // pass 0 rather than omit it, and the migrated caller that omitted nothing gets the 0 added.
+        // Wrapper mode declares every new parameter required, so the new member's c has no default. The wrapper must pass 0
+        // explicitly, and the migrated caller gets the 0 added.
         const string calcSource = @"public class Calc
 {
     public int Add(int a, int b) => a + b;
@@ -194,7 +195,8 @@ public class ChangeSignatureWrapperTests
         Assert.That(result.Error, Is.Null);
         Assert.That(result.SkippedCallSites, Is.Empty);
         var calcAfter = result.Changes["Calc.cs"];
-        Assert.That(calcAfter, Does.Contain("int c = 0"), "The new member declares the optional parameter");
+        Assert.That(calcAfter, Does.Contain("int a, int b, int c)"), "The new member declares the new parameter required");
+        Assert.That(calcAfter, Does.Not.Contain("c = 0"), "No declared default that would compete with the wrapper");
         Assert.That(calcAfter, Does.Contain("this.Add(a, b, 0);"), "The wrapper passes the default explicitly");
         Assert.That(result.Changes["Caller.cs"], Does.Contain("calc.Add(3, 4, 0)"), "The migrated caller passes the default explicitly");
 
@@ -502,7 +504,7 @@ public class ChangeSignatureWrapperTests
         SetFiles(
             ("Saver.cs", "public class Saver { public int Save(int id, string name) => id; }"),
             ("Caller.cs", "public class Caller { public void Run(Saver s) { System.Func<int, string, int> f = s.Save; } }"));
-        var result = await _refactoringEngine.ChangeSignatureAsync("Saver.cs", "Save", new SignatureParameterSpec[] { new ExistingParameterSpec(1), new ExistingParameterSpec(0) });
+        var result = await _refactoringEngine.ChangeSignatureAsync("Saver.cs", "Save", new SignatureParameterSpec[] { new ExistingParameterSpec(1), new ExistingParameterSpec(0) }, oldSignature: ChangeSignatureOldSignature.remove);
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.Error, Does.Contain("Could not rewrite 1 call site(s)"));
@@ -538,5 +540,192 @@ public class ChangeSignatureWrapperTests
         Assert.That(result.WrapperSignature, Is.Null);
         Assert.That(result.ReplacementSignature, Is.Null);
         Assert.That(result.MigratedCallSites, Is.Null);
+    }
+
+    private Task<ChangeSignatureResult> Auto(string filePath, string methodName, params SignatureParameterSpec[] parameters) =>
+    _refactoringEngine.ChangeSignatureAsync(filePath, methodName, parameters, oldSignature: ChangeSignatureOldSignature.auto);
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    public async Task ChangeSignature_Auto_AllCallersMigrate_RemovesOldSignatureAndLeavesWrapperFieldsNull()
+    {
+        const string saverSource = @"public class Saver
+{
+    public int Save(int id, string name) => id + name.Length;
+    public int Run() => Save(1, ""x"");
+}";
+        const string callerSource = @"public class Caller
+{
+    public int Use(Saver s) => s.Save(1, ""a"");
+}";
+        SetFiles(("Saver.cs", saverSource), ("Caller.cs", callerSource));
+        // No oldSignature argument: auto is the default.
+        var result = await _refactoringEngine.ChangeSignatureAsync("Saver.cs", "Save", new SignatureParameterSpec[] { new ExistingParameterSpec(1), new ExistingParameterSpec(0) });
+
+        Assert.That(result.IsError, Is.False, result.Error);
+        Assert.That(result.OldSignatureOutcome, Is.EqualTo(ChangeSignatureOldSignature.remove), "Every caller migrates, so the old signature is removed");
+        Assert.That(result.SkippedCallSites, Is.Empty);
+        Assert.That(result.WrapperSignature, Is.Null);
+        Assert.That(result.ReplacementSignature, Is.Null);
+        Assert.That(result.MigratedCallSites, Is.Null);
+        Assert.That(result.Changes["Saver.cs"], Does.Not.Contain("Obsolete"), "No wrapper is kept");
+        Assert.That(result.Changes["Saver.cs"], Does.Contain("Save(string name, int id)"), "The member has the new order");
+        Assert.That(result.Changes["Caller.cs"], Does.Contain("s.Save(\"a\", 1)"), "The invocation is migrated to the new order");
+
+        AssertCompiles(CompileFiles(AfterChange(result.Changes, ("Saver.cs", saverSource), ("Caller.cs", callerSource))));
+    }
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    public async Task ChangeSignature_Auto_MethodGroupCaller_KeepsWrapperAndListsSkippedCallSite()
+    {
+        const string saverSource = @"public class Saver
+{
+    public int Save(string name, int id) => id + name.Length;
+}";
+        const string callerSource = @"public class Caller { public void Run(Saver s) { System.Func<string, int, int> f = s.Save; } }";
+        SetFiles(("Saver.cs", saverSource), ("Caller.cs", callerSource));
+        var result = await Auto("Saver.cs", "Save", new ExistingParameterSpec(1), new ExistingParameterSpec(0));
+
+        Assert.That(result.IsError, Is.False, result.Error);
+        Assert.That(result.OldSignatureOutcome, Is.EqualTo(ChangeSignatureOldSignature.keepAsDeprecatedWrapper), "A method-group caller cannot migrate, so the eligible method keeps a wrapper");
+        Assert.That(result.WrapperSignature, Is.EqualTo("Save(string, int)"));
+        Assert.That(result.ReplacementSignature, Is.EqualTo("Save(int, string)"));
+        Assert.That(result.SkippedCallSites, Has.Count.EqualTo(1));
+        Assert.That(result.SkippedCallSites[0].FilePath.ToString(), Does.EndWith("Caller.cs"), "The skipped call site names its file");
+        Assert.That(result.SkippedCallSites[0].LineNumber, Is.EqualTo(1), "The skipped call site names its line");
+        Assert.That(result.Changes["Saver.cs"], Does.Contain("[global::System.Obsolete(\"Use Save(int, string)\")]"), "The wrapper is kept");
+
+        var compilation = CompileFiles(AfterChange(result.Changes, ("Saver.cs", saverSource), ("Caller.cs", callerSource)));
+        AssertCompiles(compilation);
+        AssertWrapperBindsToNewMember(compilation, "Saver.cs", "Save", "int", "string");
+    }
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    public async Task ChangeSignature_Auto_VirtualMethodWithUnmigratedCaller_IsRefusedAndNamesCallerAndReason()
+    {
+        SetFiles(
+            ("Base.cs", "public class Base { public virtual int Add(int a, int b) => a + b; }"),
+            ("Caller.cs", "public class Caller { public void Run(Base b) { System.Func<int, int, int> f = b.Add; } }"));
+        var result = await Auto("Base.cs", "Add", new ExistingParameterSpec(1), new ExistingParameterSpec(0));
+
+        Assert.That(result.IsError, Is.True, "Auto must refuse: the caller cannot migrate and no wrapper is possible");
+        Assert.That(result.Error, Does.Contain("Nothing was changed. Could not rewrite 1 call site(s)"));
+        Assert.That(result.Error, Does.Contain("Caller.cs:1"), "The refusal names the caller file and line");
+        Assert.That(result.Error, Does.Contain("cannot wrap 'Add': it is virtual, abstract, override or an interface member"), "The refusal names why a wrapper is not possible");
+        Assert.That(result.Changes, Is.Empty, "A refused change writes nothing");
+        Assert.That(result.OldSignatureOutcome, Is.Null, "No outcome on an error");
+    }
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    public async Task ChangeSignature_Auto_GenericMethod_MigratesEveryCallerAndCompiles()
+    {
+        const string pickerSource = @"public class Picker
+{
+    public T Pick<T>(T first, T second) where T : class => first ?? second;
+    public string Run() => Pick(""a"", ""b"");
+}";
+        const string consumerSource = @"public class Consumer
+{
+    public string Use(Picker p) => p.Pick<string>(""a"", ""b"");
+}";
+        SetFiles(("Picker.cs", pickerSource), ("Consumer.cs", consumerSource));
+        var result = await Auto("Picker.cs", "Pick", new ExistingParameterSpec(0), new ExistingParameterSpec(1), new NewParameterSpec("id", "int", "0"));
+
+        Assert.That(result.IsError, Is.False, result.Error);
+        Assert.That(result.OldSignatureOutcome, Is.EqualTo(ChangeSignatureOldSignature.remove));
+        Assert.That(result.SkippedCallSites, Is.Empty);
+        Assert.That(result.Changes["Picker.cs"], Does.Contain("where T : class"), "The constraint is kept");
+        Assert.That(result.Changes["Picker.cs"], Does.Contain("Pick(\"a\", \"b\", 0)"), "The in-file call passes the default");
+        Assert.That(result.Changes["Consumer.cs"], Does.Contain("p.Pick<string>(\"a\", \"b\", 0)"), "The cross-file generic call is migrated");
+
+        AssertCompiles(CompileFiles(AfterChange(result.Changes, ("Picker.cs", pickerSource), ("Consumer.cs", consumerSource))));
+    }
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    public async Task ChangeSignature_KeepAsDeprecatedWrapper_NewParameterWithDefault_IsRequiredOnMemberAndOldShapedCallerStaysOnWrapper()
+    {
+        const string saverSource = @"public class Saver
+{
+    public int Save(string name, int id) => id + name.Length;
+}";
+        const string callerSource = @"public class Caller { public void Run(Saver s) { System.Func<string, int, int> f = s.Save; } }";
+        SetFiles(("Saver.cs", saverSource), ("Caller.cs", callerSource));
+        var result = await KeepWrapper("Saver.cs", "Save", new ExistingParameterSpec(1), new ExistingParameterSpec(0), new NewParameterSpec("scale", "int", "2"));
+
+        Assert.That(result.IsError, Is.False, result.Error);
+        Assert.That(result.OldSignatureOutcome, Is.EqualTo(ChangeSignatureOldSignature.keepAsDeprecatedWrapper));
+        Assert.That(result.SkippedCallSites, Has.Count.EqualTo(1), "The method-group caller is left on the wrapper");
+        Assert.That(result.Changes["Saver.cs"], Does.Contain("int id, string name, int scale)"), "The new member declares the added parameter");
+        Assert.That(result.Changes["Saver.cs"], Does.Not.Contain("scale ="), "The new member has no default: a defaulted overload would compete with the wrapper");
+        Assert.That(result.Changes["Caller.cs"], Does.Contain("System.Func<string, int, int> f = s.Save;"), "The old-shaped caller text is unchanged");
+
+        var compilation = CompileFiles(AfterChange(result.Changes, ("Saver.cs", saverSource), ("Caller.cs", callerSource)));
+        AssertCompiles(compilation);
+        AssertWrapperBindsToNewMember(compilation, "Saver.cs", "Save", "int", "string", "int");
+    }
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    public async Task ChangeSignature_Auto_ParamsExpandedCall_MigratesWithEveryArgumentAndCompiles()
+    {
+        const string totalsSource = @"public class Totals
+{
+    public int Total(params int[] values) => values.Length;
+    public int Run() => Total(1, 2, 3);
+}";
+        const string callerSource = @"public class Caller
+{
+    public int Use(Totals t) => t.Total(new[] { 4, 5 });
+}";
+        SetFiles(("Totals.cs", totalsSource), ("Caller.cs", callerSource));
+        var result = await Auto("Totals.cs", "Total", new NewParameterSpec("label", "string", "\"x\""), new ExistingParameterSpec(0));
+
+        Assert.That(result.IsError, Is.False, result.Error);
+        Assert.That(result.OldSignatureOutcome, Is.EqualTo(ChangeSignatureOldSignature.remove), "Every call site migrates, so the old signature is removed");
+        Assert.That(result.SkippedCallSites, Is.Empty);
+        Assert.That(result.Changes["Totals.cs"], Does.Contain("Total(\"x\", 1, 2, 3)"), "The expanded call keeps all three params arguments after the new parameter");
+        Assert.That(result.Changes["Totals.cs"], Does.Not.Contain("Obsolete"), "No wrapper is kept");
+        Assert.That(result.Changes["Caller.cs"], Does.Contain("t.Total(\"x\", new[] { 4, 5 })"), "The array-form call is migrated");
+
+        AssertCompiles(CompileFiles(AfterChange(result.Changes, ("Totals.cs", totalsSource), ("Caller.cs", callerSource))));
+    }
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    public async Task ChangeSignature_RemoveMode_NonTrailingNewParameter_IsRequiredAndCompilesWithoutCS1737()
+    {
+        const string pairSource = @"public class Pair
+{
+    public int M(int a, int b) => a + b;
+    public int Run() => M(1, 2);
+}";
+        const string callerSource = @"public class Caller
+{
+    public int Use(Pair p) => p.M(3, 4);
+}";
+        SetFiles(("Pair.cs", pairSource), ("Caller.cs", callerSource));
+        var result = await _refactoringEngine.ChangeSignatureAsync("Pair.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(0), new NewParameterSpec("c", "int", "0"), new ExistingParameterSpec(1) }, oldSignature: ChangeSignatureOldSignature.remove);
+
+        Assert.That(result.IsError, Is.False, result.Error);
+        Assert.That(result.OldSignatureOutcome, Is.EqualTo(ChangeSignatureOldSignature.remove));
+        Assert.That(result.Changes["Pair.cs"], Does.Contain("int a, int c, int b)"), "The added parameter is declared required, so the later required parameter is legal");
+        Assert.That(result.Changes["Pair.cs"], Does.Not.Contain("int c = 0"), "No default on the added parameter in front of a required one");
+        Assert.That(result.Changes["Pair.cs"], Does.Contain("M(1, 0, 2)"), "The declaration's call site receives the default in its new position");
+        Assert.That(result.Changes["Caller.cs"], Does.Contain("p.M(3, 0, 4)"), "The cross-file call receives the default in its new position");
+
+        var compilation = CompileFiles(AfterChange(result.Changes, ("Pair.cs", pairSource), ("Caller.cs", callerSource)));
+        Assert.That(compilation.GetDiagnostics().Where(d => d.Id == "CS1737"), Is.Empty, "An optional parameter before a required one is CS1737");
+        AssertCompiles(compilation);
     }
 }
