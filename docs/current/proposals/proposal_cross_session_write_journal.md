@@ -1,0 +1,178 @@
+# Cross-session write journal: attribute file changes to the server instance that made them
+
+**Status:** PROPOSED 2026-11-05. Awaiting review; nothing built. File:line citations come from an audit on 2026-10-13 and have not been re-verified since.
+
+## Motivation
+
+Several RoslynSentinel server instances run against the same repo at once (one stdio process per
+window, each launched from its own `<repoHash>-<8 hex>` instance folder by
+`scripts/roslynsentinel-mcp-launch.ps1`, lines 141-177). They share a working tree but not memory:
+
+- A server's `FileSystemWatcher` (`PersistentWorkspaceManager.SetupWatcher`, lines 709-725) cannot tell
+  a sibling session's write from an editor or shell write. Both land in `_externalChanges`
+  (line 956), and a later write to a flagged file halts the session (`SessionHalted`,
+  lines 1509-1513). Self-writes are filtered by `_internalChanges` and `_knownFileHashes`, which are
+  per-process, so a sibling's write is "external" by construction.
+- `git status` shows dirty files with no indication of which session, or why. The `reason` argument
+  every tool call must supply (`ToolCallReason`, mandatory, at least 10 chars with a space,
+  `RoslynSentinel.Common/ToolCallReason.cs:14`) is discarded after the call.
+- Existing operation blobs (`.roslynsentinel/operations/`) do not fill the gap: `Reason` is null in
+  every blob inspected (0 matches for `"Reason": "` on disk; no blob-building path receives the tool
+  `reason`), there is no session id, they are written after the files are on disk, and they carry
+  full source text rather than hashes.
+
+The goal is to let a server answer "who wrote this file, when, and why" and to tell a sibling write
+from a genuinely external one.
+
+## Proposal
+
+### Journal location and layout (decided direction, details open)
+
+One append-only JSONL file per server instance, under the git common dir so it is never a dirty file
+and is shared by worktrees:
+
+`<git-common-dir>/roslynsentinel/sessions/<sid>.jsonl`
+
+`<sid>` is the instance folder name (`<repoHash>-<token>`), derived in C# from
+`AppContext.BaseDirectory` (the exe lives in `<instance>\Advanced\`). Runs outside the launch wrapper
+(HTTP fallback, test hosts) fall back to a generated GUID. A restarted instance gets a new token, so a
+new sid, which is correct: its in-memory state is gone.
+
+One writer per file means no cross-process locking and no corruption from concurrent appends. Readers
+merge all files. The repo root is rejected as a location because the file would show as untracked and
+needs a drift-detector exclusion, which is the problem being solved.
+
+### Entry format
+
+Line 1 is a header: `{"v":1,"sid":...,"pid":...,"processStartUtc":...,"binaryPath":...}`.
+Later lines are entries:
+
+`{"v":1,"ts":...,"tool":...,"reason":...,"changeId":...,"files":[{"path":...,"hashBefore":...,"hashAfter":...,"op":"write|delete|create"}]}`
+
+- Hashes, not content. Content stays in the operation blobs, linked by `changeId` where one exists
+  ("undo available").
+- `reason` is capped in length and ASCII-sanitised.
+- Git mutations log commit hashes so entries can later be marked resolved.
+
+### Where the append happens
+
+At the write chokepoint, `PersistentWorkspaceManager.ApplyProposedChangesAsync` (line 1439), **before**
+files are written, with `hashAfter` computed from the content about to be written. Reasons:
+
+- The blob writer runs after the apply returns ("outside the chokepoint by design",
+  `docs/current/reference-code-file-write-paths-v1.md:97`), so the file is on disk before any entry
+  exists. A sibling's watcher event (500 ms debounce) can fire first and find nothing.
+- Blob coverage is incomplete: no blob for `UndoLastApply`, `RetryFailedChanges`,
+  `MsToolAugmentEngine` format/using-sort, and Git operations; the Asyncify/`AsyncBatchEngine` batch
+  paths were only partly traced.
+
+The chokepoint signature does not carry tool name or reason, and there is no `AsyncLocal` in the
+codebase. Rather than add parameters across 50 call sites in 11 files, set an
+`AsyncLocal<ToolCallContext>` (tool name, reason) once at the tool boundary, in a request filter
+beside the existing `AddDriftFilter` (`ServiceRegistrationExtensionsBasic.cs:513`), and read it in the
+chokepoint. When the context is absent (internal callers), log `tool: null`.
+
+Git mutating operations (`GitImpl`: commit, restore, checkout, reset, revert, stash pop) bypass both
+the chokepoint and the blobs and need their own append.
+
+### Drift-detector integration
+
+In `OnFileSystemChanged`, before `_externalChanges.Add` (line 956), hash the on-disk file and look it
+up in the other sessions' journals:
+
+- Equals another session's `hashAfter`: record as `sibling session <sid>: <reason>` and adopt the
+  new content (refresh `_knownFileHashes`, reload the document) instead of flagging external. Whether
+  to adopt automatically or only annotate is an open question below.
+- No match: external (editor, built-in Edit, shell). The journal cannot name an external writer.
+
+`hashBefore` makes interleaved edits by two sessions to one file visible, which a single hash cannot.
+
+### Reporting
+
+- `Git(status)` and `ExternalFileDrift(List/Status)` annotate each dirty file with last writer sid,
+  reason, and liveness (live / dead / unknown). Files with no journal match read "external (no known
+  session)".
+- The journal records every server write, not only watched `.cs`/`.csproj`/`.sln`, so non-source
+  files written via the chokepoint are attributed too (whether `WriteFile` on Markdown/JSON goes
+  through the chokepoint is unverified).
+
+### Liveness and cleanup
+
+- Liveness: header `pid` + `processStartUtc` (start time guards against PID reuse). A missing instance
+  directory also means dead, but a present one proves nothing: the launch sweep only removes folders
+  at least 3600 s old with no live server exe (launch script lines 192-276, `$minimumAgeForSweep` at
+  line 208; the comment there says 15 s, which disagrees with the code), so a dead session's folder can
+  linger.
+- Cleanup: drop a session's journal when the session is dead and every file it touched is clean
+  (committed or reverted), so journal lifetime follows the git tree. A crashed session's entries stay
+  until then, which is the point.
+- Failure policy: any journal I/O failure degrades to a logged warning; it never blocks or halts an
+  edit.
+
+## Alternatives considered, not pursued
+
+- **Shared SQLite DB (WAL) in `.git/roslynsentinel/`.** Gives transactions, atomic per-file leases
+  and cheap queries. Rejected for now: adds a native dependency and a schema that must tolerate
+  sessions running different binary versions; WAL does not work on network filesystems; stale rows
+  need heartbeats and GC. Attribution and reconciliation need none of the atomicity. Revisit if the
+  goal becomes conflict prevention (leases) rather than explanation. LocalDB was dismissed outright
+  (Windows-only, install burden).
+- **Journal in the repo root.** Shows as untracked, needs gitignore and a drift-detector exclusion.
+- **Extend the operation blobs instead of a new journal.** Attractive (one writer, existing
+  `changeId`, `UndoLastApply`/`GetOperationDetail` already read them) but: writes land after the
+  files, coverage has the gaps listed above, no retention exists (blobs from 2026-06-08 remain),
+  writes are not atomic, there is no schema version, and each blob holds full source so a hash lookup
+  means scanning hundreds of large files. The blob `Reason` also needs the same `AsyncLocal` plumbing,
+  so reuse saves nothing there. Keep blobs as the payload/undo store; link by `changeId`.
+- **Add `toolName`/`reason` parameters to `ApplyProposedChangesAsync`.** 50 call sites in 11 files for
+  data an ambient context carries equally well.
+- **Shell/process-level locking or a lock file per repo.** Serialises sessions rather than informing
+  them; wrong goal.
+
+## Open questions
+
+- Auto-adopt a sibling's write that matches a journal `hashAfter`, or only annotate and still
+  require acknowledgement? Auto-adopt removes the false-positive halts but means trusting the journal.
+- Clock handling: ordering across files relies on timestamps. Fine on one machine; does the repo ever
+  live on a share?
+- Does the `AsyncLocal` survive every path into the chokepoint (batch tools, background tasks,
+  `RetryFailedChanges`)? Untraced.
+- `Git` mutations: which hook point in `GitImpl`, and how to record resulting file hashes cheaply
+  after a checkout/reset touching many files.
+- Journal retention if a session dies with dirty files nobody ever commits.
+- Worktrees: is `git rev-parse --git-common-dir` the right root for sessions in different worktrees
+  of one repo, or should the journal be per-worktree?
+- Whether the `Outcome` serialisation drift in old blobs (`"succeeded"`, `1`, `"Succeeded"`) breaks
+  loading in `UndoLastApply`/`GetOperationDetail` is unverified; it affects only the `changeId` link,
+  not the journal.
+
+## Cost / risk
+
+- Touches the write chokepoint (hot path, every edit): appends add I/O and must be cheap and
+  non-blocking. A bug here can affect all mutating tools, so failure must degrade silently.
+- New request filter and `AsyncLocal` at the tool boundary; the central filter pipeline order matters
+  (see memory `reference_central_mcp_request_filter_pipeline`).
+- Drift detector change alters when `SessionHalted` triggers; needs tests for sibling-match,
+  no-match, and journal-unavailable cases.
+- Adds on-disk state under `.git` that must tolerate concurrent versions of the format (hence the `v`
+  field and ignore-unknown-fields readers).
+- Reason text is model-written; it stays local under `.git` but should still be length-capped.
+
+### Separate defects found during the audit (not part of this proposal)
+
+Worth their own TODO entries:
+
+- No retention for `.roslynsentinel/operations/` blobs.
+- `.roslynsentinel/` is ignored only by the blanket `*.json` gitignore rule.
+- `UndoLastApply` cannot undo a file creation (null `BeforeSource` is filtered out; returns
+  `NoReversibleItems`), and `UndoLastApply` itself writes no blob.
+- `Reason` is never populated on successful blob items.
+
+## Related
+
+- `docs/current/reference-code-file-write-paths-v1.md` (write paths, blob writer "outside the chokepoint").
+- `docs/current/references/reference_architecture_map.md` (chokepoint, request pipeline).
+- [external-drift-hard-blocker.md](../ideas/external-drift-hard-blocker.md) (existing drift idea; not re-read for this proposal).
+- Memories: `project_per_session_mcp_server_isolation`, `project_externaldrift_false_positive_cross_check_gitstatus`,
+  `project_concurrent_sessions`, `project_operation_blob_json_gotchas`,
+  `reference_central_mcp_request_filter_pipeline`.
