@@ -80,14 +80,36 @@ internal static class GitHunkParser
     public static string BuildPatch(GitFileDiff diff, IReadOnlyCollection<int> indexes)
     {
         var sb = new StringBuilder(diff.HeaderText);
+        var delta = 0;
         foreach (var index in indexes.Distinct().OrderBy(i => i))
         {
             if (index < 1 || index > diff.Hunks.Count)
                 throw new ArgumentOutOfRangeException(nameof(indexes), index,
                     $"Hunk index must be between 1 and {diff.Hunks.Count}.");
-            sb.Append(diff.Hunks[index - 1].RawText);
+            var hunk = diff.Hunks[index - 1];
+            sb.Append(WithNewStart(hunk, delta));
+            delta += hunk.NewCount - hunk.OldCount;
         }
         return sb.ToString();
+    }
+
+    // Rewrites only the new-start number of a hunk's first line, so the body stays byte-exact.
+    // The header position must match the partial patch: a hunk with no old lines (pure insertion or
+    // pure deletion) has nothing else to position it, and git reads its position from the header.
+    private static string WithNewStart(GitHunk hunk, int delta)
+    {
+        var text = hunk.RawText;
+        var lineEnd = text.IndexOf('\n');
+        var firstLine = lineEnd < 0 ? text : text[..lineEnd];
+        var m = HunkHeaderRegex.Match(firstLine);
+        if (!m.Success)
+            return text;
+
+        var newStart = hunk.OldCount == 0 ? hunk.OldStart + 1 + delta
+            : hunk.NewCount == 0 ? hunk.OldStart - 1 + delta
+            : hunk.OldStart + delta;
+        var ns = m.Groups["ns"];
+        return text[..ns.Index] + newStart.ToString(CultureInfo.InvariantCulture) + text[(ns.Index + ns.Length)..];
     }
 
     /// <summary>Parses hunk ids given as CSV ("1,3") or a JSON array ("[1,3]" / "[\"1\",\"3\"]"); duplicates collapse, result ascending.</summary>

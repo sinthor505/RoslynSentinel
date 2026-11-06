@@ -2868,6 +2868,28 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    public async Task Git_Stage_HunkIds_LowerInsertionAfterUnselectedInsertion_LandsAfterItsNeighbourAsync()
+    {
+        var lines = CommitNumberedFile("a.txt", 30);
+        var edited = new List<string>(lines);
+        edited.Insert(15, "inserted after 15"); // hunk 2, lower in the file: staged alone
+        edited.InsertRange(2, new[] { "top 1", "top 2", "top 3", "top 4", "top 5" }); // hunk 1, near the top: not staged
+        WriteLines("a.txt", edited);
+        var listing = await ListHunksAsync("a.txt");
+
+        var result = await StageHunksAsync("a.txt", hunkIds: "2", hunkFingerprint: listing.Fingerprint);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var staged = (GitStageHunksResult)result.SuccessData!;
+        Assert.That(staged.RemainingUnstagedHunks, Is.EqualTo(1));
+        var index = IndexContent("a.txt").Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+        var neighbour = index.IndexOf("line 15");
+        Assert.That(neighbour, Is.GreaterThanOrEqualTo(0), "original line 15 must be in the staged blob.");
+        Assert.That(index[neighbour + 1], Is.EqualTo("inserted after 15"));
+        Assert.That(index.Where(l => l.StartsWith("top ", StringComparison.Ordinal)), Is.Empty);
+    }
+
+    [Test]
     public async Task Git_Stage_HunkIds_ThenCommit_CommitsOnlyStagedHunksAsync()
     {
         var lines = CommitNumberedFile("a.txt", 30);

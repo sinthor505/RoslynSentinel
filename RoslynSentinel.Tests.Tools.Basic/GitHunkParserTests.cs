@@ -122,7 +122,8 @@ public class GitHunkParserTests
 
         var patch = GitHunkParser.BuildPatch(diff, [3, 1]);
 
-        var expected = FileHeader + hunk1 + hunk3; // ascending order, verbatim
+        // Ascending order. Hunk 2 is unselected and hunk 1 nets 0, so hunk 3 starts at 20, not the full-file 21.
+        var expected = FileHeader + hunk1 + "@@ -20 +20 @@\n-x\r\n+y\r\n"; // header keeps its bare LF, as in the input
         Assert.That(Encoding.Latin1.GetBytes(patch), Is.EqualTo(Encoding.Latin1.GetBytes(expected)));
     }
 
@@ -148,6 +149,24 @@ public class GitHunkParserTests
         var diff = GitHunkParser.Parse(TwoHunks);
 
         Assert.Throws<ArgumentOutOfRangeException>(() => GitHunkParser.BuildPatch(diff, [3]));
+    }
+
+    [Test]
+    public void BuildPatch_SelectedSubset_RewritesNewStartOnlyForPureHunks()
+    {
+        // Hunk 1 adds two net lines. With hunk 1 unselected, hunks 2 and 3 must not carry its shift.
+        var text = FileHeader +
+                   "@@ -3 +3,3 @@\n-old3\n+new3a\n+new3b\n+new3c\n" +
+                   "@@ -10,0 +12,1 @@\n+ins\n" +
+                   "@@ -20,2 +23,0 @@\n-x\n-y\n";
+        var diff = GitHunkParser.Parse(text);
+
+        var patch = GitHunkParser.BuildPatch(diff, [2, 3]);
+
+        var expected = FileHeader +
+                       "@@ -10,0 +11,1 @@\n+ins\n" +
+                       "@@ -20,2 +20,0 @@\n-x\n-y\n";
+        Assert.That(patch, Is.EqualTo(expected));
     }
 
     // ---- Fingerprint --------------------------------------------------------------------------
