@@ -99,7 +99,10 @@ $repo    = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\', '/
 $repoFwd = $repo.Replace('\', '/')
 
 # Implementer / implementer-sweep briefs for the tier cases. $files is a count of distinct .cs paths.
-$oosText = 'Out of scope: do not commit; no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed'
+# An existing out-of-repo directory, as written in a command (back slashes, and forward slashes for Bash).
+$outRepo    = $env:TEMP
+$outRepoFwd = $outRepo.Replace('\', '/')
+$oosText ='Out of scope: do not commit; no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed'
 function New-Brief([int]$files, [string]$tier, [string]$limits = 'Limits: see tier file', [string]$operation = '') {
     $list = (1..$files | ForEach-Object { "P/F$_.cs" }) -join ', '
     $b = "Files: $list`nSymbols: x`nCall sites: none`nAcceptance: clean Build"
@@ -343,6 +346,50 @@ $cases = @(
        p = @{ tool_name = 'Bash'; tool_input = @{ command = "git -C `"$env:TEMP`" commit -m x" } } }
     @{ n = 'git -C <in-repo path> status stays covered'; want = 'DENY'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = "git -C `"$PSScriptRoot`" status" } } }
+    # --- a path held in a variable in the command text (single-quoted/escaped so the variable reaches the hook unexpanded) ---
+    @{ n = 'var: $r=<out-of-repo>; git -C $r log'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "`$r='$outRepo'; git -C `$r log -1" } } }
+    @{ n = 'var: git -C "$r" log (quoted use)'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "`$r='$outRepo'; git -C `"`$r`" log -1" } } }
+    @{ n = 'var: git -C ${r} log (braced use)'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "`$r='$outRepo'; git -C `${r} log -1" } } }
+    @{ n = 'var: Bash r=<out-of-repo>; git -C "$r" log'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = "r=$outRepoFwd; git -C `"`$r`" log -1" } } }
+    @{ n = 'var: in-repo path in $r stays covered'; want = 'DENY'; match = 'The Git tool only sees this repo'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "`$r='$repo'; git -C `$r log" } } }
+    @{ n = 'var: $r assigned twice stays covered'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "`$r='$outRepo'; `$r='$repo'; git -C `$r log -1" } } }
+    @{ n = 'var: $r reassigned with += stays covered'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "`$r='$outRepo'; `$r += 'x'; git -C `$r log -1" } } }
+    @{ n = 'var: value built from another variable stays covered'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "`$b='$outRepo'; `$r=`"`$b`"; git -C `$r log -1" } } }
+    @{ n = 'var: $r used before its assignment stays covered'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "git -C `$r log -1; `$r='$outRepo'" } } }
+    @{ n = 'var: out-of-repo $r with git commit stays covered'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "`$r='$outRepo'; git -C `$r commit -m x" } } }
+    @{ n = 'var: $r read of out-of-repo doc + gci *.cs listing'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "`$r='$outRepo'; Get-Content `"`$r\doc\license.txt`"; Get-ChildItem `$r -Recurse -Filter *.cs" } } }
+    # --- reader rule per statement: the reader verb and the .cs token must be in the same statement ---
+    @{ n = 'stmts: Get-Content <out-of-repo txt>; gci <out-of-repo> *.cs'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Get-Content $outRepo\doc\license.txt; Get-ChildItem $outRepo -Recurse -Filter *.cs" } } }
+    @{ n = 'stmts: Get-Content notes.txt; gci -Filter *.cs'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Get-Content notes.txt; Get-ChildItem -Recurse -Filter *.cs' } } }
+    @{ n = 'stmts: Get-Content Foo.cs; Get-ChildItem'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Get-Content Foo.cs; Get-ChildItem' } } }
+    @{ n = 'stmts: Get-ChildItem *.cs | Get-Content (pipeline is one statement)'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Get-ChildItem *.cs | Get-Content' } } }
+    @{ n = 'stmts: $f = Get-ChildItem *.cs; Get-Content $f (variable carries the .cs)'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '$f = Get-ChildItem *.cs; Get-Content $f' } } }
+    @{ n = 'stmts: gci *.cs -OutVariable f; Get-Content $f'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Get-ChildItem *.cs -OutVariable f; Get-Content $f' } } }
+    @{ n = 'stmts: $l += inside a *.cs pipeline; Get-Content $l'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '$l = @(); Get-ChildItem *.cs | ForEach-Object { $l += $_ }; Get-Content $l' } } }
+    @{ n = 'stmts: gci *.cs -ov $f; Get-Content $f'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Get-ChildItem *.cs -ov f; Get-Content $f' } } }
+    @{ n = 'stmts: foreach over *.cs with an inner ; stays one statement'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'foreach ($f in Get-ChildItem *.cs) { $n = 1; Get-Content $f }' } } }
+    @{ n = 'stmts: cd <out-of-repo>; Get-Content *.cs (cd in an earlier statement)'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Set-Location $outRepo; Get-Content *.cs" } } }
     @{ n = 'git -C <nonexistent path> status stays covered (fail-safe)'; want = 'DENY'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git -C /no/such/path/at/all status' } } }
     @{ n = 'git -C <sibling dir sharing repo-name prefix> status allowed (not a substring match)'; want = 'allow'

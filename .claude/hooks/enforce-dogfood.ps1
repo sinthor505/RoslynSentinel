@@ -196,6 +196,7 @@ function Convert-LocationPath([string]$p) {
 # the path after `git -C`, the value of `--git-dir=`/`--git-dir <p>`, and the value of -WorkingDirectory.
 # Returned strings are unquoted and git-bash mapped, but NOT resolved; relative ones stay relative.
 # Callers must wrap the call in @() (a lone result unrolls to a scalar).
+# A path held in a variable is resolved beforehand by Expand-SimpleAssignments (simple single assignments only).
 function Get-CommandLocations([string]$scan) {
     $found = New-Object 'System.Collections.Generic.List[string]'
     if (-not $scan) { return @() }
@@ -264,7 +265,7 @@ function Test-AllLocationsOutside([string[]]$locs, [switch]$ResolveExisting) {
 # command's explicit locations (cd/Set-Location/-WorkingDirectory/git -C) and passes only when there is at least
 # one and all are outside; a relative token with `..`, `$` or `~` is unresolvable and blocks. No tokens => false.
 # -ExtraTokens: redirect targets (`> x.cs`), which the tokenizer does not split on.
-function Test-ShellCsTargetsOutsideRepo([string]$scan, [switch]$QuotedNeedsDir, [string[]]$ExtraTokens = @()) {
+function Test-ShellCsTargetsOutsideRepo([string]$scan, [switch]$QuotedNeedsDir, [string[]]$ExtraTokens = @(), [string]$LocationScan = '') {
     $toks = New-Object 'System.Collections.Generic.List[string]'
     [void](Test-CsPathToken $scan -QuotedNeedsDir:$QuotedNeedsDir -Collected $toks)
     foreach ($e in $ExtraTokens) { if ($e) { $toks.Add($e) } }
@@ -277,10 +278,180 @@ function Test-ShellCsTargetsOutsideRepo([string]$scan, [switch]$QuotedNeedsDir, 
             continue
         }
         if ($p -match '(^|[\\/])\.\.([\\/]|$)' -or $p -match '[$~]') { return $false }
-        if ($null -eq $locsOutside) { $locsOutside = Test-AllLocationsOutside @(Get-CommandLocations $scan) }
+        # -LocationScan: the whole command, when $scan is one statement of it (a `cd` in an earlier statement still counts).
+        if ($null -eq $locsOutside) { $locsOutside = Test-AllLocationsOutside @(Get-CommandLocations $(if ($LocationScan) { $LocationScan } else { $scan })) }
         if (-not $locsOutside) { return $false }
     }
     return $true
+}
+
+# --- Statements and simple variable assignments (deviation: shared by the reader rule and the git rule) ---
+
+# Splits a shell command into statements at ; && || and newlines that are outside quotes and outside (...) / {...}
+# nesting. A single & is PowerShell's call operator and a single | stays inside its pipeline, so neither splits.
+# Quote handling matches Test-CsPathToken: a quote with no closing partner is an ordinary character.
+# Returns objects with Start (offset into $s) and Text; callers must wrap the call in @().
+function Get-ShellStatements([string]$s) {
+    $result = New-Object 'System.Collections.Generic.List[object]'
+    if ([string]::IsNullOrEmpty($s)) { return $result.ToArray() }
+    $n = $s.Length; $start = 0; $depth = 0; $i = 0
+    while ($i -lt $n) {
+        $ch = $s[$i]
+        if ($ch -eq [char]39 -or $ch -eq [char]34) {
+            $end = $s.IndexOf($ch, $i + 1)
+            if ($end -gt $i) { $i = $end + 1 } else { $i++ }
+            continue
+        }
+        if ($ch -eq [char]40 -or $ch -eq [char]123) { $depth++ }
+        elseif ($ch -eq [char]41 -or $ch -eq [char]125) { if ($depth -gt 0) { $depth-- } }
+        elseif ($depth -eq 0) {
+            $sepLen = 0
+            if ($ch -eq [char]59 -or $ch -eq [char]10) { $sepLen = 1 }
+            elseif (($ch -eq [char]38 -or $ch -eq [char]124) -and ($i + 1) -lt $n -and $s[$i + 1] -eq $ch) { $sepLen = 2 }
+            if ($sepLen -gt 0) {
+                $result.Add([pscustomobject]@{ Start = $start; Text = $s.Substring($start, $i - $start) })
+                $i += $sepLen; $start = $i
+                continue
+            }
+        }
+        $i++
+    }
+    $result.Add([pscustomobject]@{ Start = $start; Text = $s.Substring($start) })
+    return $result.ToArray()
+}
+
+# Replaces $name / ${name} in $t with the values in $vals (lower-case name -> literal text), except inside single
+# quotes (no expansion there) and where the reference is not a plain value use: followed by `:`, or - outside double
+# quotes - by `[`, `(` or `.name` (property or method access). Inside double quotes the bare value is inserted;
+# outside, the value is inserted as is, wrapped in double quotes when it contains whitespace.
+function Expand-VariableRefs([string]$t, [hashtable]$vals) {
+    $sb = New-Object System.Text.StringBuilder
+    $refPat = [regex]'\G\$(?:\{(?<n>\w+)\}|(?<n>\w+))'
+    $q = [char]0
+    $i = 0; $n = $t.Length
+    while ($i -lt $n) {
+        $ch = $t[$i]
+        if ($q -ne [char]0) {
+            if ($ch -eq $q) { $q = [char]0 }
+        }
+        elseif ($ch -eq [char]39 -or $ch -eq [char]34) {
+            if ($t.IndexOf($ch, $i + 1) -gt $i) { $q = $ch }
+        }
+        if ($ch -eq [char]36 -and $q -ne [char]39) {
+            $m = $refPat.Match($t, $i)
+            if ($m.Success) {
+                $key = $m.Groups['n'].Value.ToLowerInvariant()
+                if ($vals.ContainsKey($key)) {
+                    $after = $i + $m.Length
+                    $next = if ($after -lt $n) { $t[$after] } else { [char]0 }
+                    $skip = ($next -eq [char]58)
+                    if (-not $skip -and $q -ne [char]34) {
+                        if ($next -eq [char]91 -or $next -eq [char]40) { $skip = $true }
+                        elseif ($next -eq [char]46 -and ($after + 1) -lt $n -and ($t[$after + 1] -match '[A-Za-z_]')) { $skip = $true }
+                    }
+                    if (-not $skip) {
+                        $inner = [string]$vals[$key]
+                        $rep = if ($q -eq [char]34 -or $inner -notmatch '\s') { $inner } else { '"' + $inner + '"' }
+                        [void]$sb.Append($rep)
+                        $i += $m.Length
+                        continue
+                    }
+                }
+            }
+        }
+        [void]$sb.Append($ch)
+        $i++
+    }
+    return $sb.ToString()
+}
+
+# Scanned-copy-only substitution of simple variable assignments, so a path held in a variable
+# (`$r='C:\other'; git -C $r log`, Bash `r=/c/other; git -C "$r" log`) is judged by its literal value.
+# Resolved only when the whole command assigns the name exactly once, as a statement of its own whose value is a
+# quoted or bare literal with no `$`, quote or backtick in it; the value replaces later references only. Anything
+# else (reassigned, an expression, another variable in the value) is left alone and stays "cannot tell".
+# Fail-safe: on any error the original text is returned.
+function Expand-SimpleAssignments([string]$cmd) {
+    try {
+        if ([string]::IsNullOrEmpty($cmd) -or $cmd.IndexOf('=') -lt 0 -or $cmd.IndexOf('$') -lt 0) { return $cmd }
+        $stmts = @(Get-ShellStatements $cmd)
+        $assignPat = '^\s*(?:\$\{?(?<n>\w+)\}?\s*=\s*|(?<n>\w+)=)(?<v>''[^'']*''|"[^"$`]*"|[^\s;&|$"''`(){}<>*?=,@]+)\s*$'
+        $map = @{}
+        for ($k = 0; $k -lt $stmts.Count; $k++) {
+            $m = [regex]::Match($stmts[$k].Text, $assignPat)
+            if (-not $m.Success) { continue }
+            $name = $m.Groups['n'].Value
+            $key = $name.ToLowerInvariant()
+            if ($map.ContainsKey($key)) { continue }
+            $v = $m.Groups['v'].Value
+            $inner = if ($v.Length -ge 2 -and ($v[0] -eq [char]39 -or $v[0] -eq [char]34)) { $v.Substring(1, $v.Length - 2) } else { $v }
+            if ($inner.Length -eq 0 -or $inner -match '[$"''`]') { continue }
+            # Every form that could (re)assign the name, anywhere in the command, must be this one statement.
+            $esc = [regex]::Escape($name)
+            $alts = @(
+                ('(?<![\w$])\$\{?' + $esc + '\}?\s*(?:(?:[-+*/%]|\?\?)?=(?!=)|\+\+|--|\s+in\b)'),
+                ('\[ref\]\s*\$\{?' + $esc + '\b'),
+                ('-(?:Out|Error|Warning|Information)?Variable[\s:]+\$?' + $esc + '\b'),
+                ('(?<![\w$.\-])' + $esc + '=(?!=)')
+            )
+            $count = [regex]::Matches($cmd, ('(?:' + ($alts -join '|') + ')'), [System.Text.RegularExpressions.RegexOptions]::IgnoreCase).Count
+            if ($count -ne 1) { continue }
+            $map[$key] = @{ Idx = $k; Inner = $inner }
+        }
+        if ($map.Count -eq 0) { return $cmd }
+        $sb = New-Object System.Text.StringBuilder
+        $pos = 0
+        for ($k = 0; $k -lt $stmts.Count; $k++) {
+            $st = $stmts[$k]
+            [void]$sb.Append($cmd.Substring($pos, $st.Start - $pos))
+            $t = $st.Text
+            $active = @{}
+            foreach ($key in @($map.Keys)) { if ($map[$key].Idx -lt $k) { $active[$key] = $map[$key].Inner } }
+            if ($active.Count -gt 0) { $t = Expand-VariableRefs $t $active }
+            [void]$sb.Append($t)
+            $pos = $st.Start + $st.Text.Length
+        }
+        [void]$sb.Append($cmd.Substring($pos))
+        return $sb.ToString()
+    }
+    catch { return $cmd }
+}
+
+# Reader rule, evaluated per statement (Get-ShellStatements): returns the reader verb of the first statement that
+# has a reader verb at a command position AND a path-shaped .cs token (or a variable assigned from a statement that
+# had one, so `$f = Get-ChildItem *.cs; Get-Content $f` is still a C# read) and whose .cs targets are not all outside
+# the repo; $null when there is none. A pipeline is one statement, so `Get-ChildItem *.cs | Get-Content` is caught.
+function Get-CsReaderHit([string]$scan, [string]$readers) {
+    $stmts = @()
+    try { $stmts = @(Get-ShellStatements $scan) } catch { $stmts = @() }
+    if ($stmts.Count -eq 0) { $stmts = @([pscustomobject]@{ Start = 0; Text = $scan }) }
+    $tainted = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($st in $stmts) {
+        $t = [string]$st.Text
+        $hasCs = Test-CsPathToken $t -QuotedNeedsDir
+        if (-not $hasCs) {
+            foreach ($tv in $tainted) {
+                if ($t -match ('(?i)\$\{?' + [regex]::Escape($tv) + '(?!\w)')) { $hasCs = $true; break }
+            }
+        }
+        if (-not $hasCs) { continue }
+        # Taint every variable this statement names (not only a leading assignment): `$f = gci *.cs`,
+        # `gci *.cs -OutVariable f`, `gci *.cs | % { $l += $_ }` all leave a later `Get-Content $f`/`$l` reading C#.
+        # Automatics are skipped. A resolved `$r` was substituted away by Expand-SimpleAssignments, so it is not named here.
+        $skipVars = 'env|_|psitem|true|false|null|args|input|this|pwd|home|psscriptroot|matches|lastexitcode|error|host|pid'
+        $names = New-Object 'System.Collections.Generic.List[string]'
+        foreach ($vm in [regex]::Matches($t, '\$(?:\{(?<n>\w+)\}|(?<n>\w+))(?![\w:])')) { $names.Add($vm.Groups['n'].Value) }
+        foreach ($vm in [regex]::Matches($t, '(?i)(?<![\w-])-(?:OutVariable|ov|PipelineVariable|pv)[\s:=]+\$?\{?(?<n>\w+)')) { $names.Add($vm.Groups['n'].Value) }
+        if ($t -match '^\s*(?<n>\w+)=') { $names.Add($Matches['n']) }   # Bash assignment: f=$(ls *.cs)
+        foreach ($nm in $names) {
+            if ($nm -notmatch "(?i)^($skipVars)$" -and -not $tainted.Contains($nm)) { $tainted.Add($nm) }
+        }
+        if ($t -match "(^\s*|[;&|(\r\n]\s*|\bxargs\s+)($readers)(\s|$)") {
+            $verb = $Matches[2]
+            if (-not (Test-ShellCsTargetsOutsideRepo $t -QuotedNeedsDir -LocationScan $scan)) { return $verb }
+        }
+    }
+    return $null
 }
 
 function Get-InlineBypassReason([string]$text) {
@@ -783,7 +954,9 @@ positive if the referenced name already exists elsewhere in the file. Proceeding
 
         # Rules below scan a copy with here-string/heredoc bodies removed (prose is not a command).
         # $command stays the original for block messages, out-of-repo git checks and bypass lookup.
-        $scan = Remove-HereStrings $command
+        # Simple same-command variable assignments are also substituted (Expand-SimpleAssignments), so
+        # `$r='C:\other'; git -C $r log` is judged by the literal path.
+        $scan = Expand-SimpleAssignments (Remove-HereStrings $command)
 
         # --- shell text search/read of C# ---------------------------------------------
         # The Grep-tool rule above is trivially sidestepped by running grep/rg/Select-String/
@@ -796,10 +969,12 @@ positive if the referenced name already exists elsewhere in the file. Proceeding
         # Out-of-repo exemption (deviation): MCP tools cannot see files outside the loaded solution, so when every
         # .cs target is outside this repo (absolute path, or relative under an out-of-repo Set-Location/cd/git -C)
         # the rule does not apply. It is a condition, not an `exit 0`, so the git rule below still runs.
-        if ((Test-CsPathToken $scan -QuotedNeedsDir) -and $command -notmatch '[\\/]Worktree[\\/]' -and
-            $scan -match "(^|[;&|(\r\n]\s*|\bxargs\s+)($csReaders)(\s|$)" -and
-            -not (Test-ShellCsTargetsOutsideRepo $scan -QuotedNeedsDir)) {
-            $which = $Matches[2]
+        # Per statement (deviation, Get-CsReaderHit): the reader verb and the .cs token must be in the same statement
+        # (split on ; && || and newlines outside quotes; a pipeline is one statement), so `Get-Content notes.txt;
+        # Get-ChildItem -Filter *.cs` is allowed. A variable assigned from a statement with a .cs token counts as one.
+        $csReaderVerb = if ($command -notmatch '[\\/]Worktree[\\/]') { Get-CsReaderHit $scan $csReaders } else { $null }
+        if ($csReaderVerb) {
+            $which = $csReaderVerb
             Exit-IfBypassed "$command`n$([string]$toolInput.description)" $null
             DenyBypassable @"
 BLOCKED by dog-fooding policy: '$which' via shell on C# source.
@@ -936,6 +1111,8 @@ status, log, diff, stage/add, commit (incl. amend) and revert are covered by the
   GitRemote(operation: "worktree", action: "remove", worktreePath: "...")
       # pass discardUncommittedChanges: true only to throw away a dirty worktree
   (GitRemote is on demand in claude-lean: McpToolsetControl(toolSet: git, enabled: true) first.)
+
+The Git tool only sees this repo. For a read-only command on another repo, pass its absolute path literally after ``git -C``.
 
 It also avoids the shell-quoting and CRLF footguns that Bash hits on Windows paths.
 

@@ -110,7 +110,7 @@ speculatively or route around it with shell tools.
 
 `.claude/hooks/enforce-dogfood.ps1` blocks common violations (including `Read` on an in-repo `.cs`); use
 the MCP tool instead, no report needed. It matches literal text, so it can block a benign command that
-merely mentions `.cs` or `git log`: report that false positive and stop - do not reword to slip past it.
+merely mentions `.cs` or `git log`: report that false positive and stop - do not reword to slip past it. A read-only command on another repo, with its absolute path after `git -C`, is an allowed route, not rewording.
 A custom subagent that lists `Read` must also list `ReadFile`/`GetMethodSource`/`Search`.
 
 - **Successful bypass** (a `Read`/`Edit`/`Write`/shell call on a `.cs`, or shell git, that went through
