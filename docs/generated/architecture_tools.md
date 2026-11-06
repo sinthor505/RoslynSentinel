@@ -104,7 +104,7 @@
 | WorkspaceBuildTestTools | Build | WorkspaceBuildTest | - | Compiles the solution. level=quickBuild: in-memory Roslyn diagnostics (fast). |
 | WorkspaceBuildTestTools | GetDiagnostics | WorkspaceBuildTest | - | Gets compiler diagnostics for a file, project, or the whole solution. |
 | WorkspaceBuildTestTools | RunTest | WorkspaceBuildTest | - | Runs `dotnet test` on the solution or one project. |
-| WorkspaceFileEditTools | CreateFile | WorkspaceFileContent, WorkspaceFileIO | - | Creates a new file. |
+| WorkspaceFileEditTools | CreateFile | WorkspaceFileContent, WorkspaceFileIO | - | Creates a new file; fails if it already exists (never overwrites). |
 | WorkspaceFileEditTools | ReadFile | WorkspaceFileContent, WorkspaceFileIO | Allowed | Returns the raw text of a file in the loaded solution, verbatim (no reformatting). |
 | WorkspaceFileEditTools | ReplaceSnippet | WorkspaceFileContent, WorkspaceFileIO | - | Replaces one exact text block with another in a file, for small localized edits. |
 | WorkspaceFileEditTools | RetryFailedChanges | WorkspaceFileContent, WorkspaceFileIO | - | Retries failed file writes using server-cached content - no need to re-send file contents. specificFiles limits to a... |
@@ -125,7 +125,7 @@
 | WorkspaceReadNavigationTools | ListAll | Claude, Workspace, WorkspaceFileContent, WorkspaceReadNav | Allowed | Lists every declared symbol in the loaded solution with file, kind, name, container, and line range. |
 | WorkspaceReadNavigationTools | Search | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | - | Search; mode picks the target. text: regex/literal scan of .cs files (restrict with fileGlob). symbol: declaration... |
 | WorkspaceTools | Build | Claude, claude-lean, Workspace | - | Compiles the solution. level=quickBuild: in-memory Roslyn diagnostics (fast). |
-| WorkspaceTools | CreateFile | Claude, claude-lean, Workspace | - | Creates a new file; fails if it already exists. |
+| WorkspaceTools | CreateFile | Claude, claude-lean, Workspace | - | Creates a new file; fails if it already exists (never overwrites). |
 | WorkspaceTools | CreateProject | Claude, claude-lean (on demand), Workspace | - | Creates a new project and adds it to the loaded solution. |
 | WorkspaceTools | DeleteUnusedSymbol | Claude, claude-lean (on demand), Workspace | - | Deletes a symbol only if it has zero usages anywhere in the codebase. |
 | WorkspaceTools | Features | Claude, claude-lean (on demand), Workspace | - | Queries or updates feature flags. |

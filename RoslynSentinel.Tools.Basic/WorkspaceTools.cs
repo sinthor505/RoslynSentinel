@@ -168,15 +168,16 @@ public class WorkspaceTools
 
     [McpServerTool(Name = "CreateFile")]
     [Produces(DataTag.ChangeId)]
-    [Description("Creates a new file; fails if it already exists. For a new file with its full content in one call, use WriteFile(operation: CreateFile, content: ...).")]
+    [Description("Creates a new file; fails if it already exists (never overwrites). Pass content to write the full body in one call, any file type. For a .cs file you may instead seed an empty type with typeKind and typeName, then add members with Member. Parent directories are created if missing.")]
     public Task<SentinelCallToolResult<object>> CreateFileTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("For .cs files: namespace to seed the file with; omit it for the global namespace.")] string? namespaceName = null,
-        [Description("Required for .cs files: kind of top-level type to seed (class/interface/etc). Use staticClass for a static utility class.")] NewTypeKind? typeKind = null,
-        [Description("Required for .cs files: name of the seeded top-level type.")] string? typeName = null,
+        [Description("Alternative to content. Required for .cs files: kind of top-level type to seed (class/interface/etc). Use staticClass for a static utility class.")] NewTypeKind? typeKind = null,
+        [Description("Alternative to content. Required for .cs files: name of the seeded top-level type.")] string? typeName = null,
+        [Description("Full file body, written in one call (any file type; for .cs it is validated and rejected if it adds compiler errors). Use instead of typeKind/typeName/namespaceName, not with them.")] string? content = null,
         CancellationToken cancellationToken = default)
-        => _fileEdit.CreateFileTool(reason, filePath, namespaceName, typeKind, typeName, cancellationToken);
+        => _fileEdit.CreateFileTool(reason, filePath, namespaceName, typeKind, typeName, content, cancellationToken);
 
     // The confirmationCode paramater was causing hallucinations and invalid tool calls. Reverted back to the original ApplyDiffTool tool but keeping this here (block-commented, since it depends
     // on ProposedChangeAction.confirmationCode, which is also commented out in ToolEnums.cs) in case we want to reintroduce ApplyDiffTool with a confirmationCode in the future.

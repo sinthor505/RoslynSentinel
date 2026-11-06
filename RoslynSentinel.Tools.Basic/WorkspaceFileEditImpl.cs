@@ -1024,6 +1024,7 @@ public class WorkspaceFileEditImpl
         string? namespaceName = null,
         NewTypeKind? typeKind = null,
         string? typeName = null,
+        string? content = null,
         CancellationToken cancellationToken = default)
     {
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
@@ -1049,28 +1050,42 @@ public class WorkspaceFileEditImpl
                 };
             }
 
-            bool isCSharpFile = filePathResolved.Absolute.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
-            if (isCSharpFile && (typeKind == null || string.IsNullOrWhiteSpace(typeName)))
+            bool hasSeedArguments = typeKind != null || !string.IsNullOrWhiteSpace(typeName) || !string.IsNullOrWhiteSpace(namespaceName);
+            if (content != null && hasSeedArguments)
             {
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"CreateFile: 'typeKind' and 'typeName' are both required for a .cs file, so the new file starts with an empty top-level type that {ToolCallHint.Call("Member", ("operation", "addMember"))} can populate members into.")
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: pass either 'content' (the full file body) or 'typeKind' and 'typeName' (an empty seeded type), not both.")
                 };
             }
 
-            string content;
-            if (isCSharpFile)
+            bool isCSharpFile = filePathResolved.Absolute.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
+            if (isCSharpFile && content == null && (typeKind == null || string.IsNullOrWhiteSpace(typeName)))
+            {
+                return new SentinelCallToolResult<object>()
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"CreateFile: 'typeKind' and 'typeName' are both required for a .cs file, so the new file starts with an empty top-level type that {ToolCallHint.Call("Member", ("operation", "addMember"))} can populate members into. Or pass 'content' to write the whole file in one call.")
+                };
+            }
+
+            string body;
+            if (content != null)
+            {
+                body = content;
+            }
+            else if (isCSharpFile)
             {
                 string keyword = typeKind!.Value == NewTypeKind.staticClass ? "static class" : typeKind.Value.ToString().TrimStart('@');
                 // A null/whitespace namespaceName means the global namespace, by design (e.g. an NUnit [SetUpFixture]).
-                content = string.IsNullOrWhiteSpace(namespaceName)
+                body = string.IsNullOrWhiteSpace(namespaceName)
                     ? $"public {keyword} {typeName}\n{{\n}}\n"
                     : $"namespace {namespaceName};\n\npublic {keyword} {typeName}\n{{\n}}\n";
             }
             else
             {
-                content = "";
+                body = "";
             }
 
             var directory = Path.GetDirectoryName((string)filePathResolved.Absolute);
@@ -1079,21 +1094,18 @@ public class WorkspaceFileEditImpl
                 Directory.CreateDirectory(directory);
             }
 
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = content };
+            // TODO a .cs file outside every project folder (e.g. the solution root) is written without compile validation: no project owns it, so the gate compiles nothing; WriteFile has the same gap
+            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = body };
             var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: true, cancellationToken: cancellationToken);
             if (result.IsError && result.ValidationResult != null)
             {
-                string writeFileHint = _writeAdvice.IsExposed("WriteFile")
-                    ? $"\nAlternatively, {ToolCallHint.Call("WriteFile", ("operation", "CreateFile"))} can create this file with its full, already-correct body in one call, avoiding the empty-scaffold-then-populate sequence entirely."
-                    : "";
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception,
                         "CreateFile: this content would introduce new compiler errors - not written to disk. Fix the issue(s) below and retry:\n" +
                         "[COMPILER ERROR]\n" +
-                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken) +
-                        writeFileHint)
+                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                 };
             }
 
@@ -1109,12 +1121,6 @@ public class WorkspaceFileEditImpl
             await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "create_file", result, cancellationToken: cancellationToken);
             var strippedResult = result with { PreImages = null };
             var createFileFindings = new List<Finding>();
-            if (_writeAdvice.IsExposed("WriteFile"))
-            {
-                createFileFindings.Add(new Finding("CreateFile",
-                    $"{ToolCallHint.Call("WriteFile")} is also available on this server and can create a file with its full body " +
-                    $"in one call, instead of populating it afterward via {ToolCallHint.Call("Member", ("operation", "addMember"))}."));
-            }
             createFileFindings.AddRange(result.Findings ?? []);
             return new SentinelCallToolResult<object>()
             {

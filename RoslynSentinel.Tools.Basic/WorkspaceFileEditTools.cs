@@ -84,13 +84,14 @@ public class WorkspaceFileEditTools
 
     [McpServerTool(Name = "CreateFile")]
     [Produces(DataTag.ChangeId)]
-    [Description("Creates a new file. Fails if the file already exists - this tool never overwrites or writes free-form whole-file content. Parent directories are created automatically if missing. For a new file with its full content in one call, use WriteFile(operation: CreateFile, content: ...).")]
+    [Description("Creates a new file; fails if it already exists (never overwrites). Pass content to write the full body in one call, any file type. For a .cs file you may instead seed an empty type with typeKind and typeName, then add members with Member. Parent directories are created if missing.")]
     public Task<SentinelCallToolResult<object>> CreateFileTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("For .cs files: namespace to seed the file with (e.g. 'RoslynSentinel.Tests.Battery.Basic'); omit it to create the type in the global namespace. Ignored for other file types.")] string? namespaceName = null,
-        [Description("Required for .cs files, ignored otherwise. Kind of top-level type to seed the file with - this seeds a valid compilation unit plus one empty top-level type declaration (e.g. 'public class Foo\\n{\\n}'), so Member(add) can immediately populate members inside it. Use staticClass for a static utility/helper class (e.g. static test helpers, extension-method containers) - static is only valid on classes, not the other kinds. For a second top-level type in the same file, add it afterward with Member(add, containerName: null, newMemberSource: \"...\").")] NewTypeKind? typeKind = null,
-        [Description("Required for .cs files, ignored otherwise. Name of the top-level type to seed the file with (e.g. 'Foo').")] string? typeName = null,
+        [Description("Alternative to content. Required for .cs files, ignored otherwise. Kind of top-level type to seed the file with - this seeds a valid compilation unit plus one empty top-level type declaration (e.g. 'public class Foo\\n{\\n}'), so Member(add) can immediately populate members inside it. Use staticClass for a static utility/helper class (e.g. static test helpers, extension-method containers) - static is only valid on classes, not the other kinds. For a second top-level type in the same file, add it afterward with Member(add, containerName: null, newMemberSource: \"...\").")] NewTypeKind? typeKind = null,
+        [Description("Alternative to content. Required for .cs files without content, ignored otherwise. Name of the top-level type to seed the file with (e.g. 'Foo').")] string? typeName = null,
+        [Description("Full file body, written in one call (any file type; for .cs it is validated and rejected if it adds compiler errors). Use instead of typeKind/typeName/namespaceName, not with them.")] string? content = null,
         CancellationToken cancellationToken = default)
-        => _impl.CreateFile(reason, filePath, namespaceName, typeKind, typeName, cancellationToken);
+        => _impl.CreateFile(reason, filePath, namespaceName, typeKind, typeName, content, cancellationToken);
 }

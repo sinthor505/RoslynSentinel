@@ -325,10 +325,6 @@ public static class ToolArgumentValidator
 
         return new System.Collections.Generic.Dictionary<string, System.Func<UnknownParameterContext, string>>(StringComparer.OrdinalIgnoreCase)
         {
-            ["CreateFile.content"] = ctx => "CreateFile only creates a seeded file and takes no content. " +
-                (ctx.IsToolRegistered("WriteFile")
-                    ? $"To create it with its full content use {ToolCallHint.Call("WriteFile", ("operation", "CreateFile"), ("filePath", ctx.ValueOr("filePath", "<filePath>")))} (pass the full text as content)."
-                    : $"Create it with {ToolCallHint.Call("CreateFile", ("filePath", ctx.ValueOr("filePath", "<filePath>")))}, then add members with {ToolCallHint.Call("Member", ("operation", "addMember"), ("containerName", ctx.ValueOr("typeName", "<typeName>")))}."),
             ["GetMethodSource.maxLines"] = lineRange,
             ["GetMethodSource.startLine"] = lineRange,
             ["GetMethodSource.endLine"] = lineRange,

@@ -29,7 +29,7 @@ public class WholeFileWriteTools
     }
     [McpServerTool(Name = "WriteFile")]
     [Produces(DataTag.ChangeId)]
-    [Description("Writes a whole file to disk, creating or overwriting it. Use ApplyUnifiedDiff for partial edits.")]
+    [Description("Writes a whole file to disk, creating or overwriting it. For a partial change to an existing file use a targeted edit instead.")]
     public async Task<SentinelCallToolResult<object>> WriteFileTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("CreateFile: file must not already exist. ReplaceFile: overwrites, creating if missing.")]

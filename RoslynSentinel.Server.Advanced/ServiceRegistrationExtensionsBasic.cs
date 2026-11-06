@@ -315,6 +315,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         }
         if (activeToolClasses.Contains("WholeFileWriteTools"))
         {
+            // TODO comment is stale: AllModes derives from ModeToToolClasses.Keys, and --mode=all does expose WriteFile
             // Restricted/operator-only tool -> deliberately NOT included in AllModes (see
             // ServerStdio.cs/ServerHttp.cs), so --mode alone can't reach it; only an explicit
             // --mode=Admin/--mode=WholeFileWrite or --include-tools=WholeFileWriteTools

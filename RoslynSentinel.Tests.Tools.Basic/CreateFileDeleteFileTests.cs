@@ -202,6 +202,121 @@ public class CreateFileDeleteFileTests
     }
 
     [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
+    public async Task CreateFile_CsFileWithContent_WritesTheFullBodyInOneCallAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        // The content is written as LF, so the mode is pinned to Lf rather than the platform default.
+        workspaceManager.EolModeOverride = EolMode.Lf;
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Greeter.cs");
+        var content = "namespace MyApp.Content;\n\npublic class Greeter\n{\n    public string Hello() => \"hello\";\n    public string Bye() => \"bye\";\n}\n";
+
+        var result = await workspaceTools.CreateFileTool(reason: "test message", newFile, content: content);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(File.Exists(newFile), Is.True);
+        Assert.That(await File.ReadAllTextAsync(newFile), Is.EqualTo(content));
+    }
+
+    [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
+    public async Task CreateFile_ContentTogetherWithTypeKind_FailsInvalidArgumentAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "Mixed.cs");
+
+        var result = await workspaceTools.CreateFileTool(reason: "test message", newFile, typeKind: NewTypeKind.@class, typeName: "Foo", content: "public class Foo { }\n");
+
+        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.Message, Does.Contain("pass either 'content'"));
+        Assert.That(File.Exists(newFile), Is.False);
+    }
+
+    [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
+    public async Task CreateFile_CsFileWithoutContentOrType_MessageOffersContentAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "NoBody.cs");
+
+        var result = await workspaceTools.CreateFileTool(reason: "test message", newFile);
+
+        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.ErrorData!.Message, Does.Contain("Or pass 'content'"));
+        Assert.That(File.Exists(newFile), Is.False);
+    }
+
+    [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
+    public async Task CreateFile_ContentExistingFile_FailsWithoutOverwritingAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var existingFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        var originalContent = await File.ReadAllTextAsync(existingFile);
+
+        var result = await workspaceTools.CreateFileTool(reason: "test message", existingFile, content: "public class Replacement { }\n");
+
+        Assert.That(!result.IsError, Is.False);
+        Assert.That(await File.ReadAllTextAsync(existingFile), Is.EqualTo(originalContent));
+    }
+
+    [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
+    public async Task CreateFile_CsFileContentWithCompileError_IsRejectedAndNotWrittenAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Broken.cs");
+        var content = "public class Broken\n{\n    void M() { UndefinedThing.Call(); }\n}\n";
+
+        var result = await workspaceTools.CreateFileTool(reason: "test message", newFile, content: content);
+
+        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.ErrorData!.Message, Does.Contain("this content would introduce new compiler errors"));
+        Assert.That(File.Exists(newFile), Is.False);
+    }
+
+    [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
+    public async Task CreateFile_NonCsFileWithContent_WritesItAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        // The content is written as LF, so the mode is pinned to Lf rather than the platform default.
+        workspaceManager.EolModeOverride = EolMode.Lf;
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "Notes.txt");
+        var content = "plain text notes\nsecond line\n";
+
+        var result = await workspaceTools.CreateFileTool(reason: "test message", newFile, content: content);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(await File.ReadAllTextAsync(newFile), Is.EqualTo(content));
+    }
+
+    [Test]
     public async Task DeleteFile_ExistingFile_RemovesFromDiskAsync()
     {
         using var fixture = new TestSolutionFixture();

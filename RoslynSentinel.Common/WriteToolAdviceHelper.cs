@@ -144,6 +144,7 @@ public sealed class WriteToolAdviceHelper
         var toolNames = new List<string>();
         WriteEscapeRoute? primaryRoute = null;
 
+        // TODO advice cannot see the rejected content, so it offers Member(replace) even for usings plus several members
         // 1. Structural, Member(replace) first and by name: the common oversize case is replacing a
         // whole method/property/constructor body, which Member does with no size limit.
         if (IsExposed("Member"))

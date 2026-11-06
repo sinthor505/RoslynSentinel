@@ -561,66 +561,6 @@ public class ToolParameterAliasTests
     }
 
     [Test]
-    public async Task CreateFileContent_Rejection_RedirectsToACallThatExists()
-    {
-        // The redirect must name only a call that exists in the tool list this server actually exposes.
-        var tools = await _client.ListToolsAsync(cancellationToken: TestContext.CurrentContext.CancellationToken);
-        var writeFileRegistered = tools.Any(t => t.Name == "WriteFile");
-
-        var result = await _client.CallToolAsync(
-            "CreateFile",
-            new Dictionary<string, object?>
-            {
-                ["reason"] = "test message",
-                ["filePath"] = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "Made.cs"),
-                ["content"] = "public class Made { }",
-            }!,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
-
-        var text = TextOf(result);
-        Assert.That(result.IsError, Is.True, $"'content' is not a CreateFile parameter. Got: {text}");
-        Assert.That(text, Does.Contain("CreateFile only creates a seeded file and takes no content."), $"Got: {text}");
-        if (writeFileRegistered)
-        {
-            Assert.That(text, Does.Contain("WriteFile(reason:"), $"Got: {text}");
-            Assert.That(text, Does.Contain("operation: CreateFile"), $"Got: {text}");
-        }
-        else
-        {
-            Assert.That(text, Does.Not.Contain("WriteFile("), $"WriteFile is not registered, so it must not be named. Got: {text}");
-            Assert.That(text, Does.Contain("Member(reason:"), $"Got: {text}");
-            Assert.That(text, Does.Contain("operation: addMember"), $"Got: {text}");
-        }
-    }
-
-    [Test]
-    public void UnknownParameterHint_CreateFileContent_NamesWriteFileOnlyWhenItIsRegistered()
-    {
-        var arguments = new Dictionary<string, System.Text.Json.JsonElement>
-        {
-            ["filePath"] = System.Text.Json.JsonSerializer.SerializeToElement("Foo.cs"),
-            ["typeName"] = System.Text.Json.JsonSerializer.SerializeToElement("Foo"),
-        };
-
-        var withWriteFile = ToolArgumentValidator.GetUnknownParameterHint("CreateFile", "content", arguments, name => name == "WriteFile");
-        Assert.That(withWriteFile, Does.Contain("WriteFile(reason:"));
-        Assert.That(withWriteFile, Does.Contain("operation: CreateFile"));
-        Assert.That(withWriteFile, Does.Contain("filePath: \"Foo.cs\""));
-        Assert.That(withWriteFile, Does.Not.Contain("Member("));
-
-        var withoutWriteFile = ToolArgumentValidator.GetUnknownParameterHint("CreateFile", "content", arguments, _ => false);
-        Assert.That(withoutWriteFile, Does.Contain("Member(reason:"));
-        Assert.That(withoutWriteFile, Does.Contain("operation: addMember"));
-        Assert.That(withoutWriteFile, Does.Contain("containerName: \"Foo\""));
-        Assert.That(withoutWriteFile, Does.Not.Contain("WriteFile("));
-
-        // Case-insensitive key, and a literal placeholder when the value was not supplied.
-        var placeholder = ToolArgumentValidator.GetUnknownParameterHint("createfile", "CONTENT", new Dictionary<string, System.Text.Json.JsonElement>(), _ => true);
-        Assert.That(placeholder, Does.Contain("filePath: "));
-        Assert.That(placeholder, Does.Contain("<filePath>"));
-    }
-
-    [Test]
     public void UnknownParameterHint_BuildFullBuild_OnlyForFalse()
     {
         static Dictionary<string, System.Text.Json.JsonElement> With(bool value) =>
