@@ -685,7 +685,9 @@ public class WorkspaceFileEditImpl
                 // Escape-hatch advice comes from WriteToolAdviceHelper, never a hardcoded tool name:
                 // the old text here named WriteFileTool unconditionally, and in run 398 WriteFileTool was
                 // gated off, so the one instruction the model was given was unfollowable.
-                var advice = _writeAdvice.AdviseForOversizedEdit("ReplaceSnippet");
+                // The shape lets the advice stop recommending Member(replace) for content that holds several
+                // members or usings.
+                var advice = _writeAdvice.AdviseForOversizedEdit("ReplaceSnippet", RejectedContentClassifier.Classify(newContent));
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsError = true,
@@ -813,6 +815,18 @@ public class WorkspaceFileEditImpl
 
         var perEditErrors = new List<string>();
         var anySizeBoundExceeded = false;
+        // Shape of the oversized NEW content, combined across edits: the most general shape wins
+        // (FileLevel > MultipleMembers > Unspecified > SingleMember), so one non-member edit is never hidden.
+        var oversizedShape = RejectedContentShape.Unspecified;
+        var sawOversized = false;
+        static RejectedContentShape CombineShapes(RejectedContentShape a, RejectedContentShape b) => ShapeRank(a) >= ShapeRank(b) ? a : b;
+        static int ShapeRank(RejectedContentShape shape) => shape switch
+        {
+            RejectedContentShape.FileLevel => 3,
+            RejectedContentShape.MultipleMembers => 2,
+            RejectedContentShape.Unspecified => 1,
+            _ => 0
+        };
         for (int i = 0; i < batchEdits.Count; i++)
         {
             var edit = batchEdits[i];
@@ -836,6 +850,9 @@ public class WorkspaceFileEditImpl
             {
                 perEditErrors.Add($"batchEdits[{i}] ({edit.FilePath}): {string.Join("; ", exceeded)}.");
                 anySizeBoundExceeded = true;
+                var shape = RejectedContentClassifier.Classify(edit.NewContent);
+                oversizedShape = sawOversized ? CombineShapes(oversizedShape, shape) : shape;
+                sawOversized = true;
             }
         }
 
@@ -844,7 +861,7 @@ public class WorkspaceFileEditImpl
             // Same escape-hatch advice as the single-edit path, appended once (not per edit) and only
             // when a size bound tripped - it is noise for e.g. a missing newContent.
             var sizeAdvice = anySizeBoundExceeded
-                ? "\n" + _writeAdvice.AdviseForOversizedEdit("ReplaceSnippet").Sentence
+                ? "\n" + _writeAdvice.AdviseForOversizedEdit("ReplaceSnippet", oversizedShape).Sentence
                 : "";
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {

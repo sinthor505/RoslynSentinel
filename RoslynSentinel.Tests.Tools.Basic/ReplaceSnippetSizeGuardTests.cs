@@ -141,4 +141,57 @@ public class ReplaceSnippetSizeGuardTests
             Assert.That(result.ErrorData!.Message, Does.Contain("ReplaceSnippet"), "must still state a way forward");
         });
     }
+
+    [Test]
+    public async Task ReplaceSnippet_OversizedSeveralMembers_AdvisesOneMemberCallPerMemberAsync()
+    {
+        // Several small methods (no usings) over 6000 chars: the advice must steer to one Member call per
+        // member, not to the single whole-member sentence that a one-method rejection gets.
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
+
+        var targetFile = workspace.PathOf(TargetRelativePath);
+        var anchor = FirstLine(workspace.ReadText(TargetRelativePath));
+        var filler = new string('-', 480);
+        var severalMethods = string.Join("\n\n", Enumerable.Range(0, 12).Select(i =>
+            $"    public int Method{i}() {{ return {i}; /* {filler} */ }}"));
+        Assert.That(severalMethods.Length, Is.GreaterThan(6000), "must exceed the char cap by a wide margin");
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "test message", ProposedChangeAction.validate, targetFile,
+            oldContent: anchor, newContent: severalMethods);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData!.Message, Does.Contain("several members"));
+            Assert.That(result.ErrorData!.Message, Does.Not.Contain("whole method/property/constructor"));
+        });
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_OversizedSingleMethod_KeepsWholeMemberAdviceAsync()
+    {
+        // One large method over 6000 chars: a single declaration keeps the whole-member wording.
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
+
+        var targetFile = workspace.PathOf(TargetRelativePath);
+        var anchor = FirstLine(workspace.ReadText(TargetRelativePath));
+        var body = string.Join("\n", Enumerable.Range(0, 60).Select(i =>
+            $"        total += {i} * 2; // {new string('-', 100)}"));
+        var oneMethod = "    public int Compute()\n    {\n        var total = 0;\n" + body + "\n        return total;\n    }";
+        Assert.That(oneMethod.Length, Is.GreaterThan(6000), "must exceed the char cap by a wide margin");
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "test message", ProposedChangeAction.validate, targetFile,
+            oldContent: anchor, newContent: oneMethod);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData!.Message, Does.Contain("whole method/property/constructor"));
+            Assert.That(result.ErrorData!.Message, Does.Not.Contain("several members"));
+        });
+    }
 }

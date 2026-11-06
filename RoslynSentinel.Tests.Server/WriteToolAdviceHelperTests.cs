@@ -155,4 +155,90 @@ public class WriteToolAdviceHelperTests
             Assert.That(helper.IsExposed("Member"), Is.True);
         });
     }
+
+    [Test]
+    public void AdviseForOversizedEdit_SingleMemberShape_KeepsWholeMemberWordingAndNamesMember()
+    {
+        // One declaration per call is exactly what Member(replace) takes, so a single-member rejection keeps the original whole-member sentence.
+        var helper = new WriteToolAdviceHelper([WholeFileWriteClass, RefactoringClass]);
+
+        var advice = helper.AdviseForOversizedEdit("ReplaceSnippet", RejectedContentShape.SingleMember);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(advice.Sentence, Does.Contain("whole method/property/constructor"));
+            Assert.That(advice.Sentence, Does.Contain("Member(reason:"));
+            Assert.That(advice.ToolNames[0], Is.EqualTo("Member"));
+        });
+    }
+
+    [Test]
+    public void AdviseForOversizedEdit_MultipleMembersShape_SaysSeveralMembersNotWholeMember()
+    {
+        // Member takes one declaration per call, so several members must be told to go one call each.
+        var helper = new WriteToolAdviceHelper([WholeFileWriteClass, RefactoringClass]);
+
+        var advice = helper.AdviseForOversizedEdit("ReplaceSnippet", RejectedContentShape.MultipleMembers);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(advice.Sentence, Does.Contain("several members"));
+            Assert.That(advice.Sentence, Does.Contain("Member call"));
+            Assert.That(advice.Sentence, Does.Not.Contain("whole method/property/constructor"));
+        });
+    }
+
+    [Test]
+    public void AdviseForOversizedEdit_FileLevelShape_SaysUsingsNotWholeMember()
+    {
+        // Usings and whole type declarations cannot go through Member(replace) at all, so the advice must say so.
+        var helper = new WriteToolAdviceHelper([WholeFileWriteClass, RefactoringClass]);
+
+        var advice = helper.AdviseForOversizedEdit("ReplaceSnippet", RejectedContentShape.FileLevel);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(advice.Sentence, Does.Contain("usings"));
+            Assert.That(advice.Sentence, Does.Not.Contain("whole method/property/constructor"));
+        });
+    }
+
+    [Test]
+    public void AdviseForOversizedEdit_EveryShape_NamesOnlyExposedToolsWithAndWithoutMember()
+    {
+        // The shape only changes wording, never the tool set: for every shape, with Member exposed and
+        // with Member gated off, every tool named must be exposed.
+        RejectedContentShape[] shapes =
+        [
+            RejectedContentShape.Unspecified,
+            RejectedContentShape.SingleMember,
+            RejectedContentShape.MultipleMembers,
+            RejectedContentShape.FileLevel,
+        ];
+        var helpers = new[]
+        {
+            WriteToolAdviceHelper.WithAllToolsExposed(),
+            new WriteToolAdviceHelper([WholeFileWriteClass]),
+        };
+
+        foreach (var shape in shapes)
+        {
+            foreach (var helper in helpers)
+            {
+                var advice = helper.AdviseForOversizedEdit("ReplaceSnippet", shape);
+
+                foreach (var toolName in advice.ToolNames)
+                {
+                    // The split step names the rejecting tool itself, which is callable by definition.
+                    if (toolName == "ReplaceSnippet")
+                    {
+                        continue;
+                    }
+
+                    Assert.That(helper.IsExposed(toolName), Is.True,
+                        $"shape {shape} named unexposed tool '{toolName}'");
+                }
+            }
+        }
+    }
 }

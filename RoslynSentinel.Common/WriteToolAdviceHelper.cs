@@ -26,6 +26,24 @@ public enum WriteEscapeRoute
 }
 
 /// <summary>
+/// The shape of content that a narrow write tool refused, used to pick advice that fits it.
+/// </summary>
+public enum RejectedContentShape
+{
+    /// <summary>Unknown shape: the generic advice applies (today's behaviour).</summary>
+    Unspecified,
+
+    /// <summary>Exactly one member declaration.</summary>
+    SingleMember,
+
+    /// <summary>Two or more member declarations and no usings or type declarations.</summary>
+    MultipleMembers,
+
+    /// <summary>Has using directives and/or type or namespace declarations: a whole-file body.</summary>
+    FileLevel
+}
+
+/// <summary>
 /// Advice for a caller whose edit exceeded its tool's limits: the primary (first-named) route,
 /// every tool the advice names (all verified present on this server's surface), and ready-made
 /// phrasing.
@@ -88,7 +106,8 @@ public sealed class WriteToolAdviceHelper
             ["ApplyUnifiedDiff"] = "WholeFileWriteTools",
             ["Member"] = "RefactoringStructuralTools",
             ["RenameSymbol"] = "RefactoringStructuralTools",
-            ["ChangeSignature"] = "RefactoringStructuralTools",
+            // ChangeSignature is declared in AdvancedRefactoringTools, not RefactoringStructuralTools.
+            ["ChangeSignature"] = "AdvancedRefactoringTools",
             ["ExtractMethod"] = "RefactoringStructuralTools",
         };
 
@@ -138,20 +157,38 @@ public sealed class WriteToolAdviceHelper
     /// The tool that refused the edit, named in the <see cref="WriteEscapeRoute.SplitIntoSmallerEdits"/>
     /// phrasing so the advice reads as "call this again, smaller" rather than something abstract.
     /// </param>
-    public WriteAdvice AdviseForOversizedEdit(string rejectingToolName)
+    /// <param name="contentShape">
+    /// The shape of the rejected content, from <see cref="RejectedContentShape"/>. Unspecified keeps
+    /// the generic advice. MultipleMembers and FileLevel steer away from a single Member(replace),
+    /// which takes exactly one member per call.
+    /// </param>
+    public WriteAdvice AdviseForOversizedEdit(string rejectingToolName, RejectedContentShape contentShape = RejectedContentShape.Unspecified)
     {
         var clauses = new List<string>();
         var toolNames = new List<string>();
         WriteEscapeRoute? primaryRoute = null;
 
-        // TODO advice cannot see the rejected content, so it offers Member(replace) even for usings plus several members
-        // 1. Structural, Member(replace) first and by name: the common oversize case is replacing a
-        // whole method/property/constructor body, which Member does with no size limit.
+        // 1. Structural, Member first and by name: the common oversize case is replacing a whole
+        // method/property/constructor body, which Member does with no size limit. Member takes exactly
+        // one declaration per call, so the advice follows the rejected content's shape.
         if (IsExposed("Member"))
         {
-            clauses.Add($"If you are replacing a whole method/property/constructor, use {ToolCallHint.Call("Member", ("operation", "replace"))} - it has no size limit.");
             toolNames.Add("Member");
             primaryRoute = WriteEscapeRoute.StructuredEdit;
+            switch (contentShape)
+            {
+                case RejectedContentShape.MultipleMembers:
+                    clauses.Add($"The new content holds several members, and {ToolCallHint.Call("Member", ("operation", "replace"))} takes exactly one per call. Make one Member call per member: operation replace for each existing member you are replacing, operation addMember for each new one - none of them has a size limit.");
+                    break;
+                case RejectedContentShape.FileLevel:
+                    clauses.Add($"The new content holds usings or whole type declarations. Change the using lines with a small {rejectingToolName} call, then make one {ToolCallHint.Call("Member", ("operation", "addMember"))} call per member (or operation replace for an existing member) - Member has no size limit.");
+                    break;
+                case RejectedContentShape.Unspecified:
+                case RejectedContentShape.SingleMember:
+                default:
+                    clauses.Add($"If you are replacing a whole method/property/constructor, use {ToolCallHint.Call("Member", ("operation", "replace"))} - it has no size limit.");
+                    break;
+            }
         }
 
         var otherStructuralTools = new[] { "RenameSymbol", "ChangeSignature", "ExtractMethod" }
