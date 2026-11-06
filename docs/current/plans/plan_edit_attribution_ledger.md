@@ -1,6 +1,6 @@
 # Plan: Edit attribution ledger naming the agent behind each write, with a same-file conflict refusal and a fixed per-process operating mode
 
-**Status:** APPROVED 2026-11-05. Design rulings from the owner are recorded under Decision; Steps 0-2 done (Step 0 results under that step); writes are recorded but nothing reads the record yet. Citations checked at commit b3b90a26; the request pipeline, `AsyncLocal` and telemetry points were rechecked at bab9599b, which added per-tool telemetry. Between those commits `PersistentWorkspaceManager.cs`, `ToolArgumentValidator.cs`, `ValidateAndApplyHelper.cs` and `AdminTools.cs` did not change, so their line citations still hold.
+**Status:** APPROVED 2026-11-05. Design rulings from the owner are recorded under Decision; Steps 0-3 done (Step 0 results under that step); writes are recorded and the filter sets identity, but nothing reads the record yet and the hook is not installed. Citations checked at commit b3b90a26; the request pipeline, `AsyncLocal` and telemetry points were rechecked at bab9599b, which added per-tool telemetry. Between those commits `PersistentWorkspaceManager.cs`, `ToolArgumentValidator.cs`, `ValidateAndApplyHelper.cs` and `AdminTools.cs` did not change, so their line citations still hold.
 
 ## Problem
 
@@ -178,7 +178,9 @@ in place. Findings reuse `Finding`.
 
 ### Step 3 - Identity filter (outermost)
 
-- Files: `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (`CallToolFilterRegistrations`; add
+- Files: new `RoslynSentinel.Server.Advanced/AgentIdentityCapture.cs` (the filter's logic, testable without an
+  `McpRequestContext`, as `ToolTelemetryRecorder` is);
+  `RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (`CallToolFilterRegistrations`; add
   `("AgentIdentity", AddAgentIdentityFilter)` as the first row, ahead of `ToolCallEcho`);
   `RoslynSentinel.Tests.Server/ToolTelemetryFilterOrderTests.cs`.
 - Change: read and remove `_agentId`/`_agentType`, read `reason` raw, call

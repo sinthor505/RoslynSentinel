@@ -12,7 +12,7 @@
 | RoslynSentinel.Tests | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Tests.Support.Basic |
 | RoslynSentinel.Tests.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Advanced, RoslynSentinel.Engines.Basic, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Advanced, RoslynSentinel.Tests.Support.Basic |
 | RoslynSentinel.Tests.Asyncify | RoslynSentinel.Common, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Advanced, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Tools.Advanced |
-| RoslynSentinel.Tests.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic |
+| RoslynSentinel.Tests.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Utilities.AgentIdentityHook |
 | RoslynSentinel.Tests.Battery.Advanced | RoslynSentinel.Engines.Advanced, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Advanced, RoslynSentinel.Tests.Support.Basic |
 | RoslynSentinel.Tests.Battery.Basic | RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic |
 | RoslynSentinel.Tests.Integration | RoslynSentinel.Common, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests |
@@ -27,6 +27,7 @@
 | RoslynSentinel.Tools.Advanced | RoslynSentinel.Common, RoslynSentinel.Engines.Advanced, RoslynSentinel.Engines.Basic |
 | RoslynSentinel.Tools.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Basic |
 | RoslynSentinel.Tools.Experimental | RoslynSentinel.Common, RoslynSentinel.Engines.Advanced, RoslynSentinel.Engines.Basic |
+| RoslynSentinel.Utilities.AgentIdentityHook |  |
 | RoslynSentinel.Utilities.PlanStepRunner | RoslynSentinel.Common |
 | TempCheck |  |
 

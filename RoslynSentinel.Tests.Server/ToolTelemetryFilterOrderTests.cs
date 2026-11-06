@@ -11,7 +11,7 @@ using RoslynSentinel.Server.Advanced;
 namespace RoslynSentinel.Tests.Server;
 
 /// <summary>
-/// Pins where the tool-telemetry call-tool filter sits in the pipeline (second, right inside the echo filter, so it wraps
+/// Pins where the tool-telemetry call-tool filter sits in the pipeline (third, right inside the echo filter, so it wraps
 /// argument validation, ToolError and the breakers), plus a smoke test of the <see cref="ToolTelemetryRecorder"/> seam.
 /// The full behaviour tests (outcomes, error codes, concurrency, status field) belong in this file too.
 /// </summary>
@@ -19,7 +19,7 @@ namespace RoslynSentinel.Tests.Server;
 public class ToolTelemetryFilterOrderTests
 {
     [Test]
-    public void CallToolFilters_AreRegisteredInTheDeclaredOrder_WithTelemetrySecond()
+    public void CallToolFilters_AreRegisteredInTheDeclaredOrder_WithIdentityFirstAndTelemetryThird()
     {
         var services = new ServiceCollection();
         services.AddRoslynSentinelEnginesBasic();
@@ -37,8 +37,9 @@ public class ToolTelemetryFilterOrderTests
         var names = RoslynSentinelServiceExtensionsBasic.CallToolFilterNames;
 
         Assert.That(registered, Has.Count.EqualTo(names.Count), "Every name in CallToolFilterNames must be one registered call-tool filter, and vice versa.");
-        Assert.That(names[0], Is.EqualTo("ToolCallEcho"), "The echo filter must stay outermost.");
-        Assert.That(names[1], Is.EqualTo("ToolTelemetry"), "The telemetry filter must be second so it wraps ToolError, argument validation and the breakers.");
+        Assert.That(names[0], Is.EqualTo("AgentIdentity"), "The identity filter must stay outermost so its keys never reach the echo or the argument validator.");
+        Assert.That(names[1], Is.EqualTo("ToolCallEcho"), "The echo filter must sit outside every filter that can change the response.");
+        Assert.That(names[2], Is.EqualTo("ToolTelemetry"), "The telemetry filter must be third so it wraps ToolError, argument validation and the breakers.");
         Assert.That(names, Does.Contain("ToolError"));
         Assert.That(host.Services.GetService<ToolTelemetry>(), Is.Not.Null, "AddRoslynSentinelToolsBasic must register the ToolTelemetry singleton.");
     }

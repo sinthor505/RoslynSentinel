@@ -79,13 +79,15 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// <summary>
     /// The call-tool filters in registration order, which is their nesting order: the first is the outermost
     /// (csharp-sdk McpServerImpl.BuildFilterPipeline folds from the last filter inward). Single source for both
-    /// the registration and <see cref="CallToolFilterNames"/>, so a test can pin the order. ToolTelemetry sits
-    /// second, right inside the echo filter, so it wraps every other filter: argument validation and the breakers
-    /// (which refuse without calling next), and ToolError, which copies the body's isError onto CallToolResult.IsError
-    /// before the telemetry filter reads it.
+    /// the registration and <see cref="CallToolFilterNames"/>, so a test can pin the order. AgentIdentity sits first so its
+    /// keys never reach the echo or the argument validator and every other filter can read the context; it never refuses.
+    /// ToolTelemetry sits third, right inside the echo filter, so it wraps every filter that can refuse: argument validation
+    /// and the breakers (which refuse without calling next), and ToolError, which copies the body's isError onto
+    /// CallToolResult.IsError before the telemetry filter reads it.
     /// </summary>
     private static readonly (string Name, Action<IMcpRequestFilterBuilder> Add)[] CallToolFilterRegistrations =
     [
+        ("AgentIdentity", AddAgentIdentityFilter),
         ("ToolCallEcho", AddToolCallEchoFilter),
         ("ToolTelemetry", AddToolTelemetryFilter),
         ("ArgumentValidation", AddArgumentValidationFilter),
@@ -1005,17 +1007,43 @@ public static class RoslynSentinelServiceExtensionsBasic
     }
 
     /// <summary>
+    /// Registers the agent identity filter: strips <c>_agentId</c> and <c>_agentType</c> from the arguments and sets
+    /// <see cref="ToolCallContext"/> for the call; the logic is <see cref="AgentIdentityCapture.Enter"/>.
+    /// <para>
+    /// Must be registered first. The echo snapshots arguments before calling next, so only a filter outside it keeps the
+    /// keys out of the echoed arguments, and they must be gone before the validation filter refuses them as unknown. An
+    /// AsyncLocal set by an inner filter is not visible to an outer filter's code after next returns, so being outermost
+    /// also lets the echo and telemetry read the context.
+    /// </para>
+    /// </summary>
+    private static void AddAgentIdentityFilter(IMcpRequestFilterBuilder filters)
+    {
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            // Async on purpose, unlike the telemetry filter: an async method restores the caller's ExecutionContext when it
+            // returns, so the AsyncLocal set here cannot leak out of this call.
+            async (context, cancellationToken) =>
+            {
+                AgentIdentityCapture.Enter(
+                    context.Params?.Name,
+                    context.Params?.Arguments,
+                    () => (context.Server.Services?.GetService<PersistentWorkspaceManager>() as IEditAttributionLedgerProvider)?.EditAttributions.CurrentSeq ?? 0);
+                return await next(context, cancellationToken);
+            }));
+    }
+
+    /// <summary>
     /// Registers the tool-call echo filter: stamps a <c>toolCall</c> property (call id, tool name,
     /// truncated arguments as sent) onto the first text block of every response, so a transcript,
     /// log line or offloaded result can be tied back to the call that produced it. See
     /// <see cref="ToolCallEcho"/> and docs/current/plans/plan_tool_call_echo.md.
     /// <para>
-    /// Must be registered <em>first</em>: the first filter added is the outermost, so it post-processes
-    /// last and sees the final content of every path (argument-validation rejection, breaker refusals,
+    /// Must be registered right inside <see cref="AddAgentIdentityFilter"/>, ahead of every other filter: an earlier filter
+    /// is further out, so this one post-processes after them and sees the final content of every path (argument-validation rejection, breaker refusals,
     /// the exception catch-all, and the large-result offload stub), none of which carry a tool-level
     /// identifier of their own. The arguments are snapshotted before <c>next</c> runs because the
-    /// validation filter repairs parameter-name case in place, and the echo must show what the caller
-    /// actually sent.
+    /// validation filter repairs parameter-name case in place, and the echo must show what the caller actually sent, apart from the identity keys, which are not the caller's own arguments.
     /// </para>
     /// </summary>
     private static void AddToolCallEchoFilter(IMcpRequestFilterBuilder filters)
@@ -1064,7 +1092,7 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// Registers the tool-telemetry filter: counts every tool call (and its outcome and duration) on
     /// <see cref="ToolTelemetry"/>. The logic is <see cref="ToolTelemetryRecorder.RecordAsync"/>.
     /// <para>
-    /// Must be registered second - immediately inside the echo filter and before everything else - so it wraps
+    /// Must be registered third - immediately inside the echo filter and before everything else - so it wraps
     /// argument validation and the breakers (which refuse without calling next) and the ToolError filter, whose
     /// body-isError sync means it reads the corrected <c>CallToolResult.IsError</c> (see
     /// <see cref="CallToolFilterRegistrations"/>). Because it records only after <c>next</c> returns, a McpServerStatus
@@ -1125,7 +1153,7 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// <see cref="ToolArgumentValidator"/> for the full analysis.
     /// </para>
     /// <para>
-    /// Registered before every other call-tool filter, except the tool-call echo filter (see
+    /// Registered before every other call-tool filter, except the agent identity, tool-call echo and telemetry filters (see
     /// <see cref="AddToolCallEchoFilter"/>), so no other filter does work on a call that cannot succeed.
     /// </para>
     /// </summary>
