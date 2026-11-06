@@ -976,13 +976,13 @@ public class WorkspaceReadNavigationImpl
                 .SelectMany(s => s.Project.Documents.Select(d => (Document: d, ProjectName: s.Project.Name, IsTest: s.IsTest)))
                 .ToList();
 
-            var results = new ConcurrentBag<TextSearchMatch>();
+            // Lightweight hits only (1-based line and column); previews, context and enclosing members are built after the cap, for the kept rows alone.
+            var hits = new ConcurrentBag<(Document Document, FilePathWrapper FilePath, int Line, int Column, MatchKind Kind)>();
             var hiddenCounts = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var warnings = new List<string>();
             // FilePathWrapper.Relative is empty unless a root is supplied; a '/'-containing fileGlob
             // is matched against Relative, so omitting the root made every such glob match 0 files.
             var solutionRoot = _workspaceManager.GetSolutionRoot();
-            int resultCount = 0;
             int globMatchedDocCount = 0;
             Regex? regex = null;
             bool regexPatternValid = true;
@@ -1004,11 +1004,6 @@ public class WorkspaceReadNavigationImpl
                 var (document, projectName, isTest) = item;
                 var hidden = isTest && !effectiveIncludeTests;
 
-                if (!hidden && Volatile.Read(ref resultCount) >= maxResults)
-                {
-                    return;
-                }
-
                 var docPath = new FilePathWrapper(document.FilePath ?? "", solutionRoot);
                 if (!string.IsNullOrEmpty(fileGlob))
                 {
@@ -1027,25 +1022,8 @@ public class WorkspaceReadNavigationImpl
                 }
 
                 var text = await document.GetTextAsync(ct);
-                var sourceText = text.ToString();
-                var lines = sourceText.Split('\n');
-                // The syntax root is only needed to name the enclosing member of a visible hit, so it
-                // is fetched on the first hit in the document rather than for every document.
-                SyntaxNode? root = null;
-                var rootFetched = false;
+                var lines = text.ToString().Split('\n');
                 var docHiddenCount = 0;
-
-                string? EnclosingMemberAt(int lineIndex, int col)
-                {
-                    if (root == null || lineIndex >= text.Lines.Count)
-                    {
-                        return null;
-                    }
-                    var lineStart = text.Lines[lineIndex].Start;
-                    var lineLength = text.Lines[lineIndex].End - lineStart;
-                    var position = lineStart + Math.Clamp(col, 0, Math.Max(0, lineLength));
-                    return EnclosingMemberResolver.GetEnclosingMemberName(root, position);
-                }
 
                 for (int i = 0; i < lines.Length; i++)
                 {
@@ -1055,10 +1033,6 @@ public class WorkspaceReadNavigationImpl
                         {
                             break;
                         }
-                    }
-                    else if (Volatile.Read(ref resultCount) >= maxResults)
-                    {
-                        break;
                     }
 
                     var line = lines[i];
@@ -1090,33 +1064,14 @@ public class WorkspaceReadNavigationImpl
                         continue;
                     }
 
-                    if (!rootFetched)
-                    {
-                        root = await document.GetSyntaxRootAsync(ct);
-                        rootFetched = true;
-                    }
-
-                    var preview = line.Trim();
-                    if (preview.Length > 120)
-                    {
-                        preview = preview[..120] + "…";
-                    }
-
                     if (literalCol >= 0)
                     {
-                        results.Add(new TextSearchMatch(docPath.Absolute, i + 1, literalCol + 1, preview, MatchKind.Literal, EnclosingMemberAt(i, literalCol), ContextOf(lines, i, before: true), ContextOf(lines, i, before: false)));
-                        Interlocked.Increment(ref resultCount);
+                        hits.Add((document, docPath, i + 1, literalCol + 1, MatchKind.Literal));
                     }
 
                     if (regexMatch != null)
                     {
-                        results.Add(new TextSearchMatch(docPath.Absolute, i + 1, regexMatch.Index + 1, preview, MatchKind.Regex, EnclosingMemberAt(i, regexMatch.Index), ContextOf(lines, i, before: true), ContextOf(lines, i, before: false)));
-                        // A regex hit at the same column as the literal hit is deduped out of the
-                        // final lists (literalKeys), so it must not consume a resultCount slot.
-                        if (!(literalCol >= 0 && regexMatch.Index == literalCol))
-                        {
-                            Interlocked.Increment(ref resultCount);
-                        }
+                        hits.Add((document, docPath, i + 1, regexMatch.Index + 1, MatchKind.Regex));
                     }
                 }
 
@@ -1126,21 +1081,82 @@ public class WorkspaceReadNavigationImpl
                 }
             });
 
-            // ConcurrentBag has no defined enumeration order; sort deterministically before any
-            // maxResults truncation so repeated identical searches return identical result sets.
-            var orderedResults = results.OrderBy(r => r.filePath.Absolute, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(r => r.Line).ThenBy(r => r.Column).ToList();
-            var literalResults = orderedResults.Where(r => r.MatchedAs == MatchKind.Literal).Take(maxResults).ToList();
-            var literalKeys = literalResults.Select(r => (r.filePath, r.Line, r.Column)).ToHashSet();
-            var rawRegexResults = orderedResults.Where(r => r.MatchedAs == MatchKind.Regex).ToList();
-            var regexResults = rawRegexResults.Where(r => !literalKeys.Contains((r.filePath, r.Line, r.Column))).Take(maxResults).ToList();
-            int regexOverlapCount = rawRegexResults.Count - regexResults.Count;
-            int totalResultCount = literalResults.Count + regexResults.Count;
+            // Every visible document was scanned, so `hits` is the complete match set. A ConcurrentBag has no
+            // defined enumeration order, so order it by path, line and column (literal before regex at one
+            // position), collapse exact duplicates (one file reached through several projects) and drop regex
+            // hits that repeat a literal hit; only then apply the single maxResults cap shared by literal and
+            // regex rows. The kept rows therefore never depend on how the parallel scan was scheduled.
+            var orderedHits = hits
+                .OrderBy(h => h.FilePath.Absolute, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(h => h.Line).ThenBy(h => h.Column).ThenBy(h => h.Kind)
+                .DistinctBy(h => (h.FilePath.Absolute.ToUpperInvariant(), h.Line, h.Column, h.Kind))
+                .ToList();
+            var uniqueHits = new List<(Document Document, FilePathWrapper FilePath, int Line, int Column, MatchKind Kind)>(orderedHits.Count);
+            // Counted before the cap, so it is the number of real regex/literal overlaps and never includes rows the cap cut.
+            int regexOverlapCount = 0;
+            foreach (var hit in orderedHits)
+            {
+                if (uniqueHits.Count > 0)
+                {
+                    var previous = uniqueHits[^1];
+                    if (previous.Line == hit.Line && previous.Column == hit.Column
+                        && string.Equals(previous.FilePath.Absolute, hit.FilePath.Absolute, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Hits are distinct, so a repeat at the same position is a regex hit behind its literal hit.
+                        regexOverlapCount++;
+                        continue;
+                    }
+                }
+
+                uniqueHits.Add(hit);
+            }
+
+            int totalMatchCount = uniqueHits.Count;
+            var literalResults = new List<TextSearchMatch>();
+            var regexResults = new List<TextSearchMatch>();
+            // Previews, context lines and enclosing members are built for the kept rows only. The kept hits are in
+            // path order, so one document's text and syntax root are held at a time.
+            DocumentId? renderedDocumentId = null;
+            Microsoft.CodeAnalysis.Text.SourceText? renderedText = null;
+            string[] renderedLines = [];
+            SyntaxNode? renderedRoot = null;
+            foreach (var hit in uniqueHits.Take(maxResults))
+            {
+                if (hit.Document.Id != renderedDocumentId)
+                {
+                    renderedDocumentId = hit.Document.Id;
+                    var documentText = await hit.Document.GetTextAsync(cancellationToken);
+                    renderedText = documentText;
+                    renderedLines = documentText.ToString().Split('\n');
+                    renderedRoot = await hit.Document.GetSyntaxRootAsync(cancellationToken);
+                }
+
+                var lineIndex = hit.Line - 1;
+                var preview = renderedLines[lineIndex].Trim();
+                if (preview.Length > 120)
+                {
+                    preview = preview[..120] + "…";
+                }
+
+                string? enclosingMember = null;
+                if (renderedRoot != null && renderedText != null && lineIndex < renderedText.Lines.Count)
+                {
+                    var lineStart = renderedText.Lines[lineIndex].Start;
+                    var lineLength = renderedText.Lines[lineIndex].End - lineStart;
+                    var position = lineStart + Math.Clamp(hit.Column - 1, 0, Math.Max(0, lineLength));
+                    enclosingMember = EnclosingMemberResolver.GetEnclosingMemberName(renderedRoot, position);
+                }
+
+                var match = new TextSearchMatch(hit.FilePath.Absolute, hit.Line, hit.Column, preview, hit.Kind, enclosingMember, ContextOf(renderedLines, lineIndex, before: true), ContextOf(renderedLines, lineIndex, before: false));
+                (hit.Kind == MatchKind.Literal ? literalResults : regexResults).Add(match);
+            }
+
+            int returnedMatchCount = literalResults.Count + regexResults.Count;
             var hiddenHint = hiddenCounts.IsEmpty
                 ? string.Empty
-                : BuildHiddenTestMatchHint(hiddenCounts, hasVisibleHits: totalResultCount > 0);
+                : BuildHiddenTestMatchHint(hiddenCounts, hasVisibleHits: totalMatchCount > 0);
 
-            if (literalResults.Count == 0 && regexResults.Count == 0)
+            if (totalMatchCount == 0)
             {
                 // The recovery pass runs only here (empty visible result), never during the main scan.
                 var recoveryHint = await BuildRecoveryHintAsync(solution, documentsToScan, pattern, fileGlob, includeTests, effectiveIncludeTests, globMatchedDocCount, solutionRoot, cancellationToken);
@@ -1200,18 +1216,22 @@ public class WorkspaceReadNavigationImpl
                 var emptyResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = new TextSearchResult(literalResults, regexResults, regexOverlapCount, regexPatternValid), TotalRecords = 0, WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = string.Join(" ", warnings) };
                 return emptyResult with { IsError = false, WarningDetails = null, Findings = justTripped ? new[] { new Finding("OrientationBreaker", string.Join(" ", warnings), FindingSeverity.Warning) } : Array.Empty<Finding>() };
             }
-            else if (totalResultCount >= maxResults)
+            else if (totalMatchCount > returnedMatchCount)
             {
-                warnings.Add($"{totalResultCount} matches found - returning first ({maxResults}) matches scanned - Narrow fileGlob/pattern or increase maxResults to see more.");
+                warnings.Add($"{totalMatchCount} matches found, returning the first {returnedMatchCount}. Narrow fileGlob/pattern or increase maxResults to see more.");
             }
 
-            _workspaceManager.RecordSearchOutcome(literalResults.Count + regexResults.Count);
+            _workspaceManager.RecordSearchOutcome(totalMatchCount);
 
             string? warning = warnings.Count > 0 ? string.Join(" ", warnings) : null;
             var payload = new TextSearchResult(literalResults, regexResults, regexOverlapCount, regexPatternValid);
             var allMatches = literalResults.Concat(regexResults).ToList();
             var matchSummary = SummarizeListResult.Build(allMatches, m => m.filePath.Absolute);
-            var searchResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = payload, TotalRecords = literalResults.Count + regexResults.Count, WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = matchSummary.ToSummaryMessage("match") + (hiddenHint.Length > 0 ? " " + hiddenHint : string.Empty), ListSummary = matchSummary };
+            // ListSummary and its message describe the returned rows; when the cap cut some, say returned of total rather than present the capped count as the total.
+            var summaryMessage = totalMatchCount > returnedMatchCount
+                ? $"{returnedMatchCount} of {totalMatchCount} matches returned across {matchSummary.FileCount} file{(matchSummary.FileCount == 1 ? "" : "s")}."
+                : matchSummary.ToSummaryMessage("match");
+            var searchResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = payload, TotalRecords = totalMatchCount, HasMoreData = totalMatchCount > returnedMatchCount, WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = summaryMessage + (hiddenHint.Length > 0 ? " " + hiddenHint : string.Empty), ListSummary = matchSummary };
             return searchResult with { WarningDetails = warning };
         }
         catch (Exception ex)

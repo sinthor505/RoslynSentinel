@@ -739,6 +739,98 @@ public class BatteryTwentyTests
         Assert.That(firstOrder, Is.Ordered, "results should be sorted deterministically (by file path)");
     }
 
+    // Six lines: a.b matches literally on lines 2, 4, 6 and only as a regex ("a" any char "b") on lines 3, 5.
+    // Each literal line is also a regex hit at the same column, so there are 3 regex/literal overlaps.
+    private const string CapMixedSource = "namespace TestProj;\n// a.b\n// axb\n// a.b\n// axb\n// a.b\n";
+
+    [Test]
+    [Description("blocking_error_search_text_cap_reports_no_more_data_and_returns_varying_rows.md: exactly maxResults matches is not truncation.")]
+    public async Task SearchSolutionText_ExactlyAtCap_ReportsNoMoreDataAndNoWarning()
+    {
+        SetSource("namespace TestProj;\n// CapMarker one\n// CapMarker two\n// CapMarker three\n", "Test.cs");
+
+        var result = await _workspaceTools.SearchSolutionTool(reason: "test message", mode: SearchMode.text, query: "CapMarker", maxResults: 3);
+
+        Assert.That(result.IsError, Is.False);
+        var payload = (TextSearchResult)result.SuccessData!;
+        Assert.That(payload.LiteralResults.Count, Is.EqualTo(3));
+        Assert.That(result.TotalRecords, Is.EqualTo(3));
+        Assert.That(result.HasMoreData, Is.False, "all three matches were returned");
+        Assert.That(result.WarningDetails, Is.Null, "nothing was cut, so there is nothing to warn about");
+        Assert.That(result.StatusMessage, Does.Contain("3 matches across 1 file"));
+    }
+
+    [Test]
+    [Description("blocking_error_search_text_cap_reports_no_more_data_and_returns_varying_rows.md: over the cap reports the true total.")]
+    public async Task SearchSolutionText_OverCap_ReportsTrueTotalHasMoreDataAndWarning()
+    {
+        SetSource("namespace TestProj;\n// CapMarker 1\n// CapMarker 2\n// CapMarker 3\n// CapMarker 4\n// CapMarker 5\n", "Test.cs");
+
+        var result = await _workspaceTools.SearchSolutionTool(reason: "test message", mode: SearchMode.text, query: "CapMarker", maxResults: 3);
+
+        Assert.That(result.IsError, Is.False);
+        var payload = (TextSearchResult)result.SuccessData!;
+        Assert.That(payload.LiteralResults.Select(r => r.Line), Is.EqualTo(new[] { 2, 3, 4 }), "the first three matches by line are kept");
+        Assert.That(result.TotalRecords, Is.EqualTo(5), "totalRecords is the true match count, not the capped count");
+        Assert.That(result.HasMoreData, Is.True);
+        Assert.That(result.WarningDetails, Does.Contain("5 matches found, returning the first 3"));
+        Assert.That(result.StatusMessage, Does.Contain("3 of 5 matches"), "the status message must not present the capped count as the total");
+    }
+
+    [Test]
+    [Description("blocking_error_search_text_cap_reports_no_more_data_and_returns_varying_rows.md: the capped rows must not depend on which documents the parallel scan finishes first.")]
+    public async Task SearchSolutionText_CappedQueryAcrossManyDocuments_ReturnsIdenticalRowsEachTime()
+    {
+        var files = Enumerable.Range(0, 40)
+            .Select(i => ($"File{i:00}.cs", $"namespace TestProj; public class File{i:00} {{ public int CapMarker() => {i}; }}"))
+            .ToArray();
+        SetSources(files);
+
+        var expectedFiles = files.Take(5).Select(f => f.Item1).ToList();
+        for (var run = 0; run < 10; run++)
+        {
+            var result = await _workspaceTools.SearchSolutionTool(reason: "test message", mode: SearchMode.text, query: "CapMarker", maxResults: 5);
+
+            var payload = (TextSearchResult)result.SuccessData!;
+            Assert.That(payload.LiteralResults.Select(r => Path.GetFileName(r.filePath.Absolute)), Is.EqualTo(expectedFiles), $"run {run}: the cap must keep the first five matches by path");
+            Assert.That(result.TotalRecords, Is.EqualTo(40), $"run {run}");
+            Assert.That(result.HasMoreData, Is.True, $"run {run}");
+        }
+    }
+
+    [Test]
+    [Description("blocking_error_search_text_cap_reports_no_more_data_and_returns_varying_rows.md: one maxResults cap spans literal and regex rows together.")]
+    public async Task SearchSolutionText_LiteralAndRegexRows_ShareOneCap()
+    {
+        SetSource(CapMixedSource, "Test.cs");
+
+        var result = await _workspaceTools.SearchSolutionTool(reason: "test message", mode: SearchMode.text, query: "a.b", maxResults: 3);
+
+        Assert.That(result.IsError, Is.False);
+        var payload = (TextSearchResult)result.SuccessData!;
+        Assert.That(payload.LiteralResults.Count + payload.RegexResults.Count, Is.EqualTo(3), "literal and regex rows together must not exceed maxResults");
+        Assert.That(payload.LiteralResults.Select(r => r.Line), Is.EqualTo(new[] { 2, 4 }));
+        Assert.That(payload.RegexResults.Select(r => r.Line), Is.EqualTo(new[] { 3 }));
+        Assert.That(result.TotalRecords, Is.EqualTo(5), "3 literal rows + 2 regex-only rows");
+        Assert.That(result.HasMoreData, Is.True);
+        Assert.That(result.WarningDetails, Does.Contain("5 matches found, returning the first 3"));
+    }
+
+    [Test]
+    [Description("blocking_error_search_text_cap_reports_no_more_data_and_returns_varying_rows.md: regexOverlapCount counts real overlaps, not regex rows the cap cut.")]
+    public async Task SearchSolutionText_RegexOverlapCount_IsComputedBeforeTheCap()
+    {
+        SetSource(CapMixedSource, "Test.cs");
+
+        var result = await _workspaceTools.SearchSolutionTool(reason: "test message", mode: SearchMode.text, query: "a.b", maxResults: 2);
+
+        Assert.That(result.IsError, Is.False);
+        var payload = (TextSearchResult)result.SuccessData!;
+        Assert.That(payload.LiteralResults.Count + payload.RegexResults.Count, Is.EqualTo(2));
+        Assert.That(payload.RegexOverlapCount, Is.EqualTo(3), "lines 2, 4 and 6 are literal and regex hits at one column; the regex-only rows cut by the cap are not overlaps");
+        Assert.That(result.TotalRecords, Is.EqualTo(5));
+    }
+
     // --- LoadSolutionTool ---
 
     [Test]

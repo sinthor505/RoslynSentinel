@@ -22,6 +22,7 @@ public static class SequenceMessages
             return $"COMPLETE: the requested offset is at or past the end of the sequence ({page.Total} {units}); nothing is returned and there is nothing more to fetch.";
         }
 
+        // TODO "COMPLETE ... nothing more to fetch" describes the stored rows only: a capped Search(mode: text) with 19356 matches pages to "195-200 of 200" here with hasMoreData false and no warning. Carry the tool's own truncation signal onto the last page.
         string prefix = nextFetchCall is null ? "COMPLETE:" : "INCOMPLETE:";
         string suffix = nextFetchCall is null
             ? " That is the end of the sequence; there is nothing more to fetch."
