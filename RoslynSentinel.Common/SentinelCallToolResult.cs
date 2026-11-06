@@ -289,10 +289,12 @@ public record SentinelCallToolResult<TSuccess, TError> : IOperationResult
     /// <summary>Non-fatal observations surfaced alongside the result. Empty when there are none.</summary>
     private IReadOnlyList<Finding>? _findings;
 
-    // Explicit findings win; otherwise lift the write-chokepoint findings carried on an AppliedChangeSummary payload.
+    // Explicit findings win; otherwise lift the write-chokepoint findings carried on an AppliedChangeSummary payload,
+    // else those carried on a ResultError (error fallback).
     public IReadOnlyList<Finding> Findings
     {
-        get => _findings is { Count: > 0 } ? _findings : (SuccessData as AppliedChangeSummary)?.Findings ?? [];
+        get => _findings is { Count: > 0 } ? _findings
+            : (SuccessData as AppliedChangeSummary)?.Findings ?? (ErrorData as ResultError)?.Findings ?? [];
         init => _findings = value;
     }
 
@@ -396,6 +398,10 @@ public record ResultError(
     /// <summary>The cause category, derived from <see cref="ErrorCode"/>. Not serialized.</summary>
     [JsonIgnore]
     public ResultStatus Category => ResultStatusExtensions.FromErrorCode(ErrorCode);
+
+    /// <summary>Non-fatal observations for this error. Lifted into <see cref="SentinelCallToolResult{TSuccess,TError}.Findings"/>, so it is never serialized inside errorData.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<Finding>? Findings { get; init; }
 
     /// <summary>
     /// Pass-through kept for migration only: returns a <see cref="ResultError"/> carrying

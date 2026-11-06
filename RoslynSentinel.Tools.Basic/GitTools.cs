@@ -9,6 +9,7 @@ namespace RoslynSentinel.Tools.Basic;
 public class GitTools
 {
     private readonly IGitOperations _gitImpl;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<GitTools> _logger;
 
     public GitTools(IWorkspaceManager workspaceManager,
@@ -16,7 +17,28 @@ public class GitTools
     {
         _logger = logger;
         _gitImpl = new GitImpl(workspaceManager, new NullLogger<GitImpl>());
+        _workspaceManager = workspaceManager;
 
+    }
+
+    /// <summary>
+    /// Info findings for status paths whose latest edit attribution ledger entry was written by another agent.
+    /// Git status paths are repo-relative with '/', so each is joined with the repo root to match ledger keys.
+    /// </summary>
+    private IReadOnlyList<Finding> StatusForeignEditFindings(string gitRoot, GitStatusResult status)
+    {
+        var paths = new List<string>();
+        foreach (var entry in status.Staged.Concat(status.Unstaged))
+        {
+            paths.Add(Path.Combine(gitRoot, entry.Path.Replace('/', '\\')));
+        }
+
+        foreach (var untracked in status.Untracked)
+        {
+            paths.Add(Path.Combine(gitRoot, untracked.Replace('/', '\\')));
+        }
+
+        return EditAttributionFindings.ForCurrentCaller(_workspaceManager, paths);
     }
 
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
@@ -163,6 +185,16 @@ public class GitTools
 
         if (!((GitResult)result).IsError)
         {
+            if (operation == GitOperation.status && string.IsNullOrWhiteSpace(repoPath) && result is GitStatusResult statusResult)
+            {
+                // Never attribute for another repo: the edit attribution ledger keys are paths of this solution.
+                var foreignEdits = StatusForeignEditFindings(gitRoot, statusResult);
+                if (foreignEdits.Count > 0)
+                {
+                    return new SentinelCallToolResult<object> { IsError = false, SuccessData = result, Findings = foreignEdits };
+                }
+            }
+
             return new SentinelCallToolResult<object> { IsError = false, SuccessData = result };
         }
         else

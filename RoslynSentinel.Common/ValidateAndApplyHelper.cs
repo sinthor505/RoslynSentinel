@@ -112,7 +112,10 @@ public static class ValidateAndApplyHelper
                 $"Fix the issue(s) below and retry.",
                 detailString,
                 detail.Cast<object>().ToList());
-            return new ApplyOutcome(null, validationError, dryRun, Validation: validation);
+            // Foreign-agent findings for the files that failed the compile gate; null when there are none so single-agent output is unchanged.
+            var validationFindings = EditAttributionFindings.ForCurrentCaller(
+                workspaceManager, detail.Select(d => d.FilePath.ToString()));
+            return new ApplyOutcome(null, validationError with { Findings = validationFindings.Count > 0 ? validationFindings.ToList() : null }, dryRun, Validation: validation);
         }
 
         if (dryRun)
@@ -133,7 +136,12 @@ public static class ValidateAndApplyHelper
             var applyError = applyResult.RefusalCode != null
                 ? new ResultError(applyResult.RefusalCode, applyResult.Summary)
                 : new ResultError(ToolErrorCode.Exception, $"{operationName} apply failed", Detail: applyResult.Summary);
-            return new ApplyOutcome(null, applyError, false);
+            // ConcurrentEditRefused's Summary already names the writer, so the lookup is skipped for it.
+            var refusedPaths = applyResult.RefusalCode == ToolErrorCode.ConcurrentEditRefused
+                ? Array.Empty<string>()
+                : applyResult.FailedFiles.Keys.Select(k => k.ToString());
+            var refusalFindings = EditAttributionFindings.ForCurrentCaller(workspaceManager, refusedPaths);
+            return new ApplyOutcome(null, applyError with { Findings = refusalFindings.Count > 0 ? refusalFindings.ToList() : null }, false);
         }
 
         var changeId = Guid.NewGuid().ToString("n")[..8];

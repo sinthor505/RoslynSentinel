@@ -585,7 +585,8 @@ public class AdvancedRefactoringTools
                 // caller can retry with a correct callSiteFixups entry rather than guessing.
                 if (result.PendingLedgerEntries is { Count: > 0 } unresolvedEntries)
                 {
-                    return UnresolvedCallSitesResult(unresolvedEntries, string.Empty);
+                    var unresolvedResult = UnresolvedCallSitesResult(unresolvedEntries, string.Empty);
+                    return unresolvedResult with { ErrorData = unresolvedResult.ErrorData! with { Findings = apply.Error.Findings } };
                 }
 
                 if (result.SkippedCallSites.Count > 0)
@@ -594,7 +595,7 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<AppliedChangeSummary>
                     {
                         IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.UnresolvedCallSites, $"{result.SkippedCallSites.Count} call site(s) could not be automatically rewritten, so the move was rejected. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) for each site, or \"FilePath:*\" / \"*\" to apply one value to every unresolved site in a file / everywhere.", detail, result.SkippedCallSites.Cast<object>().ToList())
+                        ErrorData = new ResultError(ToolErrorCode.UnresolvedCallSites, $"{result.SkippedCallSites.Count} call site(s) could not be automatically rewritten, so the move was rejected. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) for each site, or \"FilePath:*\" / \"*\" to apply one value to every unresolved site in a file / everywhere.", detail, result.SkippedCallSites.Cast<object>().ToList()) { Findings = apply.Error.Findings }
                     };
                 }
 

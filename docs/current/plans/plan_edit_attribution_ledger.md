@@ -1,6 +1,6 @@
 # Plan: Edit attribution ledger naming the agent behind each write, with a same-file conflict refusal and a fixed per-process operating mode
 
-**Status:** APPROVED 2026-11-05. Design rulings from the owner are recorded under Decision; Steps 0-8 done (Step 0 results under that step); the hook is installed and live: writes are recorded, the filter sets identity, the chokepoint refuses same-file conflicts between two known agents and `UndoLastApply` refuses an undo over another agent's later write. Step 8 live check: a restarted server latched `MultiAgent` ("auto: first call carried an agent id") with `CallerAgentId: main`, and two concurrent subagents each reported their own distinct id; the Step 4 refusal naming a subagent was not reproduced live (it needs a write landing inside another agent's in-flight call) and is covered by tests only. A missing hook exe fails open (checked with `claude -p` in a scratch folder, both command forms). Citations checked at commit b3b90a26; the request pipeline, `AsyncLocal` and telemetry points were rechecked at bab9599b, which added per-tool telemetry. Between those commits `PersistentWorkspaceManager.cs`, `ToolArgumentValidator.cs`, `ValidateAndApplyHelper.cs` and `AdminTools.cs` did not change, so their line citations still hold.
+**Status:** APPROVED 2026-11-05. Design rulings from the owner are recorded under Decision; Steps 0-8 done (Step 0 results under that step), and Step 9 done except its "not found" errors; the hook is installed and live: writes are recorded, the filter sets identity, the chokepoint refuses same-file conflicts between two known agents and `UndoLastApply` refuses an undo over another agent's later write. Step 8 live check: a restarted server latched `MultiAgent` ("auto: first call carried an agent id") with `CallerAgentId: main`, and two concurrent subagents each reported their own distinct id; the Step 4 refusal naming a subagent was not reproduced live (it needs a write landing inside another agent's in-flight call) and is covered by tests only. A missing hook exe fails open (checked with `claude -p` in a scratch folder, both command forms). Citations checked at commit b3b90a26; the request pipeline, `AsyncLocal` and telemetry points were rechecked at bab9599b, which added per-tool telemetry. Between those commits `PersistentWorkspaceManager.cs`, `ToolArgumentValidator.cs`, `ValidateAndApplyHelper.cs` and `AdminTools.cs` did not change, so their line citations still hold.
 
 ## Problem
 
@@ -253,15 +253,52 @@ in place. Findings reuse `Finding`.
 
 ### Step 9 - Reporting surfaces
 
-- Files: `RoslynSentinel.Tools.Basic/WorkspaceBuildTestTools.cs` (`GetDiagnostics` at `:15`; `Build` is believed to be
-  in this file, confirm); `RoslynSentinel.Common/ValidateAndApplyHelper.cs`; the `Git` status implementation;
-  `ServiceRegistrationExtensionsBasic.cs` (a stamp filter modelled on `WorkspaceStaleStamp`).
+- Files: `RoslynSentinel.Common/EditAttributionFindings.cs` (new shared helper); `RoslynSentinel.Tools.Basic/WorkspaceBuildTestImpl.cs`
+  (`Build`, `GetDiagnostics`); `RoslynSentinel.Common/ValidateAndApplyHelper.cs`; `RoslynSentinel.Common/SentinelCallToolResult.cs`;
+  `RoslynSentinel.Tools.Advanced/AdvancedRefactoringTools.cs` (`MoveMemberTool` error branch);
+  `RoslynSentinel.Tools.Basic/GitTools.cs`; for "not found" errors `RoslynSentinel.Common/ToolResultMarshaller.cs`,
+  `RoslynSentinel.Server.Advanced/AgentIdentityCapture.cs` and `RoslynSentinel.Common/ToolCallContext.cs`.
 - Change: one shared helper turns a set of paths into `Finding`s, reading "last changed by `<agent>` via `<tool>`,
   `<age>`: `<reason>`". Emit only for a different agent. Apply to: files carrying errors in `Build`, `GetDiagnostics`
-  and compile-gate failures; dirty files in `Git(status)`; error results whose `filePath` argument has a foreign
-  entry.
-- Done when tests cover each surface and show no output when there is no foreign entry, so single-agent results do
-  not change.
+  and compile-gate failures; dirty files in `Git(status)`.
+- Failed edits (owner ruling, 2026-11-06): about 55 sites turn a failed `ApplyOutcome` into a result with
+  `ErrorData = apply.Error` and drop its `Findings`. So `ResultError` carries a JSON-ignored `Findings`, set in
+  `ValidateAndApplyHelper`, and `SentinelCallToolResult.Findings` falls back to it after explicit findings and
+  `AppliedChangeSummary`. The 55 sites do not change. `MoveMemberTool` builds new errors in its error branch and copies
+  the `Findings` across.
+- "Not found" errors (owner ruling, 2026-11-06). Purpose: a reasonably confident signal, so an agent's own typo or guess
+  is not blamed on another agent or on the brief. The agent still investigates, so the note states evidence and not
+  a cause. It runs in `ToolResultMarshaller`, where the typed result is in hand, so there is no JSON rewrite and no new
+  filter. `AgentIdentityCapture` copies the `filePath` and the missing term onto `ToolCallContext`, from a per-tool map of
+  argument names (`methodName`, `memberName`, `oldContent` and so on). Unmapped tools get no note. Match the term exactly,
+  normalizing line endings for snippets and using word boundaries for names. Evidence, in order:
+  1. Operation blobs, searched directly (owner ruling, 2026-11-06), not through the edit attribution ledger, which is per
+     server. The blob folder is per solution root, so every window writes to it. Filter by filename timestamp to a recent
+     window (30-60 minutes, tunable), newest first, open each and match the item's `FilePath`. A writer is foreign when
+     its session differs from the caller's, or the session matches and its agent id differs. If the foreign item's
+     `BeforeSource` holds the term: "`Bar` was in `Foo.cs` before agent `b7` changed it 20s ago via RenameSymbol:
+     `<reason>`", saying when the writer is another session. Blobs exist only for successful applies. An item with no
+     session id counts as foreign only when its agent id differs and is not `main`, because every window's main session
+     is called `main`.
+  2. Git fallback: if `git show HEAD:<path>` holds the term and the file on disk does not, and no blob in the window shows
+     a write by this caller: "`Bar` is in `Foo.cs` at HEAD but not on disk: it was changed since the last commit, writer
+     unknown". This now only has to cover edits made outside any server and writes older than the window. `git log -S`
+     is not used, because old removals are not a sign of a live conflict.
+  3. Neither: no note, so a typo stays silent.
+- Session id: the hook helper adds `_sessionId` from the hook input's `session_id`. `AgentIdentityCapture` strips it onto
+  `ToolCallContext`, and `OperationBlobWriter.WriteAsync` stamps `AppliedBySessionId` beside `AppliedByAgentId` (add
+  `AppliedByAgentType` and `AppliedByReason` too, for the note). **Rollout order, same trap as Step 8:** a server that does
+  not strip `_sessionId` refuses every call as an unknown parameter, and the hook's settings hot-reload. So commit the
+  server side first, restart every window, confirm with `McpServerStatus`, and only then republish the helper with
+  `scripts/publish-agent-identity-hook.ps1`.
+- Known gaps: `GetDiagnostics` checks only errors inside `maxDetails` (TODO.md); `Git(status)` checks the 10-per-list
+  sample when totals exceed `maxEntries`; a name mentioned only in a comment can still match; `batchEdits` paths are not
+  covered at first.
+- Not verified: that every `ReplaceSnippet` and batch blob carries `BeforeSource`; that the timestamp match is reliable;
+  that `ToolCallContext` is visible in the marshaller.
+- Done when tests cover each surface and show no output when there is no foreign entry; a typo gets no note; a term removed
+  by another agent gets the blob note; a term removed outside the server gets the Git note. A call with no agent id
+  is unchanged.
 
 ### Step 10 - Re-validate after a sibling's write
 
@@ -284,6 +321,8 @@ in place. Findings reuse `Finding`.
 ## Out of scope
 
 - Persisting the edit attribution ledger, or attributing writes across server instances (cross-session journal proposal).
+  One exception by owner ruling, 2026-11-06: the Step 9 "not found" note may name a writer from another window by reading
+  the shared operation blobs. No refusal depends on it.
 - Any change to external-drift detection or `SessionHalted`.
 - A runtime mode toggle, or any new tool or tool operation.
 - Ownership rules on `LedgerFix`/`LedgerRelease`, and changes to `ScopedOperationLedgerEngine`.

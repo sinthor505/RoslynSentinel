@@ -104,7 +104,7 @@ public class WorkspaceBuildTestImpl
                 {
                     IsError = false,
                     SuccessData = result.Data with { BuildVerification = buildVerification },
-                    Findings = result.Findings
+                    Findings = WithForeignWriterFindings(result.Findings, summary.Details)
                 };
             }
 
@@ -114,7 +114,7 @@ public class WorkspaceBuildTestImpl
             {
                 IsError = false,
                 SuccessData = new DiagnosticsSummaryResult(TotalIssues: relevant.Count, Errors: summary.Errors, Warnings: summary.Warnings, TopIssues: groups, BuildVerification: buildVerification),
-                Findings = result.Findings
+                Findings = WithForeignWriterFindings(result.Findings, summary.Details)
             };
         }
         catch (Exception ex)
@@ -266,6 +266,15 @@ public class WorkspaceBuildTestImpl
         return dot >= 0 ? name[..dot] : name;
     }
 
+    // Appends Info findings for error files whose latest edit attribution ledger entry was written by another agent.
+    // Returns existing unchanged (same reference) when there are none, so single-agent output stays byte-identical.
+    private IReadOnlyList<Finding> WithForeignWriterFindings(IReadOnlyList<Finding> existing, IEnumerable<DiagnosticInfo> diagnostics)
+    {
+        var errorFiles = diagnostics.Where(d => d.Severity == "Error").Select(d => d.FilePath.ToString());
+        var attribution = EditAttributionFindings.ForCurrentCaller(_workspaceManager, errorFiles);
+        return attribution.Count == 0 ? existing : existing.Concat(attribution).ToList();
+    }
+
     public async Task<SentinelCallToolResult<object>> Build(ToolCallReason reason, BuildVerifyLevel level = BuildVerifyLevel.fullBuildThrowaway,
         ToolScope scope = ToolScope.solution, string? scopeName = null, int maxDetails = 20,
         bool useScratchDir = false, bool includeOutput = false, bool includeWarnings = false,
@@ -317,7 +326,7 @@ public class WorkspaceBuildTestImpl
                 var failureMessage = driftHint is not null ? buildSummary + " " + driftHint : buildSummary;
                 // The build ran and failed: report isError:true like RunTestTool does for an incomplete run, but keep the
                 // BuildResult payload (inline or offloaded) so the caller still gets the error details.
-                return buildToolResult with { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, failureMessage), Findings = result.Findings, StatusMessage = failureMessage };
+                return buildToolResult with { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, failureMessage), Findings = WithForeignWriterFindings(result.Findings, buildResult.FullDiagnostics?.Errors ?? buildResult.Errors), StatusMessage = failureMessage };
             }
 
             return buildToolResult with { Findings = result.Findings, StatusMessage = buildSummary };
