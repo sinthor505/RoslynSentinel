@@ -85,6 +85,7 @@ public class ServerBinaryStalenessGitTests
     // (process start, 60s timeout, or pipe EOF wait under load), not a shared-repo collision (each test has its own GUID repo).
     // Passes alone; do not paper over it with retry loops.
     [Test]
+    [NonParallelizable]
     public void LaterCommitTouchingServerSource_IsStaleAndListed()
     {
         var sha = Commit("RoslynSentinel.Common/a.cs", "first");
