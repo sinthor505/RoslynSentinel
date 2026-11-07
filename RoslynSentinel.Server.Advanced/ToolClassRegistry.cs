@@ -44,7 +44,7 @@ public static class ToolClassRegistry
             "LoadSolution", "ReadFile", "GetFileOutline", "GetMethodSource", "GetLargeResult",
             "Search",
             "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
-            "RenameSymbol", "CreateFile", "DeleteFile",
+            "RenameSymbol", "ChangeSignature", "CreateFile", "DeleteFile", "WriteFile",
             "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift",
             ToolsetCatalog.ControlToolName,
         ],
@@ -54,12 +54,13 @@ public static class ToolClassRegistry
     /// Tool classes that declare at least one <see cref="ClaudeLeanToolNames"/> tool, including SubAgentTools (its SubAgent tool is on demand via the modelEval toolset),
     /// DeclarationTools, ParameterEditTools and SemanticFindReplaceTools, whose single tools (DeclarationTool, ParameterEditTool, SemanticFindReplaceTool) are on-demand only: the allow-list keeps
     /// them out of the startup surface and the <c>declarations</c> toolset adds them. Listed here so the class exists in claude-lean and McpServerStatusTool can name its mode.
+    /// AdvancedRefactoringTools contributes only ChangeSignature to the core set; its other tools stay on demand (the allow-list filters them out).
     /// </summary>
     private static readonly string[] ClaudeLeanToolClasses =
     [
         "WorkspaceTools", "WorkspaceReadNavigationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
         "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
-        "AdminTools", "WholeFileWriteTools", "ToolsetControlTools", "DeclarationTools", "ParameterEditTools",
+        "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools", "ToolsetControlTools", "DeclarationTools", "ParameterEditTools",
         "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools", "QualifyCrefsTools",
         "SubAgentTools",
     ];

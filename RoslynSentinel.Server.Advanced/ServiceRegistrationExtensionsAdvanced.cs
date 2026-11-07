@@ -74,9 +74,9 @@ public static class RoslynSentinelServiceExtensionsAdvanced
             resolvedIncludeTools,
             resolvedExcludeTools);
 
-        // claude-lean: AdvancedRefactoringTools is an on-demand class (McpToolsetControlTool may add its tools
-        // later). Registering the class here is dependency-only: the per-tool allow-list that
-        // WithSentinelTools reads makes it register none of its tools at startup. See the same widening
+        // claude-lean: AdvancedRefactoringTools is core for ChangeSignature (ToolClassRegistry.ClaudeLeanToolNames)
+        // and on demand for its other tools, which McpToolsetControlTool may add later. The per-tool allow-list
+        // that WithSentinelTools reads keeps those other tools out of the startup surface. See the same widening
         // in AddRoslynSentinelToolsBasic.
         if (activeModes.Contains(ToolClassRegistry.ClaudeLeanMode)
             && ToolClassRegistry.ClaudeLeanOnDemandToolClasses.Contains("AdvancedRefactoringTools")

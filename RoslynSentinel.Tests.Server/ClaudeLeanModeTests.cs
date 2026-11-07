@@ -36,7 +36,7 @@ public class ClaudeLeanModeTests
         "LoadSolution", "ReadFile", "GetFileOutline", "GetMethodSource", "GetLargeResult",
         "Search",
         "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
-        "RenameSymbol", "CreateFile", "DeleteFile",
+        "RenameSymbol", "ChangeSignature", "CreateFile", "DeleteFile", "WriteFile",
         "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift",
         "McpToolsetControl",
     ];
@@ -220,7 +220,8 @@ public class ClaudeLeanModeTests
         Assert.That(classes, Does.Contain("TestCategoryTaggingTools"));
         Assert.That(classes, Does.Contain("SubAgentTools")); // on demand via the modelEval toolset
         Assert.That(classes.Count(name => name == "SubAgentTools"), Is.EqualTo(1), "SubAgentTools must appear exactly once in the claude-lean resolution");
-        Assert.That(classes, Does.Not.Contain("AdvancedRefactoringTools"));
+        // ChangeSignature (core) is declared on AdvancedRefactoringTools; the per-tool allow-list hides its other tools.
+        Assert.That(classes, Does.Contain("AdvancedRefactoringTools"));
         Assert.That(classes, Does.Not.Contain("DocumentationTools"));
     }
 
@@ -283,11 +284,16 @@ public class ClaudeLeanModeTests
         var classes = ToolClassRegistry.ModeToToolClasses["claude-lean"];
         var helper = new WriteToolAdviceHelper(classes, ToolClassRegistry.ClaudeLeanToolNames);
 
-        // WriteFile is an on-demand moveExtract tool, not core, so claude-lean advice must not name it.
-        Assert.That(helper.IsExposed("WriteFile"), Is.False);
+        // WriteFile is a claude-lean core tool (WholeFileWriteTools is active and allow-listed), so advice may name it.
+        Assert.That(helper.IsExposed("WriteFile"), Is.True);
+        // ApplyDiff is on demand (not allow-listed), so claude-lean advice must not name it.
         Assert.That(helper.IsExposed("ApplyDiff"), Is.False);
         Assert.That(helper.IsExposed("ApplyUnifiedDiff"), Is.False);
-        Assert.That(helper.AdviseForOversizedEdit("ReplaceSnippet").ToolNames, Does.Not.Contain("ApplyDiff"));
+        var advice = helper.AdviseForOversizedEdit("ReplaceSnippet");
+        Assert.That(advice.ToolNames, Does.Not.Contain("ApplyDiff"));
+        // WriteFile is the least surgical route, so the advice names it last.
+        Assert.That(advice.ToolNames, Does.Contain("WriteFile"));
+        Assert.That(advice.ToolNames.Last(), Is.EqualTo("WriteFile"));
     }
 
     [Test]

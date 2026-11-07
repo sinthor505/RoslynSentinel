@@ -4,7 +4,7 @@
 
 | Class | Tool name | Modes | Breaker | Summary |
 |-------|-----------|-------|---------|---------|
-| AdvancedRefactoringTools | ChangeSignature | Claude, claude-lean (on demand), Refactor | - | Reorders, adds, or removes method parameters and updates all call sites solution-wide. |
+| AdvancedRefactoringTools | ChangeSignature | Claude, claude-lean, Refactor | - | Reorders, adds, or removes method parameters and updates all call sites solution-wide. |
 | AdvancedRefactoringTools | ConvertAnonymousToNamed | Claude, claude-lean (on demand), Refactor | - | Converts the first anonymous object creation in a file into a named class declaration. |
 | AdvancedRefactoringTools | ExtractMembers | Claude, claude-lean (on demand), Refactor | - | Extracts class members into a new interface or partial class (newType=superclass is not implemented). |
 | AdvancedRefactoringTools | Inline | Claude, claude-lean (on demand), Refactor | - | Inlines a symbol by replacing all usages with its definition. |
@@ -100,7 +100,7 @@
 | WholeFileWriteTools | ApplyDiff | Claude, claude-lean (on demand), WholeFileWrite | - | Applies or validates a change set as either full file contents (changesetFormat=files) or a unified diff... |
 | WholeFileWriteTools | ApplyUnifiedDiff | Claude, claude-lean (on demand), WholeFileWrite | - | Applies or validates a unified diff against a single file; mismatched hunk lines are re-anchored nearby. |
 | WholeFileWriteTools | DeleteFile | Claude, claude-lean, WholeFileWrite | - | Deletes a file from disk; fails if it doesn't exist. |
-| WholeFileWriteTools | WriteFile | Claude, claude-lean (on demand), WholeFileWrite | - | Writes a whole file to disk, creating or overwriting it. |
+| WholeFileWriteTools | WriteFile | Claude, claude-lean, WholeFileWrite | - | Writes a whole file to disk, creating or overwriting it. |
 | WorkspaceBuildTestTools | Build | WorkspaceBuildTest | - | Compiles the solution. level=quickBuild: in-memory Roslyn diagnostics (fast). |
 | WorkspaceBuildTestTools | GetDiagnostics | WorkspaceBuildTest | - | Gets compiler diagnostics for a file, project, or the whole solution. |
 | WorkspaceBuildTestTools | RunTest | WorkspaceBuildTest | - | Runs `dotnet test` on the solution or one project. |

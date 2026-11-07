@@ -37,7 +37,7 @@ public static class ToolsetCatalog
                 // Declaration replaces ModifyModifier, ChangeAccessibility, ModifyAttribute and ModifyBaseType in claude-lean;
                 // those four remain registered in claude and the other modes. ParameterEdit likewise replaces MethodSignature and
                 // ConstructorParameter in claude-lean only.
-                "Declaration", "ParameterEdit", "ModifyEnum", "ChangeSignature", "SyncTypeAndFilename", "UsingDirective", "TypedMember",
+                "Declaration", "ParameterEdit", "ModifyEnum", "SyncTypeAndFilename", "UsingDirective", "TypedMember",
             ],
             [ToolSetName.moveExtract] =
             [
@@ -45,7 +45,7 @@ public static class ToolsetCatalog
                 "ExtractMethod", "Inline", "InlineClass", "Introduce", "IntroduceParameterObject", "WrapRange",
                 "InvertAssignments", "ConvertAnonymousToNamed", "SyncInterface", "SummaryComment",
                 "DeleteUnusedSymbol", "PreviewRenameImpact", "ApplyDiff", "ApplyUnifiedDiff", "SemanticFindReplace",
-                "NamedArguments", "QualifyCrefs", "WriteFile",
+                "NamedArguments", "QualifyCrefs",
             ],
             [ToolSetName.projectAdmin] =
             [
@@ -73,7 +73,7 @@ public static class ToolsetCatalog
         new Dictionary<ToolSetName, string>
         {
             [ToolSetName.declarations] = "change declarations: modifiers, accessibility, attributes, base types, signatures, constructor parameters, enums, sync type and filename, UsingDirective, TypedMember (generate a typed property or field)",
-            [ToolSetName.moveExtract] = "move/extract/inline/introduce refactors, interface and doc sync, safe delete, rename preview, ApplyDiff, ApplyUnifiedDiff, SemanticFindReplace, NamedArguments, QualifyCrefs, WriteFile",
+            [ToolSetName.moveExtract] = "move/extract/inline/introduce refactors, interface and doc sync, safe delete, rename preview, ApplyDiff, ApplyUnifiedDiff, SemanticFindReplace, NamedArguments, QualifyCrefs",
             [ToolSetName.projectAdmin] = "projects and workspace: create/split projects, solution and framework listings, Features, ProjectDoc, workspace health, operation details, retry, type info, symbol relationships, GetDiagnostics, InspectSymbol",
             [ToolSetName.testCategories] = "plan test-category attributes (NUnit/xUnit/MSTest) from the production types each test references (TagTestCategories, dry run by default, dryRun: false applies)",
             [ToolSetName.modelEval] = "dispatch a task to a local model in a child server (SubAgent, Advanced only)",

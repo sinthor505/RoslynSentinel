@@ -314,7 +314,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         }
         if (activeToolClasses.Contains("AdminTools"))
         {
-            // Restricted/operator-only tool -> deliberately NOT included in AllModes (see
+            // Operator tool. --mode=all also exposes it (AllModes derives from ModeToToolClasses.Keys, see
             // ServerStdio.cs/ServerHttp.cs); reachable via --mode=Admin, --mode=Claude, or
             // --include-tools=AdminTools.
             services.AddSingleton<AdminTools>();
@@ -322,11 +322,10 @@ public static class RoslynSentinelServiceExtensionsBasic
         }
         if (activeToolClasses.Contains("WholeFileWriteTools"))
         {
-            // TODO comment is stale: AllModes derives from ModeToToolClasses.Keys, and --mode=all does expose WriteFile
-            // Restricted/operator-only tool -> deliberately NOT included in AllModes (see
-            // ServerStdio.cs/ServerHttp.cs), so --mode alone can't reach it; only an explicit
-            // --mode=Admin/--mode=WholeFileWrite or --include-tools=WholeFileWriteTools
-            // activates it.
+            // Whole-file write tools (WriteFile, DeleteFile, ApplyDiff, ApplyUnifiedDiff). --mode=all also
+            // exposes the class (AllModes derives from ModeToToolClasses.Keys, see ServerStdio.cs/ServerHttp.cs).
+            // claude-lean makes WriteFile and DeleteFile core (ToolClassRegistry.ClaudeLeanToolNames); the other
+            // tools stay on demand there. Also reachable via --mode=WholeFileWrite or --include-tools=WholeFileWriteTools.
             services.AddSingleton<WholeFileWriteTools>();
             mcpBuilder.WithSentinelTools<WholeFileWriteTools>();
         }
