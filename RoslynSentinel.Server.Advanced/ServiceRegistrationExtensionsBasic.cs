@@ -1021,7 +1021,7 @@ public static class RoslynSentinelServiceExtensionsBasic
     }
 
     /// <summary>
-    /// Registers the agent identity filter: strips <c>_agentId</c> and <c>_agentType</c> from the arguments and sets
+    /// Registers the agent identity filter: strips <c>_agentId</c>, <c>_agentType</c> and <c>_sessionId</c> from the arguments and sets
     /// <see cref="ToolCallContext"/> for the call; the logic is <see cref="AgentIdentityCapture.Enter"/>.
     /// <para>
     /// Must be registered first. The echo snapshots arguments before calling next, so only a filter outside it keeps the
@@ -1042,7 +1042,8 @@ public static class RoslynSentinelServiceExtensionsBasic
                 AgentIdentityCapture.Enter(
                     context.Params?.Name,
                     context.Params?.Arguments,
-                    () => (context.Server.Services?.GetService<PersistentWorkspaceManager>() as IEditAttributionLedgerProvider)?.EditAttributions.CurrentSeq ?? 0);
+                    () => (context.Server.Services?.GetService<PersistentWorkspaceManager>() as IEditAttributionLedgerProvider)?.EditAttributions.CurrentSeq ?? 0,
+                    () => context.Server.Services?.GetService<PersistentWorkspaceManager>()?.GetSolutionRoot());
                 return await next(context, cancellationToken);
             }));
     }

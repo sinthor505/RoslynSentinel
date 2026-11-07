@@ -4,7 +4,7 @@ namespace RoslynSentinel.Utilities.AgentIdentityHook;
 
 /// <summary>
 /// Rewrites a Claude Code PreToolUse hook payload so an RoslynSentinel MCP call carries the caller identity
-/// in tool_input (_agentId and _agentType). A null result means the call runs with no identity (fail open),
+/// in tool_input (_agentId, _agentType and _sessionId). A null result means the call runs with no identity (fail open),
 /// so a hook problem never blocks a tool call.
 /// </summary>
 public static class AgentIdentityHookTransform
@@ -41,6 +41,14 @@ public static class AgentIdentityHookTransform
                 agentType = type;
             }
 
+            string? sessionId = null;
+            if (root.TryGetProperty("session_id", out JsonElement sessionElement)
+                && sessionElement.ValueKind == JsonValueKind.String
+                && sessionElement.GetString() is { Length: > 0 } session)
+            {
+                sessionId = session;
+            }
+
             using MemoryStream stream = new();
             using (Utf8JsonWriter writer = new(stream))
             {
@@ -50,7 +58,7 @@ public static class AgentIdentityHookTransform
                 writer.WriteStartObject("updatedInput");
                 foreach (JsonProperty property in toolInput.EnumerateObject())
                 {
-                    if (property.NameEquals("_agentId") || property.NameEquals("_agentType"))
+                    if (property.NameEquals("_agentId") || property.NameEquals("_agentType") || property.NameEquals("_sessionId"))
                     {
                         continue;
                     }
@@ -62,6 +70,11 @@ public static class AgentIdentityHookTransform
                 if (agentType is not null)
                 {
                     writer.WriteString("_agentType", agentType);
+                }
+
+                if (sessionId is not null)
+                {
+                    writer.WriteString("_sessionId", sessionId);
                 }
 
                 writer.WriteEndObject();

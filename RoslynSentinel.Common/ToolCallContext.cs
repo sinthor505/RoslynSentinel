@@ -45,6 +45,18 @@ public sealed class ToolCallContext
     /// <summary>Sequence number at call start.</summary>
     public long StartSeq { get; }
 
+    /// <summary>Host session id from the request, or null when the host does not supply one.</summary>
+    public string? SessionId { get; init; }
+
+    /// <summary>The call's filePath argument, for the not-found notes (NotFoundEvidence); null when the tool has none.</summary>
+    public string? TargetFilePath { get; init; }
+
+    /// <summary>The name or snippet the call looks for in TargetFilePath, for the not-found notes; null for tools with no mapped term.</summary>
+    public string? MissingTerm { get; init; }
+
+    /// <summary>Solution root at call start, for the not-found notes; null when no solution is loaded.</summary>
+    public string? SolutionRoot { get; init; }
+
     /// <summary>True once the write gate has passed for this call.</summary>
     public bool GatePassed => Volatile.Read(ref _gatePassed) != 0;
 

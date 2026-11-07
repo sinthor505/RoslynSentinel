@@ -53,26 +53,29 @@ public static class EditAttributionFindings
         {
             return Array.Empty<Finding>();
         }
+    }
 
-        static string FormatAge(TimeSpan age)
+    /// <summary>
+    /// Short age text such as 20s, 5m or 2h; a negative age reads as 0s.
+    /// </summary>
+    internal static string FormatAge(TimeSpan age)
+    {
+        if (age < TimeSpan.Zero)
         {
-            if (age < TimeSpan.Zero)
-            {
-                age = TimeSpan.Zero;
-            }
-
-            if (age.TotalSeconds < 60)
-            {
-                return $"{(int)age.TotalSeconds}s";
-            }
-
-            if (age.TotalMinutes < 60)
-            {
-                return $"{(int)age.TotalMinutes}m";
-            }
-
-            return $"{(int)age.TotalHours}h";
+            age = TimeSpan.Zero;
         }
+
+        if (age.TotalSeconds < 60)
+        {
+            return $"{(int)age.TotalSeconds}s";
+        }
+
+        if (age.TotalMinutes < 60)
+        {
+            return $"{(int)age.TotalMinutes}m";
+        }
+
+        return $"{(int)age.TotalHours}h";
     }
 
     /// <summary>

@@ -84,6 +84,7 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
         CancellationToken cancellationToken)
     {
         ForwardGuidance(result);
+        result = WithNotFoundNotes(result);
         try
         {
             object? passthrough = Passthrough(result, serializerOptions);
@@ -138,6 +139,26 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
         }
 
         return fitted.ToJsonString(options);
+    }
+
+    // Evidence notes for a not-found error (NotFoundEvidence), added here where the typed result is in hand and before it is serialized.
+    // An error thrown instead of returned never reaches the marshaller; CallToolFailureHandler adds the same notes. Never throws.
+    private static object? WithNotFoundNotes(object? result)
+    {
+        try
+        {
+            if (result is IFindingsEnvelope { IsError: true } envelope
+                && NotFoundEvidence.ForCurrentCall(envelope.Code) is { Count: > 0 } notes)
+            {
+                return envelope.WithAddedFindings(notes);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Not-found notes failed: {ex}");
+        }
+
+        return result;
     }
 
     // Guidance-adherence telemetry: the telemetry filter only sees the serialized CallToolResult, so the envelope's

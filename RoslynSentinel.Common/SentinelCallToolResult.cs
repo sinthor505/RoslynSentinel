@@ -185,6 +185,19 @@ public static class ToolErrorCode
 
 // ── Envelope ──────────────────────────────────────────────────────────────────
 
+/// <summary>Non-generic view of a <see cref="SentinelCallToolResult{TSuccess, TError}"/>, so a caller holding the result as an object can add findings to an error without reflection.</summary>
+public interface IFindingsEnvelope
+{
+    /// <summary>True when the operation did not succeed.</summary>
+    bool IsError { get; }
+
+    /// <summary>The error code, or null when there is none.</summary>
+    string? Code { get; }
+
+    /// <summary>A copy of this result, of the same runtime type, with <paramref name="extra"/> appended to its findings.</summary>
+    object WithAddedFindings(IReadOnlyList<Finding> extra);
+}
+
 /// <summary>
 /// Typed envelope returned by Tool scan tools.
 /// Exactly one of <see cref="SuccessData"/>, <see cref="ErrorData"/>, or <see cref="LargeResult"/> is populated.
@@ -196,7 +209,7 @@ public static class ToolErrorCode
 /// <see cref="ResultError"/> and is what nearly every tool method actually returns. A tool opts into
 /// a structured, non-ResultError error shape by returning this base type directly instead.
 /// </remarks>
-public record SentinelCallToolResult<TSuccess, TError> : IOperationResult
+public record SentinelCallToolResult<TSuccess, TError> : IOperationResult, IFindingsEnvelope
 {
     /// <summary>
     /// <c>true</c> when a newer build of the server's own binaries exists in the repo than the ones this process
@@ -297,6 +310,9 @@ public record SentinelCallToolResult<TSuccess, TError> : IOperationResult
             : (SuccessData as AppliedChangeSummary)?.Findings ?? (ErrorData as ResultError)?.Findings ?? [];
         init => _findings = value;
     }
+
+    /// <inheritdoc />
+    public object WithAddedFindings(IReadOnlyList<Finding> extra) => this with { Findings = [.. Findings, .. extra] };
 
     /// <summary>
     /// Present when the result exceeded the inline-size threshold and was written to disk.

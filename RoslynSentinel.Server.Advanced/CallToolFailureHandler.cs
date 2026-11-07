@@ -55,12 +55,15 @@ public static class CallToolFailureHandler
             Debug.WriteLine($"Unexpected error in CallTool filter: {ex}");
         }
 
+        // The ISolutionProvider argument is documented as unused by the translator; there is no
+        // provider to hand it here (and none is needed).
+        var error = ToolErrorMapper.ToResultError(ex, null!, string.IsNullOrWhiteSpace(toolName) ? "Tool call" : toolName);
         var envelope = new SentinelCallToolResult<object>
         {
             IsError = true,
-            // The ISolutionProvider argument is documented as unused by the translator; there is no
-            // provider to hand it here (and none is needed).
-            ErrorData = ToolErrorMapper.ToResultError(ex, null!, string.IsNullOrWhiteSpace(toolName) ? "Tool call" : toolName),
+            ErrorData = error,
+            // A typed throw such as a snippet no-match skips the result marshaller, so its not-found notes are added here.
+            Findings = NotFoundEvidence.ForCurrentCall(error.ErrorCode),
         };
 
         return new CallToolResult

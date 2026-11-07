@@ -1,6 +1,6 @@
 # Plan: Edit attribution ledger naming the agent behind each write, with a same-file conflict refusal and a fixed per-process operating mode
 
-**Status:** APPROVED 2026-11-05. Design rulings from the owner are recorded under Decision; Steps 0-8 done (Step 0 results under that step), and Step 9 done except its "not found" errors; the hook is installed and live: writes are recorded, the filter sets identity, the chokepoint refuses same-file conflicts between two known agents and `UndoLastApply` refuses an undo over another agent's later write. Step 8 live check: a restarted server latched `MultiAgent` ("auto: first call carried an agent id") with `CallerAgentId: main`, and two concurrent subagents each reported their own distinct id; the Step 4 refusal naming a subagent was not reproduced live (it needs a write landing inside another agent's in-flight call) and is covered by tests only. A missing hook exe fails open (checked with `claude -p` in a scratch folder, both command forms). Citations checked at commit b3b90a26; the request pipeline, `AsyncLocal` and telemetry points were rechecked at bab9599b, which added per-tool telemetry. Between those commits `PersistentWorkspaceManager.cs`, `ToolArgumentValidator.cs`, `ValidateAndApplyHelper.cs` and `AdminTools.cs` did not change, so their line citations still hold.
+**Status:** APPROVED 2026-11-05. Design rulings from the owner are recorded under Decision; Steps 0-9 done (Step 0 results under that step), with the Step 9 hook helper republish pending the rollout order in that step; the hook is installed and live: writes are recorded, the filter sets identity, the chokepoint refuses same-file conflicts between two known agents and `UndoLastApply` refuses an undo over another agent's later write. Step 8 live check: a restarted server latched `MultiAgent` ("auto: first call carried an agent id") with `CallerAgentId: main`, and two concurrent subagents each reported their own distinct id; the Step 4 refusal naming a subagent was not reproduced live (it needs a write landing inside another agent's in-flight call) and is covered by tests only. A missing hook exe fails open (checked with `claude -p` in a scratch folder, both command forms). Citations checked at commit b3b90a26; the request pipeline, `AsyncLocal` and telemetry points were rechecked at bab9599b, which added per-tool telemetry. Between those commits `PersistentWorkspaceManager.cs`, `ToolArgumentValidator.cs`, `ValidateAndApplyHelper.cs` and `AdminTools.cs` did not change, so their line citations still hold.
 
 ## Problem
 
@@ -268,18 +268,21 @@ in place. Findings reuse `Finding`.
   the `Findings` across.
 - "Not found" errors (owner ruling, 2026-11-06). Purpose: a reasonably confident signal, so an agent's own typo or guess
   is not blamed on another agent or on the brief. The agent still investigates, so the note states evidence and not
-  a cause. It runs in `ToolResultMarshaller`, where the typed result is in hand, so there is no JSON rewrite and no new
-  filter. `AgentIdentityCapture` copies the `filePath` and the missing term onto `ToolCallContext`, from a per-tool map of
-  argument names (`methodName`, `memberName`, `oldContent` and so on). Unmapped tools get no note. Match the term exactly,
-  normalizing line endings for snippets and using word boundaries for names. Evidence, in order:
+  a cause. `RoslynSentinel.Common/NotFoundEvidence.cs` holds the search. It runs in `ToolResultMarshaller`, where the typed
+  result is in hand, so there is no JSON rewrite and no new filter. A typed throw (`ToolNotFoundException`, including a
+  `ReplaceSnippet` no-match) never reaches the marshaller, so `CallToolFailureHandler.ToFailureResult` adds the same notes.
+  `AgentIdentityCapture` copies the `filePath`, the missing term and the solution root onto `ToolCallContext`, from a
+  per-tool map of argument names (`methodName`, `memberName`, `oldContent` and so on). Unmapped tools get no note. The codes
+  are `NotFound`, `MethodNotFound` and `FileNotFound`. Match the term exactly, normalizing line endings for snippets and
+  using word boundaries for names; a name under 3 characters gets no note. Evidence, in order:
   1. Operation blobs, searched directly (owner ruling, 2026-11-06), not through the edit attribution ledger, which is per
-     server. The blob folder is per solution root, so every window writes to it. Filter by filename timestamp to a recent
-     window (30-60 minutes, tunable), newest first, open each and match the item's `FilePath`. A writer is foreign when
-     its session differs from the caller's, or the session matches and its agent id differs. If the foreign item's
-     `BeforeSource` holds the term: "`Bar` was in `Foo.cs` before agent `b7` changed it 20s ago via RenameSymbol:
-     `<reason>`", saying when the writer is another session. Blobs exist only for successful applies. An item with no
-     session id counts as foreign only when its agent id differs and is not `main`, because every window's main session
-     is called `main`.
+     server. The blob folder is per solution root, so every window writes to it. Filter by filename timestamp to the last
+     60 minutes (`DefaultWindow`), newest first, at most 200 blobs, open each and match the item's `FilePath`. Newest first,
+     the first `BeforeSource` that holds the term belongs to the write that removed it. If that writer is foreign:
+     "`Bar` was in `Foo.cs` before agent `b7` changed it 20s ago via RenameSymbol: `<reason>`", saying when the writer is
+     another session. A writer is foreign when its session differs from the caller's, or the session matches and its agent
+     id differs. Blobs exist only for successful applies. Without a session id on both sides, an item counts as foreign only
+     when its agent id differs and is not `main`, because every window's main session is called `main`.
   2. Git fallback: if `git show HEAD:<path>` holds the term and the file on disk does not, and no blob in the window shows
      a write by this caller: "`Bar` is in `Foo.cs` at HEAD but not on disk: it was changed since the last commit, writer
      unknown". This now only has to cover edits made outside any server and writes older than the window. `git log -S`
@@ -294,8 +297,9 @@ in place. Findings reuse `Finding`.
 - Known gaps: `GetDiagnostics` checks only errors inside `maxDetails` (TODO.md); `Git(status)` checks the 10-per-list
   sample when totals exceed `maxEntries`; a name mentioned only in a comment can still match; `batchEdits` paths are not
   covered at first.
-- Not verified: that every `ReplaceSnippet` and batch blob carries `BeforeSource`; that the timestamp match is reliable;
-  that `ToolCallContext` is visible in the marshaller.
+- Known gaps, not-found notes: two blobs written in the same second have no reliable order; a bare file name that the tool
+  resolved elsewhere in the solution gets a blob note but no Git note, because Git looks under the solution root.
+- Not verified: that every `ReplaceSnippet` and batch blob carries `BeforeSource`.
 - Done when tests cover each surface and show no output when there is no foreign entry; a typo gets no note; a term removed
   by another agent gets the blob note; a term removed outside the server gets the Git note. A call with no agent id
   is unchanged.

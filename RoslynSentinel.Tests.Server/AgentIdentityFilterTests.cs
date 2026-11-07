@@ -234,6 +234,126 @@ public class AgentIdentityFilterTests
         }
     }
 
+    [Test]
+    public void Enter_SessionId_IsCapturedAndStripped()
+    {
+        try
+        {
+            var arguments = new Dictionary<string, JsonElement>
+            {
+                [AgentIdentityCapture.AgentIdKey] = JsonDocument.Parse("\"a1\"").RootElement.Clone(),
+                [AgentIdentityCapture.SessionIdKey] = JsonDocument.Parse("\"s1\"").RootElement.Clone(),
+            };
+
+            AgentIdentityCapture.Enter("T", arguments, () => 0);
+
+            Assert.That(ToolCallContext.Current, Is.Not.Null);
+            Assert.That(ToolCallContext.Current!.SessionId, Is.EqualTo("s1"));
+            Assert.That(arguments.ContainsKey(AgentIdentityCapture.SessionIdKey), Is.False);
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
+    [Test]
+    public void Enter_MappedTool_CapturesFileAndTerm()
+    {
+        try
+        {
+            var arguments = new Dictionary<string, JsonElement>
+            {
+                ["filePath"] = JsonDocument.Parse("\"Foo.cs\"").RootElement.Clone(),
+                ["methodName"] = JsonDocument.Parse("\"Bar\"").RootElement.Clone(),
+            };
+
+            AgentIdentityCapture.Enter("GetMethodSource", arguments, () => 0, () => "C:\\root");
+
+            Assert.That(ToolCallContext.Current, Is.Not.Null);
+            Assert.That(ToolCallContext.Current!.TargetFilePath, Is.EqualTo("Foo.cs"));
+            Assert.That(ToolCallContext.Current.MissingTerm, Is.EqualTo("Bar"));
+            Assert.That(ToolCallContext.Current.SolutionRoot, Is.EqualTo("C:\\root"));
+            Assert.That(arguments.ContainsKey("filePath"), Is.True);
+            Assert.That(arguments.ContainsKey("methodName"), Is.True);
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
+    [Test]
+    public void Enter_ReplaceSnippet_TermIsOldContent()
+    {
+        try
+        {
+            var arguments = new Dictionary<string, JsonElement>
+            {
+                ["filePath"] = JsonDocument.Parse("\"Foo.cs\"").RootElement.Clone(),
+                ["oldContent"] = JsonDocument.Parse("\"a b\"").RootElement.Clone(),
+            };
+
+            AgentIdentityCapture.Enter("ReplaceSnippet", arguments, () => 0);
+
+            Assert.That(ToolCallContext.Current, Is.Not.Null);
+            Assert.That(ToolCallContext.Current!.MissingTerm, Is.EqualTo("a b"));
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
+    [Test]
+    public void Enter_UnmappedTool_HasNoTerm()
+    {
+        try
+        {
+            var arguments = new Dictionary<string, JsonElement>
+            {
+                ["filePath"] = JsonDocument.Parse("\"Foo.cs\"").RootElement.Clone(),
+                ["methodName"] = JsonDocument.Parse("\"Bar\"").RootElement.Clone(),
+            };
+
+            AgentIdentityCapture.Enter("Build", arguments, () => 0, () => "C:\\root");
+
+            Assert.That(ToolCallContext.Current, Is.Not.Null);
+            Assert.That(ToolCallContext.Current!.MissingTerm, Is.Null);
+            Assert.That(ToolCallContext.Current.TargetFilePath, Is.Null);
+            Assert.That(ToolCallContext.Current.SolutionRoot, Is.Null);
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
+    [Test]
+    public void Enter_SolutionRootThrows_KeepsIdentity()
+    {
+        try
+        {
+            var arguments = new Dictionary<string, JsonElement>
+            {
+                [AgentIdentityCapture.AgentIdKey] = JsonDocument.Parse("\"a1\"").RootElement.Clone(),
+                ["filePath"] = JsonDocument.Parse("\"Foo.cs\"").RootElement.Clone(),
+                ["methodName"] = JsonDocument.Parse("\"Bar\"").RootElement.Clone(),
+            };
+
+            Assert.DoesNotThrow(() => AgentIdentityCapture.Enter("GetMethodSource", arguments, () => 0, () => throw new InvalidOperationException("boom")));
+
+            Assert.That(ToolCallContext.Current, Is.Not.Null);
+            Assert.That(ToolCallContext.Current!.AgentId, Is.EqualTo("a1"));
+            Assert.That(ToolCallContext.Current.MissingTerm, Is.EqualTo("Bar"));
+            Assert.That(ToolCallContext.Current.SolutionRoot, Is.Null);
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
     private static Dictionary<string, object?> Args(string? agentId = null, string? agentType = null)
     {
         var args = new Dictionary<string, object?> { ["reason"] = "test message" };

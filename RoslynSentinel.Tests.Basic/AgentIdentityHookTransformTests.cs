@@ -91,4 +91,45 @@ public class AgentIdentityHookTransformTests
             Assert.That(result, Is.Null, json);
         }
     }
+
+    [Test]
+    public void SessionId_IsWrittenToUpdatedInput()
+    {
+        byte[] input = System.Text.Encoding.UTF8.GetBytes("{\"session_id\":\"s1\",\"tool_input\":{\"path\":\"a.cs\"}}");
+
+        byte[]? output = RoslynSentinel.Utilities.AgentIdentityHook.AgentIdentityHookTransform.Transform(input);
+
+        Assert.That(output, Is.Not.Null);
+        using System.Text.Json.JsonDocument document = System.Text.Json.JsonDocument.Parse(output!);
+        System.Text.Json.JsonElement updated = document.RootElement.GetProperty("hookSpecificOutput").GetProperty("updatedInput");
+        Assert.That(updated.GetProperty("_sessionId").GetString(), Is.EqualTo("s1"));
+    }
+
+    [Test]
+    public void MissingSessionId_OmitsKey()
+    {
+        byte[] input = System.Text.Encoding.UTF8.GetBytes("{\"tool_input\":{\"path\":\"a.cs\"}}");
+
+        byte[]? output = RoslynSentinel.Utilities.AgentIdentityHook.AgentIdentityHookTransform.Transform(input);
+
+        Assert.That(output, Is.Not.Null);
+        using System.Text.Json.JsonDocument document = System.Text.Json.JsonDocument.Parse(output!);
+        System.Text.Json.JsonElement updated = document.RootElement.GetProperty("hookSpecificOutput").GetProperty("updatedInput");
+        Assert.That(updated.TryGetProperty("_sessionId", out _), Is.False);
+    }
+
+    [Test]
+    public void ModelSuppliedSessionId_IsReplaced()
+    {
+        byte[] input = System.Text.Encoding.UTF8.GetBytes("{\"session_id\":\"s1\",\"tool_input\":{\"_sessionId\":\"fake\",\"x\":1}}");
+
+        byte[]? output = RoslynSentinel.Utilities.AgentIdentityHook.AgentIdentityHookTransform.Transform(input);
+
+        Assert.That(output, Is.Not.Null);
+        using System.Text.Json.JsonDocument document = System.Text.Json.JsonDocument.Parse(output!);
+        System.Text.Json.JsonElement updated = document.RootElement.GetProperty("hookSpecificOutput").GetProperty("updatedInput");
+        string[] names = updated.EnumerateObject().Select(property => property.Name).ToArray();
+        Assert.That(names, Is.EqualTo(new[] { "x", "_agentId", "_sessionId" }));
+        Assert.That(updated.GetProperty("_sessionId").GetString(), Is.EqualTo("s1"));
+    }
 }

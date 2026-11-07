@@ -98,12 +98,14 @@ public static class OperationBlobWriter
         try
         {
             // Stamped here so every blob writer gets it; the apply blob is written inside the applying tool call, so the ambient context is the applier.
-            var applierId = ToolCallContext.Current?.AgentId;
-            if (applierId is not null)
+            if (ToolCallContext.Current is { } applier)
             {
                 foreach (var item in items)
                 {
-                    item.AppliedByAgentId ??= applierId;
+                    item.AppliedByAgentId ??= applier.AgentId;
+                    item.AppliedBySessionId ??= applier.SessionId;
+                    item.AppliedByAgentType ??= applier.AgentType;
+                    item.AppliedByReason ??= applier.Reason;
                 }
             }
 

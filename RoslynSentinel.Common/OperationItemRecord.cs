@@ -32,4 +32,22 @@ public class OperationItemRecord
     {
         get; set;
     }
+
+    /// <summary>Session id of the call that applied this change; null when the call carried none. Used by the not-found notes to tell windows apart.</summary>
+    public string? AppliedBySessionId
+    {
+        get; set;
+    }
+
+    /// <summary>Agent type of the call that applied this change; null when the call carried none.</summary>
+    public string? AppliedByAgentType
+    {
+        get; set;
+    }
+
+    /// <summary>Stated reason of the call that applied this change; null when the call carried none.</summary>
+    public string? AppliedByReason
+    {
+        get; set;
+    }
 }
