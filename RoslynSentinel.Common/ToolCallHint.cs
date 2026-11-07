@@ -64,7 +64,8 @@ public static class ToolCallHint
     /// <summary>
     /// Renders a complete call, <c>Tool(p1: v1, p2: v2)</c>, in schema order. A parameter appears when the caller supplied
     /// a valid value or the schema marks it required (then a placeholder). Unknown tools render as the bare name; a null or
-    /// empty tool name renders as an empty string. Invalid or unknown pairs are dropped.
+    /// empty tool name renders as an empty string. Invalid or unknown pairs are dropped, except a pair stripped from the schema by
+    /// the lean profile (<see cref="HiddenSchemaParams"/>), which is kept after the schema parameters.
     /// </summary>
     public static string Call(ToolSignatureCatalog catalog, string toolName, params (string Name, string Value)[] known)
     {
@@ -84,10 +85,20 @@ public static class ToolCallHint
         }
 
         var supplied = new Dictionary<string, string>(StringComparer.Ordinal);
+        // Hidden pairs: the lean schema profile strips some parameters from the emitted schema, but the server still
+        // accepts them, so a supplied hidden name is kept (first occurrence wins) and rendered after the schema parameters.
+        var hidden = new List<(string Name, string Rendered)>();
         foreach (var pair in known ?? Array.Empty<(string Name, string Value)>())
         {
             var spec = FindSpec(parameters, pair.Name);
-            if (spec is not null && TryRender(spec, pair.Value, out var rendered))
+            if (spec is null)
+            {
+                if (pair.Value is not null && HiddenSchemaParams.IsHidden(toolName, pair.Name) && !hidden.Exists(entry => entry.Name == pair.Name))
+                {
+                    hidden.Add((pair.Name, RenderHidden(pair.Value)));
+                }
+            }
+            else if (TryRender(spec, pair.Value, out var rendered))
             {
                 supplied.TryAdd(spec.Name, rendered);
             }
@@ -104,6 +115,11 @@ public static class ToolCallHint
             {
                 parts.Add($"{spec.Name}: {Placeholder(spec)}");
             }
+        }
+
+        foreach (var (name, rendered) in hidden)
+        {
+            parts.Add($"{name}: {rendered}");
         }
 
         return $"{toolName}({string.Join(", ", parts)})";
@@ -193,6 +209,17 @@ public static class ToolCallHint
 
     private static ToolParameterSpec? FindSpec(IReadOnlyList<ToolParameterSpec> parameters, string? name) =>
         name is null ? null : parameters.FirstOrDefault(parameter => parameter.Name == name);
+
+    /// <summary>Renders a value for a hidden (schema-stripped) parameter with no spec: bool bare, otherwise a quoted string.</summary>
+    private static string RenderHidden(string value)
+    {
+        if (bool.TryParse(value, out var flag))
+        {
+            return flag ? "true" : "false";
+        }
+
+        return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+    }
 
     private static bool TryRender(ToolParameterSpec spec, string? value, out string rendered)
     {

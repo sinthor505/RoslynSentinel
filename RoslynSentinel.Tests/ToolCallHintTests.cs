@@ -75,6 +75,52 @@ public class ToolCallHintTests
     }
 
     [Test]
+    [NonParallelizable] // HiddenSchemaParams is process-wide static state, so this test cannot overlap other tests that touch it.
+    public void Call_HiddenParameter_IsRenderedOnlyWhenRegistered()
+    {
+        using var probe = JsonDocument.Parse("""{"type":"object","properties":{"reason":{"type":"string"}},"required":["reason"]}""");
+        var catalog = ToolSignatureCatalog.FromSchemas(new[]
+        {
+            KeyValuePair.Create("HiddenParamProbe", probe.RootElement.Clone()),
+        });
+
+        try
+        {
+            HiddenSchemaParams.Register("HiddenParamProbe", new[] { "lineBefore" });
+
+            Assert.That(ToolCallHint.Call(catalog, "HiddenParamProbe", ("reason", "a reason that is long"), ("lineBefore", "foo()")), Is.EqualTo("HiddenParamProbe(reason: \"a reason that is long\", lineBefore: \"foo()\")"));
+        }
+        finally
+        {
+            HiddenSchemaParams.Clear();
+        }
+
+        Assert.That(ToolCallHint.Call(catalog, "HiddenParamProbe", ("reason", "a reason that is long"), ("lineBefore", "foo()")), Is.EqualTo("HiddenParamProbe(reason: \"a reason that is long\")"));
+    }
+
+    [Test]
+    [NonParallelizable] // HiddenSchemaParams is process-wide static state, so this test cannot overlap other tests that touch it.
+    public void Call_HiddenStringValue_IsQuotedEvenWhenNumeric()
+    {
+        using var probe = JsonDocument.Parse("""{"type":"object","properties":{"reason":{"type":"string"}},"required":["reason"]}""");
+        var catalog = ToolSignatureCatalog.FromSchemas(new[]
+        {
+            KeyValuePair.Create("HiddenParamProbe", probe.RootElement.Clone()),
+        });
+
+        try
+        {
+            HiddenSchemaParams.Register("HiddenParamProbe", new[] { "lineBefore" });
+
+            Assert.That(ToolCallHint.Call(catalog, "HiddenParamProbe", ("reason", "a reason that is long"), ("lineBefore", "42")), Is.EqualTo("HiddenParamProbe(reason: \"a reason that is long\", lineBefore: \"42\")"));
+        }
+        finally
+        {
+            HiddenSchemaParams.Clear();
+        }
+    }
+
+    [Test]
     public void Call_InvalidEnum_IsDroppedAndPlaceholderShown()
     {
         var catalog = BuildCatalog();
