@@ -3102,8 +3102,13 @@ public class AsyncifyTools
                 var applyResult3b = await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { { handler.FilePath, handlerResult.UpdatedText } },
                     validateChanges: true, cancellationToken: state.InnerToken);
-                if (applyResult3b.IsError && applyResult3b.ValidationResult != null)
+                // TODO the same IsError-with-null-ValidationResult fall-through exists at the flag/bridge phases (applyResult1126, 1223, 1317, 1421, 3a); fix each with its own test
+                if (applyResult3b.IsError)
                 {
+                    if (applyResult3b.ValidationResult == null)
+                    {
+                        throw new InvalidOperationException($"Write refused: {applyResult3b.Summary}");
+                    }
                     var diagMsg = string.Join("; ", applyResult3b.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
                     throw new InvalidOperationException($"Validation: {applyResult3b.ValidationResult.Diagnostics.Count} error(s) - {diagMsg}");
                 }

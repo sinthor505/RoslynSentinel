@@ -3940,6 +3940,66 @@ public class User
                 var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Pair.cs", "Double"));
                 Assert.That(ex!.Message, Does.Contain("'Factor'").And.Contain("not in scope"));
             }
+
+            [Test]
+            public async Task BUG_InlineMethod_TemplateNeedsUsingMissingAtCaller_IsRefused()
+            {
+                const string defs = @"using System.Globalization;
+public static class Defs { public static string Format(int x) => x.ToString(CultureInfo.InvariantCulture); }";
+                const string user = @"public class User { public string Run() { return Defs.Format(3); } }";
+                var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Defs.cs", defs), ("User.cs", user)]);
+                _workspaceManager.SetTestSolution(solution);
+                var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Defs.cs", "Format"));
+                Assert.That(ex!.Message, Does.Contain("CultureInfo").And.Contain("not in scope"));
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_CallInExpressionBodiedProperty_Inlines()
+            {
+                const string code = @"public class Util { public static int Double(int x) => x * 2; }
+public class User { public int X => Util.Double(3); }";
+                SetSource(code, "Pair.cs");
+                var result = await _advancedStructuralEngine.InlineMethodAsync("Pair.cs", "Double");
+                var text = string.Join("\n", result.Values);
+                Assert.That(text, Does.Contain("3 * 2"));
+                Assert.That(text, Does.Not.Contain("Double("));
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_CallInFieldInitializer_Inlines()
+            {
+                const string code = @"public class Util { public static int Double(int x) => x * 2; }
+public class User { public int F = Util.Double(3); }";
+                SetSource(code, "Pair.cs");
+                var result = await _advancedStructuralEngine.InlineMethodAsync("Pair.cs", "Double");
+                var text = string.Join("\n", result.Values);
+                Assert.That(text, Does.Contain("3 * 2"));
+                Assert.That(text, Does.Not.Contain("Double("));
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_CrossProject_PublicTemplate_Inlines()
+            {
+                var solution = TestSolutionBuilder.CreateTwoProjectSolution(
+                    "Lib", [("Util.cs", "public static class Util { public static int Double(int x) => x * 2; }")],
+                    "App", [("User.cs", "public class User { public int Run() { return Util.Double(3); } }")]);
+                _workspaceManager.SetTestSolution(solution);
+                var result = await _advancedStructuralEngine.InlineMethodAsync("Util.cs", "Double");
+                var text = string.Join("\n", result.Values);
+                Assert.That(text, Does.Contain("3 * 2"));
+                Assert.That(text, Does.Not.Contain("Double("));
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_CrossProject_InternalTemplate_IsRefusedAsInaccessible()
+            {
+                var solution = TestSolutionBuilder.CreateTwoProjectSolution(
+                    "Lib", [("Util.cs", "public static class Util { internal static int Factor = 2; public static int Double(int x) => x * Factor; }")],
+                    "App", [("User.cs", "public class User { public int Run() { return Util.Double(3); } }")]);
+                _workspaceManager.SetTestSolution(solution);
+                var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Util.cs", "Double"));
+                Assert.That(ex!.Message, Does.Contain("'Factor'").And.Contain("inaccessible"));
+            }
         }
 
         /// <summary>

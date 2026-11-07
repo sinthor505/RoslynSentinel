@@ -707,6 +707,156 @@ public static class DataHelper
         }
     }
 
+    // Phase 3b: a non-void handler flagged AsyncHandlerCandidate makes ConvertEventHandlerCallerToAsyncVoidAsync
+    // throw (only void methods convert to async void), so the item must count as Failed with a FailureDetail.
+    [Test, CancelAfter(60000)]
+    public async Task T23_Asyncify_HandlerConvert_NonVoidHandler_CountsAsFailedWithFailureDetail()
+    {
+        var source = """
+            using System;
+            using System.Threading.Tasks;
+
+            public class RegionForm
+            {
+                [MigrationCandidate("AsyncHandlerCandidate", Score = 70, Reason = "non-void handler", FlaggedDate = "2026-06-01")]
+                public int OnClick(object s, EventArgs e)
+                {
+                    return 1;
+                }
+            }
+            """ + "\n" + AttrStub;
+
+        SetSource(source);
+
+        var result = await _asyncifyTools.AsyncifyTool(reason: "test message");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
+        Assert.That(result.SuccessData, Is.Not.Null);
+        Assert.That(result.SuccessData!.PhaseBreakdown!.Handler.Failed, Is.EqualTo(1),
+            "The non-void OnClick handler must count as a failed Handler item.");
+        Assert.That(result.SuccessData.Failures, Has.Count.EqualTo(1),
+            "The failure must be reported as a FailureDetail on the result.");
+
+        var failure = result.SuccessData.Failures[0];
+        Assert.That(failure.MethodName, Is.EqualTo("OnClick"));
+        Assert.That(failure.Outcome, Is.EqualTo(ItemRecordOutcome.Failed));
+        Assert.That(failure.Reason, Is.Not.Null.And.Not.Empty);
+    }
+
+    // Phase 3b: a convertible handler (its sync bridge call gets an async sibling) whose in-place write is refused
+    // because the file is read-only. The conversion succeeds; only the write fails, so the item must be Failed.
+    [Test, CancelAfter(60000)]
+    public async Task T24_Asyncify_HandlerConvert_WriteRefused_IsFailedNotSucceeded()
+    {
+        var source = """
+            using System;
+            using System.Threading.Tasks;
+
+            public class RegionForm
+            {
+                [MigrationCandidate("AsyncHandlerCandidate", Score = 70, Reason = "blocking handler", FlaggedDate = "2026-06-01")]
+                public void OnClick(object s, EventArgs e)
+                {
+                    LoadTrips();
+                }
+
+                [System.Obsolete("Asyncify-bridge: call LoadTripsAsync instead.")]
+                public void LoadTrips() { }
+
+                public Task LoadTripsAsync() => Task.CompletedTask;
+            }
+            """ + "\n" + AttrStub;
+
+        SetSource(source);
+        var path = PathOf("RegionForm.cs");
+        File.SetAttributes(path, FileAttributes.ReadOnly);
+
+        try
+        {
+            var result = await _asyncifyTools.AsyncifyTool(reason: "test message");
+
+            Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
+            Assert.That(result.SuccessData, Is.Not.Null);
+            Assert.That(result.SuccessData!.PhaseBreakdown!.Handler.Succeeded, Is.EqualTo(0),
+                "A refused write must not count the OnClick handler as Succeeded.");
+            Assert.That(result.SuccessData.PhaseBreakdown.Handler.Failed, Is.EqualTo(1),
+                "A refused write must count the OnClick handler as Failed.");
+            Assert.That(result.SuccessData.Failures, Has.Count.EqualTo(1),
+                "The refused write must surface as one FailureDetail.");
+
+            var reason = result.SuccessData.Failures[0].Reason;
+            TestContext.Out.WriteLine($"T24 Failure Reason: {reason}");
+            Assert.That(reason, Is.Not.Null.And.Not.Empty,
+                $"The FailureDetail Reason must name the cause. Reason was: {reason}");
+        }
+        finally
+        {
+            File.SetAttributes(path, FileAttributes.Normal);
+        }
+    }
+
+    // Phase 3b: the same convertible handler as T24, but the write is refused by an open scoped operation ledger
+    // (ScopedLedgerBlocked) because RegionForm.cs is not tracked by the ledger. The refusal returns IsError with a
+    // null ValidationResult, so the item must be Failed, not Succeeded.
+    [Test, CancelAfter(60000)]
+    public async Task T25_Asyncify_HandlerConvert_LedgerRefusedWrite_IsFailedNotSucceeded()
+    {
+        var source = """
+            using System;
+            using System.Threading.Tasks;
+
+            public class RegionForm
+            {
+                [MigrationCandidate("AsyncHandlerCandidate", Score = 70, Reason = "blocking handler", FlaggedDate = "2026-06-01")]
+                public void OnClick(object s, EventArgs e)
+                {
+                    LoadTrips();
+                }
+
+                [System.Obsolete("Asyncify-bridge: call LoadTripsAsync instead.")]
+                public void LoadTrips() { }
+
+                public Task LoadTripsAsync() => Task.CompletedTask;
+            }
+            """ + "\n" + AttrStub;
+
+        SetSource(source);
+
+        var ledger = (IScopedOperationLedger)_workspaceManager;
+        var otherFilePath = _workspaceManager.ResolveFromWire(PathOf("Other.cs")).Absolute;
+        var opened = ledger.TryOpen(
+            "Asyncify_Test",
+            [
+                new CallSiteLedgerEntry
+                {
+                    EntryId = "entry-1",
+                    FilePath = otherFilePath,
+                    Line = 1,
+                    BrokenExpression = "x.Foo()",
+                    OldStaticType = "ClassA",
+                    Status = CallSiteStatus.Ambiguous,
+                },
+            ],
+            out var rejection);
+        Assert.That(opened, Is.True, rejection);
+
+        var result = await _asyncifyTools.AsyncifyTool(reason: "test message");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
+        Assert.That(result.SuccessData, Is.Not.Null);
+        Assert.That(result.SuccessData!.PhaseBreakdown!.Handler.Succeeded, Is.EqualTo(0),
+            "A ledger-refused write must not count the OnClick handler as Succeeded.");
+        Assert.That(result.SuccessData.PhaseBreakdown.Handler.Failed, Is.EqualTo(1),
+            "A ledger-refused write must count the OnClick handler as Failed.");
+        Assert.That(result.SuccessData.Failures, Has.Count.EqualTo(1),
+            "The ledger-refused write must surface as one FailureDetail.");
+
+        var reason = result.SuccessData.Failures[0].Reason;
+        TestContext.Out.WriteLine($"T25 Failure Reason: {reason}");
+        Assert.That(reason, Is.Not.Null.And.Not.Empty,
+            $"The FailureDetail Reason must name the cause. Reason was: {reason}");
+    }
+
     [Test, CancelAfter(30000)]
     public async Task T17_UpliftCallers_QualifiedStaticCall_PreservesTypeQualifier()
     {
