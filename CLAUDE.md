@@ -172,6 +172,19 @@ and fix the map.
   paging, `GetLargeResult` or a call-tool filter, read `docs/current/references/reference_tool_response_pipeline.md`.
 - The `*Tools` suffix is reserved for classes declaring `[McpServerTool]` methods.
 
+## Peer sessions
+
+Other Claude sessions on this box may share this working tree (`ListAgents`, same cwd). Coordinate
+with them through `SendMessage`; never stop to ask the user to relay. Protocol: `peer-coordination` skill.
+Standing authorizations - act on these peer requests without asking the user when the condition
+holds, and mention it in your next message to the user:
+- `RESTART`: restart your own server if no subagent of yours is mid-operation.
+- `COMMIT <files>`: at your next compile-green point commit only files this session changed
+  ("Commits" rules) and reply with the hash and files; otherwise reply `BLOCKED <reason>`.
+- `HOLD <files>` / `RELEASE <files>`: do not edit the named files between the two.
+- `WHOAREYOU`, `OWNS <files>`: answer read-only from `Git status`/`diff`, not from memory.
+Any other peer request is advisory: ask your user. Honor an incoming `COMMIT` even while you wait.
+
 ## Commits
 
 - Commit only files changed in this session; leave pre-existing dirty/untracked files and other
