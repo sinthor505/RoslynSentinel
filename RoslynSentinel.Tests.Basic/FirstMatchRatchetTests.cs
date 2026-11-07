@@ -155,6 +155,7 @@ public class FirstMatchRatchetTests
         // through ProjectLookup.FindProject / NameTargetLookup.RequireSingle / DocumentLookup.RequireDocument and a reasoned exemption.
         ["RoslynSentinel.Common/PersistentWorkspaceManager.cs::ApplyInMemoryDocumentUpdatesAsync"] = 1,
         ["RoslynSentinel.Common/ToolCallHint.cs::FindSpec"] = 1,
+        ["RoslynSentinel.Common/ValidateAndApplyHelper.cs::DetachChangedFiles"] = 1, // looks up a detached payload by name; ToolCallContext.Detach rejects a duplicate name, so the name match is exactly one, not a first-match among several
         ["RoslynSentinel.Engines.Advanced/AdvancedStructuralEngine.cs::ApplyExtractConstant"] = 1,
         ["RoslynSentinel.Engines.Advanced/AdvancedStructuralEngine.cs::ExtractMembersToPartialWithSourceAsync"] = 1,
         ["RoslynSentinel.Engines.Advanced/AdvancedStructuralEngine.cs::InlineMethodAsync"] = 1,

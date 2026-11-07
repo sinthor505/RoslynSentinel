@@ -512,7 +512,7 @@ public class WorkspaceTools
         int timeoutSeconds = 600,
         [Description("true = counts and FailureSummary only, no Results list.")] bool summary = false,
         [Description(ToolParams.UseScratchDir)] bool useScratchDir = false,
-        [Description("true = keep failed tests' Output and the stdout/stderr tails. Default false: compact digest; the unprojected failed rows are stored (GetLargeResult with largeResult.resultId, path successData.fullResults).")] bool includeOutput = false,
+        [Description("true = keep failed tests' Output and the stdout/stderr tails. Default false: compact digest.")] bool includeOutput = false,
         [Description("Extra env vars for the test process (name -> value).")] Dictionary<string, string>? environment = null,
         CancellationToken cancellationToken = default)
         => _buildTest.RunTestTool(reason, scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, includeOutput, environment, cancellationToken);
