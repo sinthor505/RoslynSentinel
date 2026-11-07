@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
@@ -293,7 +294,7 @@ public class WorkspaceBuildTestImpl
             {
                 // Surface external drift: a failed build may be caused by a file changed on disk under us.
                 var driftHint = DriftMessages.BuildHint(_workspaceManager.GetExternalFileChanges());
-                var failureMessage = driftHint is not null ? buildSummary + " " + driftHint : buildSummary;
+                var failureMessage = (driftHint is not null ? buildSummary + " " + driftHint : buildSummary) + " " + ToolCallHint.Next("Build", "after fixing the errors in this result (root-cause project first).", ("level", "quickBuild"));
                 // The build ran and failed: report isError:true like RunTestTool does for an incomplete run, but keep the
                 // BuildResult payload (inline or offloaded) so the caller still gets the error details.
                 return buildToolResult with { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, failureMessage), Findings = WithForeignWriterFindings(result.Findings, buildResult.FullDiagnostics?.Errors ?? buildResult.Errors), StatusMessage = failureMessage };
@@ -330,7 +331,7 @@ public class WorkspaceBuildTestImpl
 
             if (!result.TryGetData(out var testRunResult))
             {
-                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, result.Error?.Message ?? "Test run failed unexpectedly."), Findings = result.Findings };
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, result.Error?.Message ?? ("Test run failed unexpectedly. " + ToolCallHint.Next("Build", "to rule out compile errors, then retry the test run.", ("level", "quickBuild")))), Findings = result.Findings };
             }
 
             var projected = TestRunResultProjector.Project(testRunResult, resultsType, includeOutput: includeOutput);
@@ -341,7 +342,8 @@ public class WorkspaceBuildTestImpl
 
             if (!testRunResult.RunCompleted)
             {
-                return new SentinelCallToolResult<object>() { IsError = true, SuccessData = projected, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, testRunResult.Detail ?? "Test run did not complete."), StatusMessage = testRunResult.Detail ?? "Test run did not complete.", WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
+                var incompleteMessage = (testRunResult.Detail ?? "Test run did not complete.") + " " + ToolCallHint.Next("Build", "to rule out compile errors, then retry the test run.", ("level", "quickBuild"));
+                return new SentinelCallToolResult<object>() { IsError = true, SuccessData = projected, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, incompleteMessage), StatusMessage = incompleteMessage, WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
             }
 
             var failedRows = testRunResult.Results.Where(r => r.Outcome == TestOutcome.Failed).ToList();
