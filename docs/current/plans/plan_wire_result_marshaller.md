@@ -1,7 +1,7 @@
 # Plan: one result marshaller at the SDK MarshalResult seam owns offload, paging, metadata and serialization
 
-**Status:** APPROVED 2026-11-02. In progress: Steps 0-7 done (Step 7 2026-11-06), Step 9 done 2026-11-07, Step 8 on HOLD
-pending a user decision (see the HOLD note under Step 8); Step 10 waits on that decision. Steps 10-11 remain.
+**Status:** APPROVED 2026-11-02. In progress: Steps 0-7 done (Step 7 2026-11-06), Steps 9 and 11 done 2026-11-07, Step 8 on
+HOLD pending a user decision (see the HOLD note under Step 8); Step 10 waits on that decision.
 
 How it works now, including `SequencePager` (built later from
 [proposal_sequence_pager.md](../proposals/proposal_sequence_pager.md), and running before `ResultPager.Fit`):
@@ -302,6 +302,15 @@ enum value.
   key-pinning tests read today's shapes; all changes before Step 10 are additive.
 
 ## Progress log
+
+2026-11-07: Step 11 done. `Tests.Server/ToolReturnShapeRatchetTests.cs` reflects over every `[McpServerToolType]` type in
+`Tools.Basic`, `Tools.Advanced` and `Tools.Experimental` and compares the untyped returns (after unwrapping `Task`/`ValueTask`)
+with `docs/known-untyped-tool-returns.txt` (`<Type>.<Method> | <category>`), failing on a new offender and on a stale
+entry; regenerate with `ROSLYNSENTINEL_UPDATE_TOOL_RETURN_BASELINE=1`. Measured baseline: 97 offenders, 95
+`SentinelCallToolResult<object>`, 2 `SentinelCallToolResult<string>` (`AdminTools.ExternalFileDriftTool`,
+`IntelligenceTools.PreviewMoveFileToNamespaceFolderTool`), 0 bare `object` or `string`, 0 two-argument forms. The failure
+messages were not exercised by a live negative run. The count is the starting point for
+`findings/finding_anonymous_and_untyped_return_shapes.md`.
 
 2026-11-07: Step 9 done. `LargeResultHelper.InlineBudgetChars` (15 * 1024) is the defining size constant;
 `OffloadThresholdBytes` is `[Obsolete("Use InlineBudgetChars")]` and has no code reader (the 11 production sites in the
