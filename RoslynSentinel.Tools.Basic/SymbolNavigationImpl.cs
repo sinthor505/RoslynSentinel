@@ -59,12 +59,22 @@ public class SymbolNavigationImpl
 
             if (result.Count == 0)
             {
+                // Only the empty path pays for the retry: say where the hidden test-project hits are, or that none exist.
+                var hiddenNote = "";
+                if (excluded > 0)
+                {
+                    var withTests = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind.ToString(), containingType, containingNamespace, projectName, filePathResolved, exactMatch, true, cancellationToken);
+                    hiddenNote = withTests.Count > 0
+                        ? $" {withTests.Count} declaration(s) were found in test project(s) ({string.Join(", ", withTests.GroupBy(l => l.ProjectName).Select(g => $"{g.Key} {g.Count()}"))}), hidden because includeTests is false; pass includeTests: true to see them."
+                        : $" {excluded} test project(s) were also searched and hold no match, so the name is not declared anywhere in the solution.";
+                }
+
                 return new SentinelCallToolResult<object>
                 {
                     IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.NotFound, $"Symbol '{symbolName}' not found in the solution" +
                         (projectName != null ? $" (project: {projectName})" : "") +
-                        $". Try exactMatch=false for a broader search, verify the symbol name and symbolKind, or call {ToolCallHint.Call("ListAll")} for a cheap solution-wide orientation listing if you're not sure of the exact name." + (excluded > 0 ? $" {excluded} test project(s) were excluded because includeTests is false; pass includeTests: true if the symbol is declared in a test project." : string.Empty))
+                        $". Try exactMatch=false for a broader search, verify the symbol name and symbolKind, or call {ToolCallHint.Call("ListAll")} for a cheap solution-wide orientation listing if you're not sure of the exact name." + hiddenNote)
                 };
             }
 

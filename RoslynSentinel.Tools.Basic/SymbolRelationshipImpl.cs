@@ -35,16 +35,16 @@ public class SymbolRelationshipImpl
     private async Task<List<object>> RunRelationshipQueryAsync(FindUsagesSearchKind searchKind, string name, string? projectName, string filePath, bool sortByFrequency, bool includeTests, string? hasAttribute, List<string> hiddenTestProjects, CancellationToken cancellationToken)
     {
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
-        // attributeUsages, implementorsOf, objectCreations, extensionsFor and methodsByReturnType with includeTests false and no project/file scope are view filters: scan every
+        // attributeUsages, implementorsOf, objectCreations, extensionsFor, methodsByReturnType and typesWithAttribute with includeTests false and no project/file scope are view filters: scan every
         // document, then drop test-project hits here and record their project names in hiddenTestProjects.
-        var hideTestHits = (searchKind is FindUsagesSearchKind.attributeUsages or FindUsagesSearchKind.implementorsOf or FindUsagesSearchKind.objectCreations or FindUsagesSearchKind.extensionsFor or FindUsagesSearchKind.methodsByReturnType) && !includeTests && string.IsNullOrEmpty(projectName) && string.IsNullOrEmpty(filePath);
+        var hideTestHits = (searchKind is FindUsagesSearchKind.attributeUsages or FindUsagesSearchKind.implementorsOf or FindUsagesSearchKind.objectCreations or FindUsagesSearchKind.extensionsFor or FindUsagesSearchKind.methodsByReturnType or FindUsagesSearchKind.typesWithAttribute) && !includeTests && string.IsNullOrEmpty(projectName) && string.IsNullOrEmpty(filePath);
         object result = searchKind switch
         {
             FindUsagesSearchKind.implementorsOf => await _symbolNavigationEngine.FindAllImplementationsAsync(name, projectName, cancellationToken),
             FindUsagesSearchKind.attributeUsages => await _discoveryEngine.FindAttributeUsagesAsync(name, projectName, filePathResolved, includeTests: includeTests || hideTestHits, hasAttribute: hasAttribute, cancellationToken: cancellationToken),
             FindUsagesSearchKind.objectCreations => await _discoveryEngine.FindObjectCreationSitesAsync(name, filePathResolved, projectName, sortByFrequency, cancellationToken),
             FindUsagesSearchKind.extensionsFor => await _symbolNavigationEngine.FindExtensionMethodsAsync(name, projectName, cancellationToken),
-            FindUsagesSearchKind.typesWithAttribute => await _discoveryEngine.FindTypesByAttributeAsync(name, includeTests, projectName, cancellationToken),
+            FindUsagesSearchKind.typesWithAttribute => await _discoveryEngine.FindTypesByAttributeAsync(name, includeTests || hideTestHits, projectName, cancellationToken),
             FindUsagesSearchKind.methodsByReturnType => await _discoveryEngine.FindMethodsByReturnTypeAsync(name, cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(searchKind), searchKind, "Unhandled searchKind.")
         };
@@ -58,6 +58,8 @@ public class SymbolRelationshipImpl
                 FindUsagesSearchKind.objectCreations => (object)ExcludeTestHits((List<ObjectCreationSite>)result, s => s.FilePath.Absolute, testDocProjects, hiddenTestProjects),
                 FindUsagesSearchKind.extensionsFor => (object)ExcludeTestHits((List<ExtensionMethodInfo>)result, e => AbsolutePathOrNull(e.FilePath), testDocProjects, hiddenTestProjects),
                 FindUsagesSearchKind.methodsByReturnType => (object)ExcludeTestHits((List<SearchResult>)result, r => AbsolutePathOrNull(r.FilePath), testDocProjects, hiddenTestProjects),
+                // FindTypesByAttributeAsync already runs FindReferencesAsync over the whole solution, so this filter adds no scan cost.
+                FindUsagesSearchKind.typesWithAttribute => (object)ExcludeTestHits((List<SearchResult>)result, r => AbsolutePathOrNull(r.FilePath), testDocProjects, hiddenTestProjects),
                 _ => result
             };
         }

@@ -142,7 +142,18 @@ public class LocateSymbolIncludeTestsTests
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(result.ErrorData?.Message, Does.Contain(ExclusionPhrase));
+        Assert.That(result.ErrorData?.Message, Does.Contain("1 declaration(s) were found in test project(s) (TestsProj 1)"));
+        Assert.That(result.ErrorData?.Message, Does.Contain(IncludeTestsHint));
+    }
+
+    [Test]
+    public async Task Impl_IncludeTestsFalse_NameDeclaredNowhere_NotFoundSaysTestProjectsHoldNoMatch()
+    {
+        var result = await _impl.LocateSymbol(reason: "test message", symbolName: "NoSuchSymbolAnywhere", includeTests: false);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData?.Message, Does.Contain("test project(s) were also searched and hold no match"));
     }
 
     [Test]

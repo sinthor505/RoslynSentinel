@@ -883,6 +883,33 @@ public class AttributedTarget { }
         }
     }
 
+    [Test]
+    [Category("SymbolRelationshipTools")]
+    public async Task QuerySymbolRelationships_TypesWithAttribute_IncludeTestsFalse_HidesTestHitAndNamesIt()
+    {
+        var (dir, impl) = BuildAppAndTestsSolution(
+            "public class ProbeAttribute : System.Attribute { }\n[Probe]\npublic class AppTarget { }\n",
+            "[Probe]\npublic class TestTarget { }\n");
+        try
+        {
+            var hidden = await impl.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.typesWithAttribute, includeTests: false);
+            Assert.That(hidden.IsError, Is.False, hidden.ErrorData?.Message);
+            var hiddenHits = (hidden.SuccessData as System.Collections.IEnumerable)?.Cast<SearchResult>().ToList();
+            Assert.That(hiddenHits, Is.Not.Null.And.Count.EqualTo(1));
+            Assert.That(hiddenHits![0].FilePath, Does.Contain("AppProj"));
+            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests is false").And.Contain("TestsProj"));
+
+            var all = await impl.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.typesWithAttribute, includeTests: true);
+            Assert.That(all.IsError, Is.False, all.ErrorData?.Message);
+            var allHits = (all.SuccessData as System.Collections.IEnumerable)?.Cast<SearchResult>().ToList();
+            Assert.That(allHits, Is.Not.Null.And.Count.EqualTo(2));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
     private (string Dir, SymbolRelationshipImpl Impl) BuildAppAndTestsSolution(string appSource, string testSource)
     {
         var dir = Path.Combine(Path.GetTempPath(), "SymRelIncludeTests_" + Guid.NewGuid().ToString("N"));
@@ -901,7 +928,8 @@ public class AttributedTarget { }
                 .WithFilePath(testCsproj))
             .AddDocument(DocumentId.CreateNewId(testProjectId, "Tests.cs"), "Tests.cs",
                 Microsoft.CodeAnalysis.Text.SourceText.From(testSource), filePath: Path.Combine(dir, "TestsProj", "Tests.cs"))
-            // Deviation from the neighbouring test: TestsProj references AppProj so app types resolve in the test project.
+            // Deviation from the neighbouring test: TestsProj references AppProj so app types resolve, and gets the core metadata reference so its attributes (System.Attribute base) bind.
+            .AddMetadataReference(testProjectId, Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(typeof(object).Assembly.Location))
             .AddProjectReference(testProjectId, new Microsoft.CodeAnalysis.ProjectReference(appProjectId));
         _workspaceManager.SetTestSolution(solution);
 
