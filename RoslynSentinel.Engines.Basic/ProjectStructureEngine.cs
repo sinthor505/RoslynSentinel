@@ -1794,7 +1794,7 @@ public class SolutionStructureEngine
     public async Task<ProjectEditResult> CreateProjectAsync(string projectName, string projectType = "console", CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var slnPath = _workspaceManager.SolutionPath ?? solution.FilePath;
+        var slnPath = _workspaceManager.SolutionPath ?? solution.FilePath ?? throw new ToolNotFoundException("Solution path not found.");
         var slnDir = Path.GetDirectoryName(slnPath) ?? throw new ToolNotFoundException("Solution path not found.");
         var projectDir = Path.Combine(slnDir, projectName);
         Directory.CreateDirectory(projectDir);

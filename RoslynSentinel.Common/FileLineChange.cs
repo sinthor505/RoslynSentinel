@@ -104,7 +104,7 @@ public record FileLineChange(string FilePath, int LinesAdded, int LinesRemoved)
 
         int max = Math.Min(n + m, maxDistance);
         int offset = max + 1;
-        var furthestX = new int[2 * max + 3];
+        var furthestX = new int[(2 * max) + 3];
         for (int d = 0; d <= max; d++)
         {
             for (int k = -d; k <= d; k += 2)

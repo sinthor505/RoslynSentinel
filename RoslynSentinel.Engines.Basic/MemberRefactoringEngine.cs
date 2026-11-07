@@ -3720,23 +3720,23 @@ public class MemberRefactoringEngine
         var movedRegions = new List<MovedMemberRegion>();
         var sourceEdits = MoveMemberTextEdits.BuildSourceEdits(sourceText, membersToMove, editsByDocument.TryGetValue(sourceDocument.Id, out var existingSourceEdits) ? existingSourceEdits : new List<TextChange>(), keptMembers ?? new HashSet<MemberDeclarationSyntax>(), forwarderText ?? (_ => string.Empty), out var insideMovedMemberEdits);
         editsByDocument[sourceDocument.Id] = sourceEdits;
-        if (targetDocument?.FilePath != null && targetClassNode != null)
+        if (targetDocument is { FilePath: { } targetFilePath } && targetClassNode != null)
         {
             bool sameFile = targetDocument.Id == sourceDocument.Id;
             var targetText = sameFile ? sourceText : await targetDocument.GetTextAsync(cancellationToken);
             texts[targetDocument.Id] = targetText;
-            var targetEol = eolResolver.ResolveEol(targetDocument.FilePath ?? string.Empty, targetText.ToString());
+            var targetEol = eolResolver.ResolveEol(targetFilePath, targetText.ToString());
             var targetIndent = MoveMemberTextEdits.GetTargetMemberIndentation(targetText, targetClassNode);
             var blocks = membersToMove.Select(m => MoveMemberTextEdits.BuildMovedMemberText(sourceText, m, insideMovedMemberEdits.Where(e => m.FullSpan.Contains(e.Span)).ToList(), MoveMemberTextEdits.GetMemberIndentation(sourceText, m), targetIndent, targetEol)).ToList();
             var insertion = MoveMemberTextEdits.BuildInsertion(targetText, targetClassNode, MoveMemberTextEdits.JoinMovedMembers(membersToMove, blocks, targetEol), targetEol);
-            if (sourceDocument.FilePath != null)
+            if (sourceDocument.FilePath is { } sourceFilePath)
             {
                 // One region per moved member, in insertion order, each carrying the same block text and in-member edits the
                 // builders just used, so MovePositionMap sees exactly what the engine wrote.
                 for (var i = 0; i < membersToMove.Count; i++)
                 {
                     var member = membersToMove[i];
-                    movedRegions.Add(new MovedMemberRegion(sourceDocument.FilePath, member.FullSpan, targetDocument.FilePath, insertion.Span.Start, blocks[i], insideMovedMemberEdits.Where(e => member.FullSpan.Contains(e.Span)).ToList()));
+                    movedRegions.Add(new MovedMemberRegion(sourceFilePath, member.FullSpan, targetFilePath, insertion.Span.Start, blocks[i], insideMovedMemberEdits.Where(e => member.FullSpan.Contains(e.Span)).ToList()));
                 }
             }
 

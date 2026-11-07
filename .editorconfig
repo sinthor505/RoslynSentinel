@@ -24,6 +24,7 @@ dotnet_diagnostic.IDE0028.severity = none
 dotnet_diagnostic.CA2016.severity = warning
 dotnet_diagnostic.IDE0047.severity = none
 dotnet_diagnostic.IDE0061.severity = none
+dotnet_diagnostic.IDE0031.severity = none
 
 dotnet_diagnostic.AsyncFixer01.severity = none
 

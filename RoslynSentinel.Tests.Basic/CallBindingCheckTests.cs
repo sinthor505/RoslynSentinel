@@ -567,7 +567,7 @@ public class CallBindingCheckTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
-        var thrown = await Assert.CatchAsync<OperationCanceledException>(() => CallBindingCheck.CheckAsync(solution, solution, SaveScope, null, cancellation.Token));
+        var thrown = await Assert.CatchAsync<OperationCanceledException>(async () => await CallBindingCheck.CheckAsync(solution, solution, SaveScope, null, cancellation.Token));
 
         Assert.That(thrown, Is.Not.Null);
     }

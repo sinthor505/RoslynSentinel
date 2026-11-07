@@ -10,20 +10,23 @@ namespace RoslynSentinel.Common;
 /// </summary>
 internal static class GitProcess
 {
-    [ThreadStatic]
-    private static string? _lastFailure;
-
     /// <summary>Why the most recent <see cref="TryRun"/> on this thread returned null; null after success.</summary>
-    internal static string? LastFailure => _lastFailure;
+    [field: ThreadStatic]
+    internal static string? LastFailure
+    {
+        get; private set;
+    }
 
     /// <summary>
     /// Runs <c>git &lt;gitArgs&gt;</c> in <paramref name="workingDirectory"/>. Returns the exit code and stdout, or
     /// null when git cannot be started (missing, bad directory), times out (the process is killed), or its output
     /// cannot be read. Never throws for those conditions.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "Disposed by using statement")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("AsyncFixer", "AsyncFixer04")]
     internal static (int ExitCode, string StdOut)? TryRun(string workingDirectory, TimeSpan timeout, params string[] gitArgs)
     {
-        _lastFailure = null;
+        LastFailure = null;
         try
         {
             var psi = new ProcessStartInfo("git")
@@ -46,7 +49,7 @@ internal static class GitProcess
             using var process = Process.Start(psi);
             if (process is null)
             {
-                _lastFailure = "Process.Start returned null";
+                LastFailure = "Process.Start returned null";
                 return null;
             }
 
@@ -58,14 +61,14 @@ internal static class GitProcess
             if (!process.WaitForExit(timeout))
             {
                 TryKill(process);
-                _lastFailure = $"timed out after {timeout.TotalSeconds:0}s and was killed";
+                LastFailure = $"timed out after {timeout.TotalSeconds:0}s and was killed";
                 return null;
             }
 
             // The process has exited; the pipes reach EOF promptly unless a grandchild still holds them.
             if (!Task.WaitAll([stdOutTask, stdErrTask], TimeSpan.FromSeconds(2)))
             {
-                _lastFailure = "stdout/stderr did not reach EOF within 2s after the process exited (a grandchild may hold the pipe)";
+                LastFailure = "stdout/stderr did not reach EOF within 2s after the process exited (a grandchild may hold the pipe)";
                 return null;
             }
 
@@ -73,7 +76,7 @@ internal static class GitProcess
         }
         catch (Exception ex) when (ex is Win32Exception or IOException or InvalidOperationException or ArgumentException or AggregateException)
         {
-            _lastFailure = $"{ex.GetType().Name}: {ex.Message}";
+            LastFailure = $"{ex.GetType().Name}: {ex.Message}";
             return null;
         }
     }

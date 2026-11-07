@@ -433,7 +433,7 @@ public class MoveMemberCallBindingTests
         ("Target.cs", Lines("namespace Example;", "", "public class Target", "{", "}")),
         };
         using var workspace = InMemoryWorkspace.Create(files);
-        var solution = workspace.Manager.CurrentSolution;
+        var solution = workspace.Manager.CurrentSolution!;
         var moved = await MethodSymbolAsync(solution, workspace.PathOf("Source.cs").ToString(), "Save");
 
         var result = await MoveMemberCallBindingCheck.CheckAsync(solution, solution, new ISymbol[] { moved }, "Missing", new[] { workspace.PathOf("Target.cs").ToString() }, keepsOldMember: false);
