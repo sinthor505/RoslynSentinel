@@ -921,6 +921,150 @@ public static class DataHelper
             $"The FailureDetail Reason must name the cause. Reason was: {reason}");
     }
 
+    // Flag-phase fixture: both methods score 55 ("blocking-calls:40 service-class:15"), above the default minScore of 50,
+    // and no method name collides with an async overload, so only the refused write can make an item Failed.
+    private const string FlagPhaseSource = """
+        using System.Threading.Tasks;
+
+        public class OrderService
+        {
+            public int LoadOne(Task<int> t) { return t.Result; }
+
+            public int LoadTwo(Task<int> t)
+            {
+                return t.Result;
+            }
+        }
+        """;
+
+    private static FlagCandidateTarget LoadOneTarget(string filePath) => new FlagCandidateTarget
+    {
+        FilePath = filePath,
+        MethodName = "LoadOne",
+        Pattern = "AsyncBridgeCandidate",
+        Score = 55,
+        Reason = "blocking-calls:40 service-class:15",
+    };
+
+    // Opens a scoped operation ledger that tracks only Other.cs, so every write to the fixture files is refused
+    // (ScopedLedgerBlocked: IsError with a null ValidationResult).
+    private void OpenLedgerThatRefusesFixtureWrites()
+    {
+        var ledger = (IScopedOperationLedger)_workspaceManager;
+        var otherFilePath = _workspaceManager.ResolveFromWire(PathOf("Other.cs")).Absolute;
+        var opened = ledger.TryOpen(
+            "Asyncify_Test",
+            [
+                new CallSiteLedgerEntry
+                {
+                    EntryId = "entry-1",
+                    FilePath = otherFilePath,
+                    Line = 1,
+                    BrokenExpression = "x.Foo()",
+                    OldStaticType = "ClassA",
+                    Status = CallSiteStatus.Ambiguous,
+                },
+            ],
+            out var rejection);
+        Assert.That(opened, Is.True, rejection);
+    }
+
+    // Standalone FlagAsyncMigrationCandidates, scope=project (applyResult1126): the flag write is refused, so no
+    // flagged method may be Succeeded and each must be Failed with the refusal in its FailureDetail.
+    [Test, CancelAfter(60000)]
+    public async Task T27_FlagAsyncMigrationCandidates_ProjectScope_WriteRefused_IsFailedNotSucceeded()
+    {
+        SetSource(FlagPhaseSource, "OrderService.cs");
+        var before = File.ReadAllText(PathOf("OrderService.cs"));
+        OpenLedgerThatRefusesFixtureWrites();
+
+        var result = await _asyncifyTools.FlagAsyncMigrationCandidates(scope: "project", projectName: "TestProj");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
+        Assert.That(result.SuccessData, Is.Not.Null);
+        Assert.That(result.SuccessData!.Succeeded, Is.EqualTo(0),
+            "A refused write must not count the flagged methods as Succeeded.");
+        Assert.That(result.SuccessData.Failed, Is.EqualTo(2),
+            "Both flagged methods (LoadOne, LoadTwo) must be counted Failed when the write is refused.");
+        Assert.That(result.SuccessData.Failures, Has.Count.EqualTo(2));
+        Assert.That(result.SuccessData.Failures.Select(f => f.Reason), Has.All.Contain("Write refused"),
+            "The Reason must come from the write-refused branch. Reasons: " + string.Join(" | ", result.SuccessData.Failures.Select(f => f.Reason)));
+        Assert.That(File.ReadAllText(PathOf("OrderService.cs")), Is.EqualTo(before),
+            "A refused write must leave the file on disk unchanged.");
+    }
+
+    // Standalone FlagAsyncMigrationCandidates, scope=targets (applyResult1223): the item is recorded Succeeded before the
+    // write, then the refused write must flip it to Failed and move the counter.
+    [Test, CancelAfter(60000)]
+    public async Task T28_FlagAsyncMigrationCandidates_TargetsScope_WriteRefused_IsFailedNotSucceeded()
+    {
+        SetSource(FlagPhaseSource, "OrderService.cs");
+        var before = File.ReadAllText(PathOf("OrderService.cs"));
+        OpenLedgerThatRefusesFixtureWrites();
+
+        var result = await _asyncifyTools.FlagAsyncMigrationCandidates(
+            scope: "targets",
+            flagTargets: [LoadOneTarget(PathOf("OrderService.cs"))]);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
+        Assert.That(result.SuccessData, Is.Not.Null);
+        Assert.That(result.SuccessData!.Succeeded, Is.EqualTo(0),
+            "A refused write must not leave the flagged method counted as Succeeded.");
+        Assert.That(result.SuccessData.Failed, Is.EqualTo(1));
+        Assert.That(result.SuccessData.Failures, Has.Count.EqualTo(1));
+        Assert.That(result.SuccessData.Failures[0].Reason, Does.Contain("Write refused"),
+            "Reason was: " + result.SuccessData.Failures[0].Reason);
+        Assert.That(File.ReadAllText(PathOf("OrderService.cs")), Is.EqualTo(before),
+            "A refused write must leave the file on disk unchanged.");
+    }
+
+    // Asyncify macro Phase 1 with discovery (applyResult1317): the flag write is refused, so PhaseBreakdown.Flag must
+    // report the two discovered methods as Failed, not Succeeded.
+    [Test, CancelAfter(60000)]
+    public async Task T29_Asyncify_FlagPhaseDiscovery_WriteRefused_IsFailedNotSucceeded()
+    {
+        SetSource(FlagPhaseSource, "OrderService.cs");
+        var before = File.ReadAllText(PathOf("OrderService.cs"));
+        OpenLedgerThatRefusesFixtureWrites();
+
+        var result = await _asyncifyTools.AsyncifyTool(reason: "test message");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
+        Assert.That(result.SuccessData, Is.Not.Null);
+        Assert.That(result.SuccessData!.PhaseBreakdown!.Flag.Succeeded, Is.EqualTo(0),
+            "A refused write must not count the discovered methods as Succeeded in Phase 1.");
+        Assert.That(result.SuccessData.PhaseBreakdown.Flag.Failed, Is.EqualTo(2),
+            "A refused write must count both discovered methods as Failed in Phase 1.");
+        Assert.That(result.SuccessData.Failures.Select(f => f.Reason), Has.Some.Contain("Write refused"),
+            "Reasons: " + string.Join(" | ", result.SuccessData.Failures.Select(f => f.Reason)));
+        Assert.That(File.ReadAllText(PathOf("OrderService.cs")), Is.EqualTo(before),
+            "A refused write must leave the file on disk unchanged.");
+    }
+
+    // Asyncify macro Phase 1 with explicit methodTargets (applyResult1421): same expectation as T29 for one target.
+    [Test, CancelAfter(60000)]
+    public async Task T30_Asyncify_FlagPhaseExplicitTargets_WriteRefused_IsFailedNotSucceeded()
+    {
+        SetSource(FlagPhaseSource, "OrderService.cs");
+        var before = File.ReadAllText(PathOf("OrderService.cs"));
+        OpenLedgerThatRefusesFixtureWrites();
+
+        var result = await _asyncifyTools.AsyncifyTool(
+            reason: "test message",
+            methodTargets: [LoadOneTarget(PathOf("OrderService.cs"))]);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
+        Assert.That(result.SuccessData, Is.Not.Null);
+        Assert.That(result.SuccessData!.PhaseBreakdown!.Flag.Succeeded, Is.EqualTo(0),
+            "A refused write must not count the explicit target as Succeeded in Phase 1.");
+        Assert.That(result.SuccessData.PhaseBreakdown.Flag.Failed, Is.EqualTo(1),
+            "A refused write must count the explicit target as Failed in Phase 1.");
+        Assert.That(result.SuccessData.Failures.Select(f => f.Reason), Has.Some.Contain("Write refused"),
+            "Reasons: " + string.Join(" | ", result.SuccessData.Failures.Select(f => f.Reason)));
+        Assert.That(File.ReadAllText(PathOf("OrderService.cs")), Is.EqualTo(before),
+            "A refused write must leave the file on disk unchanged.");
+    }
+
     [Test, CancelAfter(30000)]
     public async Task T17_UpliftCallers_QualifiedStaticCall_PreservesTypeQualifier()
     {

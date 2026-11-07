@@ -2078,6 +2078,26 @@ public class AsyncifyTools
         return base_ + breakerSuffix;
     }
 
+    /// <summary>
+    /// Null when the apply succeeded. Otherwise the Failed-item reason: "Write refused: &lt;Summary&gt;" when the write was refused
+    /// before validation ran (ValidationResult null), or "Validation: N error(s) - [id] msg" when validation rejected the change.
+    /// </summary>
+    private static string? DescribeRefusedApply(ApplyChangesResult applyResult)
+    {
+        if (!applyResult.IsError)
+        {
+            return null;
+        }
+
+        if (applyResult.ValidationResult == null)
+        {
+            return $"Write refused: {applyResult.Summary}";
+        }
+
+        var diagMsg = string.Join("; ", applyResult.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
+        return $"Validation: {applyResult.ValidationResult.Diagnostics.Count} error(s) - {diagMsg}";
+    }
+
     private async Task<BatchResultSummary> FlagMigrationCandidatesCore(
         FlagCandidatesInput input,
         IProgress<EngineProgress>? progress,
@@ -2111,9 +2131,34 @@ public class AsyncifyTools
                     if (applyResult1126.IsError && applyResult1126.ValidationResult != null)
                         _logger.LogWarning("FlagMigrationCandidates: validation found {Count} error(s) in attribute changes - skipping write",
                             applyResult1126.ValidationResult.Diagnostics.Count);
+                    var writeFailure1126 = DescribeRefusedApply(applyResult1126);
 
                     foreach (var f in engineResult.Flagged)
                     {
+                        if (writeFailure1126 != null)
+                        {
+                            // Nothing was written: the flagged method must not be reported as Succeeded.
+                            items.Add(new OperationItemRecord
+                            {
+                                FilePath = f.FilePath,
+                                MethodName = f.MethodName,
+                                Outcome = ItemRecordOutcome.Failed,
+                                Reason = writeFailure1126,
+                            });
+                            if (failures.Count < 10)
+                            {
+                                failures.Add(new FailureDetail
+                                {
+                                    FilePath = f.FilePath,
+                                    MethodName = f.MethodName,
+                                    Reason = writeFailure1126,
+                                    Outcome = ItemRecordOutcome.Failed,
+                                });
+                            }
+                            failed++;
+                            continue;
+                        }
+
                         string? beforeSource1135 = null;
                         applyResult1126.PreImages?.TryGetValue(f.FilePath, out beforeSource1135);
                         items.Add(new OperationItemRecord
@@ -2231,7 +2276,34 @@ public class AsyncifyTools
                     if (applyResult1223.IsError && applyResult1223.ValidationResult != null)
                         _logger.LogWarning("FlagMigrationCandidates: validation found {Count} error(s) in attribute changes - skipping write",
                             applyResult1223.ValidationResult.Diagnostics.Count);
-                    if (applyResult1223.PreImages != null)
+                    var writeFailure1223 = DescribeRefusedApply(applyResult1223);
+                    if (writeFailure1223 != null)
+                    {
+                        // Nothing was written: every item recorded as Succeeded above becomes Failed.
+                        foreach (var item in items)
+                        {
+                            if (item.Outcome != ItemRecordOutcome.Succeeded)
+                            {
+                                continue;
+                            }
+
+                            item.Outcome = ItemRecordOutcome.Failed;
+                            item.Reason = writeFailure1223;
+                            if (failures.Count < 10)
+                            {
+                                failures.Add(new FailureDetail
+                                {
+                                    FilePath = item.FilePath,
+                                    MethodName = item.MethodName,
+                                    Reason = writeFailure1223,
+                                    Outcome = ItemRecordOutcome.Failed,
+                                });
+                            }
+                            succeeded--;
+                            failed++;
+                        }
+                    }
+                    else if (applyResult1223.PreImages != null)
                     {
                         foreach (var item in items)
                         {
@@ -2564,6 +2636,7 @@ public class AsyncifyTools
                 if (applyResult1317.IsError && applyResult1317.ValidationResult != null)
                     _logger.LogWarning("AsyncifyCore Phase 1: validation found {Count} error(s) in flag attribute changes - skipping write",
                         applyResult1317.ValidationResult.Diagnostics.Count);
+                var writeFailure1317 = DescribeRefusedApply(applyResult1317);
 
                 foreach (var f in flagResult.Flagged)
                 {
@@ -2577,6 +2650,30 @@ public class AsyncifyTools
                             Reason = "excluded",
                         });
                         state.P1Skipped++; state.Skipped++;
+                        continue;
+                    }
+
+                    if (writeFailure1317 != null)
+                    {
+                        // Nothing was written: the flagged method must not be reported as Succeeded.
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath = f.FilePath,
+                            MethodName = f.MethodName,
+                            Outcome = ItemRecordOutcome.Failed,
+                            Reason = writeFailure1317,
+                        });
+                        if (failures.Count < 10)
+                        {
+                            failures.Add(new FailureDetail
+                            {
+                                FilePath = f.FilePath,
+                                MethodName = f.MethodName,
+                                Reason = writeFailure1317,
+                                Outcome = ItemRecordOutcome.Failed,
+                            });
+                        }
+                        state.P1Failed++; state.Failed++;
                         continue;
                     }
 
@@ -2656,6 +2753,7 @@ public class AsyncifyTools
                 var (flagResults, flagErrors) =
                     await _asyncOptimizationEngine.FlagMultipleMigrationCandidatesAsync(tuples);
 
+                var flagItemsStart = items.Count; // items from earlier phases sit before this index
                 var allChanges = new Dictionary<FilePathWrapper, string>();
                 for (int i = 0; i < flagResults.Count; i++)
                 {
@@ -2700,7 +2798,35 @@ public class AsyncifyTools
                     if (applyResult1421.IsError && applyResult1421.ValidationResult != null)
                         _logger.LogWarning("AsyncifyCore Phase 1: validation found {Count} error(s) in explicit-target flag changes - skipping write",
                             applyResult1421.ValidationResult.Diagnostics.Count);
-                    if (applyResult1421.PreImages != null)
+                    var writeFailure1421 = DescribeRefusedApply(applyResult1421);
+                    if (writeFailure1421 != null)
+                    {
+                        // Nothing was written: every phase-1 item recorded as Succeeded above becomes Failed.
+                        for (int itemIdx = flagItemsStart; itemIdx < items.Count; itemIdx++)
+                        {
+                            var item = items[itemIdx];
+                            if (item.Outcome != ItemRecordOutcome.Succeeded)
+                            {
+                                continue;
+                            }
+
+                            item.Outcome = ItemRecordOutcome.Failed;
+                            item.Reason = writeFailure1421;
+                            if (failures.Count < 10)
+                            {
+                                failures.Add(new FailureDetail
+                                {
+                                    FilePath = item.FilePath,
+                                    MethodName = item.MethodName,
+                                    Reason = writeFailure1421,
+                                    Outcome = ItemRecordOutcome.Failed,
+                                });
+                            }
+                            state.P1Succeeded--;
+                            state.P1Failed++; state.Failed++;
+                        }
+                    }
+                    else if (applyResult1421.PreImages != null)
                     {
                         foreach (var item in items)
                         {
@@ -3106,7 +3232,6 @@ public class AsyncifyTools
                 var applyResult3b = await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { { handler.FilePath, handlerResult.UpdatedText } },
                     validateChanges: true, cancellationToken: state.InnerToken);
-                // TODO the same IsError-with-null-ValidationResult fall-through exists at the flag/bridge phases (applyResult1126, 1223, 1317, 1421); fix each with its own test
                 if (applyResult3b.IsError)
                 {
                     if (applyResult3b.ValidationResult == null)
