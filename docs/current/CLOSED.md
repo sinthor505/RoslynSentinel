@@ -8,6 +8,24 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## SessionHalted false positive from a timestamp-only touch of a file with no baseline - resolved (2026-11-07)
+
+`SessionHalted` external-drift latch: false positive from a timestamp-only touch of a file with no recorded baseline (2026-09-15) - the message now self-reports scope (`DriftMessages.DriftHaltMessage`) and a content-hash gate covers files that have a baseline (`PersistentWorkspaceManager.cs:908-913`); 2026-10-20: the no-baseline path skips a Changed event when the document's loaded text equals disk (`IsTrackedDocumentUnchangedOnDisk`), project/solution files are hashed at load, and a folded document gets a baseline (`RecordFoldedDocumentBaseline`); 2026-10-21: a loaded `.csproj` edit now takes the full-solution reload (the per-project `OpenProjectAsync` branch always threw "already part of the workspace" and is deleted) and that reload re-records project/solution hashes (`RecordStructuralFileHashes`), pinned by `ExternalTouch_ProjectFileAfterDebounceReload_IsNotFlaggedAsDriftAsync`; 2026-11-05: `ExternalEdit_FoldedDocument_GetsBaselineHashThenTouchIgnoredAndEditFlaggedAsync` now also pins that the folded document holds recoverable text equal to the folded content (the case where Roslyn releases that text before a real edit cannot be forced deterministically, recorded in the test comment); the `.slnx` fixture tests were added 2026-10-21 (touch not flagged; edit flagged, re-baselined, later touch not flagged); failed reloads are now a sticky stale record that refuses source writes (the remaining visibility gaps are in the reload-failure TODO entry) - [doc](plans/plan_session_halt_recovery_and_git_gaps.md)
+
+Evidence: OnFileSystemChanged returns early when IsTrackedDocumentUnchangedOnDisk says the loaded text equals disk, and folded documents get a baseline (RecordFoldedDocumentBaseline); pinned by five CreateFileDeleteFileTests cases. Paths that still flag are deliberate (every doubt returns false): text not materialized, file locked or unreadable, non-document files, Created/Renamed/Deleted events. Partial-acknowledge policy and per-session halt granularity stay in plans/plan_session_halt_recovery_and_git_gaps.md.
+
+## MoveMember private-state TOOL-GAP - resolved (2026-11-07)
+
+MoveMember private-state TOOL-GAP, mostly done (2026-10-17) - `fieldMap`, the ctor-assigned-field guard, `oldMember`/`forwarderReceiver`, same-class call rewrite and string-for-object coercion shipped (2026-10-18); a client-cached stale schema is only answered by the new hint. The mid-session toolset visibility gap is tracked in the P1 stale tool list entry. The class docs on WorkspaceTools/WorkspaceReadNavigationTools were verified current and need no change - [doc](proposals/proposal_movemember_keep_delegator_and_same_class_calls.md)
+
+Evidence: proposals/proposal_movemember_keep_delegator_and_same_class_calls.md status IMPLEMENTED 2026-10-18 (slices 1-8), generic methods added later under D7. Remaining keep-mode gaps stay in the TODO.md "MoveMember keep modes" entry and client-side visibility in the stale tool list entry.
+
+## MoveMember collateral-change tripwire leftovers - resolved (2026-11-07)
+
+MoveMember collateral-change tripwire leftovers (2026-10-19) - only by-design gaps remain: the new-class file has no pre-image so is unchecked, and the compile gate skips a new file whose path maps to no project (`SolutionProjectLocator.FindContainingProject`); extending the tripwire to other tools is deferred (plan closed: [doc](plans/closed/plan_movemember_collateral_change_tripwire.md)); the dry run now returns `editSpans` (done 2026-10-19); see the collateral item in [issues/issue_movemember_open_followups.md](issues/issue_movemember_open_followups.md)
+
+Evidence: Only by-design gaps remain: issues/issue_movemember_open_followups.md collateral item records that the new-class file has no pre-image and that a new file mapping to no project skips the compile gate. Extending the tripwire to other tools stays a deferral recorded in plans/closed/plan_movemember_collateral_change_tripwire.md (lines 85, 104).
+
 ## claude-lean could not write a new file in one call - resolved (2026-11-07)
 
 Was: an implementer building a 174-line file seeded an empty class with `CreateFile`, then `ReplaceSnippet` refused the fill (over the size limit), its error advice offered `Member(replace)` for content holding several members, and `WriteFile`/`ChangeSignature` were on demand ([plan](plans/closed/plan_claude_lean_core_write_tools.md)).
