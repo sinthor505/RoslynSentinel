@@ -156,9 +156,18 @@ public class WorkspaceFileEditImpl
                 {
                     failed.Add($"{path}: {error}");
                 }
+                if (revertResult.IsError)
+                {
+                    // Refused before any write (e.g. ScopedLedgerBlocked): return before RecordUndo so the ledger keeps these fixes marked as applied.
+                    var refusedFailures = failed.Count > 0 ? $" Failures: {string.Join("; ", failed)}" : "";
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsError = true,
+                        ErrorData = new ResultError(revertResult.Code!, $"{revertResult.Summary} Nothing was reverted.{refusedFailures}")
+                    };
+                }
             }
 
-            // TODO UndoLastApply reports a ledger-refused revert as success (WorkspaceFileEditImpl ~153)
             // Unconditional: the ledger itself sorts out whether changeId matches an individual
             // fix's entry or the changeId that opened the ledger (cascades to every entry in that
             // case) - see ScopedOperationLedgerEngine.RecordUndo. A no-op when no ledger is open

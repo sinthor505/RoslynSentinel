@@ -159,6 +159,62 @@ public class UndoLastApplyConcurrentEditTests
     }
 
     [Test]
+    [Description("Undo is refused with ScopedLedgerBlocked when an open scoped ledger blocks a file it would revert, and records no undo")]
+    public async Task Undo_RefusedByOpenScopedLedger_ReturnsErrorAndSkipsRecordUndo()
+    {
+        await SeedAsync();
+
+        ToolCallContext.Set(new ToolCallContext("agent-a", "implementer", "SemanticFindReplace", "apply replaceConstruction", 0));
+        var data = Data(await RunAsync(SemanticReplaceMode.apply, WidgetType, CreateFactory));
+        var changeId = data.GetProperty("changeId").GetString()!;
+
+        // The ledger tracks Widgets.cs, so Consumers.cs (which the undo would revert) is blocked.
+        var ledger = (IScopedOperationLedger)_workspaceManager;
+        var widgetsFilePath = _workspaceManager.ResolveFromWire(Path.Combine(_fixture!.SolutionDirectory, WidgetsPath)).Absolute;
+        var opened = ledger.TryOpen(
+            "Undo_Test",
+            [
+                new CallSiteLedgerEntry
+                {
+                    EntryId = "entry-1",
+                    FilePath = widgetsFilePath,
+                    Line = 1,
+                    BrokenExpression = "classCLocalVarA.Foo()",
+                    OldStaticType = "ClassA",
+                    Status = CallSiteStatus.Ambiguous,
+                },
+                new CallSiteLedgerEntry
+                {
+                    EntryId = "entry-2",
+                    FilePath = widgetsFilePath,
+                    Line = 2,
+                    BrokenExpression = "classCLocalVarB.Foo()",
+                    OldStaticType = "ClassB",
+                    Status = CallSiteStatus.Ambiguous,
+                },
+            ],
+            out var rejection,
+            openingChangeId: changeId);
+        Assert.That(opened, Is.True, rejection);
+        ledger.RecordFix(["entry-1"], "fix-id");
+
+        ToolCallContext.Set(null);
+        var editImpl = new WorkspaceFileEditImpl(
+            _workspaceManager,
+            Battery.Basic.TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            NullLogger.Instance,
+            _validationEngine,
+            Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            WriteToolAdviceHelper.WithAllToolsExposed());
+        var undo = await editImpl.UndoLastApply(new ToolCallReason("testing undo refused by open ledger"), changeId);
+
+        Assert.That(undo.IsError, Is.True);
+        Assert.That(undo.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ScopedLedgerBlocked));
+        Assert.That(ReadSeeded(ConsumersPath), Is.Not.EqualTo(ConsumersSource));
+        Assert.That(ledger.GetOpenEntries().Single(e => e.EntryId == "entry-1").IsFixed, Is.True);
+    }
+
+    [Test]
     [Description("Undo without an agent id is not refused by the concurrent-edit guard")]
     public async Task Undo_WithoutAgentId_IsNotRefusedByTheGuard()
     {
