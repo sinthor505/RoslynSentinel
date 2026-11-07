@@ -17,10 +17,7 @@ public sealed class StackOverflowEngine
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects
-            .SelectMany(p => p.Documents)
-            .FirstOrDefault(d => d.FilePath != null &&
-                d.FilePath.Equals(filePath, StringComparison.OrdinalIgnoreCase));
+        var document = DocumentLookup.FindDocumentOrNull(solution, filePath);
 
         SyntaxNode root;
         SemanticModel? model = null;

@@ -32,13 +32,7 @@ public class PathDrivenTestEngine
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var normalizedPath = Path.GetFullPath(filePath);
-        var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
-            .Select(solution.GetDocument)
-            .FirstOrDefault()
-            ?? solution.Projects.SelectMany(p => p.Documents)
-                .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
-                                     string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
+        var document = DocumentLookup.FindDocumentOrNull(solution, filePath);
 
         if (document == null)
         {

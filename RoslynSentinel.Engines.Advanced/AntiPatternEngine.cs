@@ -1860,12 +1860,8 @@ public class AntiPatternEngine
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
         {
-            var normalizedPath = Path.GetFullPath(filePath);
-            documents = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument);
-            if (!documents.Any(d => d != null))
-            {
-                documents = solution.Projects.SelectMany(p => p.Documents).Where(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase)).Cast<Document?>();
-            }
+            var found = DocumentLookup.FindDocumentOrNull(solution, filePath);
+            documents = found is null ? Enumerable.Empty<Document>() : new[] { found };
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
@@ -2143,12 +2139,8 @@ public class AntiPatternEngine
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
         {
-            var normalizedPath = Path.GetFullPath(filePath);
-            documents = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument);
-            if (!documents.Any(d => d != null))
-            {
-                documents = solution.Projects.SelectMany(p => p.Documents).Where(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase)).Cast<Document?>();
-            }
+            var found = DocumentLookup.FindDocumentOrNull(solution, filePath);
+            documents = found is null ? Enumerable.Empty<Document>() : new[] { found };
         }
         else if (!string.IsNullOrEmpty(projectName))
         {

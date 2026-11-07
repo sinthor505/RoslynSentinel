@@ -28,14 +28,7 @@ public class InventoryEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
 
-        // Fallback: tolerate path/link differences by matching on file name + full-path equality (case-insensitive).
-        var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
-                               .Select(solution.GetDocument)
-                               .FirstOrDefault() ?? solution.Projects
-                .SelectMany(p => p.Documents)
-                .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
-                                     string.Equals(Path.GetFullPath(d.FilePath), normalizedPath,
-                                                   StringComparison.OrdinalIgnoreCase));
+        var document = DocumentLookup.FindDocumentOrNull(solution, filePath);
         if (document == null)
         {
             var existsOnDisk = File.Exists(normalizedPath);
@@ -63,14 +56,7 @@ public class InventoryEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
 
-        // Fallback: tolerate path/link differences by matching on file name + full-path equality (case-insensitive).
-        var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
-                               .Select(solution.GetDocument)
-                               .FirstOrDefault() ?? solution.Projects
-                .SelectMany(p => p.Documents)
-                .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
-                                     string.Equals(Path.GetFullPath(d.FilePath), normalizedPath,
-                                                   StringComparison.OrdinalIgnoreCase));
+        var document = DocumentLookup.FindDocumentOrNull(solution, filePath);
         if (document == null)
         {
             var existsOnDisk = File.Exists(normalizedPath);

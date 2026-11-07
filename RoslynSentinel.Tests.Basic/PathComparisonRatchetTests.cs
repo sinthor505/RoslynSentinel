@@ -209,7 +209,6 @@ public class PathComparisonRatchetTests
         ["RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs::a"] = 2,
         ["RoslynSentinel.Engines.Basic/ProjectStructureEngine.cs::a"] = 4,
         ["RoslynSentinel.Engines.Basic/SemanticReplaceEngine.cs::a"] = 5,
-        ["RoslynSentinel.Engines.Basic/SymbolNavigationEngine.cs::a"] = 6,
         ["RoslynSentinel.Engines.Basic/SyntaxTargetResolver.cs::a"] = 1,
 
         // Kind b: comparer-less string.Equals / x.Equals(y) on a path string (pre-existing; phase 5b removes these).
@@ -218,24 +217,13 @@ public class PathComparisonRatchetTests
 
         // Kind c: hand-rolled .Documents scans on .FilePath outside DocumentLookup (pre-existing; phase 5b removes these).
         ["RoslynSentinel.Common/PersistentWorkspaceManager.cs::c"] = 1,
-        ["RoslynSentinel.Engines.Advanced/AntiPatternEngine.cs::c"] = 2,
         ["RoslynSentinel.Engines.Advanced/AsyncOptimizationEngine.cs::c"] = 4,
-        ["RoslynSentinel.Engines.Advanced/CloneDetectionEngine.cs::c"] = 1,
         ["RoslynSentinel.Engines.Advanced/ControlFlowEngine.cs::c"] = 1,
-        ["RoslynSentinel.Engines.Advanced/DocumentationEngine.cs::c"] = 1,
-        ["RoslynSentinel.Engines.Advanced/MetricsEngine.cs::c"] = 1,
-        ["RoslynSentinel.Engines.Advanced/OutParamRefactoringEngine.cs::c"] = 1,
-        ["RoslynSentinel.Engines.Advanced/PathDrivenTestEngine.cs::c"] = 1,
-        ["RoslynSentinel.Engines.Advanced/SecurityEngine.cs::c"] = 7,
-        ["RoslynSentinel.Engines.Advanced/StackOverflowEngine.cs::c"] = 1,
         ["RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs::c"] = 2,
         ["RoslynSentinel.Engines.Basic/DiagnosticEngine.cs::c"] = 1,
-        ["RoslynSentinel.Engines.Basic/DiscoveryEngine.cs::c"] = 1,
-        ["RoslynSentinel.Engines.Basic/InventoryEngine.cs::c"] = 2,
         ["RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs::c"] = 1,
         ["RoslynSentinel.Engines.Basic/NamedArgumentsEngine.cs::c"] = 1,
         ["RoslynSentinel.Engines.Basic/SemanticReplaceEngine.cs::c"] = 1,
-        ["RoslynSentinel.Engines.Basic/SymbolNavigationEngine.cs::c"] = 6,
         ["RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs::c"] = 1,
         ["RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs::c"] = 2,
     };

@@ -2706,8 +2706,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
             var processedProjectRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var changedFilePath in fileChanges.Keys.ToList())
             {
-                var doc = documents.FirstOrDefault(d =>
-                    string.Equals(d.FilePath, changedFilePath, StringComparison.OrdinalIgnoreCase));
+                var doc = DocumentLookup.FindDocumentOrNull(solution, changedFilePath);
                 if (doc?.Project.FilePath == null)
                 {
                     continue;

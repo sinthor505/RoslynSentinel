@@ -321,9 +321,8 @@ public class DiscoveryEngine
     {
         if (!string.IsNullOrEmpty(filePath))
         {
-            var normalizedPath = Path.GetFullPath(filePath);
-            var matches = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).Where(d => d != null)!.Cast<Document>();
-            return matches.Any() ? matches : solution.Projects.SelectMany(p => p.Documents).Where(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
+            var found = DocumentLookup.FindDocumentOrNull(solution, filePath);
+            return found is null ? Enumerable.Empty<Document>() : new[] { found };
         }
 
         return solution.Projects.Where(p => projectName == null || string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase)).SelectMany(p => p.Documents);

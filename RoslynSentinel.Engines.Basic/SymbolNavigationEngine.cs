@@ -1283,8 +1283,7 @@ public class SymbolNavigationEngine
         Document? methodDoc = null;
         if (filePath != null)
         {
-            methodDoc = solution.Projects.SelectMany(p => p.Documents)
-                .FirstOrDefault(d => d.FilePath == filePath);
+            methodDoc = DocumentLookup.FindDocumentOrNull(solution, filePath);
         }
         if (methodDoc == null)
         {
@@ -1435,8 +1434,7 @@ public class SymbolNavigationEngine
                     continue;
                 }
 
-                var refDoc = solution.Projects.SelectMany(p => p.Documents)
-                    .FirstOrDefault(d => d.FilePath == refTree.FilePath);
+                var refDoc = solution.GetDocument(refTree);
                 if (refDoc == null)
                 {
                     continue;
@@ -1664,8 +1662,7 @@ public class SymbolNavigationEngine
                         continue;
                     }
 
-                    var doc = solution.Projects.SelectMany(p => p.Documents)
-                        .FirstOrDefault(d => d.FilePath == candidate.FilePath);
+                    var doc = DocumentLookup.FindDocumentOrNull(solution, candidate.FilePath);
                     if (doc == null)
                     {
                         continue;
@@ -1770,8 +1767,7 @@ public class SymbolNavigationEngine
                     continue;
                 }
 
-                var refDoc = solution.Projects.SelectMany(p => p.Documents)
-                    .FirstOrDefault(d => d.FilePath == refTree.FilePath);
+                var refDoc = solution.GetDocument(refTree);
                 if (refDoc == null)
                 {
                     continue;
@@ -2035,8 +2031,7 @@ public class SymbolNavigationEngine
                         continue;
                     }
 
-                    var doc = solution.Projects.SelectMany(p => p.Documents)
-                        .FirstOrDefault(d => d.FilePath == candidate.FilePath);
+                    var doc = DocumentLookup.FindDocumentOrNull(solution, candidate.FilePath);
                     if (doc == null)
                     {
                         continue;
@@ -2365,8 +2360,7 @@ public class SymbolNavigationEngine
                 var refFilePath = loc.Location.SourceTree?.FilePath ?? filePath;
 
                 // Determine access kind from surrounding AST
-                var refDoc = solution.Projects.SelectMany(p => p.Documents)
-                    .FirstOrDefault(d => d.FilePath == refFilePath);
+                var refDoc = DocumentLookup.FindDocumentOrNull(solution, refFilePath);
                 if (refDoc == null)
                 {
                     continue;

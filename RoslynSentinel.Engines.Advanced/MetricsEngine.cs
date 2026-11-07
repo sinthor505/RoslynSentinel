@@ -106,16 +106,7 @@ public class MetricsEngine
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
-        Document? document = null;
-        foreach (var project in solution.Projects)
-        {
-            document = project.Documents.FirstOrDefault(d =>
-                string.Equals(d.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
-            if (document != null)
-            {
-                break;
-            }
-        }
+        var document = DocumentLookup.FindDocumentOrNull(solution, filePath);
         if (document == null)
         {
             return new List<CohesionAnalysis>();

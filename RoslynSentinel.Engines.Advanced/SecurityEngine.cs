@@ -27,11 +27,7 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> AnalyzeSecurityAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var normalizedPath = Path.GetFullPath(filePath);
-        var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault()
-            ?? solution.Projects.SelectMany(p => p.Documents)
-                .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
-                                     string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
+        var document = DocumentLookup.FindDocumentOrNull(solution, filePath);
         if (document == null)
         {
             return new List<SecurityIssueReport>();
@@ -188,15 +184,8 @@ public class SecurityEngine
         IEnumerable<Document?> docs;
         if (!string.IsNullOrEmpty(filePath))
         {
-            var normalizedPath = Path.GetFullPath(filePath!);
-            docs = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument);
-            if (!docs.Any(d => d != null))
-            {
-                docs = solution.Projects.SelectMany(p => p.Documents)
-                    .Where(d => !string.IsNullOrEmpty(d.FilePath) &&
-                                string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase))
-                    .Cast<Document?>();
-            }
+            var found = DocumentLookup.FindDocumentOrNull(solution, filePath);
+            docs = found is null ? Enumerable.Empty<Document?>() : new Document?[] { found };
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
@@ -250,15 +239,8 @@ public class SecurityEngine
         IEnumerable<Document?> docs;
         if (!string.IsNullOrEmpty(filePath))
         {
-            var normalizedPath = Path.GetFullPath(filePath!);
-            docs = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument);
-            if (!docs.Any(d => d != null))
-            {
-                docs = solution.Projects.SelectMany(p => p.Documents)
-                    .Where(d => !string.IsNullOrEmpty(d.FilePath) &&
-                                string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase))
-                    .Cast<Document?>();
-            }
+            var found = DocumentLookup.FindDocumentOrNull(solution, filePath);
+            docs = found is null ? Enumerable.Empty<Document?>() : new Document?[] { found };
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
@@ -416,11 +398,7 @@ public class SecurityEngine
         FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var normalizedPath = Path.GetFullPath(filePath);
-        var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault()
-            ?? solution.Projects.SelectMany(p => p.Documents)
-                .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
-                                     string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
+        var document = DocumentLookup.FindDocumentOrNull(solution, filePath);
         if (document == null)
         {
             return [];
@@ -529,15 +507,8 @@ public class SecurityEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var issues = new List<SecurityIssueReport>();
 
-        var normalizedPath = Path.GetFullPath(filePath);
-        IEnumerable<Document?> docs = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument);
-        if (!docs.Any(d => d != null))
-        {
-            docs = solution.Projects.SelectMany(p => p.Documents)
-                .Where(d => !string.IsNullOrEmpty(d.FilePath) &&
-                            string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase))
-                .Cast<Document?>();
-        }
+        var found = DocumentLookup.FindDocumentOrNull(solution, filePath);
+        IEnumerable<Document?> docs = found is null ? Enumerable.Empty<Document?>() : new Document?[] { found };
 
         foreach (var doc in docs)
         {
@@ -677,15 +648,8 @@ public class SecurityEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var issues = new List<SecurityIssueReport>();
 
-        var normalizedPath = Path.GetFullPath(filePath);
-        IEnumerable<Document?> docs = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument);
-        if (!docs.Any(d => d != null))
-        {
-            docs = solution.Projects.SelectMany(p => p.Documents)
-                .Where(d => !string.IsNullOrEmpty(d.FilePath) &&
-                            string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase))
-                .Cast<Document?>();
-        }
+        var found = DocumentLookup.FindDocumentOrNull(solution, filePath);
+        IEnumerable<Document?> docs = found is null ? Enumerable.Empty<Document?>() : new Document?[] { found };
 
         foreach (var doc in docs)
         {
@@ -744,11 +708,7 @@ public class SecurityEngine
         FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var normalizedPath = Path.GetFullPath(filePath);
-        var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault()
-            ?? solution.Projects.SelectMany(p => p.Documents)
-                .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
-                                     string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
+        var document = DocumentLookup.FindDocumentOrNull(solution, filePath);
         if (document == null)
         {
             return [];
