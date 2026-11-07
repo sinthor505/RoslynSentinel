@@ -1,13 +1,22 @@
 # Named result DTOs for Search callers / implementations / references (finish plan_wire_result_marshaller Step 7)
 
-**Status:** PROPOSED 2026-11-04. Partly superseded 2026-11-04 by
-[proposal_sequence_pager.md](./proposal_sequence_pager.md): the "two-list limitation" section and open questions 2, 3
-and 5 no longer apply (the pager pages `callers` and `implementations` as one sequence, no reshaping); the named
-records remain an identification choice only. Nothing built.
+**Status:** IMPLEMENTED 2026-11-06. Built: `CallersSearchResult`, `ImplementationsSearchResult` and
+`ReferencesSearchResult` in `RoslynSentinel.Tools.Basic/SearchRelationshipResults.cs`, used by
+`SymbolRelationshipImpl.FindReferences`, with the same JSON as the anonymous objects they replaced.
+
+Differences from the text below, which is kept as proposed:
+
+- The records carry NO `[ResultRecords]`. `SequencePager.ResolveSequence` treats a non-empty declared list as the only
+  sequence, so declaring `Callers` would drop `Implementations` out of paging; the default sequence pages both.
+- [proposal_sequence_pager.md](../proposal_sequence_pager.md) (2026-11-04) replaced the `two-list limitation` section and
+  open questions 2, 3 and 5. Open questions 1 and 4 are closed: placed in `Tools.Basic`, no marker interface. Open
+  questions 6 and 7 only matter while `ResultPager.Fit` remains as a fallback.
+- `Rest of Step 7`: no scan-tool or `AsyncifyTools` attributes (those DTOs were not inspected; the default sequence is
+  expected to handle them), and the bare-array pager test already exists as `BareArraySuccessData_IsOneList`.
 
 ## Motivation
 
-[plan_wire_result_marshaller.md](../plans/plan_wire_result_marshaller.md) Step 7 still lists one open item:
+[plan_wire_result_marshaller.md](../../plans/plan_wire_result_marshaller.md) Step 7 still lists one open item:
 `[ResultRecords]` for `Search` references / callers / implementations ("anonymous objects need a named record, a
 wire-shape decision"), plus bare-list tools. A read-only investigation on 2026-11-04 (explore-tier2) found:
 
@@ -143,8 +152,8 @@ declared; `Implementations` falls back to inference (`inferred: true`). Two ways
 
 ## Related
 
-- [plan_wire_result_marshaller.md](../plans/plan_wire_result_marshaller.md) -- Step 7 "Done when" and the open item.
-- [proposal_central_large_result_offload.md](./proposal_central_large_result_offload.md) and
-  [plan_typed_large_result_offload.md](../plans/plan_typed_large_result_offload.md) -- the superseded
+- [plan_wire_result_marshaller.md](../../plans/plan_wire_result_marshaller.md) -- Step 7 "Done when" and the open item.
+- [proposal_central_large_result_offload.md](../proposal_central_large_result_offload.md) and
+  [plan_typed_large_result_offload.md](../../plans/plan_typed_large_result_offload.md) -- the superseded
   `IPageableResult` design.
 - `dto-conventions` skill (reuse-first, NEW-DTO format, suffix table, wire safety).

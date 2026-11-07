@@ -5,6 +5,7 @@
 
 using System.Collections;
 using System.IO;
+using System.Reflection;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
@@ -95,10 +96,10 @@ public class FindReferencesIncludeTestsTests
     // StatusMessage is null when nothing is excluded; treat null as empty for negative checks.
     private static string StatusOf(SentinelCallToolResult<object> result) => result.StatusMessage ?? string.Empty;
 
-    // SuccessData is an anonymous object; read a named list property and its FilePath values by reflection.
+    // SuccessData is typed object; read a named list property and its FilePath values by reflection.
     private static List<string> PathsIn(SentinelCallToolResult<object> result, string listProperty)
     {
-        var list = (IEnumerable)result.SuccessData!.GetType().GetProperty(listProperty)!.GetValue(result.SuccessData)!;
+        var list = (IEnumerable)result.SuccessData!.GetType().GetProperty(listProperty, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)!.GetValue(result.SuccessData)!;
         return list.Cast<object>()
             .Select(item => (string)item.GetType().GetProperty("FilePath")!.GetValue(item)!)
             .ToList();

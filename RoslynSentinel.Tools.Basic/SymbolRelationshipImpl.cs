@@ -319,11 +319,7 @@ public class SymbolRelationshipImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsError = false,
-                    SuccessData = new
-                    {
-                        callers = result,
-                        summary
-                    },
+                    SuccessData = new CallersSearchResult(result, summary),
                     StatusMessage = summary.ToSummaryMessage("caller") + DroppedTestHitsNote(droppedProjectNames) + ZeroResultScopeNote(summary, symbolName, includeTests),
                     ListSummary = summary
                 };
@@ -337,11 +333,7 @@ public class SymbolRelationshipImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsError = false,
-                    SuccessData = new
-                    {
-                        implementations = result,
-                        summary
-                    },
+                    SuccessData = new ImplementationsSearchResult(result, summary),
                     StatusMessage = summary.ToSummaryMessage("implementation") + DroppedTestHitsNote(droppedProjectNames) + ZeroResultScopeNote(summary, symbolName, includeTests),
                     ListSummary = summary
                 };
@@ -372,12 +364,7 @@ public class SymbolRelationshipImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsError = false,
-                    SuccessData = new
-                    {
-                        callers,
-                        implementations,
-                        summary
-                    },
+                    SuccessData = new ReferencesSearchResult(callers, implementations, summary),
                     StatusMessage = summary.ToSummaryMessage("hit") + DroppedTestHitsNote(droppedProjectNames) + ZeroResultScopeNote(summary, symbolName, includeTests)
                         + (implementationsSkipped ? " Implementations skipped: the target cannot have implementations (sealed/static type or non-virtual member)." : string.Empty),
                     ListSummary = summary

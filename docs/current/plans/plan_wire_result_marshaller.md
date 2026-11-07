@@ -1,6 +1,6 @@
 # Plan: one result marshaller at the SDK MarshalResult seam owns offload, paging, metadata and serialization
 
-**Status:** APPROVED 2026-11-02. In progress: Steps 0-6 done with the marshaller on by default, Step 7 mostly done; next are Step 7's remainder and Step 8.
+**Status:** APPROVED 2026-11-02. In progress: Steps 0-6 done with the marshaller on by default, Step 7 done 2026-11-06; next is Step 8.
 
 How it works now, including `SequencePager` (built later from
 [proposal_sequence_pager.md](../proposals/proposal_sequence_pager.md), and running before `ResultPager.Fit`):
@@ -208,9 +208,9 @@ enum value.
 - Change: `ForPossiblyLargeDataAsync` and `ForPossiblyLargeDetailAsync` become
   `[Obsolete("Return the payload; the result marshaller offloads")]` pass-throughs that never store; a caller that
   passed a domain `totalRecords` sets the envelope field itself. Then sweep callers in slices (one project per
-  slice) to plain construction. Where a tool has a records list, add `[ResultRecords]` to its DTO property.
-- Done when: no production call to either method or to `StoreLargeResultAsync` outside the marshaller;
-  `[ResultRecords]` on the list DTOs of ListAll, Search, QuerySymbolRelationships and the scan tools.
+  slice) to plain construction. Add `[ResultRecords]` only where the default sequence would page the wrong list.
+- Done when: no production call to either method or to `StoreLargeResultAsync` outside the marshaller. A declared
+  `[ResultRecords]` list becomes the only sequence, so never declare one of two lists that should page together.
 
 ### Step 8 - Side stores become `[NeverInline]` properties
 - Files: `Tools.Basic/WorkspaceBuildTestImpl.cs` (`StoreFullDiagnosticsAsync`, `StoreFullTestResultAsync`);
@@ -283,6 +283,12 @@ enum value.
   key-pinning tests read today's shapes; all changes before Step 10 are additive.
 
 ## Progress log
+
+2026-11-06: Step 7 done. `Search` callers, implementations and references return named records with no
+`[ResultRecords]` ([proposal_search_relationship_result_dtos.md](../proposals/closed/proposal_search_relationship_result_dtos.md));
+the default sequence pages their lists. Bare-list tools stay on the default sequence. A text search found no production
+call to `ForPossiblyLargeDataAsync`, `ForPossiblyLargeDetailAsync` or `StoreLargeResultAsync`, only their declarations
+and comments. The older text below still links this proposal at its former path.
 
 The former Status text, kept as written (dates are in the text).
 

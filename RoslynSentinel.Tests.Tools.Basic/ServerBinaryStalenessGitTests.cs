@@ -61,7 +61,8 @@ public class ServerBinaryStalenessGitTests
         return RunGit(_repo, "rev-parse", "HEAD");
     }
 
-    [Test]
+    // Suspected flaky: failed once in a full solution run ("git failed to run: init --quiet", null result) and passed when the class ran alone.
+[Test]
     public void SameSha_IsNotStale()
     {
         var sha = Commit("RoslynSentinel.Common/a.cs", "first");

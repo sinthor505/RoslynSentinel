@@ -761,7 +761,7 @@ public class BatteryTwentyTwoTests
         var result = await _symbolRelationshipTools.FindReferencesTool(reason: "test message", "ProcessAsync", FindReferencesKind.all, filePath: "Test.cs");
         Assert.That(result.IsError, Is.False);
         Assert.That(result.SuccessData, Is.Not.Null);
-        var json = System.Text.Json.JsonSerializer.Serialize(result.SuccessData);
+        var json = System.Text.Json.JsonSerializer.Serialize(result.SuccessData, ModelContextProtocol.McpJsonUtilities.DefaultOptions);
         Assert.That(json, Does.Contain("callers"));
         Assert.That(json, Does.Contain("implementations"));
     }

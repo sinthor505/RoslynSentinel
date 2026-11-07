@@ -31,7 +31,7 @@ string under `successData` at any depth, records each cut in `largeResult.omitte
 4. **Attributes cannot mark most results.** `[ResultRecords]` is read off the runtime type of `SuccessData`; anonymous
    objects (`Search` callers / implementations / references) and bare lists (`ListAll`, `LocateSymbol`,
    `QuerySymbolRelationships`) cannot carry it
-   ([proposal_search_relationship_result_dtos.md](./proposal_search_relationship_result_dtos.md)).
+   ([proposal_search_relationship_result_dtos.md](./closed/proposal_search_relationship_result_dtos.md)).
 5. **Per-tool fixes do not scale.** Reshaping each multi-list result (tagged lists, nested DTOs) repeats the same
    decision at every tool.
 
@@ -170,7 +170,7 @@ Migration-first throughout: new code beside the old, old marked `[Obsolete]`, ca
 9. **Shape fixes** for each unit-rule violation from slice 2 (or a `// TODO` at the site).
 10. **Retire** `Fit`'s cutting logic, `omitted` and `GetLargeResult(path:)` once their readers have moved.
 
-Later, not scheduled: `Merged(key)` order; an `IPageableResult` marker for a ratchet test; named `Search` records.
+Later, not scheduled: `Merged(key)` order; an `IPageableResult` marker for a ratchet test.
 
 ## Alternatives considered, not pursued
 
@@ -289,7 +289,7 @@ Other slice 1 findings:
 
 ## Related
 
-- [proposal_search_relationship_result_dtos.md](./proposal_search_relationship_result_dtos.md) -- its "two-list
+- [proposal_search_relationship_result_dtos.md](./closed/proposal_search_relationship_result_dtos.md) -- its "two-list
   limitation" section and open questions 2, 3 and 5 are superseded by this proposal.
 - [plan_wire_result_marshaller.md](../plans/plan_wire_result_marshaller.md) -- `Fit`'s design (Step 3) and Step 7.
 - [proposal_central_large_result_offload.md](./proposal_central_large_result_offload.md) and
