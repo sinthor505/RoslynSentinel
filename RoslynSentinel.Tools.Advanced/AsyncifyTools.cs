@@ -2996,8 +2996,12 @@ public class AsyncifyTools
                 var applyResult3a = await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { { candidate.FilePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable
                     validateChanges: true, cancellationToken: state.InnerToken);
-                if (applyResult3a.IsError && applyResult3a.ValidationResult != null)
+                if (applyResult3a.IsError)
                 {
+                    if (applyResult3a.ValidationResult == null)
+                    {
+                        throw new InvalidOperationException($"Write refused: {applyResult3a.Summary}");
+                    }
                     var diagMsg = string.Join("; ", applyResult3a.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
                     throw new InvalidOperationException($"Validation: {applyResult3a.ValidationResult.Diagnostics.Count} error(s) - {diagMsg}");
                 }
@@ -3102,7 +3106,7 @@ public class AsyncifyTools
                 var applyResult3b = await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { { handler.FilePath, handlerResult.UpdatedText } },
                     validateChanges: true, cancellationToken: state.InnerToken);
-                // TODO the same IsError-with-null-ValidationResult fall-through exists at the flag/bridge phases (applyResult1126, 1223, 1317, 1421, 3a); fix each with its own test
+                // TODO the same IsError-with-null-ValidationResult fall-through exists at the flag/bridge phases (applyResult1126, 1223, 1317, 1421); fix each with its own test
                 if (applyResult3b.IsError)
                 {
                     if (applyResult3b.ValidationResult == null)

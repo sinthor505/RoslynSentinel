@@ -795,6 +795,70 @@ public static class DataHelper
         }
     }
 
+    // Phase 3a: a HandlerToAsyncCandidate-flagged handler whose bridge write is refused because the file is
+    // read-only (no ValidationResult). The conversion succeeds; only the write fails, so the item must be Failed
+    // and the file on disk must be unchanged.
+    [Test, CancelAfter(60000)]
+    public async Task T26_Asyncify_HandlerToAsyncBridge_WriteRefused_IsFailedNotSucceeded()
+    {
+        var source = """
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+
+            public class TripService
+            {
+                [MigrationCandidate("HandlerToAsyncCandidate", Score = 70, Reason = "extracted handler body", FlaggedDate = "2026-06-01")]
+                public int GetTrips(int companyId)
+                {
+                    return companyId;
+                }
+            }
+            """ + "\n" + AttrStub;
+
+        SetSource(source, "TripService.cs");
+        var path = PathOf("TripService.cs");
+        var before = File.ReadAllText(path);
+
+        var ledger = (IScopedOperationLedger)_workspaceManager;
+        var otherFilePath = _workspaceManager.ResolveFromWire(PathOf("Other.cs")).Absolute;
+        var opened = ledger.TryOpen(
+            "Asyncify_Test",
+            [
+                new CallSiteLedgerEntry
+                {
+                    EntryId = "entry-1",
+                    FilePath = otherFilePath,
+                    Line = 1,
+                    BrokenExpression = "x.Foo()",
+                    OldStaticType = "ClassA",
+                    Status = CallSiteStatus.Ambiguous,
+                },
+            ],
+            out var rejection);
+        Assert.That(opened, Is.True, rejection);
+
+        var result = await _asyncifyTools.AsyncifyTool(reason: "test message");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
+        Assert.That(result.SuccessData, Is.Not.Null);
+        Assert.That(result.SuccessData!.PhaseBreakdown!.HandlerToAsync.Succeeded, Is.EqualTo(0),
+            "A refused write must not count the GetTrips handler as Succeeded in Phase 3a.");
+        Assert.That(result.SuccessData.PhaseBreakdown.HandlerToAsync.Failed, Is.EqualTo(1),
+            "A refused write must count the GetTrips handler as Failed in Phase 3a.");
+        Assert.That(result.SuccessData.Failures, Has.Count.EqualTo(1),
+            "The refused write must surface as one FailureDetail. Reasons: " + string.Join(" | ", result.SuccessData.Failures.Select(f => $"{f.FilePath}: {f.Reason}")));
+
+        var reason = result.SuccessData.Failures[0].Reason;
+        TestContext.Out.WriteLine($"T26 Failure Reason: {reason}");
+        Assert.That(reason, Is.Not.Null.And.Not.Empty,
+            $"The FailureDetail Reason must name the cause. Reason was: {reason}");
+        Assert.That(reason, Does.Contain("Write refused"),
+            $"The Reason must come from the Phase 3a write-refused branch. Reason was: {reason}");
+        Assert.That(File.ReadAllText(path), Is.EqualTo(before),
+            "A refused write must leave the file on disk unchanged.");
+    }
+
     // Phase 3b: the same convertible handler as T24, but the write is refused by an open scoped operation ledger
     // (ScopedLedgerBlocked) because RegionForm.cs is not tracked by the ledger. The refusal returns IsError with a
     // null ValidationResult, so the item must be Failed, not Succeeded.
