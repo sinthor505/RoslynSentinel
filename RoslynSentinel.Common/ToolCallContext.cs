@@ -8,11 +8,13 @@ namespace RoslynSentinel.Common;
 /// assignment having to flow back up. <see cref="Current"/> is null when no filter set it (engines, tests, other
 /// hosts).
 /// </summary>
-public sealed class ToolCallContext
+public sealed class ToolCallContext : IDetachedPayloadSource
 {
     private static readonly AsyncLocal<ToolCallContext?> Slot = new();
 
     private int _gatePassed;
+    private readonly object _detachedLock = new();
+    private readonly List<(string Name, object Payload)> _detached = [];
 
     /// <summary>Creates the context for one tool call.</summary>
     public ToolCallContext(string? agentId, string? agentType, string toolName, string? reason, long startSeq)
@@ -81,4 +83,45 @@ public sealed class ToolCallContext
     {
         LastWriteUtc = utc;
     }
+
+    /// <summary>
+    /// A snapshot of the payloads detached during this call (see <see cref="Detach"/>), for code that cannot reach the result
+    /// object. The marshaller reads it from <see cref="Current"/>; in mode <c>on</c> it handles them like
+    /// <c>SentinelCallToolResult.Detached</c>, in <c>off</c> and <c>passthrough</c> they are dropped.
+    /// </summary>
+    public IReadOnlyList<(string Name, object Payload)> Detached
+    {
+        get
+        {
+            lock (_detachedLock)
+            {
+                return _detached.Count == 0 ? [] : _detached.ToArray();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Declares <paramref name="payload"/> (a list or a string) as stored, not inline, under <c>successData.&lt;name&gt;</c> of this
+    /// call's result. Safe from concurrent continuations of the call. Throws <see cref="ArgumentException"/> for a bad name or payload
+    /// or a name already detached in this call. Use <see cref="DetachCurrent"/> where the context may be absent.
+    /// </summary>
+    public void Detach(string name, object payload)
+    {
+        DetachedPayloads.Validate(name, payload);
+        lock (_detachedLock)
+        {
+            if (_detached.Exists(d => d.Name == name))
+            {
+                throw new ArgumentException($"A payload named '{name}' is already detached in this call.", nameof(name));
+            }
+
+            _detached.Add((name, payload));
+        }
+    }
+
+    /// <summary>
+    /// <see cref="Detach"/> on <see cref="Current"/>; a no-op (no validation, no throw) when no filter set a context, as when an
+    /// engine or test calls the code directly.
+    /// </summary>
+    public static void DetachCurrent(string name, object payload) => Current?.Detach(name, payload);
 }

@@ -1,7 +1,7 @@
 # Plan: one result marshaller at the SDK MarshalResult seam owns offload, paging, metadata and serialization
 
-**Status:** APPROVED 2026-11-02. In progress: Steps 0-7 done (Step 7 2026-11-06), Steps 9 and 11 done 2026-11-07, Step 8 on
-HOLD pending a user decision (see the HOLD note under Step 8); Step 10 waits on that decision.
+**Status:** APPROVED 2026-11-02. In progress: Steps 0-7 done (Step 7 2026-11-06), Steps 9 and 11 done 2026-11-07, Step 8 re-planned
+and approved 2026-11-07 (four slices, see Step 8 and the proposal), not yet built; Step 10 follows it.
 
 How it works now, including `SequencePager` (built later from
 [proposal_sequence_pager.md](../proposals/proposal_sequence_pager.md), and running before `ResultPager.Fit`):
@@ -213,18 +213,29 @@ enum value.
 - Done when: no production call to either method or to `StoreLargeResultAsync` outside the marshaller. A declared
   `[ResultRecords]` list becomes the only sequence, so never declare one of two lists that should page together.
 
-### Step 8 - Side stores become `[NeverInline]` properties
+### Step 8 - Retire the three side stores (Build uncapped; RunTest and changed content as detached payloads)
 - Files: `Tools.Basic/WorkspaceBuildTestImpl.cs` (`StoreFullDiagnosticsAsync`, `StoreFullTestResultAsync`);
-  `Common/ValidateAndApplyHelper.cs` (`StoreChangedContentAsync`); their result DTOs; descriptions in
+  `Common/ValidateAndApplyHelper.cs` (`StoreChangedContentAsync`); `Common/ToolResultMarshaller.cs`,
+  `Common/SentinelCallToolResult.cs`, `Common/ToolCallContext.cs`; their result DTOs; descriptions in
   `Common/ToolParams.cs`, `WorkspaceBuildTestTools.cs`, `WorkspaceTools.cs`; `Server.Advanced/ToolArgumentValidator.cs`
   (`fullResultsId` alias); `BuildToolResultShapeTests`, `RunTestTests`, apply-result tests.
-- Change: the full diagnostics, full test results and changed content become `[NeverInline]` DTO properties.
-  The marshaller moves them to the store and reports them in `omitted`. Keep the old id fields populated from
-  the new `resultId` until Step 10 (additive).
-- Done when: tests page the full lists by path; `Utilities.PlanStepRunner` build parsing still reads
-  `errorCount` (it is inline header data).
-- **HOLD 2026-11-07: the step as written does not work; needs a user decision.** A survey (explore-tier2, source read
-  only) found:
+- Change, four slices (design, examples and survey facts in
+  [proposal_side_stores_never_inline.md](../proposals/proposal_side_stores_never_inline.md), approved 2026-11-07):
+  1. Build: remove the 20-row inline cap and `StoreFullDiagnosticsAsync`; `[ResultRecords]` on `BuildResult.Errors`;
+     the marshaller pages `errors` like any other list. `FullDiagnosticsResultId`, `OmittedErrorCount` `[Obsolete]`.
+  2. Marshaller: a never-serialized `Detached(name, object)` slot on `SentinelCallToolResult` and `ToolCallContext`;
+     resolved before the budget check, grafted at `successData.<name>`, moved out, stored as one `Envelope`, then the
+     remainder is budget-checked as today. Neutral pointer wording ("Stored, not inline"). `Tests.Server` suite.
+  3. RunTest: `Detach("fullResults", unprojectedRows)` replaces `StoreFullTestResultAsync`; `FullResultsId` `[Obsolete]`.
+  4. Changed content: `ToolCallContext.Current?.Detach("changedFiles", list of {path, text})` replaces
+     `StoreChangedContentAsync` (one site); `ChangedContentResultId` `[Obsolete]`, `NotEchoedHint` points at
+     `largeResult`. The ~50 id copy sites are removed in Step 10.
+- Done when: tests page `successData.errors` by offset and `successData.fullResults` / `successData.changedFiles` by
+  `path`; no `StoreRawJsonAsync` caller remains outside the filter backstop; `Utilities.PlanStepRunner` build parsing
+  still reads `errorCount` (inline header data).
+- Superseded form, kept for the record: "the three stores become `[NeverInline]` DTO properties". A survey on
+  2026-11-07 (explore-tier2, source read only) found it does not work as written; `[NeverInline]` stays as the declarative
+  form until Step 10 decides its fate:
   - The marshaller applies `[NeverInline]` only over budget (`ToolResultMarshaller.MarshalAsync` returns the text when it
     fits), so a populated list in a small response stays inline and nothing is stored. Over budget, `SequencePager` runs
     before `ResultPager.Fit` and would take a populated `[NeverInline]` array as the page sequence.
@@ -235,13 +246,9 @@ enum value.
     DTO is serialized before the id exists) without a write-back; the `Note` text built from the id
     (`AppliedChangeSummary.cs:119-121`) changes. A dictionary (`ChangedContent`) cannot be paged by path, so the stored
     shape must be a list. `GetDiagnostics.buildVerification` is nested, and `ReflectHints` reads only direct properties.
-  - Cost if built: slice 0 marshaller (apply `[NeverInline]` before the budget check, neutral pointer wording, tests);
-    slice 1 Build (`BuildResult.FullErrors`/`FullWarnings`); slice 2 RunTest (`TestRunResult.FullResults`); slice 3
-    changed content (~50 `ChangedContentResultId:` construction sites in 5 files, migration-first).
-  - Options: (a) build it as above; (b) keep the three stores and reword "Done when" of Step 7 to name them as the
-    accepted exceptions (they are the only writers outside the marshaller); (c) build slice 0 plus Build/RunTest only.
-    Step 9 is independent and proceeds meanwhile. Full write-up and the open questions:
-    [proposal_side_stores_never_inline.md](../proposals/proposal_side_stores_never_inline.md).
+  - Resolved 2026-11-07 by the four slices above: Build needs no store at all (inline and stored rows are the same type,
+    so the marshaller's own paging replaces the cap); RunTest and changed content hand the marshaller the payload as data,
+    so it is never serialized into the wire text, never reflected and never gated by the budget check.
 
 ### Step 9 - One measure
 - Files: `Common/LargeResultHelper.cs`, `ServiceRegistrationExtensionsBasic.cs` (filter), `GetLargeResult` shrink
@@ -320,8 +327,9 @@ sites, moved with the same value). The filter already compared the same value; b
 `ToolResultMarshaller` now set `largeResult.sizeChars` (`LargeResultInfo.SizeChars`, `long?`, omitted when null) beside
 `sizeBytes`; two new `ToolResultMarshallerOnModeTests` pin it for the Fit and sequence paths. Left for Step 10: the
 filter's own `offloaded` stub (`sizeBytes = text.Length`, in chars despite the name) and the legacy `GetLargeResult`
-window code, which now reads `InlineBudgetChars`. Step 8 survey 2026-11-07 (read-only): the step as written does not
-work, see the HOLD note under Step 8.
+window code, which now reads `InlineBudgetChars`. Step 8 survey 2026-11-07 (read-only): the step as written did not
+work; re-planned the same day as four slices (Build uncapped, marshaller `Detached` payload, RunTest, changed content),
+approved, not yet built.
 
 2026-11-06: Step 7 done. `Search` callers, implementations and references return named records with no
 `[ResultRecords]` ([proposal_search_relationship_result_dtos.md](../proposals/closed/proposal_search_relationship_result_dtos.md));

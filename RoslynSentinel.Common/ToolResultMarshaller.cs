@@ -41,6 +41,14 @@ namespace RoslynSentinel.Common;
 /// (or whose sequence already fits whole) takes the <see cref="ResultPager"/> path above unchanged.
 /// </para>
 /// <para>
+/// <b>Detached payloads</b> (proposal_side_stores_never_inline.md slice 2): a tool or the apply helper can declare a list or
+/// string as stored, not inline (<c>SentinelCallToolResult.Detach</c>, <see cref="ToolCallContext.Detach"/>). In mode <c>on</c>,
+/// before the budget check, each is grafted into the parsed tree at <c>successData.&lt;name&gt;</c>, the full tree is stored as one
+/// Envelope, and the text goes on without that property, with a neutral pointer (<c>Stored, not inline: ...</c>) and an
+/// <c>omitted</c> entry. If the remainder is also over budget the usual paging runs on the remainder under its own resultId and
+/// the detached pointer is appended to that pointer's message.
+/// </para>
+/// <para>
 /// A <see cref="string"/> return also reaches the SDK's structured-content step, which is a no-op for every tool today (no
 /// tool sets <c>UseStructuredContent = true</c>, so none has an output schema). Never throws: any exception returns the
 /// original object and is logged at error level (server-side only, nothing tool-visible).
@@ -94,6 +102,16 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
             }
 
             const int budget = LargeResultHelper.InlineBudgetChars - LargeResultHelper.EchoReserveChars;
+
+            // Detached payloads (SentinelCallToolResult.Detach / ToolCallContext.Detach) are stored whatever the size, so they are
+            // resolved before the budget check. Only mode On gets here; off and passthrough never serialize them (JsonIgnore), so
+            // the payload is dropped, not inlined.
+            if (CollectDetached(result) is { Count: > 0 } detached
+                && await DetachAsync(toolName, text, detached, serializerOptions, cancellationToken).ConfigureAwait(false) is { } detachment)
+            {
+                return await FinishDetachedAsync(toolName, result, detachment, serializerOptions, budget, cancellationToken).ConfigureAwait(false);
+            }
+
             if (text.Length <= budget)
             {
                 return text;
@@ -392,6 +410,189 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
         }
 
         return WithPointerFirst(fitted, pointerNode, options);
+    }
+
+    // The payloads detached on the result object plus those detached on the ambient call context (code that cannot reach the
+    // result, such as the apply helper). The context is null when no filter set one (tests, engines): then only the result's count.
+    private static IReadOnlyList<(string Name, object Payload)> CollectDetached(object? result)
+    {
+        IReadOnlyList<(string Name, object Payload)> fromResult = (result as IDetachedPayloadSource)?.Detached ?? [];
+        IReadOnlyList<(string Name, object Payload)> fromContext = ToolCallContext.Current?.Detached ?? [];
+        if (fromContext.Count == 0)
+        {
+            return fromResult;
+        }
+
+        return fromResult.Count == 0 ? fromContext : [.. fromResult, .. fromContext];
+    }
+
+    // Appends a sentence to the envelope's warningDetails (kept, not replaced, when the tool already set one).
+    private static void AddWarning(JsonObject envelope, string warning) =>
+        envelope["warningDetails"] = envelope["warningDetails"] is JsonValue existing && existing.TryGetValue(out string? previous) && !string.IsNullOrEmpty(previous)
+            ? previous + " " + warning
+            : warning;
+
+    // Stage 1 of a detached result (proposal_side_stores_never_inline.md slice 2): each payload is serialized with the wire options,
+    // grafted into the parsed tree at successData.<name>, and the FULL grafted tree is stored as one Envelope (a path-addressable
+    // file: GetLargeResult(path: "successData.<name>") pages it). Then every grafted path is moved out (ResultPager.MoveOut, which
+    // writes the omitted entry) and the now-empty property is removed, so the wire text never carries the payload or an empty shell.
+    // Returns the remainder tree plus the pointer for it, or null when there is nothing to store (no successData object, or every
+    // payload empty or not a list/string), in which case the caller carries on with the untouched text.
+    private async Task<(JsonObject Remainder, JsonNode PointerNode, string Message, bool Stored)?> DetachAsync(
+        string toolName, string text, IReadOnlyList<(string Name, object Payload)> detached, JsonSerializerOptions options, CancellationToken cancellationToken)
+    {
+        const string successPrefix = "successData.";
+        if (JsonNode.Parse(text) is not JsonObject parsed || parsed["successData"] is not JsonObject successData)
+        {
+            _logger.LogWarning("Tool {ToolName} detached payloads but its result has no successData object to hold them; they are dropped.", toolName);
+            return null;
+        }
+
+        var typeInfo = options.GetTypeInfo(typeof(object));
+        var names = new List<string>();
+        foreach (var (name, payload) in detached)
+        {
+            JsonNode? node = JsonSerializer.SerializeToNode(payload, typeInfo);
+            bool empty;
+            if (node is JsonArray array)
+            {
+                empty = array.Count == 0;
+            }
+            else if (node is JsonValue value && value.TryGetValue(out string? line))
+            {
+                empty = line.Length == 0;
+            }
+            else
+            {
+                _logger.LogWarning("Tool {ToolName} detached payload {Name}, which serializes to neither a list nor a string; it is dropped.", toolName, name);
+                continue;
+            }
+
+            if (empty)
+            {
+                continue;
+            }
+
+            if (!names.Contains(name))
+            {
+                if (successData.ContainsKey(name))
+                {
+                    _logger.LogWarning("Tool {ToolName} detached payload {Name}, replacing the inline property of the same name.", toolName, name);
+                }
+
+                names.Add(name);
+            }
+
+            // A name detached twice (result and context) keeps the later payload.
+            successData[name] = node;
+        }
+
+        if (names.Count == 0)
+        {
+            return null;
+        }
+
+        string fullText = parsed.ToJsonString(options);
+        var omitted = new List<OmittedPart>();
+        foreach (string name in names)
+        {
+            ResultPager.MoveOut(parsed, successPrefix + name, omitted);
+            successData.Remove(name);
+        }
+
+        var (resultId, filePath, failure) = await TryStoreAsync(toolName, fullText, omitted, sequence: null, cancellationToken).ConfigureAwait(false);
+        string summary = string.Join(
+            ", ",
+            omitted.Select(p => $"{p.Path[successPrefix.Length..]} ({p.Total} {(p.Unit == ResultPager.UnitLines ? "lines" : "records")})"));
+
+        if (resultId is not null)
+        {
+            string calls = string.Join(" ; ", omitted.Select(p => LargeResultHints.FetchCall(resultId, path: p.Path)));
+            string message = $"Stored, not inline: {summary}. {calls}";
+            var pointer = new LargeResultInfo(
+                resultType: nameof(ResultWrapperType.Envelope),
+                writtenToFile: true,
+                filePath: filePath,
+                resultId: resultId,
+                sizeBytes: Encoding.UTF8.GetByteCount(fullText),
+                totalRecords: omitted[0].Total,
+                message: message)
+            {
+                Omitted = omitted,
+                SizeChars = fullText.Length,
+            };
+            return (parsed, JsonSerializer.SerializeToNode(pointer, options)!, message, true);
+        }
+
+        string warning = $"Not inline: {summary} was left out of the text, but {failure}; it is not retrievable. Narrow the request.";
+        JsonNode failedPointer = JsonSerializer.SerializeToNode(
+            new
+            {
+                resultType = nameof(ResultWrapperType.Envelope),
+                writtenToFile = false,
+                totalRecords = omitted[0].Total,
+                message = warning,
+                omitted,
+            },
+            options)!;
+        return (parsed, failedPointer, warning, false);
+    }
+
+    // Stage 2 of a detached result: the remainder (payloads already stored and removed) goes through the usual budget check.
+    // Merge rule when the remainder is ALSO over budget: the existing flow (sequence page or Fit, FitAndStoreAsync) runs unchanged
+    // on the remainder text and stores that text under its own resultId; the detached payload stays in the first file. They are
+    // two files on purpose: a stored sequence is read by offset and ignores GetLargeResult's path, so the payload could not be
+    // addressed by path inside a sequence file. The detached pointer is then appended to the existing pointer's message (its
+    // omitted/returned fields keep describing the remainder's file), or becomes the pointer when the usual flow added none.
+    private async Task<string> FinishDetachedAsync(
+        string toolName,
+        object? result,
+        (JsonObject Remainder, JsonNode PointerNode, string Message, bool Stored) detachment,
+        JsonSerializerOptions options,
+        int budget,
+        CancellationToken cancellationToken)
+    {
+        JsonObject remainder = detachment.Remainder;
+        string remainderText = remainder.ToJsonString(options);
+        if (remainderText.Length <= budget)
+        {
+            if (!detachment.Stored)
+            {
+                AddWarning(remainder, detachment.Message);
+            }
+
+            return WithPointerFirst(remainder, detachment.PointerNode, options);
+        }
+
+        string usual = await FitAndStoreAsync(toolName, result, remainderText, options, budget, cancellationToken).ConfigureAwait(false);
+        if (JsonNode.Parse(usual) is not JsonObject final)
+        {
+            return usual;
+        }
+
+        if (final["largeResult"] is JsonObject existing)
+        {
+            if (detachment.Stored)
+            {
+                existing["message"] = existing["message"] is JsonValue current && current.TryGetValue(out string? previous) && !string.IsNullOrEmpty(previous)
+                    ? previous + " " + detachment.Message
+                    : detachment.Message;
+            }
+            else
+            {
+                AddWarning(final, detachment.Message);
+            }
+
+            return final.ToJsonString(options);
+        }
+
+        // The usual flow could not cut the remainder (nothing cuttable) and added no pointer: the detached pointer leads.
+        if (!detachment.Stored)
+        {
+            AddWarning(final, detachment.Message);
+        }
+
+        return WithPointerFirst(final, detachment.PointerNode, options);
     }
 
     // The runtime type of SentinelCallToolResult<TSuccess, TError>.SuccessData, where the typed hints ([ResultRecords],

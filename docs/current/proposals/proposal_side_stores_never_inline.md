@@ -1,15 +1,15 @@
-# Retire the Build / RunTest / changed-content side stores through [NeverInline] (plan_wire_result_marshaller Step 8)
+# Retire the Build / RunTest / changed-content side stores (plan_wire_result_marshaller Step 8)
 
-**Status:** PROPOSED 2026-11-07. Awaiting a decision between options (a), (b) and (c); the survey below found that Step 8 as
-written in the plan does not work.
+**Status:** APPROVED 2026-11-07 (direction, not yet built). The original Step 8 (declare `[NeverInline]` properties and extend
+the marshaller) was found not to work as written; the approved direction is "B for Build, C for RunTest and changed
+content" below. The 2026-11-07 survey facts are kept because the slices depend on them.
 
 ## Motivation
 
 [plan_wire_result_marshaller.md](../plans/plan_wire_result_marshaller.md) Step 8 wants the last three writers that store a
-file outside the marshaller (`LargeResultHelper.StoreRawJsonAsync`) to become `[NeverInline]` DTO properties, so the
-marshaller moves them to the store and reports them in `largeResult.omitted`. A read-only survey on 2026-11-07
-(explore-tier2, source only, nothing run) established what exists and what the step would have to change. Verified facts
-are marked with file:line; items under "Not checked" are hypotheses.
+file outside the marshaller (`LargeResultHelper.StoreRawJsonAsync`) to go away, so every stored result is a marshaller
+`Envelope` and Step 10 can delete the `Raw` wrapper type and its reader. Two read-only surveys on 2026-11-07 (explore-tier2,
+source only, nothing run) established what exists. Verified facts carry file:line; items under "Not checked" are hypotheses.
 
 ### The three side stores today
 
@@ -19,8 +19,9 @@ are marked with file:line; items under "Not checked" are hypotheses.
 | Id property | `BuildResult.FullDiagnosticsResultId` (`Common/BuildResult.cs:26`) | `TestRunResult.FullResultsId` (`Engines.Basic/TestRunEngine.cs:58`) | `ApplyOutcome.ChangedContentResultId` (`ApplyOutcome.cs:46`), copied to `AppliedChangeSummary.ChangedContentResultId` (`AppliedChangeSummary.cs:20`) |
 | Stored JSON | `BuildFullDiagnostics(Errors, Warnings)` (`BuildResult.cs:63`), uncapped, `[JsonIgnore]` on `BuildResult.FullDiagnostics` | the whole unprojected engine `TestRunResult` (`TestRunEngine.cs:43`) | `Dictionary<string,string>` keyed by file path |
 | Serializer | `SharedJsonOptions.Compact`, no naming policy, so PascalCase keys | same | same |
-| Stored when | `Outcome == Failed` or `OmittedErrorCount > 0` (`WorkspaceBuildTestImpl.cs:315`; `:95` in `GetDiagnostics`) | `FailedCount > 0` and not summary (`:378`) | every real apply that wrote files, unless `ChangedContentOptions.InlineOnApply` (`ValidateAndApplyHelper.cs:155`) |
-| Wrapper type | `Raw` (`StoreRawJsonAsync`, `LargeResultHelper.cs:94-96`) | `Raw` | `Raw`; null when no solution root |
+| Stored when | `Outcome == Failed` or `OmittedErrorCount > 0` (`WorkspaceBuildTestImpl.cs:324`; `:95` in `GetDiagnostics`) | `FailedCount > 0` and not summary (`:386`) | every real apply that wrote files, unless `ChangedContentOptions.InlineOnApply` (`ValidateAndApplyHelper.cs:155`) |
+| Wrapper type | `Raw` (`StoreRawJsonAsync`, `LargeResultHelper.cs:95`), no budget check | `Raw` | `Raw`; null when no solution root |
+| Inline rows vs stored rows | same type (`DiagnosticInfo`), inline capped at 20 | different: inline is a projection, stored is the unprojected row | different: inline is a note plus id, stored is the content |
 
 Sizes: the full Build lists are uncapped (`BuildEngine.cs` ~:398 records a 2,160-error build of about 880 KB). The engine
 caps RunTest `Results` at `maxDetails` (default 50) before the tool sees them (`TestRunEngine.cs:257`); the stored object is
@@ -36,6 +37,27 @@ What a model sees today, from a build with 60 errors (illustrative shape, not a 
 It reads the rest with `GetLargeResult(resultId: "ab12...")`, which takes the legacy `Raw` branch
 (`Tools.Basic/WorkspaceReadNavigationImpl.cs` ~:1882, character windows over `all.Data.ToJsonString(Compact)`).
 
+### Marshaller facts the design rests on
+
+- `SentinelToolFactory.MarshalResultAsync` hands `ToolResultMarshaller.MarshalAsync` the **raw DTO object** before the SDK
+  serializes it (`Common/SentinelToolFactory.cs` ~:101-112, ~:160-170), so the marshaller knows the runtime type and can read
+  never-serialized members. `SentinelCallToolResult.Paging` (`PagingHints`) and `GuidanceHint` already use that channel.
+- `MarshalAsync` order (`Common/ToolResultMarshaller.cs:78-127`): `ForwardGuidance`, `WithNotFoundNotes`, `Passthrough`
+  (serialize), budget = 15360 - 2560 = 12800 chars, `if (text.Length <= budget) return text;` at `:98`, then
+  `FitAndStoreAsync` (`:326-395`): parse, `SequencePager.ResolveSequence`, `ResultPager.Fit` (the only place hints are
+  resolved), `TryStoreAsync` stores the **full original wire text** via `LargeResultHelper.StoreEnvelopeAsync`, pointer
+  message hard-coded "INCOMPLETE: this result was cut to fit".
+- `LargeResultHelper.StoreEnvelopeAsync(string, string? root, CT, omitted, sequence)` (`LargeResultHelper.cs:107`) is public,
+  takes a string, has no budget check and already has a non-marshaller caller (`Tools.Basic/ResidualMentionSummarizer.cs:197`).
+- `ResultPager.Fit` 5-arg overload (`ResultPager.cs:127-183`) calls `MoveOut` for every never-inline path with no size
+  check (`:145`), then cuts. `ReflectHints` (`:74-110`) reads direct public properties of the success-data type only.
+- `GetLargeResult` on an `Envelope` without `Sequence` calls `PageEnvelope` (`WorkspaceReadNavigationImpl.cs:1682-1745`):
+  `path` is dot names and `[i]` indexes; only a `JsonArray` or a string can be paged (`:1727-1733`).
+- `ToolCallContext` (`Common/ToolCallContext.cs`) is `AsyncLocal`, set by the outermost filter, carries `SolutionRoot` and
+  write-gate flags, has no payload slot, and the marshaller does not read it today.
+- The request-filter backstop (`Server.Advanced/ServiceRegistrationExtensionsBasic.cs:593`) sees serialized text and calls
+  `StoreRawJsonAsync` above 15360 chars (note: a different threshold from the marshaller's 12800).
+
 ### Consumers of the ids and the stored files
 
 | Kind | Where |
@@ -49,109 +71,158 @@ It reads the rest with `GetLargeResult(resultId: "ab12...")`, which takes the le
 | RunTest tests | `Tests.Tools.Basic/RunTestTests.cs:299,313,355-369,384-399`; `Tests.Basic/TestRunResultProjectorTests.cs:26,41,243-249` |
 | Changed-content tests | `Tests.Basic/ChangedContentOffloadTests.cs` (3 tests call `StoreChangedContentAsync` directly), `AppliedChangeSummaryTests.cs` (18 hits), `Tests.Tools.Basic/CompactResultDefaultTests.cs` (5) |
 | Changed-content construction sites | about 50 `ChangedContentResultId:` copies: `Tools.Advanced/AdvancedRefactoringTools.cs` (27), `Tools.Basic/RefactoringStructuralImpl.cs` (17), `RefactoringExtractionDocsImpl.cs` (5), `RefactoringSignatureImpl.cs` (3), `GenerationTools.cs` (1) |
-| `Raw` writers/readers that stay until Step 10 | the filter backstop `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` ~:593; `GetLargeResultTests` T9-T12b |
+| `Raw` writers/readers that stay until Step 10 | the filter backstop `ServiceRegistrationExtensionsBasic.cs:593`; `GetLargeResultTests` T9-T12b |
 
 ## Proposal
 
-Nothing here is decided. The shape below is the design Step 8 implies, with the changes the survey says it needs.
+Three ways to retire the stores were compared. The approved direction is a combination: **B for Build, C for RunTest and
+changed content**. A (the original Step 8) is not pursued.
 
-### Why Step 8 as written fails
+### A. `[NeverInline]` DTO properties plus marshaller changes (original Step 8; rejected)
 
-1. **`[NeverInline]` is applied only over budget.** `ToolResultMarshaller.MarshalAsync` returns the text unchanged when
-   `text.Length <= budget` (`ToolResultMarshaller.cs` ~:97), before any parse or hint lookup. `ResultPager.Fit` does call
-   `MoveOut` for every `[NeverInline]` path unconditionally (`ResultPager.cs:145`), but the marshaller only reaches `Fit`
-   over budget. A small failed build with a populated `fullErrors` list would send it inline, store nothing and add no
-   pointer. The existing test `NeverInline_IsAlwaysMovedOut_EvenWhenTheEnvelopeFits` (`ResultPagerTests.cs:455`) calls
-   `Fit` directly with a 1,000,000 budget, so it does not cover the marshaller. No marshaller-level test of
-   `[NeverInline]` exists.
-2. **The sequence pager runs first and ignores `[NeverInline]`.** `FitAndStoreAsync` calls `SequencePager.ResolveSequence`
-   before `ResultPager.Fit`; the default rule takes every non-empty array directly under `successData` as the sequence.
-   A populated `[NeverInline]` array could become the page sequence instead of being moved out. Whether `BuildPage` then
-   falls back to `Fit` is not verified (the existing fallback is `PartsOutsideOverBudget`, ~:241-250).
-3. **The old id fields cannot be "populated from the new resultId".** The DTO is serialized before the store runs, so no id
-   exists yet. Keeping the id fields additive until Step 10 needs a write-back (for example a `ResultIdProperty` argument on
-   `NeverInlineAttribute` that the marshaller patches into the text after the store) or the fields are dropped and the
-   descriptions change.
-4. **A dictionary cannot be paged by path.** `ResultPager.SelectNode` (`ResultPager.cs:190-232`) splits on `.` without
-   escaping, so a key like `src/Foo.cs` cannot be addressed, and `PageEnvelope` (`WorkspaceReadNavigationImpl.cs:1688-1696`)
-   rejects non-array, non-string nodes. `AppliedChangeSummary.ChangedContent` is such a dictionary, and it stays inline
-   for no-stage, dry-run and `InlineOnApply` results (`AppliedChangeSummary.cs:51-52`), so it cannot simply take the
-   attribute. A separate list property of `{path, text}` is needed.
+Add `BuildResult.FullErrors`, `TestRunResult.FullResults`, `AppliedChangeSummary.ChangedFiles`, all `[NeverInline]`, and
+teach the marshaller to resolve hints before the budget check, `MoveOut`, store and page the remainder.
+
+```json
+// wire text as the tool returns it (~900 KB on a 2,160-error build)
+{ "successData": { "outcome": "Failed", "errorCount": 2160, "omittedErrorCount": 2140,
+    "errors": [ "...20..." ], "fullErrors": [ "...2160..." ] } }
+// after the marshaller: parse, MoveOut fullErrors, store Envelope, re-serialize
+{ "largeResult": { "resultId": "ab12", "omitted": [{ "path": "successData.fullErrors", "total": 2160, "returned": 0 }] },
+  "successData": { "outcome": "Failed", "errorCount": 2160, "omittedErrorCount": 2140, "errors": [ "...20..." ], "fullErrors": [] } }
+```
+
+Why it fails as written:
+
+1. **`[NeverInline]` is applied only over budget.** `MarshalAsync` returns the text unchanged at `:98` before any hint
+   lookup; a small failed build with a populated `fullErrors` goes inline and stores nothing. The only test,
+   `NeverInline_IsAlwaysMovedOut_EvenWhenTheEnvelopeFits` (`ResultPagerTests.cs:455`), calls `Fit` directly.
+2. **The sequence pager runs first and ignores `[NeverInline]`.** The default rule takes every non-empty array directly under
+   `successData`; a populated `[NeverInline]` array could become the page sequence.
+3. **The old id fields cannot be "populated from the new resultId".** The DTO is serialized before the store runs.
+4. **A dictionary cannot be paged by path.** `ResultPager.SelectNode` (`ResultPager.cs:190-232`) splits on `.`, and
+   `PageEnvelope` rejects non-array, non-string nodes. `AppliedChangeSummary.ChangedContent` is such a dictionary and must
+   stay inline for no-stage, dry-run and `InlineOnApply` results (`AppliedChangeSummary.cs:51-52`).
 5. **The nested case is not found.** `GetDiagnostics` carries the `BuildResult` under `successData.buildVerification`
-   (`DiagnosticReport.cs:124`); `ResultPager.ReflectHints` (`ResultPager.cs:74-110`) reads only direct public properties of
-   the success-data type.
-6. **Wording.** A deliberate move-out would print "INCOMPLETE: this result was cut to fit", which is wrong when nothing
-   was too big (`ToolResultMarshaller.cs` ~:366).
+   (`DiagnosticReport.cs:124`); `ReflectHints` reads only direct properties.
+6. **Wording.** A deliberate move-out would print "INCOMPLETE: this result was cut to fit" (`ToolResultMarshaller.cs` ~:366).
+7. **Cost.** The full list is serialized into the wire text, parsed, deep-cloned, moved out and serialized again on every
+   call that has one, and the inline `errors`/`omittedErrorCount` duplicate what `largeResult.omitted` says.
 
-### What it takes, if built
+Fixing 1, 2, 5 and 6 needs the most marshaller machinery of the three options for the least change in behaviour.
 
-Slice 0, marshaller (prerequisite for every other slice):
-- Resolve hints before the budget check. Gate cheaply on "the success-data type has any `[NeverInline]` path" (hints are
-  cached per type); parse only when one is non-empty.
-- Build the moved-out base through a new public `ResultPager` helper that wraps `MoveOut`. If the base fits, store the
-  full text as an `Envelope` and return the base plus a pointer. If it is still over budget, run `ResolveSequence` and `Fit`
-  on the base, not on the full parse (emptied arrays are ignored by the default sequence rule, which removes problem 2).
-- Neutral pointer wording for a deliberate move-out; keep `LargeResultHints.FetchCall(resultId, path:)`.
-- Decide the id write-back (problem 3) or drop the old fields.
-- A `Tests.Server` suite at marshaller level: under budget, over budget, store failure, no solution root.
+### B. Change the DTO: stop capping Build and let the marshaller page (approved for Build)
 
-Slice 1, Build: `BuildResult.FullErrors` and `FullWarnings` (`List<DiagnosticInfo>?`), populated under today's store
-condition only. Edit `WorkspaceBuildTestImpl.cs` (`Build`, `StoreFullDiagnosticsAsync`), `ToolParams.cs:12`,
-`BuildToolResultShapeTests`, `BuildResultProjectorTests`. Decide `GetDiagnostics.buildVerification` here (nested
-`[NeverInline]` support, or leave that one `StoreRawJsonAsync` use with a `// TODO`).
+The Build store exists only because the tool caps inline `errors` at 20. Inline rows and stored rows are the same
+`DiagnosticInfo` type, so the store is a hand-rolled copy of what the marshaller already does for every other tool.
+Remove the cap and `StoreFullDiagnosticsAsync`; put `[ResultRecords]` on `Errors` so a long `warnings` list never wins the
+default sequence rule; mark `FullDiagnosticsResultId` and `OmittedErrorCount` `[Obsolete]` (set to null / 0).
 
-Slice 2, RunTest: `TestRunResult.FullResults` (`List<TestCaseResult>?`), set after projection from the unprojected rows.
-Edit `TestRunEngine.cs`, `WorkspaceBuildTestImpl.cs`, `ToolParams.cs:15`, `WorkspaceBuildTestTools.cs:63`,
-`WorkspaceTools.cs:515`, `RunTestTests`, `TestRunResultProjectorTests`.
+```json
+// 12 errors: fits, everything inline, no store, no pointer (today: 12 inline plus a stored copy nobody needs)
+{ "successData": { "outcome": "Failed", "errorCount": 12, "errors": [ "...12..." ] } }
+// 2,160 errors: existing marshaller decision 6 pages errors at offset 0
+{ "largeResult": { "resultId": "ab12", "returned": 85, "nextOffset": 85, "totalRecords": 2160, "hasMoreData": true },
+  "successData": { "outcome": "Failed", "errorCount": 2160, "errors": [ "...85..." ] } }
+```
 
-Slice 3, changed content (last): add `ChangedFiles` (`List<{path, text}>`) beside the old id, mark the id `[Obsolete]`,
-move the ~50 construction sites in slices, and change the `Note` text to point at `largeResult.message`. If the sweep is
-too large for the implementer tiers, record it as a `TOOL-GAP:` instead of hand-editing.
+Zero marshaller changes. Problem 5 disappears because `Fit` already cuts at any depth under
+`successData.buildVerification`. The model gets record paging (`offset`/`limit`, camelCase) instead of raw character
+windows over PascalCase. Cost: a 2,160-error build serializes about 900 KB of wire text before the cut (today the same
+bytes are serialized into the store, so the delta is one parse and one deep clone; not measured).
 
-Every `[NeverInline]` property must be an array or string so `GetLargeResult` can page it.
+B does **not** fit RunTest or changed content: RunTest's inline rows are a projection of the stored rows (dropping the
+projection would push 50 stack traces through `Fit`, which cuts each string separately and lists 50 `omitted` entries), and
+changed content is a path-keyed dictionary that is inline in some modes and cannot be paged (problem 4).
+
+### C. Change how the two-part result is built: a detached payload (approved for RunTest and changed content)
+
+Let the tool say "this object belongs in the store, not in the text" as data rather than as an attribute: a
+never-serialized `Detached` slot (`name`, `object`) on `SentinelCallToolResult` for tools that build their own result, and
+the same slot on `ToolCallContext` for code that cannot reach the result (the apply helper). The marshaller, **before** the
+budget check: `SerializeToNode` each payload with the wire options, graft it into the parsed tree at
+`successData.<name>`, `MoveOut` that path, store the full tree as one `Envelope` (`StoreEnvelopeAsync`), then budget-check
+the remainder exactly as today (sequence, `Fit`). Neutral pointer wording for a deliberate move-out.
+
+```csharp
+// WorkspaceBuildTestImpl.RunTest: replaces StoreFullTestResultAsync and the FullResultsId splice
+result.Detach("fullResults", unprojectedRows);
+// ValidateAndApplyHelper: replaces StoreChangedContentAsync, one site; the payload is a list, not a dictionary
+ToolCallContext.Current?.Detach("changedFiles", changes.Select(c => new ChangedFile(c.Key.Path, c.Value)).ToList());
+```
+
+```json
+{ "largeResult": { "resultId": "cd34", "resultType": "Envelope",
+    "message": "Stored, not inline: fullResults (7 records). GetLargeResult(resultId: \"cd34\", path: \"successData.fullResults\")",
+    "omitted": [{ "path": "successData.fullResults", "total": 7, "returned": 0, "unit": "records" }] },
+  "successData": { "passed": 120, "failed": 7, "results": [ "...7 projected rows..." ] } }
+```
+
+Why it beats A: the payload is never serialized into the wire text and never passes through hint reflection, so problems
+1, 2, 5 and 6 are gone by construction and problem 4 is solved by choosing a list for the payload with no DTO change. The
+~50 `ChangedContentResultId:` copies keep compiling (they copy `null`), so that sweep moves to Step 10 instead of blocking
+Step 8. Problem 3 stays by design: there is no id in the DTO; `largeResult.resultId` is the id, and `NotEchoedHint` and the
+descriptions point there. With no solution root the marshaller emits the pointer with `writtenToFile: false` and
+`warningDetails`, where the stores today return a null id silently. Tests that call impl methods directly see the payload on
+the result or context without a marshaller.
+
+### Slices
+
+1. **Build (B).** `WorkspaceBuildTestImpl.Build`: remove the 20-cap and `StoreFullDiagnosticsAsync`; `[ResultRecords]` on
+   `BuildResult.Errors`; `FullDiagnosticsResultId`, `OmittedErrorCount` `[Obsolete]`; `BuildFullDiagnostics` and the
+   `[JsonIgnore]` `FullDiagnostics` property removed or `[Obsolete]`; `ToolParams.cs:12`; `BuildToolResultShapeTests`,
+   `BuildResultProjectorTests`. `GetDiagnostics.buildVerification` (`:95`) comes for free. Acceptance: a 2,000-error build
+   through the marshaller stays within the marshaller's per-call time (measure once before committing to it).
+2. **Marshaller (C).** `Detached` on `SentinelCallToolResult` and `ToolCallContext`; `MarshalAsync` resolves detached
+   payloads before the `:98` budget check, grafts, moves out, stores, then continues as today; neutral pointer message;
+   `LargeResultHints.FetchCall(resultId, path:)` kept. Additive; nothing declares it until slice 3. A `Tests.Server` suite:
+   under budget, over budget (payload plus cut), store failure, no solution root, context null.
+3. **RunTest (C).** `Detach("fullResults", ...)` replaces `StoreFullTestResultAsync` and the `:386` splice; `FullResultsId`
+   `[Obsolete]`; `ToolParams.cs:15`, `WorkspaceBuildTestTools.cs:63`, `WorkspaceTools.cs:515`; `RunTestTests`,
+   `TestRunResultProjectorTests`.
+4. **Changed content (C via `ToolCallContext`).** One-line change in `ValidateAndApplyHelper` (`:200-216`, `:197`);
+   `ChangedContentResultId` `[Obsolete]` on `ApplyOutcome` and `AppliedChangeSummary`; `NotEchoedHint` points at
+   `largeResult`; `ChangedContentOffloadTests`, `AppliedChangeSummaryTests`, `CompactResultDefaultTests`. The ~50 copy sites
+   are removed in Step 10 with the `Raw` deletion (`implementer-sweep`, or `TOOL-GAP:` if no tool fits).
+
+Every detached payload must be an array or string at its path so `GetLargeResult` can page it.
 
 ### What changes for the model
 
-Raw character windows over PascalCase `{Errors, Warnings}` become `Envelope` path paging over camelCase
-`successData.fullErrors`. In `off`/`passthrough` mode and in tests that call a tool method directly, nothing is moved out,
-so the full lists would appear inline; the id-based tests (`BuildToolResultShapeTests.cs:130`, `RunTestTests.cs:369`)
-would have to run the tool result through a marshaller with a temporary solution root (whether `Tests.Tools.Basic` can host
-one is not checked). An in-memory run with no solution root gives a pointer with `warningDetails` and no id, where the
-changed-content store today returns a null id silently.
+Raw character windows over PascalCase `{Errors, Warnings}` become `Envelope` paging over camelCase paths: record paging for
+Build (`offset`/`limit` on `successData.errors`), `path` paging for `successData.fullResults` and `successData.changedFiles`.
+The id lives in `largeResult.resultId` instead of a DTO field. In `off`/`passthrough` mode nothing is detached, so the
+RunTest and changed-content payloads are dropped (not inlined); Build lists appear in full.
 
 ## Alternatives considered, not pursued
 
-- **Do Step 8 as written (declare the properties and let the existing marshaller handle them).** Rejected by problems 1
-  and 2 above: small responses would carry the full list inline, and a populated array can be taken as the page sequence.
-- **Make the stores themselves "unconditional" and drop the inline caps.** Not pursued: it would serialize the full list on
-  every call. Today the full lists are serialized only inside the store and only when the condition holds; with a populated
-  `[NeverInline]` list the wire text includes it, is parsed, has the list moved out and is serialized again (about one
-  extra parse and one extra serialization per call that has a list; not measured).
-- **A dictionary as `[NeverInline]`** (`proposal_sequence_pager.md:102-105,240-245` mentions the idea). Stores the content
-  but cannot retrieve it by path (problem 4).
+- **A as written** (problems 1-7 above).
+- **A with slice 0 marshaller surgery** (resolve hints before the budget check, nested hint support, id write-back via a
+  `ResultIdProperty` on the attribute). Superseded by C, which reaches the same place without serializing the payload into
+  the wire text or reflecting over nested types.
+- **B for RunTest** (return the unprojected rows inline). The projection exists to shape what the model sees; `Fit` would
+  cut 50 strings separately.
+- **A dictionary as `[NeverInline]`** (`proposal_sequence_pager.md:102-105,240-245`). Stores the content but cannot
+  retrieve it by path (problem 4).
+- **Keep the three stores as accepted exceptions.** Blocks Step 10 (`Raw` cannot be deleted).
 
 ## Open questions
 
-1. Which option: (a) build all three slices, (b) keep the three stores and name them as accepted exceptions to Step 7's
-   "no stores outside the marshaller", or (c) slice 0 plus Build and RunTest only, leaving changed content as the
-   accepted exception? Recommendation: (c), or (b) if touching these tools is unwelcome. Changed content needs a shape
-   change and a ~50-site sweep for a store that is already conditional and works.
-2. Id write-back (`ResultIdProperty` on the attribute) or drop the old id fields and change the descriptions?
-3. Is nested `[NeverInline]` support worth building for `GetDiagnostics.buildVerification`, or does it keep its one raw
-   store?
-4. Not checked: `SequencePager.BuildPage` behaviour with a populated `[NeverInline]` array; per-row sizes of
-   `DiagnosticInfo` and `TestCaseResult` and any timing; how `FilePathWrapper` serializes as a dictionary key and whether the
-   stored path form changes from absolute to wire-relative; the exact `GetDiagnostics` DTO shapes and tests; how the
-   offload filter, echo and stamps interact with a pointer on a small response; whether `Tests.Tools.Basic` can host a
-   marshaller; the remaining `Tests.Basic` and `Tests.Tools.Basic` hits for the apply-result id beyond those listed.
+1. Does `[NeverInline]` stay as the declarative form for a future DTO whose property is always large, or is it removed in
+   Step 10 if nothing uses it? Default: keep until Step 10, decide there.
+2. Not checked: `SequencePager.BuildPage` with an emptied array; per-row sizes of `DiagnosticInfo` and `TestCaseResult` and
+   timing for a 2,000-error build; how `FilePathWrapper` serializes and whether the stored path form changes from absolute
+   to wire-relative under `WirePathRelativize`; the exact `GetDiagnostics` DTO shapes and tests; how the offload filter,
+   echo and stamps interact with a pointer on a small response; whether `Tests.Tools.Basic` can host a marshaller; the
+   remaining `Tests.Basic` and `Tests.Tools.Basic` hits for the apply-result id beyond those listed; `LargeResultInfo` field
+   casing on the wire.
 
 ## Cost / risk
 
-- Slice 0 is contained and additive (no production type declares `[NeverInline]` yet). Slices 1-3 change model-visible
-  output of tools that models use constantly (`Build`, `RunTest`, every refactoring apply).
-- Step 10 cannot delete the `Raw` wrapper type and its reader until all three stores are gone (options (a)) or are
-  accepted as exceptions that keep it (options (b) and (c) for changed content).
-- Test churn: about ten test files rewritten to read the new pointer instead of an id field.
+- Slice 2 is contained and additive. Slices 1, 3 and 4 change model-visible output of tools that models use constantly
+  (`Build`, `RunTest`, every refactoring apply).
+- Step 10 can delete the `Raw` wrapper type and its reader once slices 1, 3 and 4 land and the filter backstop is replaced.
+- Test churn: about ten test files rewritten to read `largeResult` instead of an id field.
 - `Utilities.PlanStepRunner` is not affected (it reads `errorCount` from the inline header).
 
 ## Related

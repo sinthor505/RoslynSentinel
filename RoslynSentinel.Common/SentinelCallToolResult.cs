@@ -209,7 +209,7 @@ public interface IFindingsEnvelope
 /// <see cref="ResultError"/> and is what nearly every tool method actually returns. A tool opts into
 /// a structured, non-ResultError error shape by returning this base type directly instead.
 /// </remarks>
-public record SentinelCallToolResult<TSuccess, TError> : IOperationResult, IFindingsEnvelope
+public record SentinelCallToolResult<TSuccess, TError> : IOperationResult, IFindingsEnvelope, IDetachedPayloadSource
 {
     /// <summary>
     /// <c>true</c> when a newer build of the server's own binaries exists in the repo than the ones this process
@@ -292,6 +292,33 @@ public record SentinelCallToolResult<TSuccess, TError> : IOperationResult, IFind
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public GuidanceHint? GuidanceHint { get; init; }
+
+    private List<(string Name, object Payload)>? _detached;
+
+    /// <summary>
+    /// Payloads that belong in the result store, not in the wire text (proposal_side_stores_never_inline.md, slice 2), added by
+    /// <see cref="Detach"/>. Not serialized, like <see cref="Paging"/>. In mode <c>on</c> the marshaller grafts each one into the tree
+    /// at <c>successData.&lt;name&gt;</c>, stores the full tree as one Envelope and returns the text with that path moved out; in
+    /// <c>off</c> and <c>passthrough</c> they are dropped. A <c>with</c> copy shares this list with the original.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<(string Name, object Payload)> Detached => _detached ?? [];
+
+    /// <summary>
+    /// Declares <paramref name="payload"/> (a list or a string) as stored, not inline, under <c>successData.&lt;name&gt;</c>.
+    /// Throws <see cref="ArgumentException"/> for a bad name, a null payload, a dictionary or any other non-list, non-string value,
+    /// or a name already detached on this result.
+    /// </summary>
+    public void Detach(string name, object payload)
+    {
+        DetachedPayloads.Validate(name, payload);
+        if (_detached is not null && _detached.Exists(d => d.Name == name))
+        {
+            throw new ArgumentException($"A payload named '{name}' is already detached on this result.", nameof(name));
+        }
+
+        (_detached ??= []).Add((name, payload));
+    }
 
     /// <summary>ErrorData details. Non-null when <see cref="IsError"/> is false.</summary>
     public TError? ErrorData

@@ -468,7 +468,7 @@ public static class ResultPager
     }
 
     // A NeverInline node: always empty inline. Arrays and strings keep their shape (empty); any other kind is removed.
-    private static void MoveOut(JsonObject root, string path, List<OmittedPart> omitted)
+    internal static void MoveOut(JsonObject root, string path, List<OmittedPart> omitted)
     {
         string[] segments = path.Split('.');
         JsonObject current = root;
