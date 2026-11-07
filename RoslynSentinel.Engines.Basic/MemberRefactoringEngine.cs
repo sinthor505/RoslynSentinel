@@ -1954,7 +1954,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            throw new ToolInvalidArgumentException("Could not parse file.");
+            throw new ToolInvalidArgumentException($"Could not read '{filePath}' as a C# syntax tree, so Member cannot insert a member after the anchor. It may not be a C# document in the loaded solution: check the path with ReadFile, or reload with LoadSolution.");
         }
 
         BaseTypeDeclarationSyntax? container = null;
@@ -2014,7 +2014,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            throw new ToolInvalidArgumentException("Could not parse file.");
+            throw new ToolInvalidArgumentException($"Could not read '{filePath}' as a C# syntax tree, so Member cannot insert a member before the anchor. It may not be a C# document in the loaded solution: check the path with ReadFile, or reload with LoadSolution.");
         }
 
         BaseTypeDeclarationSyntax? container = null;
@@ -2320,7 +2320,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            throw new ToolInvalidArgumentException("Could not parse file.");
+            throw new ToolInvalidArgumentException($"Could not read '{filePath}' as a C# syntax tree, so Member cannot replace the member. It may not be a C# document in the loaded solution: check the path with ReadFile, or reload with LoadSolution.");
         }
 
         SyntaxNode? member;
@@ -2550,7 +2550,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            throw new ToolInvalidArgumentException("Could not parse file.");
+            throw new ToolInvalidArgumentException($"Could not read '{filePath}' as a C# syntax tree, so Member cannot remove the member. It may not be a C# document in the loaded solution: check the path with ReadFile, or reload with LoadSolution.");
         }
 
         SyntaxNode? member;

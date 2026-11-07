@@ -104,7 +104,7 @@ public class WorkspaceBuildTestImpl
                 {
                     IsError = false,
                     SuccessData = result.Data with { BuildVerification = buildVerification },
-                    Findings = WithForeignWriterFindings(result.Findings, summary.Details)
+                    Findings = WithForeignWriterFindings(result.Findings, summary)
                 };
             }
 
@@ -114,7 +114,7 @@ public class WorkspaceBuildTestImpl
             {
                 IsError = false,
                 SuccessData = new DiagnosticsSummaryResult(TotalIssues: relevant.Count, Errors: summary.Errors, Warnings: summary.Warnings, TopIssues: groups, BuildVerification: buildVerification),
-                Findings = WithForeignWriterFindings(result.Findings, summary.Details)
+                Findings = WithForeignWriterFindings(result.Findings, summary)
             };
         }
         catch (Exception ex)
@@ -272,6 +272,18 @@ public class WorkspaceBuildTestImpl
     {
         var errorFiles = diagnostics.Where(d => d.Severity == "Error").Select(d => d.FilePath.ToString());
         var attribution = EditAttributionFindings.ForCurrentCaller(_workspaceManager, errorFiles);
+        return attribution.Count == 0 ? existing : existing.Concat(attribution).ToList();
+    }
+
+    // GetDiagnostics form: solution scope caps Details and relativizes its paths, so it carries the uncapped absolute list instead.
+    private IReadOnlyList<Finding> WithForeignWriterFindings(IReadOnlyList<Finding> existing, DiagnosticSummary summary)
+    {
+        if (summary.ErrorFilePaths is null)
+        {
+            return WithForeignWriterFindings(existing, summary.Details);
+        }
+
+        var attribution = EditAttributionFindings.ForCurrentCaller(_workspaceManager, summary.ErrorFilePaths);
         return attribution.Count == 0 ? existing : existing.Concat(attribution).ToList();
     }
 

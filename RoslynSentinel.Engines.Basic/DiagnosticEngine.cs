@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -9,7 +10,9 @@ public record DiagnosticSummary(
     int Errors,
     int Warnings,
     List<DiagnosticInfo> Details,
-    BuildResult? BuildVerification = null
+    BuildResult? BuildVerification = null,
+    // Absolute paths of every file with an error, uncapped, for last-writer findings. Not sent: Details is the wire list.
+    [property: JsonIgnore] IReadOnlyList<string>? ErrorFilePaths = null
 );
 
 public class DiagnosticEngine
@@ -91,6 +94,8 @@ public class DiagnosticEngine
         var solutionDir = Path.GetDirectoryName(solution.FilePath ?? "") ?? "";
         var allDiagnostics = new List<DiagnosticInfo>();
 
+        var errorFilePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var project in solution.Projects)
         {
             var compilation = await project.GetCompilationAsync(cancellationToken);
@@ -102,7 +107,17 @@ public class DiagnosticEngine
             bool isBlazor = IsBlazorProject(project);
             var diagnostics = compilation.GetDiagnostics(cancellationToken)
                 .Where(d => d.Severity != DiagnosticSeverity.Hidden)
-                .Where(d => !(isBlazor && _blazorGeneratorFalsePositiveIds.Contains(d.Id)));
+                .Where(d => !(isBlazor && _blazorGeneratorFalsePositiveIds.Contains(d.Id)))
+                .ToList();
+
+            foreach (var info in diagnostics.Select(d => d.ToInfo()).Where(i => i.Severity == "Error"))
+            {
+                var path = info.FilePath.ToString();
+                if (!string.IsNullOrEmpty(path))
+                {
+                    errorFilePaths.Add(path);
+                }
+            }
 
             allDiagnostics.AddRange(diagnostics.Select(d => d.ToInfo().WithRelativePath(solutionDir) with { Project = project.Name }));
         }
@@ -126,6 +141,6 @@ public class DiagnosticEngine
                 "", 0, 0, 0, 0));
         }
 
-        return new EngineResultWrapper<DiagnosticSummary>(EngineOutcome.Success, new DiagnosticSummary(totalErrors, totalWarnings, details));
+        return new EngineResultWrapper<DiagnosticSummary>(EngineOutcome.Success, new DiagnosticSummary(totalErrors, totalWarnings, details, ErrorFilePaths: errorFilePaths.ToList()));
     }
 }

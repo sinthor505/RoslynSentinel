@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## SyncInterfaceToImplementation same-file path re-spaced irregular members - resolved (2026-11-07)
+
+`SyncInterfaceToImplementation` same-file path goes through `ReplaceNodeAndFormatReplacementAsync`, which annotates the whole interface node, so irregular existing members are re-spaced (`int  A( ) ;` becomes `int A();`) - pinned 2026-10-21 by `AdvancedRefactoringNormalizeCharacterizationTests.SyncInterface_SameFile_RespacesIrregularMembers_Pinned`, fix (annotate only the added members) deliberately deferred 2026-10-21 (shared formatting code, cosmetic gain; revisit on a diff-noise report); the cross-file defect is fixed (CLOSED.md)
+
+Evidence: Stale entry: already fixed in 13899fc2 (2026-10-22). AdvancedRefactoringEngine.SyncInterfaceToImplementationAsync annotates only the new members (comment at line 359); the pin was renamed and flipped to AdvancedRefactoringNormalizeCharacterizationTests.SyncInterface_SameFile_KeepsIrregularMembers.
+
 ## SubAgent returned an empty output when the answer was in reasoning - resolved (2026-11-07)
 
 SubAgent returns an empty `output` when the model puts its final answer in reasoning (2026-11-07) - a SubAgent child run (qwen3.5-9b-coder) converged but `Content` was null and the answer sat in `ReasoningContent` (transcript turn 4), so the tool returned `output: ""`; fall back to the last reasoning text or report that the final message was empty (`ModelAgentRunner` / SubAgent result mapping, untraced)
