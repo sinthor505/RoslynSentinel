@@ -30,6 +30,6 @@ Run tasks sequentially. Pin `-Commit`; the default is the current HEAD.
 - Claude CLI 2.1.296 has no `--max-turns`; the caps are `-MaxBudgetUsd` (default 5) and `-TimeoutMinutes` (default 30).
 - `-RunTests` uses `dotnet test --no-build --filter FullyQualifiedName~<class>`; the filter syntax is unverified under NUnit 5, so treat test results as informational.
 - Five tool-surface tests are red on baseline (see memory `reference_known_failing_tests`); do not run the full suite as an acceptance check.
-- The `mcp` arm needs `LoadSolution` and tool gating handled by the agent; `claude-lean` omits ChangeSignature and MoveMember, so S1 relies on `ReplaceSnippet` unless the agent enables a toolset.
+- The `mcp` arm needs `LoadSolution` and tool gating handled by the agent; `claude-lean` has ChangeSignature and WriteFile in its core set but omits MoveMember, so S1 uses `ChangeSignature` or `ReplaceSnippet`; MoveMember needs the `moveExtract` toolset.
 - Cost, token and tool-call fields depend on the stream-json event shape (`result` event, `tool_use` / `tool_result` blocks); confirm on the first real run.
 - A single run per arm is noisy; repeat before drawing conclusions.
