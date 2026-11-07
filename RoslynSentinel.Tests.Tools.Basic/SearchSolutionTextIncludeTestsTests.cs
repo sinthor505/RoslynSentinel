@@ -194,6 +194,87 @@ public class SearchSolutionTextIncludeTestsTests
     }
 
     [Test]
+    [Description("Regression: a first segment such as 'RoslynSentinel.*' matched test project names by regex and switched includeTests on, " +
+                 "so Search(fileGlob: 'RoslynSentinel.*/**/*.cs', includeTests: false) returned and counted every test project.")]
+    public async Task IncludeTestsFalse_WildcardFirstSegmentMatchingTestAndAppProjects_HidesTestProject()
+    {
+        var result = await _impl.SearchSolutionText(reason: "test message", pattern: SharedPattern,
+            fileGlob: "*Proj/**/*.cs", includeTests: false);
+
+        Assert.That(result.IsError, Is.False);
+        var paths = PathsOf((TextSearchResult)result.SuccessData!).ToList();
+        Assert.That(paths.Any(p => p.EndsWith("App.cs", StringComparison.OrdinalIgnoreCase)), Is.True);
+        Assert.That(paths.Any(p => p.EndsWith("UnitTest1.cs", StringComparison.OrdinalIgnoreCase)), Is.False,
+            "a wildcard that also matches the non-test project names no test project");
+        Assert.That(result.TotalRecords, Is.EqualTo(1), "totalRecords must not count the hidden test hit");
+        Assert.That(result.ListSummary!.ByFile.Select(f => f.FilePath), Has.None.Contains("UnitTest1.cs"));
+        Assert.That(result.StatusMessage, Does.Contain("+1 more in test projects (TestsProj 1)"));
+    }
+
+    [Test]
+    public async Task IncludeTestsFalse_WildcardFirstSegmentMatchingOnlyTestProjects_ImpliesIncludeTests()
+    {
+        var result = await _impl.SearchSolutionText(reason: "test message", pattern: SharedPattern,
+            fileGlob: "Tests*/**/*.cs", includeTests: false);
+
+        Assert.That(result.IsError, Is.False);
+        var paths = PathsOf((TextSearchResult)result.SuccessData!).ToList();
+        Assert.That(paths.Any(p => p.EndsWith("UnitTest1.cs", StringComparison.OrdinalIgnoreCase)), Is.True,
+            "a wildcard that selects only test projects is an explicit request for them");
+        Assert.That(result.StatusMessage, Does.Not.Contain("hidden because includeTests is false"));
+    }
+
+    [Test]
+    public async Task IncludeTestsFalse_BraceListOfProjectNamesInFirstSegment_ImpliesIncludeTests()
+    {
+        var result = await _impl.SearchSolutionText(reason: "test message", pattern: SharedPattern,
+            fileGlob: "{TestsProj,AppProj}/**/*.cs", includeTests: false);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var paths = PathsOf((TextSearchResult)result.SuccessData!).ToList();
+        Assert.That(paths.Any(p => p.EndsWith("UnitTest1.cs", StringComparison.OrdinalIgnoreCase)), Is.True,
+            "a brace alternative that names a test project implies includeTests");
+        Assert.That(paths.Any(p => p.EndsWith("App.cs", StringComparison.OrdinalIgnoreCase)), Is.True);
+    }
+
+    [Test]
+    public async Task IncludeTestsFalse_GlobNamingOneTestFile_FindsHitWithoutIncludeTests()
+    {
+        // The "search for TODO in this file before editing it" shape: an explicit test-file glob with includeTests left false.
+        var result = await _impl.SearchSolutionText(reason: "test message", pattern: TestsMarker,
+            fileGlob: "TestsProj/UnitTest1.cs", includeTests: false);
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.TotalRecords, Is.EqualTo(1));
+        Assert.That(PathsOf((TextSearchResult)result.SuccessData!).Single(), Does.EndWith("UnitTest1.cs"));
+    }
+
+    [Test]
+    public async Task IncludeTestsFalse_ZeroMatchesAnywhere_StatesTestProjectsWereExcludedAndNamesTheRerun()
+    {
+        var result = await _impl.SearchSolutionText(reason: "test message", pattern: "NoSuchTextAnywhere_7f3a",
+            includeTests: false);
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.TotalRecords, Is.EqualTo(0));
+        Assert.That(result.StatusMessage, Does.Contain("Test projects were excluded"));
+        Assert.That(result.StatusMessage, Does.Contain("includeTests"));
+        Assert.That(result.StatusMessage, Does.Contain("true"));
+    }
+
+    [Test]
+    public async Task IncludeTestsFalse_ZeroMatchesInExplicitTestFile_DoesNotClaimTestsWereExcluded()
+    {
+        var result = await _impl.SearchSolutionText(reason: "test message", pattern: "NoSuchTextAnywhere_7f3a",
+            fileGlob: "TestsProj/UnitTest1.cs", includeTests: false);
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.TotalRecords, Is.EqualTo(0));
+        Assert.That(result.StatusMessage, Does.Not.Contain("Test projects were excluded"),
+            "the glob named the test project, so it was searched");
+    }
+
+    [Test]
     public async Task GlobMatchingNoDocument_IsNotAnErrorAndSamplesPathsFromAllProjects()
     {
         var result = await _impl.SearchSolutionText(reason: "test message", pattern: SharedPattern,

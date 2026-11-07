@@ -669,22 +669,55 @@ public class WorkspaceReadNavigationImpl
 
     // A '/'-containing fileGlob whose first path segment matches a test project's name (for example
     // "MyProj.Tests/**/*.cs") is an explicit request for that project, so includeTests is implied
-    // (same rule as naming a test project in projectName/filePath). A segment made only of '*'
-    // ("**/*.cs", "*/Foo.cs") names nothing and never counts. Malformed globs still raise
+    // (same rule as naming a test project in projectName/filePath). A wildcard segment counts only when it
+    // selects test projects exclusively ("*.Tests/**"); one that also matches a non-test project
+    // ("MyProj.*/**/*.cs", "*Proj/**") is a wildcard over the solution and never counts, so such a glob
+    // hides test hits like a plain "**/*.cs" does. A segment made only of '*' ("**/*.cs", "*/Foo.cs") names
+    // nothing. Brace alternatives inside the segment are judged one by one. Malformed globs still raise
     // GlobSyntaxException from GlobToRegex.
-    private static bool GlobNamesTestProject(string? fileGlob, IEnumerable<string> testProjectNames)
+    private static bool GlobNamesTestProject(string? fileGlob, IEnumerable<(string Name, bool IsTest)> projects)
     {
         if (string.IsNullOrEmpty(fileGlob))
         {
             return false;
         }
 
-        var names = testProjectNames.ToList();
-        return FirstGlobSegments(fileGlob.Replace('\\', '/')).Any(firstSegment =>
+        var projectList = projects.ToList();
+        return FirstGlobSegments(fileGlob.Replace('\\', '/'))
+            .SelectMany(ExpandBraceAlternatives)
+            .Any(alternative =>
+            {
+                var segmentRegex = "^" + GlobToRegex(alternative) + "$";
+                var matched = projectList.Where(p => Regex.IsMatch(p.Name, segmentRegex, RegexOptions.IgnoreCase)).ToList();
+                return matched.Count > 0 && matched.All(p => p.IsTest);
+            });
+    }
+
+    // Expands the first {a,b} group of a glob segment (recursively) into plain alternatives: "{A,B}" gives "A" and "B".
+    // A segment with no terminated '{' group comes back unchanged, so GlobToRegex still reports a malformed glob.
+    private static IEnumerable<string> ExpandBraceAlternatives(string segment)
+    {
+        int depth = 0;
+        int groupStart = -1;
+        for (int i = 0; i < segment.Length; i++)
         {
-            var segmentRegex = "^" + GlobToRegex(firstSegment) + "$";
-            return names.Any(name => Regex.IsMatch(name, segmentRegex, RegexOptions.IgnoreCase));
-        });
+            if (segment[i] == '{')
+            {
+                if (depth++ == 0)
+                {
+                    groupStart = i;
+                }
+            }
+            else if (segment[i] == '}' && depth > 0 && --depth == 0)
+            {
+                var prefix = segment[..groupStart];
+                var suffix = segment[(i + 1)..];
+                return SplitTopLevelCommas(segment[(groupStart + 1)..i])
+                    .SelectMany(alternative => ExpandBraceAlternatives(prefix + alternative + suffix));
+            }
+        }
+
+        return [segment];
     }
 
     // The first path segment of each glob a brace list expands to, skipping any '/' inside {...}: "{A,B}/x.cs" gives
@@ -971,7 +1004,7 @@ public class WorkspaceReadNavigationImpl
                 .Select(p => (Project: p, IsTest: TestProjectDetector.IsTestProject(p)))
                 .ToList();
             var effectiveIncludeTests = includeTests
-                || GlobNamesTestProject(fileGlob, projectScans.Where(s => s.IsTest).Select(s => s.Project.Name));
+                || GlobNamesTestProject(fileGlob, projectScans.Select(s => (s.Project.Name, s.IsTest)));
             var documentsToScan = projectScans
                 .SelectMany(s => s.Project.Documents.Select(d => (Document: d, ProjectName: s.Project.Name, IsTest: s.IsTest)))
                 .ToList();
@@ -1206,6 +1239,11 @@ public class WorkspaceReadNavigationImpl
                     if (hiddenHint.Length > 0)
                     {
                         warnings.Add(hiddenHint);
+                    }
+                    else if (!effectiveIncludeTests && documentsToScan.Any(d => d.IsTest))
+                    {
+                        // Test projects are scanned but their hits hidden; none matched either, yet say so, so a zero is never read as "tests were searched".
+                        warnings.Add($"Test projects were excluded from this result (includeTests: false) and hold no match either. To include them: {ToolCallHint.Call("Search", ("mode", "text"), ("query", pattern), ("includeTests", "true"))}.");
                     }
                 }
                 if (recoveryHint != null)
