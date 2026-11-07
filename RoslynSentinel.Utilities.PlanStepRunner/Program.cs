@@ -251,9 +251,7 @@ public static class Program
             WriteBlockerDoc(options, step, repeatedFailure, stepDir);
         }
 
-        var lastContent = result.Transcript.Turns.Count > 0
-            ? result.Transcript.Turns[^1].ModelMessage.Content ?? ""
-            : "";
+        var lastContent = result.Transcript.FinalMessage();
         var looksBlocked = BlockedPhrases.Any(p => lastContent.Contains(p, StringComparison.OrdinalIgnoreCase));
 
         // Read what the model touched *before* the Build/RunTest snapshots below, so the runner's

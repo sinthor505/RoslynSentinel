@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using RoslynSentinel.Common.AgentLoop;
 
 namespace RoslynSentinel.Tools.Advanced;
 
@@ -75,9 +76,7 @@ public sealed class SubAgentImpl(IWorkspaceManager workspaceManager, ILogger log
                 child, SystemPrompt, ApplyResponseFormat(prompt, responseFormat), model, maxTokensPerTurn,
                 turnCap, wallClockCapMinutes, cancellationToken);
 
-            var output = run.Transcript.Turns.Count > 0
-                ? run.Transcript.Turns[^1].ModelMessage.Content ?? ""
-                : "";
+            var output = run.Transcript.FinalMessage();
 
             return new SentinelCallToolResult<SubAgentResult>
             {
@@ -90,6 +89,7 @@ public sealed class SubAgentImpl(IWorkspaceManager workspaceManager, ILogger log
                     TurnCount = run.TurnCount,
                     TranscriptPath = run.TranscriptPath,
                 },
+                Findings = BuildOutputFindings(run.Transcript, output),
             };
         }
         catch (SubAgentLaunchException ex)
@@ -112,6 +112,19 @@ public sealed class SubAgentImpl(IWorkspaceManager workspaceManager, ILogger log
                 $"SubAgent failed unexpectedly ({ex.GetType().Name}). Run id {runId}; see the server log and the run's agent.log for detail." + (logDirectory is null ? "" : $" Logs: {logDirectory}"),
                 Detail: ex.Message.Length > 400 ? ex.Message[..400] : ex.Message));
         }
+    }
+
+    /// <summary>Says when Output is not the model's final message, so a caller does not read reasoning as an answer or "" as success.</summary>
+    private static IReadOnlyList<Finding> BuildOutputFindings(AgentTranscript transcript, string output)
+    {
+        if (transcript.FinalMessageIsFromReasoning())
+        {
+            return [new Finding("SubAgent", "The model's final message had no content; Output is its last reasoning text.", FindingSeverity.Caution)];
+        }
+
+        return string.IsNullOrWhiteSpace(output)
+            ? [new Finding("SubAgent", "The model's final message was empty, so Output is empty; see TranscriptPath for what it did.", FindingSeverity.Caution)]
+            : [];
     }
 
     private static SentinelCallToolResult<SubAgentResult> Failure(ResultError error) =>

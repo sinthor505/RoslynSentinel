@@ -21,6 +21,27 @@ public sealed class AgentTranscript
     public string UserPrompt { get; set; } = "";
 
     public List<AgentTranscriptTurn> Turns { get; } = [];
+
+    /// <summary>
+    /// The model's final text: the last turn's Content, or its ReasoningContent when Content is blank
+    /// (some models put the whole answer in reasoning), or "" when there is no turn or both are blank.
+    /// </summary>
+    public string FinalMessage()
+    {
+        if (Turns.Count == 0)
+        {
+            return "";
+        }
+
+        var last = Turns[^1].ModelMessage;
+        return !string.IsNullOrWhiteSpace(last.Content) ? last.Content : last.ReasoningContent ?? "";
+    }
+
+    /// <summary>True when <see cref="FinalMessage"/> came from reasoning because the last turn's Content was blank.</summary>
+    public bool FinalMessageIsFromReasoning() =>
+        Turns.Count > 0
+        && string.IsNullOrWhiteSpace(Turns[^1].ModelMessage.Content)
+        && !string.IsNullOrWhiteSpace(Turns[^1].ModelMessage.ReasoningContent);
 }
 
 public sealed class AgentTranscriptTurn

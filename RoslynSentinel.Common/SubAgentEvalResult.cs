@@ -126,9 +126,7 @@ public sealed record SubAgentEvalResult : IOperationResult
         string? failureExcerpt = null;
         if (!run.Converged)
         {
-            var lastContent = run.Transcript.Turns.Count > 0
-                ? run.Transcript.Turns[^1].ModelMessage.Content ?? ""
-                : "";
+            var lastContent = run.Transcript.FinalMessage();
             failureExcerpt = lastContent.Length <= MaxFailureExcerptChars
                 ? lastContent
                 : lastContent[..MaxFailureExcerptChars] + "...";
