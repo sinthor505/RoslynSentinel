@@ -45,7 +45,8 @@ public class ServerBinaryStalenessGitTests
     {
         var result = GitProcess.TryRun(directory, GitTimeout, args);
         // TODO Suspected flaky: LaterCommitTouchingServerSource_IsStaleAndListed failed here once in a full solution run ("git failed to run: rev-parse HEAD", TryRun returned null) and passes alone; cause not traced.
-        Assert.That(result, Is.Not.Null, "git failed to run: " + string.Join(' ', args));
+        // TryRun now records the reason in GitProcess.LastFailure; read it from the failure message next time.
+        Assert.That(result, Is.Not.Null, "git failed to run: " + string.Join(' ', args) + " (" + GitProcess.LastFailure + ")");
         Assert.That(result!.Value.ExitCode, Is.EqualTo(0), "git " + string.Join(' ', args));
         return result.Value.StdOut.Trim();
     }

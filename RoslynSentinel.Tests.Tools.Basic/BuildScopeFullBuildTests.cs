@@ -75,6 +75,7 @@ public class BuildScopeFullBuildTests
             var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
                 level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: "Good");
 
+            Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.Success), result.Error?.Message);
             Assert.That(result.Data, Is.Not.Null, result.Error?.Message);
             Assert.That(result.Data!.Outcome, Is.EqualTo(BuildOutcome.Succeeded), result.Data.StdoutTail);
             Assert.That(result.Data.ProjectsCompiled, Is.EqualTo(new[] { "Good" }));
@@ -112,6 +113,7 @@ public class BuildScopeFullBuildTests
             var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
                 level: BuildVerifyLevel.fullBuildThrowaway);
 
+            Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.Success), result.Error?.Message);
             Assert.That(result.Data, Is.Not.Null, result.Error?.Message);
             Assert.That(result.Data!.Outcome, Is.EqualTo(BuildOutcome.Failed), result.Data.StdoutTail);
         }
@@ -148,6 +150,7 @@ public class BuildScopeFullBuildTests
             var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
                 level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: "Bad");
 
+            Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.Success), result.Error?.Message);
             Assert.That(result.Data, Is.Not.Null, result.Error?.Message);
             Assert.That(result.Data!.Outcome, Is.EqualTo(BuildOutcome.Failed), result.Data.StdoutTail);
         }
@@ -185,6 +188,7 @@ public class BuildScopeFullBuildTests
             var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50,
                 level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.file, scopeName: goodFile);
 
+            Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.Success), result.Error?.Message);
             Assert.That(result.Data, Is.Not.Null, result.Error?.Message);
             Assert.That(result.Data!.Outcome, Is.EqualTo(BuildOutcome.Succeeded), result.Data.StdoutTail);
             Assert.That(result.Data.ProjectsCompiled, Is.EqualTo(new[] { "Good" }));
