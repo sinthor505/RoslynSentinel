@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Edit attribution ledger for parallel subagents - resolved (2026-11-07)
+
+Edit attribution ledger for parallel subagents (2026-11-05, approved) - per-server record of which agent wrote each file, same-file conflict refusal, fixed per-process operating mode (`--operating-mode`); identity injected by a PreToolUse hook - [plan](plans/closed/plan_edit_attribution_ledger.md)
+
+Evidence: Steps 0-11 done. On 2026-11-07 every running server was at b6ccd5e5 or newer and the hook helper was republished. Its output carried `_sessionId` when run by hand, and a test instance with hand-passed `_agentId` and `_sessionId` gave the right note for another session's `main`, the caller's own write, a subagent and a name that never existed. Not run across two real windows; the Git note is covered by tests only.
+
 ## Model tool-choice gap: ApplyDiff used instead of ChangeAccessibility - resolved (2026-11-07)
 
 Model tool-choice gap: `ApplyDiff` used instead of `ChangeAccessibility` for `ReplaceBlockFormatted`, 67.5% of all ApplyDiff failures (2026-09-05) - lever 3 done 2026-11-05 (the CS0122 hint now names ChangeAccessibility); levers 1-2 (fixture prompt, `ChangeAccessibility` description) untested, re-run the model-eval batch to measure before pulling them - [doc](model_eval_replaceblockformatted_accessibility_cost_2026_09_05.md)
