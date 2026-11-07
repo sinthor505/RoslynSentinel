@@ -116,22 +116,44 @@ public class DocumentationEngine
             classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         }
 
-        // DEFERRED (accepted 2026-10-22, finding #20): only properties are annotated; plain fields are ignored.
-        // Left as-is on purpose until scheduled; do not re-raise in reviews.
-        var properties = classNode!.Members.OfType<PropertyDeclarationSyntax>().ToList();
-        var newClassNode = classNode.ReplaceNodes(properties, (oldProp, newProp) =>
+        // Properties, plus public instance fields. A multi-variable field (public int a, b;) is skipped:
+        // one attribute would describe two names.
+        var members = classNode!.Members.Where(m => m switch
         {
+            PropertyDeclarationSyntax => true,
+            FieldDeclarationSyntax field => field.Declaration.Variables.Count == 1
+                && field.Modifiers.Any(SyntaxKind.PublicKeyword)
+                && !field.Modifiers.Any(SyntaxKind.ConstKeyword)
+                && !field.Modifiers.Any(SyntaxKind.StaticKeyword),
+            _ => false
+        }).ToList();
+        var newClassNode = classNode.ReplaceNodes(members, (oldMember, newMember) =>
+        {
+            var name = newMember switch
+            {
+                PropertyDeclarationSyntax prop => prop.Identifier.Text,
+                FieldDeclarationSyntax fieldDecl => fieldDecl.Declaration.Variables[0].Identifier.Text,
+                _ => string.Empty
+            };
+            var isReadOnlyField = newMember is FieldDeclarationSyntax readOnlyCandidate && readOnlyCandidate.Modifiers.Any(SyntaxKind.ReadOnlyKeyword);
+            var description = isReadOnlyField ? $"Gets the {name}." : $"Gets or sets the {name}.";
             var attr = SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(
                 SyntaxFactory.Attribute(SyntaxFactory.ParseName("Description"))
                     .WithArgumentList(SyntaxFactory.AttributeArgumentList(SyntaxFactory.SingletonSeparatedList(
-                        SyntaxFactory.AttributeArgument(SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal($"Gets or sets the {newProp.Identifier.Text}."))))))));
-            if (newProp.AttributeLists.SelectMany(al => al.Attributes).Any(a => a.Name.ToString() is "Description" or "DescriptionAttribute" or "System.ComponentModel.Description" or "System.ComponentModel.DescriptionAttribute"))
+                        SyntaxFactory.AttributeArgument(SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(description))))))));
+            if (newMember.AttributeLists.SelectMany(al => al.Attributes).Any(a => a.Name.ToString() is "Description" or "DescriptionAttribute" or "System.ComponentModel.Description" or "System.ComponentModel.DescriptionAttribute"))
             {
-                return newProp;
+                return newMember;
             }
 
             addedAttribute = true;
-            return AnnotatedInsertionHelper.AppendAttributeLists(newProp, [attr]);
+            // AppendAttributeLists is typed to PropertyDeclarationSyntax, so fields use AddAttributeLists directly.
+            return newMember switch
+            {
+                PropertyDeclarationSyntax prop => AnnotatedInsertionHelper.AppendAttributeLists(prop, [attr]),
+                FieldDeclarationSyntax field => field.AddAttributeLists(attr.WithAdditionalAnnotations(Microsoft.CodeAnalysis.Formatting.Formatter.Annotation)),
+                _ => newMember
+            };
         });
 
         if (!addedUsing && !addedAttribute)
@@ -141,7 +163,7 @@ public class DocumentationEngine
                 Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
                 UpdatedText = originalText,
-                Message = "Every property already has a [Description] - nothing to add."
+                Message = "Every property and public field already has a [Description] - nothing to add."
             };
         }
 

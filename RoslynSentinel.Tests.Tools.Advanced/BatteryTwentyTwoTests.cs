@@ -365,8 +365,60 @@ public class BatteryTwentyTwoTests
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         Assert.That(result.UpdatedText, Does.Contain("[Description(\"Gets or sets the OrderId.\")]"));
-        // DEFERRED (accepted 2026-10-22, finding #20): DocumentPocoFields annotates properties only; plain fields are ignored.
-        // Left as-is on purpose until scheduled; do not re-raise in reviews.
+    }
+
+    [Test]
+    [Category("DocumentationEngine")] // sentinel:auto-category
+    public async Task DocumentPocoFields_PublicFields_AnnotatedWithGetsOrSetsOrGets()
+    {
+        const string code = @"
+public class Model {
+    public int Count;
+    public readonly string Name = ""x"";
+    public int Total { get; set; }
+}";
+        SetSource(code, "Test.cs");
+        var result = await _documentationEngine.DocumentPocoFieldsAsync("Test.cs", "Model");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("[Description(\"Gets or sets the Count.\")]"));
+        Assert.That(result.UpdatedText, Does.Contain("[Description(\"Gets the Name.\")]"));
+        Assert.That(result.UpdatedText, Does.Contain("[Description(\"Gets or sets the Total.\")]"));
+    }
+
+    [Test]
+    [Category("DocumentationEngine")] // sentinel:auto-category
+    public async Task DocumentPocoFields_NonPublicConstStaticAndMultiVariableFields_AreSkipped()
+    {
+        const string code = @"
+public class Model {
+    private int hidden;
+    public const int Max = 1;
+    public static int Shared;
+    public int a, b;
+    public int P { get; set; }
+}";
+        SetSource(code, "Test.cs");
+        var result = await _documentationEngine.DocumentPocoFieldsAsync("Test.cs", "Model");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText.Split("[Description(").Length - 1, Is.EqualTo(1), "Only the property P may be annotated");
+        Assert.That(result.UpdatedText, Does.Contain("[Description(\"Gets or sets the P.\")]"));
+    }
+
+    [Test]
+    [Category("DocumentationEngine")] // sentinel:auto-category
+    public async Task DocumentPocoFields_RunTwiceWithFields_SecondRunIsAlreadyInTargetState()
+    {
+        const string code = @"
+public class Model {
+    public int Count;
+    public readonly string Name = ""x"";
+}";
+        SetSource(code, "Test.cs");
+        var first = await _documentationEngine.DocumentPocoFieldsAsync("Test.cs", "Model");
+        SetSource(first.UpdatedText, "Test.cs");
+        var second = await _documentationEngine.DocumentPocoFieldsAsync("Test.cs", "Model");
+        Assert.That(second.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
+        Assert.That(second.UpdatedText, Is.EqualTo(first.UpdatedText));
     }
 
     // --- GenerateEqualityOverrides (via AnalysisEngine) ---
