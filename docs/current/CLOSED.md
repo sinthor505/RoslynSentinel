@@ -8,6 +8,11 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## claude-lean could not write a new file in one call - resolved (2026-11-07)
+
+Was: an implementer building a 174-line file seeded an empty class with `CreateFile`, then `ReplaceSnippet` refused the fill (over the size limit), its error advice offered `Member(replace)` for content holding several members, and `WriteFile`/`ChangeSignature` were on demand ([plan](plans/closed/plan_claude_lean_core_write_tools.md)).
+Evidence: `CreateFile(content)` 25be5c3e; shape-aware oversize advice 046deb59; `--hide-tools` (the SubAgent child hides `WriteFile`) abdf8774; `WriteFile` and `ChangeSignature` always-on in claude-lean af0e830f (21 core tools). Live check 2026-11-07: a 6793-char `CreateFile(content)` landed in one call; a SubAgent child (qwen3.5-9b-coder) listed 20 tools without `WriteFile` and created its file in one `CreateFile(content)` call. ModelEval fixture A at host 113: 3/3 at 563f5ead, 3/3 at 046deb59, 2/3 at af0e830f; one 0/3 run in a dirty working tree is put down to another session's uncommitted edits (hypothesis). Not run: the Chain7 AFTER-only eval (weak baseline).
+
 ## Malformed `.csproj` reload was silent - resolved (2026-11-06)
 
 Was: a syntax-broken `.csproj` reloaded with `workspaceStale: false`, `projectCount` unchanged and the project holding zero documents, because the reload-failure record only fired when the load threw, not when MSBuildWorkspace reported a failed project as a diagnostic ([doc](proposals/proposal_workspace_reload_failure_visibility.md)).
