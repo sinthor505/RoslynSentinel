@@ -24,9 +24,11 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
+    [string]$RepoRoot,
     [string]$MemoryDir
 )
+
+if (-not $RepoRoot) { $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path }
 
 $ErrorActionPreference = 'Stop'
 

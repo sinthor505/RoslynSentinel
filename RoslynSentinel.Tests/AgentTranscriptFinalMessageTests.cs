@@ -64,6 +64,42 @@ public class AgentTranscriptFinalMessageTests
         Assert.That(transcript.FinalMessageIsFromReasoning(), Is.False);
     }
 
+    [Test]
+    public void BareThinkTagsOnly_IsEmptyAndNotFromReasoning()
+    {
+        var transcript = TranscriptWith(Assistant("<think>\n", "<think> "));
+
+        Assert.That(transcript.FinalMessage(), Is.EqualTo(""));
+        Assert.That(transcript.FinalMessageIsFromReasoning(), Is.False);
+    }
+
+    [Test]
+    public void ClosedThinkBlockBeforeAnswer_IsStripped()
+    {
+        var transcript = TranscriptWith(Assistant("<think>plan</think>answer", null));
+
+        Assert.That(transcript.FinalMessage(), Is.EqualTo("answer"));
+        Assert.That(transcript.FinalMessageIsFromReasoning(), Is.False);
+    }
+
+    [Test]
+    public void ThinkTagsInContent_FallBackToReasoningText()
+    {
+        var transcript = TranscriptWith(Assistant("<think>\n", "thinking"));
+
+        Assert.That(transcript.FinalMessage(), Is.EqualTo("thinking"));
+        Assert.That(transcript.FinalMessageIsFromReasoning(), Is.True);
+    }
+
+    [Test]
+    public void UnclosedThinkTagAfterAnswer_IsStripped()
+    {
+        var transcript = TranscriptWith(Assistant("answer </think>", null));
+
+        Assert.That(transcript.FinalMessage(), Is.EqualTo("answer"));
+        Assert.That(transcript.FinalMessageIsFromReasoning(), Is.False);
+    }
+
     private static AgentChatMessage Assistant(string? content, string? reasoning) =>
         new() { Role = "assistant", Content = content, ReasoningContent = reasoning };
 

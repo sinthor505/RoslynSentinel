@@ -22,6 +22,14 @@ public sealed class AgentTranscript
 
     public List<AgentTranscriptTurn> Turns { get; } = [];
 
+    // Models that emit reasoning inline wrap it in think tags; an unclosed or bare tag is not an answer either.
+    private static readonly System.Text.RegularExpressions.Regex ThinkTags = new(
+        @"<think>[\s\S]*?</think>|</?think>",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    private static string WithoutThinkTags(string? text) =>
+        string.IsNullOrEmpty(text) ? "" : ThinkTags.Replace(text, "").Trim();
+
     /// <summary>
     /// The model's final text: the last turn's Content, or its ReasoningContent when Content is blank
     /// (some models put the whole answer in reasoning), or "" when there is no turn or both are blank.
@@ -34,14 +42,15 @@ public sealed class AgentTranscript
         }
 
         var last = Turns[^1].ModelMessage;
-        return !string.IsNullOrWhiteSpace(last.Content) ? last.Content : last.ReasoningContent ?? "";
+        var content = WithoutThinkTags(last.Content);
+        return content.Length > 0 ? content : WithoutThinkTags(last.ReasoningContent);
     }
 
     /// <summary>True when <see cref="FinalMessage"/> came from reasoning because the last turn's Content was blank.</summary>
     public bool FinalMessageIsFromReasoning() =>
         Turns.Count > 0
-        && string.IsNullOrWhiteSpace(Turns[^1].ModelMessage.Content)
-        && !string.IsNullOrWhiteSpace(Turns[^1].ModelMessage.ReasoningContent);
+        && WithoutThinkTags(Turns[^1].ModelMessage.Content).Length == 0
+        && WithoutThinkTags(Turns[^1].ModelMessage.ReasoningContent).Length > 0;
 }
 
 public sealed class AgentTranscriptTurn
