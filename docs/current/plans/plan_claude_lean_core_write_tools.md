@@ -1,6 +1,6 @@
 # Plan: Promote WriteFile and ChangeSignature to claude-lean core, and give new files a one-call route
 
-**Status:** DRAFT 2026-11-06. Decisions settled; awaiting approval to start. Nothing built.
+**Status:** IN PROGRESS 2026-11-06. Steps 1-5 committed (25be5c3e, 046deb59, abdf8774, af0e830f, 702cee12). Step 6 partly done: live server at 702cee12 lists 21 core tools incl. `WriteFile` and `ChangeSignature`, `SemanticFindReplace` stays on demand, a 6793-char `CreateFile(content)` landed in one call, and a child launched with `--hide-tools=WriteFile` lists 20 tools (no `WriteFile`; `DeleteFile` and `ChangeSignature` present). Still open: the ModelEval before/after run and one SubAgent child new-file task (both need a local model).
 
 ## Problem
 
