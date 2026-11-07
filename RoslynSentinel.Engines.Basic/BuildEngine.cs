@@ -149,21 +149,33 @@ public class BuildEngine
     {
         var errors = new List<DiagnosticInfo>();
         var warnings = new List<DiagnosticInfo>();
+        // Quiet verbosity prints each diagnostic inline and again in the "Build FAILED." summary,
+        // so the same line is matched twice. Project is part of the key because the same file
+        // can build in two projects. Path is lowered so the comparison is ordinal-ignore-case.
+        var seen = new HashSet<(string Id, string Severity, string Path, int Line, int Col, string Message, string Project)>();
         foreach (Match m in DiagnosticLineRegex.Matches(stdout))
         {
             var severity = m.Groups["severity"].Value == "error" ? "Error" : "Warning";
             var lineNum = m.Groups["line"].Success ? int.Parse(m.Groups["line"].Value) : 0;
             var colNum = m.Groups["col"].Success ? int.Parse(m.Groups["col"].Value) : 0;
+            var project = ProjectNameFromPath(m.Groups["project"].Value);
+            var id = m.Groups["id"].Value;
+            var path = m.Groups["path"].Value;
+            var message = m.Groups["message"].Value;
+            if (!seen.Add((id, severity, path.ToLowerInvariant(), lineNum, colNum, message, project)))
+            {
+                continue;
+            }
             var info = new DiagnosticInfo(
-                m.Groups["id"].Value,
+                id,
                 severity,
-                m.Groups["message"].Value,
-                m.Groups["path"].Value,
+                message,
+                path,
                 lineNum,
                 colNum,
                 lineNum,
                 colNum,
-                Project: ProjectNameFromPath(m.Groups["project"].Value)
+                Project: project
             );
             (severity == "Error" ? errors : warnings).Add(info);
         }

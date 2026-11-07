@@ -66,4 +66,60 @@ public class BuildEngineParseTests
         Assert.That(errors[0].Message, Is.EqualTo("Cannot implicitly convert type 'int[]' to 'List<int>' [see docs]"));
         Assert.That(errors[0].Project, Is.EqualTo("X"));
     }
+
+    [Test]
+    public void ParseDiagnostics_ErrorRepeatedInSummary_IsReportedOnce()
+    {
+        const string line = @"C:\r\Foo\Bar.cs(12,34): error CS1002: ; expected [C:\r\Foo\Foo.csproj]";
+        var stdout = line + "\nBuild FAILED.\n" + line;
+
+        var (errors, warnings) = BuildEngine.ParseDiagnostics(stdout);
+
+        Assert.That(warnings, Is.Empty);
+        Assert.That(errors, Has.Count.EqualTo(1));
+        Assert.That(errors[0].Id, Is.EqualTo("CS1002"));
+    }
+
+    [Test]
+    public void ParseDiagnostics_SameLocationInTwoProjects_IsKeptTwice()
+    {
+        const string stdout =
+            @"C:\r\Foo\Bar.cs(12,34): error CS1002: ; expected [C:\r\A\A.csproj]" + "\n" +
+            @"C:\r\Foo\Bar.cs(12,34): error CS1002: ; expected [C:\r\B\B.csproj]";
+
+        var (errors, warnings) = BuildEngine.ParseDiagnostics(stdout);
+
+        Assert.That(warnings, Is.Empty);
+        Assert.That(errors, Has.Count.EqualTo(2));
+        Assert.That(errors[0].Project, Is.EqualTo("A"));
+        Assert.That(errors[1].Project, Is.EqualTo("B"));
+    }
+
+    [Test]
+    public void ParseDiagnostics_TwoErrorsSameLineDifferentColumns_AreBothKept()
+    {
+        const string stdout =
+            @"C:\r\Foo\Bar.cs(12,34): error CS0103: The name 'x' does not exist in the current context [C:\r\Foo\Foo.csproj]" + "\n" +
+            @"C:\r\Foo\Bar.cs(12,40): error CS0103: The name 'x' does not exist in the current context [C:\r\Foo\Foo.csproj]";
+
+        var (errors, warnings) = BuildEngine.ParseDiagnostics(stdout);
+
+        Assert.That(warnings, Is.Empty);
+        Assert.That(errors, Has.Count.EqualTo(2));
+        Assert.That(errors[0].StartColumn, Is.EqualTo(34));
+        Assert.That(errors[1].StartColumn, Is.EqualTo(40));
+    }
+
+    [Test]
+    public void ParseDiagnostics_WarningRepeatedInSummary_IsReportedOnce()
+    {
+        const string line = @"C:\r\X.cs(3,5): warning CS0168: The variable 'a' is declared but never used [C:\r\X.csproj]";
+        var stdout = line + "\nBuild succeeded with warnings.\n" + line;
+
+        var (errors, warnings) = BuildEngine.ParseDiagnostics(stdout);
+
+        Assert.That(errors, Is.Empty);
+        Assert.That(warnings, Has.Count.EqualTo(1));
+        Assert.That(warnings[0].Id, Is.EqualTo("CS0168"));
+    }
 }
