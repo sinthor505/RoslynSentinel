@@ -50,7 +50,8 @@ name was built this way.
 
 Budget: `LargeResultHelper.InlineBudgetChars` (15360) minus `EchoReserveChars` (2560), in chars of the wire text. In order:
 
-1. `ForwardGuidance` hands the never-serialized `GuidanceHint` to the telemetry collector.
+1. `ForwardGuidance` hands the never-serialized `GuidanceHint` to the telemetry collector. Then `WithNotFoundNotes` adds any
+   `NotFoundEvidence` findings to a not-found error, through `IFindingsEnvelope` (filter 8 below covers the thrown form).
 2. `Passthrough`: `null`, `string`, `ContentBlock`, `AIContent`, `CallToolResult` and enumerables of the content types
    are returned unchanged and never cut. Anything else is serialized once with the tool's wire options, by default
    `McpJsonUtilities.DefaultOptions` (camelCase, nulls omitted), not `SharedJsonOptions`.
@@ -98,9 +99,10 @@ First added is outermost (csharp-sdk `McpServerImpl.BuildFilterPipeline` folds f
 the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (13 filters), pinned by
 `ToolTelemetryFilterOrderTests` via `CallToolFilterNames`. In registration order:
 
-1. `AddAgentIdentityFilter` (`Server.Advanced/AgentIdentityCapture.cs`): strips `_agentId`/`_agentType` from the arguments,
-   latches the operating mode and sets the ambient `ToolCallContext` (`Common/ToolCallContext.cs`). Outermost so the echo
-   and the argument validator never see the keys. Never refuses or throws; on failure the call runs with a null context.
+1. `AddAgentIdentityFilter` (`Server.Advanced/AgentIdentityCapture.cs`): strips `_agentId`/`_agentType`/`_sessionId` from the
+   arguments, latches the operating mode and sets the ambient `ToolCallContext` (`Common/ToolCallContext.cs`), with the
+   `filePath` and missing term of the tools in its `MissingTermArgument` map. Outermost so the echo and the argument
+   validator never see the keys. Never refuses or throws; on failure the call runs with a null context.
 2. `AddToolCallEchoFilter`: stamps call id/tool/args onto the first text block (sees final content).
 3. `AddToolTelemetryFilter` (`Server.Advanced/ToolTelemetryRecorder.cs`, `Common/ToolTelemetry.cs`): counts every call per
    tool (success / error / error code / duration) for `McpServerStatus.toolTelemetry`. Third on purpose, so it wraps the
@@ -130,7 +132,8 @@ the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationE
    `CallToolResult.IsError=true` (same name and polarity).
 8. `AddWorkspaceNotLoadedFilter` exception catch-all (`CallToolFailureHandler`): an escaped exception becomes a structured
    failure body (`ToolErrorMapper.ToResultError`: `SolutionNotLoadedException` keeps its actionable message, a typed
-   `ToolException` keeps its code) with `IsError=true`; a client abort is rethrown.
+   `ToolException` keeps its code) with `IsError=true`; a client abort is rethrown. A thrown error never reaches the
+   marshaller, so `ToFailureResult` adds the `NotFoundEvidence` findings itself.
 9. Post-call drift diagnostic (`AddDriftFilter`, `GetContentExternalFileChangesAsync`, log only).
 10. `AddLargeResultOffloadFilter`: the backstop for text the marshaller did not cut. A text block over
     `OffloadThresholdBytes` (read as chars) goes to a `Raw` file via `StoreRawJsonAsync`, and the caller gets a pointer with

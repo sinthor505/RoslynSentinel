@@ -1,6 +1,6 @@
 # Plan: Edit attribution ledger naming the agent behind each write, with a same-file conflict refusal and a fixed per-process operating mode
 
-**Status:** APPROVED 2026-11-05. Design rulings from the owner are recorded under Decision; Steps 0-10 done (Step 0 results under that step), with the Step 9 hook helper republish pending the rollout order in that step; the hook is installed and live: writes are recorded, the filter sets identity, the chokepoint refuses same-file conflicts between two known agents and `UndoLastApply` refuses an undo over another agent's later write. Step 8 live check: a restarted server latched `MultiAgent` ("auto: first call carried an agent id") with `CallerAgentId: main`, and two concurrent subagents each reported their own distinct id; the Step 4 refusal naming a subagent was not reproduced live (it needs a write landing inside another agent's in-flight call) and is covered by tests only. A missing hook exe fails open (checked with `claude -p` in a scratch folder, both command forms). Citations checked at commit b3b90a26; the request pipeline, `AsyncLocal` and telemetry points were rechecked at bab9599b, which added per-tool telemetry. Between those commits `PersistentWorkspaceManager.cs`, `ToolArgumentValidator.cs`, `ValidateAndApplyHelper.cs` and `AdminTools.cs` did not change, so their line citations still hold.
+**Status:** APPROVED 2026-11-05. Design rulings from the owner are recorded under Decision; Steps 0-11 done (Step 0 results under that step); the one open item is the Step 9 hook helper republish, an owner action listed in that step, after which this plan closes; the hook is installed and live: writes are recorded, the filter sets identity, the chokepoint refuses same-file conflicts between two known agents and `UndoLastApply` refuses an undo over another agent's later write. Step 8 live check: a restarted server latched `MultiAgent` ("auto: first call carried an agent id") with `CallerAgentId: main`, and two concurrent subagents each reported their own distinct id; the Step 4 refusal naming a subagent was not reproduced live (it needs a write landing inside another agent's in-flight call) and is covered by tests only. A missing hook exe fails open (checked with `claude -p` in a scratch folder, both command forms). Citations checked at commit b3b90a26; the request pipeline, `AsyncLocal` and telemetry points were rechecked at bab9599b, which added per-tool telemetry. Between those commits `PersistentWorkspaceManager.cs`, `ToolArgumentValidator.cs`, `ValidateAndApplyHelper.cs` and `AdminTools.cs` did not change, so their line citations still hold.
 
 ## Problem
 
@@ -300,6 +300,14 @@ in place. Findings reuse `Finding`.
 - Known gaps, not-found notes: two blobs written in the same second have no reliable order; a bare file name that the tool
   resolved elsewhere in the solution gets a blob note but no Git note, because Git looks under the solution root.
 - Not verified: that every `ReplaceSnippet` and batch blob carries `BeforeSource`.
+- Live check at 9c27ce7b (restarted server, a subagent created a scratch file and renamed a method): `GetMethodSource`,
+  `ReadFile(memberName)` and a `ReplaceSnippet` no-match each carried the blob note naming the subagent, with tool, age and
+  reason; a typo got no note. The note shows the blob's operation name (`replace_snippet`), not always the tool's name.
+  Tests only: the Git note, and another session as writer, which needs the republished helper.
+- **Remaining rollout, owner action.** When the helper was due, three other servers ran older builds (`0022bcdb`, `090b4b16`
+  twice), so it was not republished. Restart those windows, confirm no server runs a build older than b6ccd5e5, then run
+  `scripts/publish-agent-identity-hook.ps1`. Until then the search uses agent ids alone, so it cannot tell one window's `main`
+  from another's.
 - Done when tests cover each surface and show no output when there is no foreign entry; a typo gets no note; a term removed
   by another agent gets the blob note; a term removed outside the server gets the Git note. A call with no agent id
   is unchanged.
@@ -318,8 +326,9 @@ in place. Findings reuse `Finding`.
 
 ### Step 11 - Guidance and docs
 
-- Files: `docs/current/references/reference_architecture_map.md` (new filter, 12 becomes 13 and the numbered list
-  shifts; edit attribution ledger, refusals, mode); memory `reference_central_mcp_request_filter_pipeline` (still says 11);
+- Files: `docs/current/references/reference_architecture_map.md` (edit attribution ledger, refusals, mode, hook setup and
+  `--operating-mode`); `docs/current/references/reference_tool_response_pipeline.md` (filter 1, filter 8, marshaller order; the
+  count was already 13); memory `reference_central_mcp_request_filter_pipeline` no longer exists;
   `.claude/skills/dispatch-implementer/SKILL.md` ("Concurrent C# dispatches (trial)": the refusal and the
   `MULTI-AGENT:` report); `.mcp.json` or launch script docs for `--operating-mode`.
 - Done when the docs match the source.

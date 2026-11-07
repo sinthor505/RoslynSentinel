@@ -82,6 +82,11 @@ view and CS errors); only one may run `Build`/`RunTest`. If an error, stale-view
 looks caused by the second agent, first treat it as a trial finding: report it (`MULTI-AGENT:` plus what
 collided), drop back to one subagent and continue. Do not write a blocker doc or halt for it.
 
+The server now names the other agent. `ConcurrentEditRefused` means another agent wrote a target file, or wrote elsewhere in a
+way that breaks this change, while the call ran; nothing was written. Tell the agent to re-read and retry; a conflict between
+slices comes back as `MULTI-AGENT:` plus the writer named in the error, and you re-slice. `Findings` with source
+`EditAttribution` on `Build`, `GetDiagnostics`, `Git(status)` and not-found errors are evidence about the last writer, not a cause.
+
 ## Briefing an orchestrator
 
 When the dispatcher is an `orchestrator`, brief it to run its own subagents in the foreground. Nested

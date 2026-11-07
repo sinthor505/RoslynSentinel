@@ -121,6 +121,26 @@ Nothing compiler-enforced stops a new `File.WriteAllText`, but `Tests.Basic/Bare
 outside `FileIoHelper` (allowlist of non-workspace writes); `WriteChokepointGuardrailTests.cs` and `EolChokepointConversionTests.cs`
 cover EOL/line-count behaviour of the shared path.
 
+**Agent attribution and operating mode.** A `PreToolUse` hook (`.claude/settings.json`, matcher on the RoslynSentinel MCP tools)
+runs `.claude/hooks/bin/agent-identity-hook.exe`, which adds `_agentId` (`main` outside a subagent), `_agentType` and
+`_sessionId` to the call's arguments. The exe is a local build output: publish it with `scripts/publish-agent-identity-hook.ps1`;
+a missing exe fails open, and the call runs with no identity. A new `_x` key must ship in this order, because a server that does
+not strip it refuses every call as an unknown parameter and hook settings reach every session at once: commit the server side,
+restart every window, confirm with `McpServerStatus`, and only then republish the helper.
+`--operating-mode=auto|single-agent|multi-agent` (env `ROSLYNSENTINEL_OPERATING_MODE`, `Common/AgentOperatingModeOptions.cs`)
+fixes the mode for the process; `auto` latches on the first tool call, `MultiAgent` if it carried an agent id. `McpServerStatus`
+reports `operatingMode`, `operatingModeSource` and `callerAgentId`. In `MultiAgent` the scoped operation ledger cannot open, so
+`MoveMember` refuses unresolved call sites before writing. In `SingleAgent` a different known agent is refused while one is open.
+
+The edit attribution ledger (`Common/EditAttributionLedger.cs`, in memory, per server, last 8 writes per file; not the scoped
+operation ledger) records who wrote each file. Inside the lock, after the refusals above, the chokepoint refuses with
+`ConcurrentEditRefused` when a different known agent wrote a target after this call started (`CheckConcurrentEditConflict`), or
+wrote anywhere since the call started and re-running the compile gate now finds new errors (`RevalidateAfterForeignWriteAsync`,
+only for a call whose gate passed, `ToolCallContext.GatePassed`). `UndoLastApply` refuses over another agent's later write, using
+`OperationItemRecord.AppliedByAgentId`. `Common/EditAttributionFindings.cs` adds last-writer `Findings` to `Build`,
+`GetDiagnostics`, compile-gate failures and `Git(status)`. `Common/NotFoundEvidence.cs` adds them to not-found errors by searching
+the operation blobs, which every window shares, and then Git.
+
 **Session halt and acknowledge.** The drift latch is `_sessionHalted` in `PersistentWorkspaceManager`; the halt-stamp
 filter (pipeline item 5) shows it, and any tripped breaker, on every response. `ExternalFileDrift(operation:
 Acknowledge)` (`Tools.Basic/AdminTools.cs`) clears the latch even when only some files are named. Files not named stay
