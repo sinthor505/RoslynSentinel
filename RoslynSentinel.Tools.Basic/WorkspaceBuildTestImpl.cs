@@ -213,23 +213,6 @@ public class WorkspaceBuildTestImpl
         }
     }
 
-    // Stores the uncapped test result list for GetLargeResultTool. A storage failure must not turn a finished
-    // test report into a tool error, so it degrades to "no id".
-    private async Task<string?> StoreFullTestResultAsync(TestRunResult fullResult, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var json = System.Text.Json.JsonSerializer.Serialize(fullResult, SharedJsonOptions.Compact);
-            var stored = await LargeResultHelper.StoreRawJsonAsync(json, _workspaceManager.GetSolutionRoot(), cancellationToken);
-            return stored.resultId;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogWarning(ex, "RunTest: could not store the full test result");
-            return null;
-        }
-    }
-
     // Groups a failed row by its test class: "Namespace.Class.Method(args)" -> "Namespace.Class".
     private static string TestClassOf(TestCaseResult row)
     {
@@ -361,14 +344,19 @@ public class WorkspaceBuildTestImpl
                 return new SentinelCallToolResult<object>() { IsError = true, SuccessData = projected, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, testRunResult.Detail ?? "Test run did not complete."), StatusMessage = testRunResult.Detail ?? "Test run did not complete.", WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
             }
 
-            if (testRunResult.FailedCount > 0 && !summary)
-            {
-                projected = projected with { FullResultsId = await StoreFullTestResultAsync(testRunResult, cancellationToken) };
-            }
-
             var failedRows = testRunResult.Results.Where(r => r.Outcome == TestOutcome.Failed).ToList();
             var toolResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = WithoutTailsWhenClean(projected), TotalRecords = testRunResult.FailedCount, WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = SummarizeTestRun(testRunResult), ListSummary = SummarizeListResult.Build(failedRows, TestClassOf) };
-            return toolResult with { Findings = result.Findings, StatusMessage = SummarizeTestRun(testRunResult) };
+            var finalResult = toolResult with { Findings = result.Findings, StatusMessage = SummarizeTestRun(testRunResult) };
+
+            // The unprojected rows (full messages, stack traces, Output) are stored by the marshaller under
+            // successData.fullResults, not inline; the response's largeResult.resultId + that path reach them via
+            // GetLargeResult. Only the rows are detached: the counts are already inline.
+            if (testRunResult.FailedCount > 0 && !summary)
+            {
+                finalResult.Detach("fullResults", testRunResult.Results.ToList());
+            }
+
+            return finalResult;
         }
         catch (Exception ex)
         {

@@ -55,7 +55,7 @@ public record TestRunResult(
     string? Detail = null,
     bool RunCompleted = true,
     List<ProjectTestSummary>? ProjectSummaries = null,
-    string? FullResultsId = null,
+    [property: Obsolete("Use largeResult (the stored fullResults payload)")] string? FullResultsId = null,
     int OmittedResultCount = 0
 ) : IOperationResult
 {

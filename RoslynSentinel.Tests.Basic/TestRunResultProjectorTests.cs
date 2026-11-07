@@ -22,8 +22,7 @@ public class TestRunResultProjectorTests
         List<GroupedCountSummary>? failureSummary = null,
         string? stdout = null,
         string? stderr = null,
-        bool runCompleted = true,
-        string? fullResultsId = null)
+        bool runCompleted = true)
     {
         return new TestRunResult(
             RunSucceeded: failedCount == 0,
@@ -37,8 +36,7 @@ public class TestRunResultProjectorTests
             StdoutTail: stdout,
             StderrTail: stderr,
             Duration: TimeSpan.FromSeconds(1),
-            RunCompleted: runCompleted,
-            FullResultsId: fullResultsId);
+            RunCompleted: runCompleted);
     }
 
     [Test]
@@ -240,12 +238,20 @@ public class TestRunResultProjectorTests
     }
 
     [Test]
-    public void Project_FullResultsId_IsLeftUnchanged()
+    public void Project_LeavesTheUnprojectedInputRowsIntact_ForTheDetachedFullResults()
     {
-        var withId = BuildResult(new[] { FailedRow(0) }, totalCount: 1, failedCount: 1, fullResultsId: "abc123");
-        var withoutId = BuildResult(new[] { FailedRow(0) }, totalCount: 1, failedCount: 1);
+        // RunTest detaches the engine's unprojected rows (full message, stack, output) while only the projection goes inline,
+        // so projecting must not mutate or share the input rows.
+        var longMessage = new string('m', 600);
+        var longStack = string.Join("\n", Enumerable.Range(1, 8).Select(i => $"   at Some.Type.Method{i}()"));
+        var result = BuildResult(new[] { FailedRow(0, longMessage, longStack, "captured output") }, totalCount: 1, failedCount: 1);
 
-        Assert.That(TestRunResultProjector.Project(withId, TestResultsFilter.failed, includeOutput: false).FullResultsId, Is.EqualTo("abc123"));
-        Assert.That(TestRunResultProjector.Project(withoutId, TestResultsFilter.failed, includeOutput: false).FullResultsId, Is.Null);
+        var projected = TestRunResultProjector.Project(result, TestResultsFilter.failed, includeOutput: false);
+
+        Assert.That(projected.Results[0].ErrorMessage, Has.Length.EqualTo(300));
+        Assert.That(projected.Results[0].Output, Is.Null);
+        Assert.That(result.Results[0].ErrorMessage, Is.EqualTo(longMessage), "the input row keeps its full message.");
+        Assert.That(result.Results[0].ErrorStackTrace, Is.EqualTo(longStack), "the input row keeps its full stack trace.");
+        Assert.That(result.Results[0].Output, Is.EqualTo("captured output"));
     }
 }

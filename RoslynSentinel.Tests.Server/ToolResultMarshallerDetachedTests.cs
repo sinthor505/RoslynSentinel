@@ -155,6 +155,48 @@ public class ToolResultMarshallerDetachedTests
         Assert.That(wrapper["Data"]!["successData"]!["passed"]!.GetValue<int>(), Is.EqualTo(120), "the rest of the envelope is stored too");
     }
 
+    // proposal_side_stores_never_inline.md slice 3: RunTest returns its projected TestRunResult inline and detaches the
+    // unprojected rows as "fullResults". The inline text keeps the capped digest; the stored Envelope holds the full rows.
+    [Test]
+    public async Task Detach_RunTestShapedResult_StoresTheUnprojectedRowsAndKeepsTheirStackTracesOutOfTheText()
+    {
+        string fullStack = string.Join("\n", Enumerable.Range(1, 8).Select(i => $"   at {Marker}-{i} Some.Type.Method{i}()"));
+        string fullMessage = "distinct solitary failure " + new string('x', 600);
+        var unprojected = new RoslynSentinel.Engines.Basic.TestRunResult(
+            RunSucceeded: false,
+            ExitCode: 1,
+            TotalCount: 1,
+            PassedCount: 0,
+            FailedCount: 1,
+            SkippedCount: 0,
+            FailureSummary: [],
+            Results: [new RoslynSentinel.Engines.Basic.TestCaseResult("Tests.Failing.AlwaysFails", TestOutcome.Failed, TimeSpan.FromMilliseconds(5), fullMessage, fullStack, "captured output")],
+            StdoutTail: null,
+            StderrTail: null,
+            Duration: TimeSpan.FromSeconds(1));
+        var projected = RoslynSentinel.Engines.Basic.TestRunResultProjector.Project(unprojected, TestResultsFilter.failed, includeOutput: false);
+        var result = new SentinelCallToolResult<object> { IsError = false, SuccessData = projected, TotalRecords = 1, StatusMessage = "1 of 1 tests failed" };
+        result.Detach(Name, unprojected.Results.ToList());
+
+        string text = await MarshalAsync(Marshaller(_root), result);
+
+        Assert.That(text, Does.Contain("Tests.Failing.AlwaysFails"), "the inline digest still names the failed test");
+        Assert.That(text, Does.Not.Contain($"{Marker}-5"), "the unprojected stack trace lines are not in the wire text");
+        Assert.That(text, Does.Not.Contain("captured output"));
+        var envelope = JsonNode.Parse(text)!.AsObject();
+        var pointer = envelope["largeResult"]!.AsObject();
+        string resultId = pointer["resultId"]!.GetValue<string>();
+        Assert.That(resultId, Is.Not.Empty);
+        Assert.That(pointer["message"]!.GetValue<string>(), Does.StartWith($"Stored, not inline: {Name} (1 records)."));
+        Assert.That(envelope["successData"]!.AsObject().ContainsKey(Name), Is.False);
+
+        var rows = ResultPager.SelectNode(StoredWrapper(resultId)["Data"]!, "successData." + Name) as JsonArray;
+        Assert.That(rows!, Has.Count.EqualTo(1));
+        Assert.That(rows[0]!["errorStackTrace"]!.GetValue<string>(), Is.EqualTo(fullStack));
+        Assert.That(rows[0]!["errorMessage"]!.GetValue<string>(), Is.EqualTo(fullMessage));
+        Assert.That(rows[0]!["output"]!.GetValue<string>(), Is.EqualTo("captured output"));
+    }
+
     [Test]
     public async Task Detach_OnTheCallContext_IsHandledLikeADetachOnTheResult()
     {

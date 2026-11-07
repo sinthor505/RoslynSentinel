@@ -296,7 +296,7 @@ public class RunTestTests
     }
 
     [Test]
-    public async Task RunTest_SummaryTrue_ReportsNoOmittedResultsAndNoFullResultsIdAsync()
+    public async Task RunTest_SummaryTrue_ReportsNoOmittedResultsAndDetachesNoFullResultsAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -310,7 +310,7 @@ public class RunTestTests
         var data = (TestRunResult)result.SuccessData!;
         Assert.That(data.FailedCount, Is.EqualTo(1));
         Assert.That(data.OmittedResultCount, Is.Zero, "summary=true omits Results by request, so nothing is counted as omitted.");
-        Assert.That(data.FullResultsId, Is.Null, "summary=true stores no full-results payload.");
+        Assert.That(result.Detached, Is.Empty, "summary=true stores no full-results payload.");
     }
 
     [Test]
@@ -349,10 +349,10 @@ public class RunTestTests
         Assert.That(data.StdoutTail, Is.Not.Null.And.Not.Empty, "includeOutput: true keeps the stdout tail on a completed run with tests.");
     }
 
-    // Mirrors Build_QuickBuild_FailedWithMoreThanMaxDetails_ReturnsFullDiagnosticsResultIdReadableByGetLargeResult:
-    // the stored unprojected TestRunResult is paged back through GetLargeResultTool and parsed.
+    // The unprojected rows are declared stored (Detach) under successData.fullResults; the marshaller stores them and
+    // leaves a largeResult pointer (ToolResultMarshallerDetachedTests covers that half, with a RunTest-shaped result).
     [Test]
-    public async Task RunTest_FullResultsId_ReadableByGetLargeResultAsync()
+    public async Task RunTest_FailingRun_DetachesTheUnprojectedRowsAsFullResultsAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -363,25 +363,18 @@ public class RunTestTests
         var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution, timeoutSeconds: 120);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-        var data = (TestRunResult)result.SuccessData!;
-        Assert.That(data.FullResultsId, Is.Not.Null.And.Not.Empty);
-
-        var page = await workspaceTools.GetLargeResultTool(reason: "test message", resultId: data.FullResultsId, offset: 0, charLimit: RoslynSentinel.Common.LargeResultHelper.InlineBudgetChars);
-
-        Assert.That(page.IsError, Is.False, "the stored unprojected payload must be readable by its resultId.");
-        var pageDataType = page.SuccessData!.GetType();
-        var text = (string)pageDataType.GetProperty("text")!.GetValue(page.SuccessData)!;
-        using var doc = System.Text.Json.JsonDocument.Parse(text);
-        var results = doc.RootElement.EnumerateObject()
-            .First(p => string.Equals(p.Name, "Results", StringComparison.OrdinalIgnoreCase)).Value;
-        Assert.That(results.GetArrayLength(), Is.EqualTo(1), "the stored result holds the one failed row.");
-        Assert.That(text, Does.Contain("distinct solitary failure"), "the stored row keeps the untruncated message.");
+        var detached = result.Detached.Single();
+        Assert.That(detached.Name, Is.EqualTo("fullResults"));
+        var rows = (List<TestCaseResult>)detached.Payload;
+        Assert.That(rows, Has.Count.EqualTo(1), "the payload holds the one failed row.");
+        Assert.That(rows[0].Outcome, Is.EqualTo(TestOutcome.Failed));
+        Assert.That(rows[0].ErrorMessage, Does.Contain("distinct solitary failure"), "the stored row keeps the untruncated message.");
     }
 
     // The projected digest keeps the failed test's name inline and caps its message at 300 chars; the untruncated
-    // unprojected result stays behind FullResultsId for GetLargeResult.
+    // unprojected rows are detached as fullResults (stored by the marshaller, read with GetLargeResult).
     [Test]
-    public async Task RunTest_FailingRun_ListsFailedTestNameInlineWithCappedMessageAndFullResultsIdAsync()
+    public async Task RunTest_FailingRun_ListsFailedTestNameInlineWithCappedMessageAndDetachesFullResultsAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -396,7 +389,7 @@ public class RunTestTests
         var failed = data.Results.Single(r => r.Outcome == TestOutcome.Failed);
         Assert.That(failed.TestName, Does.Contain("AlwaysFails"), "the failed test name must be listed inline.");
         Assert.That(failed.ErrorMessage?.Length ?? 0, Is.LessThanOrEqualTo(300), "the inline ErrorMessage is capped at 300 chars.");
-        Assert.That(data.FullResultsId, Is.Not.Null.And.Not.Empty, "a failing run stores the unprojected result behind FullResultsId.");
+        Assert.That(result.Detached.Select(d => d.Name), Is.EqualTo(new[] { "fullResults" }), "a failing run detaches the unprojected rows.");
     }
 
     [Test]
