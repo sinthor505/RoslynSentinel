@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Model tool-choice gap: ApplyDiff used instead of ChangeAccessibility - resolved (2026-11-07)
+
+Model tool-choice gap: `ApplyDiff` used instead of `ChangeAccessibility` for `ReplaceBlockFormatted`, 67.5% of all ApplyDiff failures (2026-09-05) - lever 3 done 2026-11-05 (the CS0122 hint now names ChangeAccessibility); levers 1-2 (fixture prompt, `ChangeAccessibility` description) untested, re-run the model-eval batch to measure before pulling them - [doc](model_eval_replaceblockformatted_accessibility_cost_2026_09_05.md)
+
+Evidence: Rerun 2026-11-07, 10 MinimalGuidance runs on unsloth/qwen3.5-9b: ApplyDiff is no longer in the surface, ChangeAccessibility called in 7 of 10 runs, and in both runs hitting CS0122 the hint led to it on the next turn. Levers 1-2 not pulled; numbers appended to the doc.
+
 ## MoveMember keep modes: remaining gaps - resolved (2026-11-07)
 
 MoveMember keep modes: remaining gaps (2026-11-05; generic methods DONE per owner ruling D7: forwarder mirrors type parameters and constraints and passes explicit type arguments, tests in MoveMemberSuccessTests/MoveMemberForwarderTests) - keep modes on extension methods stay refused by design (`TargetIneligible`) until a use case appears, and a plain move is refused only when a receiver-style call `"a".Foo(1)` exists; a private moved method keeps a forwarder to a now-inaccessible member (CS0122, caught by the compile gate, no eligibility refusal yet); a generic containing type (`class Foo<T>`) gets no refusal, the dry-run compile gate catches a moved body that uses the containing `T` - [doc](proposals/proposal_movemember_keep_delegator_and_same_class_calls.md)

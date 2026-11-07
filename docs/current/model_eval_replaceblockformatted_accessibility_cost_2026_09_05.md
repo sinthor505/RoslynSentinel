@@ -149,3 +149,13 @@ the first full-dataset confirmation that the pattern is both real and large, not
 Not yet decided which lever to pull or A/B tested — this entry exists so the (large, confirmed)
 opportunity is discoverable from `TODO.md` rather than only living in the dated doc.
 
+## Rerun after lever 3 (2026-11-07)
+
+`MinimalGuidance -Repeats 10` on host 113, model `unsloth/qwen3.5-9b` (owner: comparable to `qwen3.5-9b-coder`), assistance level L1; runs `20261107-074915-789` through `20261107-081647-052` under `ModelTestingResults\113\Model_FixesWholeFileRewriteBug_MinimalGuidance\`.
+
+- 7 of 10 passed. Runs 6 and 9 stopped with `ModelFinished` but failed the test (`ContosoOrders.Tests`, 1 of 5); run 10 hit `TurnCapExceeded` at 40 turns. These three were not traced.
+- `ApplyDiff` is no longer in this test's tool surface (49 tools), so the 67.5% metric cannot be re-measured as written. The model edits with `ReplaceSnippet`.
+- `ChangeAccessibility` was called 7 times in 7 runs, all successful. Runs 4, 7 and 9 did not call it.
+- The wrong-order CS0122 on `ReplaceBlockFormatted` still occurred in runs 1 and 8, now through `ReplaceSnippet`. Its text names `ChangeAccessibility`, and the model called that tool on the next turn in both.
+
+Verdict: n=10 is too small for a rate, but lever 3 worked each time it fired, and levers 1-2 are not justified on this evidence. A follow-up must count `ReplaceSnippet`, not `ApplyDiff`.
