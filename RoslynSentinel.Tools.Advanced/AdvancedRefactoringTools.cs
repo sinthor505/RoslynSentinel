@@ -1054,7 +1054,7 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, implFileErr)
+                        ErrorData = new ResultError(ToolErrorCode.NotFound, implFileErr)
                     };
                 var implResult = await _codeGenerationEngine.ImplementInterfaceAsync(resolvedFilePath, className, interfaceName, cancellationToken: cancellationToken);
                 var implGuard = RefactoringToolHelpers.RequireUpdatedText(implResult, "SyncInterface implement", resolvedFilePath, $"Verify the class and interface names (case-sensitive); use {ToolCallHint.Call("Search", ("mode", "symbol"))} to confirm both exist in the solution.");
@@ -1090,7 +1090,7 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, syncFileErr)
+                        ErrorData = new ResultError(ToolErrorCode.NotFound, syncFileErr)
                     };
                 var syncResult = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync(resolvedFilePath, className, interfaceName, cancellationToken: cancellationToken);
                 var syncGuard = RefactoringToolHelpers.RequireUpdatedText(syncResult, "SyncInterface sync", resolvedFilePath, $"Verify the class and interface names (case-sensitive); use {ToolCallHint.Call("Search", ("mode", "symbol"))} to confirm both exist in the solution.");

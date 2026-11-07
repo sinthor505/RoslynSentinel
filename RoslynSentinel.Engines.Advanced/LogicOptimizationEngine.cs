@@ -621,11 +621,7 @@ public class LogicSimplificationEngine
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = DocumentLookup.FindDocumentOrNull(solution, resolvedFilePath);
-        if (document == null)
-        {
-            return new EngineResultWrapper<List<DocumentEditResult>>(EngineOutcome.DocumentNotFound, null, new EngineError("Document not found"));
-        }
+        var document = DocumentLookup.RequireDocument(solution, resolvedFilePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);

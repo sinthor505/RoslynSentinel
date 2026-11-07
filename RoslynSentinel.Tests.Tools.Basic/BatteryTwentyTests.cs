@@ -1101,7 +1101,7 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.CreateProjectTool(reason: "test message", "NewTestProject");
 
-        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound)); Assert.That(result.ErrorData!.Message, Is.EqualTo("CreateProject failed: Solution path not found.")); // TODO throw-migration: NotFound outcome for an unloaded solution; migrate to ThrowsAsync when tools throw again
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound)); Assert.That(result.ErrorData!.Message, Is.EqualTo("CreateProject failed: Solution path not found."));
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
@@ -1277,7 +1277,7 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.SplitProjectByFolderTool(reason: "test message", "TestProj", "NonExistentFolder", "NewProject");
 
-        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound)); Assert.That(result.ErrorData!.Message, Is.EqualTo("SplitProjectByFolder failed: Solution path not found.")); // TODO throw-migration: NotFound outcome for a missing folder; migrate to ThrowsAsync when tools throw again
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound)); Assert.That(result.ErrorData!.Message, Is.EqualTo("SplitProjectByFolder failed: Solution path not found."));
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 }

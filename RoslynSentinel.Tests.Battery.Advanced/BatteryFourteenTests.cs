@@ -24,12 +24,12 @@ public class AdvancedLogicEngineTests
     [TearDown]
     public void TearDown() => _mgr?.Dispose();
     [Test]
-    public async Task InvertBooleanLogic_UnknownFile_ReturnsEmptyDict()
+    public async Task InvertBooleanLogic_UnknownFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
-        var result = await TestEnginesAdvanced.LogicSimplificationEngine(_mgr).InvertBooleanLogicAsync("NoSuchFile.cs", "myBool");
-        Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.DocumentNotFound), "unknown file should yield DocumentNotFound"); // TODO throw-migration: assert the typed exception once the boolean-logic engine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestEnginesAdvanced.LogicSimplificationEngine(_mgr).InvertBooleanLogicAsync("NoSuchFile.cs", "myBool"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]

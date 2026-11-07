@@ -4429,15 +4429,12 @@ namespace MyApp
 
         [Test]
         [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-        public async Task SyncInterfaceToImplementation_Tool_FileNotInWorkspace_DoesNotThrow()
+        public async Task SyncInterfaceToImplementation_Tool_FileNotInWorkspace_ReturnsNotFoundError()
         {
-            // Because the engine returns non-empty content, the tool's file-not-found IOE guard
-            // does NOT fire. The tool returns the engine's content to the caller.
             var tools = CreateAdvancedTools();
-            object? result = null;
-            await Assert.DoesNotThrowAsync(async () => result = await tools.SyncInterfaceTool(reason: "test message", "nonexistent.cs", "IGhost", SyncInterfaceAction.sync, "Ghost"));
-            // TODO throw-migration: should this be DocumentNotFound/TargetNotFound? engine currently no-ops
-            Assert.That(result, Is.Not.Null, "Tool returns engine content when engine signals no-changes-needed");
+            var result = await tools.SyncInterfaceTool(reason: "test message", "nonexistent.cs", "IGhost", SyncInterfaceAction.sync, "Ghost");
+            Assert.That(result.IsError, Is.True, "a file outside the solution is an error result");
+            Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
         [Test]
