@@ -555,7 +555,7 @@ public class WholeFileWriteTools
                         {
                             IsError = false,
                             SuccessData = diffResponseData,
-                            Findings = result.Findings ?? []
+                            Findings = MergeDiffApplyFindings(result.Findings, diffReport)
                         };
                     }
                     catch (Exception ex)

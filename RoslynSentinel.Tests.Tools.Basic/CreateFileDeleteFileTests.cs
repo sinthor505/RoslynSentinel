@@ -1238,4 +1238,25 @@ public class CreateFileDeleteFileTests
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(result.Findings.Any(f => f.Source == "WriteChokepoint"), Is.True, "the mixed pre-image finding must reach the ApplyDiff (diff format) response");
     }
+
+    [Test]
+    [Category("WholeFileWriteTools")] // sentinel:auto-category
+    public async Task ApplyDiff_DiffFormat_UnrecognizedHunkLine_HunkWarningReachesToolResponseAsync()
+    {
+        // ApplyDiff's diff branch builds its envelope Findings from the diff engine report too, so the DiffHunkAnalyzer warning must be merged in explicitly. The "\ No newline" marker line is an unrecognized hunk line -> a DiffHunkAnalyzer finding.
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        workspaceManager.EolModeOverride = EolMode.Crlf;
+        var existingProjectDir = Path.GetDirectoryName(Directory.EnumerateFiles(fixture.SolutionDirectory, "*.csproj", SearchOption.AllDirectories).First())!;
+        var sourceFile = Path.Combine(existingProjectDir, "EolApplyDiffHunkWarningSource.cs");
+        await File.WriteAllTextAsync(sourceFile, "namespace MyApp.Eol;\r\npublic class Foo\n{\r\n}\n");
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var wholeFileWriteTools = BuildWholeFileWriteTools(workspaceManager);
+        var diff = "--- a/EolApplyDiffHunkWarningSource.cs\n+++ b/EolApplyDiffHunkWarningSource.cs\n@@ -1,4 +1,4 @@\n namespace MyApp.Eol;\n-public class Foo\n+public class Foo2\n {\n }\n\\ No newline at end of file\n";
+
+        var result = await wholeFileWriteTools.ApplyDiffTool(reason: "test message", ChangesetFormat.diff, ProposedChangeAction.apply, filePath: sourceFile, unifiedDiff: diff);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(result.Findings.Count(f => f.Source == "DiffHunkAnalyzer"), Is.EqualTo(1), "the hunk-analyzer warning must reach the ApplyDiff response");
+    }
 }

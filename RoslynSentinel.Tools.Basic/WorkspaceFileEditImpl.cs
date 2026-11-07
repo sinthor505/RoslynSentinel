@@ -131,6 +131,7 @@ public class WorkspaceFileEditImpl
                 revertChanges[item.FilePath] = item.BeforeSource!;
             }
 
+            ApplyChangesResult? revertResult = null;
             var reverted = new List<string>();
             var noOpFiles = new List<string>();
             if (revertChanges.Count > 0)
@@ -138,7 +139,7 @@ public class WorkspaceFileEditImpl
                 // exactRestore: this writes back a pre-image the server captured itself, so it bypasses the
                 // EOL-change guard and EOL normalization (a mixed-EOL pre-image over a since-normalized file would
                 // otherwise be refused as an EOL change) and writes the captured bytes verbatim.
-                var revertResult = await _workspaceManager.ApplyProposedChangesAsync(
+                revertResult = await _workspaceManager.ApplyProposedChangesAsync(
                     revertChanges, rollbackOnPartialFailure: true, cancellationToken: cancellationToken, exactRestore: true);
                 var noOpSet = new HashSet<string>(revertResult.NoOpFiles ?? [], StringComparer.OrdinalIgnoreCase);
                 foreach (var path in revertResult.SucceededFiles)
@@ -181,7 +182,8 @@ public class WorkspaceFileEditImpl
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
-                SuccessData = $"Reverted {reverted.Count} files{noOpPart}. Files: {string.Join(", ", reverted)}{failedPart}"
+                SuccessData = $"Reverted {reverted.Count} files{noOpPart}. Files: {string.Join(", ", reverted)}{failedPart}",
+                Findings = revertResult?.Findings ?? []
             };
         }
         catch (Exception ex)
