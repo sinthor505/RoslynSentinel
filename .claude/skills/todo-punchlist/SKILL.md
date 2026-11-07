@@ -8,7 +8,9 @@ description: Drive a long autonomous (usually overnight) run through docs/curren
 Two halves: an **interactive** half (phases 1-4, owner present) that settles scope and every decision
 it can, and an **autonomous** half (phases 5-8, owner away) that never stops to ask. The main session
 plans, dispatches, reads short reports and keeps the tracker; it reads no diffs and briefs no
-implementers itself. CLAUDE.md applies throughout (dog-fooding, `Git` scope `listed`, ASCII only).
+implementers itself (Batched mode). Read
+`docs/current/references/reference_autonomous_run_conventions.md` first: standing rulings, live-window
+steps, tracker, dispatch contract, failures and summary are defined there. CLAUDE.md applies throughout.
 
 ## 1. Punchlist
 
@@ -39,82 +41,34 @@ overnight candidates. Give a recommendation for each (include / leave).
 - Ask every `DECISION` with `AskUserQuestion`, up to 4 per call, recommended option first. A simple
   one is settled now. Otherwise the owner says defer: mark it `DEFERRED (owner)`, do not dispatch it.
 - `NEEDS-DESIGN` items are deferred without asking, unless the owner wants to design one now.
-- **Live-window steps** are actions on the owner's running environment rather than the repo:
-  restarting other VS Code windows or other sessions' servers, `/mcp` reconnect or fresh-session
-  checks of the client tool list, editing `C:\Users\Administrator\.mcp.json` or user-profile
-  settings, publishing hooks to the profile (`scripts/publish-agent-identity-hook.ps1`), anything
-  that needs two real windows. Unattended, they disrupt other sessions or need a human at the client.
-  Explain this to the owner and ask whether to do the code part and put the live step in the morning
-  checklist (the usual answer).
-
-Standing rulings (do not ask again; copy into the tracker):
-- Restart your **own** server instance freely when it is idle (no agent mid-operation).
-- Model-eval runs are allowed. First query `http://192.168.1.112:1234/api/v1/models` and `.113`
-  (`loaded_instances` non-empty) for a loaded `qwen3.5` variant; pass its exact key with `-Model`.
-  Never load or unload models. If neither host has one, defer the eval items.
-- Never push. A decision that comes up during the autonomous half is deferred, not asked.
+- `LIVE-WINDOW` items: explain what the live step involves (reference, "Live-window steps") and
+  confirm the usual ruling: code part overnight, live step on the morning checklist.
 
 ## 4. Tracker (write before the first dispatch)
 
-Path `.claude/handoff/<yyyy-MM-dd>_todo_punchlist_<sid8>.progress.md` (`<sid8>` from the journal
-filename); overwrite `.claude/handoff/LATEST.md` with its filename. Add a `project_` memory file and
-MEMORY.md line "READ <tracker> first" so it survives compaction. Only the main session writes the
-tracker, after every state change (dispatch, report, commit, decision).
-
-```markdown
-# Punchlist run: TODO.md items <range> (started <date>)
-READ THIS FIRST after compaction or in a resumed session. Journal: <path>
-## Owner rulings            (scope, exclusions, decisions from phase 3, standing rulings)
-## Rules to keep following  (tiers from .claude/implementer-tiers.json, 0-failure test baseline, commit rule)
-## Item status
-| # | Item | L | Status |    L = TODO.md line at start; match by text later, lines shift
-## Batches                  (letter, items, state, orchestrator agent id)
-## In flight
-## Scoping notes            (anchors from phase 3, unverified)
-## Commits                  (hash, items)
-## Morning checklist        (live-window steps, things to check by hand)
-## Deferred decisions       (each one phrased as a question the owner can answer quickly, with a recommendation)
-```
-
-Status: `TODO` / `WIP` / `DONE (hash)` / `PARTIAL (what is left)` / `DEFERRED (why)` / `STALE (evidence)`.
+Per the reference, `<kind>_<slug>` = `todo_punchlist`. Extra sections: `## Scoping notes` (anchors
+from phase 3, unverified). The Status table's Ref column is the TODO.md line at the start; match
+entries by text later, as lines shift.
 
 ## 5. Batches
 
-- Group `CLEAR` items into batches A, B, C... by code area so no two batches touch the same files;
-  cheapest first, parked items last. Run **one batch at a time** (an orchestrator plus its child is
-  already the two-agent limit, and Build/RunTest cannot overlap).
-- Before each batch: `Git(status)`. Other sessions may be dirty in the tree; name their files in
-  the brief as not ours.
-- Dispatch one `orchestrator` per batch. Its brief points at the tracker rows rather than restating
-  them, and says:
-  - run every child in the foreground (`run_in_background: false`); load `dispatch-implementer`;
-    re-verify scoping anchors before briefing; append each dispatch to `.claude/journal/implementer-ledger.md`
-  - build and run relevant tests per slice; commit each finished slice with `Git` scope `listed`,
-    message naming the item numbers, `Co-Authored-By` trailer; never push
-  - close finished entries with `scripts/Close-TodoItem.ps1 -Prefix -Title -Evidence`; shrink
-    partial entries in TODO.md to what is left; leave `// TODO` markers per CLAUDE.md
-  - defer anything needing design or owner judgement and keep going; do not edit the tracker
-  - final report, at most 15 lines: per item `#n STATUS (hash) - one line`, new TODOs, owner
-    questions with a recommendation, tests run and result
-- Read the report, update the tracker. Resume the same orchestrator with `SendMessage` for small
-  follow-ups instead of spawning a new one.
+- Batched mode only (reference, "Dispatch modes"). Group `CLEAR` items by code area; cheapest first,
+  parked items last.
+- Brief additions to the reference's orchestrator contract: commit messages name the item numbers;
+  close finished entries with `scripts/Close-TodoItem.ps1 -Prefix -Title -Evidence`; shrink partial
+  entries in TODO.md to what is left.
+- Read the report, update the tracker.
 
 ## 6. After each batch
 
-One full `RunTest` (plain call, nothing else running). Baseline is 0 failures. Re-run a failure
-alone: if it passes, record it as a flake in the tracker; if it comes from another session's commits,
-say so; otherwise it becomes the first item of the next batch.
+Full `RunTest` and flake handling per the reference. A real new failure becomes the first item of
+the next batch.
 
 ## 7. Failures and stalls
 
-A tool failure follows the CLAUDE.md blocker rule (blocker doc, item `DEFERRED (blocker <slug>)`),
-then the run continues with other items. If an orchestrator stalls or returns without a report,
-check `ListAgents`, record the state in the tracker and resume or re-dispatch the remaining items.
-If usage runs low, the tracker is the handoff: bring it up to date, then follow `wrapup`.
+Per the reference.
 
 ## 8. Summary (end of run)
 
-- Update TODO.md / CLOSED.md leftovers and the tracker; mark the `project_` memory closed.
-- Final message: commits per batch, the last full-run result, counts done/partial/deferred/stale,
-  the Morning checklist, Deferred decisions (question + recommendation each), new TODOs. Point to
-  the tracker for detail; do not repeat it.
+Update TODO.md / CLOSED.md leftovers and the tracker; close the `project_` memory; final message
+per the reference's end-of-run summary.
