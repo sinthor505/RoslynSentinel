@@ -169,7 +169,7 @@ public class TestingEngine
         return new TestSkeletonReport(testFilePath, sb.ToString());
     }
 
-    public async Task<TestScaffoldResult> GenerateTestScaffoldAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<TestScaffoldResult> GenerateTestScaffoldAsync(FilePathWrapper filePath, string className, string framework = "NUnit", CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
@@ -210,17 +210,32 @@ public class TestingEngine
                      && !m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)))
             .ToList();
 
+        // Same mapping as GenerateTestSkeletonAsync; an unknown value falls back to xUnit there too. Moq is used for the mocks in all three.
+        var frameworkLower = framework.ToLowerInvariant();
+        var isNUnit = frameworkLower == "nunit";
+        var isMsTest = frameworkLower == "mstest";
+        var usesSetUpMethod = isNUnit || isMsTest;
+        var testAttribute = isNUnit ? "[Test]" : isMsTest ? "[TestMethod]" : "[Fact]";
+        var classAttribute = isNUnit ? "[TestFixture]" : isMsTest ? "[TestClass]" : "";
+        var setUpAttribute = isNUnit ? "[SetUp]" : "[TestInitialize]";
+        var frameworkUsing = isNUnit ? "using NUnit.Framework;"
+            : isMsTest ? "using Microsoft.VisualStudio.TestTools.UnitTesting;"
+            : "using Xunit;";
+
         var sb = new StringBuilder();
         sb.AppendLine("using System;");
         sb.AppendLine("using System.Threading.Tasks;");
-        // DEFERRED (accepted 2026-10-22, finding #20): GenerateTestScaffold always emits xUnit/Moq usings, even for an NUnit test project.
-        // Left as-is on purpose until scheduled; do not re-raise in reviews.
         sb.AppendLine("using Moq;");
-        sb.AppendLine("using Xunit;");
+        sb.AppendLine(frameworkUsing);
         sb.AppendLine($"using {ns};");
         sb.AppendLine();
         sb.AppendLine($"namespace {testNamespace}");
         sb.AppendLine("{");
+        if (classAttribute.Length > 0)
+        {
+            sb.AppendLine($"    {classAttribute}");
+        }
+
         sb.AppendLine($"    public class {testClassName}");
         sb.AppendLine("    {");
 
@@ -232,7 +247,17 @@ public class TestingEngine
         sb.AppendLine($"        private {className} _sut = null!;");
         sb.AppendLine();
 
-        sb.AppendLine($"        public {testClassName}()");
+        // NUnit/MSTest build the mocks and system under test in a setup method; xUnit does it in the constructor.
+        if (usesSetUpMethod)
+        {
+            sb.AppendLine($"        {setUpAttribute}");
+            sb.AppendLine("        public void SetUp()");
+        }
+        else
+        {
+            sb.AppendLine($"        public {testClassName}()");
+        }
+
         sb.AppendLine("        {");
         foreach (var param in interfaceParams)
         {
@@ -262,7 +287,7 @@ public class TestingEngine
             bool returnsTask = method.ReturnType.ToString().StartsWith("Task");
             bool needsAsync = isAsync || returnsTask;
 
-            sb.AppendLine("        [Fact]");
+            sb.AppendLine($"        {testAttribute}");
             sb.AppendLine(needsAsync
                 ? $"        public async Task {testName}()"
                 : $"        public void {testName}()");

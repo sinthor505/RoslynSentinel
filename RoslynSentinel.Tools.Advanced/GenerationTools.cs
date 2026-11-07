@@ -323,7 +323,7 @@ public class GenerationTools
                                            Returns PathDrivenTestReport.
               generate_repository_interface  Extracts an interface from a class with DI and Moq snippets.
                                            Returns RepositoryInterfaceResult.
-              generate_test_scaffold       Generates an xUnit+Moq test scaffold with mock fields and test stubs.
+              generate_test_scaffold       Generates a Moq test scaffold (framework, default NUnit) with mock fields and test stubs.
                                            Returns TestScaffoldResult.
               generate_test_skeleton       Generates a test class skeleton with one test stub per public method.
                                            Returns TestSkeletonReport.
@@ -338,7 +338,7 @@ public class GenerationTools
               members: for generate_to_string_safe - optional comma-separated member list.
               decoratorPrefix: for generate_decorator_class (default "Logging").
               projectName: for generate_decorator_class - optional project scope.
-              framework: for generate_path_driven_tests - "NUnit" (default), "xunit", or "mstest".
+              framework: for generate_path_driven_tests, generate_test_skeleton, generate_test_scaffold - "NUnit" (default), "xunit", or "mstest".
               disambiguateLine: for generate_path_driven_tests - disambiguates overloaded methods.
             """,
         StructuredOptions = new Dictionary<string, object>

@@ -1041,7 +1041,7 @@ public class CodeTransformTools
     [Produces(DataTag.ResultOnly)]
     [Description("Generates new code for a type or method. Call DescribeAdvancedToolOptions(\"generate\") for the list of kind values, their required parameters, and return types.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: filepath is required for every kind except generate_decorator_class. className/methodName/members/disambiguateLine requirements vary per kind -> see DescribeAdvancedToolOptions("generate"). Enforced at runtime, not by the schema.
-    public async Task<SentinelCallToolResult<object>> Generate([Description("The kind of code to generate. See DescribeAdvancedToolOptions(\"generate\") for valid values.")] CodeTransformKind kind, [Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [Consumes(DataTag.ClassName)] string? className = null, [Consumes(DataTag.MethodName)] string? methodName = null, [Consumes(DataTag.MemberName)] string? members = null, [Description("Only used by kind=generate_decorator_class: the prefix for the generated decorator class name.")][ExternalInputRequired(DataTag.DecoratorPrefix)] string decoratorPrefix = "Logging", [Description("Only used by kind=generate_decorator_class: scopes the interface lookup to one project.")][ExternalInputRequired(DataTag.ProjectName)] string? projectName = null, [Description("Only used by kind=generate_path_driven_tests: \"NUnit\" (default), \"xunit\", or \"mstest\".")][ExternalInputRequired(DataTag.Framework)] string framework = "NUnit", [Description("Only used by kind=generate_path_driven_tests: resolves an overloaded method target.")][ExternalInputRequired(DataTag.StartLine)] int? disambiguateLine = null, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> Generate([Description("The kind of code to generate. See DescribeAdvancedToolOptions(\"generate\") for valid values.")] CodeTransformKind kind, [Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [Consumes(DataTag.ClassName)] string? className = null, [Consumes(DataTag.MethodName)] string? methodName = null, [Consumes(DataTag.MemberName)] string? members = null, [Description("Only used by kind=generate_decorator_class: the prefix for the generated decorator class name.")][ExternalInputRequired(DataTag.DecoratorPrefix)] string decoratorPrefix = "Logging", [Description("Only used by kind=generate_decorator_class: scopes the interface lookup to one project.")][ExternalInputRequired(DataTag.ProjectName)] string? projectName = null, [Description("For generate_path_driven_tests and generate_test_*: \"NUnit\" (default), \"xunit\", or \"mstest\".")][ExternalInputRequired(DataTag.Framework)] string framework = "NUnit", [Description("Only used by kind=generate_path_driven_tests: resolves an overloaded method target.")][ExternalInputRequired(DataTag.StartLine)] int? disambiguateLine = null, // RequestContext<CallToolRequestParams> requestParams = null,
  CancellationToken cancellationToken = default)
     {
         try
@@ -1278,7 +1278,7 @@ public class CodeTransformTools
                             };
                         }
 
-                        var result = await _testingEngine.GenerateTestScaffoldAsync(resolvedFilePath, className, cancellationToken);
+                        var result = await _testingEngine.GenerateTestScaffoldAsync(resolvedFilePath, className, framework, cancellationToken);
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
@@ -1304,7 +1304,7 @@ public class CodeTransformTools
                             };
                         }
 
-                        var result = await _testingEngine.GenerateTestSkeletonAsync(resolvedFilePath, className, cancellationToken: cancellationToken);
+                        var result = await _testingEngine.GenerateTestSkeletonAsync(resolvedFilePath, className, framework, cancellationToken);
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
