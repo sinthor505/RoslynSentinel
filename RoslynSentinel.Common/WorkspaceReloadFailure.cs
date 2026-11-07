@@ -16,7 +16,7 @@ public enum WorkspaceReloadTriggerKind
     /// <summary>A .sln or .slnx file changed on disk.</summary>
     SolutionFileChange,
 
-    /// <summary>A project file changed on disk.</summary>
+    /// <summary>A project file or a build-configuration file (.props, .targets) changed on disk.</summary>
     ProjectFileChange,
 
     /// <summary>The file watcher lost events and the workspace was re-synced.</summary>
@@ -110,13 +110,25 @@ public static class WorkspaceStaleText
         return $"A workspace reload ({failure.Trigger}{fileSuffix}) failed: {failure.Cause}. The loaded solution may not match disk.";
     }
 
-    /// <summary>True when the path is a solution or project file, which stays editable while the workspace is stale.</summary>
+    /// <summary>True when the path is a solution, project or build-configuration file, which stays editable while the workspace is stale.</summary>
     public static bool IsStructuralTarget(string path)
     {
         var extension = Path.GetExtension(path);
         return extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".sln", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".slnx", StringComparison.OrdinalIgnoreCase);
+            || extension.Equals(".slnx", StringComparison.OrdinalIgnoreCase)
+            || IsBuildConfigFile(path);
+    }
+
+    /// <summary>
+    /// True for an MSBuild import file (.props or .targets, including Directory.Build.props, Directory.Build.targets and
+    /// Directory.Packages.props). A change to one can alter every project's evaluation, so it takes the full reload like a .csproj.
+    /// </summary>
+    internal static bool IsBuildConfigFile(string path)
+    {
+        var extension = Path.GetExtension(path);
+        return extension.Equals(".props", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".targets", StringComparison.OrdinalIgnoreCase);
     }
 }
 

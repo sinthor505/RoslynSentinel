@@ -124,8 +124,8 @@ public class WorkspaceStaleRefusalTests
     [TestCase("x\\y.sln", true)]
     [TestCase("y.slnx", true)]
     [TestCase("a.cs", false)]
-    [TestCase("a.props", false)]
-    [TestCase("a.targets", false)]
+    [TestCase("a.props", true)]
+    [TestCase("Directory.Build.targets", true)]
     [TestCase("a", false)]
     public void IsStructuralTarget_ClassifiesByExtension(string path, bool expected) =>
         Assert.That(WorkspaceStaleText.IsStructuralTarget(path), Is.EqualTo(expected));

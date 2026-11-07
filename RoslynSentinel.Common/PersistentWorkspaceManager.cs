@@ -164,6 +164,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     private string? _lastLoadFailure;
     // Sticky record of the last failed load/reload, cleared by the next successful full load or reload.
     private WorkspaceReloadFailure? _reloadFailure;
+    // Changed .cs files the per-file fold could not read, so CurrentSolution still holds their old text. Non-empty means the
+    // workspace is not in sync with disk; a later successful fold of the file, or any successful full load, removes it.
+    private readonly ConcurrentDictionary<string, byte> _unfoldedFiles = new(StringComparer.OrdinalIgnoreCase);
     private readonly Timer _debounceTimer;
     // Bounded automatic retry of a failed debounce reload; every attempt holds _solutionLock for a full MSBuild load, so keep it bounded.
     private int _debounceRetryCount;
@@ -192,6 +195,33 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     internal void ClearReloadFailure()
     {
         Volatile.Write(ref _reloadFailure, null);
+        _unfoldedFiles.Clear();
+    }
+
+    /// <summary>True when a changed file could not be read by the per-file fold, so the loaded solution is behind disk for it.</summary>
+    internal bool HasUnfoldedFiles => !_unfoldedFiles.IsEmpty;
+
+    // A fold read failed: remember the file and record a sticky SourceFileChange failure naming it (file name only).
+    private void RecordUnfoldedFile(string filePath, Exception ex)
+    {
+        _unfoldedFiles[filePath] = 0;
+        RecordReloadFailure(
+            WorkspaceReloadTriggerKind.SourceFileChange,
+            filePath,
+            new InvalidOperationException($"the changed file could not be read for the in-memory update ({ex.GetType().Name}: {ex.Message})"),
+            oldWorkspaceKept: true);
+    }
+
+    // The file was read (or is gone) so it no longer lags disk. Clears the sticky record when this was the last unfolded
+    // file and the record is still the one RecordUnfoldedFile wrote (a later reload failure of another kind is left alone).
+    private void NoteFileFolded(string filePath)
+    {
+        if (_unfoldedFiles.TryRemove(filePath, out _)
+            && _unfoldedFiles.IsEmpty
+            && Volatile.Read(ref _reloadFailure) is { Trigger: WorkspaceReloadTriggerKind.SourceFileChange })
+        {
+            ClearReloadFailure();
+        }
     }
 
     public SolutionLoadStatus SolutionLoadStatus => Volatile.Read(ref _loadsInProgress) > 0 ? SolutionLoadStatus.Loading : (SolutionLoadStatus)Volatile.Read(ref _terminalLoadStatus);
@@ -601,6 +631,30 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         }
     }
 
+    // Baselines the content hash of the .props/.targets files that triggered a full reload, so a later timestamp-only touch of one
+    // is hash-confirmed as a no-op instead of reloading again. Not part of RecordStructuralFileHashes: the build-config files a
+    // project imports are not known without evaluating it, so they are baselined lazily, once they have changed. Called with
+    // _solutionLock held; never throws on IO errors.
+    private void RecordBuildConfigFileHashes(IEnumerable<string> changedPaths)
+    {
+        foreach (var path in changedPaths)
+        {
+            if (!WorkspaceStaleText.IsBuildConfigFile(path) || !File.Exists(path))
+            {
+                continue;
+            }
+
+            try
+            {
+                _knownFileHashes[new FilePathWrapper(path)] = ComputeContentHash(ReadAllTextShared(path));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Locked/mid-write -> leave unhashed (keeps flagging, the old behavior).
+            }
+        }
+    }
+
     // A reload that failed because a project file did not load keeps the old workspace, whose baseline hashes are the
     // previous good file content. Without re-baselining, restoring exactly that content is hash-confirmed as a no-op
     // by OnFileSystemChanged, no reload runs, and the sticky failure never clears. Re-hash the project and solution
@@ -924,7 +978,12 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     }
 
     // Filename patterns the solution and out-of-tree watchers subscribe to (FileSystemWatcher.Filters).
-    private static readonly string[] WatchedFilePatterns = { "*.cs", "*.csproj", "*.sln", "*.slnx" };
+    // .props/.targets cover Directory.Build.props, Directory.Build.targets and Directory.Packages.props; a change to one takes the full reload like a .csproj.
+    internal static readonly string[] WatchedFilePatterns = { "*.cs", "*.csproj", "*.sln", "*.slnx", "*.props", "*.targets" };
+
+    // True when the file extension (with the dot) is one OnFileSystemChanged acts on; must stay in step with WatchedFilePatterns.
+    internal static bool IsWatchedExtension(string extension)
+        => extension.ToLowerInvariant() is ".cs" or ".csproj" or ".sln" or ".slnx" or ".props" or ".targets";
 
     // Directory-segment names whose contents are never watched (build output, VCS, IDE, packages, harness clones).
     private static readonly string[] IgnoredWatcherDirectoryNames = { "bin", "obj", ".git", ".vs", "node_modules", "Worktree" };
@@ -1084,8 +1143,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
     private void OnFileSystemChanged(object sender, FileSystemEventArgs e)
     {
-        var ext = Path.GetExtension(e.FullPath).ToLowerInvariant();
-        if (ext is not (".cs" or ".csproj" or ".sln" or ".slnx"))
+        if (!IsWatchedExtension(Path.GetExtension(e.FullPath)))
         {
             return;
         }
@@ -1215,7 +1273,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         _debounceTimer.Change(500, Timeout.Infinite);
     }
 
-    private static WorkspaceReloadTriggerKind ClassifyReloadTrigger(IReadOnlyList<string> changes, bool watcherErrored, bool overflowed, out string? triggerFile)
+    internal static WorkspaceReloadTriggerKind ClassifyReloadTrigger(IReadOnlyList<string> changes, bool watcherErrored, bool overflowed, out string? triggerFile)
     {
         if (watcherErrored)
         {
@@ -1241,7 +1299,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
         foreach (var path in changes)
         {
-            if (string.Equals(Path.GetExtension(path), ".csproj", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(Path.GetExtension(path), ".csproj", StringComparison.OrdinalIgnoreCase) || WorkspaceStaleText.IsBuildConfigFile(path))
             {
                 triggerFile = Path.GetFileName(path);
                 return WorkspaceReloadTriggerKind.ProjectFileChange;
@@ -1301,7 +1359,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     // A changed .csproj always takes the full-solution reload: OpenProjectAsync throws
                     // "already part of the workspace" on a project that is already open, so a per-project
                     // reload cannot re-open it. The full reload also refreshes the structural file hashes.
-                    if (ext == ".csproj")
+                    // A .props/.targets file (Directory.Build.props and friends) can change any project's evaluation, so it takes the same route.
+                    if (ext == ".csproj" || WorkspaceStaleText.IsBuildConfigFile(path))
                     {
                         solutionNeedsReload = true;
                         break;
@@ -1328,6 +1387,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     {
                         // pruneInternalChanges: false keeps this path's existing behaviour (it never pruned).
                         SwapInFreshWorkspaceLocked(newWorkspace, newSolution, pruneInternalChanges: false);
+                        RecordBuildConfigFileHashes(changes);
                     }
                     catch
                     {
@@ -2153,7 +2213,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 try
                 {
                     needsFullReload = await ApplyInMemoryDocumentUpdatesAsync(succeeded, CancellationToken.None);
-                    workspaceInSync = !needsFullReload;
+                    // A changed file the fold could not read leaves the workspace behind disk, so it is not in sync either.
+                    workspaceInSync = !needsFullReload && !HasUnfoldedFiles;
                     if (!needsFullReload)
                     {
                         Interlocked.Increment(ref _workspaceVersion);
@@ -2467,10 +2528,11 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         => _knownFileHashes[new FilePathWrapper(filePath)] = ComputeContentHash(content);
 
     // Fast in-memory path -> O(files), no MSBuild, no I/O beyond reading .cs file content.
-    // Returns true when a structural file (.csproj / .sln) was among the affected files and a
+    // Returns true when a structural file (.csproj / .sln / .props / .targets) was among the affected files and a
     // full MSBuild reload is needed; the caller fires that reload after releasing the lock.
+    // A .cs file that cannot be read is skipped and recorded (RecordUnfoldedFile), so HasUnfoldedFiles and ReloadFailure report it.
     // Guards only on CurrentSolution == null so it also works in SetTestSolution test scenarios.
-    private async Task<bool> ApplyInMemoryDocumentUpdatesAsync(List<string> affectedFiles, CancellationToken cancellationToken)
+    internal async Task<bool> ApplyInMemoryDocumentUpdatesAsync(List<string> affectedFiles, CancellationToken cancellationToken)
     {
         if (CurrentSolution == null)
         {
@@ -2483,7 +2545,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         {
             var ext = Path.GetExtension(filePath).ToLowerInvariant();
 
-            if (ext is ".csproj" or ".sln" or ".slnx")
+            if (ext is ".csproj" or ".sln" or ".slnx" || WorkspaceStaleText.IsBuildConfigFile(filePath))
             {
                 needsFullReload = true;
                 continue;
@@ -2496,6 +2558,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
             if (!File.Exists(filePath))
             {
+                NoteFileFolded(filePath);
                 // File is gone (e.g. the old half of a rename) -> drop its tracked Document so
                 // the type it declared doesn't keep existing twice in the compilation.
                 var deletedDocId = CurrentSolution.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
@@ -2517,8 +2580,11 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 {
                     _logger.LogWarning("Could not read {FilePathWrapper} for in-memory update: {Message}", filePath, ex.Message);
                 }
+                RecordUnfoldedFile(filePath, ex);
                 continue;
             }
+
+            NoteFileFolded(filePath);
 
             var sourceText = SourceText.From(content, Encoding.UTF8);
 
