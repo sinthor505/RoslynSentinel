@@ -1954,7 +1954,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            throw new ToolInvalidArgumentException($"Could not read '{filePath}' as a C# syntax tree, so Member cannot insert a member after the anchor. It may not be a C# document in the loaded solution: check the path with ReadFile, or reload with LoadSolution.");
+            throw new ToolInvalidArgumentException($"Could not read '{filePath}' as a C# syntax tree, so Member cannot insert a member after the anchor. It may not be a C# document in the loaded solution: check the path with {ToolCallHint.Call("ReadFile", ("filePath", filePath.ToString()))}, or reload with {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))}.");
         }
 
         BaseTypeDeclarationSyntax? container = null;
@@ -2014,7 +2014,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            throw new ToolInvalidArgumentException($"Could not read '{filePath}' as a C# syntax tree, so Member cannot insert a member before the anchor. It may not be a C# document in the loaded solution: check the path with ReadFile, or reload with LoadSolution.");
+            throw new ToolInvalidArgumentException($"Could not read '{filePath}' as a C# syntax tree, so Member cannot insert a member before the anchor. It may not be a C# document in the loaded solution: check the path with {ToolCallHint.Call("ReadFile", ("filePath", filePath.ToString()))}, or reload with {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))}.");
         }
 
         BaseTypeDeclarationSyntax? container = null;
@@ -2320,7 +2320,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            throw new ToolInvalidArgumentException($"Could not read '{filePath}' as a C# syntax tree, so Member cannot replace the member. It may not be a C# document in the loaded solution: check the path with ReadFile, or reload with LoadSolution.");
+            throw new ToolInvalidArgumentException($"Could not read '{filePath}' as a C# syntax tree, so Member cannot replace the member. It may not be a C# document in the loaded solution: check the path with {ToolCallHint.Call("ReadFile", ("filePath", filePath.ToString()))}, or reload with {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))}.");
         }
 
         SyntaxNode? member;
@@ -2550,7 +2550,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            throw new ToolInvalidArgumentException($"Could not read '{filePath}' as a C# syntax tree, so Member cannot remove the member. It may not be a C# document in the loaded solution: check the path with ReadFile, or reload with LoadSolution.");
+            throw new ToolInvalidArgumentException($"Could not read '{filePath}' as a C# syntax tree, so Member cannot remove the member. It may not be a C# document in the loaded solution: check the path with {ToolCallHint.Call("ReadFile", ("filePath", filePath.ToString()))}, or reload with {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))}.");
         }
 
         SyntaxNode? member;
@@ -2752,7 +2752,7 @@ public class MemberRefactoringEngine
             // The forwarder calls the target from the source class, so a member that stays private or protected there is CS0122. Nothing widens it today.
             if (methodSymbol is { DeclaredAccessibility: Accessibility.Private or Accessibility.Protected or Accessibility.ProtectedAndInternal })
             {
-                throw new ToolTargetIneligibleException($"oldMember '{oldMember}' cannot forward '{method.Identifier.Text}': it is {methodSymbol.DeclaredAccessibility}, so the forwarder in '{className}' could not call it on '{targetClassName}' (CS0122). Make it internal or public first with ChangeAccessibility, or use oldMember remove if nothing in '{className}' still calls it.");
+                throw new ToolTargetIneligibleException($"oldMember '{oldMember}' cannot forward '{method.Identifier.Text}': it is {methodSymbol.DeclaredAccessibility}, so the forwarder in '{className}' could not call it on '{targetClassName}' (CS0122). Make it internal or public first with {ToolCallHint.Call("ChangeAccessibility", ("targetName", method.Identifier.Text), ("accessibility", "internal"))}, or use oldMember remove if nothing in '{className}' still calls it.");
             }
         }
 
