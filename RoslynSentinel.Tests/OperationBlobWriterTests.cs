@@ -70,6 +70,36 @@ public class OperationBlobWriterTests
             Does.StartWith("Inline_method_"));
     }
 
+    [Test]
+    public async Task WriteAsync_NamesTheBlobFromTheCallsWriteTimeAsync()
+    {
+        var stamp = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc).AddTicks(1234567);
+        var context = new ToolCallContext("a", "implementer", "Member", "name test", 0);
+        context.MarkWritten(stamp);
+        ToolCallContext.Set(context);
+        try
+        {
+            var result = await OperationBlobWriter.WriteAsync("Tool", "abc12345", OneItem(), _solutionRoot);
+
+            Assert.That(result.FileName, Is.EqualTo("Tool_20260102T030405Z_1234567_abc12345.json"));
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
+    [Test]
+    public async Task WriteAsync_WithoutACallContext_StillWritesAFractionSegmentAsync()
+    {
+        ToolCallContext.Set(null);
+
+        var result = await OperationBlobWriter.WriteAsync("Tool", "abc12345", OneItem(), _solutionRoot);
+
+        Assert.That(result.FileName, Does.Match(@"^Tool_\d{8}T\d{6}Z_\d{7}_abc12345\.json$"));
+        Assert.That(OperationBlobWriter.FindBlobPath("abc12345", _solutionRoot), Is.Not.Null);
+    }
+
     [TestCase("Weird:Name")]
     [TestCase("back\\slash")]
     [TestCase("with*star")]

@@ -297,8 +297,10 @@ in place. Findings reuse `Finding`.
 - Known gaps: `GetDiagnostics` checks only errors inside `maxDetails` (TODO.md); `Git(status)` checks the 10-per-list
   sample when totals exceed `maxEntries`; a name mentioned only in a comment can still match; `batchEdits` paths are not
   covered at first.
-- Known gaps, not-found notes: two blobs written in the same second have no reliable order; a bare file name that the tool
-  resolved elsewhere in the solution gets a blob note but no Git note, because Git looks under the solution root.
+- Known gaps, not-found notes: blob order rests on the write time in the blob's file name (taken inside the write lock, to
+  100 ns), so a system clock adjustment can misorder writes and two servers' writes to one file are not serialized; a bare
+  file name that the tool resolved elsewhere in the solution gets a blob note but no Git note, because Git looks under the
+  solution root.
 - Not verified: that every `ReplaceSnippet` and batch blob carries `BeforeSource`.
 - Live check at 9c27ce7b (restarted server, a subagent created a scratch file and renamed a method): `GetMethodSource`,
   `ReadFile(memberName)` and a `ReplaceSnippet` no-match each carried the blob note naming the subagent, with tool, age and

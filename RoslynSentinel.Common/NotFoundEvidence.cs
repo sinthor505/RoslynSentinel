@@ -22,7 +22,7 @@ public static class NotFoundEvidence
 
     private static readonly TimeSpan DefaultWindow = TimeSpan.FromMinutes(60);
     private static readonly TimeSpan GitTimeout = TimeSpan.FromSeconds(5);
-    private static readonly Regex BlobTimestamp = new(@"_(\d{8}T\d{6}Z)_", RegexOptions.CultureInvariant | RegexOptions.RightToLeft);
+    private static readonly Regex BlobTimestamp = new(@"_(\d{8}T\d{6}Z)(?:_(\d{7}))?_", RegexOptions.CultureInvariant | RegexOptions.RightToLeft);
 
     private enum WriterKind
     {
@@ -201,9 +201,16 @@ public static class NotFoundEvidence
     private static DateTime? TimestampOf(string blobPath)
     {
         var match = BlobTimestamp.Match(Path.GetFileName(blobPath));
-        return match.Success && DateTime.TryParseExact(match.Groups[1].Value, "yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var written)
-            ? written
-            : null;
+        if (!match.Success
+            || !DateTime.TryParseExact(match.Groups[1].Value, "yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var written))
+        {
+            return null;
+        }
+
+        // A blob written before the fraction segment was added counts as the start of its second.
+        return match.Groups[2].Success
+            ? written.AddTicks(long.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture))
+            : written;
     }
 
     // A blob may be mid-write by another window, so an unreadable one is skipped rather than failing the search.

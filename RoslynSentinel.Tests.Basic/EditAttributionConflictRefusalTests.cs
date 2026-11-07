@@ -108,6 +108,61 @@ public class EditAttributionConflictRefusalTests
     }
 
     [Test]
+    public async Task SuccessfulWrite_RecordsTheWriteTimeOnTheCall()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            Seed(file);
+            using var manager = NewManager();
+            var context = new ToolCallContext("A", "coder", "ReplaceSnippet", "stamp test", 0);
+            ToolCallContext.Set(context);
+            var before = DateTime.UtcNow;
+
+            var result = await manager.ApplyProposedChangesAsync(
+                new() { [file] = Variant(2) }, retryCount: 0, validateChanges: false);
+
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(context.LastWriteUtc, Is.Not.Null);
+            Assert.That(context.LastWriteUtc!.Value, Is.GreaterThanOrEqualTo(before).And.LessThanOrEqualTo(DateTime.UtcNow));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task RefusedWrite_DoesNotRecordAWriteTime()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            Seed(file);
+            using var manager = NewManager();
+
+            ToolCallContext.Set(new ToolCallContext("B", "implementer", "Member", "add Foo", 0));
+            var writeB = await manager.ApplyProposedChangesAsync(
+                new() { [file] = Variant(3) }, retryCount: 0, validateChanges: false);
+            Assert.That(writeB.IsError, Is.False, writeB.Summary);
+
+            var context = new ToolCallContext("A", "coder", "ReplaceSnippet", "stamp test", 0);
+            ToolCallContext.Set(context);
+            var result = await manager.ApplyProposedChangesAsync(
+                new() { [file] = Variant(2) }, retryCount: 0, validateChanges: false);
+
+            Assert.That(result.RefusalCode, Is.EqualTo(ToolErrorCode.ConcurrentEditRefused));
+            Assert.That(context.LastWriteUtc, Is.Null);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task NullAgentIds_CallerWithoutIdentity_IsNotRefused()
     {
         var dir = NewTempDir();

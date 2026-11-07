@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
@@ -112,8 +113,11 @@ public static class OperationBlobWriter
             var dir = Path.Combine(solutionRoot, ".roslynsentinel", "operations");
             Directory.CreateDirectory(dir);
 
-            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
-            var fileName = $"{SanitizeToolName(toolName)}_{timestamp}_{changeId}.json";
+            // The fraction is its own segment rather than part of the timestamp, so a server still running the older whole-second parser keeps reading these names.
+            var stamp = ToolCallContext.Current?.LastWriteUtc ?? DateTime.UtcNow;
+            var timestamp = stamp.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
+            var fraction = (stamp.Ticks % TimeSpan.TicksPerSecond).ToString("D7", CultureInfo.InvariantCulture);
+            var fileName = $"{SanitizeToolName(toolName)}_{timestamp}_{fraction}_{changeId}.json";
             var filePath = Path.Combine(dir, fileName);
 
             var payload = new
@@ -271,7 +275,7 @@ public static class OperationBlobWriter
 
     /// <summary>
     /// Locates the on-disk blob path for the given changeId, or null if not found.
-    /// Blob filename pattern: {toolName}_{timestamp}_{changeId}.json
+    /// Blob filename pattern: {toolName}_{timestamp}_{fraction}_{changeId}.json; blobs written before the fraction was added have no fraction segment
     /// </summary>
     public static string? FindBlobPath(string changeId, string? solutionRoot)
     {

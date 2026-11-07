@@ -72,4 +72,13 @@ public sealed class ToolCallContext
         GateRemovePaths = removePaths;
         Volatile.Write(ref _gatePassed, 1);
     }
+
+    /// <summary>When the chokepoint last wrote files in this call, taken inside the write lock; null until then. Names the operation blob, so blob order follows write order rather than the order the blobs were written.</summary>
+    public DateTime? LastWriteUtc { get; private set; }
+
+    /// <summary>Records the time of a chokepoint write for this call.</summary>
+    public void MarkWritten(DateTime utc)
+    {
+        LastWriteUtc = utc;
+    }
 }

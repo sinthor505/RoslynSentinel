@@ -2135,6 +2135,11 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 succeeded.Clear();
             }
 
+            if (succeeded.Count > 0)
+            {
+                ToolCallContext.Current?.MarkWritten(DateTime.UtcNow);
+            }
+
             RecordEditAttributions(succeeded, noOp, deletePaths, preImages);
 
             // --- Proactive Workspace Sync ---

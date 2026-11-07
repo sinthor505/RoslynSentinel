@@ -87,6 +87,32 @@ public class NotFoundEvidenceTests
         }
     }
 
+    private async Task<string> WriteStampedBlobAsync(string toolName, string agentId, DateTime stamp, string before)
+    {
+        var context = new ToolCallContext(agentId, "implementer", "RenameSymbol", "stamped write", 0) { SessionId = "s1" };
+        context.MarkWritten(stamp);
+        ToolCallContext.Set(context);
+        try
+        {
+            var blob = await OperationBlobWriter.WriteAsync(
+                toolName,
+                Guid.NewGuid().ToString("N")[..8],
+                [new OperationItemRecord { FilePath = Path.Combine(_root, "Foo.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = before }],
+                _root);
+            return Path.Combine(_root, ".roslynsentinel", "operations", blob.FileName!);
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
+    private static DateTime StartOfSecondOneMinuteAgo()
+    {
+        var value = DateTime.UtcNow.AddMinutes(-1);
+        return value.AddTicks(-(value.Ticks % TimeSpan.TicksPerSecond));
+    }
+
     private IReadOnlyList<Finding> Find(string term, string agentId = "main", string? sessionId = "s1", DateTime? now = null) =>
         NotFoundEvidence.Find(_root, "Foo.cs", term, agentId, sessionId, now ?? DateTime.UtcNow);
 
@@ -198,6 +224,46 @@ public class NotFoundEvidenceTests
 
         Assert.That(findings, Has.Count.EqualTo(1));
         Assert.That(findings[0].Message, Does.Contain("`b7`"));
+    }
+
+    [Test]
+    public async Task SameSecond_NewerFractionIsTheRemover()
+    {
+        var second = StartOfSecondOneMinuteAgo();
+        await WriteStampedBlobAsync("z_tool", "olderAgent", second.AddTicks(1), "class Foo { void Bar() { } }");
+        await WriteStampedBlobAsync("a_tool", "newerAgent", second.AddTicks(2), "class Foo { void Bar() { } }");
+
+        var findings = Find("Bar");
+
+        Assert.That(findings, Has.Count.EqualTo(1));
+        Assert.That(findings[0].Message, Does.Contain("`newerAgent`"));
+        Assert.That(findings[0].Message, Does.Not.Contain("olderAgent"));
+    }
+
+    [Test]
+    public async Task NameWithoutFraction_IsStillFound_AndCountsAsStartOfSecond()
+    {
+        var second = StartOfSecondOneMinuteAgo();
+        var path = await WriteStampedBlobAsync("z_tool", "olderAgent", second, "class Foo { void Bar() { } }");
+        File.Move(path, path.Replace("_0000000_", "_"));
+        await WriteStampedBlobAsync("a_tool", "newerAgent", second.AddTicks(5), "class Foo { void Bar() { } }");
+
+        var findings = Find("Bar");
+
+        Assert.That(findings, Has.Count.EqualTo(1));
+        Assert.That(findings[0].Message, Does.Contain("`newerAgent`"));
+    }
+
+    [Test]
+    public async Task NameWithoutFraction_AloneIsStillFound()
+    {
+        var path = await WriteStampedBlobAsync("z_tool", "olderAgent", StartOfSecondOneMinuteAgo(), "class Foo { void Bar() { } }");
+        File.Move(path, path.Replace("_0000000_", "_"));
+
+        var findings = Find("Bar");
+
+        Assert.That(findings, Has.Count.EqualTo(1));
+        Assert.That(findings[0].Message, Does.Contain("`olderAgent`"));
     }
 
     [Test]
