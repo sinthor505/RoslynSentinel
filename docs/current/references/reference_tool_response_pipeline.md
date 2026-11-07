@@ -89,7 +89,7 @@ fills the budget; a given `limit` is an upper bound.
 
 | Hint | Where | Use |
 | --- | --- | --- |
-| `[ResultRecords]` | Property on the `SuccessData` type | The default sequence would pick the wrong list. Today: `TextSearchResult.LiteralResults`, `EnvelopePageResult.Items` |
+| `[ResultRecords]` | Property on the `SuccessData` type | The default sequence would pick the wrong list. Today: `TextSearchResult.LiteralResults`, `EnvelopePageResult.Items`, `BuildResult.Errors` |
 | `SentinelCallToolResult.Paging` (`PagingHints`) | Set on the envelope; never serialized | Several lists form one sequence, or anonymous and bare-list shapes that cannot carry an attribute |
 | `[NeverInline]` | DTO property | Always moved to the store. No production use yet (plan Step 8) |
 
@@ -156,7 +156,9 @@ Open work lives in [plan_wire_result_marshaller.md](../plans/plan_wire_result_ma
 
 - `ForPossiblyLargeDataAsync` and `ForPossiblyLargeDetailAsync` are `[Obsolete]` with no production callers, and
   `StoreLargeResultAsync` has none either. `GetLargeResult` keeps its readers for older stored types.
-- Side stores still outside the marshaller: `StoreFullDiagnosticsAsync` and `StoreFullTestResultAsync`
+- Build no longer has a side store: it returns every error inline and the marshaller pages `errors`
+  (`StoreFullDiagnosticsAsync` is gone; `FullDiagnosticsResultId`/`OmittedErrorCount` are `[Obsolete]` and empty).
+- Side stores still outside the marshaller: `StoreFullTestResultAsync`
   (`WorkspaceBuildTestImpl`), `StoreChangedContentAsync` (`ValidateAndApplyHelper`), all writing `Raw`; and
   `ResidualMentionSummarizer`, writing `Envelope`.
 - `ResultPager.Fit` and `SequencePager` are both live; retiring `Fit`, `omitted` and `path` is a proposal slice, not done.

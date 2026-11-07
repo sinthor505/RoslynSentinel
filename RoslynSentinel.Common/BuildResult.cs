@@ -11,7 +11,7 @@ public record BuildResult(
     bool DiagnosticsComplete,
     int ErrorCount,
     int WarningCount,
-    List<DiagnosticInfo> Errors,
+    [property: ResultRecords] List<DiagnosticInfo> Errors,
     List<DiagnosticInfo> Warnings,
     List<DiagnosticGroupSummary> ErrorSummary,
     List<DiagnosticGroupSummary> WarningSummary,
@@ -21,9 +21,9 @@ public record BuildResult(
     int? ExitCode = null,
     string? Detail = null,
     BuildFailureBreakdown? Breakdown = null,
-    int OmittedErrorCount = 0,
+    [property: Obsolete("Use the marshaller paging of errors (largeResult)"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int OmittedErrorCount = 0,
     int SuppressedDownstreamErrorCount = 0,
-    string? FullDiagnosticsResultId = null,
+    [property: Obsolete("Use the marshaller paging of errors (largeResult)")] string? FullDiagnosticsResultId = null,
     [property: JsonIgnore] BuildFullDiagnostics? FullDiagnostics = null) : IOperationResult
 {
     /// <summary>True unless the build succeeded; a NotRun build gives no verification, so it is an error.</summary>
@@ -59,5 +59,9 @@ public record BuildProjectErrorCount(string Project, int ErrorCount, bool IsRoot
 /// <summary>Error count for one file in a failed build.</summary>
 public record BuildFileErrorCount(string File, int ErrorCount);
 
-/// <summary>Uncapped diagnostic lists carried from the engine to the tool boundary; never serialised.</summary>
+/// <summary>
+/// Uncapped diagnostic lists carried from the engine to <see cref="BuildResultProjector"/>; never serialised and no
+/// longer stored. The projector returns every error inline and the result marshaller pages <c>errors</c>.
+/// </summary>
+// TODO BuildEngine still caps BuildResult.Errors to maxDetails and fills this carrier with the uncapped lists; once the engine stops capping, drop this carrier and BuildResult.FullDiagnostics.
 public record BuildFullDiagnostics(List<DiagnosticInfo> Errors, List<DiagnosticInfo> Warnings);

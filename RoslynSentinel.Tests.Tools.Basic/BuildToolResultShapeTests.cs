@@ -1,6 +1,3 @@
-using System.Text;
-using System.Text.Json;
-
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Common;
@@ -12,7 +9,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 /// <summary>
 /// Shape of the projected BuildResult returned by the BuildTool tool (quickBuild): green builds carry counts only,
-/// failed builds carry a breakdown and a capped detail list, and the full list is readable through GetLargeResultTool.
+/// failed builds carry a breakdown and every error inline (the result marshaller pages a long list).
 /// </summary>
 [TestFixture]
 [Category("WorkspaceTools")] // sentinel:auto-category
@@ -62,7 +59,7 @@ public class BuildToolResultShapeTests
     private static string WarningOnlySource => "namespace TestProj; public class Warn { public void M() { int unused = 0; } }";
 
     [Test]
-    public async Task Build_QuickBuild_FailedSolution_ReturnsBreakdownByProjectAndFirstNDetails()
+    public async Task Build_QuickBuild_FailedSolution_ReturnsBreakdownByProjectAndAllErrors()
     {
         SetSource(ManyErrorsSource(21), "Many.cs");
 
@@ -71,8 +68,7 @@ public class BuildToolResultShapeTests
         Assert.That(result.IsError, Is.True);
         var data = (BuildResult)result.SuccessData!;
         Assert.That(data.Outcome, Is.EqualTo(BuildOutcome.Failed));
-        Assert.That(data.Errors, Has.Count.EqualTo(5), "maxDetails caps the detail list.");
-        Assert.That(data.OmittedErrorCount, Is.EqualTo(16), "21 errors minus the 5 listed.");
+        Assert.That(data.Errors, Has.Count.EqualTo(21), "maxDetails no longer caps errors: all of them are inline.");
         Assert.That(data.Breakdown, Is.Not.Null);
 
         var project = data.Breakdown!.ByProject.Single();
@@ -104,12 +100,10 @@ public class BuildToolResultShapeTests
         Assert.That(data.Breakdown, Is.Null);
         Assert.That(data.StdoutTail, Is.Null);
         Assert.That(data.StderrTail, Is.Null);
-        Assert.That(data.FullDiagnosticsResultId, Is.Null);
-        Assert.That(data.OmittedErrorCount, Is.Zero);
     }
 
     [Test]
-    public async Task Build_QuickBuild_FailedWithMoreThanMaxDetails_ReturnsFullDiagnosticsResultIdReadableByGetLargeResult()
+    public async Task Build_QuickBuild_MoreErrorsThanTheOldCap_ReturnsAllOfThemInline()
     {
         SetSource(ManyErrorsSource(25), "Many.cs");
 
@@ -117,30 +111,12 @@ public class BuildToolResultShapeTests
 
         Assert.That(result.IsError, Is.True);
         var data = (BuildResult)result.SuccessData!;
-        Assert.That(data.Errors, Has.Count.EqualTo(20), "default maxDetails is 20.");
-        Assert.That(data.OmittedErrorCount, Is.EqualTo(5));
-        Assert.That(data.FullDiagnosticsResultId, Is.Not.Null.And.Not.Empty);
-
-        // Raw results page over the stored text in bounded windows (charLimit), so read every window back.
-        var reassembled = new StringBuilder();
-        int? offset = 0;
-        var pageCount = 0;
-        while (offset is not null)
-        {
-            var page = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: data.FullDiagnosticsResultId, offset: offset.Value, charLimit: LargeResultHelper.InlineBudgetChars);
-
-            Assert.That(page.IsError, Is.False, "the stored full-diagnostics payload must be readable by its resultId.");
-            var pageDataType = page.SuccessData!.GetType();
-            reassembled.Append((string)pageDataType.GetProperty("text")!.GetValue(page.SuccessData)!);
-            offset = (int?)pageDataType.GetProperty("nextOffset")!.GetValue(page.SuccessData);
-            pageCount++;
-            Assert.That(pageCount, Is.LessThan(10), "Paging should terminate quickly.");
-        }
-
-        using var doc = JsonDocument.Parse(reassembled.ToString());
-        JsonElement errors = doc.RootElement.EnumerateObject()
-            .First(p => string.Equals(p.Name, "Errors", StringComparison.OrdinalIgnoreCase)).Value;
-        Assert.That(errors.GetArrayLength(), Is.EqualTo(25), "the stored list is uncapped: every error, not just the 20 listed.");
+        Assert.That(data.ErrorCount, Is.EqualTo(25));
+        Assert.That(data.Errors, Has.Count.EqualTo(25), "the old default cap was 20; every error is inline now and the marshaller pages a long list.");
+#pragma warning disable CS0618 // the obsolete side-store fields stay empty
+        Assert.That(data.FullDiagnosticsResultId, Is.Null, "no side store: the full list is the inline list.");
+        Assert.That(data.OmittedErrorCount, Is.Zero);
+#pragma warning restore CS0618
     }
 
     [Test]
@@ -155,18 +131,5 @@ public class BuildToolResultShapeTests
         Assert.That(data.Outcome, Is.EqualTo(BuildOutcome.Succeeded));
         Assert.That(data.WarningCount, Is.GreaterThan(0));
         Assert.That(data.Warnings, Is.Not.Empty, "includeWarnings=true returns the warning list.");
-    }
-
-    [Test]
-    public async Task Build_DefaultMaxDetails_IsTwenty()
-    {
-        SetSource(ManyErrorsSource(21), "Many.cs");
-
-        var result = await _workspaceTools.BuildTool(reason: "test message", BuildVerifyLevel.quickBuild);
-
-        Assert.That(result.IsError, Is.True);
-        var data = (BuildResult)result.SuccessData!;
-        Assert.That(data.Errors, Has.Count.EqualTo(20));
-        Assert.That(data.OmittedErrorCount, Is.EqualTo(1));
     }
 }

@@ -87,7 +87,6 @@ public class BuildResultProjectorTests
         Assert.That(projected.StdoutTail, Is.Null);
         Assert.That(projected.StderrTail, Is.Null);
         Assert.That(projected.Breakdown, Is.Null);
-        Assert.That(projected.OmittedErrorCount, Is.EqualTo(0));
         Assert.That(projected.SuppressedDownstreamErrorCount, Is.EqualTo(0));
     }
 
@@ -100,7 +99,6 @@ public class BuildResultProjectorTests
         Assert.That(projected.ErrorCount, Is.EqualTo(1));
         Assert.That(projected.Errors, Has.Count.EqualTo(1));
         Assert.That(projected.Errors[0], Is.EqualTo(error));
-        Assert.That(projected.OmittedErrorCount, Is.EqualTo(0));
         Assert.That(projected.SuppressedDownstreamErrorCount, Is.EqualTo(0));
         Assert.That(projected.Breakdown, Is.Not.Null);
         Assert.That(projected.Breakdown!.ByProject, Is.EqualTo(new[] { new BuildProjectErrorCount("Core", 1, true) }));
@@ -127,7 +125,6 @@ public class BuildResultProjectorTests
         var projected = BuildResultProjector.Project(Failed(errors), Defaults, null);
 
         Assert.That(projected.Errors, Has.Count.EqualTo(10));
-        Assert.That(projected.OmittedErrorCount, Is.EqualTo(0));
         Assert.That(projected.SuppressedDownstreamErrorCount, Is.EqualTo(0));
         Assert.That(
             projected.Breakdown!.ByProject,
@@ -144,19 +141,21 @@ public class BuildResultProjectorTests
     }
 
     [Test]
-    public void HundredErrors_CapsDetailsAndReportsOmitted()
+    public void HundredErrors_AreAllReturnedInline()
     {
         var errors = Enumerable.Range(1, 100).Select(i => Err("Core", $"Core/F{i % 7}.cs", line: i)).ToList();
 
         var projected = BuildResultProjector.Project(Failed(errors), Defaults, null);
 
         Assert.That(projected.ErrorCount, Is.EqualTo(100), "the exact count is never changed");
-        Assert.That(projected.Errors, Has.Count.EqualTo(20));
-        Assert.That(projected.OmittedErrorCount, Is.EqualTo(80));
-        Assert.That(projected.Errors.Select(e => e.StartLine), Is.EqualTo(Enumerable.Range(1, 20)), "original order is kept");
+        Assert.That(projected.Errors, Has.Count.EqualTo(100), "MaxDetails (20) no longer caps errors; the result marshaller pages a long list");
+        Assert.That(projected.Errors.Select(e => e.StartLine), Is.EqualTo(Enumerable.Range(1, 100)), "original order is kept");
         Assert.That(projected.Breakdown!.ByProject.Single().ErrorCount, Is.EqualTo(100));
-        Assert.That(projected.FullDiagnostics!.Errors, Has.Count.EqualTo(100), "the uncapped carrier is left for the tool layer");
-        Assert.That(projected.FullDiagnosticsResultId, Is.Null, "the tool layer sets the id");
+        Assert.That(projected.FullDiagnostics!.Errors, Has.Count.EqualTo(100), "the engine carrier is left untouched");
+#pragma warning disable CS0618 // the obsolete side-store fields stay empty
+        Assert.That(projected.FullDiagnosticsResultId, Is.Null);
+        Assert.That(projected.OmittedErrorCount, Is.Zero);
+#pragma warning restore CS0618
     }
 
     [Test]
@@ -171,9 +170,9 @@ public class BuildResultProjectorTests
 
         Assert.That(projected.ErrorCount, Is.EqualTo(1000));
         Assert.That(projected.SuppressedDownstreamErrorCount, Is.EqualTo(700));
-        Assert.That(projected.OmittedErrorCount, Is.EqualTo(980));
-        Assert.That(projected.Errors, Has.Count.EqualTo(20));
-        Assert.That(projected.Errors.All(e => e.Project == "Core"), Is.True, "root-cause errors are listed first");
+        Assert.That(projected.Errors, Has.Count.EqualTo(1000));
+        Assert.That(projected.Errors.Take(300).All(e => e.Project == "Core"), Is.True, "root-cause errors are listed first");
+        Assert.That(projected.Errors.Skip(300).All(e => e.Project == "App"), Is.True, "downstream errors follow");
         Assert.That(
             projected.Breakdown!.ByProject,
             Is.EqualTo(new[] { new BuildProjectErrorCount("Core", 300, true), new BuildProjectErrorCount("App", 700, false) }),
@@ -191,7 +190,6 @@ public class BuildResultProjectorTests
         Assert.That(projected.Outcome, Is.EqualTo(BuildOutcome.Failed));
         Assert.That(projected.Errors, Is.Empty);
         Assert.That(projected.Breakdown, Is.Null);
-        Assert.That(projected.OmittedErrorCount, Is.EqualTo(0));
         Assert.That(projected.StdoutTail, Is.EqualTo("error NU1101: Unable to find package Foo"));
         Assert.That(projected.StderrTail, Is.EqualTo("restore failed"));
         Assert.That(projected.Detail, Is.EqualTo("exit 1"));
@@ -257,9 +255,10 @@ public class BuildResultProjectorTests
     }
 
     [Test]
-    public void ProjectedFailedResult_SerializesUnder15KB()
+    public void ProjectedFailedResult_KeepsEveryErrorAndDoesNotSerializeTheCarrier()
     {
         // Realistic failed build: 100 errors over three projects and many files, compiler-length messages.
+        // The payload is no longer kept under the inline budget here: the result marshaller pages a long errors list.
         string[] ids = ["CS0246", "CS0103", "CS1061", "CS0117"];
         string[] projects = ["Core", "Engines", "App"];
         var errors = Enumerable.Range(1, 100)
@@ -283,9 +282,6 @@ public class BuildResultProjectorTests
 
         Assert.That(projected.ErrorSummary.All(s => s.Locations.Count <= BuildResultProjector.MaxSummaryLocations), Is.True);
         Assert.That(json, Does.Not.Contain("\"FullDiagnostics\"").IgnoreCase, "the carrier is [JsonIgnore]");
-        Assert.That(
-            json.Length,
-            Is.LessThan(LargeResultHelper.InlineBudgetChars),
-            $"projected payload was {json.Length} characters");
+        Assert.That(projected.Errors, Has.Count.EqualTo(100));
     }
 }

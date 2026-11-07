@@ -1,7 +1,7 @@
 namespace RoslynSentinel.Common;
 
 /// <summary>How much of a full <see cref="BuildResult"/> the wire response should carry.</summary>
-/// <param name="MaxDetails">Maximum number of individual error (and, when requested, warning) rows returned.</param>
+/// <param name="MaxDetails">Maximum number of warning rows returned (when requested). Errors are never capped here: the result marshaller pages them.</param>
 /// <param name="IncludeOutput">Keep StdoutTail/StderrTail even when errors were parsed (or the build succeeded).</param>
 /// <param name="IncludeWarnings">Return the warning list and warning summary (the warning count is always kept).</param>
 public sealed record BuildProjection(int MaxDetails, bool IncludeOutput, bool IncludeWarnings);
@@ -9,8 +9,7 @@ public sealed record BuildProjection(int MaxDetails, bool IncludeOutput, bool In
 /// <summary>
 /// Pure projection of a full (engine-side) <see cref="BuildResult"/> into the small payload the Build tool
 /// returns: green builds carry counts only; failed builds carry a per-project/per-file breakdown, the
-/// root-cause projects' errors first, a capped detail list and the number omitted. No I/O: the tool layer
-/// stores <see cref="BuildResult.FullDiagnostics"/> and sets <see cref="BuildResult.FullDiagnosticsResultId"/>.
+/// root-cause projects' errors first and every error row (the result marshaller pages a long list). No I/O.
 /// </summary>
 public static class BuildResultProjector
 {
@@ -33,7 +32,7 @@ public static class BuildResultProjector
     /// Shrinks <paramref name="full"/> for the wire. <paramref name="transitiveDependencies"/> maps a project name
     /// to the names of the projects it transitively depends on; null means no graph is known, so every project
     /// that has errors counts as a root cause. A project absent from the map is treated as having no dependencies.
-    /// Leaves <see cref="BuildResult.FullDiagnostics"/> and <see cref="BuildResult.FullDiagnosticsResultId"/> untouched.
+    /// Leaves <see cref="BuildResult.FullDiagnostics"/> untouched.
     /// </summary>
     public static BuildResult Project(
         BuildResult full,
@@ -63,7 +62,6 @@ public static class BuildResultProjector
                 StdoutTail = options.IncludeOutput ? full.StdoutTail : null,
                 StderrTail = options.IncludeOutput ? full.StderrTail : null,
                 Breakdown = null,
-                OmittedErrorCount = 0,
                 SuppressedDownstreamErrorCount = 0,
             };
         }
@@ -100,13 +98,9 @@ public static class BuildResultProjector
             // Root-cause errors first, original order kept inside each half.
             details = errors.Where(e => isRoot[ProjectOf(e)])
                 .Concat(errors.Where(e => !isRoot[ProjectOf(e)]))
-                .Take(maxDetails)
                 .Select(CutMessage)
                 .ToList();
         }
-
-        // The engine may already have capped Errors (no FullDiagnostics): trust the exact ErrorCount for "omitted".
-        int totalErrors = Math.Max(full.ErrorCount, errors.Count);
 
         return full with
         {
@@ -117,7 +111,6 @@ public static class BuildResultProjector
             StdoutTail = keepTails ? full.StdoutTail : null,
             StderrTail = keepTails ? full.StderrTail : null,
             Breakdown = breakdown,
-            OmittedErrorCount = Math.Max(0, totalErrors - details.Count),
             SuppressedDownstreamErrorCount = suppressed,
         };
     }

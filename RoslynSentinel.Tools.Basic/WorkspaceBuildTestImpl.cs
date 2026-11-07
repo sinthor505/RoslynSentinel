@@ -88,13 +88,9 @@ public class WorkspaceBuildTestImpl
                     : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken);
                 if (buildRun.TryGetData(out var rawBuild))
                 {
-                    // Project like Build does so the embedded verification does not carry up to 50 raw details.
+                    // Project like Build does (breakdown, root-cause order); every error is inline and the result marshaller pages a long list.
                     buildVerification = BuildResultProjector.Project(
                         rawBuild, new BuildProjection(maxDetails, IncludeOutput: false, IncludeWarnings: false), await GetTransitiveDependenciesAsync(cancellationToken));
-                    if ((rawBuild.Outcome == BuildOutcome.Failed || buildVerification.OmittedErrorCount > 0) && rawBuild.FullDiagnostics is { } fullDiagnostics)
-                    {
-                        buildVerification = buildVerification with { FullDiagnosticsResultId = await StoreFullDiagnosticsAsync(fullDiagnostics, cancellationToken) };
-                    }
                 }
             }
 
@@ -217,23 +213,6 @@ public class WorkspaceBuildTestImpl
         }
     }
 
-    // Stores the uncapped error/warning lists for GetLargeResultTool. A storage failure must not turn a finished
-    // build report into a tool error, so it degrades to "no id".
-    private async Task<string?> StoreFullDiagnosticsAsync(BuildFullDiagnostics fullDiagnostics, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var json = System.Text.Json.JsonSerializer.Serialize(fullDiagnostics, SharedJsonOptions.Compact);
-            var stored = await LargeResultHelper.StoreRawJsonAsync(json, _workspaceManager.GetSolutionRoot(), cancellationToken);
-            return stored.resultId;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogWarning(ex, "Build: could not store the full diagnostics list");
-            return null;
-        }
-    }
-
     // Stores the uncapped test result list for GetLargeResultTool. A storage failure must not turn a finished
     // test report into a tool error, so it degrades to "no id".
     private async Task<string?> StoreFullTestResultAsync(TestRunResult fullResult, CancellationToken cancellationToken)
@@ -323,10 +302,6 @@ public class WorkspaceBuildTestImpl
             var transitiveDependencies = await GetTransitiveDependenciesAsync(cancellationToken);
             var projected = BuildResultProjector.Project(
                 buildResult, new BuildProjection(maxDetails, includeOutput, includeWarnings), transitiveDependencies);
-            if ((buildResult.Outcome == BuildOutcome.Failed || projected.OmittedErrorCount > 0) && buildResult.FullDiagnostics is { } fullDiagnostics)
-            {
-                projected = projected with { FullDiagnosticsResultId = await StoreFullDiagnosticsAsync(fullDiagnostics, cancellationToken) };
-            }
 
             // includeOutput=true asks for the tails even from a clean build, so only strip them otherwise.
             var buildToolResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = includeOutput ? projected : WithoutTailsWhenClean(projected), WorkspaceVersion = _workspaceManager.WorkspaceVersion };

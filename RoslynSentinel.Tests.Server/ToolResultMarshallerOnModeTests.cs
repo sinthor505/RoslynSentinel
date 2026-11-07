@@ -233,6 +233,52 @@ public class ToolResultMarshallerOnModeTests
         Assert.That(pointer["returned"]!.GetValue<int>(), Is.InRange(1, 299));
     }
 
+    // plan_wire_result_marshaller.md Step 8 slice 1: Build returns every error inline and the marshaller pages them.
+    [Test]
+    public async Task On_BuildResultWithTwoThousandErrors_PagesErrors_AndTheWarningsStayOutsideTheSequence()
+    {
+        var errors = Enumerable.Range(1, 2000)
+            .Select(i => new DiagnosticInfo(
+                "CS0246", "Error", $"The type or namespace name 'Missing{i}' could not be found (are you missing a using directive or an assembly reference?)",
+                $"RoslynSentinel.Core/Services/File{i % 40}.cs", i, 1, i, 2, "Core"))
+            .ToList();
+        var warnings = Enumerable.Range(1, 5)
+            .Select(i => new DiagnosticInfo("CS0168", "Warning", $"The variable 'v{i}' is declared but never used", "RoslynSentinel.Core/W.cs", i, 1, i, 2, "Core"))
+            .ToList();
+        var build = new BuildResult(
+            Outcome: BuildOutcome.Failed,
+            Level: BuildVerifyLevel.fullBuild,
+            ProjectsCompiled: ["Core"],
+            DiagnosticsComplete: true,
+            ErrorCount: errors.Count,
+            WarningCount: warnings.Count,
+            Errors: errors,
+            Warnings: warnings,
+            ErrorSummary: [],
+            WarningSummary: [],
+            StdoutTail: null,
+            StderrTail: null,
+            Duration: TimeSpan.FromSeconds(3));
+        var result = new SentinelCallToolResult<object> { IsError = true, SuccessData = build, StatusMessage = "Build failed" };
+        Assert.That(FullText(result).Length, Is.GreaterThan(500_000), "fixture sanity: a build of this size is far over the budget");
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var (envelope, pointer, _) = await MarshalPagedAsync(result);
+        clock.Stop();
+
+        // Reported, not asserted: the slice acceptance asks for the marshal time of a 2,000-error build to be measured.
+        TestContext.Out.WriteLine($"Marshal time for {errors.Count} errors (wire text over {FullText(result).Length} chars): {clock.ElapsedMilliseconds} ms");
+
+        Assert.That(pointer["totalRecords"]!.GetValue<int>(), Is.EqualTo(2000), "only the declared errors list forms the sequence, so warnings do not add to the total");
+        int returned = envelope["successData"]!["errors"]!.AsArray().Count;
+        Assert.That(returned, Is.InRange(1, 1999));
+        Assert.That(pointer["returned"]!.GetValue<int>(), Is.EqualTo(returned));
+        Assert.That(envelope["hasMoreData"]!.GetValue<bool>(), Is.True);
+        Assert.That(pointer.ContainsKey("omitted"), Is.False);
+        Assert.That(envelope["successData"]!["warnings"]!.AsArray(), Has.Count.EqualTo(5), "warnings are outside the sequence and returned whole");
+        Assert.That(envelope["successData"]!["errorCount"]!.GetValue<int>(), Is.EqualTo(2000));
+    }
+
     // ---- store failure ----
 
     [Test]
