@@ -1,7 +1,8 @@
 # Plan: one result marshaller at the SDK MarshalResult seam owns offload, paging, metadata and serialization
 
-**Status:** APPROVED 2026-11-02. In progress: Steps 0-7 done (Step 7 2026-11-06), Steps 9 and 11 done 2026-11-07, Step 8 re-planned
-and approved 2026-11-07 (four slices, see Step 8 and the proposal), not yet built; Step 10 follows it.
+**Status:** APPROVED 2026-11-02. In progress: Steps 0-7 done (Step 7 2026-11-06), Steps 9 and 11 done 2026-11-07, Step 8 built
+2026-11-07 (four slices, see Step 8 and the proposal; live check pending a server restart); Step 10 follows it, no earlier
+than 7 days after Steps 7-8 ship.
 
 How it works now, including `SequencePager` (built later from
 [proposal_sequence_pager.md](../proposals/proposal_sequence_pager.md), and running before `ResultPager.Fit`):
@@ -330,6 +331,20 @@ filter's own `offloaded` stub (`sizeBytes = text.Length`, in chars despite the n
 window code, which now reads `InlineBudgetChars`. Step 8 survey 2026-11-07 (read-only): the step as written did not
 work; re-planned the same day as four slices (Build uncapped, marshaller `Detached` payload, RunTest, changed content),
 approved, not yet built.
+
+2026-11-07 (later): Step 8 built in four commits. Slice 2 `af7e210f`: `Detach(name, payload)` on `SentinelCallToolResult` and
+`ToolCallContext` (payload must be an array or string); `ToolResultMarshaller` stores each detached payload as its own
+Envelope before the budget check (pointer "Stored, not inline: ..."; when the remainder is also over budget it is stored
+under a second resultId because `GetLargeResult` ignores `path` for a stored sequence file; `omitted` unit is "items").
+Slice 1 `d9fd0ec6`: Build returns every error inline with `[ResultRecords]` on `BuildResult.Errors`, the marshaller pages it,
+`StoreFullDiagnosticsAsync` deleted; `BuildResult.FullDiagnostics` stays as the engine's carrier (TODO: drop once
+`BuildEngine` stops capping). Slice 3 `c6215b34`: RunTest detaches the unprojected rows as `fullResults`. Slice 4 (changed
+content): `ValidateAndApplyHelper.DetachChangedFiles` appends `ChangedFile(Path, Text)` rows to `changedFiles` (appends,
+because the Qualify-crefs and test-category loops apply once per project and `Detach` rejects a duplicate name);
+`NotEchoedHint` points at `largeResult`. `FullResultsId`, `ChangedContentResultId`, `FullDiagnosticsResultId` and
+`OmittedErrorCount` are `[Obsolete]` and never set; the ~50 `ChangedContentResultId:` copy sites stay for Step 10. No
+production `StoreRawJsonAsync` caller remains except the filter backstop. Not yet checked live (running server predates
+the commits; restart first). In `off`/`passthrough` mode detached payloads are dropped.
 
 2026-11-06: Step 7 done. `Search` callers, implementations and references return named records with no
 `[ResultRecords]` ([proposal_search_relationship_result_dtos.md](../proposals/closed/proposal_search_relationship_result_dtos.md));

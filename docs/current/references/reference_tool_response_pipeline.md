@@ -158,9 +158,12 @@ Open work lives in [plan_wire_result_marshaller.md](../plans/plan_wire_result_ma
   `StoreLargeResultAsync` has none either. `GetLargeResult` keeps its readers for older stored types.
 - Build no longer has a side store: it returns every error inline and the marshaller pages `errors`
   (`StoreFullDiagnosticsAsync` is gone; `FullDiagnosticsResultId`/`OmittedErrorCount` are `[Obsolete]` and empty).
-- Side stores still outside the marshaller: `StoreFullTestResultAsync`
-  (`WorkspaceBuildTestImpl`), `StoreChangedContentAsync` (`ValidateAndApplyHelper`), all writing `Raw`; and
-  `ResidualMentionSummarizer`, writing `Envelope`.
+- RunTest and changed content use a detached payload: the tool calls `Detach(name, list)` on its `SentinelCallToolResult`
+  (RunTest, `fullResults`) or `ToolCallContext` (`ValidateAndApplyHelper.DetachChangedFiles`, `changedFiles`); the
+  marshaller stores it as its own `Envelope` before the budget check, reachable with
+  `GetLargeResult(resultId, path: "successData.<name>")`. The payload must be an array or string and is dropped in
+  `off`/`passthrough` mode. `FullResultsId` and `ChangedContentResultId` are `[Obsolete]` and empty.
+- Writers of `Raw` left: the filter backstop. `ResidualMentionSummarizer` writes `Envelope` outside the marshaller.
 - `ResultPager.Fit` and `SequencePager` are both live; retiring `Fit`, `omitted` and `path` is a proposal slice, not done.
 
 ## Usage
@@ -179,7 +182,7 @@ Tests, one `RunTest` at a time:
 
 | Area | Fixtures |
 | --- | --- |
-| Marshaller | `ToolResultMarshallerOnModeTests`, `ToolResultMarshallerPassthroughTests` (`Tests.Server`) |
+| Marshaller | `ToolResultMarshallerOnModeTests`, `ToolResultMarshallerPassthroughTests`, `ToolResultMarshallerDetachedTests` (`Tests.Server`) |
 | Factory | `SentinelToolFactoryParityTests` (`Tests.Server`) |
 | Pagers | `SequencePagerTests`, `ResultPagerTests` (`Tests.Server`) |
 | Filters | `LargeResultOffloadFilterTests`, `ToolTelemetryFilterOrderTests` (`Tests.Server`) |

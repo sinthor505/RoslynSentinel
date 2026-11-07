@@ -64,20 +64,30 @@ public class ConvertedToolHintTests
     }
 
     [Test]
-    public void AppliedChangeSummary_Note_WithResultId_NamesCompleteGetLargeResultCall()
+    public void AppliedChangeSummary_Note_WithDetachedChangedFiles_NamesCompleteGetLargeResultCallForTheChangedFilesPath()
     {
-        var filePath = new FilePathWrapper("test.cs");
-        var summary = new AppliedChangeSummary(
-            ChangeId: "abc12345",
-            AffectedFiles: new List<FilePathWrapper> { filePath },
-            Description: "test",
-            DryRun: false,
-            ChangedContent: null,
-            Validated: true,
-            ChangedContentResultId: "resultId123");
+        var context = new ToolCallContext("agent-1", "implementer", "Member", "hint test", 0);
+        ToolCallContext.Set(context);
+        try
+        {
+            context.Detach("changedFiles", new List<ChangedFile> { new("test.cs", "content") });
+            var filePath = new FilePathWrapper("test.cs");
+            var summary = new AppliedChangeSummary(
+                ChangeId: "abc12345",
+                AffectedFiles: new List<FilePathWrapper> { filePath },
+                Description: "test",
+                DryRun: false,
+                ChangedContent: null,
+                Validated: true);
 
-        Assert.That(summary.Note, Does.Contain("GetLargeResult("));
-        Assert.That(summary.Note, Does.Contain("resultId: \"resultId123\""));
-        Assert.That(summary.Note, Does.Contain("reason:"));
+            Assert.That(summary.Note, Does.Contain("GetLargeResult("));
+            Assert.That(summary.Note, Does.Contain("resultId: \"<largeResult.resultId>\""));
+            Assert.That(summary.Note, Does.Contain("path: \"successData.changedFiles\""));
+            Assert.That(summary.Note, Does.Contain("reason:"));
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
     }
 }

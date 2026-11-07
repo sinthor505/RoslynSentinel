@@ -17,7 +17,7 @@ public record AppliedChangeSummary(
     Dictionary<FilePathWrapper, string>? ChangedContent = null,
     bool Validated = false,
     List<FileLineChange>? LineChanges = null,
-    string? ChangedContentResultId = null,
+    [property: Obsolete("Use largeResult (the stored changedFiles payload)")] string? ChangedContentResultId = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<AppliedEditSpan>? EditSpans = null,
     // Write-chokepoint findings copied from ApplyOutcome.Findings; not serialized here, the result envelope lifts them (SentinelCallToolResult.Findings).
     [property: JsonIgnore] List<Finding>? Findings = null
@@ -48,7 +48,7 @@ public record AppliedChangeSummary(
     /// <summary>
     /// Inline only for no-stage results (Validated false) and when ChangedContentOptions.InlineOnApply is on; otherwise null.
     /// A dry run is compact too: lineChanges say what would change and the diff (returnDiff: true) shows it, never the whole file.
-    /// A real apply stays null - see ChangedContentResultId.
+    /// A real apply stays null: its updated text is the stored successData.changedFiles payload (largeResult.resultId).
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<FilePathWrapper, string>? ChangedContent { get; init; } = (DryRun || Validated) && !ChangedContentOptions.InlineOnApply ? null : ChangedContent;
@@ -116,9 +116,12 @@ public record AppliedChangeSummary(
             return "";
         }
 
-        if (!string.IsNullOrEmpty(ChangedContentResultId))
+        // The real apply detached its written files (ValidateAndApplyHelper.DetachChangedFiles); this summary has no id of its
+        // own, because the DTO is serialized before the marshaller stores the payload. The id is the response's largeResult.resultId.
+        // Without a ToolCallContext (an engine or a test calling the code directly) nothing was detached, so the read-it-yourself note below applies.
+        if (ToolCallContext.Current?.Detached.Any(detached => detached.Name == ValidateAndApplyHelper.ChangedFilesPayloadName) == true)
         {
-            return $" The updated content is not echoed; fetch it with {LargeResultHints.FetchCall(ChangedContentResultId)}, or read the file with {ToolCallHint.Call("ReadFile")}, GetMethodSource or {ToolCallHint.Call("Member", ("operation", "view"))}.";
+            return $" The updated content is not echoed; it is stored with this response (largeResult.resultId): fetch it with {LargeResultHints.FetchCall("<largeResult.resultId>", path: "successData." + ValidateAndApplyHelper.ChangedFilesPayloadName)}, or read the file with {ToolCallHint.Call("ReadFile")}, GetMethodSource or {ToolCallHint.Call("Member", ("operation", "view"))}.";
         }
 
         return Validated ? $" The updated content is not echoed; read it with {ToolCallHint.Call("ReadFile")}, GetMethodSource or {ToolCallHint.Call("Member", ("operation", "view"))}." : "";

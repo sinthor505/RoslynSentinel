@@ -221,6 +221,53 @@ public class ToolResultMarshallerDetachedTests
         Assert.That(rows!, Has.Count.EqualTo(4));
     }
 
+    // proposal_side_stores_never_inline.md slice 4: a real apply detaches {path, text} rows as "changedFiles" on the call context
+    // (ValidateAndApplyHelper.DetachChangedFiles); the AppliedChangeSummary stays compact and the stored Envelope holds the text.
+    [Test]
+    public async Task Detach_ChangedFilesFromARealApply_StoresPathAndTextRowsAndKeepsTheFileTextOutOfTheText()
+    {
+        const string FileText = "namespace Demo; public class Edited { public virtual int Target() => 1; }";
+        var path = new FilePathWrapper("Demo/Edited.cs", validated: true);
+        var summary = new AppliedChangeSummary(
+            ChangeId: "abc12345",
+            AffectedFiles: [path],
+            Description: "test",
+            DryRun: false,
+            ChangedContent: null,
+            Validated: true);
+        var result = new SentinelCallToolResult<object> { IsError = false, SuccessData = summary, StatusMessage = "applied" };
+        string text;
+        string note;
+        try
+        {
+            ToolCallContext.Set(new ToolCallContext(null, null, "Probe", "test reason", 0));
+            ValidateAndApplyHelper.DetachChangedFiles(new Dictionary<FilePathWrapper, string> { { path, FileText } });
+            note = summary.Note;
+
+            text = await MarshalAsync(Marshaller(_root), result);
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+
+        Assert.That(text, Does.Not.Contain(FileText), "the file text is not in the wire text");
+        var envelope = JsonNode.Parse(text)!.AsObject();
+        Assert.That(envelope.First().Key, Is.EqualTo("largeResult"));
+        Assert.That(envelope["successData"]!.AsObject().ContainsKey("changedFiles"), Is.False, "no empty shell is left behind");
+        Assert.That(envelope["successData"]!["changeId"]!.GetValue<string>(), Is.EqualTo("abc12345"), "the compact summary stays inline");
+        var pointer = envelope["largeResult"]!.AsObject();
+        string resultId = pointer["resultId"]!.GetValue<string>();
+        Assert.That(resultId, Is.Not.Empty);
+        Assert.That(pointer["message"]!.GetValue<string>(), Is.EqualTo($"Stored, not inline: changedFiles (1 records). {LargeResultHints.FetchCall(resultId, path: "successData.changedFiles")}"));
+        Assert.That(note, Does.Contain("largeResult.resultId").And.Contain("successData.changedFiles"), "the summary's Note points at the pointer");
+
+        var rows = ResultPager.SelectNode(StoredWrapper(resultId)["Data"]!, "successData.changedFiles") as JsonArray;
+        Assert.That(rows!, Has.Count.EqualTo(1));
+        Assert.That(rows[0]!["path"]!.GetValue<string>(), Is.EqualTo((string)path));
+        Assert.That(rows[0]!["text"]!.GetValue<string>(), Is.EqualTo(FileText));
+    }
+
     [Test]
     public async Task Detach_AStringPayload_IsStoredAsLines()
     {

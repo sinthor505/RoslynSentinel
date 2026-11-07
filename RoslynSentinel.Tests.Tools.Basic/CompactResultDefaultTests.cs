@@ -16,10 +16,10 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 /// (ModifyModifierTool -> ValidateAndApplyHelper -> AppliedChangeSummary) must not echo the whole file in
 /// changedContent and neither does a dry run (it carries lineChanges, plus the diff with returnDiff: true), while
 /// autoStage=false results still do.
-/// Runs on an InMemoryWorkspace (no MSBuild load). That workspace has no solution root by default, so the offload to a
-/// large-result file cannot happen there (fail-closed: ChangedContentResultId is null and the Note falls back to
-/// ReadFileTool). The offload end-to-end test sets FakeWorkspaceManager.SolutionPath to a temp directory, which is the
-/// fake's documented way to supply a root.
+/// Runs on an InMemoryWorkspace (no MSBuild load). A real apply detaches its written files as the "changedFiles" payload
+/// of the call's ToolCallContext (proposal_side_stores_never_inline.md, slice 4); the marshaller stores it, which is asserted
+/// in Tests.Server ToolResultMarshallerDetachedTests. Here a ToolCallContext is set only by the test that checks the detach;
+/// without one nothing is detached and the Note falls back to ReadFileTool.
 /// NonParallelizable: ChangedContentOptions.InlineOnApply is process-wide static state that one test flips.
 /// </summary>
 [TestFixture]
@@ -28,6 +28,10 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 public class CompactResultDefaultTests
 {
     private const string FixtureRelativePath = "ContosoOrders.Core/CompactResultFixture.cs";
+
+    [SetUp]
+    [TearDown]
+    public void ResetContext() => ToolCallContext.Set(null);
 
     // About 150 lines: enough that echoing the whole file on a real apply would be the noise the default removes.
     private static readonly string FixtureSource = BuildFixtureSource();
@@ -84,13 +88,13 @@ public class CompactResultDefaultTests
     }
 
     [Test]
-    public async Task ModifyModifier_Applied_WithoutSolutionRoot_ResultIdIsNullAndNoteFallsBackToReadFileAsync()
+    public async Task ModifyModifier_Applied_WithoutToolCallContext_NothingIsDetachedAndNoteFallsBackToReadFileAsync()
     {
-        // The in-memory workspace has no solution root, so there is nowhere to write the offloaded content file:
-        // the offload fails closed (null id) and the Note must not advertise GetLargeResultTool.
+        // No ToolCallContext (an engine or test calling the tool directly): DetachCurrent is a no-op, so the Note must not
+        // advertise GetLargeResultTool for a payload that was never declared.
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = BuildTools(workspace.Manager);
-        Assert.That(workspace.Manager.GetSolutionRoot(), Is.Null, "precondition: no solution root");
+        Assert.That(ToolCallContext.Current, Is.Null, "precondition: no tool call context");
 
         var result = await AddVirtualAsync(tools, workspace);
 
@@ -98,7 +102,6 @@ public class CompactResultDefaultTests
         var summary = result.SuccessData!;
         Assert.Multiple(() =>
         {
-            Assert.That(summary.ChangedContentResultId, Is.Null);
             Assert.That(summary.Note, Does.Contain("ReadFile"));
             Assert.That(summary.Note, Does.Not.Contain("GetLargeResult"));
         });
@@ -178,38 +181,24 @@ public class CompactResultDefaultTests
     }
 
     [Test]
-    public async Task ModifyModifier_Applied_ResultIdFetchesUpdatedTextViaGetLargeResultAsync()
+    public async Task ModifyModifier_Applied_DetachesTheUpdatedTextAsChangedFilesAndNotePointsAtLargeResultAsync()
     {
-        var root = Path.Combine(Path.GetTempPath(), "CompactResultDefaultTests_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        try
-        {
-            using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
-            // FakeWorkspaceManager.GetSolutionRoot() falls back to the directory of SolutionPath when set.
-            workspace.Manager.SolutionPath = Path.Combine(root, "Test.sln");
-            var tools = BuildTools(workspace.Manager);
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var context = new ToolCallContext("agent-1", "implementer", "ModifyModifier", "test detach", 0);
+        ToolCallContext.Set(context);
 
-            var result = await AddVirtualAsync(tools, workspace);
+        var result = await AddVirtualAsync(tools, workspace);
 
-            Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
-            var summary = result.SuccessData!;
-            Assert.That(summary.ChangedContent, Is.Null);
-            Assert.That(summary.ChangedContentResultId, Is.Not.Null.And.Not.Empty, "a solution root exists, so the content must be offloaded");
-            Assert.That(summary.Note, Does.Contain("GetLargeResult").And.Contain(summary.ChangedContentResultId!));
-
-            var readNav = TestTools.WorkspaceReadNavigationImpl(workspace.Manager, NullLogger<WorkspaceReadNavigationImpl>.Instance);
-            var fetched = await readNav.GetLargeResult(reason: "test fetch offloaded changed content", resultId: summary.ChangedContentResultId);
-
-            Assert.That(fetched.IsError, Is.False, fetched.ErrorData?.Message);
-            var json = JsonSerializer.Serialize(fetched.SuccessData);
-            Assert.That(json, Does.Contain("public virtual int Target()"), "the stored text must be the updated file");
-        }
-        finally
-        {
-            if (Directory.Exists(root))
-            {
-                Directory.Delete(root, recursive: true);
-            }
-        }
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var summary = result.SuccessData!;
+        Assert.That(summary.ChangedContent, Is.Null);
+        var detached = context.Detached.Single(d => d.Name == "changedFiles");
+        var rows = detached.Payload as List<ChangedFile>;
+        Assert.That(rows, Is.Not.Null.And.Count.EqualTo(1));
+        Assert.That(rows![0].Path, Does.EndWith("CompactResultFixture.cs"));
+        Assert.That(rows[0].Text, Does.Contain("public virtual int Target()"), "the detached text must be the updated file");
+        Assert.That(JsonSerializer.Serialize(summary), Does.Not.Contain("public virtual int Target()"), "the file text is not in the serialized summary");
+        Assert.That(summary.Note, Does.Contain("GetLargeResult").And.Contain("largeResult.resultId").And.Contain("successData.changedFiles"));
     }
 }

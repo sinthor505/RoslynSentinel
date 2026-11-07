@@ -7,6 +7,18 @@ namespace RoslynSentinel.Tests.Basic;
 [TestFixture]
 public class AppliedChangeSummaryTests
 {
+    [SetUp]
+    [TearDown]
+    public void ResetContext() => ToolCallContext.Set(null);
+
+    // A real apply's ValidateAndApplyHelper detaches its written files on the call's context; the Note reads that to point at largeResult.
+    private static void DetachChangedFilesOnTheCall()
+    {
+        var context = new ToolCallContext("agent-1", "implementer", "Member", "note test", 0);
+        ToolCallContext.Set(context);
+        context.Detach("changedFiles", new List<ChangedFile> { new("test.cs", "content") });
+    }
+
     [Test]
     public void RealApply_DropsChangedContent()
     {
@@ -62,8 +74,9 @@ public class AppliedChangeSummaryTests
     }
 
     [Test]
-    public void RealApply_WithResultId_NoteNamesGetLargeResultAndResultId()
+    public void RealApply_WithDetachedChangedFiles_NotePointsAtLargeResultAndTheChangedFilesPath()
     {
+        DetachChangedFilesOnTheCall();
         var filePath = new FilePathWrapper("test.cs");
         var summary = new AppliedChangeSummary(
             ChangeId: "abc12345",
@@ -71,15 +84,16 @@ public class AppliedChangeSummaryTests
             Description: "test",
             DryRun: false,
             ChangedContent: null,
-            Validated: true,
-            ChangedContentResultId: "resultId123");
+            Validated: true);
 
-        // The resultId inside the call is asserted in Tests.Tools.Basic ConvertedToolHintTests (this project sees no tool schemas, so ToolCallHint renders the bare tool name).
+        // The complete call (resultId and path rendered) is asserted in Tests.Tools.Basic ConvertedToolHintTests (this project sees no tool schemas, so ToolCallHint renders the bare tool name).
         Assert.That(summary.Note, Does.Contain("GetLargeResult"));
+        Assert.That(summary.Note, Does.Contain("largeResult.resultId"));
+        Assert.That(summary.Note, Does.Contain("successData.changedFiles"));
     }
 
     [Test]
-    public void RealApply_WithoutResultId_NoteNamesReadFile()
+    public void RealApply_NothingDetached_NoteNamesReadFile()
     {
         var filePath = new FilePathWrapper("test.cs");
         var summary = new AppliedChangeSummary(
@@ -88,16 +102,16 @@ public class AppliedChangeSummaryTests
             Description: "test",
             DryRun: false,
             ChangedContent: null,
-            Validated: true,
-            ChangedContentResultId: null);
+            Validated: true);
 
         Assert.That(summary.Note, Does.Contain("ReadFile"));
         Assert.That(summary.Note, Does.Not.Contain("GetLargeResult"));
     }
 
     [Test]
-    public void RealApply_SerializedJsonOmitsChangedContentAndCarriesResultId()
+    public void RealApply_SerializedJsonOmitsChangedContentAndTheObsoleteResultId()
     {
+        DetachChangedFilesOnTheCall();
         var filePath = new FilePathWrapper("test.cs");
         var summary = new AppliedChangeSummary(
             ChangeId: "abc12345",
@@ -105,16 +119,15 @@ public class AppliedChangeSummaryTests
             Description: "test",
             DryRun: false,
             ChangedContent: null,
-            Validated: true,
-            ChangedContentResultId: "resultId123");
+            Validated: true);
 
-        var json = JsonSerializer.Serialize(summary, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        // The wire options omit nulls, so the never-populated obsolete id is absent from the response.
+        var json = JsonSerializer.Serialize(summary, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
         using var doc = JsonDocument.Parse(json);
 
         Assert.That(doc.RootElement.TryGetProperty("changedContent", out _), Is.False);
         Assert.That(doc.RootElement.TryGetProperty("ChangedContent", out _), Is.False);
-        Assert.That(json, Does.Contain("resultId123"));
-        Assert.That(json, Does.Contain("changedContentResultId"));
+        Assert.That(json, Does.Not.Contain("changedContentResultId"));
     }
 
     [Test]
@@ -323,8 +336,9 @@ public class AppliedChangeSummaryTests
     }
 
     [Test]
-    public void NonValidatedSiteWithResultId_NoteNamesGetLargeResult()
+    public void NonValidatedSiteWithDetachedChangedFiles_NoteNamesGetLargeResult()
     {
+        DetachChangedFilesOnTheCall();
         var filePath = new FilePathWrapper("test.cs");
         var summary = new AppliedChangeSummary(
             ChangeId: "abc",
@@ -332,10 +346,10 @@ public class AppliedChangeSummaryTests
             Description: "test",
             DryRun: false,
             ChangedContent: null,
-            Validated: false,
-            ChangedContentResultId: "rid1");
+            Validated: false);
 
-        // The resultId inside the call is asserted in Tests.Tools.Basic ConvertedToolHintTests (this project sees no tool schemas, so ToolCallHint renders the bare tool name).
+        // The complete call is asserted in Tests.Tools.Basic ConvertedToolHintTests (this project sees no tool schemas, so ToolCallHint renders the bare tool name).
         Assert.That(summary.Note, Does.Contain("GetLargeResult"));
+        Assert.That(summary.Note, Does.Contain("successData.changedFiles"));
     }
 }

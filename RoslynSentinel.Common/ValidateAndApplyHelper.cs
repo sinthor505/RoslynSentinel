@@ -152,7 +152,11 @@ public static class ValidateAndApplyHelper
         var blob = await OperationBlobWriter.WriteApplyBlobAsync(
             operationName, changeId, applyResult, workspaceManager.GetSolutionRoot(), logger);
 
-        var contentResultId = ChangedContentOptions.InlineOnApply || applyResult.SucceededFiles.Count == 0 ? null : await StoreChangedContentAsync(changes, workspaceManager.GetSolutionRoot(), logger, cancellationToken);
+        if (!ChangedContentOptions.InlineOnApply && applyResult.SucceededFiles.Count > 0)
+        {
+            DetachChangedFiles(changes);
+        }
+
         var appliedDiff = returnDiff ? BuildDiffFromPreImages(changes, applyResult.PreImages) : null;
         var lineChanges = ComputeLineChanges(changes, deletePaths, p =>
             applyResult.PreImages != null && applyResult.PreImages.TryGetValue(p, out var pre) ? pre : beforeTexts.GetValueOrDefault(p));
@@ -172,7 +176,7 @@ public static class ValidateAndApplyHelper
             ((IUnrecoverableBreaker)workspaceManager).Trip(operationName, changeId, reason);
 
             // No changeId: one UndoLastApply cannot resolve is worse than none.
-            return new ApplyOutcome(null, null, false, appliedDiff, reason, LineChanges: lineChanges, ChangedContentResultId: contentResultId, Findings: applyResult.Findings);
+            return new ApplyOutcome(null, null, false, appliedDiff, reason, LineChanges: lineChanges, Findings: applyResult.Findings);
         }
 
         // Nothing was written, so no changeId should be issued either. Previously one was minted
@@ -194,33 +198,35 @@ public static class ValidateAndApplyHelper
                 LineChanges: lineChanges, Findings: applyResult.Findings);
         }
 
-        return new ApplyOutcome(changeId, null, false, appliedDiff, LineChanges: lineChanges, ChangedContentResultId: contentResultId, Findings: applyResult.Findings);
+        return new ApplyOutcome(changeId, null, false, appliedDiff, LineChanges: lineChanges, Findings: applyResult.Findings);
     }
 
-    public static async Task<string?> StoreChangedContentAsync(IReadOnlyDictionary<FilePathWrapper, string> changes, string? solutionRoot, ILogger logger, CancellationToken cancellationToken)
+    /// <summary>The name the written files are detached under: the payload lands at <c>successData.changedFiles</c> in the result store.</summary>
+    public const string ChangedFilesPayloadName = "changedFiles";
+
+    /// <summary>
+    /// Declares the updated text of every written file as the stored (not inline) <c>successData.changedFiles</c> payload of
+    /// the current call, one <see cref="ChangedFile"/> per entry. A no-op when no <see cref="ToolCallContext"/> is set.
+    /// A name can be detached once per call, but a tool may apply several batches in one call (per-project loops such as
+    /// QualifyCrefs and the test-category apply), so later batches append to the list the first one detached.
+    /// </summary>
+    public static void DetachChangedFiles(IReadOnlyDictionary<FilePathWrapper, string> changes)
     {
-        if (changes.Count == 0)
+        var context = ToolCallContext.Current;
+        if (context is null || changes.Count == 0)
         {
-            return null;
+            return;
         }
 
-        try
+        var rows = changes.Select(entry => new ChangedFile((string)entry.Key, entry.Value)).ToList();
+        // The batches of one call are applied one after another, so the list needs no lock.
+        if (context.Detached.FirstOrDefault(detached => detached.Name == ChangedFilesPayloadName).Payload is List<ChangedFile> existing)
         {
-            var dict = new Dictionary<string, string>();
-            foreach (var (key, value) in changes)
-            {
-                dict[(string)key] = value;
-            }
+            existing.AddRange(rows);
+            return;
+        }
 
-            var json = System.Text.Json.JsonSerializer.Serialize(dict, SharedJsonOptions.Compact);
-            var (offloaded, filePath, resultId) = await LargeResultHelper.StoreRawJsonAsync(json, solutionRoot, cancellationToken);
-            return offloaded ? resultId : null;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Failed to store changed content for large-result offload");
-            return null;
-        }
+        context.Detach(ChangedFilesPayloadName, rows);
     }
 
     /// <summary>

@@ -30,7 +30,7 @@ namespace RoslynSentinel.Common;
 /// is the visible signature of a whole-file reformat.
 /// </param>
 /// <param name="ChangedContentResultId">
-/// Id of the large-result file holding the updated text of every written file (fetch with GetLargeResult); null on dry runs, errors, no-write results, when ChangedContentOptions.InlineOnApply is on, or when the store failed (fail-closed).
+/// Obsolete and never populated (always null). The updated text of every written file is the stored <c>successData.changedFiles</c> payload (a list of <see cref="ChangedFile"/>), whose id is the response's <c>largeResult.resultId</c>; see ValidateAndApplyHelper.
 /// </param>
 /// <param name="Findings">
 /// Non-fatal observations from the write chokepoint, copied from <c>ApplyChangesResult.Findings</c> on a successful apply. Null on error, on a dry run, and when there are none.
@@ -43,6 +43,7 @@ public record ApplyOutcome(
     string? NotReversibleReason = null,
     DiagnosticReport? Validation = null,
     List<FileLineChange>? LineChanges = null,
-    string? ChangedContentResultId = null,
+    // TODO Step 10: remove the ChangedContentResultId copy sites (about 50 in Tools.Advanced, Tools.Basic) and then this member and the one on AppliedChangeSummary
+    [property: Obsolete("Use largeResult (the stored changedFiles payload)")] string? ChangedContentResultId = null,
     List<Finding>? Findings = null
 );

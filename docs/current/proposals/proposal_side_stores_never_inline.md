@@ -1,6 +1,6 @@
 # Retire the Build / RunTest / changed-content side stores (plan_wire_result_marshaller Step 8)
 
-**Status:** APPROVED 2026-11-07 (direction, not yet built). The original Step 8 (declare `[NeverInline]` properties and extend
+**Status:** IMPLEMENTED 2026-11-07 (slices af7e210f, d9fd0ec6, c6215b34 and the changed-content slice; live check pending; the text below is kept as designed). Was: APPROVED 2026-11-07 (direction, not yet built). The original Step 8 (declare `[NeverInline]` properties and extend
 the marshaller) was found not to work as written; the approved direction is "B for Build, C for RunTest and changed
 content" below. The 2026-11-07 survey facts are kept because the slices depend on them.
 
