@@ -37,7 +37,17 @@
                          Its "Recov%" is "next call was the same tool and ok" -- a retried query, not proof
                          the first answer was wrong.
 
+.PARAMETER AgentLogRoot  Folder searched recursively for model-eval agent.log files (the runner's transcript of a
+                         model under test). Each file is parsed by scripts\Parse-AgentLog.ps1 and its tool results are
+                         checked the same way: a failed call whose error code matches -CodePattern, or a successful call
+                         whose statusMessage / warning reports "no matches / 0 results / not found". Rows join the same
+                         report (Session = test name + run timestamp). When -AgentLogRoot or -AgentLog is given the
+                         Claude Code transcripts are NOT scanned unless -ProjectsRoot is also passed explicitly.
+.PARAMETER AgentLog      One agent.log file (same handling as -AgentLogRoot). May be combined with it.
+
 .EXAMPLE
+  .\scripts\Get-NotFoundRecoveryReport.ps1 -AgentLogRoot .\ModelTestingResults\113\Model_FixesWholeFileRewriteBug_MinimalGuidance
+  .\scripts\Get-NotFoundRecoveryReport.ps1 -AgentLog .\ModelTestingResults\113\Some_Test\20261107-080949-313\agent.log -Detail
   .\scripts\Get-NotFoundRecoveryReport.ps1 -Since 2026-10-01
   .\scripts\Get-NotFoundRecoveryReport.ps1 -Tool ReplaceSnippet -Top 6
   .\scripts\Get-NotFoundRecoveryReport.ps1 -CsvPath $env:TEMP\notfound.csv
@@ -52,14 +62,21 @@ param(
     [string]$CsvPath,
     [switch]$Detail,
     [switch]$ErrorsOnly,
-    [switch]$AllErrors
+    [switch]$AllErrors,
+    [string]$AgentLogRoot,
+    [string]$AgentLog
 )
 
 $ErrorActionPreference = 'Stop'
-if (-not (Test-Path $ProjectsRoot)) { throw "Transcript root not found: $ProjectsRoot" }
-
-$files = Get-ChildItem -Path $ProjectsRoot -Recurse -Filter *.jsonl -File
-if ($Since) { $files = $files | Where-Object { $_.LastWriteTime -ge $Since } }
+# Claude Code transcripts stay the default input; agent-log input replaces them unless -ProjectsRoot is explicit.
+$useTranscripts = $PSBoundParameters.ContainsKey('ProjectsRoot') -or -not ($AgentLogRoot -or $AgentLog)
+if ($useTranscripts) {
+    if (-not (Test-Path $ProjectsRoot)) { throw "Transcript root not found: $ProjectsRoot" }
+    $files = @(Get-ChildItem -Path $ProjectsRoot -Recurse -Filter *.jsonl -File)
+    if ($Since) { $files = @($files | Where-Object { $_.LastWriteTime -ge $Since }) }
+} else {
+    $files = @()
+}
 
 $guideRx = [regex]'(?i)Did you mean|\bTry\b|Re-?run|\bpass\b|\bcall\b|\bVerify\b|\bomit\b|\buse\b|\bcheck\b|\bsee\b|\bMUST\b|Re-?read|\bcopy\b|\bSupply\b|\bretry\b|\bSelect one\b|\bNarrow\b|NOT a confirmed'
 $zeroRx = [regex]'(?i)\bno (matches|results|references|callers|implementations|symbols|members|files|usages|candidates|findings|declarations)\b|\b0 (matches|results|references|callers|hits|usages)\b|\bzero\b|\bnothing\b|\bnone found\b|\bnot found\b'
@@ -76,7 +93,7 @@ function Get-Template([string]$m) {
 
 $rows = [System.Collections.Generic.List[object]]::new()
 $seenIds = [System.Collections.Generic.HashSet[string]]::new()
-Write-Host "Scanning $($files.Count) transcript file(s)..." -ForegroundColor DarkGray
+if ($useTranscripts) { Write-Host "Scanning $($files.Count) transcript file(s)..." -ForegroundColor DarkGray }
 
 foreach ($f in $files) {
     $pending = [System.Collections.Generic.List[object]]::new()   # failures awaiting their next tool_use
@@ -138,6 +155,76 @@ foreach ($f in $files) {
             NextTool = ''; NextFailed = $null
         }
         $rows.Add($row); $pending.Add($row)
+    }
+}
+
+# --- Model-eval agent.log input (reuses Parse-AgentLog.ps1; the parser is called, not copied) ---
+if ($AgentLogRoot -or $AgentLog) {
+    $parser = Join-Path $PSScriptRoot 'Parse-AgentLog.ps1'
+    if (-not (Test-Path -LiteralPath $parser)) { throw "Parse-AgentLog.ps1 not found next to this script: $parser" }
+    $logInputs = @()
+    if ($AgentLogRoot) {
+        if (-not (Test-Path -LiteralPath $AgentLogRoot -PathType Container)) { throw "Agent log root not found (expected a folder): $AgentLogRoot" }
+        $logInputs += $AgentLogRoot
+    }
+    if ($AgentLog) {
+        if (-not (Test-Path -LiteralPath $AgentLog -PathType Leaf)) { throw "Agent log not found (expected a file): $AgentLog" }
+        $logInputs += $AgentLog
+    }
+    $runs = [System.Collections.Generic.List[object]]::new()
+    foreach ($li in $logInputs) { foreach ($run in @(& $parser -LogPath $li)) { if ($run) { $runs.Add($run) } } }
+    Write-Host "Parsed $($runs.Count) agent.log run(s), $(($runs | ForEach-Object { @($_.Turns).Count } | Measure-Object -Sum).Sum) turn(s)." -ForegroundColor DarkGray
+
+    foreach ($run in $runs) {
+        $calls = @($run.Turns | ForEach-Object { $_.ToolCalls })   # call order = log order
+        $session = "$($run.TestName)/$($run.RunTimestamp)" + $(if ($run.Phase) { "/$($run.Phase)" } else { '' })
+        for ($ci = 0; $ci -lt $calls.Count; $ci++) {
+            $c = $calls[$ci]
+            $o = $c.ResultOrError
+            if ($null -eq $o) { continue }   # no result line (run killed) - nothing to judge
+            $code = $null; $msg = $null
+            $raw = if ($o.PSObject.Properties['RawUnparsedText']) { [string]$o.RawUnparsedText } else { $null }
+            $errObj = if ($o.PSObject.Properties['errorData']) { $o.errorData } elseif ($o.PSObject.Properties['error']) { $o.error } else { $null }
+            if ($errObj -is [string]) { $msg = $errObj }
+            elseif ($errObj -and $errObj.PSObject.Properties['errorCode']) { $code = [string]$errObj.errorCode; $msg = [string]$errObj.message }
+            elseif ($o.PSObject.Properties['message'] -and $c.Success -eq $false) { $msg = [string]$o.message }
+            elseif ($raw -and $c.Success -eq $false) { $msg = $raw }   # plain-text refusals (e.g. orientation breaker)
+
+            if ($null -ne $msg) {
+                # Failure. Without an errorCode only a zero-result sounding message counts as not-found.
+                if (-not $code) {
+                    if (-not ($AllErrors -or $zeroRx.IsMatch($msg))) { continue }
+                    $code = 'ZeroResult'
+                } elseif (-not $AllErrors -and $code -notmatch $CodePattern) { continue }
+            } elseif ($c.Success -ne $false -and -not $ErrorsOnly) {
+                # Success whose statusMessage (current) or warning (older envelopes) reports an empty result.
+                $msg = if ($o.PSObject.Properties['statusMessage'] -and $o.statusMessage) { [string]$o.statusMessage }
+                       elseif ($o.PSObject.Properties['warning'] -and $o.warning) { [string]$o.warning }
+                       else { $null }
+                if (-not $msg -or $o.isError -or -not $zeroRx.IsMatch($msg)) { continue }
+                $code = 'ZeroResult'
+            } else { continue }
+
+            $tool = [string]$c.ToolName
+            if ($Tool -and $tool -ine $Tool) { continue }
+            $a0 = $c.Args
+            $mode = ''
+            if ($a0 -and $a0.PSObject.Properties['mode']) { $mode = [string]$a0.mode }
+            elseif ($a0 -and $a0.PSObject.Properties['operation']) { $mode = [string]$a0.operation }
+            $nextTool = ''; $nextFailed = $null
+            if ($ci + 1 -lt $calls.Count) { $nextTool = [string]$calls[$ci + 1].ToolName; $nextFailed = ($calls[$ci + 1].Success -eq $false) }
+            $argsText = ($a0 | ConvertTo-Json -Compress -Depth 3) -replace '"reason":"[^"]*",?', '' -replace ',\}', '}'
+            $rows.Add([pscustomobject]@{
+                Tool = $tool; Mode = $mode; Code = $code
+                Guided = $guideRx.IsMatch($msg)
+                Template = Get-Template $msg
+                Message = $msg
+                Args = $argsText
+                Session = $session
+                Time = $run.RunTimestamp
+                NextTool = $nextTool; NextFailed = $nextFailed
+            })
+        }
     }
 }
 

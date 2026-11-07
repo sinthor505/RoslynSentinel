@@ -393,7 +393,16 @@ function Copy-NewRunDirectories {
         $dest = Join-Path $resultsDir $relative
         New-Item -ItemType Directory -Force -Path (Split-Path $dest -Parent) | Out-Null
         Write-Host "Archiving run to $dest" -ForegroundColor DarkGray
-        Copy-Item -Path $runPath -Destination $dest -Recurse -Force
+        # Copy-Item of a folder onto an EXISTING folder nests it (<ts>\<ts>\...). $dest already exists
+        # when something else archived this run first (the test project's own
+        # ModelTestingResultsArchiver also writes ModelTestingResults\<suffix>\...), so copy the
+        # contents in that case; a missing $dest is created by the plain folder copy.
+        if (Test-Path -LiteralPath $dest) {
+            Copy-Item -Path (Join-Path $runPath '*') -Destination $dest -Recurse -Force
+        }
+        else {
+            Copy-Item -Path $runPath -Destination $dest -Recurse -Force
+        }
     }
 }
 

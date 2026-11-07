@@ -22,8 +22,14 @@
           ToolCalls[]: one record per "Turn N: calling <Tool> with args: {...}" line that follows,
             each with ToolName, Args (parsed JSON, so .reason is directly queryable), Success,
             DurationSeconds, ResultOrError (parsed JSON of the Result:/error message)
-      - TotalToolErrors, ToolErrorCountsByName (cross-checkable against AgentToolErrorAssertions'
-        AssertWithinBudget numbers)
+      - TotalToolCalls, ToolCallCountsByName, TotalToolErrors, ToolErrorCountsByName
+        (cross-checkable against AgentToolErrorAssertions' AssertWithinBudget numbers)
+
+    Accepts both log generations: category RoslynSentinel.Common.AgentLoop.ModelAgentRunner (current,
+    " - " separator) and RoslynSentinel.Tests.ModelEval.AgentLoop.ModelAgentRunner (older, em-dash).
+    Large args/results the runner offloaded ("[2.3 KB offloaded -> turn-1-01-X-result.json]") are
+    loaded from the file beside agent.log (ToolCall.ResultFile names it). A nested duplicate run
+    folder (<ts>\<ts>\agent.log beside <ts>\agent.log) is skipped so counts are not doubled.
 
     Reasoning/Content text is multi-line in the source log (everything between "Reasoning:" and
     the literal " Content:" marker, which the runner always emits even when reasoning is empty
@@ -80,7 +86,11 @@ function ConvertFrom-JsonLoose {
     param([string]$Text)
     if ([string]::IsNullOrWhiteSpace($Text)) { return $null }
     try {
-        return ConvertFrom-Json -InputObject $Text -Depth 64 -ErrorAction Stop
+        # -Depth exists only on PowerShell 6+; Windows PowerShell 5.1 rejects the parameter.
+        if ($PSVersionTable.PSVersion.Major -ge 6) {
+            return ConvertFrom-Json -InputObject $Text -Depth 64 -ErrorAction Stop
+        }
+        return ConvertFrom-Json -InputObject $Text -ErrorAction Stop
     }
     catch {
         # Tool args/results are occasionally truncated mid-stream in a crashed run, or contain a
@@ -94,7 +104,34 @@ function Get-AgentLogFiles {
     if (Test-Path -Path $Path -PathType Leaf) {
         return @(Get-Item -Path $Path)
     }
-    return @(Get-ChildItem -Path $Path -Filter 'agent.log' -Recurse -File)
+    $all = @(Get-ChildItem -Path $Path -Filter 'agent.log' -Recurse -File)
+    # Some archived runs hold a nested duplicate of the same name (<ts>\<ts>\agent.log beside
+    # <ts>\agent.log). Parsing both doubles every count, so drop the nested copy when the outer
+    # folder has its own agent.log. A nested phase layout (<ts>\<ts>\<phase>\agent.log) has no
+    # outer log and is kept.
+    return @($all | Where-Object {
+        $dir = $_.Directory
+        $parent = $dir.Parent
+        -not ($parent -and $dir.Name -eq $parent.Name -and (Test-Path -LiteralPath (Join-Path $parent.FullName 'agent.log')))
+    })
+}
+
+# Large tool args/results are offloaded by the runner to a file beside agent.log and the log line
+# carries a marker instead: args `{"_offloaded":true,"_sizeBytes":N,"_file":"turn-4-01-X-args.json"}`
+# and results `[2.3 KB offloaded -> turn-1-01-X-result.json]`. Returns the file name or $null.
+function Get-OffloadedFileName {
+    param([string]$Text)
+    if ($Text -match '^\[[^\]]*offloaded -> (?<f>[^\]\s]+)\]\s*$') { return $Matches.f }
+    if ($Text -match '^\{\s*"_offloaded"\s*:\s*true.*"_file"\s*:\s*"(?<f>[^"]+)"') { return $Matches.f }
+    return $null
+}
+
+function Read-OffloadedJson {
+    param([string]$Dir, [string]$FileName)
+    # Leaf only: the marker comes from a log file, never trust it to carry a path.
+    $path = Join-Path $Dir (Split-Path $FileName -Leaf)
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
+    return ConvertFrom-JsonLoose ([System.IO.File]::ReadAllText($path))
 }
 
 function Convert-AgentLogFile {
@@ -154,6 +191,9 @@ function Convert-AgentLogFile {
         ToolsExposedCount    = $null
         UserPrompt           = $null
         Turns                = @()
+        ToolsExposed         = @()
+        TotalToolCalls       = 0
+        ToolCallCountsByName = @{}
         TotalToolErrors      = 0
         ToolErrorCountsByName = @{}
     }
@@ -177,7 +217,9 @@ function Convert-AgentLogFile {
         # \n-escaped JSON source text), so '.' must match them for the patterns below.
         $singleLine = [System.Text.RegularExpressions.RegexOptions]::Singleline
 
-        if ($category -eq 'RoslynSentinel.Tests.ModelEval.AgentLoop.ModelAgentRunner') {
+        # The runner moved from RoslynSentinel.Tests.ModelEval.AgentLoop to RoslynSentinel.Common.AgentLoop;
+        # accept any namespace so old and current logs both parse.
+        if ($category -match '(^|\.)AgentLoop\.ModelAgentRunner$') {
 
             $headerMatch = [System.Text.RegularExpressions.Regex]::Match(
                 $message,
@@ -192,12 +234,16 @@ function Convert-AgentLogFile {
 
             $turnRespondedMatch = [System.Text.RegularExpressions.Regex]::Match(
                 $message,
-                '^Turn (?<turn>\d+): model responded in (?<duration>[\d:.]+) — (?<toolCallCount>\d+) tool call\(s\)\. Reasoning: (?<reasoning>.*?) Content: (?<content>.*)$',
+                '^Turn (?<turn>\d+): model responded in (?<duration>[\d:.]+) (?:-|\u2014) (?<toolCallCount>\d+) tool call\(s\)\. Reasoning: (?<reasoning>.*?) Content: (?<content>.*)$',
                 $singleLine)
             if ($turnRespondedMatch.Success) {
                 $turnNumber = [int]$turnRespondedMatch.Groups['turn'].Value
                 if (-not $turnsByNumber.Contains($turnNumber)) {
-                    $turnsByNumber[$turnNumber] = [ordered]@{
+                    # [pscustomobject], not [ordered]@{}: Sort-Object / Group-Object / Where-Object
+                    # read PROPERTIES, and a dictionary exposes its keys as entries instead, so
+                    # `$run.Turns.ToolCalls | Group-Object ToolName` came back blank and the turns
+                    # sorted in the wrong order.
+                    $turnsByNumber[$turnNumber] = [pscustomobject][ordered]@{
                         TurnNumber      = $turnNumber
                         ResponseTime    = $turnRespondedMatch.Groups['duration'].Value
                         ToolCallCount   = [int]$turnRespondedMatch.Groups['toolCallCount'].Value
@@ -216,18 +262,27 @@ function Convert-AgentLogFile {
             if ($callingMatch.Success) {
                 $turnNumber = [int]$callingMatch.Groups['turn'].Value
                 if (-not $turnsByNumber.Contains($turnNumber)) {
-                    $turnsByNumber[$turnNumber] = [ordered]@{
+                    $turnsByNumber[$turnNumber] = [pscustomobject][ordered]@{
                         TurnNumber = $turnNumber; ResponseTime = $null; ToolCallCount = $null
                         ReasoningText = $null; ContentText = $null; ToolCalls = @()
                     }
                 }
-                $turnsByNumber[$turnNumber].ToolCalls += [ordered]@{
+                $argsText = $callingMatch.Groups['args'].Value
+                $argsFile = Get-OffloadedFileName $argsText
+                $argsObj = $null
+                if ($argsFile) { $argsObj = Read-OffloadedJson -Dir $File.DirectoryName -FileName $argsFile }
+                if ($null -eq $argsObj) { $argsObj = ConvertFrom-JsonLoose $argsText }
+                $turnsByNumber[$turnNumber].ToolCalls += [pscustomobject][ordered]@{
                     ToolName        = $callingMatch.Groups['tool'].Value
-                    Args            = ConvertFrom-JsonLoose $callingMatch.Groups['args'].Value
+                    Args            = $argsObj
                     Success         = $null
                     DurationTime    = $null
                     ResultOrError   = $null
+                    ResultFile      = $null
                 }
+                $toolName = $callingMatch.Groups['tool'].Value
+                if (-not $run.ToolCallCountsByName.ContainsKey($toolName)) { $run.ToolCallCountsByName[$toolName] = 0 }
+                $run.ToolCallCountsByName[$toolName]++
                 continue
             }
 
@@ -240,13 +295,20 @@ function Convert-AgentLogFile {
                 $toolName = $resultMatch.Groups['tool'].Value
                 $success = $resultMatch.Groups['outcome'].Value -eq 'succeeded'
                 if ($turnsByNumber.Contains($turnNumber)) {
+                    # First unresolved call of this tool: results are logged in call order.
                     $pendingCall = @($turnsByNumber[$turnNumber].ToolCalls) |
                         Where-Object { $_.ToolName -eq $toolName -and $null -eq $_.Success } |
-                        Select-Object -Last 1
+                        Select-Object -First 1
                     if ($pendingCall) {
+                        $payloadText = $resultMatch.Groups['payload'].Value.Trim()
+                        $resultFile = Get-OffloadedFileName $payloadText
+                        $resultObj = $null
+                        if ($resultFile) { $resultObj = Read-OffloadedJson -Dir $File.DirectoryName -FileName $resultFile }
+                        if ($null -eq $resultObj) { $resultObj = ConvertFrom-JsonLoose $payloadText }
                         $pendingCall.Success = $success
                         $pendingCall.DurationTime = $resultMatch.Groups['duration'].Value
-                        $pendingCall.ResultOrError = ConvertFrom-JsonLoose $resultMatch.Groups['payload'].Value
+                        $pendingCall.ResultOrError = $resultObj
+                        $pendingCall.ResultFile = $resultFile
                     }
                 }
                 if (-not $success) {
@@ -262,6 +324,7 @@ function Convert-AgentLogFile {
     }
 
     $run.Turns = @($turnsByNumber.Values | Sort-Object -Property TurnNumber)
+    $run.TotalToolCalls = @($run.Turns | ForEach-Object { $_.ToolCalls }).Count
     return [pscustomobject]$run
 }
 
