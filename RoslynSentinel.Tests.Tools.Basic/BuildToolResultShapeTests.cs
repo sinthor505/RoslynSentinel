@@ -127,7 +127,7 @@ public class BuildToolResultShapeTests
         var pageCount = 0;
         while (offset is not null)
         {
-            var page = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: data.FullDiagnosticsResultId, offset: offset.Value, charLimit: LargeResultHelper.OffloadThresholdBytes);
+            var page = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: data.FullDiagnosticsResultId, offset: offset.Value, charLimit: LargeResultHelper.InlineBudgetChars);
 
             Assert.That(page.IsError, Is.False, "the stored full-diagnostics payload must be readable by its resultId.");
             var pageDataType = page.SuccessData!.GetType();

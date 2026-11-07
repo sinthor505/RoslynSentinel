@@ -366,7 +366,7 @@ public class RunTestTests
         var data = (TestRunResult)result.SuccessData!;
         Assert.That(data.FullResultsId, Is.Not.Null.And.Not.Empty);
 
-        var page = await workspaceTools.GetLargeResultTool(reason: "test message", resultId: data.FullResultsId, offset: 0, charLimit: RoslynSentinel.Common.LargeResultHelper.OffloadThresholdBytes);
+        var page = await workspaceTools.GetLargeResultTool(reason: "test message", resultId: data.FullResultsId, offset: 0, charLimit: RoslynSentinel.Common.LargeResultHelper.InlineBudgetChars);
 
         Assert.That(page.IsError, Is.False, "the stored unprojected payload must be readable by its resultId.");
         var pageDataType = page.SuccessData!.GetType();

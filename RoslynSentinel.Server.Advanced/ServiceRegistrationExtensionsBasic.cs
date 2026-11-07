@@ -556,7 +556,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                     {
                         var text = block.Text;
                         if (string.IsNullOrEmpty(text) ||
-                            text.Length <= LargeResultHelper.OffloadThresholdBytes)
+                            text.Length <= LargeResultHelper.InlineBudgetChars)
                         {
                             continue;
                         }
@@ -564,7 +564,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                         var logger = context.Server.Services?.GetService<ILogger<PersistentWorkspaceManager>>();
                         logger?.LogWarning(
                             "Large tool result: tool '{Tool}' returned {SizeChars} chars (threshold: {OffloadThresholdBytes})",
-                            context.Params?.Name, text.Length, LargeResultHelper.OffloadThresholdBytes);
+                            context.Params?.Name, text.Length, LargeResultHelper.InlineBudgetChars);
 
                         // Result marshaller miss detector (plan_wire_result_marshaller.md Step 4): in mode On a tool built through
                         // SentinelToolFactory (SentinelToolFactory.IsHooked) should never reach this point over the threshold with a
@@ -578,7 +578,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                             {
                                 logger?.LogError(
                                     "Result marshaller miss: hooked tool '{Tool}' still returned {SizeChars} chars (threshold: {OffloadThresholdBytes}) after marshalling; the offload filter is handling it as the backstop. Check ResultPager hints and LargeResultHelper.EchoReserveChars.",
-                                    context.Params?.Name, text.Length, LargeResultHelper.OffloadThresholdBytes);
+                                    context.Params?.Name, text.Length, LargeResultHelper.InlineBudgetChars);
                             }
                             else
                             {
@@ -687,7 +687,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                                     isError,
                                     statusMessage,
                                     listSummary,
-                                    message = $"Result is {text.Length} bytes (threshold: {LargeResultHelper.OffloadThresholdBytes}).{hint} Use {RoslynSentinel.Common.LargeResultHints.FetchCall(stored.resultId!)} to page through results."
+                                    message = $"Result is {text.Length} bytes (threshold: {LargeResultHelper.InlineBudgetChars}).{hint} Use {RoslynSentinel.Common.LargeResultHints.FetchCall(stored.resultId!)} to page through results."
                                 }, RoslynSentinel.Common.SharedJsonOptions.Compact)
                             }];
                         break;

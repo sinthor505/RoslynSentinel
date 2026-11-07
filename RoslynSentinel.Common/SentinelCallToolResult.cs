@@ -500,6 +500,16 @@ public record LargeResultInfo
         get; init;
     }
 
+    /// <summary>
+    /// Length of the full result's wire text in characters, the unit the inline budget is measured in (<see cref="SizeBytes"/>
+    /// is the UTF-8 byte count of the same text). Null, so omitted, when the writer did not measure chars.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public long? SizeChars
+    {
+        get; init;
+    }
+
     public LargeResultInfo(
     string resultType,
     bool writtenToFile,

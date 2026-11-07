@@ -11,15 +11,16 @@ public static class LargeResultHelper
     // private) - grepped for external references to LargeResultHelper.JsonOptions before this
     // change; none found outside this file.
     internal static readonly JsonSerializerOptions JsonOptions = SharedJsonOptions.Default;
-    public const int OffloadThresholdBytes = 15 * 1024; // 15 KB
+    [Obsolete("Use InlineBudgetChars")]
+    public const int OffloadThresholdBytes = InlineBudgetChars;
 
     /// <summary>
     /// The inline size budget in characters of the final wire text: the length the generic offload filter
-    /// (<c>AddLargeResultOffloadFilter</c>) compares a response's text against, which is <see cref="OffloadThresholdBytes"/>
+    /// (<c>AddLargeResultOffloadFilter</c>) compares a response's text against, which is this constant
     /// read as a character count. Introduced by plan_wire_result_marshaller.md Step 4 as the one named chars constant;
-    /// Step 9 makes it the only size constant. Who measures what: docs/current/references/reference_tool_response_pipeline.md.
+    /// It is the only size constant; OffloadThresholdBytes is obsolete and equals it. Who measures what: docs/current/references/reference_tool_response_pipeline.md.
     /// </summary>
-    public const int InlineBudgetChars = OffloadThresholdBytes;
+    public const int InlineBudgetChars = 15 * 1024;
 
     /// <summary>
     /// Characters kept free beneath <see cref="InlineBudgetChars"/> for what later filters add to a response (the
@@ -50,7 +51,7 @@ public static class LargeResultHelper
     }
 
     /// <summary>
-    /// Serializes <paramref name="data"/> and, if it exceeds <see cref="OffloadThresholdBytes"/>, writes it
+    /// Serializes <paramref name="data"/> and, if it exceeds <see cref="InlineBudgetChars"/>, writes it
     /// to <c>.roslynsentinel/largeresults/largeresult_<timestamp>_<resultId>.json</c> wrapped in a
     /// <see cref="ResultWrapper"/> tagged with <paramref name="wrapperType"/> so <c>GetLargeResult</c> can
     /// deserialize it back. Callers that skip this and hand-write their own file (as GetMethodSource/
@@ -61,7 +62,7 @@ public static class LargeResultHelper
         T data, string? solutionRoot, ResultWrapperType wrapperType, CancellationToken cancellationToken)
     {
         var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(data);
-        if (jsonBytes.Length <= OffloadThresholdBytes || string.IsNullOrEmpty(solutionRoot) || data == null)
+        if (jsonBytes.Length <= InlineBudgetChars || string.IsNullOrEmpty(solutionRoot) || data == null)
         {
             return (false, default, null, jsonBytes);
         }

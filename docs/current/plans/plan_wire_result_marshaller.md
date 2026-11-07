@@ -1,6 +1,7 @@
 # Plan: one result marshaller at the SDK MarshalResult seam owns offload, paging, metadata and serialization
 
-**Status:** APPROVED 2026-11-02. In progress: Steps 0-6 done with the marshaller on by default, Step 7 done 2026-11-06; next is Step 8.
+**Status:** APPROVED 2026-11-02. In progress: Steps 0-7 done (Step 7 2026-11-06), Step 9 done 2026-11-07, Step 8 on HOLD
+pending a user decision (see the HOLD note under Step 8); Step 10 waits on that decision. Steps 10-11 remain.
 
 How it works now, including `SequencePager` (built later from
 [proposal_sequence_pager.md](../proposals/proposal_sequence_pager.md), and running before `ResultPager.Fit`):
@@ -222,6 +223,24 @@ enum value.
   the new `resultId` until Step 10 (additive).
 - Done when: tests page the full lists by path; `Utilities.PlanStepRunner` build parsing still reads
   `errorCount` (it is inline header data).
+- **HOLD 2026-11-07: the step as written does not work; needs a user decision.** A survey (explore-tier2, source read
+  only) found:
+  - The marshaller applies `[NeverInline]` only over budget (`ToolResultMarshaller.MarshalAsync` returns the text when it
+    fits), so a populated list in a small response stays inline and nothing is stored. Over budget, `SequencePager` runs
+    before `ResultPager.Fit` and would take a populated `[NeverInline]` array as the page sequence.
+  - The three stores already store only when needed: Build `Failed || OmittedErrorCount > 0`, RunTest `FailedCount > 0`,
+    changed content on every real apply (unless `InlineOnApply`). They work and models use them.
+  - Moving them changes model-visible output: `Raw` char windows over PascalCase `{Errors, Warnings}` become `Envelope`
+    paging over camelCase `successData.fullErrors`; the old id fields cannot be "populated from the new resultId" (the
+    DTO is serialized before the id exists) without a write-back; the `Note` text built from the id
+    (`AppliedChangeSummary.cs:119-121`) changes. A dictionary (`ChangedContent`) cannot be paged by path, so the stored
+    shape must be a list. `GetDiagnostics.buildVerification` is nested, and `ReflectHints` reads only direct properties.
+  - Cost if built: slice 0 marshaller (apply `[NeverInline]` before the budget check, neutral pointer wording, tests);
+    slice 1 Build (`BuildResult.FullErrors`/`FullWarnings`); slice 2 RunTest (`TestRunResult.FullResults`); slice 3
+    changed content (~50 `ChangedContentResultId:` construction sites in 5 files, migration-first).
+  - Options: (a) build it as above; (b) keep the three stores and reword "Done when" of Step 7 to name them as the
+    accepted exceptions (they are the only writers outside the marshaller); (c) build slice 0 plus Build/RunTest only.
+    Step 9 is independent and proceeds meanwhile.
 
 ### Step 9 - One measure
 - Files: `Common/LargeResultHelper.cs`, `ServiceRegistrationExtensionsBasic.cs` (filter), `GetLargeResult` shrink
@@ -283,6 +302,16 @@ enum value.
   key-pinning tests read today's shapes; all changes before Step 10 are additive.
 
 ## Progress log
+
+2026-11-07: Step 9 done. `LargeResultHelper.InlineBudgetChars` (15 * 1024) is the defining size constant;
+`OffloadThresholdBytes` is `[Obsolete("Use InlineBudgetChars")]` and has no code reader (the 11 production sites in the
+filter, `AsyncifyTools`, `WorkspaceFileEditImpl`, `WorkspaceReadNavigationImpl` and `StoreLargeResultAsync`, and the test
+sites, moved with the same value). The filter already compared the same value; both pointer writers in
+`ToolResultMarshaller` now set `largeResult.sizeChars` (`LargeResultInfo.SizeChars`, `long?`, omitted when null) beside
+`sizeBytes`; two new `ToolResultMarshallerOnModeTests` pin it for the Fit and sequence paths. Left for Step 10: the
+filter's own `offloaded` stub (`sizeBytes = text.Length`, in chars despite the name) and the legacy `GetLargeResult`
+window code, which now reads `InlineBudgetChars`. Step 8 survey 2026-11-07 (read-only): the step as written does not
+work, see the HOLD note under Step 8.
 
 2026-11-06: Step 7 done. `Search` callers, implementations and references return named records with no
 `[ResultRecords]` ([proposal_search_relationship_result_dtos.md](../proposals/closed/proposal_search_relationship_result_dtos.md));

@@ -197,6 +197,21 @@ public class ToolResultMarshallerOnModeTests
     }
 
     [Test]
+    public async Task On_OverBudgetSequencePage_SetsSizeCharsToTheFullTextLength_AndSizeBytesIsNoSmaller()
+    {
+        var big = BigSearch(400);
+        string fullText = FullText(big);
+
+        var (_, pointer, _) = await MarshalPagedAsync(big);
+
+        Assert.That(pointer.ContainsKey("returned"), Is.True, "sequence path: the pointer carries the page cursor");
+        long sizeChars = pointer["sizeChars"]!.GetValue<long>();
+        long sizeBytes = pointer["sizeBytes"]!.GetValue<long>();
+        Assert.That(sizeChars, Is.EqualTo(fullText.Length), "sizeChars counts the full wire text, not the first page");
+        Assert.That(sizeChars, Is.LessThanOrEqualTo(sizeBytes), "UTF-8 bytes are never fewer than UTF-16 chars");
+    }
+
+    [Test]
     public async Task On_ADeclaredRecordsHintOnTheRuntimeSuccessDataType_IsUsed_AndNotInferred()
     {
         var data = new OnModeProbeData
@@ -383,6 +398,24 @@ public class ToolResultMarshallerOnModeTests
         Assert.That(pointer.ContainsKey("returned"), Is.False);
         Assert.That(pointer.ContainsKey("nextOffset"), Is.False);
         Assert.That(pointer["message"]!.GetValue<string>(), Does.Contain("path: "));
+    }
+
+    [Test]
+    public async Task On_OverBudgetFit_SetsSizeCharsToTheFullTextLength_AndSizeBytesIsNoSmaller()
+    {
+        var files = Enumerable.Range(1, 60).ToDictionary(i => $"File{i}.cs", i => new string((char)('a' + (i % 26)), 1_000));
+        var result = new SentinelCallToolResult<object> { IsError = false, SuccessData = new { contents = files } };
+        string fullText = FullText(result);
+        Assert.That(fullText.Length, Is.GreaterThan(LargeResultHelper.InlineBudgetChars), "fixture sanity");
+
+        var (_, pointer, _) = await MarshalPagedAsync(result, checkLength: false);
+
+        Assert.That(pointer["omitted"]!.AsArray(), Is.Not.Empty, "Fit path: the cut is listed in omitted");
+        Assert.That(pointer.ContainsKey("returned"), Is.False, "Fit path: no sequence");
+        long sizeChars = pointer["sizeChars"]!.GetValue<long>();
+        long sizeBytes = pointer["sizeBytes"]!.GetValue<long>();
+        Assert.That(sizeChars, Is.EqualTo(fullText.Length), "sizeChars counts the full wire text, not the fitted inline text");
+        Assert.That(sizeChars, Is.LessThanOrEqualTo(sizeBytes), "UTF-8 bytes are never fewer than UTF-16 chars");
     }
 
     [Test]

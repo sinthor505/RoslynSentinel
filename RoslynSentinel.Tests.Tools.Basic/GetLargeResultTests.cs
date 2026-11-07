@@ -315,7 +315,7 @@ public class GetLargeResultTests
         // charLimit controls the raw-text window size (limit means "N records" and is ignored for
         // Raw results) - pass the full threshold explicitly to read the whole short payload back in
         // one window.
-        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: stored.resultId, charLimit: LargeResultHelper.OffloadThresholdBytes);
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: stored.resultId, charLimit: LargeResultHelper.InlineBudgetChars);
 
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.HasMoreData, Is.False, "The whole stored text fits in one window, so there should be no more pages.");
@@ -333,7 +333,7 @@ public class GetLargeResultTests
     {
         // A JSON object whose single field is repeated past OffloadThresholdBytes so the stored
         // text needs more than one window to read back in full.
-        var original = new string('x', LargeResultHelper.OffloadThresholdBytes + 500);
+        var original = new string('x', LargeResultHelper.InlineBudgetChars + 500);
         var originalJson = JsonSerializer.Serialize(new { data = original });
         var stored = await LargeResultHelper.StoreRawJsonAsync(originalJson, _tempDir, CancellationToken.None);
         Assert.That(stored.offloaded, Is.True);
@@ -345,7 +345,7 @@ public class GetLargeResultTests
         {
             // charLimit controls the raw-text window size (limit means "N records" and is ignored
             // for Raw results) - pass the full threshold explicitly on every page.
-            var page = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: stored.resultId, offset: offset.Value, charLimit: LargeResultHelper.OffloadThresholdBytes);
+            var page = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: stored.resultId, offset: offset.Value, charLimit: LargeResultHelper.InlineBudgetChars);
             Assert.That(!page.IsError, Is.True);
 
             var pageDataType = page.SuccessData!.GetType();
@@ -355,7 +355,7 @@ public class GetLargeResultTests
             // A single page must never itself be big enough to re-trigger the offload filter on
             // its way back out -> otherwise GetLargeResultTool(Raw) could re-offload under a new
             // resultId in an unbounded fetch/still-too-big/re-offload loop.
-            Assert.That(text.Length, Is.LessThanOrEqualTo(LargeResultHelper.OffloadThresholdBytes));
+            Assert.That(text.Length, Is.LessThanOrEqualTo(LargeResultHelper.InlineBudgetChars));
 
             offset = (int?)pageDataType.GetProperty("nextOffset")!.GetValue(page.SuccessData);
             pageCount++;
@@ -412,7 +412,7 @@ public class GetLargeResultTests
             JsonSerializer.Serialize(payload), _tempDir, CancellationToken.None);
         Assert.That(stored.offloaded, Is.True);
 
-        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: stored.resultId, charLimit: LargeResultHelper.OffloadThresholdBytes);
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: stored.resultId, charLimit: LargeResultHelper.InlineBudgetChars);
 
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.HasMoreData, Is.False);

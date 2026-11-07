@@ -295,6 +295,7 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
                 message: SequenceMessages.ForPage(parsed, sequence, page, LargeResultHints.FetchCall(resultId, offset: page.NextOffset)))
             {
                 Returned = page.Returned,
+                SizeChars = text.Length,
                 NextOffset = page.NextOffset,
             };
             pointerNode = JsonSerializer.SerializeToNode(pointer, options)!;
@@ -368,6 +369,7 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
                 message: $"INCOMPLETE: this result was cut to fit ({summary}); the cut parts are stored in full. Call {LargeResultHints.FetchCall(resultId, path: omitted[0].Path)} to read the first cut part (add offset/limit to page; every cut part is listed in omitted).")
             {
                 Omitted = omitted,
+                SizeChars = text.Length,
             };
             pointerNode = JsonSerializer.SerializeToNode(pointer, options)!;
         }

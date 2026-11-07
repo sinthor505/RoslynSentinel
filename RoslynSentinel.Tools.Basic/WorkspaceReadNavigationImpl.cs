@@ -1903,7 +1903,7 @@ public class WorkspaceReadNavigationImpl
                 // never itself be large enough for the filter to re-offload it, regardless of how
                 // quote-dense the stored content is.
                 const int envelopeOverheadBytes = 256;
-                var worstCaseMaxSlice = Math.Max(1, (LargeResultHelper.OffloadThresholdBytes - envelopeOverheadBytes) / 2);
+                var worstCaseMaxSlice = Math.Max(1, (LargeResultHelper.InlineBudgetChars - envelopeOverheadBytes) / 2);
                 var requestedWindow = charLimit is > 0 && charLimit < worstCaseMaxSlice ? charLimit.Value : worstCaseMaxSlice;
                 var length = Math.Min(requestedWindow, rawText.Length - start);
 
@@ -1922,7 +1922,7 @@ public class WorkspaceReadNavigationImpl
                 }
 
                 var pageData = BuildRawPage(length);
-                while (length > 0 && JsonSerializer.Serialize(pageData, _jsonOptions).Length > LargeResultHelper.OffloadThresholdBytes - envelopeOverheadBytes)
+                while (length > 0 && JsonSerializer.Serialize(pageData, _jsonOptions).Length > LargeResultHelper.InlineBudgetChars - envelopeOverheadBytes)
                 {
                     length /= 2;
                     pageData = BuildRawPage(length);
@@ -2130,7 +2130,7 @@ public class WorkspaceReadNavigationImpl
                                    LiteralResults = literalPage,
                                    RegexResults = regexPage
                                }, _jsonOptions).Length
-                                   > LargeResultHelper.OffloadThresholdBytes - envelopeOverheadBytes)
+                                   > LargeResultHelper.InlineBudgetChars - envelopeOverheadBytes)
                         {
                             pageRows = Math.Max(1, pageRows / 2);
                             (literalPage, regexPage) = BuildTextSearchPage(pageRows);
@@ -2351,7 +2351,7 @@ public class WorkspaceReadNavigationImpl
     {
         const int envelopeOverheadBytes = 256;
         var page = candidatePage;
-        while (page.Count > 1 && JsonSerializer.Serialize(page, jsonOptions).Length > LargeResultHelper.OffloadThresholdBytes - envelopeOverheadBytes)
+        while (page.Count > 1 && JsonSerializer.Serialize(page, jsonOptions).Length > LargeResultHelper.InlineBudgetChars - envelopeOverheadBytes)
         {
             page = page.Take(Math.Max(1, page.Count / 2)).ToList();
         }

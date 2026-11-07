@@ -285,7 +285,7 @@ public class BuildResultProjectorTests
         Assert.That(json, Does.Not.Contain("\"FullDiagnostics\"").IgnoreCase, "the carrier is [JsonIgnore]");
         Assert.That(
             json.Length,
-            Is.LessThan(LargeResultHelper.OffloadThresholdBytes),
+            Is.LessThan(LargeResultHelper.InlineBudgetChars),
             $"projected payload was {json.Length} characters");
     }
 }
