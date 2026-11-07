@@ -12,10 +12,14 @@ implementers itself. CLAUDE.md applies throughout (dog-fooding, `Git` scope `lis
 
 ## 1. Punchlist
 
-- Read `docs/current/TODO.md` yourself (one small file) and show a numbered list, one sentence per item,
-  grouped **Quick wins / Small / Medium / Large / Needs owner or blocked**, cheapest first. Give each
-  item its TODO.md line number. Mark parked items `(parked)`: an entry marked parked or deferred, the
-  "Needs owner review" section, and `PARKED` lines in the memory index.
+- Read `docs/current/TODO.md` yourself (one small file) and the latest
+  `.claude/handoff/*_todo_review_*.md` record if there is one. Show a numbered list, one sentence per
+  item, grouped **Quick wins / Small / Medium / Large / Needs owner or blocked**, cheapest first. Give
+  each item its TODO.md line number. Mark `[READY]` items `(ready)` (settled by a todo review) and
+  `[PARKED]` items `(parked)`, as well as the "Needs owner review" section and `PARKED` lines in the
+  memory index.
+- Items that need several decisions or a design are better settled by a `todo-review` session
+  first: say so and suggest it rather than scoping them overnight.
 - The numbers are permanent for the run: tracker, briefs, commit messages and the summary use them.
 
 ## 2. Confirm scope
@@ -30,6 +34,8 @@ overnight candidates. Give a recommendation for each (include / leave).
   item comes back as one of: `CLEAR` (file:symbol anchors, acceptance test), `DECISION` (the question,
   options, recommendation), `NEEDS-DESIGN`, `STALE` (evidence it is already done), `LIVE-WINDOW`.
   Write the anchors into the tracker's Scoping notes (they are unverified until a batch re-checks them).
+  For a `[READY]` item, the scoper reads the linked doc's `## Decisions` section and treats those as
+  owner rulings: do not ask them again; report `DECISION` only for a question they do not cover.
 - Ask every `DECISION` with `AskUserQuestion`, up to 4 per call, recommended option first. A simple
   one is settled now. Otherwise the owner says defer: mark it `DEFERRED (owner)`, do not dispatch it.
 - `NEEDS-DESIGN` items are deferred without asking, unless the owner wants to design one now.

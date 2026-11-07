@@ -1,6 +1,6 @@
 # TODO - open items only
 
-Rules: (1) one entry = one line (`- [OPEN|IN-PROGRESS|BLOCKED] Title (YYYY-MM-DD if known) - one sentence - [doc]` followed by a relative link); (2) when an item is done, move it to [CLOSED.md](./CLOSED.md) with evidence (older months: [archive/](./archive/)); (3) design prose belongs in proposals/, ideas/, issues/ or design/ (see [templates/README.md](./templates/README.md)), never here. Full text of every shrunk entry lives in the linked doc under "Moved from TODO.md (2026-10-17)".
+Rules: (1) one entry = one line (`- [OPEN|READY|IN-PROGRESS|BLOCKED|PARKED] Title (YYYY-MM-DD if known) - one sentence - [doc]` followed by a relative link; READY = decided and scoped by a todo review, decisions in the linked doc's `## Decisions`; PARKED = the sentence says why and what would unpark it); (2) when an item is done, move it to [CLOSED.md](./CLOSED.md) with evidence (older months: [archive/](./archive/)); (3) design prose belongs in proposals/, ideas/, issues/ or design/ (see [templates/README.md](./templates/README.md)), never here. Full text of every shrunk entry lives in the linked doc under "Moved from TODO.md (2026-10-17)".
 
 ## P1 Now
 
