@@ -83,6 +83,33 @@ public class EditAttributionLedger
         }
     }
 
+    /// <summary>
+    /// Most recent write recorded after <paramref name="afterSeq"/> by a known agent other than <paramref name="agentId"/>, across all
+    /// files in this edit attribution ledger; null when there is none. An anonymous writer does not count.
+    /// </summary>
+    public EditAttribution? LatestForeignSince(long afterSeq, string agentId)
+    {
+        lock (_gate)
+        {
+            EditAttribution? latest = null;
+            foreach (var list in _byPath.Values)
+            {
+                foreach (var entry in list)
+                {
+                    if (entry.Seq > afterSeq
+                        && entry.AgentId is not null
+                        && !string.Equals(entry.AgentId, agentId, StringComparison.Ordinal)
+                        && (latest is null || entry.Seq > latest.Seq))
+                    {
+                        latest = entry;
+                    }
+                }
+            }
+
+            return latest;
+        }
+    }
+
     private static string? SanitizeReason(string? reason)
     {
         if (reason is null)

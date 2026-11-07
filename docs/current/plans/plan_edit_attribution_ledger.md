@@ -1,6 +1,6 @@
 # Plan: Edit attribution ledger naming the agent behind each write, with a same-file conflict refusal and a fixed per-process operating mode
 
-**Status:** APPROVED 2026-11-05. Design rulings from the owner are recorded under Decision; Steps 0-9 done (Step 0 results under that step), with the Step 9 hook helper republish pending the rollout order in that step; the hook is installed and live: writes are recorded, the filter sets identity, the chokepoint refuses same-file conflicts between two known agents and `UndoLastApply` refuses an undo over another agent's later write. Step 8 live check: a restarted server latched `MultiAgent` ("auto: first call carried an agent id") with `CallerAgentId: main`, and two concurrent subagents each reported their own distinct id; the Step 4 refusal naming a subagent was not reproduced live (it needs a write landing inside another agent's in-flight call) and is covered by tests only. A missing hook exe fails open (checked with `claude -p` in a scratch folder, both command forms). Citations checked at commit b3b90a26; the request pipeline, `AsyncLocal` and telemetry points were rechecked at bab9599b, which added per-tool telemetry. Between those commits `PersistentWorkspaceManager.cs`, `ToolArgumentValidator.cs`, `ValidateAndApplyHelper.cs` and `AdminTools.cs` did not change, so their line citations still hold.
+**Status:** APPROVED 2026-11-05. Design rulings from the owner are recorded under Decision; Steps 0-10 done (Step 0 results under that step), with the Step 9 hook helper republish pending the rollout order in that step; the hook is installed and live: writes are recorded, the filter sets identity, the chokepoint refuses same-file conflicts between two known agents and `UndoLastApply` refuses an undo over another agent's later write. Step 8 live check: a restarted server latched `MultiAgent` ("auto: first call carried an agent id") with `CallerAgentId: main`, and two concurrent subagents each reported their own distinct id; the Step 4 refusal naming a subagent was not reproduced live (it needs a write landing inside another agent's in-flight call) and is covered by tests only. A missing hook exe fails open (checked with `claude -p` in a scratch folder, both command forms). Citations checked at commit b3b90a26; the request pipeline, `AsyncLocal` and telemetry points were rechecked at bab9599b, which added per-tool telemetry. Between those commits `PersistentWorkspaceManager.cs`, `ToolArgumentValidator.cs`, `ValidateAndApplyHelper.cs` and `AdminTools.cs` did not change, so their line citations still hold.
 
 ## Problem
 
@@ -309,8 +309,10 @@ in place. Findings reuse `Finding`.
 - Files: `PersistentWorkspaceManager.cs` (inside the lock, after Step 4); `ValidateAndApplyHelper.cs`.
 - Change: `ValidateAndApplyHelper` sets `ctx.GatePassed` when its gate passes, and the chokepoint treats
   `validateChanges` the same way. Under the lock, if the gate passed and any entry from a different known agent has
-  `Seq > ctx.StartSeq`, re-run `ValidationEngine.ValidateChangesAsync(CurrentSolution, changes)`, the static overload
-  meant for use inside the chokepoint (`ValidationEngine.cs:136`). Refuse on new errors, naming the agent.
+  `Seq > ctx.StartSeq`, re-run `ValidationEngine.ValidateChangesAsync(CurrentSolution, changes, ctx.GateRemovePaths)`, the
+  static overload meant for use inside the chokepoint (`ValidationEngine.cs:136`). `GateRemovePaths` holds what the gate left
+  out of its candidate, because a rename's old path would otherwise read as a duplicate declaration, and the chokepoint is not
+  given `removePaths`. Refuse on new errors with `ConcurrentEditRefused`, naming the agent.
 - Done when a test reproduces the race (A removes a method, B adds a call, both validated first) and the later apply is
   refused; a call with no foreign write does not re-validate.
 

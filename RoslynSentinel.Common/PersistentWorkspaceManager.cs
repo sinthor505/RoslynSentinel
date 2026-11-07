@@ -1877,6 +1877,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     Summary: $"Validation failed with {validationReport.Diagnostics.Count} new error(s); no files written.",
                     ValidationResult: validationReport);
             }
+
+            ToolCallContext.Current?.MarkGatePassed();
         }
 
         await _solutionLock.WaitAsync(cancellationToken);
@@ -1903,6 +1905,13 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             if (conflict is not null)
             {
                 return conflict;
+            }
+
+            // Another agent wrote elsewhere while this call ran: the compile gate saw an older solution, so run it again here.
+            var revalidation = await RevalidateAfterForeignWriteAsync(changes, exactRestore, cancellationToken);
+            if (revalidation is not null)
+            {
+                return revalidation;
             }
 
             // ── Pre-image capture ─────────────────────────────────────────────
@@ -2250,10 +2259,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     continue;
                 }
 
-                var writer = $"Written by agent '{latest.AgentId}'"
-                    + (string.IsNullOrEmpty(latest.AgentType) ? string.Empty : $" ({latest.AgentType})")
-                    + $" via {latest.Tool ?? "an unknown tool"} at {latest.UtcTime:HH:mm:ss}Z"
-                    + (string.IsNullOrEmpty(latest.Reason) ? string.Empty : $": \"{latest.Reason}\"");
+                var writer = "Written by " + DescribeWriter(latest);
                 conflicts[(FilePathWrapper)target] = writer;
                 firstPath ??= target;
             }
@@ -2280,6 +2286,66 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             if (_logger.IsEnabled(LogLevel.Warning))
             {
                 _logger.LogWarning(ex, "Concurrent edit check failed; the write proceeds.");
+            }
+
+            return null;
+        }
+    }
+
+    private static string DescribeWriter(EditAttribution entry) =>
+    $"agent '{entry.AgentId}'"
+    + (string.IsNullOrEmpty(entry.AgentType) ? string.Empty : $" ({entry.AgentType})")
+    + $" via {entry.Tool ?? "an unknown tool"} at {entry.UtcTime:HH:mm:ss}Z"
+    + (string.IsNullOrEmpty(entry.Reason) ? string.Empty : $": \"{entry.Reason}\"");
+
+    /// <summary>
+    /// A call's compile gate ran against the solution as it stood then. When a different known agent has written since the call
+    /// started, this re-runs the gate against the current solution. It runs inside the lock, so the compile holds up other writers, and
+    /// only when such a write exists. Returns null when the write may proceed. A check failure is logged and the write proceeds,
+    /// so this check never blocks a write on its own.
+    /// </summary>
+    private async Task<ApplyChangesResult?> RevalidateAfterForeignWriteAsync(Dictionary<FilePathWrapper, string> changes, bool exactRestore, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var ctx = ToolCallContext.Current;
+            if (exactRestore || ctx is not { AgentId: { } agentId, GatePassed: true } || CurrentSolution is null)
+            {
+                return null;
+            }
+
+            var writer = _editAttributions.LatestForeignSince(ctx.StartSeq, agentId);
+            if (writer is null)
+            {
+                return null;
+            }
+
+            var report = await ValidationEngine.ValidateChangesAsync(CurrentSolution, changes, ctx.GateRemovePaths, cancellationToken);
+            if (!report.IsError || report.Diagnostics.Count == 0)
+            {
+                return null;
+            }
+
+            var first = report.Diagnostics[0];
+            var why = $"{DescribeWriter(writer)} wrote while this call was running";
+            return new ApplyChangesResult(
+                true,
+                [],
+                changes.Keys.ToDictionary(path => path, _ => why),
+                $"Refused - this change passed its compile check, but {why}, and it now introduces {report.Diagnostics.Count} new compiler error(s); nothing was written. " +
+                $"First: {first.Id} in {Path.GetFileName((string)first.FilePath)}:{first.StartLine}: {first.Message} " +
+                "Next: re-read the files involved, update your change, then retry. " +
+                "If your change conflicts with the other agent's slice, stop and report to your dispatcher with a line starting MULTI-AGENT: and the writer named above.",
+                WorkspaceInSync: true,
+                WorkspaceVersion: _workspaceVersion,
+                ValidationResult: report,
+                RefusalCode: ToolErrorCode.ConcurrentEditRefused);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning(ex, "Re-validation after another agent's write failed; the write proceeds.");
             }
 
             return null;

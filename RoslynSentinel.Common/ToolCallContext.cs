@@ -60,6 +60,16 @@ public sealed class ToolCallContext
     /// <summary>True once the write gate has passed for this call.</summary>
     public bool GatePassed => Volatile.Read(ref _gatePassed) != 0;
 
-    /// <summary>Marks the write gate as passed for this call. Visible to every continuation that holds this instance.</summary>
-    public void MarkGatePassed() => Volatile.Write(ref _gatePassed, 1);
+    /// <summary>The paths the write gate left out of its candidate solution; null when none or the gate has not passed.</summary>
+    public IReadOnlyCollection<FilePathWrapper>? GateRemovePaths { get; private set; }
+
+    /// <summary>
+    /// Marks the write gate as passed for this call. Visible to every continuation that holds this instance.
+    /// <paramref name="removePaths"/> are the paths the gate left out of its candidate solution, so a re-validation can do the same.
+    /// </summary>
+    public void MarkGatePassed(IReadOnlyCollection<FilePathWrapper>? removePaths = null)
+    {
+        GateRemovePaths = removePaths;
+        Volatile.Write(ref _gatePassed, 1);
+    }
 }

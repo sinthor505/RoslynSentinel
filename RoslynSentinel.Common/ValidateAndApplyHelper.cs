@@ -82,13 +82,14 @@ public static class ValidateAndApplyHelper
             }
         }
 
+        IReadOnlyCollection<FilePathWrapper>? allRemovePaths;
         DiagnosticReport validation;
         try
         {
             // Files actually being deleted from disk also need their Document dropped from the
             // candidate solution before compiling -> same reasoning as removePaths (a rename's old
             // path), just via a different route (an on-disk delete instead of a superseding write).
-            var allRemovePaths = deletePaths == null
+            allRemovePaths = deletePaths == null
                 ? removePaths
                 : (removePaths ?? []).Concat(deletePaths).ToList();
             validation = await validationEngine.ValidateChangesAsync(changes, allRemovePaths, cancellationToken);
@@ -117,6 +118,9 @@ public static class ValidateAndApplyHelper
                 workspaceManager, detail.Select(d => d.FilePath.ToString()));
             return new ApplyOutcome(null, validationError with { Findings = validationFindings.Count > 0 ? validationFindings.ToList() : null }, dryRun, Validation: validation);
         }
+
+        // The chokepoint re-runs this gate if another agent writes before this change lands.
+        ToolCallContext.Current?.MarkGatePassed(allRemovePaths);
 
         if (dryRun)
         {
