@@ -1216,7 +1216,7 @@ public class MemberRefactoringEngine
 
         if (methodDecl.ParameterList.Parameters.Any(p => p.Identifier.Text == paramName))
         {
-            throw new ToolTargetIneligibleException($"Cannot edit: '{methodName}' already has a parameter named '{paramName}'.");
+            throw new ToolTargetIneligibleException($"Cannot edit: '{methodName}' already has a parameter named '{paramName}'. Choose a different paramName, or call {ToolCallHint.Call("GetMethodSource", ("filePath", filePath.ToString()), ("methodName", methodName))} to see its current parameters.");
         }
 
         var newParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName)).WithType(SyntaxFactory.ParseTypeName(paramType).WithTrailingTrivia(SyntaxFactory.Space));
@@ -2636,7 +2636,7 @@ public class MemberRefactoringEngine
                     !(l.Location.SourceTree == memberTree && memberSpan.Contains(l.Location.SourceSpan))));
                 if (usageCount > 0)
                 {
-                    throw new ToolTargetIneligibleException($"Cannot remove member '{memberName}' - it has {usageCount} usages in the solution.");
+                    throw new ToolTargetIneligibleException($"Cannot remove member '{memberName}' - it has {usageCount} usages in the solution. Call {ToolCallHint.Call("Search", ("mode", "references"), ("query", memberName))} to list them, update or remove those usages, then retry.");
                 }
             }
         }
@@ -4329,7 +4329,7 @@ public class MemberRefactoringEngine
 
         if (methodNode != null)
         {
-            throw new ToolTargetIneligibleException("Could not convert method to property: methods with parameters cannot become properties.");
+            throw new ToolTargetIneligibleException($"Could not convert method to property: methods with parameters cannot become properties. Call {ToolCallHint.Call("GetMethodSource", ("filePath", filePath.ToString()), ("methodName", methodName))} to see its parameters; remove them first or keep it a method.");
         }
 
         if (methodNode == null)
@@ -4337,7 +4337,7 @@ public class MemberRefactoringEngine
             throw new ToolNotFoundException("Method not found.", "method", methodName);
         }
 
-        throw new ToolTargetIneligibleException("Could not convert method to property: the method body must be a single return statement or an expression body.");
+        throw new ToolTargetIneligibleException($"Could not convert method to property: the method body must be a single return statement or an expression body. Call {ToolCallHint.Call("GetMethodSource", ("filePath", filePath.ToString()), ("methodName", methodName))} to see the body and reduce it to one return statement first.");
     }
 
     /// <summary>
@@ -4385,7 +4385,7 @@ public class MemberRefactoringEngine
             };
         }
 
-        throw new ToolTargetIneligibleException("Method accesses instance members and cannot be made static.");
+        throw new ToolTargetIneligibleException($"Method accesses instance members and cannot be made static. Call {ToolCallHint.Call("GetMethodSource", ("filePath", filePath.ToString()), ("methodName", methodName))} to see which instance members it uses; move them or pass them as parameters first.");
     }
 
     public async Task<ExtractMethodResult> ExtractMethodAsync(FilePathWrapper filePath, int startLine, string startLineText, int endLine, string endLineText, string newMethodName, CancellationToken cancellationToken = default)
