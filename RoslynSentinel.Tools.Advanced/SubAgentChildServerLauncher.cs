@@ -124,6 +124,7 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
             }
 
             await BuildServerAsync(serverProject, buildDirectory, cancellationToken);
+            await RestoreSolutionAsync(Path.Combine(worktreePath, solutionRelativePath), worktreePath, runId, cancellationToken);
 
             var serverExe = Path.Combine(buildDirectory, "RoslynSentinel.Server.Advanced.exe");
             var transport = new StdioClientTransport(new StdioClientTransportOptions
@@ -232,6 +233,31 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
                 $"Building the worktree's RoslynSentinel server failed (exit code {result.ExitCode}). " +
                 "The base ref may not compile; try a different baseBranch.",
                 Tail($"{result.StdOut}\n{result.StdErr}".Trim(), MaxBuildDetailChars));
+        }
+    }
+
+    /// <summary>
+    /// Restores every project in the worktree's solution. The server build above restores only the server's
+    /// own closure, so without this the test projects have no assets file and the child's Build reports
+    /// thousands of CS0246 errors the model did not cause. A failure here is only logged: the server can
+    /// still run, and a failed launch would cost the caller more than a noisy Build.
+    /// </summary>
+    private async Task RestoreSolutionAsync(string solutionPath, string worktreePath, string runId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await RunProcessAsync(
+                "dotnet", ["restore", solutionPath, "--nologo", "-v", "quiet"], worktreePath, cancellationToken);
+            if (result.ExitCode != 0)
+            {
+                logger.LogWarning(
+                    "SubAgent {RunId}: restoring the worktree solution failed (exit code {ExitCode}); the child's Build may report false errors. {Detail}",
+                    runId, result.ExitCode, Tail($"{result.StdOut}\n{result.StdErr}".Trim(), MaxBuildDetailChars));
+            }
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            logger.LogWarning(ex, "SubAgent {RunId}: could not run 'dotnet restore' for the worktree solution; the child's Build may report false errors.", runId);
         }
     }
 
