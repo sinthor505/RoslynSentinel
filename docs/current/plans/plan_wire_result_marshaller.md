@@ -240,7 +240,8 @@ enum value.
     changed content (~50 `ChangedContentResultId:` construction sites in 5 files, migration-first).
   - Options: (a) build it as above; (b) keep the three stores and reword "Done when" of Step 7 to name them as the
     accepted exceptions (they are the only writers outside the marshaller); (c) build slice 0 plus Build/RunTest only.
-    Step 9 is independent and proceeds meanwhile.
+    Step 9 is independent and proceeds meanwhile. Full write-up and the open questions:
+    [proposal_side_stores_never_inline.md](../proposals/proposal_side_stores_never_inline.md).
 
 ### Step 9 - One measure
 - Files: `Common/LargeResultHelper.cs`, `ServiceRegistrationExtensionsBasic.cs` (filter), `GetLargeResult` shrink
