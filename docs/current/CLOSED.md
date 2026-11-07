@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Parse-AgentLog.ps1 returns 0 turns - resolved (2026-11-07)
+
+`Parse-AgentLog.ps1` returns 0 turns on current logs (2026-11-07) - its turn regex needs an em-dash but logs use " - ", and its category filter expects `...Tests.ModelEval.AgentLoop...` while logs say `RoslynSentinel.Common.AgentLoop.ModelAgentRunner`; a patched copy at `C:\tmp\parsefix\Parse-AgentLog-patched.ps1` parses turns but its per-tool grouping comes out blank; also the eval script archives each run folder into a nested duplicate of the same name, which doubles what the parser sees
+
+Evidence: scripts/Parse-AgentLog.ps1 parses 105 runs / 1689 turns on ModelTestingResults/113/Model_FixesWholeFileRewriteBug_MinimalGuidance with per-tool grouping (pwsh 7.5 and 5.1); modeleval archive copy fixed; fac89fdd
+
 ## Edit attribution ledger for parallel subagents - resolved (2026-11-07)
 
 Edit attribution ledger for parallel subagents (2026-11-05, approved) - per-server record of which agent wrote each file, same-file conflict refusal, fixed per-process operating mode (`--operating-mode`); identity injected by a PreToolUse hook - [plan](plans/closed/plan_edit_attribution_ledger.md)
