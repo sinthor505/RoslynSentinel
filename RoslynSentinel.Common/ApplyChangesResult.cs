@@ -17,6 +17,9 @@ namespace RoslynSentinel.Common;
 /// partial write -> to avoid misleading callers into thinking their change didn't take effect.</para>
 /// <para><see cref="Findings"/> carries non-fatal observations from the write chokepoint (for example a
 /// pre-image that was written outside the chokepoint with the wrong line endings). Null when there are none.</para>
+/// <para><see cref="NeedsFullReload"/> is <c>true</c> when a structural file in the write set (project, props, targets) queued a
+/// full workspace reload instead of the per-document fold; <see cref="WorkspaceInSync"/> is then <c>false</c> until the reload
+/// lands. Omitted from the wire when <c>false</c>.</para>
 /// </summary>
 public record ApplyChangesResult(
     bool IsError,
@@ -30,7 +33,8 @@ public record ApplyChangesResult(
     List<string>? RolledBackFiles = null,
     List<string>? NoOpFiles = null,
     string? RefusalCode = null,
-    List<Finding>? Findings = null
+    List<Finding>? Findings = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] bool NeedsFullReload = false
 ) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]

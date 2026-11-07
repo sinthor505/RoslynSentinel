@@ -44,6 +44,7 @@ public class WorkspaceRefreshTests
                 new Dictionary<FilePathWrapper, string> { [tempFile] = updatedContent });
 
             Assert.That(result.WorkspaceInSync, Is.True);
+            Assert.That(result.NeedsFullReload, Is.False, "an ordinary .cs write takes the per-document fold");
             Assert.That(result.IsError, Is.False, result.Summary);
             Assert.That(result.FailedFiles, Is.Empty);
             Assert.That(result.SucceededFiles, Does.Contain(tempFile));
@@ -138,6 +139,7 @@ public class WorkspaceRefreshTests
 
             // Structural change: fast path sets needsFullReload; WorkspaceInSync must be false.
             Assert.That(result.WorkspaceInSync, Is.False, "Structural change should set WorkspaceInSync=false");
+            Assert.That(result.NeedsFullReload, Is.True, "a .csproj in the write set must report that a full reload was queued");
             Assert.That(result.IsError, Is.False, result.Summary);
             Assert.That(result.FailedFiles, Is.Empty);
             Assert.That(result.SucceededFiles, Does.Contain(csprojFile));

@@ -2264,7 +2264,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 workspaceInSync, _workspaceVersion, preImages, validationReport,
                 rolledBack.Count > 0 ? rolledBack : null,
                 noOp.Count > 0 ? noOp : null,
-                Findings: eolFindings is { Count: > 0 } ? eolFindings : null);
+                Findings: eolFindings is { Count: > 0 } ? eolFindings : null,
+                NeedsFullReload: needsFullReload);
         }
         finally
         {
