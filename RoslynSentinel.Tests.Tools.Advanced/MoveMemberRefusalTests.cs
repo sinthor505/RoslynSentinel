@@ -65,6 +65,23 @@ public sealed class MoveMemberRefusalTests
 
     [Test]
     [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_PartialClassSplitAcrossFiles_RequestedMemberInOtherPart_IsRefusedNotSkipped()
+    {
+        var sourceA = "public partial class Source\n{\n    public int Get() => 1;\n}\n\npublic class Target\n{\n}\n".ReplaceLineEndings("\r\n");
+        var sourceB = "public partial class Source\n{\n    public int Other() => 2;\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Source.cs", sourceA), ("SourceOther.cs", sourceB));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Source.cs"), "Source", ["Get", "Other"], "Target");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData?.Message, Does.Contain("another part"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("Other"));
+        Assert.That(workspace.ReadText("Source.cs"), Is.EqualTo(sourceA), "A refused call must not write.");
+        Assert.That(workspace.ReadText("SourceOther.cs"), Is.EqualTo(sourceB), "A refused call must not write.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
     public async Task MoveMember_KeepDelegator_ExtensionMethod_ReturnsTargetIneligible()
     {
         var original = "public static class Source\n{\n    public static int Get(this string s) => 1;\n}\n\npublic static class Target\n{\n}\n".ReplaceLineEndings("\r\n");
