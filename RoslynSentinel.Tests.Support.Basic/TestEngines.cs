@@ -42,8 +42,17 @@ public static class TestEngines
         return services.BuildServiceProvider();
     }
 
-    public static PersistentWorkspaceManager PersistentWorkspaceManager(ILogger<IWorkspaceManager> logger) =>
-        ActivatorUtilities.CreateInstance<PersistentWorkspaceManager>(CreateProvider(), logger);
+    // solutionPath (optional): when set, assigned to SolutionPath before the manager is returned.
+    public static PersistentWorkspaceManager PersistentWorkspaceManager(ILogger<IWorkspaceManager> logger, string? solutionPath = null)
+    {
+        var manager = ActivatorUtilities.CreateInstance<PersistentWorkspaceManager>(CreateProvider(), logger);
+        if (solutionPath is not null)
+        {
+            manager.SolutionPath = solutionPath;
+        }
+
+        return manager;
+    }
 
     public static SentinelConfiguration SentinelConfiguration() =>
         ActivatorUtilities.CreateInstance<SentinelConfiguration>(CreateProvider());
