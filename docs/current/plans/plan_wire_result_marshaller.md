@@ -346,6 +346,19 @@ because the Qualify-crefs and test-category loops apply once per project and `De
 production `StoreRawJsonAsync` caller remains except the filter backstop. Not yet checked live (running server predates
 the commits; restart first). In `off`/`passthrough` mode detached payloads are dropped.
 
+2026-11-07 (live check, server build 61990d8b, scratch project `Tests.SubAgent`, scratch file deleted): PASS for all three
+shapes. Build with 150 errors: no `omittedErrorCount`/`fullDiagnosticsResultId`; sequence pointer "INCOMPLETE: 31 of 300
+records returned ... offset: 31"; `GetLargeResult(offset: 31)` continued on `successData.errors`; header fields stayed
+inline. RunTest: "Stored, not inline: fullResults (1 records)" with `omitted` unit `items`, `inferred: false`; the stored
+row had the full message while the inline row cut `errorMessage` at ~300 chars and `errorStackTrace` at ~200 (the
+projector truncates, it does not drop). Changed content: `RenameSymbol` and `Member` replace carry the `changedFiles`
+pointer even on a small response; the `Member` Note says `resultId: "<largeResult.resultId>"` literally (built before the id
+exists) and the stored paths are repo-relative. `ReplaceSnippet` and `CreateFile` do not use `AppliedChangeSummary`, so they
+carry no pointer or changed content (no coverage of that shape there); a `Member` dry run carries none either. No
+"cut to fit" wording and no second resultId appeared. Found (not from Step 8): `Build(level: fullBuildThrowaway)` reports
+every diagnostic twice (150 real errors gave `errorCount` 300; `quickBuild` gave 150; the 3 warnings of the full build
+earlier the same day also showed as 6), so the parse of the throwaway build probably reads each diagnostic twice; open.
+
 2026-11-06: Step 7 done. `Search` callers, implementations and references return named records with no
 `[ResultRecords]` ([proposal_search_relationship_result_dtos.md](../proposals/closed/proposal_search_relationship_result_dtos.md));
 the default sequence pages their lists. Bare-list tools stay on the default sequence. A text search found no production
