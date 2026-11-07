@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## MoveMember keep modes: remaining gaps - resolved (2026-11-07)
+
+MoveMember keep modes: remaining gaps (2026-11-05; generic methods DONE per owner ruling D7: forwarder mirrors type parameters and constraints and passes explicit type arguments, tests in MoveMemberSuccessTests/MoveMemberForwarderTests) - keep modes on extension methods stay refused by design (`TargetIneligible`) until a use case appears, and a plain move is refused only when a receiver-style call `"a".Foo(1)` exists; a private moved method keeps a forwarder to a now-inaccessible member (CS0122, caught by the compile gate, no eligibility refusal yet); a generic containing type (`class Foo<T>`) gets no refusal, the dry-run compile gate catches a moved body that uses the containing `T` - [doc](proposals/proposal_movemember_keep_delegator_and_same_class_calls.md)
+
+Evidence: RequireKeepModeEligible refuses private and protected methods in keep modes (forwarder would be CS0122) and RequireNoContainingTypeParameters refuses a member using the source class type parameter unless the target declares the same name; MoveMemberRefusalTests +4, MoveMember tests 75/75 Tools.Advanced, 39/39 Basic, 112/112 Battery.Basic. Extension methods stay refused by design.
+
 ## ExtractInterface dropped signature comments silently - resolved (2026-11-07)
 
 ExtractInterface still drops comments inside signatures and cannot warn about it (2026-10-21) - member doc comments are kept now; an inline comment in a parameter list is silently lost; a warnings field would need a new result type - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)

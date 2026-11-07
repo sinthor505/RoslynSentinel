@@ -79,6 +79,61 @@ public sealed class MoveMemberRefusalTests
 
     [Test]
     [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_PrivateMethod_ReturnsTargetIneligible()
+    {
+        var original = "public class Source\n{\n    private int Get() => 1;\n}\n\npublic class Target\n{\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Get"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(result.ErrorData?.Message, Does.Contain("CS0122"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("ChangeAccessibility"));
+        Assert.That(workspace.ReadText("Refactor.cs"), Is.EqualTo(original), "A refused keep-mode move must not write.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepAsDeprecatedWrapper_ProtectedMethod_ReturnsTargetIneligible()
+    {
+        var original = "public class Source\n{\n    protected int Get() => 1;\n}\n\npublic class Target\n{\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Get"], "Target", oldMember: MoveMemberOldMember.keepAsDeprecatedWrapper);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(result.ErrorData?.Message, Does.Contain("CS0122"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("ChangeAccessibility"));
+        Assert.That(workspace.ReadText("Refactor.cs"), Is.EqualTo(original), "A refused keep-mode move must not write.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_MethodUsingClassTypeParameter_ReturnsTargetIneligible()
+    {
+        var original = "public class Source<T>\n{\n    public T Echo(T value) => value;\n}\n\npublic class Target\n{\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Echo"], "Target");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(result.ErrorData?.Message, Does.Contain("type parameter 'T'"));
+        Assert.That(workspace.ReadText("Refactor.cs"), Is.EqualTo(original), "A refused move must not write.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_GenericClass_MethodNotUsingTypeParameter_NotRefusedForTypeParameter()
+    {
+        var original = "public class Source<T>\n{\n    public static int One() => 1;\n}\n\npublic class Target\n{\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["One"], "Target");
+        Assert.That(result.ErrorData?.Message ?? string.Empty, Does.Not.Contain("type parameter"));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
     public async Task MoveMember_KeepAsDeprecatedWrapper_ExtensionMethod_ReturnsTargetIneligible()
     {
         var original = "public static class Source\n{\n    public static int Get(this string s) => 1;\n}\n\npublic static class Target\n{\n}\n".ReplaceLineEndings("\r\n");

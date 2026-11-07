@@ -2748,11 +2748,42 @@ public class MemberRefactoringEngine
             {
                 throw new ToolTargetIneligibleException($"oldMember '{oldMember}' cannot forward '{method.Identifier.Text}': it implements an interface member. Use oldMember remove.");
             }
+
+            // The forwarder calls the target from the source class, so a member that stays private or protected there is CS0122. Nothing widens it today.
+            if (methodSymbol is { DeclaredAccessibility: Accessibility.Private or Accessibility.Protected or Accessibility.ProtectedAndInternal })
+            {
+                throw new ToolTargetIneligibleException($"oldMember '{oldMember}' cannot forward '{method.Identifier.Text}': it is {methodSymbol.DeclaredAccessibility}, so the forwarder in '{className}' could not call it on '{targetClassName}' (CS0122). Make it internal or public first with ChangeAccessibility, or use oldMember remove if nothing in '{className}' still calls it.");
+            }
         }
 
         if (forwarderReceiver != null && membersToMove.All(IsStaticMember))
         {
             throw new ToolInvalidArgumentException("forwarderReceiver applies only to instance moves, and the moved members are static. Omit forwarderReceiver for a static move.");
+        }
+    }
+
+    /// <summary>
+    /// Refuses moving a member that uses the source class's own type parameter, because the target cannot see it. Skipped for a base type
+    /// target and when the target declares a type parameter of the same name, since the name still binds there and the compile gate checks the rest.
+    /// </summary>
+    private static void RequireNoContainingTypeParameters(IReadOnlyList<MemberDeclarationSyntax> membersToMove, string className, string targetClassName, bool targetIsBaseType, INamedTypeSymbol? classSymbol, INamedTypeSymbol? targetClassSymbol, SemanticModel? semanticModel, CancellationToken cancellationToken)
+    {
+        if (targetIsBaseType || classSymbol == null || semanticModel == null || classSymbol.TypeParameters.Length == 0)
+        {
+            return;
+        }
+
+        foreach (var member in membersToMove)
+        {
+            foreach (var name in member.DescendantNodes().OfType<SimpleNameSyntax>())
+            {
+                if (semanticModel.GetSymbolInfo(name, cancellationToken).Symbol is ITypeParameterSymbol parameter
+                    && SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol, classSymbol)
+                    && targetClassSymbol?.TypeParameters.Any(t => t.Name == parameter.Name) != true)
+                {
+                    throw new ToolTargetIneligibleException($"Cannot move a member out of generic class '{className}': it uses the class's type parameter '{parameter.Name}', which '{targetClassName}' cannot see. Give the method its own type parameter first, or move only members that do not use '{parameter.Name}'.");
+                }
+            }
         }
     }
 
@@ -2917,6 +2948,8 @@ public class MemberRefactoringEngine
                 targetClassSymbol = candidateModel?.GetDeclaredSymbol(matchedTargetNode, cancellationToken) as INamedTypeSymbol;
             }
         }
+
+        RequireNoContainingTypeParameters(membersToMove, className, targetClassName, targetIsBaseType, classSymbol, targetClassSymbol, semanticModel, cancellationToken);
 
         List<MemberDeclarationSyntax> instanceMembersToConvert = new();
         if (!targetIsBaseType && targetClassSymbol is { IsStatic: true } && semanticModel != null)
