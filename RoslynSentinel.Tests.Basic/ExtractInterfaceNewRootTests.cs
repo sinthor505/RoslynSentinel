@@ -131,6 +131,33 @@ public class ExtractInterfaceNewRootTests
     }
 
     [Test]
+    public async Task ExtractInterface_CommentInsideSignature_AddsOneWarningNamingTheMember()
+    {
+        const string source = "using System;\n\nnamespace MyApp;\n\npublic class Svc\n{\n    public int Add(int a /* left */, int b) => a + b;\n}\n";
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", source)]);
+        _workspaceManager.SetTestSolution(solution);
+        var warnings = new List<string>();
+
+        await _engine.ExtractInterfaceAsync("Source.cs", "Svc", "ISvc", warnings: warnings);
+
+        Assert.That(warnings, Has.Count.EqualTo(1), "one warning for the one member that lost a signature comment");
+        Assert.That(warnings[0], Does.Contain("Add"));
+    }
+
+    [Test]
+    public async Task ExtractInterface_OrdinaryLeadingCommentOnly_AddsNoWarning()
+    {
+        const string source = "using System;\n\nnamespace MyApp;\n\npublic class Svc\n{\n    // note\n    public int Add(int a, int b) => a + b;\n}\n";
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", source)]);
+        _workspaceManager.SetTestSolution(solution);
+        var warnings = new List<string>();
+
+        await _engine.ExtractInterfaceAsync("Source.cs", "Svc", "ISvc", warnings: warnings);
+
+        Assert.That(warnings, Is.Empty, "a leading comment above the member is not a signature comment");
+    }
+
+    [Test]
     public async Task ExtractInterface_KeepsMemberDocComments()
     {
         // Source member documentation comments are carried onto the interface members; a comment inside a copied

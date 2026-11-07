@@ -936,7 +936,8 @@ public class AdvancedRefactoringTools
 
                 try
                 {
-                    var changes = await _refactoringEngine.ExtractInterfaceAsync(resolvedFilePath, className, newTypeName, cancellationToken: cancellationToken);
+                    var warnings = new List<string>();
+                    var changes = await _refactoringEngine.ExtractInterfaceAsync(resolvedFilePath, className, newTypeName, cancellationToken: cancellationToken, warnings: warnings);
                     if (!autoStage)
                     {
                         return new SentinelCallToolResult<AppliedChangeSummary>()
@@ -956,7 +957,8 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
                         IsError = false,
-                        SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Extracted interface '{newTypeName}' from '{className}'.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings)
+                        SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Extracted interface '{newTypeName}' from '{className}'.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings),
+                        WarningDetails = warnings.Count > 0 ? string.Join(" ", warnings) : null
                     };
                 }
                 catch (Exception ex)

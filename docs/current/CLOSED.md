@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## ExtractInterface dropped signature comments silently - resolved (2026-11-07)
+
+ExtractInterface still drops comments inside signatures and cannot warn about it (2026-10-21) - member doc comments are kept now; an inline comment in a parameter list is silently lost; a warnings field would need a new result type - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+
+Evidence: ExtractInterfaceAsync now adds one warning per member with a comment in its signature, surfaced as WarningDetails by ExtractMembersTool; ExtractInterfaceNewRootTests 11/11. Stripping stays (preserving a // comment in a parameter list would need multi-line interface signatures). Not covered: comments inside a property accessor list, which is rebuilt rather than stripped.
+
+## SubAgent child Build reported thousands of false CS0246 errors - resolved (2026-11-07)
+
+SubAgent child `Build` reports thousands of CS0246 errors (2026-11-07) - in the child worktree `Build(quickBuild)` returned 63116 errors because the test projects have no restored packages, so a model that builds there sees a failure it did not cause; restore in the worktree before the model runs or scope the child build to the production projects
+
+Evidence: SubAgentChildServerLauncher.RestoreSolutionAsync (9718feab) restores the worktree solution before the child loads it. Live check 2026-11-07 on 192.168.1.113 with unsloth/qwen3.5-9b: child Build(quickBuild) Succeeded, whole run 57 s including the restore; transcript under RoslynSentinel-TestRuns/SubAgent/20261107-074448-514-abbddd64.
+
 ## SyncInterfaceToImplementation same-file path re-spaced irregular members - resolved (2026-11-07)
 
 `SyncInterfaceToImplementation` same-file path goes through `ReplaceNodeAndFormatReplacementAsync`, which annotates the whole interface node, so irregular existing members are re-spaced (`int  A( ) ;` becomes `int A();`) - pinned 2026-10-21 by `AdvancedRefactoringNormalizeCharacterizationTests.SyncInterface_SameFile_RespacesIrregularMembers_Pinned`, fix (annotate only the added members) deliberately deferred 2026-10-21 (shared formatting code, cosmetic gain; revisit on a diff-noise report); the cross-file defect is fixed (CLOSED.md)

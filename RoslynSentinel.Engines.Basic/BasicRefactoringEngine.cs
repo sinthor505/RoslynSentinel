@@ -1482,7 +1482,7 @@ public class BasicRefactoringEngine
         return allChanges;
     }
 
-    public async Task<Dictionary<FilePathWrapper, string>> ExtractInterfaceAsync(FilePathWrapper filePath, string className, string interfaceName, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePathWrapper, string>> ExtractInterfaceAsync(FilePathWrapper filePath, string className, string interfaceName, CancellationToken cancellationToken = default, List<string>? warnings = null)
     {
         if (!_config.IsFeatureEnabled("ExtractInterface"))
         {
@@ -1512,6 +1512,33 @@ public class BasicRefactoringEngine
         static T? StripOrNull<T>(T? node) where T : SyntaxNode => node is null ? null : Strip(node);
         // Only the source member's documentation comments survive onto the interface member; other trivia is dropped.
         static SyntaxTriviaList DocComments(SyntaxNode node) => SyntaxFactory.TriviaList(node.GetLeadingTrivia().Where(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) || t.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia)));
+        // Strip drops every comment inside a signature part, so one warning is recorded per member that lost one.
+        // Doc comments and the member's own leading trivia are not signature parts.
+        static bool IsCommentTrivia(SyntaxTrivia t) => t.IsKind(SyntaxKind.SingleLineCommentTrivia) || t.IsKind(SyntaxKind.MultiLineCommentTrivia);
+        // A return or property type's leading trivia can hold the member's own leading comments, so it is skipped.
+        static bool HasSignatureComment(SyntaxNode? node, bool skipLeadingTrivia = false)
+        {
+            if (node is null) return false;
+            var skipped = skipLeadingTrivia ? node.GetLeadingTrivia() : default;
+            return node.DescendantTrivia(descendIntoTrivia: true).Any(t => IsCommentTrivia(t) && !skipped.Contains(t));
+        }
+        if (warnings is not null)
+        {
+            foreach (var method in methods)
+            {
+                if (HasSignatureComment(method.ReturnType, skipLeadingTrivia: true) || HasSignatureComment(method.TypeParameterList) || HasSignatureComment(method.ParameterList) || method.ConstraintClauses.Any(c => HasSignatureComment(c)))
+                {
+                    warnings.Add($"Comments inside the signature of '{method.Identifier.Text}' were not copied to the interface.");
+                }
+            }
+            foreach (var prop in properties)
+            {
+                if (HasSignatureComment(prop.Type, skipLeadingTrivia: true))
+                {
+                    warnings.Add($"Comments inside the signature of '{prop.Identifier.Text}' were not copied to the interface.");
+                }
+            }
+        }
         var ifaceMethods = methods.Select(m => (MemberDeclarationSyntax)SyntaxFactory.MethodDeclaration(Strip(m.ReturnType), m.Identifier.WithoutTrivia()).WithTypeParameterList(StripOrNull(m.TypeParameterList)).WithParameterList(Strip(m.ParameterList)).WithConstraintClauses(SyntaxFactory.List(m.ConstraintClauses.Select(c => Strip(c)))).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithLeadingTrivia(DocComments(m)));
         var ifaceProperties = properties.Select(p =>
         {
