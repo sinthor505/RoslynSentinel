@@ -13,11 +13,12 @@ namespace RoslynSentinel.Tests.Basic;
 [Category("NewlineLiteralRatchet")]
 public class NewlineLiteralRatchetTests
 {
-    // Exempt from the scan: RoslynFormattingHelper.cs is where the resolved eol is applied, EolUtilities.cs defines detection.
+    // Exempt from the scan: RoslynFormattingHelper.cs is where the resolved eol is applied, EolUtilities.cs defines detection. ContentHasher.cs normalizes line endings only to compute a hash input, never output.
     private static readonly HashSet<string> ExemptFiles = new(StringComparer.Ordinal)
     {
         "RoslynSentinel.Common/RoslynFormattingHelper.cs",
         "RoslynSentinel.Common/EolUtilities.cs",
+        "RoslynSentinel.Common/ContentHasher.cs",
     };
 
     // These literals were measured on 2026-10-26 (Step 8z of docs/current/plans/plan_eol_policy_and_write_chokepoint.md).
@@ -26,7 +27,6 @@ public class NewlineLiteralRatchetTests
     // Keyed "<relative file>::<enclosing member>" to the exact count; counts may only shrink.
     private static readonly Dictionary<string, int> Baseline = new(StringComparer.Ordinal)
     {
-        ["RoslynSentinel.Common/ContentHasher.cs::ComputeHash"] = 1,
         ["RoslynSentinel.Common/ContextHelper.cs::WithAddedByComment"] = 1,
         ["RoslynSentinel.Engines.Advanced/AdvancedStructuralEngine.cs::AlignPartialDeclaration"] = 2,
         ["RoslynSentinel.Engines.Advanced/AdvancedStructuralEngine.cs::ApplyExtractConstant"] = 1,
