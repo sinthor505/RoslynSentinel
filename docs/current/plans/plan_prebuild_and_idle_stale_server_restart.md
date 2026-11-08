@@ -1,6 +1,6 @@
 # Plan: reuse server builds across non-server commits, prebuild after each commit, and restart idle stale servers on their own
 
-**Status:** APPROVED 2026-11-07. Not started; owner decisions settled (see the end).
+**Status:** IN PROGRESS 2026-11-07. Steps 1-7 built (9faeffbe, aff83858, a7ff4c11, 0b71c899 + f2cadb64, 86874736, 66c62357, 1ba2a84d, 3b89ba78, 1cfa2414, 1f1740a3); open: observe one real idle exit (Step 6 done-when), then close.
 
 ## Problem
 

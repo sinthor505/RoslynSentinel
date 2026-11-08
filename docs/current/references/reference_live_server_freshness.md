@@ -60,6 +60,30 @@ Set `ROSLYNSENTINEL_INSTANCES_ROOT` (or flip `$UseDefaultInstancesRootWhenUnset`
   `launchWarning`. Full detail: `instances\<id>\launch.log`. `StopServer` also warns when server source is
   uncommitted, since a restart builds committed code only.
 
+## Build reuse, background prebuild and idle restart (prod layout)
+
+Built by `docs/current/plans/plan_prebuild_and_idle_stale_server_restart.md`.
+
+- **Reuse.** When HEAD has no build, the launcher serves the newest complete build whose commit is an ancestor of
+  HEAD and whose diff to HEAD touches no server source (`scripts/server-source-paths.txt`, kept identical to
+  `ServerBinaryStaleness.SourcePathPrefixes` by a test; includes `Directory.Build.props` and `global.json`).
+  `launch.log` says `Reuse path: ...`. A docs- or scripts-only commit therefore costs no build.
+- **`builds\latest.json`** (`headSha`, `buildSha8`, `selection` fast|reuse|built|fallback, `buildFailed`, `utc`)
+  records every launch's or prebuild's choice.
+- **Prebuild.** `scripts/Install-GitHooks.ps1 -InstancesRoot <root>` (once per clone; `-Uninstall` reverses it)
+  sets `core.hooksPath .githooks` and `roslynsentinel.instancesRoot`. The `post-commit`/`post-merge`/`post-rewrite`
+  hooks start `scripts/Start-ServerPrebuild.ps1`, which returns at once and runs the launcher's `-BuildOnly` mode
+  in a detached, single-flight worker (`builds\prebuild.lock`; a commit during a run sets `builds\prebuild.pending`
+  and gets one more run). It strips the `GIT_*` variables git exports to hooks. Log: `builds\prebuild.log`.
+  Only commits on `master` (git config `roslynsentinel.prebuildBranch`) trigger it.
+- **Idle restart.** A stdio server started with `--builds-root` (the prod launcher passes it) exits on its own when
+  it has been idle for `--idle-restart-minutes` / `ROSLYNSENTINEL_IDLE_RESTART_MINUTES` (default 15; `<= 0`
+  disables), no tool call is in flight, it is not halted by ExternalFileDrift, no operation ledger is open, no
+  build/test holds the gate, and `latest.json` names a different, non-failed build for the dev repo's current HEAD.
+  The next tool call respawns it on the fast path. A restart loses in-memory state (undo history, toolsets enabled
+  with `McpToolsetControl`); `isFreshStartup: true` shows it happened. `McpServerStatus.idleRestart` shows whether
+  it is enabled and `lastUnmetGuard`, the check currently keeping the server up (`IdleRestartPolicy.Guard*`).
+
 ## Test instances for uncommitted server changes
 
 `McpServerControl(operation: LaunchTestInstance)` runs the throwaway build output on a free loopback port

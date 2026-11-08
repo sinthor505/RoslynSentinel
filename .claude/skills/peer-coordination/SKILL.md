@@ -32,6 +32,10 @@ to its parent instead of messaging.
 | `COMMIT <files>` | At the next compile-green point, commit only files this session changed (CLAUDE.md "Commits"), including your own edits in the named files. Do not commit a peer's edits. | `COMMITTED <hash> <files>` or `BLOCKED <reason>` (+ ETA if known) |
 | `HOLD <files>` | Do not edit the named files until `RELEASE`. If you must edit one, reply `BLOCKED` instead of editing. | `HELD <files>` |
 | `RELEASE <files>` | Lift the hold. | none needed |
+
+Before sending `RESTART`: a server on a build with the idle monitor restarts itself after 15 idle minutes once a
+newer build is ready (`McpServerStatus.idleRestart`, see `reference_live_server_freshness.md`). Send `RESTART`
+only when a peer needs the new build sooner, or its `idleRestart.enabled` is false.
 | `RESTART` | If no subagent of yours is mid-operation: `McpServerControl(operation: StopServer, confirmServerStop: ConfirmServerStop)`, then `LoadSolution`. | `RESTARTED`: new PID, instance, buildSha, `isServerBinaryStale`; or `BLOCKED <reason>` |
 
 Receiver rules:
