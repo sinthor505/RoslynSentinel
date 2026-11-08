@@ -337,7 +337,7 @@ public class CreateFileDeleteFileTests
     }
 
     [Test]
-    public async Task DeleteFile_NonExistentFile_FailsWithInvalidArgumentAsync()
+    public async Task DeleteFile_NonExistentFile_FailsWithNotFoundAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -352,7 +352,9 @@ public class CreateFileDeleteFileTests
         var result = await wholeFileWriteTools.DeleteFileTool(reason: "test message", missingFile);
 
         Assert.That(!result.IsError, Is.False);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData!.Message, Does.Contain("does not exist"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("Search"));
     }
 
     [Test]
