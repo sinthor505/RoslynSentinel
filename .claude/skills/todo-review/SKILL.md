@@ -30,21 +30,39 @@ The owner chooses which items to review. The numbers are permanent for the sessi
 ## 3. Investigate
 
 Dispatch `explore-tier2` (at most two at once, split by area; `model: sonnet` for a hard design
-question). Per item it returns, in at most 8 lines:
+question). Per item it returns, in at most about 15 lines:
+- what the item is, in plain words, and what goes wrong if it stays undone;
 - current state with evidence (`file:line`, commit, test name): this catches stale items;
-- the concrete question(s), each answerable in one choice;
-- 2-3 options with trade-offs, a recommendation, an effort estimate (Small/Medium/Large);
+- each decision point separately, each answerable in one choice;
+- per decision, 2-3 options, each with what concretely changes (files, tools), effort
+  (Small/Medium/Large) and risk or trade-off, plus a recommendation;
 - for an implementable item, the acceptance check (test or observable result).
 
 Do not read the code yourself beyond a small verification read.
 
 ## 4. Settle
 
-Ask with `AskUserQuestion`, up to 4 questions per call, recommended option first labelled
-"(Recommended)", previews for code-shape or wording choices. Each question must stand alone (name
-the item and the finding it rests on). Per item the owner answers, or says "design now", "park"
-or "drop". Follow-up questions that the answer raises go in the next call, not a new investigation,
-unless the answer invalidates the scoping.
+Ask with `AskUserQuestion`. **One item per question**: never bundle several items into one
+question or one multi-select. An item with several independent decisions gets one question per
+decision, each repeating the item context. Up to 4 questions per call, grouped by item rather than
+packed with unrelated ones.
+
+Each question text stands alone and carries:
+- the item number, title and TODO.md line;
+- the problem in one or two plain sentences;
+- the finding the choice rests on, with evidence;
+- what this choice decides.
+
+Each option's description names the concrete outcome (what gets done or recorded, effort, risk);
+its `preview` shows the exact TODO.md line or Decisions entry that choice would write (the code or
+text instead, for code-shape or wording choices). Recommended option first, labelled
+"(Recommended)". When detail does not fit, put it in the preview rather than shortening the
+question.
+
+Per question the owner answers, or says "explain in more detail", "design now", "park" or "drop".
+"Explain in more detail" gets a fuller restatement of the same question, not a new investigation.
+Follow-up questions that an answer raises go in the next call, not a new investigation, unless the
+answer invalidates the scoping.
 
 ## 5. Record each outcome (in the repo, not just locally)
 
