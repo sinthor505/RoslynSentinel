@@ -660,7 +660,6 @@ public static class ToolArgumentValidator
                 ["maxItems"] = "limit",
                 ["maxRecords"] = "limit",
                 ["pageSize"] = "limit",
-                ["fullResultsId"] = "resultId",
             },
             ["Build"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {

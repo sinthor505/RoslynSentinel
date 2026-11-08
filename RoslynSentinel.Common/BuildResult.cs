@@ -21,9 +21,7 @@ public record BuildResult(
     int? ExitCode = null,
     string? Detail = null,
     BuildFailureBreakdown? Breakdown = null,
-    [property: Obsolete("Use the marshaller paging of errors (largeResult)"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int OmittedErrorCount = 0,
     int SuppressedDownstreamErrorCount = 0,
-    [property: Obsolete("Use the marshaller paging of errors (largeResult)")] string? FullDiagnosticsResultId = null,
     [property: JsonIgnore] BuildFullDiagnostics? FullDiagnostics = null) : IOperationResult
 {
     /// <summary>True unless the build succeeded; a NotRun build gives no verification, so it is an error.</summary>

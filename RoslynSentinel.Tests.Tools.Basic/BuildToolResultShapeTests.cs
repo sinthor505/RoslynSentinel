@@ -142,10 +142,6 @@ public class BuildToolResultShapeTests
         var data = (BuildResult)result.SuccessData!;
         Assert.That(data.ErrorCount, Is.EqualTo(25));
         Assert.That(data.Errors, Has.Count.EqualTo(25), "the old default cap was 20; every error is inline now and the marshaller pages a long list.");
-#pragma warning disable CS0618 // the obsolete side-store fields stay empty
-        Assert.That(data.FullDiagnosticsResultId, Is.Null, "no side store: the full list is the inline list.");
-        Assert.That(data.OmittedErrorCount, Is.Zero);
-#pragma warning restore CS0618
     }
 
     [Test]

@@ -152,10 +152,6 @@ public class BuildResultProjectorTests
         Assert.That(projected.Errors.Select(e => e.StartLine), Is.EqualTo(Enumerable.Range(1, 100)), "original order is kept");
         Assert.That(projected.Breakdown!.ByProject.Single().ErrorCount, Is.EqualTo(100));
         Assert.That(projected.FullDiagnostics!.Errors, Has.Count.EqualTo(100), "the engine carrier is left untouched");
-#pragma warning disable CS0618 // the obsolete side-store fields stay empty
-        Assert.That(projected.FullDiagnosticsResultId, Is.Null);
-        Assert.That(projected.OmittedErrorCount, Is.Zero);
-#pragma warning restore CS0618
     }
 
     [Test]
