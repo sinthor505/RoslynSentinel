@@ -47,6 +47,7 @@ namespace RoslynSentinel.Server.Advanced
             SchemaOptions.Configure(args);
             EolPolicyOptions.Configure(args);
             AgentOperatingModeOptions.Configure(args);
+            IdleRestartOptions.Configure(args);
 
             if (ServerStartupHelpers.HandleListTools(
                     args,
@@ -105,6 +106,7 @@ namespace RoslynSentinel.Server.Advanced
             {
                 builder.Services.AddRoslynSentinelHostOptions(operatingMode, HostTransport.Stdio, ServerStartupHelpers.ParseRespawn(args, "stdio"));
                 builder.Services.AddRoslynSentinelEnginesAdvanced();
+                builder.Services.AddHostedService<IdleRestartMonitor>();
                 builder.Services.AddRoslynSentinelLlmClient();
                 builder.Services.AddSingleton(new StoppedByScriptMarker(
                     WasFound: stoppedByScriptDetails is not null, Details: stoppedByScriptDetails));

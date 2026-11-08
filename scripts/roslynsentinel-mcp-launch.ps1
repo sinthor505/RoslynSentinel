@@ -914,7 +914,7 @@ if (-not $hasEolArg -and $cwdInRepo -and -not $env:ROSLYNSENTINEL_EOL) {
 # can be swept. Legacy launches set neither (unchanged).
 $extraLaunchArgs = @()
 if ($prodMode) {
-    $extraLaunchArgs = @("--working-dir=$instanceDir")
+    $extraLaunchArgs = @("--working-dir=$instanceDir", "--builds-root=$buildsRoot")
     $env:ROSLYNSENTINEL_INSTANCE_ID = $instanceId
 }
 
