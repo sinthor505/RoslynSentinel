@@ -1444,7 +1444,7 @@ public class RefactoringStructuralImpl
             var (newPath, content) = result.Changes.First();
             if (File.Exists(newPath))
             {
-                return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename: target file '{newPath}' already exists - refusing to overwrite.") };
+                return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ToolErrorCode.TargetIneligible, $"SyncTypeAndFilename: target file '{newPath}' already exists - refusing to overwrite. Pass targetTypeName to pick a different type, or rename or delete the existing file first.") };
             }
 
             // deletePaths (not removePaths) so the old file's delete goes through

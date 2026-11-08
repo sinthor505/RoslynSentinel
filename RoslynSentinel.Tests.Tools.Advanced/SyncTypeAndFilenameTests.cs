@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
@@ -58,5 +59,37 @@ public sealed class SyncTypeAndFilenameTests
         Assert.That(result.ErrorData!.Message, Does.Contain("DoesNotExist"));
         Assert.That(result.ErrorData!.Message, Does.Contain("HelperResult"));
         Assert.That(result.ErrorData!.Message, Does.Contain("MainService"));
+    }
+
+    // An existing file at the rename target must be refused as TargetIneligible with a next step, and must not be
+    // overwritten. The in-memory workspace root is never created on disk, so the colliding file is written there
+    // directly (same directory as the document) and removed in finally.
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task SyncTypeAndFilename_TargetFileAlreadyExists_FailsWithTargetIneligibleAsync()
+    {
+        const string wrongSource = "namespace TestProj;\n\npublic class Right\n{\n    public int Id { get; set; }\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("Wrong.cs", wrongSource));
+        var rootDir = Path.GetDirectoryName(workspace.PathOf("Wrong.cs"))!;
+        var rightPath = Path.Combine(rootDir, "Right.cs");
+        try
+        {
+            Directory.CreateDirectory(rootDir);
+            File.WriteAllText(rightPath, "existing content");
+            var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
+            var result = await tools.SyncTypeAndFilenameTool(reason: "test message", workspace.PathOf("Wrong.cs"));
+            Assert.That(result.IsError, Is.True);
+            Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+            Assert.That(result.ErrorData!.Message, Does.Contain("refusing to overwrite"));
+            Assert.That(result.ErrorData!.Message, Does.Contain("targetTypeName"));
+            Assert.That(File.ReadAllText(rightPath), Is.EqualTo("existing content"), "The existing file must not be overwritten.");
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
     }
 }
