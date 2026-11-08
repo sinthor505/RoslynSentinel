@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Path comparison: caller-supplied path sites - resolved (2026-11-08)
+
+Path comparison: caller-supplied path sites (2026-11-08) - route the 6 sites that compare a caller-supplied path with a document path (MemberRefactoringEngine ~509 and ~3406, ProjectStructureEngine ~91 and ~1147, SyntaxTargetResolver ~171, SemanticReplaceEngine ~620) and the 2 comparer-less `Equals` sites through `DocumentLookup` / `PathComparison.Comparer` (first check whether upstream normalization already fixes the case); the other baseline sites stay ratchet-guarded; done = a differently cased path test per site passes and the `PathComparisonRatchetTests` baseline drops by the fixed sites - [doc](issues/issue_path_comparison_case_sensitivity.md)
+
+Evidence: 509705be (SyntaxTargetResolver), fe762aa3 (MemberRefactoringEngine 509, 3411), 044978ea (ProjectStructureEngine), 17fe2c6f (SemanticReplaceEngine 620), e9fb9e00 (NamedArguments file scope, the comparer-less Equals), fba1092c (SyncInterface sync, the other comparer-less Equals); PathCaseCallerSuppliedTests plus PathComparisonRatchetTests/FirstMatchRatchetTests baselines lowered. Measured: MemberRef ~509, ProjectStructure ~91 and both Equals sites were already case-insensitive at runtime (FilePathWrapper operators), so those tests are characterization tests; no differently-cased seam for MemberRef 3411 or SemanticReplace 620 (both strings come from the workspace). Remaining baseline kept: SemanticReplaceEngine.cs::c=1 (the d.Name fallback scan) and NamedArgumentsEngine.cs::c=1
+
+## GetMemberName: events and indexers - resolved (2026-11-08)
+
+`GetMemberName`: events and indexers (2026-11-08) - `SyntaxTargetResolver.GetMemberName` returns null for Event and Indexer (SyntaxTargetResolver.cs ~430); handle both; done = an awaited test that an event and an indexer target resolve or return an actionable error - [doc](proposal_universal_symbol_resolver.md)
+
+Evidence: 16deb019; MemberNameEventIndexerAnchorTests (events and the indexer, named "this", now resolve as insert anchors; ResolveInsertAnchorIndex, SortMembers tiebreak and GetContainerMembers now name them instead of null)
+
 ## Failure messages without a next step - resolved (2026-11-08)
 
 Failure messages without a next step (2026-11-08) - per site, list the valid values or end with a `ToolCallHint.Next`: ListSolutionItems unknown kind (WorkspaceProjectManagementImpl.cs ~173), Generate unknown kind (CodeTransformTools.cs ~1345), ModifyModifier invalid modifier, ReplaceSnippet invalid action, ListAll invalid kind and the 2 LoadSolution messages (locate with `Get-NotFoundRecoveryReport.ps1 -AllErrors`), and a completed RunTest run with failing tests (WorkspaceBuildTestImpl.cs ~159, name the first failing test in a re-run call if the engine has it); done = one test per site asserting the suffix - [doc](references/reference_not_found_recovery_ladder.md)
