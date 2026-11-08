@@ -8,6 +8,7 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
 using RoslynSentinel.Server.Advanced;
+using RoslynSentinel.Tests.Battery.Basic;
 
 namespace RoslynSentinel.Tests.Server;
 
@@ -56,7 +57,7 @@ public class ToolParameterAliasTests
                      "}" + Environment.NewLine;
 
         var relativeFilePath = Path.Combine("ContosoOrders.Core", "ParameterAliasProbe.cs");
-        using (var seedWorkspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance) { SolutionPath = _fixture.SolutionPath })
+        using (var seedWorkspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance, solutionPath: _fixture.SolutionPath))
         {
             await _fixture.AddFileToSolution(seedWorkspaceManager, relativeFilePath, source, reloadSolution: false);
 

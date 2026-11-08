@@ -11,6 +11,7 @@ using ModelContextProtocol.Protocol;
 
 using RoslynSentinel.Common;
 using RoslynSentinel.Server.Advanced;
+using RoslynSentinel.Tests.Battery.Basic;
 
 namespace RoslynSentinel.Tests.Server;
 
@@ -63,7 +64,7 @@ public class ToolCallEchoFilterTests
                      string.Join(Environment.NewLine, callers) + Environment.NewLine +
                      "}" + Environment.NewLine;
 
-        using (var seedWorkspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance) { SolutionPath = _fixture.SolutionPath })
+        using (var seedWorkspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance, solutionPath: _fixture.SolutionPath))
         {
             await _fixture.AddFileToSolution(
                 seedWorkspaceManager,
