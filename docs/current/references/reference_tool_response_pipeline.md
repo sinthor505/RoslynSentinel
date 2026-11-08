@@ -135,11 +135,14 @@ the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationE
    `ToolException` keeps its code) with `IsError=true`; a client abort is rethrown. A thrown error never reaches the
    marshaller, so `ToFailureResult` adds the `NotFoundEvidence` findings itself.
 9. Post-call drift diagnostic (`AddDriftFilter`, `GetContentExternalFileChangesAsync`, log only).
-10. `AddLargeResultOffloadFilter`: the backstop for text the marshaller did not cut. A text block over
-    `OffloadThresholdBytes` (read as chars) goes to a `Raw` file via `StoreRawJsonAsync`, and the caller gets a pointer with
-    a `resultId`. Skips `GetLargeResult` by name and any response that raised `OversizeUnitSignal`, to avoid a re-offload
-    loop. Logs "Result marshaller miss" at error level when a hooked tool's over-threshold text already has an Envelope
-    pointer (a pager or reserve bug); a hooked result the marshaller could not cut is logged at debug level.
+10. `AddLargeResultOffloadFilter`: the backstop for text the marshaller did not cut (exception catch-all and refusal
+    bodies, plain-string returns, marshaller mode off). A text block over `InlineBudgetChars` (read as chars) is stored as
+    an `Envelope` file via `StoreEnvelopeAsync` (no omitted list, no sequence; `GetLargeResult` pages the largest array or
+    string, inferred), and the caller gets a pointer with a `resultId`. A body that is not JSON cannot be stored and goes
+    out whole. Skips `GetLargeResult` by name (a Sequence-stored page with one oversize unit goes out over budget and
+    `OversizeUnitSignal` is raised only in mode On) and any response that raised `OversizeUnitSignal`, to avoid a
+    re-offload loop. In mode On a hooked tool's over-threshold text logs "Result marshaller miss" at error level;
+    otherwise (mode off, unhooked tool) it logs the "Large tool result" warning.
 11. `AddWirePathRelativizeFilter`: when `WirePathOptions.Enabled`, rewrites solution-root absolute paths in JSON
     text bodies to relative ones (`WirePathRewriter.RewriteJsonText`).
 12. Orientation (automatic) breaker, then the unrecoverable breaker (filters 12 and 13). The latter refuses every tool that is not

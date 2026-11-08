@@ -507,13 +507,16 @@ public static class RoslynSentinelServiceExtensionsBasic
         // Generic large-result offload backstop (docs/current/references/reference_tool_response_pipeline.md;
         // origin: docs/current/proposal_centralized_large_result_filter.md): sums the length of text
         // content blocks in the response (no JSON re-serialization) and, above
-        // LargeResultHelper.OffloadThresholdBytes, writes the raw response text verbatim to disk
-        // via LargeResultHelper.StoreRawJsonAsync and replaces the response with a small pointer
+        // LargeResultHelper.InlineBudgetChars, writes the response text to disk as a ResultWrapperType.Envelope
+        // via LargeResultHelper.StoreEnvelopeAsync (the type the marshaller stores, so GetLargeResult pages it with
+        // the Envelope reader: inferred path, offset/limit) and replaces the response with a small pointer
         // (resultId) instead of just logging. This is deliberately shape-agnostic: the result marshaller
-        // does the offloading, so this only catches text it did not cut (plain string or content-block
-        // returns, non-object JSON, nothing pageable, or a marshaller set to off or passthrough). A result
-        // the marshaller fitted has a small response by the time it reaches here and this filter is a
-        // no-op for it. Grep the log for "Large tool result" to review offenders without parsing full payloads.
+        // does the offloading, so this only catches text it did not cut (an exception catch-all or refusal body,
+        // plain string or content-block returns, non-object JSON, nothing pageable, or a marshaller set to off or
+        // passthrough). A result the marshaller fitted has a small response by the time it reaches here and this
+        // filter is a no-op for it. A body that is not JSON cannot be stored as an Envelope (StoreEnvelopeAsync
+        // parses it); the failure is swallowed below and the body goes out whole, as before.
+        // Grep the log for "Large tool result" / "Result marshaller miss" to review offenders without parsing full payloads.
         filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
             ModelContextProtocol.Protocol.CallToolRequestParams,
             ModelContextProtocol.Protocol.CallToolResult>(
@@ -530,16 +533,17 @@ public static class RoslynSentinelServiceExtensionsBasic
                     return result;
                 }
 
-                // GetLargeResultTool's own switch branches (WorkspaceReadNavigationImpl.cs) already
-                // shrink-and-verify every list-shaped page against this exact threshold before
-                // returning, specifically so this filter could never re-catch that response. If
-                // one still slips past that (e.g. a single oversized record a page of 1 can't
-                // shrink below), re-wrapping it under a brand-new resultId here would silently
-                // hand the caller another offload envelope pointing at itself - an
-                // unterminating fetch/still-too-big/re-offload loop with no visible way out. Skip
-                // re-offload for this tool specifically and let its own oversized response pass
-                // through as-is: a legible "still too big" is better than an invisible loop. See
-                // docs/current/blockers/blocking_error_getlargeresult_typed_branch_reoffload_loop.md.
+                // KEPT on purpose (Step 10 slice D1 checked removing it): a GetLargeResult page is cut to the budget
+                // by its own readers, but a page of a Sequence-stored file (WorkspaceReadNavigationImpl.PageSequence)
+                // goes out over budget when one unit alone is larger than a page (proposal_sequence_pager.md Decided 4).
+                // The marshaller flags that with OversizeUnitSignal only in mode On, so in mode Off or Passthrough (a file
+                // stored under On, read by a server running Off) or after a marshaller exception that page reaches this
+                // point over budget with no signal. Re-wrapping it under a brand-new resultId would hand the caller another
+                // pointer to the same oversize unit - an unterminating fetch/still-too-big/re-store loop. A legible
+                // "still too big" page is better than an invisible loop. Pinned by
+                // LargeResultOffloadFilterTests.GetLargeResult_OversizeUnitPage_IsNotStoredAgain.
+                // TODO make the marshaller raise OversizeUnitSignal for an AlreadyPaged page in every mode, then drop this exemption
+                // See docs/current/blockers/blocking_error_getlargeresult_typed_branch_reoffload_loop.md.
                 if (context.Params?.Name == "GetLargeResult")
                 {
                     return result;
@@ -562,35 +566,29 @@ public static class RoslynSentinelServiceExtensionsBasic
                         }
 
                         var logger = context.Server.Services?.GetService<ILogger<PersistentWorkspaceManager>>();
-                        logger?.LogWarning(
-                            "Large tool result: tool '{Tool}' returned {SizeChars} chars (threshold: {OffloadThresholdBytes})",
-                            context.Params?.Name, text.Length, LargeResultHelper.InlineBudgetChars);
-
-                        // Result marshaller miss detector (plan_wire_result_marshaller.md Step 4): in mode On a tool built through
-                        // SentinelToolFactory (SentinelToolFactory.IsHooked) should never reach this point over the threshold with a
-                        // result the marshaller FITTED, because the fit leaves the pointer and echo reserve free. Reaching it is a pager
-                        // or reserve bug; log it at error level and still offload below as the backstop. The marshaller also hands back
-                        // whole, by design, results it cannot cut (non-object JSON roots, plain string or content-block returns, nothing
-                        // pageable): those carry no Envelope pointer and are only logged at debug level, so the error stays a real signal.
+                        // Result marshaller miss detector (plan_wire_result_marshaller.md Step 4, Step 10 slice D1): in mode On a tool
+                        // built through SentinelToolFactory (SentinelToolFactory.IsHooked) is marshalled, so a body that still
+                        // arrives here over the threshold is a body the marshaller never fitted: an exception catch-all or refusal
+                        // body, a result it handed back whole (non-object JSON root, plain string or content-block return, nothing
+                        // pageable), or a pager/reserve bug (a fitted result leaves the pointer and echo reserve free). Each is an
+                        // error-level signal; the body is still stored below as the backstop. In mode Off or Passthrough the
+                        // marshaller is deliberately not cutting, so the original warning is all that is logged.
                         if (ResultMarshallerOptions.Mode == ResultMarshallerMode.On && SentinelToolFactory.IsHooked(context.Params?.Name))
                         {
-                            if (text.Contains("\"resultType\":\"Envelope\"", StringComparison.Ordinal))
-                            {
-                                logger?.LogError(
-                                    "Result marshaller miss: hooked tool '{Tool}' still returned {SizeChars} chars (threshold: {OffloadThresholdBytes}) after marshalling; the offload filter is handling it as the backstop. Check ResultPager hints and LargeResultHelper.EchoReserveChars.",
-                                    context.Params?.Name, text.Length, LargeResultHelper.InlineBudgetChars);
-                            }
-                            else
-                            {
-                                logger?.LogDebug(
-                                    "Hooked tool '{Tool}' returned {SizeChars} chars the marshaller could not cut; the offload filter stores it whole.",
-                                    context.Params?.Name, text.Length);
-                            }
+                            logger?.LogError(
+                                "Result marshaller miss: hooked tool '{Tool}' returned {SizeChars} chars (threshold: {OffloadThresholdBytes}) the marshaller did not cut; the offload filter is handling it as the backstop. Check ResultPager hints and LargeResultHelper.EchoReserveChars.",
+                                context.Params?.Name, text.Length, LargeResultHelper.InlineBudgetChars);
+                        }
+                        else
+                        {
+                            logger?.LogWarning(
+                                "Large tool result: tool '{Tool}' returned {SizeChars} chars (threshold: {OffloadThresholdBytes})",
+                                context.Params?.Name, text.Length, LargeResultHelper.InlineBudgetChars);
                         }
 
                         var workspaceManager = context.Server.Services?.GetService<PersistentWorkspaceManager>();
                         var solutionRoot = workspaceManager?.GetSolutionRoot();
-                        var stored = await LargeResultHelper.StoreRawJsonAsync(text, solutionRoot, cancellationToken);
+                        var stored = await LargeResultHelper.StoreEnvelopeAsync(text, solutionRoot, cancellationToken);
                         if (!stored.offloaded)
                         {
                             // No solution loaded, or the write failed to qualify -> fail closed to
@@ -683,6 +681,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                                     offloaded = true,
                                     resultId = stored.resultId,
                                     sizeBytes = text.Length,
+                                    sizeChars = text.Length,
                                     itemCount,
                                     isError,
                                     statusMessage,

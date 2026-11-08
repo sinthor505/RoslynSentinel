@@ -101,6 +101,60 @@ public class LargeResultOffloadFilterTests
         _fixture.Dispose();
         Environment.SetEnvironmentVariable(RoslynSentinel.Common.ResultMarshallerOptions.EnvVarName, _previousMarshallerMode);
     }
+
+    // Pages a stored backstop result to its end through GetLargeResult with NO charLimit: the backstop now stores a marshaller-compatible
+    // Envelope, so the Envelope reader answers {path, offset, returned, total, unit, nextOffset, hasMoreData, items|text} (paged on the
+    // largest array or string, inferred). Every page must be a native page, never another offload stub or a second largeResult pointer.
+    private async Task<(string Unit, int Total, int ReturnedSum, int ItemCount, string Reassembled, int PageCount)> PageStoredResultToEndAsync(string resultId)
+    {
+        var unit = string.Empty;
+        var total = 0;
+        var returnedSum = 0;
+        var itemCount = 0;
+        var pageCount = 0;
+        var reassembled = new System.Text.StringBuilder();
+        int? offset = 0;
+        while (offset is not null)
+        {
+            var page = await _client.CallToolAsync(
+                "GetLargeResult",
+                new Dictionary<string, object?> { ["reason"] = "test message", ["resultId"] = resultId, ["offset"] = offset.Value }!,
+                cancellationToken: TestContext.CurrentContext.CancellationToken);
+            Assert.That(page.IsError, Is.Not.True);
+
+            var pageBlocks = page.Content.OfType<TextContentBlock>().ToList();
+            Assert.That(pageBlocks, Has.Count.EqualTo(1));
+            using var pageDoc = JsonDocument.Parse(pageBlocks[0].Text);
+            Assert.That(pageDoc.RootElement.TryGetProperty("offloaded", out _), Is.False,
+                $"A GetLargeResult page must not itself be stored again (second-level pointer). Page was: {pageBlocks[0].Text}");
+            Assert.That(pageDoc.RootElement.TryGetProperty("largeResult", out _), Is.False,
+                $"A GetLargeResult page must not carry a largeResult pointer. Page was: {pageBlocks[0].Text}");
+            Assert.That(pageDoc.RootElement.TryGetProperty("successData", out var data), Is.True,
+                $"GetLargeResult must return its native successData shape (page was: {pageBlocks[0].Text})");
+
+            unit = data.GetProperty("unit").GetString()!;
+            total = data.GetProperty("total").GetInt32();
+            returnedSum += data.GetProperty("returned").GetInt32();
+            if (data.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
+            {
+                itemCount += items.GetArrayLength();
+                reassembled.Append(items.GetRawText());
+            }
+            else
+            {
+                reassembled.Append(data.GetProperty("text").GetString());
+            }
+
+            offset = data.TryGetProperty("nextOffset", out var next) && next.ValueKind != JsonValueKind.Null
+                ? next.GetInt32()
+                : null;
+            pageCount++;
+            Assert.That(pageCount, Is.LessThan(100), "Paging should terminate; too many pages indicates a broken offset/hasMore computation.");
+        }
+
+        return (unit, total, returnedSum, itemCount, reassembled.ToString(), pageCount);
+    }
+
     [Test]
     public async Task OversizedToolResponse_GetsOffloaded_AndGetLargeResultRoundTripsIt()
     {
@@ -122,50 +176,67 @@ public class LargeResultOffloadFilterTests
         Assert.That(sizeBytes, Is.GreaterThan(LargeResultHelper.InlineBudgetChars),
             "sizeBytes should report the size that actually triggered the offload.");
 
-        // Round-trip: GetLargeResultTool must be able to read the offloaded payload back, and the
-        // reassembled text (paged, since Raw pages by byte-window) must contain the real caller
-        // list the filter swapped out -> not just replay the pointer. Each page is requested with
-        // charLimit == OffloadThresholdBytes (the value the tool's own "continue reading" warning
-        // suggests) to confirm the fix in WorkspaceReadNavigationImpl.GetLargeResultTool's Raw branch:
-        // the effective window is capped below OffloadThresholdBytes to reserve headroom for the
-        // JSON envelope, so a full page can never itself be large enough to be re-offloaded by this
-        // same filter -> if it were, this loop would see an "offloaded" pointer instead of a "data"
-        // page and fail below.
-        var reassembled = new System.Text.StringBuilder();
-        int? offset = 0;
-        var pageCount = 0;
-        while (offset is not null)
+        // The backstop stores the same wrapper type the marshaller does, so the Envelope reader (not the Raw char window) answers.
+        var storedFile = Directory.GetFiles(Path.Combine(_fixture.SolutionDirectory, ".roslynsentinel", "largeresults"), $"largeresult_*_{resultId}.json").Single();
+        using (var stored = JsonDocument.Parse(File.ReadAllText(storedFile)))
         {
-            var page = await _client.CallToolAsync(
-                "GetLargeResult",
-                new Dictionary<string, object?> { ["reason"] = "test message", ["resultId"] = resultId, ["offset"] = offset.Value, ["charLimit"] = LargeResultHelper.InlineBudgetChars }!,
-                cancellationToken: TestContext.CurrentContext.CancellationToken);
-            Assert.That(page.IsError, Is.Not.True);
-
-            var pageBlocks = page.Content.OfType<TextContentBlock>().ToList();
-            Assert.That(pageBlocks, Has.Count.EqualTo(1));
-            using var pageDoc = JsonDocument.Parse(pageBlocks[0].Text);
-            // GetLargeResultTool is explicitly excluded from the generic offload-pointer wrapper (see
-            // ServiceRegistrationExtensionsBasic.cs's "if (context.Params?.Name == \"GetLargeResultTool\")
-            // { return result; }" - docs/current/blockers/blocking_error_getlargeresult_typed_branch_reoffload_loop.md),
-            // so its own response is never re-shaped into {offloaded, data}; it always returns its
-            // native {successData: {...}} shape directly, even when that response is itself large.
-            pageDoc.RootElement.TryGetProperty("successData", out var successDataProperty);
-            Assert.That(pageDoc.RootElement.TryGetProperty("successData", out _), Is.True,
-                $"GetLargeResult must return its native successData shape, not an offload pointer (page was: {pageBlocks[0].Text})");
-            var data = pageDoc.RootElement.GetProperty("successData");
-            reassembled.Append(data.GetProperty("text").GetString());
-
-            offset = data.TryGetProperty("nextOffset", out var next) && next.ValueKind != JsonValueKind.Null
-                ? next.GetInt32()
-                : null;
-            pageCount++;
-            Assert.That(pageCount, Is.LessThan(35), "Paging should terminate; too many pages indicates a broken offset/hasMore computation.");
+            Assert.That(stored.RootElement.GetProperty("Type").GetString(), Is.EqualTo(nameof(ResultWrapperType.Envelope)),
+                "The request-filter backstop must store an Envelope, not a Raw wrapper.");
         }
 
-        Assert.That(reassembled.ToString(), Does.Contain($"{CallerMethodPrefix}0"),
-            "The reassembled offloaded text must contain the real caller list, not just the pointer.");
-        Assert.That(reassembled.ToString(), Does.Contain($"{CallerMethodPrefix}{CallerCount - 1}"));
+        // Round-trip: GetLargeResult pages the stored envelope on its largest array (inferred, no path) with no charLimit; the pages
+        // must cover the whole caller list the filter swapped out, not just replay the pointer. PageStoredResultToEndAsync also fails
+        // the test if any page is itself an offload stub or carries a second largeResult pointer.
+        var paged = await PageStoredResultToEndAsync(resultId!);
+
+        Assert.That(paged.Unit, Is.EqualTo("items"));
+        Assert.That(paged.PageCount, Is.GreaterThan(1), "The payload is larger than the inline budget, so it needs more than one page.");
+        Assert.That(paged.ReturnedSum, Is.EqualTo(paged.Total), "The pages must cover the paged array exactly once.");
+        Assert.That(paged.ItemCount, Is.EqualTo(paged.Total));
+        Assert.That(paged.Total, Is.GreaterThanOrEqualTo(CallerCount));
+        Assert.That(paged.Reassembled, Does.Contain($"{CallerMethodPrefix}0\""),
+            "The reassembled offloaded items must contain the real caller list, not just the pointer.");
+        Assert.That(paged.Reassembled, Does.Contain($"{CallerMethodPrefix}{CallerCount - 1}\""));
+    }
+
+    [Test]
+    public async Task GetLargeResult_OversizeUnitPage_IsNotStoredAgain()
+    {
+        // A page of a Sequence-stored file goes out over budget when one unit alone is larger than a page (proposal_sequence_pager.md
+        // Decided 4). The marshaller flags that (OversizeUnitSignal) only in mode On; this fixture runs mode off, so the only thing that
+        // keeps the backstop from storing the page under a NEW resultId (and starting a fetch/store loop) is its GetLargeResult exemption.
+        // Remove the exemption and this test fails with an offload stub in place of the page.
+        var oversizeBlob = new string('x', LargeResultHelper.InlineBudgetChars + 2000);
+        var wire = JsonSerializer.Serialize(new
+        {
+            isError = false,
+            successData = new
+            {
+                items = new object[] { new { blob = oversizeBlob }, new { small = 2 } }
+            },
+        });
+        var sequence = new SequenceDescriptor(SequenceKind.Lists, ["successData.items"], PagingOrder.Interleaved, 0);
+        var (offloaded, _, resultId) = await LargeResultHelper.StoreEnvelopeAsync(wire, _fixture.SolutionDirectory, TestContext.CurrentContext.CancellationToken, omitted: null, sequence: sequence);
+        Assert.That(offloaded, Is.True, "Precondition: the oversize-unit envelope must be stored.");
+
+        var page = await _client.CallToolAsync(
+            "GetLargeResult",
+            new Dictionary<string, object?> { ["reason"] = "test message", ["resultId"] = resultId }!,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+        Assert.That(page.IsError, Is.Not.True);
+
+        var pageBlocks = page.Content.OfType<TextContentBlock>().ToList();
+        Assert.That(pageBlocks, Has.Count.EqualTo(1));
+        using var pageDoc = JsonDocument.Parse(pageBlocks[0].Text);
+        Assert.That(pageDoc.RootElement.TryGetProperty("offloaded", out _), Is.False,
+            $"An oversize-unit GetLargeResult page must pass through, not be stored under a second resultId. Got: {pageBlocks[0].Text}");
+        Assert.That(pageBlocks[0].Text.Length, Is.GreaterThan(LargeResultHelper.InlineBudgetChars),
+            "Precondition: the page must be over the offload threshold, otherwise this test pins nothing.");
+        var data = pageDoc.RootElement.GetProperty("successData");
+        Assert.That(data.GetProperty("returned").GetInt32(), Is.EqualTo(1));
+        Assert.That(data.GetProperty("hasMoreData").GetBoolean(), Is.True);
+        Assert.That(data.GetProperty("nextOffset").GetInt32(), Is.EqualTo(1));
+        Assert.That(data.GetProperty("envelope").GetProperty("successData").GetProperty("items").GetArrayLength(), Is.EqualTo(1));
     }
 
     [Test]
@@ -215,7 +286,7 @@ public class LargeResultOffloadFilterTests
         // docs/current/blockers/blocking_error_getlargeresult_typed_branch_reoffload_loop.md, closed).
         // With the marshaller off, QuerySymbolRelationshipsTool's typed ForPossiblyLargeDataAsync is a
         // pass-through, so an oversized implementorsOf result reaches the generic filter and is stored
-        // raw. Seed enough implementations of a shared interface to force that offload, then confirm
+        // as an Envelope. Seed enough implementations of a shared interface to force that offload, then confirm
         // the very first GetLargeResult call at default limits returns real data, not another
         // offload envelope.
         //
@@ -269,24 +340,18 @@ public class LargeResultOffloadFilterTests
         var resultId = pointer.RootElement.GetProperty("resultId").GetString();
         Assert.That(resultId, Is.Not.Null.And.Not.Empty);
 
-        // Default limits on purpose: the first page must already be real data, not another offload stub.
-        var page = await _client.CallToolAsync(
-            "GetLargeResult",
-            new Dictionary<string, object?> { ["reason"] = "test message", ["resultId"] = resultId }!,
-            cancellationToken: TestContext.CurrentContext.CancellationToken);
-        Assert.That(page.IsError, Is.Not.True);
+        // Default limits and no charLimit on purpose: the very first page must already be real data, not another offload stub.
+        // The backstop stored an Envelope, so GetLargeResult answers with the Envelope reader's page ({path, offset, returned, total,
+        // unit, nextOffset, hasMoreData, items|text}); PageStoredResultToEndAsync fails on any page that is a stub or carries a
+        // second largeResult pointer (the former re-offload loop), and the pages together must cover the whole implementor list.
+        var paged = await PageStoredResultToEndAsync(resultId!);
 
-        var pageBlocks = page.Content.OfType<TextContentBlock>().ToList();
-        Assert.That(pageBlocks, Has.Count.EqualTo(1));
-        using var pageDoc = JsonDocument.Parse(pageBlocks[0].Text);
-        // GetLargeResultTool is excluded from the generic offload-pointer wrapper (see
-        // ServiceRegistrationExtensionsBasic.cs's "if (context.Params?.Name == \"GetLargeResultTool\")
-        // { return result; }"), so its own response is never re-shaped into {offloaded, data}.
-        Assert.That(pageDoc.RootElement.TryGetProperty("offloaded", out _), Is.False,
-            $"GetLargeResult's first call must not return another offload envelope. Got: {pageBlocks[0].Text}");
-        Assert.That(pageDoc.RootElement.TryGetProperty("successData", out var data), Is.True,
-            $"GetLargeResult must return its native successData shape. Got: {pageBlocks[0].Text}");
-        Assert.That(data.GetProperty("text").GetString(), Does.Contain("OffloadFilterProbeImpl"),
-            "The first page must contain real implementor records from the stored payload.");
+        Assert.That(paged.Unit, Is.EqualTo("items"));
+        Assert.That(paged.ReturnedSum, Is.EqualTo(paged.Total), "The pages must cover the paged array exactly once.");
+        Assert.That(paged.ItemCount, Is.EqualTo(paged.Total));
+        Assert.That(paged.Total, Is.GreaterThanOrEqualTo(implementationCount));
+        Assert.That(paged.Reassembled, Does.Contain("OffloadFilterProbeImpl0\""),
+            "The reassembled pages must contain real implementor records from the stored payload.");
+        Assert.That(paged.Reassembled, Does.Contain($"OffloadFilterProbeImpl{implementationCount - 1}\""));
     }
 }
