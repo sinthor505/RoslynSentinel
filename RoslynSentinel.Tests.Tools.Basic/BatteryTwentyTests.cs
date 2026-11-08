@@ -33,6 +33,7 @@ public class BatteryTwentyTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = TestEngines.SentinelConfiguration();
         _diffEngine = TestEngines.DiffEngine();
@@ -48,6 +49,7 @@ public class BatteryTwentyTests
     public void TearDown()
     {
         _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
     }
 
     private void SetSource(string source, string fileName = "Test.cs")
