@@ -1,8 +1,10 @@
 # Plan: one result marshaller at the SDK MarshalResult seam owns offload, paging, metadata and serialization
 
-**Status:** APPROVED 2026-11-02. In progress: Steps 0-7 done (Step 7 2026-11-06), Steps 9 and 11 done 2026-11-07, Step 8 built
-2026-11-07 (four slices, see Step 8 and the proposal; live check pending a server restart); Step 10 follows it, no earlier
-than 7 days after Steps 7-8 ship.
+**Status:** IMPLEMENTED 2026-11-07. All steps done: Steps 0-7 (Step 7 2026-11-06), 8, 9, 10 and 11 (2026-11-07). Step 8 slices
+af7e210f, d9fd0ec6, c6215b34, 7f00ecb9; Step 10 slices a443016a, d0218f64, 3d4d301f, 0131c1c2, 208b9c17, 4faf2149, 4dfe5ebe and
+the exemption slice (see the progress log). The owner waived the 7-day gap (GetLargeResult is session-local, all sessions
+were idle). To do on closing: move this plan to `plans/closed/` (the docs reorganization plan owns link fixes), and the two
+superseded docs below to their `closed/` folders.
 
 How it works now, including `SequencePager` (built later from
 [proposal_sequence_pager.md](../proposals/proposal_sequence_pager.md), and running before `ResultPager.Fit`):
@@ -345,6 +347,24 @@ because the Qualify-crefs and test-category loops apply once per project and `De
 `OmittedErrorCount` are `[Obsolete]` and never set; the ~50 `ChangedContentResultId:` copy sites stay for Step 10. No
 production `StoreRawJsonAsync` caller remains except the filter backstop. Not yet checked live (running server predates
 the commits; restart first). In `off`/`passthrough` mode detached payloads are dropped.
+
+2026-11-07 (Step 10, owner waived the 7-day gap): done in slices. Dead helpers (`ForPossiblyLarge*Async`,
+`StoreLargeResultAsync`, `OffloadThresholdBytes`, `ResultError.StructuredDetailLargeResult`) a443016a; `OmittedErrorCount`,
+`FullDiagnosticsResultId`, `FullResultsId` and the `fullResultsId` alias d0218f64; `ChangedContentResultId` and its 52 copy
+sites 3d4d301f (`ChangeSignature` refuses record primary-constructor parameters, so it was 52 `ReplaceSnippet` batch edits:
+tool gap); the offload backstop stores an `Envelope` and logs a marshaller miss at error level 0131c1c2; `GetLargeResult`
+reads only Envelopes, `Raw` and the 18 typed branches, `StoreRawJsonAsync`, `charLimit` deleted, an older file returns a
+structured NotFound 208b9c17; `SentinelCallToolResult.LargeResult` deleted 4faf2149; the `BuildResult.FullDiagnostics`
+carrier deleted (the engine returns every error) 4dfe5ebe; `[NeverInline]` removed 81697386. The filter's `GetLargeResult`
+name exemption is gone: `PagingHints.ForAlreadyPagedPage()` raises `OversizeUnitSignal` where the `AlreadyPaged` hint is
+built, so it works in every marshaller mode (mode off registers no marshaller, so the marshaller route could not work).
+Live checks (server restarted): `Search` pointer plus `GetLargeResult` paging by `offset`/`limit` on the Envelope-only
+reader; a stateless HTTP test instance (`LaunchTestInstance`, mode all) paged a 3000-record result. Also this session:
+`ParseDiagnostics` drops the repeat of each diagnostic in the quiet-verbosity summary b1c71733 (fullBuild counted errors
+twice); quickBuild file and project scope carry `Project` ddc4cdeb (`breakdown.byProject` read "(unknown)"). Still not
+done (proposals): the marshaller composing the echo and stamps so `EchoReserveChars` can go
+([proposal_marshaller_owns_echo_and_stamps.md](../proposals/proposal_marshaller_owns_echo_and_stamps.md)); retiring `Fit`
+and `omitted` ([proposal_sequence_pager.md](../proposals/proposal_sequence_pager.md)).
 
 2026-11-07 (live check, server build 61990d8b, scratch project `Tests.SubAgent`, scratch file deleted): PASS for all three
 shapes. Build with 150 errors: no `omittedErrorCount`/`fullDiagnosticsResultId`; sequence pointer "INCOMPLETE: 31 of 300

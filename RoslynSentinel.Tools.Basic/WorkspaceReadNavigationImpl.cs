@@ -1638,8 +1638,9 @@ public class WorkspaceReadNavigationImpl
                     ? $"One unit is larger than a page ({built.ViolationDetail}); it is returned alone, whole, and paging continues after it."
                     : null,
                 // Server-side marker (never serialized): this page is already cut to the budget, so the marshaller must neither
-                // re-page it nor store it under a new resultId when one oversize unit leaves it over budget.
-                Paging = new PagingHints([], PagingOrder.Interleaved, AlreadyPaged: true),
+                // re-page it nor store it under a new resultId when one oversize unit leaves it over budget. The factory also
+                // raises OversizeUnitSignal, which keeps the offload filter from storing it in every mode (no marshaller runs in mode off).
+                Paging = PagingHints.ForAlreadyPagedPage(),
             };
         }
 
@@ -1765,7 +1766,7 @@ public class WorkspaceReadNavigationImpl
                 WarningDetails = warning,
                 // This path-based page is already fitted to the budget by the loop below (an element larger than a page is stepped
                 // over, never returned), so the marshaller must not cut or store it again.
-                Paging = new PagingHints([], PagingOrder.Interleaved, AlreadyPaged: true),
+                Paging = PagingHints.ForAlreadyPagedPage(),
             };
         }
 

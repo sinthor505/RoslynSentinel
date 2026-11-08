@@ -533,22 +533,12 @@ public static class RoslynSentinelServiceExtensionsBasic
                     return result;
                 }
 
-                // KEPT on purpose (Step 10 slice D1 checked removing it): a GetLargeResult page is cut to the budget
-                // by its own readers, but a page of a Sequence-stored file (WorkspaceReadNavigationImpl.PageSequence)
-                // goes out over budget when one unit alone is larger than a page (proposal_sequence_pager.md Decided 4).
-                // The marshaller flags that with OversizeUnitSignal only in mode On, so in mode Off or Passthrough (a file
-                // stored under On, read by a server running Off) or after a marshaller exception that page reaches this
-                // point over budget with no signal. Re-wrapping it under a brand-new resultId would hand the caller another
-                // pointer to the same oversize unit - an unterminating fetch/still-too-big/re-store loop. A legible
-                // "still too big" page is better than an invisible loop. Pinned by
-                // LargeResultOffloadFilterTests.GetLargeResult_OversizeUnitPage_IsNotStoredAgain.
-                // TODO make the marshaller raise OversizeUnitSignal for an AlreadyPaged page in every mode, then drop this exemption
-                // See docs/current/blockers/blocking_error_getlargeresult_typed_branch_reoffload_loop.md.
-                if (context.Params?.Name == "GetLargeResult")
-                {
-                    return result;
-                }
-
+                // No tool-name exemption for GetLargeResult: its Envelope readers (WorkspaceReadNavigationImpl.PageSequence and
+                // PageEnvelope) build their hints with PagingHints.ForAlreadyPagedPage, which raises OversizeUnitSignal for the
+                // current call while the page is built. That happens in the tool, so it holds in every marshaller mode (mode off
+                // registers no marshaller) and after a marshaller exception; a page that one oversize unit leaves over budget is
+                // caught by the check above and never re-stored under a new resultId. Pinned by
+                // LargeResultOffloadFilterTests.GetLargeResult_OversizeUnitPage_IsNotStoredAgain (mode off) and its ModeOn twin.
                 try
                 {
                     if (result.Content is null)

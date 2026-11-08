@@ -120,6 +120,7 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
             // A GetLargeResult page of a stored sequence was built to the budget by SequencePager; when it is still over, one
             // unit alone is larger than a page (Decided 4). Cutting it again would store a NEW resultId and start the re-offload
             // loop, so it goes out as is (the server log names the tool) and the offload filter is told to leave it alone.
+            // (The page builder, GetLargeResult, raises the same signal itself, because in mode off no marshaller is registered.)
             if (PagingHintsOf(result) is { AlreadyPaged: true })
             {
                 _logger.LogWarning(

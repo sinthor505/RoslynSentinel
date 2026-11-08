@@ -34,7 +34,11 @@ public class LargeResultOffloadFilterTests
     public async Task SetUp()
     {
         _previousMarshallerMode = Environment.GetEnvironmentVariable(RoslynSentinel.Common.ResultMarshallerOptions.EnvVarName);
-        Environment.SetEnvironmentVariable(RoslynSentinel.Common.ResultMarshallerOptions.EnvVarName, "off");
+        // The marshaller is registered only when the mode is not off at host build (AddRoslynSentinelToolsBasic), so the one test
+        // named ...ModeOn builds its host with the mode on; every other test pins off.
+        Environment.SetEnvironmentVariable(
+            RoslynSentinel.Common.ResultMarshallerOptions.EnvVarName,
+            TestContext.CurrentContext.Test.Name.EndsWith("ModeOn", StringComparison.Ordinal) ? "on" : "off");
         _fixture = new TestSolutionFixture();
 
         // Seed a target method plus many tiny distinct callers of it, so FindReferencesTool(kind:
@@ -203,9 +207,22 @@ public class LargeResultOffloadFilterTests
     public async Task GetLargeResult_OversizeUnitPage_IsNotStoredAgain()
     {
         // A page of a Sequence-stored file goes out over budget when one unit alone is larger than a page (proposal_sequence_pager.md
-        // Decided 4). The marshaller flags that (OversizeUnitSignal) only in mode On; this fixture runs mode off, so the only thing that
-        // keeps the backstop from storing the page under a NEW resultId (and starting a fetch/store loop) is its GetLargeResult exemption.
-        // Remove the exemption and this test fails with an offload stub in place of the page.
+        // Decided 4). This fixture runs mode off, where no marshaller is registered at all; the page builder (PageSequence) takes its
+        // hints from PagingHints.ForAlreadyPagedPage, which raises OversizeUnitSignal, and that is the only thing keeping the backstop
+        // from storing the page under a NEW resultId (a fetch/store loop). There is no GetLargeResult name exemption in the filter, so
+        // without the signal this test fails with an offload stub in place of the page.
+        await AssertOversizeUnitPagePassesThroughAsync();
+    }
+
+    [Test]
+    public async Task GetLargeResult_OversizeUnitPage_IsNotStoredAgain_ModeOn()
+    {
+        // Same page with the marshaller registered and on (SetUp keys the mode off the test name).
+        await AssertOversizeUnitPagePassesThroughAsync();
+    }
+
+    private async Task AssertOversizeUnitPagePassesThroughAsync()
+    {
         var oversizeBlob = new string('x', LargeResultHelper.InlineBudgetChars + 2000);
         var wire = JsonSerializer.Serialize(new
         {

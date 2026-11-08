@@ -139,9 +139,12 @@ the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationE
     bodies, plain-string returns, marshaller mode off). A text block over `InlineBudgetChars` (read as chars) is stored as
     an `Envelope` file via `StoreEnvelopeAsync` (no omitted list, no sequence; `GetLargeResult` pages the largest array or
     string, inferred), and the caller gets a pointer with a `resultId`. A body that is not JSON cannot be stored and goes
-    out whole. Skips `GetLargeResult` by name (a Sequence-stored page with one oversize unit goes out over budget and
-    `OversizeUnitSignal` is raised only in mode On) and any response that raised `OversizeUnitSignal`, to avoid a
-    re-offload loop. In mode On a hooked tool's over-threshold text logs "Result marshaller miss" at error level;
+    out whole. Skips any response that raised `OversizeUnitSignal`, to avoid a re-offload loop. Two raisers: the marshaller
+    (mode On, for an oversize-unit result it returns whole) and `PagingHints.ForAlreadyPagedPage()` (`Common/PagingHints.cs`),
+    the only producer of the `AlreadyPaged` hint, which the `GetLargeResult` page builders call while building the page.
+    The second works in every mode (mode off registers no marshaller) and after a marshaller exception. The signal is per
+    call (async-local, opened by this filter) and only raised on those paths, so no other tool's oversize response is
+    skipped. There is no tool-name exemption. In mode On a hooked tool's over-threshold text logs "Result marshaller miss" at error level;
     otherwise (mode off, unhooked tool) it logs the "Large tool result" warning.
 11. `AddWirePathRelativizeFilter`: when `WirePathOptions.Enabled`, rewrites solution-root absolute paths in JSON
     text bodies to relative ones (`WirePathRewriter.RewriteJsonText`).
@@ -152,22 +155,19 @@ the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationE
     `GetFileOutline`, `GetOperationDetail`, `GetWorkspaceHealth`, `ExternalFileDrift`, `Git`. A tool name declared by
     both a facade (`WorkspaceTools`) and its own class needs the attribute on both.
 
-### Migration state
+### Stored results and detached payloads
 
-Open work lives in [plan_wire_result_marshaller.md](../plans/plan_wire_result_marshaller.md) and
-[proposal_sequence_pager.md](../proposals/proposal_sequence_pager.md). As of this doc's date:
-
-- `ForPossiblyLargeDataAsync` and `ForPossiblyLargeDetailAsync` are `[Obsolete]` with no production callers, and
-  `StoreLargeResultAsync` has none either. `GetLargeResult` keeps its readers for older stored types.
-- Build no longer has a side store: it returns every error inline and the marshaller pages `errors`
-  (`StoreFullDiagnosticsAsync` is gone; `FullDiagnosticsResultId`/`OmittedErrorCount` are `[Obsolete]` and empty).
-- RunTest and changed content use a detached payload: the tool calls `Detach(name, list)` on its `SentinelCallToolResult`
-  (RunTest, `fullResults`) or `ToolCallContext` (`ValidateAndApplyHelper.DetachChangedFiles`, `changedFiles`); the
-  marshaller stores it as its own `Envelope` before the budget check, reachable with
-  `GetLargeResult(resultId, path: "successData.<name>")`. The payload must be an array or string and is dropped in
-  `off`/`passthrough` mode. `FullResultsId` and `ChangedContentResultId` are `[Obsolete]` and empty.
-- Writers of `Raw` left: the filter backstop. `ResidualMentionSummarizer` writes `Envelope` outside the marshaller.
-- `ResultPager.Fit` and `SequencePager` are both live; retiring `Fit`, `omitted` and `path` is a proposal slice, not done.
+- Every stored result is an `Envelope` file; `GetLargeResult` reads nothing else. A file written by an older server
+  returns a structured `NotFound` ("written by an older server version"); repeat the original call.
+- RunTest (`fullResults`) and apply tools (`changedFiles`) hand the marshaller a detached payload: `Detach(name, list)` on
+  the `SentinelCallToolResult`, or `ToolCallContext` (`ValidateAndApplyHelper.DetachChangedFiles`). It is stored as its
+  own `Envelope` before the budget check and reached with `GetLargeResult(resultId, path: "successData.<name>")`. The
+  payload must be an array or string and is dropped in `off`/`passthrough` mode. Build has no side store: it returns
+  every error and the marshaller pages `errors`. `ReplaceSnippet`, `CreateFile`, `WriteFile`, `DeleteFile` and `ApplyDiff`
+  return their own small result and detach nothing (pinned by `WholeFileApplyResultShapeTests`).
+- `ResidualMentionSummarizer` also writes an `Envelope`, outside the marshaller (its `detailResultId`).
+- `ResultPager.Fit` and `SequencePager` are both live; retiring `Fit`, `omitted` and `path` is a proposal slice
+  ([proposal_sequence_pager.md](../proposals/proposal_sequence_pager.md)), not done.
 
 ## Usage
 

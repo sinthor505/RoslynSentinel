@@ -29,4 +29,20 @@ public enum PagingOrder
 /// <see cref="SequencePager"/>, so the marshaller returns it unchanged even when one oversize unit leaves it over budget
 /// (never a new <c>resultId</c> and never a second cut). <see cref="RecordsPaths"/> is empty on such a page.
 /// </param>
-public sealed record PagingHints(IReadOnlyList<string> RecordsPaths, PagingOrder Order = PagingOrder.Interleaved, bool AlreadyPaged = false);
+public sealed record PagingHints(IReadOnlyList<string> RecordsPaths, PagingOrder Order = PagingOrder.Interleaved, bool AlreadyPaged = false)
+{
+    /// <summary>
+    /// The hints for a page the tool already cut to the budget (<see cref="AlreadyPaged"/>), and the one place that flag is
+    /// produced. It also raises <see cref="OversizeUnitSignal"/> for the current call, because the request-filter backstop
+    /// (<c>AddLargeResultOffloadFilter</c>) must not store such a page under a new <c>resultId</c> when one oversize unit leaves
+    /// it over budget, in EVERY marshaller mode: with the switch off no marshaller is registered, so the marshaller cannot
+    /// raise it. The signal is per call (async-local, opened by the filter around one tool call) and a strict no-op when
+    /// none is open, so no other tool's oversize response is ever skipped. Call it while building the page, on the tool's
+    /// own async flow.
+    /// </summary>
+    public static PagingHints ForAlreadyPagedPage()
+    {
+        OversizeUnitSignal.Raise();
+        return new PagingHints([], PagingOrder.Interleaved, AlreadyPaged: true);
+    }
+}
