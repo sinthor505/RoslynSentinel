@@ -78,12 +78,11 @@ simply stay up.
 ### Step 3 - Build-only mode
 - Files: `scripts/roslynsentinel-mcp-launch.ps1` (param block `:149-172`, new `-BuildOnly` switch).
 - Change: `-BuildOnly` runs source sync (`:493-526`) and build selection (Step 2), writes `latest.json`, and
-  exits 0 (non-zero on failure) without launching or sweeping. Single-flight: take a lock file
-  `builds\prebuild.lock` (stale after 30 minutes). If HEAD moved during the build, loop once more, so a burst of
-  commits ends with a build for the last one.
+  exits 0 (non-zero on failure) without launching or sweeping. It logs to `builds\prebuild.log` and creates no
+  instance folder. Single-flight is the Step 4 wrapper's job, not the launcher's (decided 2026-11-07, to keep
+  the launcher linear).
 - Done when: running `-BuildOnly` after a server-source commit produces `builds\<sha8>\complete` and an updated
-  `latest.json` with no server process started; a second concurrent run exits early, logging that the lock is
-  held.
+  `latest.json`, with no server process started and no new instance folder.
 
 ### Step 4 - Git hooks start the prebuild
 - Files: new `.githooks/post-commit`, `.githooks/post-merge`, `.githooks/post-rewrite` (sh, one line each);
@@ -91,7 +90,10 @@ simply stay up.
   an owner action, run once).
 - Change: each hook calls `Start-ServerPrebuild.ps1`, which starts `roslynsentinel-mcp-launch.ps1 -BuildOnly`
   fully detached (no inherited stdout/stderr handles) and returns at once. It skips the prebuild when the new
-  commit touches no server-source path, and when the branch is not the launcher's `-Branch`.
+  commit touches no server-source path, and when the branch is not the launcher's `-Branch`. Single-flight in
+  the detached worker: take `builds\prebuild.lock` (stale after 30 minutes); if it is held, touch
+  `builds\prebuild.pending` and exit; the lock holder, after its run, clears a pending flag and runs once more,
+  so a burst of commits ends with a build for the last one.
 - Done when: a server-source commit through the MCP `Git` tool (which shells out to `git.exe`,
   `RoslynSentinel.Tools.Basic/GitImpl.cs:1650-1735`, with no `--no-verify`) returns within about 2 s of its
   usual time; the build appears in the background; a docs-only commit starts no build.

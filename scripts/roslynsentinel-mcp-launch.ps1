@@ -164,6 +164,10 @@ param(
     # Run the legacy layout even when an instances root is configured.
     [switch]$ForceLegacy,
 
+    # Prod layout only: sync source, select or build the server for HEAD, record builds\latest.json, then exit
+    # without launching a server or sweeping.
+    [switch]$BuildOnly,
+
     # Captures all passthrough args (e.g. --include-tools=...) so PowerShell's normal named-parameter
     # binding never tries to match them against declared parameters - everything after the named
     # parameters above is forwarded verbatim to the real server exe.
@@ -209,6 +213,10 @@ $prodMode = [bool]$prodRoot
 # Failure exit code before the server is started: 97 in the prod layout (the shim keys its fallback on
 # it), 1 in the legacy layout (unchanged).
 $setupFailureExitCode = if ($prodMode) { 97 } else { 1 }
+if ($BuildOnly -and -not $prodMode) {
+    [Console]::Error.WriteLine("roslynsentinel-mcp-launch.ps1: -BuildOnly needs the prod-instances layout (set an instances root); nothing was built.")
+    exit 2
+}
 
 if ($prodMode) {
     $sourceDir = Join-Path $prodRoot 'source'
@@ -336,7 +344,8 @@ $repoHash = -join ($repoHashBytes[0..3] | ForEach-Object { $_.ToString('x2') })
 $instanceId = "$repoHash-$instanceToken"
 if ($prodMode) {
     $instanceDir = Join-Path $instancesDirRoot $instanceId
-    New-Item -ItemType Directory -Path $instanceDir -Force | Out-Null
+    # -BuildOnly creates no instance folder: its log goes to builds\prebuild.log instead.
+    if (-not $BuildOnly) { New-Item -ItemType Directory -Path $instanceDir -Force | Out-Null }
 }
 else {
     $instanceDir = Join-Path $binVscodeRoot $instanceId
@@ -344,12 +353,13 @@ else {
     New-Item -ItemType Directory -Path $outDir -Force | Out-Null
 }
 
-$logPath = Join-Path $instanceDir 'launch.log'
+$logPath = if ($BuildOnly) { Join-Path $buildsRoot 'prebuild.log' } else { Join-Path $instanceDir 'launch.log' }
 function Write-LaunchLog {
     param([string]$Message)
     Add-LogLine -Path $logPath -Message $Message
 }
 
+if ($BuildOnly) { Write-LaunchLog "Prebuild (BuildOnly) started, PID=$PID" }
 Write-LaunchLog "Instance ID '$instanceId' derived from random token='$instanceToken', repoHash='$repoHash' (repo: $devRepoRoot, layout: $layoutDescription)."
 Write-StartupLog "Instance ID '$instanceId' derived OK -> per-instance log is $logPath (subsequent steps logged there, not here)."
 #endregion
@@ -693,11 +703,18 @@ if (-not $selectedBuildDir) {
     }
 }
 $attemptedShaShort = if ($sha) { $sha.Substring(0, 8) } else { '' }
-Write-LaunchOutcome -BuildFailed:$usedFallback -AttemptedSha $attemptedShaShort -ServedDir $selectedBuildDir
+if (-not $BuildOnly) { Write-LaunchOutcome -BuildFailed:$usedFallback -AttemptedSha $attemptedShaShort -ServedDir $selectedBuildDir }
 try {
     Write-LatestBuildRecord -BuildsRoot $buildsRoot -HeadSha $sha -BuildDir $selectedBuildDir -Selection $selection -BuildFailed $usedFallback -Log { param($m) Write-LaunchLog $m }
 }
 catch { Write-LaunchLog "Latest build record not written: $($_.Exception.Message)" }
+# -BuildOnly stops here: no 'lastused' stamp, no sweep, no server launch.
+if ($BuildOnly) {
+    $headShort = if ($sha) { $sha.Substring(0, 8) } else { 'none' }
+    Write-LaunchLog "Prebuild done: selection=$selection served=$(Split-Path -Path $selectedBuildDir -Leaf) head=$headShort"
+    if ($usedFallback) { exit 1 }
+    exit 0
+}
 $exePath = Join-Path $selectedBuildDir 'Advanced\RoslynSentinel.Server.Advanced.exe'
 # Stamp the build as in use so another window's sweep (age is measured from this stamp) cannot remove it
 # between now and the server process starting.
