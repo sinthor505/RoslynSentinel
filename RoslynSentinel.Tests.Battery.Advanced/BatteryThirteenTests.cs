@@ -12,6 +12,8 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("AntiPatternEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class AnalysisEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -19,12 +21,17 @@ public class AnalysisEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _antiPatternEngine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task FindLargeTypes_SmallClass_ReturnsEmpty()
     {
@@ -75,6 +82,8 @@ public class Calc {
 [TestFixture]
 [Category("CodeGenerationEngine")] // sentinel:auto-category
 [Category("GenerationResult")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class CodeGenerationEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -82,12 +91,17 @@ public class CodeGenerationEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.CodeGenerationEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public void GenerateClassesFromJson_StringProperty_GeneratesStringProp()
     {
@@ -125,6 +139,8 @@ public class CodeGenerationEngineTests
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("ControlFlowEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class ControlFlowEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -132,12 +148,17 @@ public class ControlFlowEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.ControlFlowEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task AnalyzePathCoverage_MethodWithIfElse_ReturnsBothBranchPaths()
     {
@@ -185,6 +206,8 @@ public class Simple {
 [TestFixture]
 [Category("ReadonlyFieldCandidate")] // sentinel:auto-category
 [Category("SymbolNavigationEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class SymbolNavigationEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -192,12 +215,17 @@ public class SymbolNavigationEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task FindReadonlyFieldCandidates_NonReadonlyPrivateField_ReportsIt()
     {

@@ -10,6 +10,8 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // ────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("LogicSimplificationEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class AdvancedLogicEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -17,12 +19,17 @@ public class AdvancedLogicEngineTests
     [SetUp]
     public void SetUp()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.LogicSimplificationEngine(_mgr);
     }
 
     [TearDown]
-    public void TearDown() => _mgr?.Dispose();
+    public void TearDown()
+    {
+        _mgr?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task InvertBooleanLogic_UnknownFile_ThrowsNotFound()
     {
@@ -60,6 +67,8 @@ public static class MyExtensions
 
 [TestFixture]
 [Category("SyntaxModernizationEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class AdvancedRefactoringEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -67,12 +76,17 @@ public class AdvancedRefactoringEngineTests
     [SetUp]
     public void SetUp()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.AdvancedRefactoringEngine(_mgr);
     }
 
     [TearDown]
-    public void TearDown() => _mgr?.Dispose();
+    public void TearDown()
+    {
+        _mgr?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task ReplaceStringConcat_UnknownFile_ThrowsFileNotFound()
     {
@@ -108,6 +122,8 @@ public class Greeter
 
 [TestFixture]
 [Category("StructuralRefactoringEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class AdvancedStructuralEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -115,12 +131,17 @@ public class AdvancedStructuralEngineTests
     [SetUp]
     public void SetUp()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.StructuralRefactoringEngine(_mgr);
     }
 
     [TearDown]
-    public void TearDown() => _mgr?.Dispose();
+    public void TearDown()
+    {
+        _mgr?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task ConvertAbstractClassToInterface_MissingFile_ThrowsNotFound()
     {
@@ -166,6 +187,8 @@ public class Widget
 
 [TestFixture]
 [Category("AntiPatternEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class AntiPatternEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -173,12 +196,17 @@ public class AntiPatternEngineTests
     [SetUp]
     public void SetUp()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.AntiPatternEngine(_mgr);
     }
 
     [TearDown]
-    public void TearDown() => _mgr?.Dispose();
+    public void TearDown()
+    {
+        _mgr?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task DetectAntiPatterns_AsyncVoidMethod_ReturnsFindings()
     {

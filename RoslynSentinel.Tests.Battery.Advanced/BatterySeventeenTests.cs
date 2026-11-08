@@ -12,6 +12,8 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 
 [TestFixture]
 [Category("LogicSimplificationEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class LogicOptimizationEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -20,6 +22,7 @@ public class LogicOptimizationEngineTests
     [SetUp]
     public void SetUp()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.LogicSimplificationEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
@@ -27,7 +30,11 @@ public class LogicOptimizationEngineTests
     }
 
     [TearDown]
-    public void TearDown() => _mgr?.Dispose();
+    public void TearDown()
+    {
+        _mgr?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
 
     [Test]
     public async Task ConvertToNullCoalescing_MissingFile_ThrowsNotFound()
@@ -78,6 +85,8 @@ public class Guard
 [TestFixture]
 [Category("MsAugmentResult")] // sentinel:auto-category
 [Category("MsToolAugmentEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class MsToolAugmentEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -86,6 +95,7 @@ public class MsToolAugmentEngineTests
     [SetUp]
     public void SetUp()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = Basic.TestEngines.MsToolAugmentEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
@@ -93,7 +103,11 @@ public class MsToolAugmentEngineTests
     }
 
     [TearDown]
-    public void TearDown() => _mgr?.Dispose();
+    public void TearDown()
+    {
+        _mgr?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
 
     [Test]
     public async Task EncapsulateFieldSafe_UnknownFile_ThrowsNotFound()
@@ -126,6 +140,8 @@ public class MsToolAugmentEngineTests
 
 [TestFixture]
 [Category("SolutionStructureEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class SolutionStructureEngineTests2
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -134,6 +150,7 @@ public class SolutionStructureEngineTests2
     [SetUp]
     public void SetUp()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = Basic.TestEngines.SolutionStructureEngine(_mgr, Basic.TestEngines.SentinelConfiguration());
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
@@ -141,7 +158,11 @@ public class SolutionStructureEngineTests2
     }
 
     [TearDown]
-    public void TearDown() => _mgr?.Dispose();
+    public void TearDown()
+    {
+        _mgr?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
 
     [Test]
     public async Task FixMismatchedNamespaces_UnknownFile_ThrowsFileNotFound()

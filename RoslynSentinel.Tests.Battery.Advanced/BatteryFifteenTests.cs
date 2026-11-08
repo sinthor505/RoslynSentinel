@@ -7,6 +7,8 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 
 [TestFixture]
 [Category("AsyncOptimizationEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class AsyncOptimizationEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -15,13 +17,18 @@ public class AsyncOptimizationEngineTests
     [SetUp]
     public void SetUp()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.AsyncOptimizationEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", Stub));
     }
 
     [TearDown]
-    public async Task TearDown() => _mgr?.Dispose();
+    public async Task TearDown()
+    {
+        _mgr?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task OptimizeToValueTask_UnknownFile_ThrowsException()
     {
@@ -69,6 +76,8 @@ public class MyService
 
 [TestFixture]
 [Category("LogicSimplificationEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class CodeFlowEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -77,13 +86,18 @@ public class CodeFlowEngineTests
     [SetUp]
     public void SetUp()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.LogicSimplificationEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", Stub));
     }
 
     [TearDown]
-    public void TearDown() => _mgr?.Dispose();
+    public void TearDown()
+    {
+        _mgr?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task ReduceBlockDepth_MissingFile_ThrowsNotFound()
     {
@@ -134,6 +148,8 @@ public class Logger
 
 [TestFixture]
 [Category("CodeHealingEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class CodeHealingEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -142,13 +158,18 @@ public class CodeHealingEngineTests
     [SetUp]
     public void SetUp()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _mgr = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.CodeHealingEngine(_mgr, Basic.TestEngines.SentinelConfiguration());
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", Stub));
     }
 
     [TearDown]
-    public void TearDown() => _mgr?.Dispose();
+    public void TearDown()
+    {
+        _mgr?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task FixThreadSleep_MissingFile_ThrowsNotFound()
     {
