@@ -83,6 +83,35 @@ public class BuildToolResultShapeTests
     }
 
     [Test]
+    public async Task Build_QuickBuild_FailedProjectScope_BreakdownNamesTheProject()
+    {
+        SetSource(ManyErrorsSource(3), "Many.cs");
+
+        var result = await _workspaceTools.BuildTool(reason: "test message", BuildVerifyLevel.quickBuild, ToolScope.project, "TestProj");
+
+        Assert.That(result.IsError, Is.True);
+        var data = (BuildResult)result.SuccessData!;
+        Assert.That(data.Breakdown, Is.Not.Null);
+        Assert.That(data.Breakdown!.ByProject.Single().Project, Is.EqualTo("TestProj"), "project-scope diagnostics must carry the project name, not (unknown).");
+    }
+
+    [Test]
+    public async Task Build_QuickBuild_FailedFileScope_BreakdownNamesTheProject()
+    {
+        // File scope resolves scopeName to an absolute path, so the document must carry that absolute FilePath.
+        var filePath = Path.Combine(_tempDir, "Many.cs");
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", Path.Combine(_tempDir, "TestProj.csproj"), [("Many.cs", ManyErrorsSource(3), filePath)]);
+        _workspaceManager.SetTestSolution(solution);
+
+        var result = await _workspaceTools.BuildTool(reason: "test message", BuildVerifyLevel.quickBuild, ToolScope.file, filePath);
+
+        Assert.That(result.IsError, Is.True);
+        var data = (BuildResult)result.SuccessData!;
+        Assert.That(data.Breakdown, Is.Not.Null);
+        Assert.That(data.Breakdown!.ByProject.Single().Project, Is.EqualTo("TestProj"), "file-scope diagnostics must carry the owning project name, not (unknown).");
+    }
+
+    [Test]
     public async Task Build_QuickBuild_Green_HasNoListsAndNoTails()
     {
         SetSource(SimpleSource, "Test.cs");

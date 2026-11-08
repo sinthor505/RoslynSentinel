@@ -39,7 +39,7 @@ public class DiagnosticEngine
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var diagnostics = semanticModel?.GetDiagnostics(null, cancellationToken) ?? Enumerable.Empty<Diagnostic>();
 
-        var list = diagnostics.Select(d => d.ToInfo()).ToList();
+        var list = diagnostics.Select(d => d.ToInfo() with { Project = document.Project.Name }).ToList();
         return new EngineResultWrapper<DiagnosticSummary>(EngineOutcome.Success, new DiagnosticSummary(
             list.Count(d => d.Severity == "Error"),
             list.Count(d => d.Severity == "Warning"),
@@ -54,7 +54,7 @@ public class DiagnosticEngine
         var compilation = await project.GetCompilationAsync(cancellationToken);
         var diagnostics = compilation?.GetDiagnostics(cancellationToken) ?? Enumerable.Empty<Diagnostic>();
 
-        var list = diagnostics.Select(d => d.ToInfo()).ToList();
+        var list = diagnostics.Select(d => d.ToInfo() with { Project = project.Name }).ToList();
         return new EngineResultWrapper<DiagnosticSummary>(EngineOutcome.Success, new DiagnosticSummary(
             list.Count(d => d.Severity == "Error"),
             list.Count(d => d.Severity == "Warning"),
