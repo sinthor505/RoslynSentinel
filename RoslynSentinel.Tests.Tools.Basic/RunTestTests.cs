@@ -483,6 +483,27 @@ public class RunTestTests
         Assert.That(text, Does.Contain("Some.Tests").And.Contain("exited non-zero"));
     }
 
+    // A failed run ends with one re-run of its first failing test; a passing run carries no next step.
+    [Test]
+    public void SummarizeTestRun_FailedTests_EndsWithRerunNextStep()
+    {
+        const string testName = "RoslynSentinel.Tests.Battery.Basic.SampleTests.Fails_Here";
+        var failed = new TestRunResult(
+            RunSucceeded: false, ExitCode: 1, TotalCount: 1, PassedCount: 0, FailedCount: 1, SkippedCount: 0,
+            FailureSummary: [], Results: [new TestCaseResult(testName, TestOutcome.Failed, TimeSpan.FromSeconds(1), "boom", null)],
+            StdoutTail: null, StderrTail: null, Duration: TimeSpan.FromSeconds(1),
+            ProjectSummaries: [new ProjectTestSummary("Some.Tests", RunSucceeded: false, TotalCount: 1, PassedCount: 0, FailedCount: 1, SkippedCount: 0, Detail: null)]);
+        var passed = new TestRunResult(
+            RunSucceeded: true, ExitCode: 0, TotalCount: 1, PassedCount: 1, FailedCount: 0, SkippedCount: 0,
+            FailureSummary: [], Results: [], StdoutTail: null, StderrTail: null, Duration: TimeSpan.FromSeconds(1),
+            ProjectSummaries: []);
+
+        var text = WorkspaceBuildTestImpl.SummarizeTestRun(failed);
+
+        Assert.That(text, Does.Contain("Next: RunTest(").And.Contain(testName).And.EndWith("first failing test."));
+        Assert.That(WorkspaceBuildTestImpl.SummarizeTestRun(passed), Does.Not.Contain("Next:"));
+    }
+
     [Test]
     public async Task RunTest_EnvironmentParameter_ReachesTestProcessAsync()
     {

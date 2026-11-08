@@ -171,6 +171,14 @@ public class WorkspaceBuildTestImpl
                 " exited non-zero (build or adapter error); see StdoutTail.";
         }
 
+        // A failed run ends with one concrete re-run of its first failing test, so the caller does not
+        // have to open the large result to pick one. The row carries no project name, so only the filter is passed.
+        var firstFailed = run.Results.FirstOrDefault(r => r.Outcome == TestOutcome.Failed);
+        if (!run.RunSucceeded && run.FailedCount > 0 && firstFailed is not null)
+        {
+            headline += " " + ToolCallHint.Next("RunTest", "to re-run only the first failing test.", ("filter", $"FullyQualifiedName~{firstFailed.TestName}"));
+        }
+
         return headline;
     }
 
