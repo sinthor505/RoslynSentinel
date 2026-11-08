@@ -8,6 +8,24 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Battery leak guard sweep - resolved (2026-11-08)
+
+Battery leak guard sweep (2026-11-08) - add `WorkingDirectoryLeakGuard` + `[NonParallelizable]` to the remaining source-writing battery fixtures (about 20 Battery.Advanced files incl. Eleven/Twelve/Fourteen, TwentyFive to TwentyEight, ThirtyFive/ThirtySix; Tools.Basic BatteryTwenty has `[NonParallelizable]` but no guard) by implementer-sweep in slices; out of scope: the two on-disk RenameSymbol tests, optional Parts C/D and leaks outside Battery (issue doc); done = every source-writing battery file calls the guard and a full run leaves no leaked files - [doc](issues/issue_battery_tests_leak_files.md)
+
+Evidence: 17c2f43a, f1db6658, e47ac380, 9722c450, 876d9b08, d18683bb; guard + NonParallelizable on 84 Battery.Advanced fixtures (B18 pure SyntaxFactory without SetUp left alone) plus BatteryTwenty guard calls; Battery.Advanced 439/439, BatteryTwentyTests 82/82; BatteryTwentyTwo and BatteryFour not included (they write only to explicit temp paths, no cwd leak)
+
+## Test factory rollout sweep - resolved (2026-11-08)
+
+Test factory rollout sweep (2026-11-08) - replace the 15 `new PersistentWorkspaceManager(...)` test sites (Tests.Server 8 in 7 files, Tests.Tools.Basic 7 in 4 files incl. 4 in `ApplyDiffSizeGuardTests`) with `TestEngines.PersistentWorkspaceManager(logger, solutionPath: ...)` by implementer-sweep hand edits (owner choice 2026-11-08: `SemanticFindReplace` is not visible in the client, see the first P1 entry); done = Build green, `Search(mode: text)` for `new PersistentWorkspaceManager(` finds none outside Common and the factory, touched test classes pass - [proposal](proposals/proposal_semantic_find_replace_construction_initializers_and_skip_echo.md)
+
+Evidence: 83f39ebe, 1c9e0e52; 15 sites in 11 files now use TestEngines.PersistentWorkspaceManager, text search finds no remaining construction, solution Build 0 errors, Tests.Server 68/68 and Tests.Tools.Basic 61/61 touched classes pass (4 ApplyDiffSizeGuardTests sites sit in a commented-out block and were rewritten as text only; 11 of 15 sites used an initializer, not 3)
+
+## NewlineLiteralRatchetTests: exempt ContentHasher - resolved (2026-11-08)
+
+NewlineLiteralRatchetTests: exempt ContentHasher (2026-11-08) - move `ContentHasher.ComputeHash` (a hash input, never output) from the baseline to `ExemptFiles` (26 to 25 keys); the rest of the baseline is accepted (it only affects returned preview text and the ratchet blocks growth); done = `NewlineLiteralRatchetTests` green - [doc](plans/plan_eol_policy_and_write_chokepoint.md)
+
+Evidence: 41385b2a; NewlineLiteralRatchetTests green (baseline 26 to 25 keys)
+
 ## Hidden-test-hit hints (symbol search with results) - resolved (2026-11-08)
 
 Hidden-test-hit hints: `typesWithAttribute` and a `symbol` search with zero results now count and name hidden test hits (2026-11-07); `symbol` with some results still skips test projects (counting there means compiling them on every call, so only do it if timing allows). The `attributeUsages`/`hasAttribute`/broaden-on-empty gaps and `includeTests` for `implementorsOf`/`objectCreations`/`extensionsFor`/`methodsByReturnType` are fixed (2026-11-05) - [doc](plans/closed/plan_search_text_scan_all_projects_and_recovery_hints.md)
