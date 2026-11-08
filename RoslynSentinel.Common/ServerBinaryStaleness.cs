@@ -71,6 +71,35 @@ public static class ServerBinaryStaleness
         }
     }
 
+    /// <summary>
+    /// Full HEAD sha of the repo containing <see cref="LoadedSolutionDirectory"/>, or null when no solution is loaded, the
+    /// directory is missing, git fails or times out, or the output is not 40 hex characters. Never throws; for the idle-restart guard.
+    /// </summary>
+    public static string? CurrentHeadSha()
+    {
+        try
+        {
+            var directory = LoadedSolutionDirectory;
+            if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+            {
+                return null;
+            }
+
+            var run = GitProcess.TryRun(directory, GitTimeout, "rev-parse", "HEAD");
+            if (run is not { ExitCode: 0 })
+            {
+                return null;
+            }
+
+            var sha = run.Value.StdOut.Trim();
+            return sha.Length == 40 && sha.All(char.IsAsciiHexDigit) ? sha : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
     internal static List<LoadedBinary> GetLoadedBinaries() =>
         AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => !a.IsDynamic

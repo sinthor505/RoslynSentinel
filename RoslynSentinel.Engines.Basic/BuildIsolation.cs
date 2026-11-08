@@ -342,6 +342,9 @@ public sealed class BuildGate
     /// <summary>The one gate for this server process.</summary>
     public static BuildGate Shared { get; } = new();
 
+    /// <summary>True while a build or test run holds the gate. A point-in-time read for the idle-restart guard; it can change immediately after the call returns.</summary>
+    public bool IsBusy => _semaphore.CurrentCount == 0;
+
     private readonly SemaphoreSlim _semaphore = new(1, 1);
     private readonly object _holderLock = new();
     private string? _holderOperation;
