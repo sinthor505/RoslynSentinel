@@ -24,6 +24,8 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("AntiPatternEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class BlockingCallFalsePositiveTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -31,12 +33,17 @@ public class BlockingCallFalsePositiveTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task DetectAntiPatterns_ContextResultAssignment_IsNotFlaggedAsBlockingCall()
     {
@@ -139,6 +146,8 @@ public class BlockingCallFalsePositiveTests
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("AsyncAnalysisEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class AsyncVoidGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -146,12 +155,17 @@ public class AsyncVoidGotchaTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task DetectAsyncVoid_PublicAsyncVoidMethod_IsFlagged()
     {
@@ -267,6 +281,8 @@ public class AsyncVoidGotchaTests
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("AsyncAnalysisEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class LockInAsyncGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -274,12 +290,17 @@ public class LockInAsyncGotchaTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task FindBlockingCalls_ThreadSleepInsideAsync_IsFlagged()
     {
@@ -363,6 +384,8 @@ public class LockInAsyncGotchaTests
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("ThreadSafetyEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class ThreadSafeLockGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -370,12 +393,17 @@ public class ThreadSafeLockGotchaTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = Basic.TestEngines.ThreadSafetyEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task MakeMethodThreadSafe_NoExistingLock_AddsLockStatement()
     {
@@ -482,6 +510,8 @@ public class ThreadSafeLockGotchaTests
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("AsyncAnalysisEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class ValueTaskMisuseGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -489,12 +519,17 @@ public class ValueTaskMisuseGotchaTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task DetectValueTaskMisuse_AwaitedOnceImmediately_IsNotFlagged()
     {
@@ -578,6 +613,8 @@ public class ValueTaskMisuseGotchaTests
 [TestFixture]
 [Category("AntiPatternEngine")] // sentinel:auto-category
 [Category("ExceptionHandlingFinding")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class ExceptionHandlingGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -585,12 +622,17 @@ public class ExceptionHandlingGotchaTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task AnalyzeExceptions_EmptyCatch_IsSwallowedException()
     {
@@ -701,17 +743,24 @@ public class ExceptionHandlingGotchaTests
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("SyntaxModernizationEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class ImmutabilityGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task MakeClassImmutable_SetAccessor_BecomesInit()
     {
@@ -795,6 +844,8 @@ public class ImmutabilityGotchaTests
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("AntiPatternEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class StringConcatInLoopGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -802,12 +853,17 @@ public class StringConcatInLoopGotchaTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task DetectAntiPatterns_StringLiteralRhsInForLoop_IsFlagged()
     {
@@ -897,6 +953,8 @@ public class StringConcatInLoopGotchaTests
 [TestFixture]
 [Category("AntiPatternEngine")] // sentinel:auto-category
 [Category("MissingCancellationTokenFinding")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class MissingCancellationTokenGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -904,12 +962,17 @@ public class MissingCancellationTokenGotchaTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task FindMissingCancellationTokens_AsyncMethodWithoutCtCallingCalleeWithCt_IsFlagged()
     {
@@ -982,6 +1045,8 @@ public class MissingCancellationTokenGotchaTests
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("SecurityAndSafetyEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class UnsafeTypeCastGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -989,12 +1054,17 @@ public class UnsafeTypeCastGotchaTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.SecurityAndSafetyEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     [Category("SafetyIssue")] // sentinel:auto-category
     public async Task FindUnsafeCasts_DirectStringCast_IsFlagged()
@@ -1084,6 +1154,8 @@ public class UnsafeTypeCastGotchaTests
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("AsyncAnalysisEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class FireAndForgetGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -1091,12 +1163,17 @@ public class FireAndForgetGotchaTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task FindUnawaitedFireAndForget_RawCallToAsyncMethod_IsFlagged()
     {
@@ -1184,6 +1261,8 @@ public class FireAndForgetGotchaTests
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("AsyncAnalysisEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class ConfigureAwaitInLibraryGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -1191,12 +1270,17 @@ public class ConfigureAwaitInLibraryGotchaTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task FindConfigureAwaitMissing_AwaitInNonControllerClass_IsFlagged()
     {
