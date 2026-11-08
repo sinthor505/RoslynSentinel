@@ -170,7 +170,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown kind '{kind}'.")
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown kind '{kind}'. Valid values: {string.Join(", ", Enum.GetNames<SolutionItemsKind>())}." + " " + ToolCallHint.Next("ListSolutionItems", "with one of the valid kinds.", ("kind", "projects")))
             };
         }
         catch (Exception ex)
@@ -682,7 +682,7 @@ public class WorkspaceProjectManagementImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"LoadSolution: timeoutSeconds must be between 1 and 3600 (default 30); got {timeoutSeconds}.")
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"LoadSolution: timeoutSeconds must be between 1 and 3600 (default 30); got {timeoutSeconds}." + " " + ToolCallHint.Next("LoadSolution", "with timeoutSeconds between 1 and 3600.", ("solutionPath", solutionPath)))
                 };
             }
             var timeout = TimeSpan.FromSeconds(timeoutSeconds);
@@ -749,7 +749,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsError = true,
-                ErrorData = new ResultError(codeAndMessage.Item1, $"LoadSolution '{solutionPath}' {codeAndMessage.Item2}")
+                ErrorData = new ResultError(codeAndMessage.Item1, $"LoadSolution '{solutionPath}' {codeAndMessage.Item2}" + (codeAndMessage.Item1 == ToolErrorCode.NotFound ? " Use ListWorkspaceSolutions to find the solution file, then call LoadSolution again with its path." : " Check the server log for MSBuild errors, then retry LoadSolution (add forceReload: true if a solution is already loaded)."))
             };
         }
     }
