@@ -617,7 +617,7 @@ public class SemanticReplaceEngine
                     }
 
                     // Find the document for this site
-                    var doc = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.FilePath == site.FilePath || d.Name == site.FilePath);
+                    var doc = DocumentLookup.FindDocumentOrNull(solution, site.FilePath) ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == site.FilePath);
                     if (doc is null)
                     {
                         inaccessibleSite = site; // conservative: if we can't find the document, treat as inaccessible
