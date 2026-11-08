@@ -312,12 +312,6 @@ public class AdvancedRefactoringTools
         try
         {
             var changes = await _advancedStructuralEngine.InlineClassAsync(sourceFilePath, targetFilePath, className, cancellationToken: cancellationToken);
-            if (changes.Count == 0)
-                return new SentinelCallToolResult<object>
-                {
-                    IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, $"InlineClass: class '{className}' not found in '{sourceFilePath}'.")
-                };
             var apply = await ValidateAndApplyAsync(changes, $"Inline class '{className}' into target.", "InlineClass", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object>

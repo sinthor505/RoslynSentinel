@@ -175,29 +175,19 @@ public class StructuralRefactoringEngine
         var sourceDoc = solution.GetDocumentIdsWithFilePath(sourceFilePath).Select(solution.GetDocument).FirstOrDefault();
         if (sourceDoc == null)
         {
-            return new Dictionary<FilePathWrapper, string>
-            {
-                {
-                    "__error__",
-                    $"Source file '{Path.GetFileName(sourceFilePath)}' not found in solution."}
-            };
+            throw new ToolNotFoundException($"Source file '{Path.GetFileName(sourceFilePath)}' not found in solution. Use GetFileOutline to check the file and class names.", "file", sourceFilePath);
         }
 
         var sourceRoot = await sourceDoc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (sourceRoot == null)
         {
-            return new Dictionary<FilePathWrapper, string>();
+            throw new ToolInvalidArgumentException($"Could not parse '{sourceFilePath}' into a syntax tree, so the class cannot be inlined.");
         }
 
         var sourceClass = RoslynSentinel.Common.NameTargetLookup.RequireSingle(sourceRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         if (sourceClass == null)
         {
-            return new Dictionary<FilePathWrapper, string>
-            {
-                {
-                    "__error__",
-                    $"Class '{className}' not found in '{Path.GetFileName(sourceFilePath)}'."}
-            };
+            throw new ToolNotFoundException($"Class '{className}' not found in '{Path.GetFileName(sourceFilePath)}'. Use GetFileOutline to check the file and class names.", "class", className);
         }
 
         // Capture class symbol BEFORE modification so SymbolFinder can resolve all references
@@ -212,12 +202,7 @@ public class StructuralRefactoringEngine
             var targetClass = sourceRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text != className);
             if (targetClass == null)
             {
-                return new Dictionary<FilePathWrapper, string>
-                {
-                    {
-                        "__error__",
-                        $"No target class found in '{Path.GetFileName(sourceFilePath)}' to inline '{className}' into."}
-                };
+                throw new ToolTargetIneligibleException($"No target class found in '{Path.GetFileName(sourceFilePath)}' to inline '{className}' into.");
             }
 
             targetClassName = targetClass.Identifier.Text;
@@ -237,24 +222,14 @@ public class StructuralRefactoringEngine
             var targetDoc = solution.GetDocumentIdsWithFilePath(targetFilePath).Select(solution.GetDocument).FirstOrDefault();
             if (targetDoc == null)
             {
-                return new Dictionary<FilePathWrapper, string>
-                {
-                    {
-                        "__error__",
-                        $"Target file '{Path.GetFileName(targetFilePath)}' not found in solution."}
-                };
+                throw new ToolNotFoundException($"Target file '{Path.GetFileName(targetFilePath)}' not found in solution. Use GetFileOutline to check the file and class names.", "file", targetFilePath);
             }
 
             var targetRoot = await targetDoc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
             var targetClass = targetRoot?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
             if (targetClass == null)
             {
-                return new Dictionary<FilePathWrapper, string>
-                {
-                    {
-                        "__error__",
-                        $"No class found in target file '{Path.GetFileName(targetFilePath)}'."}
-                };
+                throw new ToolTargetIneligibleException($"No class found in target file '{Path.GetFileName(targetFilePath)}'.");
             }
 
             targetClassName = targetClass.Identifier.Text;

@@ -152,39 +152,38 @@ public class Target {}";
     }
 
     [Test]
-    public async Task InlineClass_ClassNotFound_ReturnsErrorKey()
+    public async Task InlineClass_ClassNotFound_ThrowsNotFound()
     {
         const string src = "public class Existing {}";
         SetSource(src, "File.cs");
-        var result = await _advancedStructuralEngine.InlineClassAsync("File.cs", "File.cs", "NonExistent");
-        Assert.That(result, Does.ContainKey(new FilePathWrapper("__error__")), "Should return __error__ key");
-        var errorContent = result["__error__"];
-        Assert.That(errorContent, Does.Contain("NonExistent"), "ErrorDetails should mention the missing class");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _advancedStructuralEngine.InlineClassAsync("File.cs", "File.cs", "NonExistent"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("NonExistent"), "Exception message should mention the missing class");
     }
 
     [Test]
-    public async Task InlineClass_SourceFileNotFound_ReturnsErrorKey()
+    public async Task InlineClass_SourceFileNotFound_ThrowsNotFound()
     {
         SetSource("public class Existing {}", "File.cs");
-        var result = await _advancedStructuralEngine.InlineClassAsync("doesnotexist.cs", "File.cs", "Anything");
-        Assert.That(result, Does.ContainKey(new FilePathWrapper("__error__")), "Should return __error__ key");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _advancedStructuralEngine.InlineClassAsync("doesnotexist.cs", "File.cs", "Anything"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
-    public async Task InlineClass_TargetFileNotFound_ReturnsErrorKey()
+    public async Task InlineClass_TargetFileNotFound_ThrowsNotFound()
     {
         SetSource("public class Src {}", "Source.cs");
-        var result = await _advancedStructuralEngine.InlineClassAsync("Source.cs", "doesnotexist.cs", "Src");
-        Assert.That(result, Does.ContainKey(new FilePathWrapper("__error__")), "Should return __error__ key");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _advancedStructuralEngine.InlineClassAsync("Source.cs", "doesnotexist.cs", "Src"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
-    public async Task InlineClass_SameFile_NoOtherClass_ReturnsErrorKey()
+    public async Task InlineClass_SameFile_NoOtherClass_ThrowsTargetIneligible()
     {
         const string src = "public class LoneClass { public int X; }";
         SetSource(src, "Lone.cs");
-        var result = await _advancedStructuralEngine.InlineClassAsync("Lone.cs", "Lone.cs", "LoneClass");
-        Assert.That(result, Does.ContainKey(new FilePathWrapper("__error__")), "Should return error - no target class to inline into");
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineClassAsync("Lone.cs", "Lone.cs", "LoneClass"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
     }
 
     [Test]
