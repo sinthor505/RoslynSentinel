@@ -258,14 +258,7 @@ public class RefactoringSignatureImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
-                    SuccessData = new AppliedChangeSummary(
-                        ChangeId: null,
-                        AffectedFiles: changes.Keys.ToList(),
-                        Description: noStageDescription,
-                        DryRun: false,
-                        Diff: null,
-                        ChangedContent: changes,
-                        Validated: false)
+                    SuccessData = AppliedChangeSummary.From(await ValidateAndApplyHelper.ComputeLineChangesAsync(_workspaceManager, changes, cancellationToken), null, changes.Keys.ToList(), noStageDescription, dryRun: false, diff: null, changedContent: changes, validated: false)
                 };
             }
 
@@ -276,7 +269,7 @@ public class RefactoringSignatureImpl
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
 
-            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, Findings: apply.Findings), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = description };
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = AppliedChangeSummary.From(apply, changes.Keys.ToList(), description, changedContent: changes, validated: true), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = description };
         }
         catch (Exception ex)
         {
@@ -316,14 +309,7 @@ public class RefactoringSignatureImpl
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
                     IsError = false,
-                    SuccessData = new AppliedChangeSummary(
-                        ChangeId: null,
-                        AffectedFiles: noStageChanges.Keys.ToList(),
-                        Description: $"Change accessibility of '{targetName}' to '{noStageAccessibilityKeyword}'.",
-                        DryRun: false,
-                        Diff: null,
-                        ChangedContent: noStageChanges.Count == 0 ? null : noStageChanges,
-                        Validated: false)
+                    SuccessData = AppliedChangeSummary.From(await ValidateAndApplyHelper.ComputeLineChangesAsync(_workspaceManager, noStageChanges, cancellationToken), null, noStageChanges.Keys.ToList(), $"Change accessibility of '{targetName}' to '{noStageAccessibilityKeyword}'.", dryRun: false, diff: null, changedContent: noStageChanges.Count == 0 ? null : noStageChanges, validated: false)
                 };
             }
 
@@ -338,7 +324,7 @@ public class RefactoringSignatureImpl
             if (apply.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = apply.Error };
             // ChangedContent is dropped centrally by AppliedChangeSummary for a real apply; the new text is just the accessibility keyword the caller passed in.
-            return new SentinelCallToolResult<AppliedChangeSummary>() { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Changed accessibility of '{targetName}' to '{accessibilityKeyword}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, Findings: apply.Findings) };
+            return new SentinelCallToolResult<AppliedChangeSummary>() { IsError = false, SuccessData = AppliedChangeSummary.From(apply, [filePathResolved], $"Changed accessibility of '{targetName}' to '{accessibilityKeyword}' in {Path.GetFileName(filePathResolved)}.", workspaceVersion: _workspaceManager.WorkspaceVersion, changedContent: changes, validated: true) };
         }
         catch (Exception ex)
         {
@@ -455,14 +441,7 @@ public class RefactoringSignatureImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
-                    SuccessData = new AppliedChangeSummary(
-                        ChangeId: null,
-                        AffectedFiles: noStageChanges.Keys.ToList(),
-                        Description: noStageDescription,
-                        DryRun: false,
-                        Diff: null,
-                        ChangedContent: noStageChanges.Count == 0 ? null : noStageChanges,
-                        Validated: false)
+                    SuccessData = AppliedChangeSummary.From(await ValidateAndApplyHelper.ComputeLineChangesAsync(_workspaceManager, noStageChanges, cancellationToken), null, noStageChanges.Keys.ToList(), noStageDescription, dryRun: false, diff: null, changedContent: noStageChanges.Count == 0 ? null : noStageChanges, validated: false)
                 };
             }
 
@@ -481,7 +460,7 @@ public class RefactoringSignatureImpl
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
 
-            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, Findings: apply.Findings), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = description };
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = AppliedChangeSummary.From(apply, changes.Keys.ToList(), description, changedContent: changes, validated: true), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = description };
         }
         catch (Exception ex)
         {
