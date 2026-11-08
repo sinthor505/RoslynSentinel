@@ -6,7 +6,7 @@ using RoslynSentinel.Engines.Advanced;
 namespace RoslynSentinel.Tests.Advanced;
 
 /// <summary>
-/// C5b-2a characterization tests (docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
+/// C5b-2a characterization tests (docs/current/proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
 /// Byte-exact pins for <c>StructuralRefactoringEngine.IntroduceParameterObjectAsync</c>: the main path (rewritten method
 /// plus appended record) and the interface-warning path (rewritten method only, returned with a warning message), the
 /// two annotated-container sites routed onto <c>RoslynFormattingHelper.FormatAnnotatedSpansAsync</c>. The source

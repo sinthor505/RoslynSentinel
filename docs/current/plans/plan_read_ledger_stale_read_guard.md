@@ -78,7 +78,7 @@ and one conflicts in rationale.
   anticipates this plan.** Its last Gotcha says "Nothing records which files a caller has READ ...
   Read-tracking is under design." This plan is that design. It also documents the debounce bug (the sync
   does not refresh `_knownFileHashes`) that this plan lists as a separate small bug. Step 7 updates it.
-- **`reference-code-file-write-paths-v1.md`: chokepoint step list needs one more step.** It enumerates
+- **`reference_code_file_write_paths.md`: chokepoint step list needs one more step.** It enumerates
   chokepoint steps 1-11 and the callers table. The stale-read check becomes a step between pre-image
   capture (7) and the EOL guard (8). It also records the one sanctioned direct write
   (`MsToolAugmentEngine.FormatDocumentSafeAsync` with no solution loaded); that path never reaches the
@@ -91,7 +91,7 @@ and one conflicts in rationale.
   read tool must remember to call it; nothing compiler-enforced, same "convention, not enforcement" status
   as the write paths. Its line citations are stale; do not copy them. If staged writes land, the ledger
   needs per-snapshot hashes (see Risks).
-- **`ideas/external-drift-hard-blocker.md` (SUPERSEDED 2026-10-09 by
+- **`ideas/closed/idea_external_drift_hard_blocker.md` (SUPERSEDED 2026-10-09 by
   `plan_external_file_drift_tool_and_halt_stamping.md`): conflicts in rationale.** It argued for a
   session-wide latch with deliberately no actionable path and rejected per-file blocking because a model
   could route around it; it also assumed a single session with no concurrent actors. This plan adds a
@@ -297,7 +297,7 @@ opt-in (step 5), so the check exists but is inert until a tool both records and 
 
 ### Step 7 - docs (no code)
 - **Files (3, Markdown):** `docs/current/references/reference_file_watcher_and_drift_detection.md`,
-  `docs/current/reference-code-file-write-paths-v1.md`,
+  `docs/current/references/reference_code_file_write_paths.md`,
   `docs/current/references/reference_architecture_map.md`.
 - **Change:** watcher reference: replace the last Gotcha ("Read-tracking is under design") with the
   ledger, add a short section covering `_observedHashes`, who records, who opts in, the non-latching
@@ -314,7 +314,7 @@ opt-in (step 5), so the check exists but is inert until a tool both records and 
 
 ### Step 8 - deferred follow-ups (do not schedule yet)
 - **F1.** Narrow the latch to per-file refusals once the ledger has proven itself. Contradicts
-  `external-drift-hard-blocker.md`; needs its own proposal.
+  `idea_external_drift_hard_blocker.md`; needs its own proposal.
 - **F2.** Bug, independent of this plan: `OnDebounceTimerElapsed` folds disk text into `CurrentSolution`
   but does not refresh `_knownFileHashes`, so a later event for the same file mismatches the stale baseline
   and is flagged again. Add a `docs/current/TODO.md` line if one is not there; it can be fixed first or
@@ -409,7 +409,7 @@ Risks:
    (b) refresh on every write, as decided, which never nags but weakens the inter-agent guarantee. The
    decision stands as written; this is flagged because the stated goal ("blind overwrites") is only
    partly met under (b). Needs an owner decision, or F6.
-2. **Conflict with `external-drift-hard-blocker.md`** (superseded): its rationale rejects per-file,
+2. **Conflict with `idea_external_drift_hard_blocker.md`** (superseded): its rationale rejects per-file,
    actionable blocking. Reconciled only for the coexisting design; F1 reopens it.
 3. **Tension with `design_read_chokepoint.md`:** explicit `RecordObserved` calls instead of the read gate.
    Is a future read tool expected to be forced through `IWorkspaceReader`? If yes, `RecordObserved` should

@@ -250,7 +250,7 @@ public record GitCommitResult : GitResult
 
     // Sibling of CommitHash, always its literal .Length - a byte-counted answer next to the hash
     // so a caller never has to visually count/transcribe the hex string to know its length. See
-    // docs/current/finding_git_commit_commithash_length_unconfirmed_no_source_mechanism.md: every
+    // docs/current/findings/closed/finding_git_commit_commithash_length_unconfirmed_no_source_mechanism.md: every
     // "41-character hash" report to date turned out to be an agent miscounting by eye, never an
     // actual defect - this field makes that whole category of doubt unnecessary to raise.
     public int CommitHashLength => CommitHash.Length;
@@ -3395,7 +3395,7 @@ public class GitImpl : IGitOperations
 
             // Sanity check, not a correctness fix: a SHA-1 hash is always exactly 40 hex
             // characters. This guards against a suspected (unconfirmed, see
-            // docs/current/finding_git_commit_commithash_length_unconfirmed_no_source_mechanism.md)
+            // docs/current/findings/closed/finding_git_commit_commithash_length_unconfirmed_no_source_mechanism.md)
             // response-length anomaly reported across multiple sessions - if this ever fires, it
             // proves the corruption happens at or before this point rather than in a later
             // serialization/transport layer, which the original investigation could not determine.

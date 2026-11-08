@@ -1,7 +1,7 @@
 # PostToolUse + PostToolUseFailure hook: append one JSONL line per RoslynSentinel MCP call,
 # and per built-in/shell call that is a C# fallback (Read/Glob/Grep on .cs, a shell command
 # touching .cs, or dotnet build/test instead of Build/RunTest), to this session's call log.
-# Plan: docs/current/plans/plan_mcp_tool_experience_journal.md (Step 2)
+# Plan: docs/current/plans/closed/plan_mcp_tool_experience_journal.md (Step 2)
 #
 # Both events are needed: Step 0 showed an MCP call returning isError:true fires
 # PostToolUseFailure (payload field `error`), NOT PostToolUse.

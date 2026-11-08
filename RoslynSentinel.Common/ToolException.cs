@@ -230,7 +230,7 @@ public sealed class ToolFeatureDisabledException : ToolException
 
 /// <summary>
 /// A confirmed external content-drift hit tripped the session-wide halt latch (see
-/// docs/current/ideas/external-drift-hard-blocker.md). Once thrown, every subsequent mutating
+/// docs/current/ideas/closed/idea_external_drift_hard_blocker.md). Once thrown, every subsequent mutating
 /// call on this <see cref="PersistentWorkspaceManager"/> instance throws this same exception.
 /// The external-drift latch is recoverable via <c>ExternalFileDrift(operation: Acknowledge)</c>,
 /// which clears it and allows subsequent mutations. The unrecoverable halt (see

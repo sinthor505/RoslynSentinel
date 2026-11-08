@@ -11,7 +11,7 @@
          drift never shows in git status/diff - this audit is the signal).
       3. Per-project breakdown (first path segment).
     Exit code is 0 unless -FailOn is set and a non-allowlisted file has one of the listed
-    working-tree EOL classes. Plan: docs/current/plans/plan_eol_policy_and_write_chokepoint.md.
+    working-tree EOL classes. Plan: docs/current/plans/closed/plan_eol_policy_and_write_chokepoint.md.
 
 .PARAMETER FailOn
     Working-tree EOL classes that fail the audit: any of lf, crlf, mixed, none (no line ending).

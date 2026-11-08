@@ -16,7 +16,7 @@ Differences from the text below, which is kept as proposed:
 
 ## Motivation
 
-[plan_wire_result_marshaller.md](../../plans/plan_wire_result_marshaller.md) Step 7 still lists one open item:
+[plan_wire_result_marshaller.md](../../plans/closed/plan_wire_result_marshaller.md) Step 7 still lists one open item:
 `[ResultRecords]` for `Search` references / callers / implementations ("anonymous objects need a named record, a
 wire-shape decision"), plus bare-list tools. A read-only investigation on 2026-11-04 (explore-tier2) found:
 
@@ -152,8 +152,8 @@ declared; `Implementations` falls back to inference (`inferred: true`). Two ways
 
 ## Related
 
-- [plan_wire_result_marshaller.md](../../plans/plan_wire_result_marshaller.md) -- Step 7 "Done when" and the open item.
-- [proposal_central_large_result_offload.md](../proposal_central_large_result_offload.md) and
-  [plan_typed_large_result_offload.md](../../plans/plan_typed_large_result_offload.md) -- the superseded
+- [plan_wire_result_marshaller.md](../../plans/closed/plan_wire_result_marshaller.md) -- Step 7 "Done when" and the open item.
+- [proposal_central_large_result_offload.md](proposal_central_large_result_offload.md) and
+  [plan_typed_large_result_offload.md](../../plans/closed/plan_typed_large_result_offload.md) -- the superseded
   `IPageableResult` design.
 - `dto-conventions` skill (reuse-first, NEW-DTO format, suffix table, wire safety).

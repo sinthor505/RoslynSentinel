@@ -168,7 +168,7 @@ defeats the purpose of your existence.
 
 ## Log sources — collect the server log before it's destroyed
 
-`docs/current/reference_log_sources_and_cross_referencing.md` maps every source. What matters most
+`docs/current/references/reference_log_sources_and_cross_referencing.md` maps every source. What matters most
 to you operationally:
 
 **Every step is its own isolated experiment.** A run folder has one subfolder per step
@@ -236,7 +236,7 @@ arguments, verbatim error) — not a re-pointer at the raw log.
      the error, not a root cause.
    - **A CS#### surfaces, or an MCP tool blocks/gaps during a step** → spawn `blocker-writer` immediately to draft `docs/current/blockers/blocking_error_*.md` — this is standing project convention, not optional.
    - **You need to review a step's actual diff** (to sanity-check what the model changed) → resolve the real branch/commits yourself (`git log --all --grep=<runid>` or `git branch --list '*<runid>*'`) rather than trusting the `Worktree\` folder; if anything is ambiguous, dispatch `worktree-diff-sentinel` to confirm.
-3. Cross-check step counts against the plan's own index (`docs/testing/plan-eval-defect-remediation-v2-steps-runner/00-index.md` or whichever `-PlanDir` was used) — a run stopping early may be scoped intentionally (caller only asked for steps N-M) rather than stalled; don't report a stall without checking scope first.
+3. Cross-check step counts against the plan's own index (`docs/current/evals/closed/eval_defect_remediation_v2_steps_runner/00-index.md` or whichever `-PlanDir` was used) — a run stopping early may be scoped intentionally (caller only asked for steps N-M) rather than stalled; don't report a stall without checking scope first.
 
 ## What you report back
 

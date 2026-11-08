@@ -8,7 +8,7 @@ using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
-/// Slice C6 of docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md:
+/// Slice C6 of docs/current/proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md:
 /// <see cref="RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(Document, CompilationUnitSyntax, System.Func{SyntaxNode, bool}, string, System.Threading.CancellationToken)"/>, the comment-keeping way to format a newly built
 /// file root that embeds existing code. The three fixtures mirror how AdvancedStructuralEngine builds its roots
 /// (ExtractSuperclass, ExtractMembersToPartial, ConvertTupleToClass), which use this helper since slices C7a/C7b

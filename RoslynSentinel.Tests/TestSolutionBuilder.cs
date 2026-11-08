@@ -144,7 +144,7 @@ public static class TestSolutionBuilder
     // downstream project are resolved through two different SemanticModel/Compilation object
     // graphs, so SymbolEqualityComparer.Default never sees them as "the same" type unless the
     // consuming code re-resolves across compilations (see
-    // docs/current/blockers/resolved/blocking_error_movemember_candidate_lookup_misses_sibling_field.md).
+    // docs/current/blockers/closed/blocking_error_movemember_candidate_lookup_misses_sibling_field.md).
     public static Solution CreateTwoProjectSolution(
         string upstreamProjectName,
         (string name, string content)[] upstreamDocuments,

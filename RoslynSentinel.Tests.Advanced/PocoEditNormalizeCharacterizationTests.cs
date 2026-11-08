@@ -8,7 +8,7 @@ using RoslynSentinel.Engines.Advanced;
 namespace RoslynSentinel.Tests.Advanced;
 
 /// <summary>
-/// Slice C8 characterization tests (docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
+/// Slice C8 characterization tests (docs/current/proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
 /// Byte-exact pins for the existing-root sites of <c>DocumentationEngine</c> (GenerateXmlDocumentationStubs,
 /// DocumentPocoFields) and <c>ApiGenerationEngine.AddValidationToPoco</c>. Each input has untouched, irregularly spaced
 /// code (<c>UntouchedLine</c>). A line with a trailing "~" ends in a stray CRLF in the "Mixed" (otherwise LF) variant.

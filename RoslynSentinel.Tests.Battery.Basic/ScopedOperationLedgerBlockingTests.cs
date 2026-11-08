@@ -1,5 +1,5 @@
 // IScopedOperationLedger.IsBlocked -> the per-file refusal wired into ApplyProposedChangesAsync
-// (see docs/current/proposal_scoped_operation_ledger.md, Decision 2). While a ledger is open, only
+// (see docs/current/plans/closed/plan_scoped_operation_ledger.md, Decision 2). While a ledger is open, only
 // its own tracked files (where RecordFix's resolving edits must land) stay writable; every other
 // file is refused until every entry is resolved. Unlike IUnrecoverableBreaker, this returns a
 // failed ApplyChangesResult rather than throwing SessionHaltedException.

@@ -1562,7 +1562,7 @@ public class OrderPricingRefactorChainAgentTests
         // (ContosoOrders.Tests), whose OrderCheckoutTests front door exercises GetFinalPrice -> the
         // renamed/extracted/interface-wrapped calculator logic underneath it across every rung
         // (OrderCheckout's own constructor/public shape is never touched by any rung's prompt -> see
-        // docs/current/modeleval_fixture_test_suite_redesign.md), rather than scanning for
+        // docs/current/evals/closed/eval_modeleval_fixture_test_suite_redesign.md), rather than scanning for
         // byte-for-byte/whitespace-collapsed-unchanged text. Asserting the total count is unchanged
         // (not just Failed == 0) closes the loophole where a model "fixes" a failing test by
         // deleting or [Fact(Skip=...)]-ing it instead of fixing the code.

@@ -190,7 +190,7 @@ public class SymbolNavigationEngine
     /// match's data so the caller (or the agent reading the result) can compare them. If you only
     /// need to disambiguate to one target and act on it, use ResolveCandidates (syntax-only, no
     /// filePath needed) or ResolveCandidatesWithSemanticAsync (needs a solution-wide ISymbol)
-    /// instead -- see docs/current/proposal_universal_symbol_resolver.md.
+    /// instead -- see docs/current/proposals/proposal_universal_symbol_resolver.md.
     /// </summary>
     public async Task<List<SymbolLocation>> LocateSymbolAsync(
         string symbolName,
@@ -211,7 +211,7 @@ public class SymbolNavigationEngine
         // ISolutionProvider implementation (PersistentWorkspaceManager, FakeWorkspaceManager) also
         // implements IWorkspaceManager, so this cast is safe today. Cleanup target: widen the
         // constructor and drop this cast once SymbolNavigationEngine's caller list has been
-        // consolidated. See docs/current/design_read_chokepoint.md.
+        // consolidated. See docs/current/design/design_read_chokepoint.md.
         // A supplied filePath pins the search to one declaring file. Resolve it through the shared
         // document lookup (case-insensitive; a miss names the closest real paths) instead of comparing
         // strings per location: the old per-location compare was case-sensitive, so a caller path whose
@@ -1547,7 +1547,7 @@ public class SymbolNavigationEngine
             // FieldDeclarationSyntax-only switch -> the old switch's `_ => false` silently dropped
             // ClassDeclarationSyntax (and every other type kind), so a top-level class's own
             // caller-precheck could never resolve the class itself. See
-            // docs/current/proposal_universal_symbol_resolver.md's Motivation section (the "sixth
+            // docs/current/proposals/proposal_universal_symbol_resolver.md's Motivation section (the "sixth
             // drifted lookup path").
             var declsSourceText = await document.GetTextAsync(cancellationToken);
             var declCandidates = SyntaxTargetResolver.ResolveCandidates(root, declsSourceText, symbolName, cancellationToken);
@@ -1705,7 +1705,7 @@ public class SymbolNavigationEngine
                     // caller-supplied contextSnippet that doesn't match any candidate was dropped
                     // on the floor and PreferClassMember(...).FirstOrDefault() picked an arbitrary
                     // same-named symbol from anywhere in the solution instead - the root cause
-                    // traced in docs/current/blockers/resolved/blocking_error_member_replace_containername_regression_setup_overload.md's
+                    // traced in docs/current/blockers/closed/blocking_error_member_replace_containername_regression_setup_overload.md's
                     // investigation, reproduced here in the solution-wide by-name path.
                     throw new ToolNotFoundException(
                         $"contextSnippet did not resolve to a symbol for symbolName " +
@@ -3406,7 +3406,7 @@ public class SymbolNavigationEngine
 /// A closed set of declaration kinds recognized by ResolveCandidates, replacing the ad-hoc
 /// per-call-site MemberDeclarationSyntax/BaseTypeDeclarationSyntax/EnumMemberDeclarationSyntax
 /// switch statements previously duplicated across GetMemberName, GetContainerMembersAsync, and
-/// FindImplementationsForMemberAsync (see docs/current/proposal_universal_symbol_resolver.md).
+/// FindImplementationsForMemberAsync (see docs/current/proposals/proposal_universal_symbol_resolver.md).
 /// </summary>
 
 /// <summary>

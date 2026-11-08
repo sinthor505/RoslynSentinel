@@ -12,7 +12,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 /// <summary>
 /// Full-pipeline regression tests for the mutating-tool compact-result default
-/// (docs/current/plans/plan_mutating_tools_compact_result_default.md, Step 7): a real apply through a real tool
+/// (docs/current/plans/closed/plan_mutating_tools_compact_result_default.md, Step 7): a real apply through a real tool
 /// (ModifyModifierTool -> ValidateAndApplyHelper -> AppliedChangeSummary) must not echo the whole file in
 /// changedContent and neither does a dry run (it carries lineChanges, plus the diff with returnDiff: true), while
 /// autoStage=false results still do.

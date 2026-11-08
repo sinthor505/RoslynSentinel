@@ -20,7 +20,7 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// Drives a real LM Studio model through a real in-process MCP server (same harness construction as
 /// RoslynSentinel.Tests.Advanced's McpTasksHarness* tests) against the
 /// <see cref="WholeFileRewriteReproducer"/> fixture, replacing the manual copy/paste-into-LM-Studio
-/// workflow previously used for plan-9b-model-test-step2.md. Requires an LM Studio server reachable
+/// workflow previously used for eval_9b_model_test_step2.md. Requires an LM Studio server reachable
 /// at ROSLYNSENTINEL_LLM_BASE_URL (default http://localhost:1234/v1) with ROSLYNSENTINEL_LLM_MODEL
 /// set to a loaded, tool-calling-capable model -> tests are skipped (not failed) if LM Studio isn't
 /// reachable, since this project exercises a real external model, not a mocked one.
@@ -145,7 +145,7 @@ public class WholeFileRewriteAgentTests
     // outcome instead of away from it -> see AssertFixApplied's comment for the full rationale.
     //
     // Plan-before-edit paragraph added 2026-09-02 (see docs/current/project_own_copy_helper_dominant_failure.md
-    // and docs/current/model_eval_pattern_analysis_2026_09_02.md §4.4): a 165-run excavation found
+    // and docs/current/evals/closed/eval_pattern_analysis_2026_09_02.md §4.4): a 165-run excavation found
     // this exact disambiguating text, on its own, did NOT reduce the dominant failure (the model
     // finds BlockEditHelpers.cs but still pastes a second copy of the method's body instead of
     // calling it -> 45-55% of runs) -> wording alone wasn't the lever. PlanThenExecute uses this
@@ -589,7 +589,7 @@ public class WholeFileRewriteAgentTests
         // Unrelated code must still BEHAVE correctly -> checked by running the fixture's own real
         // test project (ContosoOrders.Tests) rather than scanning for byte-for-byte-unchanged
         // formatting, which previously false-failed legitimate fixes that happened to reformat
-        // whitespace (see docs/current/modeleval_fixture_test_suite_redesign.md). Asserting the
+        // whitespace (see docs/current/evals/closed/eval_modeleval_fixture_test_suite_redesign.md). Asserting the
         // total count is unchanged (not just Failed == 0) closes the loophole where a model "fixes"
         // a failing test by deleting or [Fact(Skip=...)]-ing it instead of fixing the code.
         var testProjectPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Tests", "ContosoOrders.Tests.csproj");

@@ -1,7 +1,7 @@
 # SessionStart hook: create this session's tool-experience journal (if missing) and inject
 # its path plus the journaling rule into context. Fires for every source (startup, resume,
 # clear, compact), so the path comes back after compaction strips it from context.
-# Plan: docs/current/plans/plan_mcp_tool_experience_journal.md (Step 1)
+# Plan: docs/current/plans/closed/plan_mcp_tool_experience_journal.md (Step 1)
 #
 # Contract: SessionStart stdout is added to the model's context. FAIL-OPEN: any error prints
 # nothing and exits 0.

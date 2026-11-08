@@ -11,7 +11,7 @@ namespace RoslynSentinel.Tools.Basic;
 /// GetOperationDetailTool and GetLargeResultTool here are attribute-less delegators to <see cref="WorkspaceReadNavigationTools"/>
 /// (field <c>_readNavTools</c>), which carries their [McpServerTool] attributes and delegates to
 /// <see cref="WorkspaceReadNavigationImpl"/>. They exist so existing callers keep compiling and no tool name is
-/// registered twice. See docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md.
+/// registered twice. See docs/current/plans/closed/plan_split_workspace_refactoring_tools_for_di.md.
 /// </summary>
 [McpServerToolType]
 public class WorkspaceTools
@@ -129,7 +129,7 @@ public class WorkspaceTools
         => _projectManagement.LoadSolutionTool(reason, solutionPath, baseRepoDir, forceReload, timeoutSeconds, cancellationToken);
 
     // ListExternalDiskChanges/AcknowledgeExternalFileChanges moved to AdminTools.cs,
-    // gated behind the "Admin" mode -> see docs/current/ideas/external-drift-hard-blocker.md.
+    // gated behind the "Admin" mode -> see docs/current/ideas/closed/idea_external_drift_hard_blocker.md.
     // Not model-visible by default anymore; reconciliation is an out-of-band operator action now.
 
     // ApplyUnifiedDiffTool moved to WholeFileWriteTools.cs (gated off the default MCP surface,

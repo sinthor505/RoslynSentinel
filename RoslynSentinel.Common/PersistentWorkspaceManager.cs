@@ -38,14 +38,14 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // Set by OnWatcherError so a watcher fault is reported as WatcherError, not WatcherOverflow.
     private volatile bool _watcherErrored;
     // Session-wide fatal latch: set once by ApplyProposedChangesAsync on a confirmed hash-backed
-    // drift hit (see docs/current/ideas/external-drift-hard-blocker.md proposal item 2). While
+    // drift hit (see docs/current/ideas/closed/idea_external_drift_hard_blocker.md proposal item 2). While
     // true, every mutating call fails immediately via SessionHaltedException, regardless of which
     // file it targets. Cleared only out-of-band via ClearSessionHalt (AdminTools), never
     // by the exception's own throw path.
     private volatile bool _sessionHalted;
     private volatile bool _disposed = false;
     private readonly ConcurrentDictionary<FilePathWrapper, string> _failedChangesCache = new();
-    // Per-project Compilation cache (docs/current/proposal_compilation_cache.md). Invalidated
+    // Per-project Compilation cache (docs/current/proposals/proposal_compilation_cache.md). Invalidated
     // lazily for exactly the project(s) touched by a successful ApplyProposedChangesAsync write;
     // never invalidated eagerly and never scoped solution-wide. Both ReadSource values are unified
     // today (see GetSolutionAsync), same as everywhere else in this class -- the split becomes real
@@ -55,7 +55,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // _internalChanges/_externalChanges are the older path-key + ~5s-freshness-window
     // self-write-suppression mechanism (see OnFileSystemChanged). _knownFileHashes (below) is a
     // newer, content-based check layered IN FRONT of this one, not a replacement -> deliberately,
-    // per docs/current/ideas/external-drift-hard-blocker.md's "Decisions" section. The hash check
+    // per docs/current/ideas/closed/idea_external_drift_hard_blocker.md's "Decisions" section. The hash check
     // is the authoritative signal for "did this file's content actually change"; these older
     // fields remain unreplaced behind it for now. Do not read the coexistence of both mechanisms
     // as an unintentional half-finished migration -> it is a deliberate staged rollout, and
@@ -311,7 +311,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         get; set;
     }
     // Points at the solution-wide shared instance rather than constructing its own, per
-    // docs/current/plans/plan_shared_json_serializer_options.md.
+    // docs/current/plans/closed/plan_shared_json_serializer_options.md.
     private static readonly JsonSerializerOptions _jsonOptions = SharedJsonOptions.Default;
 
     // Guards MSBuildLocator.RegisterInstance, which is process-global and not safe to call
@@ -490,7 +490,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
     /// <summary>
     /// True once a confirmed drift hit has tripped the session-wide halt latch. See
-    /// <see cref="SessionHaltedException"/> and docs/current/ideas/external-drift-hard-blocker.md.
+    /// <see cref="SessionHaltedException"/> and docs/current/ideas/closed/idea_external_drift_hard_blocker.md.
     /// </summary>
     public bool IsSessionHalted() => _sessionHalted;
 
@@ -1670,7 +1670,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     /// <see cref="IWorkspaceReader"/> implementation. Both <see cref="ReadSource"/> values currently
     /// behave identically -- delegates straight to <see cref="GetCurrentSolutionAsync"/> -- because
     /// staged/uncommitted writes do not exist yet. Once they do, ReadSource.IncludeStaged is the one
-    /// that starts diverging; see docs/current/design_read_chokepoint.md.
+    /// that starts diverging; see docs/current/design/design_read_chokepoint.md.
     /// </summary>
     public async Task<Solution> GetSolutionAsync(ReadSource source, CancellationToken cancellationToken)
     {
@@ -1826,7 +1826,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         ServerActivityTracker.Shared.Touch();
         deletePaths ??= [];
 
-        // Session-wide fatal latch (see docs/current/ideas/external-drift-hard-blocker.md
+        // Session-wide fatal latch (see docs/current/ideas/closed/idea_external_drift_hard_blocker.md
         // proposal item 2): once tripped by a confirmed drift hit below, every subsequent
         // mutating call fails immediately and unconditionally, regardless of which file it
         // targets -> checked first, ahead of every other validation in this method.
@@ -1880,7 +1880,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 RefusalCode: ToolErrorCode.ScopedLedgerBlocked);
         }
 
-        // Scoped operation ledger (see docs/current/proposal_scoped_operation_ledger.md, Decision 2):
+        // Scoped operation ledger (see docs/current/plans/closed/plan_scoped_operation_ledger.md, Decision 2):
         // while a ledger is open, a target is refused unless it is one of the ledger's own tracked
         // files (IsBlocked deliberately allows those through, since that's exactly where RecordFix's
         // resolving edits must land). Unlike the two halts above, this is scoped to specific files
@@ -2222,7 +2222,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         Interlocked.Increment(ref _workspaceVersion);
                     }
 
-                    // Compilation cache invalidation (docs/current/proposal_compilation_cache.md):
+                    // Compilation cache invalidation (docs/current/proposals/proposal_compilation_cache.md):
                     // a full reload replaces CurrentSolution wholesale, so every cached entry is
                     // stale regardless of which files changed -> clear the whole cache rather than
                     // trying to map succeeded paths against a solution that's about to be swapped
@@ -3110,7 +3110,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     /// <paramref name="projectId"/> when one exists; otherwise builds it once and caches the build
     /// task so concurrent callers for the same project await the same build rather than racing
     /// separate ones. Invalidated only by <see cref="ApplyProposedChangesAsync"/> for exactly the
-    /// project(s) a successful write touched -- see docs/current/proposal_compilation_cache.md.
+    /// project(s) a successful write touched -- see docs/current/proposals/proposal_compilation_cache.md.
     /// </summary>
     public async Task<Compilation> GetCompilationAsync(ProjectId projectId, ReadSource source, CancellationToken cancellationToken)
     {

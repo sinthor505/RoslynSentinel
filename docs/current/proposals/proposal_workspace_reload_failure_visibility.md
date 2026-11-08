@@ -222,9 +222,9 @@ symptom this proposal wants to stop depending on. Needed:
 
 ## Related
 
-- `docs/current/plans/plan_session_halt_recovery_and_git_gaps.md` (halt recovery, `ExternalFileDrift` acknowledge).
+- `docs/current/plans/closed/plan_session_halt_recovery_and_git_gaps.md` (halt recovery, `ExternalFileDrift` acknowledge).
 - `docs/current/issues/issue_tool_hygiene_open_items.md` (adjacent small tool-hygiene defects).
-- `docs/current/plans/plan_external_file_drift_tool_and_halt_stamping.md` (source of the `HaltStamp` pattern).
+- `docs/current/plans/closed/plan_external_file_drift_tool_and_halt_stamping.md` (source of the `HaltStamp` pattern).
 - #32 (per-project reload removal, routing `.csproj` to the full reload, `RecordStructuralFileHashes`), in flight.
 - Memory: `reference_central_mcp_request_filter_pipeline.md` (where result transforms live),
   `project_externaldrift_false_positive_cross_check_gitstatus.md`, `project_concurrent_sessions.md`.

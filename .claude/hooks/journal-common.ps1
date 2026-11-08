@@ -1,6 +1,6 @@
 # Shared helpers for the tool-experience journal hooks (journal-session-start.ps1,
 # journal-log-call.ps1, journal-stop-nudge.ps1). Dot-sourced, never run directly.
-# Plan: docs/current/plans/plan_mcp_tool_experience_journal.md
+# Plan: docs/current/plans/closed/plan_mcp_tool_experience_journal.md
 #
 # Per-session files live in .claude/journal/ (local-only - excluded by the .claude/* rule in
 # .gitignore):

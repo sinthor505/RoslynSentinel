@@ -3000,7 +3000,7 @@ public class MemberRefactoringEngine
         // every call site's receiver expression. autoResolveCallSites (default true) drives that
         // rewrite through MoveInstanceMembersAsync: unambiguous sites are fixed automatically, and
         // anything left over must be named in callSiteFixups or the whole call is rejected -> see
-        // Decision 4 of docs/current/plans/plan_scoped_operation_ledger.md. STATIC members have no
+        // Decision 4 of docs/current/plans/closed/plan_scoped_operation_ledger.md. STATIC members have no
         // such ambiguity (ClassA.Foo() -> ClassB.Foo() is unambiguous everywhere) and always use the
         // direct rewrite path below.
         var nonStaticMembers = membersToMove.Where(m =>
@@ -4725,7 +4725,7 @@ public class MemberRefactoringEngine
     /// Reporting-only preview for moving instance member(s) to a destination that is not an existing
     /// base type (the one case MoveMemberAsync itself still rejects outright). Does not write anything
     /// and does not lift MoveMemberAsync's static-only guard -> see
-    /// docs/current/proposal_movemember_instance_callsite_resolution.md sections 1, 5, 6.
+    /// docs/current/plans/closed/plan_scoped_operation_ledger.md sections 1, 5, 6.
     ///
     /// For each call site of the member(s) being moved: builds an in-memory trial change set with the
     /// member relocated but that call site NOT rewritten, maps each reference's position into that trial text
@@ -4992,7 +4992,7 @@ public class MemberRefactoringEngine
                 // (via its fully-qualified metadata name) before comparing fixes this: same-compilation
                 // moves are unaffected (the round-trip is a no-op), and cross-project moves now compare
                 // two symbols that both belong to refCompilation. See
-                // docs/current/blockers/resolved/blocking_error_movemember_candidate_lookup_misses_sibling_field.md.
+                // docs/current/blockers/closed/blocking_error_movemember_candidate_lookup_misses_sibling_field.md.
                 var destinationTypeMetadataName = destinationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted));
                 var destinationTypeInRefCompilation = (ITypeSymbol?)refCompilation?.GetTypeByMetadataName(destinationTypeMetadataName) ?? destinationType;
                 // LookupSymbols must be called at a position that reflects general lexical/member
@@ -5019,7 +5019,7 @@ public class MemberRefactoringEngine
                 // display names directly - a check that cannot be defeated by any cross-compilation
                 // symbol-identity subtlety, since it never compares ITypeSymbol instances against each
                 // other at all. See
-                // docs/current/blockers/resolved/blocking_error_movemember_candidate_lookup_misses_sibling_field.md.
+                // docs/current/blockers/closed/blocking_error_movemember_candidate_lookup_misses_sibling_field.md.
                 bool IsDestinationType(ISymbol s)
                 {
                     var candidateType = GetSymbolType(s);
@@ -5119,7 +5119,7 @@ public class MemberRefactoringEngine
     }
 
     /// <summary>
-    /// Enforces the documented "new" contract (docs/current/proposal_movemember_instance_callsite_resolution.md
+    /// Enforces the documented "new" contract (docs/current/plans/closed/plan_scoped_operation_ledger.md
     /// section 2): "new" emits exactly 'new Target()' and nothing more. If Target has no accessible
     /// instance constructor callable with zero arguments, refuse up front naming the offending keys and
     /// the real constructor signature(s), instead of letting every fixed-up site fail the compile gate

@@ -142,7 +142,7 @@ public class BasicRefactoringEngine
         // ISolutionProvider implementation (PersistentWorkspaceManager, FakeWorkspaceManager) also
         // implements IWorkspaceManager, so this cast is safe today. Cleanup target: widen the
         // constructor and drop this cast once BasicRefactoringEngine's caller list has been consolidated.
-        // See docs/current/design_read_chokepoint.md.
+        // See docs/current/design/design_read_chokepoint.md.
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
 

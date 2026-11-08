@@ -1,5 +1,5 @@
 // AdminTools -> tests for the "Admin"-mode-gated reconciliation tools.
-// See docs/current/ideas/external-drift-hard-blocker.md.
+// See docs/current/ideas/closed/idea_external_drift_hard_blocker.md.
 
 using Microsoft.Extensions.Logging.Abstractions;
 

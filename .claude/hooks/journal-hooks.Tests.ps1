@@ -5,7 +5,7 @@
 #
 # Each hook runs under powershell.exe exactly as settings.json launches it, against a temp
 # journal directory (ROSLYNSENTINEL_JOURNAL_DIR). Payload shapes mirror the ones captured
-# live in Step 0 of docs/current/plans/plan_mcp_tool_experience_journal.md.
+# live in Step 0 of docs/current/plans/closed/plan_mcp_tool_experience_journal.md.
 
 $ErrorActionPreference = 'Continue'
 $hooks = $PSScriptRoot

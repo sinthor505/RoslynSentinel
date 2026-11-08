@@ -14,7 +14,7 @@ was sound.
 
 ## Background
 
-`docs/current/finding_snippet_notfound_wording_confusion_audit.md` is the full audit this plan
+`docs/current/findings/finding_snippet_notfound_wording_confusion_audit.md` is the full audit this plan
 implements. Read it first - it lists every affected call site with file:line and message text; this
 plan does not repeat that inventory, only the design and the fix order.
 
@@ -133,7 +133,7 @@ logic's ordering guarantees, which is pure overhead with no offsetting benefit a
 
 New file `RoslynSentinel.Common/ContextErrorBuilder.cs`, a small static class scoped narrowly to
 context-snippet/text-anchor errors only (confirmed against
-`docs/current/proposal_tool_error_code_taxonomy.md`: that proposal keeps `ToolErrorCode` flat and
+`docs/current/proposals/proposal_tool_error_code_taxonomy.md`: that proposal keeps `ToolErrorCode` flat and
 shared across all tools and explicitly argues against per-tool error-code types, but says nothing
 against a narrowly-scoped message builder for one family, and this plan does not touch
 `ToolErrorCode` itself - `ContextErrorBuilder` picks from the existing flat set, it does not add a

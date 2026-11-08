@@ -20,7 +20,7 @@ using RoslynSentinel.Tools.Advanced;
 namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
 /// <summary>
-/// Real-LM smoke test for the large-result marshaller (docs/current/plans/plan_wire_result_marshaller.md).
+/// Real-LM smoke test for the large-result marshaller (docs/current/plans/closed/plan_wire_result_marshaller.md).
 /// The fixture adds one generated 300-method file; ReadFile on it overflows the inline cap, so the server
 /// returns a largeResult pointer and the model must page the rest with GetLargeResult to find the needle.
 /// Read-only exercise: every mutating tool is blocked by a request filter. Same template and mode strings as

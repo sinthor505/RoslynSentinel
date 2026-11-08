@@ -6,7 +6,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
-/// C5c-4 characterization tests (docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
+/// C5c-4 characterization tests (docs/current/proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
 /// Byte-exact pins for <c>SyntaxUpgradeEngine.UseFieldBackedPropertiesAsync</c>, which collapses a backing-field +
 /// property pair into an auto-property. The rewritten property is annotated and formatted through
 /// <c>RoslynFormattingHelper.FormatAnnotatedSpansAsync</c>; code the rewrite did not touch (a sibling method with

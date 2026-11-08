@@ -99,7 +99,7 @@ ledger.
 7. **Recovery goes through the dispatcher, not peer-to-peer messaging.** The error names the agent; the main
    session, which owns slicing and can `SendMessage` either agent, resolves it.
 8. **Reporting uses the existing `Findings` list and adds no input schema.** The claude-lean schema measured 28305
-   of 28500 at W13 (`docs/current/decisions_autonomous_run_2026-11-05.md`), so there is no new tool or operation.
+   of 28500 at W13 (`docs/current/archive/decisions_autonomous_run_2026_11_05.md`), so there is no new tool or operation.
    Re-measure with `ClaudeLeanSchemaBudgetTests` before Step 6; other approved work may spend the same headroom.
 
 **DTO notes** (per the `dto-conventions` skill; repeat these in the briefs and tool-call `reason`s):
@@ -377,6 +377,6 @@ in place. Findings reuse `Finding`.
   the code without the writer. Known limitation. Multi-apply tools can also be refused part-way; check whether they roll back.
 - **Undo after-state (Step 7) - resolved.** Checked while building Step 7: nothing ever writes `OperationItemRecord.AfterSource`, so the after-state compare was dropped. The owner chose an applier id instead: `OperationBlobWriter.WriteAsync` stamps `AppliedByAgentId` on each item, and the undo is refused when the edit attribution ledger's latest writer is a different known agent. (Original note: assumed after-content or a hash per item. If absent,
   the fallback was the edit attribution ledger's latest `HashAfter`, which a restart clears.) Blobs written without an agent id carry no applier id, so their undo is never refused.
-- **Writes outside the chokepoint** (`docs/current/reference-code-file-write-paths-v1.md:122-128`) and Git mutations are not
+- **Writes outside the chokepoint** (`docs/current/references/reference_code_file_write_paths.md:122-128`) and Git mutations are not
   attributed. Whether `Git` writes the working tree was not checked.
 - **`LaunchTestInstance` children.** Whether they inherit `ROSLYNSENTINEL_OPERATING_MODE` or receive the arg was not checked.

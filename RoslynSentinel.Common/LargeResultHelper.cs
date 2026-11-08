@@ -7,7 +7,7 @@ namespace RoslynSentinel.Common;
 public static class LargeResultHelper
 {
     // Points at the solution-wide shared instance rather than constructing its own, per
-    // docs/current/plans/plan_shared_json_serializer_options.md. JsonOptions is internal (not
+    // docs/current/plans/closed/plan_shared_json_serializer_options.md. JsonOptions is internal (not
     // private) - grepped for external references to LargeResultHelper.JsonOptions before this
     // change; none found outside this file.
     internal static readonly JsonSerializerOptions JsonOptions = SharedJsonOptions.Default;

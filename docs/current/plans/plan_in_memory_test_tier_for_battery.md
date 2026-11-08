@@ -118,4 +118,4 @@ Two tiers:
 
 ## See also
 
-- [proposal_battery_test_reorganisation_in_memory_and_shared_sources.md](../proposals/proposal_battery_test_reorganisation_in_memory_and_shared_sources.md) - continues this plan: classifies the Battery fixtures, adds WorkspaceAccess to the fake, plans topic classes and shared sources.
+- [proposal_battery_test_reorganisation_in_memory_and_shared_sources.md](../proposals/closed/proposal_battery_test_reorganisation_in_memory_and_shared_sources.md) - continues this plan: classifies the Battery fixtures, adds WorkspaceAccess to the fake, plans topic classes and shared sources.

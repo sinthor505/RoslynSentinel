@@ -1,5 +1,5 @@
 // AdvancedStructuralEngine.PreviewInstanceMoveCallSitesAsync -> Decision 3 of
-// docs/current/plans/plan_scoped_operation_ledger.md (proposal_movemember_instance_callsite_resolution.md
+// docs/current/plans/closed/plan_scoped_operation_ledger.md (plan_scoped_operation_ledger.md
 // sections 1, 5, 6). Reporting-only dry-run: does not write anything, classifies each call site of the
 // member(s) being moved by compiling a trial change set (member removed, call site untouched) and asking
 // the compiler's own diagnostics whether that site breaks, then explaining broken sites via an in-scope
@@ -803,7 +803,7 @@ public class PreviewInstanceMoveCallSitesTests
         Assert.That(!fixupApply.IsError, Is.True, fixupApply.Summary);
     }
 
-    // docs/current/blockers/resolved/blocking_error_movemember_analysisengine_antipatternengine_friction.md:
+    // docs/current/blockers/closed/blocking_error_movemember_analysisengine_antipatternengine_friction.md:
     // "new" is a zero-argument constructor call only. Against a target with no zero-arg constructor it
     // used to build 'new Target()' anyway and surface one undifferentiated CS7036 per site from the
     // compile gate; it must now be refused before any change set is built, naming the key and the
@@ -1079,7 +1079,7 @@ public class PreviewInstanceMoveCallSitesTests
         });
     }
 
-    // Regression test for docs/current/blockers/resolved/blocking_error_movemember_candidate_lookup_misses_sibling_field.md.
+    // Regression test for docs/current/blockers/closed/blocking_error_movemember_candidate_lookup_misses_sibling_field.md.
     // Root cause: destinationType was resolved from the destination class's own (upstream)
     // compilation, but each call site's in-scope candidate fields were resolved from the
     // *calling* document's (downstream) compilation. SymbolEqualityComparer.Default.Equals

@@ -40,7 +40,7 @@ and the two batch errors carry the correct shape, reword the gate error, then ti
   failures.
 - No tool names in guidance text unless the tool is active in the mode being described.
 - After the last C# step: `Build(fullBuild)`, restart the server, then re-run the eval (the modeleval
-  script needs `-Model qwen/qwen3.5-9b`; see `docs/current/reference_model_eval_procedure.md`).
+  script needs `-Model qwen/qwen3.5-9b`; see `docs/current/references/reference_model_eval_procedure.md`).
 - Messages must stay ASCII and must not leak paths beyond the workspace-relative form already used.
 
 ## Steps

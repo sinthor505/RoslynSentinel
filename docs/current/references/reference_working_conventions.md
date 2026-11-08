@@ -14,7 +14,7 @@ The lower-frequency conventions. Consult when touching tests, docs, scripts or t
   [reference_not_found_recovery_ladder.md](reference_not_found_recovery_ladder.md).
 - **Doc lifecycle:** `docs/current/TODO.md` is open-items-only; resolved entries go to `CLOSED.md`. A finished
   plan, proposal or finding gets its Status line updated and moves to its folder's `closed/`.
-  `docs/current/upstream/` and `docs/obsolete/` are not active documentation.
+  `docs/current/archive/` and every `*/closed/` folder are not active documentation.
 - **Worktrees:** exclude `*/Worktree/` folders (PlanStepRunner harness clones) from diffs, searches and
   reviews; their git output is not authoritative.
 - **Text:** ASCII-only punctuation in comments, docs, commit messages and prompts (`-`/`--`, straight

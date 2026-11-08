@@ -8,7 +8,7 @@ namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
 /// Engine-level tests for the generated interface file of <see cref="BasicRefactoringEngine.ExtractInterfaceAsync"/>
-/// (slice C3-G3a of docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md): the
+/// (slice C3-G3a of docs/current/proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md): the
 /// interface file root is built from scratch and formatted by RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync
 /// (slice C8): the copied using directives stay byte-exact (header, trailing comments, own line endings) and the new
 /// interface structure takes the resolved line ending (IWorkspaceMutator.ResolveEol), ending with a line break.

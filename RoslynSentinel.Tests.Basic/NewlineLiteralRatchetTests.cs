@@ -21,7 +21,7 @@ public class NewlineLiteralRatchetTests
         "RoslynSentinel.Common/ContentHasher.cs",
     };
 
-    // These literals were measured on 2026-10-26 (Step 8z of docs/current/plans/plan_eol_policy_and_write_chokepoint.md).
+    // These literals were measured on 2026-10-26 (Step 8z of docs/current/plans/closed/plan_eol_policy_and_write_chokepoint.md).
     // The write chokepoint converts every written file to the resolved EOL, so these only affect text returned in previews.
     // New code takes the eol parameter from IWorkspaceMutator.ResolveEol instead of building a line ending by hand.
     // Keyed "<relative file>::<enclosing member>" to the exact count; counts may only shrink.

@@ -1,6 +1,6 @@
 # Plan: make every expected tool failure report the error code that matches its cause
 
-**Note 2026-10-11:** the result-type decision this plan waited on is made and built (`plans/plan_shared_result_status_interface.md`: `IResultStatus` on all status-carrying types, one `EditOutcome` -> `ResultStatus` mapping, `Cancelled`/`TimedOut` codes). Re-check the remaining steps against that code before starting them.
+**Note 2026-10-11:** the result-type decision this plan waited on is made and built (`plans/closed/plan_shared_result_status_interface.md`: `IResultStatus` on all status-carrying types, one `EditOutcome` -> `ResultStatus` mapping, `Cancelled`/`TimedOut` codes). Re-check the remaining steps against that code before starting them.
 
 **Status:** IN-PROGRESS 2026-10-19. Follows `finding_batch_edit_errors_lose_tool_exception_code.md`; steps 0-1 of that finding are done (commits 72bae67, 8688c75). Typed throws, `DocumentEditResult.ErrorCode` and slices 1, 2-engine, B and A (`Member`/`UsingDirective`, a63d48f5, a77c9d62) are built; the `CodeTransformTools` conversion is parked and the numeric taxonomy and telemetry are out of scope. Open items: TODO.md "Error codes follow cause, remaining".
 
@@ -200,7 +200,7 @@ Notes for the brief:
 - Tests: none call ApplyFileCodeTransform/ApplyClassCodeTransform. Add coverage next to RoslynSentinel.Tests.Server/CodeTransformToolsOutcomeTests.cs (14 existing tests, Method/Generate only) via test-writer; at least one per outcome family (Modified, AlreadyInTargetState via upgrade_to_file_scoped_namespace, FeatureDisabled, TargetNotFound).
 - Suggested batching: 4-5 batches of 7-9 sites (file scope x3, class scope x2), each compiled green; Qwen with unique-message anchors works, or implementer-senior.
 
-Full-suite baseline note (historical): 5 tool-surface tests were red since 348b03b3 (SubAgent enabled in claude-lean). The three ClaudeLeanModeTests failures are fixed (SubAgent is Advanced-only; see blockers/resolved/blocking_error_claudeleanmodetests_subagent_expected_in_basic_flavor.md). ToolsArchitectureDocFreshness was not re-checked. T4_LargeResult_WrittenToFile_DataNull is flaky under the full run.
+Full-suite baseline note (historical): 5 tool-surface tests were red since 348b03b3 (SubAgent enabled in claude-lean). The three ClaudeLeanModeTests failures are fixed (SubAgent is Advanced-only; see blockers/closed/blocking_error_claudeleanmodetests_subagent_expected_in_basic_flavor.md). ToolsArchitectureDocFreshness was not re-checked. T4_LargeResult_WrittenToFile_DataNull is flaky under the full run.
 
 Other LEFT relabel slices: 3 (ConfigureAwait + OptimizeTaskWait), 4 (ThreadSafety + CodeGeneration), 5 (Asyncify batch, HIGH risk). SyntaxUpgradeEngine rewriter engines (AddBraces, UpgradePatternMatching, CleanupImplicitSpans) still need change detection.
 

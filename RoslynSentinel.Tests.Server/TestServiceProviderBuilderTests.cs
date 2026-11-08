@@ -10,7 +10,7 @@ public class TestServiceProviderBuilderTests
         // ValidateOnBuild=true means BuildServiceProvider itself throws AggregateException if any
         // registered service's dependency graph doesn't resolve - this is the same check that
         // caught the IWorkspaceReader gap at real server startup (see
-        // docs/current/blockers/resolved/blocking_error_iworkspacereader_never_registered_server_wont_start.md).
+        // docs/current/blockers/closed/blocking_error_iworkspacereader_never_registered_server_wont_start.md).
         IServiceProvider? provider = null;
         Assert.DoesNotThrow(() => provider = TestServiceProviderBuilder.Build());
 
@@ -28,7 +28,7 @@ public class TestServiceProviderBuilderTests
         // ValidateOnBuild=true means BuildServiceProvider itself throws AggregateException if any
         // registered service's dependency graph doesn't resolve - this is the same check that
         // caught the IWorkspaceReader gap at real server startup (see
-        // docs/current/blockers/resolved/blocking_error_iworkspacereader_never_registered_server_wont_start.md).
+        // docs/current/blockers/closed/blocking_error_iworkspacereader_never_registered_server_wont_start.md).
         var customDummy = new object();
         IServiceProvider? provider = null;
         Assert.DoesNotThrow(() => provider = TestServiceProviderBuilder.Build(services =>

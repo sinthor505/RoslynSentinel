@@ -7,7 +7,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <summary>
 /// Fallback check for "unrelated code unchanged" when a member has no dedicated behavior test
 /// (front-door or direct) to prove it -> see
-/// docs/current/modeleval_fixture_test_suite_redesign.md. Compares the member's syntax structure
+/// docs/current/evals/closed/eval_modeleval_fixture_test_suite_redesign.md. Compares the member's syntax structure
 /// via <see cref="SyntaxFactory.AreEquivalent(SyntaxNode?, SyntaxNode?, bool)"/> with
 /// <c>topLevel: false</c>, so trivia/whitespace differences (legitimate reformatting) don't count
 /// as a change -> only this. Not a primary check: prefer a real test against the member wherever

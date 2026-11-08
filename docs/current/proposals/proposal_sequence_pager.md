@@ -291,9 +291,9 @@ Other slice 1 findings:
 
 - [proposal_search_relationship_result_dtos.md](./closed/proposal_search_relationship_result_dtos.md) -- its "two-list
   limitation" section and open questions 2, 3 and 5 are superseded by this proposal.
-- [plan_wire_result_marshaller.md](../plans/plan_wire_result_marshaller.md) -- `Fit`'s design (Step 3) and Step 7.
-- [proposal_central_large_result_offload.md](./proposal_central_large_result_offload.md) and
-  [plan_typed_large_result_offload.md](../plans/plan_typed_large_result_offload.md) -- the superseded
+- [plan_wire_result_marshaller.md](../plans/closed/plan_wire_result_marshaller.md) -- `Fit`'s design (Step 3) and Step 7.
+- [proposal_central_large_result_offload.md](./closed/proposal_central_large_result_offload.md) and
+  [plan_typed_large_result_offload.md](../plans/closed/plan_typed_large_result_offload.md) -- the superseded
   `IPageableResult` design.
 - `dto-conventions` skill.
 - Memory `reference_central_mcp_request_filter_pipeline` -- the text-based request filters (Open question 1).

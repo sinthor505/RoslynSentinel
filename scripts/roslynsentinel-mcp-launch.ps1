@@ -54,7 +54,7 @@
          C:\Users\Administrator\.mcp.json's command line stays the one place the arg list is kept,
          not duplicated here.
 
-    Full design rationale: docs/current/proposal_per_session_mcp_server.md.
+    Full design rationale: docs/current/proposals/closed/proposal_per_session_mcp_server.md.
     bin-vscode\Advanced.Http\ (the separate, still-shared standalone HTTP fallback copy, managed by
     roslynsentinel-vscode-control.ps1; its `restart` rebuilds it) is untouched by this script - it
     never matches the <instance-id> naming shape, so the sweep skips it. Throwaway HTTP instances come
@@ -477,7 +477,7 @@ $exePath = Join-Path $outDir 'RoslynSentinel.Server.Advanced.exe'
 # this properly needs more than a one-line flag - e.g. a Directory.Build.props-level conditional
 # scoped to instance builds, or pre-cleaning the default obj\/bin\ before redirecting - and is
 # tracked separately rather than risking a broken build on every launch. See
-# docs/current/blockers/resolved/blocking_error_loadsolution_missing_msbuild_workspaces_assembly.md
+# docs/current/blockers/closed/blocking_error_loadsolution_missing_msbuild_workspaces_assembly.md
 # for the concurrent-build race this was meant to close.
 
 $previousEap = $ErrorActionPreference

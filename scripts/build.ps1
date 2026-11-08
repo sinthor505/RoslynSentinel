@@ -12,7 +12,7 @@
 
     This script does not touch any running server. The stdio copy VS Code connects to is not
     managed here - each VS Code window builds and launches its own isolated instance via
-    scripts/roslynsentinel-mcp-launch.ps1 (see docs/current/proposal_per_session_mcp_server.md).
+    scripts/roslynsentinel-mcp-launch.ps1 (see docs/current/proposals/closed/proposal_per_session_mcp_server.md).
     The HTTP fallback server is not refreshed here either; see scripts/Launch-RoslynSentinelHttpServer.ps1
     (throwaway instance) or scripts/roslynsentinel-vscode-control.ps1 restart (shared copy).
 

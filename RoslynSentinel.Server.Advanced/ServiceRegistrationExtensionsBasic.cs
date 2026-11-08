@@ -505,7 +505,7 @@ public static class RoslynSentinelServiceExtensionsBasic
     {
 
         // Generic large-result offload backstop (docs/current/references/reference_tool_response_pipeline.md;
-        // origin: docs/current/proposal_centralized_large_result_filter.md): sums the length of text
+        // origin: docs/current/proposals/closed/proposal_centralized_large_result_filter.md): sums the length of text
         // content blocks in the response (no JSON re-serialization) and, above
         // LargeResultHelper.InlineBudgetChars, writes the response text to disk as a ResultWrapperType.Envelope
         // via LargeResultHelper.StoreEnvelopeAsync (the type the marshaller stores, so GetLargeResult pages it with
@@ -691,7 +691,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             }));
     }
 
-    // Wire path relativization backstop filter (see docs/current/plans/plan_wire_relative_paths_backstop_filter.md):
+    // Wire path relativization backstop filter (see docs/current/plans/closed/plan_wire_relative_paths_backstop_filter.md):
     // runs inside (registered after) the offload filter so the 15KB threshold and stored raw file see the
     // relativized text; never throws. Rewrites absolute paths in tool result JSON text blocks to be relative
     // to the solution root, enabling agents to work with portable relative paths.
@@ -861,7 +861,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         // the argument-validation filter (outer to the breaker filters, so it sees their plain-text
         // refusals; inner to the echo filter, which still stamps last). State is read AFTER next
         // returns, so an orientation breaker an inner filter just reset is not stamped.
-        // See docs/current/plans/plan_external_file_drift_tool_and_halt_stamping.md (Decision 3).
+        // See docs/current/plans/closed/plan_external_file_drift_tool_and_halt_stamping.md (Decision 3).
         filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
             ModelContextProtocol.Protocol.CallToolRequestParams,
             ModelContextProtocol.Protocol.CallToolResult>(
@@ -1041,7 +1041,7 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// Registers the tool-call echo filter: stamps a <c>toolCall</c> property (call id, tool name,
     /// truncated arguments as sent) onto the first text block of every response, so a transcript,
     /// log line or offloaded result can be tied back to the call that produced it. See
-    /// <see cref="ToolCallEcho"/> and docs/current/plans/plan_tool_call_echo.md.
+    /// <see cref="ToolCallEcho"/> and docs/current/plans/closed/plan_tool_call_echo.md.
     /// <para>
     /// Must be registered right inside <see cref="AddAgentIdentityFilter"/>, ahead of every other filter: an earlier filter
     /// is further out, so this one post-processes after them and sees the final content of every path (argument-validation rejection, breaker refusals,

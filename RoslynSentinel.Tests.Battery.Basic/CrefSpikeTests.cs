@@ -8,7 +8,7 @@ using RoslynSentinel.Tests.Fakes;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 /// <summary>
-/// Q1a spike for docs/current/plans/plan_cref_qualifier_helper_and_tool.md, Step 1. Settles two unverified claims
+/// Q1a spike for docs/current/plans/closed/plan_cref_qualifier_helper_and_tool.md, Step 1. Settles two unverified claims
 /// before the CrefQualifier helper is written:
 /// (a) cref nodes are reachable in a loaded document via DescendantNodes(descendIntoTrivia: true) and bind through
 ///     SemanticModel.GetSymbolInfo (fixture: InMemoryWorkspace, AdhocWorkspace-backed);

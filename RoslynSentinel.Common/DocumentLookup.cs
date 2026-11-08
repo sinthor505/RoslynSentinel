@@ -193,7 +193,7 @@ public sealed class DocumentScope
 /// hand out. Built on <see cref="Solution.GetDocumentIdsWithFilePath"/>, so it inherits Roslyn's
 /// OrdinalIgnoreCase path comparer by construction -- never a hand-rolled <c>d.FilePath == x</c>,
 /// whose case sensitivity depends on whether <c>x</c> is statically a string or a
-/// <see cref="FilePathWrapper"/>. See docs/current/design_read_chokepoint.md step 5.
+/// <see cref="FilePathWrapper"/>. See docs/current/design/design_read_chokepoint.md step 5.
 /// </summary>
 public static class DocumentLookup
 {

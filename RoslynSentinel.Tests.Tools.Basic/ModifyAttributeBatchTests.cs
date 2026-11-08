@@ -260,7 +260,7 @@ public class ModifyAttributeBatchTests
         Assert.That(result.ErrorData!.Message, Does.Contain("20"));
     }
 
-    // ---- Regression: docs/current/blockers/resolved/blocking_error_modifyattribute_batch_drops_nested_edit_and_reformats_type_body.md ----
+    // ---- Regression: docs/current/blockers/closed/blocking_error_modifyattribute_batch_drops_nested_edit_and_reformats_type_body.md ----
 
     private const string NestedFixtureRelativePath = "ContosoOrders.Core/AttributeNestedFixture.cs";
 

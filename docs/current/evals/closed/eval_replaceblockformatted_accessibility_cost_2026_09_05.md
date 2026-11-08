@@ -1,0 +1,197 @@
+# ReplaceBlockFormatted accessibility gap costs 67.5% of all ApplyDiff failures (2026-09-05)
+
+**Status:** CLOSED 2026-11-08. Historical record filed under closed/ by the docs reorganization; the body keeps the original outcome.
+
+**Merged from:** project_replaceblockformatted_accessibility_cost_2026_09_05
+
+Quantified follow-up to an earlier finding (Finding 2 of a hand-reviewed tool-choice sample: models
+default to `ApplyDiff`/raw edits over the purpose-built `ChangeAccessibility` tool ~8:1 for a fixed
+operation), using the newly-built [reference_parse_agent_log_script.md](../../references/reference_parse_agent_log_script.md) to
+aggregate `ToolErrorCountsByName` and per-call `ResultOrError` text across every archived run
+under `ModelTestingResults\113` (995 runs total, all test variants).
+
+## Headline numbers
+
+| Metric | Value |
+|---|---|
+| Total `ApplyDiff` failures, all 995 runs | 566 |
+| ...of which mention `ReplaceBlockFormatted` | **382 (67.5%)** |
+| — as `CS0103` ("name does not exist in current context") | 201 |
+| — as `CS0122` ("inaccessible due to its protection level") | 81 |
+| — via `ApplyDiff: ... introduces new compiler errors` (post-apply compile guard) | 299 blocks total (mixed CS codes) |
+| — via `ApplyDiff pre-apply validate failed` (pre-apply guard) | remainder of the 382 |
+| Runs affected at least once | 206 / 995 |
+| Runs affected, by test type | PlanImplementVerify 126, MinimalGuidance 59, PlanThenExecute 35, MinimalGuidanceDisambiguated 25 |
+
+Two-thirds of every `ApplyDiff` rejection across the entire historical dataset — every test
+variant, every host, every repeat — traces back to one recurring sequencing mistake around one
+symbol: the model calls `ReplaceBlockFormatted` from `BlockConverter.cs` before it has changed
+that method's accessibility from `private`/`internal` (whatever the fixture's default is) to
+something the caller can actually reach, or references it before checking it's in scope at all.
+
+## Why this happens (mechanism, not just count)
+
+The `WholeFileRewriteBug` family of fixtures (`MinimalGuidance`, `MinimalGuidanceDisambiguated`,
+`PlanThenExecute`, `PlanImplementVerify` — everything that isn't `ScriptedPlan`) all pose a
+variant of the same task: stop duplicating a whole-file-rewrite pattern and instead reuse
+`BlockEditHelpers.ReplaceBlockFormatted`, which requires exposing that helper to its new caller.
+A model has two ways to sequence this:
+
+1. **Correct-in-one-shot**: call `ChangeAccessibility` (or include the modifier change in the
+   same `ApplyDiff` hunk as the call site addition) before/atomically-with adding the call.
+2. **Sequenced-and-caught**: add the call to `ReplaceBlockFormatted` first, get rejected by
+   either the pre-apply Roslyn diagnostic pass (`CS0103`, if the name isn't even resolvable from
+   that scope) or the post-apply compile guard (`CS0122`, if it resolves but access is denied),
+   read the error, then go back and fix accessibility, then retry the call-site edit.
+
+Both guards are working exactly as designed — the whole-file comment-out guard (see `CLOSED.md`'s
+closed-history entry) and the general validate-before-apply pipeline exist precisely to catch a
+broken edit before it lands — so this isn't a tool bug. It's a **model tool-choice/sequencing gap
+that the guardrails convert into a visible, retryable error** instead of a silent wrong-state file.
+The cost is measured in wasted turns and tool-error-budget consumption (the per-tool error budget
+mechanism), not correctness.
+
+## Why `PlanImplementVerify` is hit hardest (126/655 runs, the largest share of any test type)
+
+The three-phase split's "implement" phase re-derives its own execution plan from the "plan"
+phase's prose output rather than continuing the same tool-call context a single-call test would
+have. If the plan phase's own prose doesn't explicitly sequence "change accessibility, *then* add
+the call" (plausible — the same hand-reviewed tool-choice sample shows even single-context runs get
+this wrong most of the time), the implement phase has no built-in reason
+to self-correct the ordering before its first attempt, whereas a single continuous run at least
+has the *option* of noticing and pre-empting it mid-reasoning.
+
+## Relationship to the existing tool-choice finding
+
+The earlier hand-reviewed tool-choice sample found the *symptom* — models pick
+`ApplyDiff` over `ChangeAccessibility` ~8:1 for the identical "make `ReplaceBlockFormatted`
+internal" operation, across 13 hand-reviewed runs. This finding quantifies the *cost* of that
+pattern at full-dataset scale: it isn't a stylistic quirk, it's the single largest concrete
+failure/retry driver in the entire tool-error dataset.
+
+## Orientation-breaker note (adjacent, not part of this finding)
+
+`SearchSolutionText` shows the highest raw error count (1372) in the same aggregate, but 373 of
+those are the deliberate orientation-breaker trip message ("Orientation breaker tripped: 3
+consecutive SearchSolutionText calls returned no matches... call ListAll/ListSolutionItems
+instead") firing as designed after 3 consecutive no-match searches, not a real search failure —
+the genuine no-match count is 999. Not part of this finding; noted so a future reader doesn't
+double-count it as a bigger problem than `ReplaceBlockFormatted`.
+
+## Suggested follow-up (not yet decided/actioned — see TODO.md)
+
+Candidate interventions, roughly cheapest-to-most-invasive:
+1. **Prompt-level nudge**: add an explicit sequencing hint to the fixture prompts that mention
+   reusing `ReplaceBlockFormatted` — e.g. "check/change its accessibility before wiring the new
+   call site" — and re-run a batch to see if it measurably shifts the `ApplyDiff`-vs-
+   `ChangeAccessibility` ratio or the CS0103/CS0122 counts down. Cheapest, but risks being a
+   fixture-specific patch rather than a general tool-design fix (same class of caveat as the
+   directive-error-message wiggle-room lesson from `TODO.md` — unconfirmed until tested).
+2. **Schema/description nudge on `ChangeAccessibility`**: the tool is already in every relevant
+   run's tool allowlist (confirmed in the earlier finding — availability isn't the gap), so this
+   would mean strengthening its `[Description]` to more assertively claim the "make X internal"
+   use case away from `ApplyDiff`, mirroring the fix already applied for the `ModifyModifier`
+   accessibility footgun (closed by narrowing `ModifyModifier`'s enum so it couldn't be reached for
+   accessibility changes at all) — except here the direction is the opposite (steer *toward* a
+   tool, not away from one), so the same mechanism may not transfer directly.
+3. **Compile-guard error message enrichment**: when a `CS0103`/`CS0122` rejection's message
+   mentions a symbol whose only accessibility problem is fixable via `ChangeAccessibility`,
+   consider whether the tool-layer error text could suggest that specific tool by name (matching
+   the existing convention of agent-friendly, non-leaky error messages) rather than leaving the
+   model to infer the fix path from a raw Roslyn diagnostic — untested whether this measurably
+   improves self-correction speed vs. just being redundant with what the model already infers
+   correctly most of the time (it does eventually recover in most cases; the cost is wasted
+   turns/budget, not unrecovered failures).
+
+None of these have been implemented or A/B tested yet — this doc records the quantified problem
+so a future session can pick one lever and measure it, the same way the `ModifyModifier`
+accessibility footgun fix and the directive-error-message rewrite did for their respective
+findings.
+
+## Moved from TODO.md (2026-10-17)
+
+### Model tool-choice gap: `ApplyDiff` used instead of `ChangeAccessibility` for `ReplaceBlockFormatted`, costing 67.5% of all ApplyDiff failures — open, unactioned
+
+**Found:** 2026-09-05, via a full-dataset aggregation pass over `ModelTestingResults\113` (995
+archived model-eval runs) using the new `Parse-AgentLog.ps1` script (see
+`docs/current/references/reference_parse_agent_log_script.md`). Full writeup:
+`docs/current/evals/closed/eval_replaceblockformatted_accessibility_cost_2026_09_05.md`.
+
+**What:** across every model-eval test variant that asks the model to reuse
+`BlockEditHelpers.ReplaceBlockFormatted` (all of `MinimalGuidance`, `MinimalGuidanceDisambiguated`,
+`PlanThenExecute`, `PlanImplementVerify`), the model overwhelmingly edits accessibility via a raw
+`ApplyDiff` hunk instead of calling the purpose-built `ChangeAccessibility` tool (already present
+in every affected run's tool allowlist — availability isn't the gap). When it sequences the
+accessibility change *after* adding the call site instead of before/atomically-with it, the
+pre-apply Roslyn diagnostic pass or the post-apply compile guard correctly rejects the edit
+(`CS0103`/`CS0122`), forcing a retry. This single sequencing pattern accounts for 382 of 566
+(67.5%) of every `ApplyDiff` failure across the entire 995-run historical dataset — the largest
+single failure/retry driver of anything currently measured, affecting 206/995 runs, worst in
+`PlanImplementVerify` (126/655 of its runs).
+
+**Why this matters:** both compile guards are working as designed (this is not a tool bug) — the
+cost is entirely wasted turns and tool-error-budget consumption
+(`RoslynSentinel.Tests.ModelEval`'s `AssertWithinBudget`), not unrecovered failures. It's also the
+quantified scale-up of an already-recorded qualitative finding
+(a hand-reviewed 13-run sample found `ChangeAccessibility` used 1/13 times vs. `ApplyDiff`'s ~8/13
+for the identical operation) — this is
+the first full-dataset confirmation that the pattern is both real and large, not sample noise.
+
+**Suggested approach (three candidates, none implemented/tested yet, roughly cheapest first):**
+1. Add an explicit sequencing hint to the affected fixture prompts ("check/change
+   `ReplaceBlockFormatted`'s accessibility before wiring the new call site") and re-run a batch to
+   see if it measurably shifts the tool-choice ratio or the CS0103/CS0122 counts down.
+2. Strengthen `ChangeAccessibility`'s `[Description]` to more assertively claim the "make X
+   internal/public" use case away from `ApplyDiff` — opposite direction from the
+   `ModifyModifier`-accessibility-enum fix (that one narrowed a tool's enum to steer *away* from
+   it; this would need to steer *toward* one), so the same mechanism may not transfer directly.
+3. Enrich the `CS0103`/`CS0122` compile-guard error text to name `ChangeAccessibility` explicitly
+   when the underlying cause is fixable by it, rather than leaving the model to infer the fix path
+   from a raw Roslyn diagnostic (matches the spirit of the agent-friendly-error-messages
+   principle already applied elsewhere in the tool layer).
+
+Not yet decided which lever to pull or A/B tested — this entry exists so the (large, confirmed)
+opportunity is discoverable from `TODO.md` rather than only living in the dated doc.
+
+## Rerun after lever 3 (2026-11-07)
+
+`MinimalGuidance -Repeats 10` on host 113, model `unsloth/qwen3.5-9b` (owner: comparable to `qwen3.5-9b-coder`), assistance level L1; runs `20261107-074915-789` through `20261107-081647-052` under `ModelTestingResults\113\Model_FixesWholeFileRewriteBug_MinimalGuidance\`.
+
+- 7 of 10 passed. Runs 6 and 9 stopped with `ModelFinished` but failed the test (`ContosoOrders.Tests`, 1 of 5); run 10 hit `TurnCapExceeded` at 40 turns. These three were not traced.
+- `ApplyDiff` is no longer in this test's tool surface (49 tools), so the 67.5% metric cannot be re-measured as written. The model edits with `ReplaceSnippet`.
+- `ChangeAccessibility` was called 7 times in 7 runs, all successful. Runs 4, 7 and 9 did not call it.
+- The wrong-order CS0122 on `ReplaceBlockFormatted` still occurred in runs 1 and 8, now through `ReplaceSnippet`. Its text names `ChangeAccessibility`, and the model called that tool on the next turn in both.
+
+Verdict: n=10 is too small for a rate, but lever 3 worked each time it fired, and levers 1-2 are not justified on this evidence. A follow-up must count `ReplaceSnippet`, not `ApplyDiff`.
+
+---
+
+## Merged: project_replaceblockformatted_accessibility_cost_2026_09_05
+
+Using [[reference_parse_agent_log_script]] to aggregate `ToolErrorCountsByName` and per-call
+`ResultOrError` text across all 995 archived runs under `ModelTestingResults\113`: 566 total
+`ApplyDiff` failures, of which **382 (67.5%)** mention `ReplaceBlockFormatted` — 201 as `CS0103`
+(name not in scope), 81 as `CS0122` (inaccessible), the rest split across the pre-apply/post-apply
+validation guards. 206/995 runs hit this at least once; `PlanImplementVerify` is hit hardest
+(126/655 of its runs) — likely because its "implement" phase re-derives execution from the "plan"
+phase's prose without the same in-context self-correction opportunity a single continuous run has.
+
+**Why**: this is the quantified cost of [[project_reason_param_reveals_toolchoice_and_selfcorrection]]'s
+Finding 2 (models pick `ApplyDiff` over the purpose-built `ChangeAccessibility` tool ~8:1 for the
+identical operation) — not a new gap, but proof it's the single largest concrete failure/retry
+driver in the whole dataset, not just a stylistic tool-choice quirk. Both compile guards
+(pre-apply diagnostic, post-apply compile check) are working as designed; this is a model
+sequencing gap the guardrails surface as a visible retry rather than a tool defect.
+
+**How to apply**: when picking the next model-eval lever to pull, this is the highest-leverage
+confirmed target — bigger than any single prompt-wording tweak tested so far
+([[project_directive_error_messages_wiggle_room_theory]]'s theory remains unconfirmed by
+comparison). Three candidate fixes are listed in the full doc (prompt-level sequencing hint,
+`ChangeAccessibility` description nudge, compile-guard error-message enrichment pointing at the
+specific tool) — none implemented/tested yet. Also demonstrates
+[[reference_parse_agent_log_script]]'s value: this required one aggregation pass across the whole
+historical dataset instead of another hand-reviewed N-run sample.
+
+See also [[project_modifymodifier_accessibility_footgun]] for the precedent of closing a similar
+tool-choice gap at the schema layer (opposite direction — steering *away* from a tool there,
+*toward* one here, so the fix mechanism may not transfer directly).

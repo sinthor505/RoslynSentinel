@@ -6,7 +6,7 @@ using RoslynSentinel.Engines.Advanced;
 namespace RoslynSentinel.Tests.Advanced;
 
 /// <summary>
-/// C5c-1 characterization tests (docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
+/// C5c-1 characterization tests (docs/current/proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
 /// Byte-exact pins for the five whole-document <c>Formatter.FormatAsync</c> sites in <see cref="CodeGenerationEngine"/>
 /// routed onto <c>RoslynFormattingHelper.FormatAnnotatedSpansAsync</c> (only the generated or rewritten nodes are
 /// formatted): <c>GenerateConstructorAsync</c>, <c>GenerateToStringAsync</c>, <c>ImplementInterfaceAsync</c>,

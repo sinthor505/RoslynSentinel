@@ -1,5 +1,5 @@
 // ReplaceSnippetTool's batch path (the 'batchEdits' parameter). Per the design doc
-// (docs/current/proposal_batch_replacesnippet.md) every edit in a batch is anchored against its
+// (docs/current/proposals/closed/proposal_batch_replacesnippet.md) every edit in a batch is anchored against its
 // file's ORIGINAL content, never a prior edit's output, so these tests specifically cover: multiple
 // batchEdits to one file, batchEdits spanning multiple files, overlap rejection, and the either/or validation
 // against the singular filepath/oldContent/newContent parameters.

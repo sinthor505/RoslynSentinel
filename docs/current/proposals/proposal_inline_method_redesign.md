@@ -184,6 +184,6 @@ through a different refactoring provider.
 
 - `docs/current/TODO.md`, Whitespace initiative follow-ups entry ("InlineMethod neither substitutes
   parameters nor adds parentheses").
-- `docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md` (the initiative
+- `docs/current/proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md` (the initiative
   that surfaced this and that owns the byte-exact pins).
 - `docs/current/proposals/proposal_reduce_tool_schema_token_cost.md` (schema cost of any new parameter).

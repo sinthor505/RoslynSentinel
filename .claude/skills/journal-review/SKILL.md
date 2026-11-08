@@ -6,7 +6,7 @@ description: Summarize the tool-experience journal. No argument - append a short
 # Journal review
 
 Journals are local-only files in `.claude/journal/` (plan:
-`docs/current/plans/plan_mcp_tool_experience_journal.md`). Per session:
+`docs/current/plans/closed/plan_mcp_tool_experience_journal.md`). Per session:
 
 - `<date>_<sid8>.md` - model-written lines: `- HH:mm [+|-|~] ToolName: note`
 - `<date>_<sid8>.calls.jsonl` - hook-written, one JSON object per call:

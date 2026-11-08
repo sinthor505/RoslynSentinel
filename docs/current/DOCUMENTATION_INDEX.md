@@ -1,58 +1,42 @@
 # RoslynSentinel Documentation Index
 
-**Last Updated:** 2026-08-24
+**Last Updated:** 2026-11-08
 
-> **Docs were split into `docs/current/` (accurate/relevant today) and `docs/obsolete/`
-> (superseded, completed-and-historical, or describing something no longer true) on
-> 2026-08-24.** All links below have been updated to point at each file's new location.
-> When adding a new doc, file it into the correct subdirectory from the start.
+Filing rules, filename prefixes and the Status-line format live in [templates/README.md](./templates/README.md).
+Copy the matching template before writing a doc.
 
----
+## Layout of `docs/current/`
 
-## 📚 Documentation Files
-
-### Current (`docs/current/`)
+The root holds only three files:
 
 | File | Purpose |
-|------|---------|
-| **[TODO.md](./TODO.md)** | Living task list — open items only |
-| **[CLOSED.md](./CLOSED.md)** | Permanent record of fixed/resolved issues, split out of TODO.md |
-| **[UNFINISHED.md](./UNFINISHED.md)** | Backlog: planned features and known limitations |
-| **[UNFINISHED_FEATURES.md](./UNFINISHED_FEATURES.md)** | Deferred bugs with regression tests and edge-case limitations |
-| **[reference-code-file-write-paths-v1.md](./reference-code-file-write-paths-v1.md)** | Living reference: the single write-to-disk chokepoint and its guarantees |
-| **[reference_log_sources_and_cross_referencing.md](./reference_log_sources_and_cross_referencing.md)** | Living reference: agent-side vs. server-side log locations, how to cross-reference them |
-| **[reference-vscode-control-script-v1.md](./reference-vscode-control-script-v1.md)** | Living reference: `roslynsentinel-vscode-control.ps1` status/start/restart/build verbs |
-| **[reference-roslynsentinel-mcp-launch-v1.md](./reference-roslynsentinel-mcp-launch-v1.md)** | Living reference: per-VS-Code-window stdio server launch wrapper, instance-ID derivation, sweep |
-| **[proposal_per_session_mcp_server.md](./proposal_per_session_mcp_server.md)** | Design doc: per-session MCP server isolation (implemented 2026-09-14) |
-| **[roslyn-duplication-audit-v1.md](./roslyn-duplication-audit-v1.md)** | Ongoing audit of hand-rolled logic vs. native Roslyn APIs |
-| **[tool-terminology-refinement-reference-v1.md](./tool-terminology-refinement-reference-v1.md)** | Open naming/terminology backlog for MCP tool surface |
-| **[spec-read-tool-metadata-envelope-v1.md](./spec-read-tool-metadata-envelope-v1.md)** | Unimplemented spec: truncation/scope metadata envelope for read tools |
-| **[spec-replace-throws-in-mcp-tools-v1.md](./spec-replace-throws-in-mcp-tools-v1.md)** | Partially-implemented plan: convert throws to string returns in `[McpServerTool]` methods |
-| **[project_readfile_createfile_path_inconsistency_bug.md](./project_readfile_createfile_path_inconsistency_bug.md)** | Fixed: CS0101/CS0111 collision messages from wrong-path CreateFile/ApplyDiff now name the real colliding file's path (CompilerErrorLookupHelper) |
-| **[project_readfile_createfile_disk_fallback_fixed.md](./project_readfile_createfile_disk_fallback_fixed.md)** | Fixed: `ReadFile` couldn't see files `CreateFile` wrote outside the `.cs`-only Document sync; `ReadFile` now falls back to a disk read |
-| **[project_dispose_waithandle_deadlock_found.md](./project_dispose_waithandle_deadlock_found.md)** | Fixed: `PersistentWorkspaceManager.Dispose()`'s blocking `Timer.Dispose(WaitHandle)` wait could deadlock against `_solutionLock` contention, hanging Battery and ModelEval tests; removed, redundant with an existing guard |
+| --- | --- |
+| [TODO.md](./TODO.md) | Open items only |
+| [CLOSED.md](./CLOSED.md) | Record of fixed and resolved items (older months are in `archive/closed_*.md`) |
+| [DOCUMENTATION_INDEX.md](./DOCUMENTATION_INDEX.md) | This index |
 
-### Obsolete (`docs/obsolete/`)
+Every other doc lives in a genre folder. Each genre folder has a `closed/` subfolder for history (done,
+superseded or abandoned); a doc moves there when its Status line reaches a closed state.
 
-Historical plans, specs, and snapshots — implemented, superseded, or describing a state of
-the codebase that no longer exists (e.g. the old singular `RoslynSentinel.Server` project,
-pre-consolidation tool counts). Kept for historical record. See individual files for what
-each one covered; not re-indexed in detail here since they are no longer live references.
+| Folder | Filename | Holds |
+| --- | --- | --- |
+| [blockers/](./blockers/) | `blocking_error_<slug>.md` | A tool or compiler failure that stopped work |
+| [findings/](./findings/) | `finding_<slug>.md` | Discovered behaviour, often a defect; fix not decided |
+| [proposals/](./proposals/) | `proposal_<slug>.md` | A change we intend to make but have not built |
+| [issues/](./issues/) | `issue_<slug>.md` | A known open problem or unresolved question |
+| [design/](./design/) | `design_<slug>.md` | The worked design of something built or being built |
+| [plans/](./plans/) | `plan_<slug>.md` | Sequenced implementation steps |
+| [ideas/](./ideas/) | `idea_<slug>.md` | Speculative, not committed to |
+| [references/](./references/) | `reference_<slug>.md` | Living how-it-works and where-things-live lookups |
+| [evals/](./evals/) | `eval_<slug>.md` | Model-eval analyses, run reports, PlanStepRunner step sets and run outputs |
+| [templates/](./templates/) | - | One template per genre, plus the house-style README |
+| [archive/](./archive/) | - | Frozen pre-taxonomy docs that fit no genre, and the monthly `closed_*.md` rollups |
 
----
+Generated tool and project tables are in `docs/generated/`; the known-failing-test and build-warning
+baselines are `docs/known-*.txt`.
 
-## 🎯 Quick Reference
+## Where to start
 
-### For Users: "Is this tool complete?"
-1. Check **UNFINISHED_FEATURES.md** → Search tool name
-2. If listed under "Known Limitations" → Read the workaround
-3. If listed under "Deferred Bugs" → Has regression test marked `[Ignore]`, awaiting fix
-
-### For Developers: "What still needs to be done?"
-1. Read **TODO.md** → Current open task log (primary source of truth); see **CLOSED.md** for fixed/resolved history
-2. Read **UNFINISHED.md** → Lists planned enhancements by difficulty
-3. Check **UNFINISHED_FEATURES.md** → Lists deferred bugs and limitations
-
----
-
-**This index links all RoslynSentinel documentation.**
+- What is open: [TODO.md](./TODO.md); what is already fixed: [CLOSED.md](./CLOSED.md).
+- How the server is put together: [references/reference_architecture_map.md](./references/reference_architecture_map.md).
+- Working conventions (build, docs, text, scripts): [references/reference_working_conventions.md](./references/reference_working_conventions.md).

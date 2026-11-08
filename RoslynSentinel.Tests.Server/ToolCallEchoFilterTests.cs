@@ -18,7 +18,7 @@ namespace RoslynSentinel.Tests.Server;
 /// <summary>
 /// Coverage for the outermost call-tool filter that stamps a <c>toolCall</c> echo (call id, tool
 /// name, truncated arguments as sent) onto every response - see
-/// docs/current/plans/plan_tool_call_echo.md. Runs against a real in-process
+/// docs/current/plans/closed/plan_tool_call_echo.md. Runs against a real in-process
 /// <see cref="McpClient"/>/<see cref="ModelContextProtocol.Server.McpServer"/> pair (the same pattern
 /// as <see cref="LargeResultOffloadFilterTests"/>) because the point is that the stamp survives every
 /// other filter in the chain, including the ones that replace the whole response body.

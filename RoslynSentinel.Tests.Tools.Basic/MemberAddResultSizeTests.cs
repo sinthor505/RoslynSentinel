@@ -11,7 +11,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 /// <summary>
 /// An applied MemberTool add must return line changes, not the whole file back as changedContent
-/// (docs/current/plans/plan_mutating_and_test_tool_result_noise.md, Step 2). Dry runs and autoStage=false results
+/// (docs/current/plans/closed/plan_mutating_and_test_tool_result_noise.md, Step 2). Dry runs and autoStage=false results
 /// still carry the content: nothing was written, so the content is the result.
 /// Runs on an InMemoryWorkspace, which has no solution root: the offloaded content file cannot be written there, so
 /// the response carries no large-result handle by design (fail-closed) and that is not asserted.

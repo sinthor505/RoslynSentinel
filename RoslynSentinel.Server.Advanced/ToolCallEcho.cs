@@ -10,7 +10,7 @@ namespace RoslynSentinel.Server.Advanced;
 /// outermost call-tool filter adds to every tool response, so a transcript, log line or offloaded
 /// result can be tied back to the call that produced it without pairing by position. Lives next to
 /// <see cref="ToolArgumentValidator"/>, the other filter helper in this project. See
-/// docs/current/plans/plan_tool_call_echo.md for the design.
+/// docs/current/plans/closed/plan_tool_call_echo.md for the design.
 /// </summary>
 public static class ToolCallEcho
 {

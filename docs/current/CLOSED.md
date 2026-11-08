@@ -10,7 +10,7 @@ Entries moved here from TODO.md on 2026-10-17 carry their original text plus an 
 
 ## Tool-call hint verbatim-placeholder check - resolved (2026-11-08)
 
-Tool-call hint verbatim-placeholder check (2026-10-25) - unmeasured whether a model pastes `<why you call this>` verbatim; parked because it needs a model eval; unpark at the next model-eval round (count verbatim placeholders in its logs) - [doc](proposals/proposal_tool_hint_builder.md)
+Tool-call hint verbatim-placeholder check (2026-10-25) - unmeasured whether a model pastes `<why you call this>` verbatim; parked because it needs a model eval; unpark at the next model-eval round (count verbatim placeholders in its logs) - [doc](proposals/closed/proposal_tool_hint_builder.md)
 
 Evidence: ModelEval 2026-11-08, unsloth/qwen3.5-9b on host 113, 12 tests: 12 placeholder-hint results, 0 verbatim pastes (0/12); host 112 unreachable
 
@@ -28,7 +28,7 @@ Evidence: 509705be (SyntaxTargetResolver), fe762aa3 (MemberRefactoringEngine 509
 
 ## GetMemberName: events and indexers - resolved (2026-11-08)
 
-`GetMemberName`: events and indexers (2026-11-08) - `SyntaxTargetResolver.GetMemberName` returns null for Event and Indexer (SyntaxTargetResolver.cs ~430); handle both; done = an awaited test that an event and an indexer target resolve or return an actionable error - [doc](proposal_universal_symbol_resolver.md)
+`GetMemberName`: events and indexers (2026-11-08) - `SyntaxTargetResolver.GetMemberName` returns null for Event and Indexer (SyntaxTargetResolver.cs ~430); handle both; done = an awaited test that an event and an indexer target resolve or return an actionable error - [doc](proposals/proposal_universal_symbol_resolver.md)
 
 Evidence: 16deb019; MemberNameEventIndexerAnchorTests (events and the indexer, named "this", now resolve as insert anchors; ResolveInsertAnchorIndex, SortMembers tiebreak and GetContainerMembers now name them instead of null)
 
@@ -52,19 +52,19 @@ Evidence: 56bb885d; IntroduceParameterObject_NullSyntaxRoot_ErrorNamesThePath (r
 
 ## Tool terminology: enums and migration-state rename - resolved (2026-11-08)
 
-Tool terminology: enums and migration-state rename (2026-11-08) - type `WrapRange` `wrapper` and `ModifyEnum` `values` as enums, and rename `GetMigrationLedger`/`ResetMigrationLedger` to `GetAsyncMigrationState`/`ResetAsyncMigrationState` (descriptions, prompts, docs and generated tables follow); the rest of the backlog (Introduce, bare Generate) stays reference only; done = the generated schema shows the enum values and no old tool name remains in docs/generated or prompts - [doc](tool-terminology-refinement-reference-v1.md)
+Tool terminology: enums and migration-state rename (2026-11-08) - type `WrapRange` `wrapper` and `ModifyEnum` `values` as enums, and rename `GetMigrationLedger`/`ResetMigrationLedger` to `GetAsyncMigrationState`/`ResetAsyncMigrationState` (descriptions, prompts, docs and generated tables follow); the rest of the backlog (Introduce, bare Generate) stays reference only; done = the generated schema shows the enum values and no old tool name remains in docs/generated or prompts - [doc](references/reference_tool_terminology_refinement.md)
 
 Evidence: 9fe3f2d3 (WrapRange wrapper enum), 5bb484f2 (ModifyEnum values description per owner amended ruling; GetAsyncMigrationState/ResetAsyncMigrationState rename; docs/generated regenerated); Tests.Server 694 passed 0 failed, WrapRange/BlobIntegrity 23 passed, Tests.Asyncify 123 passed. Not done by design: ModifyEnum values stays a string.
 
 ## Tool-call hint static descriptions - resolved (2026-11-08)
 
-Tool-call hint static descriptions (2026-11-08) - add the required parameters to the ~5 `// hint-ok` `[Description]` mentions (ToolParams.cs ~19 and ~24 incl. the Build/RunTest descriptions, GitTools.cs ~82 `hunkIds`); the lean budget (32000 Advanced / 30500 Basic, ~28117 used) now has room; done = `ClaudeLeanSchemaBudgetTests` and `ToolHintRatchetTests` green - [doc](proposals/proposal_tool_hint_builder.md)
+Tool-call hint static descriptions (2026-11-08) - add the required parameters to the ~5 `// hint-ok` `[Description]` mentions (ToolParams.cs ~19 and ~24 incl. the Build/RunTest descriptions, GitTools.cs ~82 `hunkIds`); the lean budget (32000 Advanced / 30500 Basic, ~28117 used) now has room; done = `ClaudeLeanSchemaBudgetTests` and `ToolHintRatchetTests` green - [doc](proposals/closed/proposal_tool_hint_builder.md)
 
 Evidence: 88b369e8; ClaudeLeanSchemaBudgetTests + ToolHintRatchetTests green. ToolParams consts keep the hint-ok marker (reworded): the ratchet scans consts, which must stay const for [Description]; the GitTools marker was removed. Advanced budget raised to 32500 (premise of ~28117 used was stale: 31964 before, 32298 after).
 
 ## Battery leak guard sweep - resolved (2026-11-08)
 
-Battery leak guard sweep (2026-11-08) - add `WorkingDirectoryLeakGuard` + `[NonParallelizable]` to the remaining source-writing battery fixtures (about 20 Battery.Advanced files incl. Eleven/Twelve/Fourteen, TwentyFive to TwentyEight, ThirtyFive/ThirtySix; Tools.Basic BatteryTwenty has `[NonParallelizable]` but no guard) by implementer-sweep in slices; out of scope: the two on-disk RenameSymbol tests, optional Parts C/D and leaks outside Battery (issue doc); done = every source-writing battery file calls the guard and a full run leaves no leaked files - [doc](issues/issue_battery_tests_leak_files.md)
+Battery leak guard sweep (2026-11-08) - add `WorkingDirectoryLeakGuard` + `[NonParallelizable]` to the remaining source-writing battery fixtures (about 20 Battery.Advanced files incl. Eleven/Twelve/Fourteen, TwentyFive to TwentyEight, ThirtyFive/ThirtySix; Tools.Basic BatteryTwenty has `[NonParallelizable]` but no guard) by implementer-sweep in slices; out of scope: the two on-disk RenameSymbol tests, optional Parts C/D and leaks outside Battery (issue doc); done = every source-writing battery file calls the guard and a full run leaves no leaked files - [doc](issues/closed/issue_battery_tests_leak_files.md)
 
 Evidence: 17c2f43a, f1db6658, e47ac380, 9722c450, 876d9b08, d18683bb; guard + NonParallelizable on 84 Battery.Advanced fixtures (B18 pure SyntaxFactory without SetUp left alone) plus BatteryTwenty guard calls; Battery.Advanced 439/439, BatteryTwentyTests 82/82; BatteryTwentyTwo and BatteryFour not included (they write only to explicit temp paths, no cwd leak)
 
@@ -76,7 +76,7 @@ Evidence: 83f39ebe, 1c9e0e52; 15 sites in 11 files now use TestEngines.Persisten
 
 ## NewlineLiteralRatchetTests: exempt ContentHasher - resolved (2026-11-08)
 
-NewlineLiteralRatchetTests: exempt ContentHasher (2026-11-08) - move `ContentHasher.ComputeHash` (a hash input, never output) from the baseline to `ExemptFiles` (26 to 25 keys); the rest of the baseline is accepted (it only affects returned preview text and the ratchet blocks growth); done = `NewlineLiteralRatchetTests` green - [doc](plans/plan_eol_policy_and_write_chokepoint.md)
+NewlineLiteralRatchetTests: exempt ContentHasher (2026-11-08) - move `ContentHasher.ComputeHash` (a hash input, never output) from the baseline to `ExemptFiles` (26 to 25 keys); the rest of the baseline is accepted (it only affects returned preview text and the ratchet blocks growth); done = `NewlineLiteralRatchetTests` green - [doc](plans/closed/plan_eol_policy_and_write_chokepoint.md)
 
 Evidence: 41385b2a; NewlineLiteralRatchetTests green (baseline 26 to 25 keys)
 
@@ -94,13 +94,13 @@ Evidence: ROSLYNSENTINEL_INSTANCES_ROOT is set in both server blocks of .mcp.jso
 
 ## Whitespace initiative follow-ups (Asyncify write-refusal fall-through, InlineMethod) - resolved (2026-11-08)
 
-Whitespace initiative follow-ups (2026-10-19; C1-C11 done and the family deleted in D1, see CLOSED.md): the `using static RoslynFormattingHelper` imports are gone (47 sites qualified 2026-11-05, see CLOSED.md); async leftovers (the relative-path Asyncify fixtures were made absolute 2026-10-19; `MigrationScanResultTests.T3` stays under the 15 KB inline threshold only because its fixture root is a short drive-root folder, so it is sensitive to path length): `ApplyProposedChangesAsync` results are now checked in `AsyncBatchEngine` (uplift, propagate-CT; the uplift flag write is pinned by `RunUpliftBatch_ValidationFails_FlagWrite{Refused,Succeeds}_*`, the propagate flag write by `PropagateCtBatch_ValidationFails_FlagWriteRefused_*`), but the original 7 bare calls in `AsyncifyTools.cs` are now all checked (2026-10-21: ClearAsyncMigrationCandidateFlags and the handler extract phase; the 5 cleanup/catch-path writes in `RunHandlerConvertPhaseAsync` append "cleanup write refused: ..." to the item `Reason` and the `FailureDetail` without changing the outcome; `T22_Asyncify_HandlerConvert_StaleFlagStripWriteRefused_ReasonCarriesCleanupNote` pins the already-async branch via the operation blob, the generic-catch handler `FailureDetail` branch is pinned by `T23_Asyncify_HandlerConvert_NonVoidHandler_CountsAsFailedWithFailureDetail` and a refused handler write by `T24`/`T25` 2026-11-07; `T25` proved Phase 3b counted a ledger-refused write (`IsError` with a null `ValidationResult`) as Succeeded, now fixed, while the same `IsError && ValidationResult != null` fall-through at the flag/bridge sites `applyResult1126`, `1223`, `1317`, `1421` and `3a` is still open, `// TODO` in `AsyncifyTools.cs`). Defect noticed, not fixed (the other four from this list were fixed 2026-10-19): `InlineMethod` (parameter substitution and precedence parentheses fixed 2026-10-21, a same-name overload or same-named method in another type of the defining file is now refused 2026-10-22, a call site where the inlined names would bind differently or be inaccessible, or an instance-state template called on another instance, is refused 2026-10-22, see CLOSED.md; call sites in another project, the needs-a-using case and the arrow-body and field-initializer speculative-binding fallbacks are pinned by the `BUG_InlineMethod_*` tests added 2026-11-07). - [doc](proposals/proposal_inline_method_redesign.md) - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+Whitespace initiative follow-ups (2026-10-19; C1-C11 done and the family deleted in D1, see CLOSED.md): the `using static RoslynFormattingHelper` imports are gone (47 sites qualified 2026-11-05, see CLOSED.md); async leftovers (the relative-path Asyncify fixtures were made absolute 2026-10-19; `MigrationScanResultTests.T3` stays under the 15 KB inline threshold only because its fixture root is a short drive-root folder, so it is sensitive to path length): `ApplyProposedChangesAsync` results are now checked in `AsyncBatchEngine` (uplift, propagate-CT; the uplift flag write is pinned by `RunUpliftBatch_ValidationFails_FlagWrite{Refused,Succeeds}_*`, the propagate flag write by `PropagateCtBatch_ValidationFails_FlagWriteRefused_*`), but the original 7 bare calls in `AsyncifyTools.cs` are now all checked (2026-10-21: ClearAsyncMigrationCandidateFlags and the handler extract phase; the 5 cleanup/catch-path writes in `RunHandlerConvertPhaseAsync` append "cleanup write refused: ..." to the item `Reason` and the `FailureDetail` without changing the outcome; `T22_Asyncify_HandlerConvert_StaleFlagStripWriteRefused_ReasonCarriesCleanupNote` pins the already-async branch via the operation blob, the generic-catch handler `FailureDetail` branch is pinned by `T23_Asyncify_HandlerConvert_NonVoidHandler_CountsAsFailedWithFailureDetail` and a refused handler write by `T24`/`T25` 2026-11-07; `T25` proved Phase 3b counted a ledger-refused write (`IsError` with a null `ValidationResult`) as Succeeded, now fixed, while the same `IsError && ValidationResult != null` fall-through at the flag/bridge sites `applyResult1126`, `1223`, `1317`, `1421` and `3a` is still open, `// TODO` in `AsyncifyTools.cs`). Defect noticed, not fixed (the other four from this list were fixed 2026-10-19): `InlineMethod` (parameter substitution and precedence parentheses fixed 2026-10-21, a same-name overload or same-named method in another type of the defining file is now refused 2026-10-22, a call site where the inlined names would bind differently or be inaccessible, or an instance-state template called on another instance, is refused 2026-10-22, see CLOSED.md; call sites in another project, the needs-a-using case and the arrow-body and field-initializer speculative-binding fallbacks are pinned by the `BUG_InlineMethod_*` tests added 2026-11-07). - [doc](proposals/proposal_inline_method_redesign.md) - [doc](proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
 
 Evidence: a98f89f7 fixed sites 1126/1223/1317/1421 (tests T27-T30); site 3a treats any IsError as a failure (AsyncifyTools.cs ~3125); the BUG_InlineMethod_* tests pin fixed or refused behaviour, not open gaps; the trivia backlog moved to its own TODO line (todo review 2026-11-08)
 
 ## Wire result marshaller - resolved (2026-11-08)
 
-Wire result marshaller follow-ups (plan IMPLEMENTED 2026-11-07, all steps done): (1) the marshaller composing the echo and stamps so `EchoReserveChars` can go - build only if a "Result marshaller miss" is seen - [proposal](proposals/proposal_marshaller_owns_echo_and_stamps.md); (2) `ChangeSignature` cannot edit record primary-constructor parameters (TOOL-GAP seen removing `ChangedContentResultId`, 52 named-argument sites; wanted: rewrite the record parameter list and update named/positional `new T(...)` and `with` call sites); (3) the plan and the two superseded docs still need moving to `closed/` (docs reorganization plan); (4) `SemanticFindReplace` `replaceConstruction` apply for `new PersistentWorkspaceManager(...)` -> `TestEngines.PersistentWorkspaceManager` factory (preview: 8 sites in Tests.Server, 11 solution-wide; check the `using` after apply) - [plan](plans/plan_wire_result_marshaller.md)
+Wire result marshaller follow-ups (plan IMPLEMENTED 2026-11-07, all steps done): (1) the marshaller composing the echo and stamps so `EchoReserveChars` can go - build only if a "Result marshaller miss" is seen - [proposal](proposals/proposal_marshaller_owns_echo_and_stamps.md); (2) `ChangeSignature` cannot edit record primary-constructor parameters (TOOL-GAP seen removing `ChangedContentResultId`, 52 named-argument sites; wanted: rewrite the record parameter list and update named/positional `new T(...)` and `with` call sites); (3) the plan and the two superseded docs still need moving to `closed/` (docs reorganization plan); (4) `SemanticFindReplace` `replaceConstruction` apply for `new PersistentWorkspaceManager(...)` -> `TestEngines.PersistentWorkspaceManager` factory (preview: 8 sites in Tests.Server, 11 solution-wide; check the `using` after apply) - [plan](plans/closed/plan_wire_result_marshaller.md)
 
 Evidence: plan status IMPLEMENTED 2026-11-07, Steps 0-11 done; 9230e2fe (Closes: plan_wire_result_marshaller); todo review 2026-11-08
 
@@ -118,19 +118,19 @@ Evidence: Steps 0-11 done. On 2026-11-07 every running server was at b6ccd5e5 or
 
 ## Model tool-choice gap: ApplyDiff used instead of ChangeAccessibility - resolved (2026-11-07)
 
-Model tool-choice gap: `ApplyDiff` used instead of `ChangeAccessibility` for `ReplaceBlockFormatted`, 67.5% of all ApplyDiff failures (2026-09-05) - lever 3 done 2026-11-05 (the CS0122 hint now names ChangeAccessibility); levers 1-2 (fixture prompt, `ChangeAccessibility` description) untested, re-run the model-eval batch to measure before pulling them - [doc](model_eval_replaceblockformatted_accessibility_cost_2026_09_05.md)
+Model tool-choice gap: `ApplyDiff` used instead of `ChangeAccessibility` for `ReplaceBlockFormatted`, 67.5% of all ApplyDiff failures (2026-09-05) - lever 3 done 2026-11-05 (the CS0122 hint now names ChangeAccessibility); levers 1-2 (fixture prompt, `ChangeAccessibility` description) untested, re-run the model-eval batch to measure before pulling them - [doc](evals/closed/eval_replaceblockformatted_accessibility_cost_2026_09_05.md)
 
 Evidence: Rerun 2026-11-07, 10 MinimalGuidance runs on unsloth/qwen3.5-9b: ApplyDiff is no longer in the surface, ChangeAccessibility called in 7 of 10 runs, and in both runs hitting CS0122 the hint led to it on the next turn. Levers 1-2 not pulled; numbers appended to the doc.
 
 ## MoveMember keep modes: remaining gaps - resolved (2026-11-07)
 
-MoveMember keep modes: remaining gaps (2026-11-05; generic methods DONE per owner ruling D7: forwarder mirrors type parameters and constraints and passes explicit type arguments, tests in MoveMemberSuccessTests/MoveMemberForwarderTests) - keep modes on extension methods stay refused by design (`TargetIneligible`) until a use case appears, and a plain move is refused only when a receiver-style call `"a".Foo(1)` exists; a private moved method keeps a forwarder to a now-inaccessible member (CS0122, caught by the compile gate, no eligibility refusal yet); a generic containing type (`class Foo<T>`) gets no refusal, the dry-run compile gate catches a moved body that uses the containing `T` - [doc](proposals/proposal_movemember_keep_delegator_and_same_class_calls.md)
+MoveMember keep modes: remaining gaps (2026-11-05; generic methods DONE per owner ruling D7: forwarder mirrors type parameters and constraints and passes explicit type arguments, tests in MoveMemberSuccessTests/MoveMemberForwarderTests) - keep modes on extension methods stay refused by design (`TargetIneligible`) until a use case appears, and a plain move is refused only when a receiver-style call `"a".Foo(1)` exists; a private moved method keeps a forwarder to a now-inaccessible member (CS0122, caught by the compile gate, no eligibility refusal yet); a generic containing type (`class Foo<T>`) gets no refusal, the dry-run compile gate catches a moved body that uses the containing `T` - [doc](proposals/closed/proposal_movemember_keep_delegator_and_same_class_calls.md)
 
 Evidence: RequireKeepModeEligible refuses private and protected methods in keep modes (forwarder would be CS0122) and RequireNoContainingTypeParameters refuses a member using the source class type parameter unless the target declares the same name; MoveMemberRefusalTests +4, MoveMember tests 75/75 Tools.Advanced, 39/39 Basic, 112/112 Battery.Basic. Extension methods stay refused by design.
 
 ## ExtractInterface dropped signature comments silently - resolved (2026-11-07)
 
-ExtractInterface still drops comments inside signatures and cannot warn about it (2026-10-21) - member doc comments are kept now; an inline comment in a parameter list is silently lost; a warnings field would need a new result type - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+ExtractInterface still drops comments inside signatures and cannot warn about it (2026-10-21) - member doc comments are kept now; an inline comment in a parameter list is silently lost; a warnings field would need a new result type - [doc](proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
 
 Evidence: ExtractInterfaceAsync now adds one warning per member with a comment in its signature, surfaced as WarningDetails by ExtractMembersTool; ExtractInterfaceNewRootTests 11/11. Stripping stays (preserving a // comment in a parameter list would need multi-line interface signatures). Not covered: comments inside a property accessor list, which is rebuilt rather than stripped.
 
@@ -154,15 +154,15 @@ Evidence: AgentTranscript.FinalMessage falls back from Content to ReasoningConte
 
 ## SessionHalted false positive from a timestamp-only touch of a file with no baseline - resolved (2026-11-07)
 
-`SessionHalted` external-drift latch: false positive from a timestamp-only touch of a file with no recorded baseline (2026-09-15) - the message now self-reports scope (`DriftMessages.DriftHaltMessage`) and a content-hash gate covers files that have a baseline (`PersistentWorkspaceManager.cs:908-913`); 2026-10-20: the no-baseline path skips a Changed event when the document's loaded text equals disk (`IsTrackedDocumentUnchangedOnDisk`), project/solution files are hashed at load, and a folded document gets a baseline (`RecordFoldedDocumentBaseline`); 2026-10-21: a loaded `.csproj` edit now takes the full-solution reload (the per-project `OpenProjectAsync` branch always threw "already part of the workspace" and is deleted) and that reload re-records project/solution hashes (`RecordStructuralFileHashes`), pinned by `ExternalTouch_ProjectFileAfterDebounceReload_IsNotFlaggedAsDriftAsync`; 2026-11-05: `ExternalEdit_FoldedDocument_GetsBaselineHashThenTouchIgnoredAndEditFlaggedAsync` now also pins that the folded document holds recoverable text equal to the folded content (the case where Roslyn releases that text before a real edit cannot be forced deterministically, recorded in the test comment); the `.slnx` fixture tests were added 2026-10-21 (touch not flagged; edit flagged, re-baselined, later touch not flagged); failed reloads are now a sticky stale record that refuses source writes (the remaining visibility gaps are in the reload-failure TODO entry) - [doc](plans/plan_session_halt_recovery_and_git_gaps.md)
+`SessionHalted` external-drift latch: false positive from a timestamp-only touch of a file with no recorded baseline (2026-09-15) - the message now self-reports scope (`DriftMessages.DriftHaltMessage`) and a content-hash gate covers files that have a baseline (`PersistentWorkspaceManager.cs:908-913`); 2026-10-20: the no-baseline path skips a Changed event when the document's loaded text equals disk (`IsTrackedDocumentUnchangedOnDisk`), project/solution files are hashed at load, and a folded document gets a baseline (`RecordFoldedDocumentBaseline`); 2026-10-21: a loaded `.csproj` edit now takes the full-solution reload (the per-project `OpenProjectAsync` branch always threw "already part of the workspace" and is deleted) and that reload re-records project/solution hashes (`RecordStructuralFileHashes`), pinned by `ExternalTouch_ProjectFileAfterDebounceReload_IsNotFlaggedAsDriftAsync`; 2026-11-05: `ExternalEdit_FoldedDocument_GetsBaselineHashThenTouchIgnoredAndEditFlaggedAsync` now also pins that the folded document holds recoverable text equal to the folded content (the case where Roslyn releases that text before a real edit cannot be forced deterministically, recorded in the test comment); the `.slnx` fixture tests were added 2026-10-21 (touch not flagged; edit flagged, re-baselined, later touch not flagged); failed reloads are now a sticky stale record that refuses source writes (the remaining visibility gaps are in the reload-failure TODO entry) - [doc](plans/closed/plan_session_halt_recovery_and_git_gaps.md)
 
-Evidence: OnFileSystemChanged returns early when IsTrackedDocumentUnchangedOnDisk says the loaded text equals disk, and folded documents get a baseline (RecordFoldedDocumentBaseline); pinned by five CreateFileDeleteFileTests cases. Paths that still flag are deliberate (every doubt returns false): text not materialized, file locked or unreadable, non-document files, Created/Renamed/Deleted events. Partial-acknowledge policy and per-session halt granularity stay in plans/plan_session_halt_recovery_and_git_gaps.md.
+Evidence: OnFileSystemChanged returns early when IsTrackedDocumentUnchangedOnDisk says the loaded text equals disk, and folded documents get a baseline (RecordFoldedDocumentBaseline); pinned by five CreateFileDeleteFileTests cases. Paths that still flag are deliberate (every doubt returns false): text not materialized, file locked or unreadable, non-document files, Created/Renamed/Deleted events. Partial-acknowledge policy and per-session halt granularity stay in plans/closed/plan_session_halt_recovery_and_git_gaps.md.
 
 ## MoveMember private-state TOOL-GAP - resolved (2026-11-07)
 
-MoveMember private-state TOOL-GAP, mostly done (2026-10-17) - `fieldMap`, the ctor-assigned-field guard, `oldMember`/`forwarderReceiver`, same-class call rewrite and string-for-object coercion shipped (2026-10-18); a client-cached stale schema is only answered by the new hint. The mid-session toolset visibility gap is tracked in the P1 stale tool list entry. The class docs on WorkspaceTools/WorkspaceReadNavigationTools were verified current and need no change - [doc](proposals/proposal_movemember_keep_delegator_and_same_class_calls.md)
+MoveMember private-state TOOL-GAP, mostly done (2026-10-17) - `fieldMap`, the ctor-assigned-field guard, `oldMember`/`forwarderReceiver`, same-class call rewrite and string-for-object coercion shipped (2026-10-18); a client-cached stale schema is only answered by the new hint. The mid-session toolset visibility gap is tracked in the P1 stale tool list entry. The class docs on WorkspaceTools/WorkspaceReadNavigationTools were verified current and need no change - [doc](proposals/closed/proposal_movemember_keep_delegator_and_same_class_calls.md)
 
-Evidence: proposals/proposal_movemember_keep_delegator_and_same_class_calls.md status IMPLEMENTED 2026-10-18 (slices 1-8), generic methods added later under D7. Remaining keep-mode gaps stay in the TODO.md "MoveMember keep modes" entry and client-side visibility in the stale tool list entry.
+Evidence: proposals/closed/proposal_movemember_keep_delegator_and_same_class_calls.md status IMPLEMENTED 2026-10-18 (slices 1-8), generic methods added later under D7. Remaining keep-mode gaps stay in the TODO.md "MoveMember keep modes" entry and client-side visibility in the stale tool list entry.
 
 ## MoveMember collateral-change tripwire leftovers - resolved (2026-11-07)
 
@@ -192,18 +192,18 @@ Evidence: `AppliedChangeSummary` dry runs are compact, W22 commit `10179fa8f7cd2
 
 ## Server-side telemetry for tool call counts and error rates - built per owner ruling D5 (2026-11-05)
 
-Was: "Server-side telemetry/metrics for tool call counts and error rates (2026-09-05) - idea, not implemented; owner decision pending on exposure and persistence" ([idea](ideas/server_telemetry_idea.md)).
+Was: "Server-side telemetry/metrics for tool call counts and error rates (2026-09-05) - idea, not implemented; owner decision pending on exposure and persistence" ([idea](ideas/closed/idea_server_telemetry.md)).
 Evidence: `ToolTelemetry` singleton (Common) updated by one call-tool filter (`ToolTelemetryRecorder`, registered 2nd, right after Echo, so it wraps ToolError and both breakers); exposed as `toolTelemetry` on `McpServerStatus`; `ToolTelemetryFlushService` writes `server-telemetry_<instanceId>.json` in place into explicit instance folders every 60 s when dirty and on shutdown; `roslynsentinel-mcp-launch.ps1` copies it to `<root>\telemetry\` before sweeping a stale instance; guidance-adherence counters (issued/followed/succeeded/ignored) via `ToolCallHint`; `scripts/Get-TelemetryRollup.ps1`. Tests: `ToolTelemetryTests`, `ToolTelemetryFlusherTests`, `ToolGuidanceTrackingTests`, `ToolTelemetryFilterOrderTests` (pins the filter order); `RoslynSentinel.Tests.Server` 617 passed, 0 failed, 9 skipped; `scripts/Test-TelemetryRollup.ps1` 109 checks on PS 5.1 and 7; Build 0 errors. Doc: [reference_server_telemetry.md](references/reference_server_telemetry.md). Live check 2026-11-06: the status field works, the launcher sweep copied a file to `telemetry\`, and at `4f511a8c` the `StopServer` flush wrote the file with the `McpServerControl` row (it did not before W24; the flush now runs on `ProcessExit`).
 
 ## `SyntaxTargetResolver` extraction follow-ups - closed by owner rulings (2026-11-05)
 
-Was: "RenameSymbol cannot merge into an existing signature (design: a merge mode retargeting callers to the existing member; owner decision); `Describe*` formatters unification; `Member(remove)` refusal list size; keyword-resolution symptom" ([proposal](proposals/proposal_syntax_target_resolver_extraction.md)).
+Was: "RenameSymbol cannot merge into an existing signature (design: a merge mode retargeting callers to the existing member; owner decision); `Describe*` formatters unification; `Member(remove)` refusal list size; keyword-resolution symptom" ([proposal](proposals/closed/proposal_syntax_target_resolver_extraction.md)).
 Evidence: owner ruling D6 - no RenameSymbol merge mode; a new name colliding with an existing member signature stays a refusal, pinned by `RenameSymbolTests.RenameSymbol_NewNameCollidesWithExistingMemberSignature_IsRefusedAndWritesNothing` (CS0111 plus the "collides with an existing declaration" hint). The three `Describe*` candidate formatters in `SymbolNavigationEngine.cs` stay separate and now carry cross-referencing XML docs (inputs, caps, wording, when to use which). Owner ruling D9 - `MemberRemoveTests.RemoveMember_FifteenHundredCallers_RefusalStaysBounded` and `RemoveMember_OneMethodWithFifteenHundredCalls_RefusalStaysBounded` pin the old 425 KB "1006 caller(s)" report (measured refusal ~2.6 KB / ~2.4 KB for 1500 callers, 10 listed). The keyword-resolution symptom did not reproduce (name-directed `SnippetSymbolLocator` overload). Build 0 errors; `RoslynSentinel.Tests.Tools.Advanced` 558/558 pass.
 
 ## Read-tool metadata envelope for other tools - closed by owner decision (2026-11-05)
 
 Was: "Read-tool metadata envelope (`isComplete`/truncation flag) for the read tools other than `ReadFile`/`GetMethodSource`/`GetFileOutline` ... owner decision pending on the `GetMethodSource` not-found contract and any other tool."
-Evidence: owner ruling D4 (decisions_autonomous_run_2026-11-05.md "Owner rulings"): no further tools get `ReadEnvelope` (Search/ListAll already report `hasMoreData`/`totalRecords`), and `GetMethodSource` not-found stays an `isError` `MethodNotFound` result with candidates; the old spec's `MethodFound=false` success shape is rejected because it would hide misses from `isError`-based handling and telemetry.
+Evidence: owner ruling D4 (decisions_autonomous_run_2026_11_05.md "Owner rulings"): no further tools get `ReadEnvelope` (Search/ListAll already report `hasMoreData`/`totalRecords`), and `GetMethodSource` not-found stays an `isError` `MethodNotFound` result with candidates; the old spec's `MethodFound=false` success shape is rejected because it would hide misses from `isError`-based handling and telemetry.
 
 ## `MoveType` could not lift a nested type to top level - resolved (2026-11-05)
 
@@ -227,7 +227,7 @@ Evidence: `RoslynSentinel.Tests.Tools.Advanced/AmbiguousNameTargetToolTests.cs` 
 ## `Member(addMember)` flattening the continuation indent of expression-bodied methods - not reproducible (2026-11-05)
 
 A CRLF fixture with an inserted two-line `=>` method (`AddMemberAsync` and `InsertMemberAfterAsync`) keeps the 8-space continuation and leaves siblings unchanged. Untested: LF files, tab indents, a caller body indent that differs. Reopen with the exact before/after text if it recurs.
-Evidence: `RoslynSentinel.Tests.Tools.Basic/MemberAddExpressionBodyIndentTests.cs` (two passing tests); [finding](findings/finding_member_add_member_flattens_expression_body_continuation_indent.md).
+Evidence: `RoslynSentinel.Tests.Tools.Basic/MemberAddExpressionBodyIndentTests.cs` (two passing tests); [finding](findings/closed/finding_member_add_member_flattens_expression_body_continuation_indent.md).
 
 ## `Member` dispatcher was a 317-line method - resolved (2026-11-05)
 
@@ -275,7 +275,7 @@ Evidence: tests FindImplementationsForMemberAsync_PositionalRecordParameter_* an
 
 ## `Build(fullBuild)` ignored `scope` - resolved (2026-11-05)
 
-`RunFullBuildAsync` now takes `scope`/`scopeName`: project scope runs `dotnet build <project.csproj>`, file scope builds the containing project, unknown names return `BuildNotRun` with a `ListAll` hint, `ProjectsCompiled` lists the project plus its references; solution scope unchanged. The "scope was ignored" StatusMessage warning and the description text were removed. Evidence: `BuildScopeFullBuildTests` (6 tests, two independent Good/Bad projects); design [proposal](proposals/proposal_build_full_build_ignores_project_scope.md) Option 1. Live check after server restart pending.
+`RunFullBuildAsync` now takes `scope`/`scopeName`: project scope runs `dotnet build <project.csproj>`, file scope builds the containing project, unknown names return `BuildNotRun` with a `ListAll` hint, `ProjectsCompiled` lists the project plus its references; solution scope unchanged. The "scope was ignored" StatusMessage warning and the description text were removed. Evidence: `BuildScopeFullBuildTests` (6 tests, two independent Good/Bad projects); design [proposal](proposals/closed/proposal_build_full_build_ignores_project_scope.md) Option 1. Live check after server restart pending.
 
 ## `RunTest` teardown-failure entries: parser tests against real output - resolved (2026-11-05)
 
@@ -284,17 +284,17 @@ Evidence: tests FindImplementationsForMemberAsync_PositionalRecordParameter_* an
 
 ## Wrap the 9 unwrapped `[McpServerTool]` returns in `SentinelCallToolResult` - resolved (2026-11-05)
 
-- McpServerStatus, GenerateClassesFromJson, GenerateHttpClient, GenerateDefaultConfigJson, InterpolateStringSafe, DescribeAdvancedToolOptions, ProjectDoc, ExternalFileDrift and McpServerControl now return the wrapper. Commit 295c2227; full solution run 6542 tests, 0 failed. Live check after restart: unconfirmed `StopServer` refused (`ConfirmationRequired`), `ExternalFileDrift(Status)` and `McpServerControl(ListTestInstances)` return `successData`. Wire shapes moved under `successData`/`errorData`. Open code TODOs: ProjectDoc missing-file read reports `Exception` not `NotFound`; legacy string wrappers `AcknowledgeDrift`/`ControlServer` removable once their direct-call tests move. Decisions: `decisions_autonomous_run_2026-11-05.md`.
+- McpServerStatus, GenerateClassesFromJson, GenerateHttpClient, GenerateDefaultConfigJson, InterpolateStringSafe, DescribeAdvancedToolOptions, ProjectDoc, ExternalFileDrift and McpServerControl now return the wrapper. Commit 295c2227; full solution run 6542 tests, 0 failed. Live check after restart: unconfirmed `StopServer` refused (`ConfirmationRequired`), `ExternalFileDrift(Status)` and `McpServerControl(ListTestInstances)` return `successData`. Wire shapes moved under `successData`/`errorData`. Open code TODOs: ProjectDoc missing-file read reports `Exception` not `NotFound`; legacy string wrappers `AcknowledgeDrift`/`ControlServer` removable once their direct-call tests move. Decisions: `decisions_autonomous_run_2026_11_05.md`.
 
 ## `contextSnippet` "not found" wording, Step 5 (wrong-node-kind family) - resolved (2026-11-02)
 
 - The "position resolved but wrong node kind" messages were unlabeled raw text at 11 sites. They now all call `SnippetNodeKindError.Describe(text, root, match, expectedNode, passInstead)` in `RoslynSentinel.Common/SnippetMatching`, which names the node kind actually found at the contextSnippet; exception types and error codes are unchanged. Commits: c96442fe (helper), 58964bbe (`AdvancedStructuralEngine` x3), f413b117 (`MappingEngine`), 980d9004 (`CodeGenerationEngine`, `SemanticRefactoringEngine`), 02d1692f (`MsToolAugmentEngine` x5). Steps 1-4 of the plan shipped 2026-09-15/16; `ContextErrorBuilder` and `DiagnoseNoMatch` were later deleted in 361263f4 (replaced by `Common/SnippetMatching`).
 - Remaining gaps (open in TODO.md P2 "Snippet wrong-node-kind leftovers"): optional sites `ImpactAnalyzer.cs:73` and `SymbolNavigationEngine.cs:445` deferred; the `ExtractMethodSafeAsync` site (~1534) is untested; `RealProjectPatternTests` asserts only the prefix. Deprecation tracking and the `NearMissList` 3-candidate cap stay a separate P3 item.
-- Docs: plan [plan_contexterrorbuilder_orienting_guidance.md](plans/closed/plan_contexterrorbuilder_orienting_guidance.md) (IMPLEMENTED, moved to closed/); audit [finding_snippet_notfound_wording_confusion_audit.md](finding_snippet_notfound_wording_confusion_audit.md) stays open.
+- Docs: plan [plan_contexterrorbuilder_orienting_guidance.md](plans/closed/plan_contexterrorbuilder_orienting_guidance.md) (IMPLEMENTED, moved to closed/); audit [finding_snippet_notfound_wording_confusion_audit.md](findings/finding_snippet_notfound_wording_confusion_audit.md) stays open.
 
 ## `LoadSolution` gave no hint when a project loaded degraded for lack of a restore - resolved (2026-11-02)
 
-- An unrestored project yields 0 `WorkspaceDiagnostic`s (MSBuildWorkspace 5.9.0, SDK 10.0.401); the missing package shows only as CS0103/CS0246 compile errors, so there was no load text to match. `BuildPostLoadHint` now flags projects structurally: `obj/project.assets.json` missing, or older than the `.csproj` or the nearest `Directory.Packages.props` (`FindUnrestoredProjects`, `BuildUnrestoredHint` in `WorkspaceProjectManagementImpl`), and points at `Build(fullBuild)` then `LoadSolution(forceReload)`. Evidence: `WorkspaceUnrestoredProjectHintTests` (2 tests). Not covered: the full sentence through a live `LoadSolution`; `GetSolutionAsync` in `LoadSolution` is not try/caught. Proposal: [proposal_load_solution_hint_for_unrestored_project.md](proposals/proposal_load_solution_hint_for_unrestored_project.md).
+- An unrestored project yields 0 `WorkspaceDiagnostic`s (MSBuildWorkspace 5.9.0, SDK 10.0.401); the missing package shows only as CS0103/CS0246 compile errors, so there was no load text to match. `BuildPostLoadHint` now flags projects structurally: `obj/project.assets.json` missing, or older than the `.csproj` or the nearest `Directory.Packages.props` (`FindUnrestoredProjects`, `BuildUnrestoredHint` in `WorkspaceProjectManagementImpl`), and points at `Build(fullBuild)` then `LoadSolution(forceReload)`. Evidence: `WorkspaceUnrestoredProjectHintTests` (2 tests). Not covered: the full sentence through a live `LoadSolution`; `GetSolutionAsync` in `LoadSolution` is not try/caught. Proposal: [proposal_load_solution_hint_for_unrestored_project.md](proposals/closed/proposal_load_solution_hint_for_unrestored_project.md).
 
 ## Small tool fixes: Member(remove) self-recursion, Build fullBuild scope note, stale comments - resolved (2026-11-02)
 
@@ -332,7 +332,7 @@ a non-uniform result (`EolWritePolicy`, `a4a6e114` through `df0ad2d9`, cleanup `
 through `8cc62db6`); `DocumentationTools` doc writes no longer keep LF (`92fbac4e`). `InsertMemberDeclarationAndFormatInsertionAsync` no longer does a
 whole-file `NormalizeEol` (verified 2026-10-26): it now takes a required `eol` and applies it to the inserted trivia only. Guards:
 `BareFileWriteRatchetTests`, `NewlineLiteralRatchetTests` (`798b0098`), `EolAuditRatchetTests`, and the `build.ps1` EOL audit.
-Evidence: `Search`/`GetMethodSource` on the 2026-10-26 source; `docs/current/reference-code-file-write-paths-v1.md` ("EOL policy").
+Evidence: `Search`/`GetMethodSource` on the 2026-10-26 source; `docs/current/references/reference_code_file_write_paths.md` ("EOL policy").
 Closed 2026-10-26 afterwards: `Tools.Basic` pre-normalisation uses `ResolveEol` (`bc9727ef`); `ApplyOutcome.Findings` (`f00dc7a0`) and the direct-write
 tools (WriteFile, DeleteFile, ApplyDiff, CreateFile, ReplaceSnippet/Batch) lift chokepoint findings to the response `findings` array (`2a65e4e2`);
 Step 9 shipped as a `ReadFile` finding that reports mixed line-ending counts and minority line numbers, no new tool class (`1d63c3e2`). Decided not to
@@ -352,7 +352,7 @@ applied in 600251b0 (205 sites, 46 files) and to `MemberRefactoringTests.cs` (36
 committed it; 53 redundant `UpdatedText ... Is.Not.Null` asserts were then simplified (47e03a6b and the last file).
 Doc: [plan_semantic_find_replace_remove_null_forgiving.md](plans/closed/plan_semantic_find_replace_remove_null_forgiving.md).
 Evidence: solution-wide `Search` for `UpdatedText!` and `UpdatedText.*Is.Not.Null` returns 0 matches. Open follow-up: the
-claude-lean client does not list on-demand tools enabled mid-session (blockers/blocking_error_toolset_enable_not_visible_in_client_tool_list.md).
+claude-lean client does not list on-demand tools enabled mid-session (blockers/closed/blocking_error_toolset_enable_not_visible_in_client_tool_list.md).
 
 ## Tool-call hints omit required parameters - resolved (2026-10-25)
 
@@ -360,7 +360,7 @@ Every server-emitted hint naming a tool lacked `reason` (all 137 tools) and ofte
 Fixed by `ToolCallHint.Call` (RoslynSentinel.Common), validated against `ToolSignatureCatalog`, with a ratchet scan
 test (`ToolHintRatchetTests`) and an empty baseline (`docs/known-handwritten-tool-hints.txt`). Conversion slices by
 project: Common, Engines.Basic, Engines.Advanced, Server.Basic, Tools.Advanced, Tools.Basic, GitImpl/GitTools (26ee119f),
-CodeTransformTools, PlanStepRunner. Doc: [proposal_tool_hint_builder.md](proposals/proposal_tool_hint_builder.md).
+CodeTransformTools, PlanStepRunner. Doc: [proposal_tool_hint_builder.md](proposals/closed/proposal_tool_hint_builder.md).
 Evidence: the validator also caught a stale tool name (`flag_migration_candidates`) and an invalid enum value
 (`ListAll(kind: types)`) that no test had flagged. Open follow-ups are in TODO.md.
 
@@ -370,7 +370,7 @@ Re-parented `BatchResultSummary` (keeps `ChangeId`), `BridgeBatchResult`, `BestI
 
 ## Failed respawn build was invisible to the agent - resolved (2026-10-24)
 
-The launcher fell back to the newest complete build when the new HEAD failed to build, visible only in `launch.log`. It now writes `instances\<id>\launch-outcome.json`; `McpServerStatus.lastLaunch` and a one-shot `launchWarning` report it, and StopServer warns about uncommitted server source. Evidence: e592a4e2; [plan](plans/closed/plan_surface_failed_launch_build.md); [blocker](blockers/resolved/blocking_error_restart_reuses_stale_commit_keyed_build.md). Live check: respawn reported `lastLaunch.buildFailed:false` and StopServer returned the warning; the failed-build path is unit-tested only.
+The launcher fell back to the newest complete build when the new HEAD failed to build, visible only in `launch.log`. It now writes `instances\<id>\launch-outcome.json`; `McpServerStatus.lastLaunch` and a one-shot `launchWarning` report it, and StopServer warns about uncommitted server source. Evidence: e592a4e2; [plan](plans/closed/plan_surface_failed_launch_build.md); [blocker](blockers/closed/blocking_error_restart_reuses_stale_commit_keyed_build.md). Live check: respawn reported `lastLaunch.buildFailed:false` and StopServer returned the warning; the failed-build path is unit-tested only.
 
 ## `Search(text)` recovery hint duplicated, and positional-record snippets did not resolve - resolved (2026-10-24)
 
@@ -398,7 +398,7 @@ The message gave no next step (22 transcript cases, 0% guided, 18% recovered). I
 
 ## Fake-write audit: unexplained `Tools.Basic` failures - resolved, flake (2026-10-22)
 
-- The shell `dotnet test` audit run (2026-10-21) showed 2 `Tools.Basic` failures that `RunTest` did not reproduce. Rerun through `RunTest` with `environment: ROSLYNSENTINEL_FAKE_WRITE_AUDIT` (1101/1102): the audit file was never created (no write attempt on a `ReadOnly` fake) and the one failure, `BuildCascadeFixtureTests.FullBuild_UpstreamProjectFails_DownstreamProjectsReportNoErrors` (5 min real build, "No data on Failure result"), passed 10/10 in isolation. Treated as a slow-build flake under load. Evidence: [proposal](proposals/proposal_battery_test_reorganisation_in_memory_and_shared_sources.md).
+- The shell `dotnet test` audit run (2026-10-21) showed 2 `Tools.Basic` failures that `RunTest` did not reproduce. Rerun through `RunTest` with `environment: ROSLYNSENTINEL_FAKE_WRITE_AUDIT` (1101/1102): the audit file was never created (no write attempt on a `ReadOnly` fake) and the one failure, `BuildCascadeFixtureTests.FullBuild_UpstreamProjectFails_DownstreamProjectsReportNoErrors` (5 min real build, "No data on Failure result"), passed 10/10 in isolation. Treated as a slow-build flake under load. Evidence: [proposal](proposals/closed/proposal_battery_test_reorganisation_in_memory_and_shared_sources.md).
 
 ## `RunTest` surfaces a failing fixture `[OneTimeTearDown]` - resolved (2026-10-21)
 
@@ -476,11 +476,11 @@ Original TODO.md text (moved 2026-10-20, shortened to the titles): C5c leftovers
 ## C6 whole-subtree whitespace enforcement and the old NormalizeWhitespace sweep list - resolved (2026-10-19)
 
 Moved from TODO.md (items "C6 whole-subtree whitespace enforcement", opened 2026-10-15, and "Old Advanced-side NormalizeWhitespace sweep list", opened 2026-08-24, superseded by C0-C6).
-Evidence: read-only review of 9402e8d3..297fb1b1 found no production caller of the deleted family; the three sites left unfixed on 2026-08-27 (`RunMicroRefactoringAsync`, `ExtractConstantSafeAsync`, `GenerateToStringSafeAsync`) now call `FormatAnnotatedTextAsync`; the last parked raw-formatter copies were merged into `RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync` in 31ecb16e, and `WhitespaceRatchetTests` now matches sync `Formatter.Format` and counts raw calls per allowlisted member. Remaining `NormalizeWhitespace` calls are non-persisted hashing (`ContentHasher`, `PersistentWorkspaceManager`) and the C9-allowlisted `AttributeTextEditBuilder`. History: [proposal](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
+Evidence: read-only review of 9402e8d3..297fb1b1 found no production caller of the deleted family; the three sites left unfixed on 2026-08-27 (`RunMicroRefactoringAsync`, `ExtractConstantSafeAsync`, `GenerateToStringSafeAsync`) now call `FormatAnnotatedTextAsync`; the last parked raw-formatter copies were merged into `RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync` in 31ecb16e, and `WhitespaceRatchetTests` now matches sync `Formatter.Format` and counts raw calls per allowlisted member. Remaining `NormalizeWhitespace` calls are non-persisted hashing (`ContentHasher`, `PersistentWorkspaceManager`) and the C9-allowlisted `AttributeTextEditBuilder`. History: [proposal](proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
 
 ## Whitespace initiative: retire the `NormalizeWholeSubtreeWhitespace` family - resolved (2026-10-19)
 
-**Evidence (2026-10-19):** slices C1-C11 (last commits 40c6cc58 C10, a8f581f2 C11); production has 0 callers, `WhitespaceRatchetTests` baseline is empty and `CountedWhitespaceHelpers_AreObsolete` keeps the four helpers `[Obsolete]`. Also fixed on the way: Asyncify T20 (relative-path fixture + `RunBridgeBatchAsync` step D ignoring `EolChangeRefused`) and the `FlagCandidatesInProjectAsync` shared-state race in `Parallel.ForEachAsync`. Proposal: proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md.
+**Evidence (2026-10-19):** slices C1-C11 (last commits 40c6cc58 C10, a8f581f2 C11); production has 0 callers, `WhitespaceRatchetTests` baseline is empty and `CountedWhitespaceHelpers_AreObsolete` keeps the four helpers `[Obsolete]`. Also fixed on the way: Asyncify T20 (relative-path fixture + `RunBridgeBatchAsync` step D ignoring `EolChangeRefused`) and the `FlagCandidatesInProjectAsync` shared-state race in `Parallel.ForEachAsync`. Proposal: proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md.
 
 **Evidence (2026-10-19, slice D1):** the caller-free helpers were deleted (the four `NormalizeNew*`/`NormalizeWholeSubtreeWhitespace` methods, `StripFormattingTriviaForNormalize`, `StripUsingKeepingLeadingTrivia`, private `DetachForNormalize`/`EnsureNodeIsNew`/`ValidateEol`) together with `RoslynFormattingHelperNormalizeNewTests.cs` (73 tests, including the stale `SafeSite_*` ones); `StripAllTriviaForNormalize` stays. `WhitespaceRatchetTests.DeletedWhitespaceHelpers_NeverReappear` replaces the caller baseline and the `[Obsolete]` check. This also closes the TODO entry below.
 
@@ -488,7 +488,7 @@ Evidence: read-only review of 9402e8d3..297fb1b1 found no production caller of t
 
 Original TODO.md text (moved verbatim 2026-10-19):
 
-- [OPEN] `NormalizeNewRootWhitespaceKeepingUsingHeaders` limitations (2026-10-16) - directive spanning usings gives CS1027 and a header on a usings-less file is not carried; fix only if the C6 variant does not subsume it - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+- [OPEN] `NormalizeNewRootWhitespaceKeepingUsingHeaders` limitations (2026-10-16) - directive spanning usings gives CS1027 and a header on a usings-less file is not carried; fix only if the C6 variant does not subsume it - [doc](proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
 
 ## claude-lean schema budget over its limit / no headroom - resolved (2026-10-18)
 
@@ -501,7 +501,7 @@ Original TODO.md text (moved verbatim 2026-10-18):
 
 ## `Search(mode: references)` could not resolve a type by name unless `filePath` was pinned - resolved (verified 2026-10-17)
 
-**Evidence (2026-10-17):** the blocker is filed under `blockers/resolved/blocking_error_search_references_by_name_excludes_types.md`; the TODO.md entry was a stale pointer to it.
+**Evidence (2026-10-17):** the blocker is filed under `blockers/closed/blocking_error_search_references_by_name_excludes_types.md`; the TODO.md entry was a stale pointer to it.
 
 Original TODO.md text (moved verbatim 2026-10-17):
 
@@ -517,7 +517,7 @@ The `simplifyExisting` path (`BasicRefactoringEngine` ~:1555) runs a whole-docum
 
 ## `MoveMember`'s `callSiteFixups` `"new"` sentinel only supported a parameterless constructor - resolved as a documented contract (verified 2026-10-17)
 
-**Evidence (2026-10-17):** option (a) of the "Not fixed" paragraph is implemented: `MemberRefactoringEngine.EnsureNewFixupsAreConstructibleAsync` (`RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs:5285`) enforces the documented "new" contract (`proposal_movemember_instance_callsite_resolution.md` section 2) and refuses up front, naming the offending keys and the real constructor signatures, when the target has no accessible zero-argument constructor. Option (b) (inferring constructor arguments from scope) was rejected on purpose: a guessed argument list can compile while silently dropping configuration.
+**Evidence (2026-10-17):** option (a) of the "Not fixed" paragraph is implemented: `MemberRefactoringEngine.EnsureNewFixupsAreConstructibleAsync` (`RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs:5285`) enforces the documented "new" contract (`plan_scoped_operation_ledger.md` section 2) and refuses up front, naming the offending keys and the real constructor signatures, when the target has no accessible zero-argument constructor. Option (b) (inferring constructor arguments from scope) was rejected on purpose: a guessed argument list can compile while silently dropping configuration.
 
 Original TODO.md text (moved verbatim 2026-10-17):
 
@@ -550,7 +550,7 @@ Original TODO.md text (moved verbatim 2026-10-17):
 **Found:** 2026-09-20, while investigating whether `SyncTypeAndFilename` is duplicated.
 
 **What:** `RoslynSentinel.Server.Basic/RefactoringStructuralTools.cs` was created as step 1 of
-`docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md` (Decision 1: split
+`docs/current/plans/closed/plan_split_workspace_refactoring_tools_for_di.md` (Decision 1: split
 `SentinelRefactoringTools` into `RefactoringSignatureTools`, `RefactoringStructuralTools`,
 `RefactoringExtractionDocsTools`). It duplicates 6 methods verbatim from
 `SentinelRefactoringTools.cs` — `Member`, `ModifyEnum`, `ModifyAttribute`, `ModifyModifier`,
@@ -586,7 +586,7 @@ during this pass — check those too before assuming this TODO's scope is limite
 
 ## `SearchSolutionText`: run both modes, use `searchMode` to rank rather than to select - implemented, tool retired into `Search(mode: text)` (verified 2026-10-17)
 
-**Evidence (2026-10-17):** the idea shipped as `design/searchsolutiontext_dual_mode_search.md`; `Search(mode: text)` (`RoslynSentinel.Tools.Basic/WorkspaceReadNavigationTools.cs`, `SearchSolutionTool`, no `searchMode` parameter) returns both `literalResults` and `regexResults` and the old standalone tool is gone (`WorkspaceTools.cs:597-606` is a non-tool delegator). The "make searchMode required" and "auto-promotion was reverted" background below describes the pre-merge state.
+**Evidence (2026-10-17):** the idea shipped as `design/closed/design_searchsolutiontext_dual_mode_search.md`; `Search(mode: text)` (`RoslynSentinel.Tools.Basic/WorkspaceReadNavigationTools.cs`, `SearchSolutionTool`, no `searchMode` parameter) returns both `literalResults` and `regexResults` and the old standalone tool is gone (`WorkspaceTools.cs:597-606` is a non-tool delegator). The "make searchMode required" and "auto-promotion was reverted" background below describes the pre-merge state.
 
 Original TODO.md text (moved verbatim 2026-10-17):
 
@@ -651,7 +651,7 @@ Fixed in bb9c477848d2f939dcfd1210ad0ed75013824709: name-directed `SnippetSymbolL
 
 ## Instance moves left doc-comment crefs behind - resolved 2026-10-15
 
-**Resolved 2026-10-15** (Q1 `CrefQualifier`, Q2a/Q2b `QualifyCrefs` tool in toolset `moveExtract`, Q3-1 to Q3-6c on the instance route: ab552200, 42a10387, 080fd140, d631e3cb, bd05e5d0, 8805b5e2). Entry was: after an instance move, a cref to the moved member still named the old class, while static moves retargeted it. The instance route now (1) retargets crefs to the moved member in the source, caller and other documents, counting ambiguous (candidate) crefs once and leaving them alone, and (2) qualifies bare crefs inside a moved member's own doc that name a non-moved source member (`A.Other`, `A{T}.Other` for a generic source class). Both report notes. Tests: `MoveMemberInstanceCrefTests`, `InstanceMoveCrefEditsTests`, `InstanceMoveCrefQualifyEditsTests`. Plan: `plans/plan_cref_qualifier_helper_and_tool.md`. Remaining limitations are in TODO.md ("Instance-move cref limitations").
+**Resolved 2026-10-15** (Q1 `CrefQualifier`, Q2a/Q2b `QualifyCrefs` tool in toolset `moveExtract`, Q3-1 to Q3-6c on the instance route: ab552200, 42a10387, 080fd140, d631e3cb, bd05e5d0, 8805b5e2). Entry was: after an instance move, a cref to the moved member still named the old class, while static moves retargeted it. The instance route now (1) retargets crefs to the moved member in the source, caller and other documents, counting ambiguous (candidate) crefs once and leaving them alone, and (2) qualifies bare crefs inside a moved member's own doc that name a non-moved source member (`A.Other`, `A{T}.Other` for a generic source class). Both report notes. Tests: `MoveMemberInstanceCrefTests`, `InstanceMoveCrefEditsTests`, `InstanceMoveCrefQualifyEditsTests`. Plan: `plans/closed/plan_cref_qualifier_helper_and_tool.md`. Remaining limitations are in TODO.md ("Instance-move cref limitations").
 
 ## `MoveMember` follow-ups: full text returned on success, and `MethodSignature` whole-file CRLF rewrite - resolved 2026-10-13
 
@@ -661,26 +661,26 @@ Fixed in bb9c477848d2f939dcfd1210ad0ed75013824709: name-directed `SnippetSymbolL
 - **`MethodSignature` rewrote whole caller files as CRLF: fixed by d89cc95f (2026-10-09).** `RemoveMethodParameterAsync` in `MemberRefactoringEngine.cs` (about lines 1548-1647) now restores the file's dominant EOL; commit 276aface covers the neighbouring signature tools. Still tree-based, and files with mixed EOL are untested.
 - **Two `ExtractMethodAsync` `NormalizeWholeSubtreeWhitespace` calls: classified safe.** Lines 4334 and 4398 of `MemberRefactoringEngine.cs` normalize newly synthesized nodes, not an existing tree root.
 
-Source: `blockers/resolved/blocking_error_movemember_reformats_entire_source_and_caller_files.md` ("Follow-up status (2026-10-13)").
+Source: `blockers/closed/blocking_error_movemember_reformats_entire_source_and_caller_files.md` ("Follow-up status (2026-10-13)").
 
 ## Result and status types used independent vocabularies; MCP `isError` was re-parsed from JSON - resolved 2026-10-11
 
-**Resolved 2026-10-11** (24499e55 phase 1, b406f44a, 333f3147, 4c82fa12, 68502897, 2e428075, 10018cdd, f2642445, 770748d2, 70322b91, 1122f2c3, a4c733c7, 00abfd09, 527a7287, 18ce4ef0, 018e9436, 9c92ae51, 0d692829; ModelEval DI fix 5e36871c). Every status-carrying type now implements `IResultStatus` (`IsError`, `Status`, `Code`, `Message`, all `[JsonIgnore]`); the envelope serializes `isError` and `isSuccess` is gone from the wire; agent-side consumers read `isError`. See `plans/plan_shared_result_status_interface.md` and `proposals/proposal_shared_result_status_interface.md`. Deferred: JSON-text read of build `outcome` in `SubAgentEvalResult.cs` (~94-95); dead `RenameSymbolResult.ToToolResponse` (`BasicRefactoringEngine.cs:58`, anonymous `success` key, 0 callers); `ClassEdit` `AlreadyInTargetState` reports Success.
+**Resolved 2026-10-11** (24499e55 phase 1, b406f44a, 333f3147, 4c82fa12, 68502897, 2e428075, 10018cdd, f2642445, 770748d2, 70322b91, 1122f2c3, a4c733c7, 00abfd09, 527a7287, 18ce4ef0, 018e9436, 9c92ae51, 0d692829; ModelEval DI fix 5e36871c). Every status-carrying type now implements `IResultStatus` (`IsError`, `Status`, `Code`, `Message`, all `[JsonIgnore]`); the envelope serializes `isError` and `isSuccess` is gone from the wire; agent-side consumers read `isError`. See `plans/closed/plan_shared_result_status_interface.md` and `proposals/closed/proposal_shared_result_status_interface.md`. Deferred: JSON-text read of build `outcome` in `SubAgentEvalResult.cs` (~94-95); dead `RenameSymbolResult.ToToolResponse` (`BasicRefactoringEngine.cs:58`, anonymous `success` key, 0 callers); `ClassEdit` `AlreadyInTargetState` reports Success.
 
 ## Search / ListAll / FindReferences: exclude test projects by default - resolved 2026-10-10
 
-**Resolved 2026-10-10** (9eb70d8e (shared detector), 52fc2f59 (text), 8b51cf94 (ListAll/kinds), b92d1e70 (symbol), f5b9b649 (references)). Tools gained `includeTests` (tool default false, impl default true); see `plans/plan_search_exclude_test_projects_by_default.md`. Entry was: hits from test projects buried answers (392 of 423 text hits for `PersistentWorkspaceManager`).
+**Resolved 2026-10-10** (9eb70d8e (shared detector), 52fc2f59 (text), 8b51cf94 (ListAll/kinds), b92d1e70 (symbol), f5b9b649 (references)). Tools gained `includeTests` (tool default false, impl default true); see `plans/closed/plan_search_exclude_test_projects_by_default.md`. Entry was: hits from test projects buried answers (392 of 423 text hits for `PersistentWorkspaceManager`).
 
 ## `Git` tool: tag, stash, worktree and hunk-level staging (closed 2026-10-10)
 
-Implemented by `plans/plan_git_tool_tag_stash_worktree_hunks.md` (steps 1-15): `tag`, `stash`, `worktree` (one shared `action` parameter) and
+Implemented by `plans/closed/plan_git_tool_tag_stash_worktree_hunks.md` (steps 1-15): `tag`, `stash`, `worktree` (one shared `action` parameter) and
 `hunks` / `stage` with `hunkIds`+`hunkFingerprint` or `lineRange`. Commits f209e84 .. 4a9c1f9 (tool), 1f71ced (live smoke + `enforce-dogfood.ps1` now denies
 shell tag/stash/worktree). Full suite 3734 total / 0 failed / 26 skipped; the eight-call live smoke passed on two restarted servers. `stash drop`/`clear`,
 tag push and worktree prune/lock/move stay shell-only by decision (D-16, D-17).
 
 ## `SessionHalted` message named one file and no recovery path - resolved 2026-10-09
 
-**Found:** 2026-09-15 (a gap under the TODO.md entry "`SessionHalted` external-drift latch: false-positive from timestamp-only touch"). **Resolved 2026-10-09.** The halt message now states how many tracked files drifted, names the first few, and spells out the recovery (`ExternalFileDrift` List, then Acknowledge, then `LoadSolution(forceReload)`); the latch policy for partial acknowledge was decided and implemented. See `plans/plan_external_file_drift_tool_and_halt_stamping.md` (halt wording is its step 6) and `plans/plan_session_halt_recovery_and_git_gaps.md` (deferred Step 2). The other two gaps in that TODO entry stay open.
+**Found:** 2026-09-15 (a gap under the TODO.md entry "`SessionHalted` external-drift latch: false-positive from timestamp-only touch"). **Resolved 2026-10-09.** The halt message now states how many tracked files drifted, names the first few, and spells out the recovery (`ExternalFileDrift` List, then Acknowledge, then `LoadSolution(forceReload)`); the latch policy for partial acknowledge was decided and implemented. See `plans/closed/plan_external_file_drift_tool_and_halt_stamping.md` (halt wording is its step 6) and `plans/closed/plan_session_halt_recovery_and_git_gaps.md` (deferred Step 2). The other two gaps in that TODO entry stay open.
 
 ## Mutating tools don't return the resulting content, forcing a separate ReadFile - resolved by design decision 2026-10-08
 
@@ -707,7 +707,7 @@ Left open (tracked in TODO.md under "`SyntaxTargetResolver` extraction follow-up
 
 ## `SubAgentEval`/`SubAgent` MCP tools - implemented and live-smoke-verified 2026-10-01
 
-Design `design_subagent_tool.md`, plan `plans/plan_subagent_tool_implementation.md`. Commits: Step 1
+Design `design_subagent_tool.md`, plan `plans/closed/plan_subagent_tool_implementation.md`. Commits: Step 1
 `8e2a59e`, Step 2 `495d012`, `--include-tools`/`--exclude-tools` prerequisite `6d57b41`, Step 3 `cffd20b`,
 Step 4 `9859277`, Steps 5+6 `8a69ff9`, Step 7 tests + stdin fix `874f80f`, Step 8 docs `4572586`,
 offloaded-result fix `a4d5aea`. Live smoke runs against qwen/qwen3.6-35b-a3b on LM Studio all passed:
@@ -730,4 +730,4 @@ Evidence: ResidualMentionScannerTests (6), ResidualMentionSummarizerTests (18), 
 
 ## MoveMember fold of engine-reorg group 6: empty engine classes removed - resolved (2026-11-05)
 
-The four empty classes (BreakingChange, Dependency, ProjectConsistency, SolutionManagement engines) are gone with their ctor params, DI registrations, test factories and dead test fields. The logic was already in SolutionStructureEngine. BreakingChangeEngine.cs and ProjectConsistencyEngine.cs remain for records they also hold. See decisions_autonomous_run_2026-11-05.md (W18).
+The four empty classes (BreakingChange, Dependency, ProjectConsistency, SolutionManagement engines) are gone with their ctor params, DI registrations, test factories and dead test fields. The logic was already in SolutionStructureEngine. BreakingChangeEngine.cs and ProjectConsistencyEngine.cs remain for records they also hold. See decisions_autonomous_run_2026_11_05.md (W18).

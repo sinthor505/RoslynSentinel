@@ -18,7 +18,7 @@ namespace RoslynSentinel.Tests.Server;
 /// <summary>
 /// Coverage for the wire-path-relativize filter that rewrites absolute file paths under the
 /// solution root to root-relative '/' form and stamps a top-level solutionRoot property -
-/// see docs/current/plans/plan_wire_relative_paths_backstop_filter.md. Runs against a real
+/// see docs/current/plans/closed/plan_wire_relative_paths_backstop_filter.md. Runs against a real
 /// in-process McpClient/McpServer pair (same pattern as ToolCallEchoFilterTests) because
 /// the point is that the rewrite survives the full filter chain.
 /// NonParallelizable: test 4 flips the process-wide ROSLYNSENTINEL_RELATIVE_PATHS env var.

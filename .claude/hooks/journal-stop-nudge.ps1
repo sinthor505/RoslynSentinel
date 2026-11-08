@@ -2,7 +2,7 @@
 # has built up since the last journal write (or the last nudge), block the stop once and ask
 # for 1-3 journal lines. A rule enforced only by remembering decays over hundreds of calls;
 # this fires every turn, so it is independent of how close compaction is.
-# Plan: docs/current/plans/plan_mcp_tool_experience_journal.md (Step 3)
+# Plan: docs/current/plans/closed/plan_mcp_tool_experience_journal.md (Step 3)
 #
 # Triggers, counting only the main agent's calls since max(journal mtime, last nudge):
 #   - MCP calls >= ROSLYNSENTINEL_JOURNAL_NUDGE_THRESHOLD (default 15), or

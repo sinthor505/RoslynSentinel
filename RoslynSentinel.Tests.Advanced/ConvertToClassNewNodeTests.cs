@@ -10,7 +10,7 @@ namespace RoslynSentinel.Tests.Advanced;
 /// <summary>
 /// Byte-exact tests for the NEW files produced by <see cref="StructuralRefactoringEngine.ConvertTupleToClassAsync"/>
 /// and <see cref="StructuralRefactoringEngine.ConvertAnonymousToNamedAsync"/> (slice C3-G3b of
-/// docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md). Since slice C7b both new files go
+/// docs/current/proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md). Since slice C7b both new files go
 /// through RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync: the synthesized structure is formatted in the
 /// document's dominant line ending and the file ends with one; code embedded from the source (using directives with
 /// their header trivia, tuple element types) is kept byte-exact, except the whitespace in front of a new token. Sources

@@ -101,7 +101,7 @@ default 30) is cancelled and surfaces `SolutionLoadTimeout`.
 session-halt latch -> unrecoverable breaker -> scoped-ledger block per target -> write/delete overlap ->
 external-drift check (a confirmed hit trips the session halt). The full 11-step order (pre-image capture for
 undo, EOL pre-pass, byte-identical skip, watcher-loop suppression via `_internalChanges`, IOException
-retry, optional rollback, in-memory resync) is in `docs/current/reference-code-file-write-paths-v1.md`
+retry, optional rollback, in-memory resync) is in `docs/current/references/reference_code_file_write_paths.md`
 (callers table re-verified 2026-10-04, EOL parts 2026-10-26), along with the sanctioned writes outside the chokepoint.
 
 **EOL policy.** `--eol auto|crlf|lf` (`Common/EolPolicyOptions.cs`, static, set at each server entry point; default `auto`) feeds
@@ -155,7 +155,7 @@ clears only drift state and the chokepoint still refuses every write.
 (`Committed` / `IncludeStaged`). Adoption is minimal: on 2026-10-03 the only consumer outside DI registration is
 `CloneDetectionEngine`. Everything else still takes `ISolutionProvider` / `PersistentWorkspaceManager` and calls
 `GetCurrentSolutionAsync` (389 call sites in 78 files as of 2026-09-24, per the design doc). It is the
-prerequisite for staged writes: see `docs/current/design_read_chokepoint.md`, `docs/current/proposal_staged_writes.md`.
+prerequisite for staged writes: see `docs/current/design/design_read_chokepoint.md`, `docs/current/proposals/proposal_staged_writes.md`.
 
 ## Usage
 

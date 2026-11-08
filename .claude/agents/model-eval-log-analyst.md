@@ -65,7 +65,7 @@ success:
 
 ## Know your sources before you start
 
-Read `docs/current/reference_log_sources_and_cross_referencing.md` — it maps every log source and
+Read `docs/current/references/reference_log_sources_and_cross_referencing.md` — it maps every log source and
 how to join them. The essentials:
 
 - **Agent side** — two files side by side in the run's `Logs\` folder, showing the *reported* result:

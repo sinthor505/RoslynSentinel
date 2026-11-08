@@ -8,11 +8,11 @@ An implementer creating a 174-line file spent three attempts on it. It seeded an
 
 Environment causes:
 - `CreateFile` takes no content, and no active tool writes a new file in one call.
-- `CreateFile`'s description names `WriteFile`, which is gated off in claude-lean (`Tools.Basic/WorkspaceTools.cs`, `Tools.Basic/WorkspaceFileEditTools.cs:87`). Run 398 lost 24 turns to the same kind of message (`docs/obsolete/blockers/resolved/finding_planstep_run_398_B_harness.md:117-119`).
+- `CreateFile`'s description names `WriteFile`, which is gated off in claude-lean (`Tools.Basic/WorkspaceTools.cs`, `Tools.Basic/WorkspaceFileEditTools.cs:87`). Run 398 lost 24 turns to the same kind of message (`docs/current/evals/closed/eval_planstep_run_398_b_harness.md:117-119`).
 - `AdviseForOversizedEdit` (`Common/WriteToolAdviceHelper.cs:141`) receives only the tool name, so it offers `Member(replace)` whatever the content is.
 - `WriteFile`'s own description names `ApplyUnifiedDiff`, which is also on demand (`Tools.Basic/WholeFileWriteTools.cs:30`).
 
-Why `WriteFile` is on demand in claude-lean: the core trim moved it to save schema tokens, because "CreateFile, ReplaceSnippet and Member(replace) cover core writes" (`docs/current/proposals/closed/proposal_trim_claude_lean_core_surface.md:55`). The 47% to 26/26 result that argues for keeping it from weak models comes from an earlier, separate gating decision (`finding_planstep_run_398_B_harness.md:123-125`).
+Why `WriteFile` is on demand in claude-lean: the core trim moved it to save schema tokens, because "CreateFile, ReplaceSnippet and Member(replace) cover core writes" (`docs/current/proposals/closed/proposal_trim_claude_lean_core_surface.md:55`). The 47% to 26/26 result that argues for keeping it from weak models comes from an earlier, separate gating decision (`eval_planstep_run_398_b_harness.md:123-125`).
 
 Self-hosted models can still reach claude-lean. The SubAgent child server starts with `--mode=Claude-Lean`, described as "the same tool surface Claude Code itself drives with" (`Tools.Advanced/SubAgentChildServerLauncher.cs:32-37`). Promotion alone would therefore hand `WriteFile` to them. The child can already reach it today by enabling `moveExtract`. ModelEval fixtures use their own mode sets and PlanStepRunner uses `--include-tools` (`Utilities.PlanStepRunner/RunnerOptions.cs:98-99`), so promotion does not change their surfaces.
 

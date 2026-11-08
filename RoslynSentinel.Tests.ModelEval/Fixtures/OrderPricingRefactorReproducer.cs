@@ -92,7 +92,7 @@ public static class OrderPricingRefactorReproducer
     /// <summary>
     /// Goes in the fixture at ContosoOrders.Tests/ModelEvalGenerated/OrderCheckoutTests.cs -> a real
     /// xunit test against <c>OrderCheckout.GetFinalPrice</c>, the "front door" per
-    /// docs/current/modeleval_fixture_test_suite_redesign.md: <c>GetFinalPrice</c>'s own name/shape
+    /// docs/current/evals/closed/eval_modeleval_fixture_test_suite_redesign.md: <c>GetFinalPrice</c>'s own name/shape
     /// is never touched by this fixture's refactor steps, only its callee
     /// (<c>CalcDisc</c> -> <c>CalculateDiscountedTotal</c>) is, so a test written against it pre-fix
     /// still compiles and is meaningful after a correct rename/extraction -> unlike a test that named

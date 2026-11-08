@@ -17,8 +17,11 @@ its content (related work, prior attempts).
 | plan | Sequenced implementation steps | `plans/` | `plan_<slug>.md` | [plan.md](./plan.md) |
 | idea | Speculative, not committed to | `ideas/` | `idea_<slug>.md` | [idea.md](./idea.md) |
 | reference | Living how-it-works / where-things-live lookup | `references/` | `reference_<slug>.md` | [reference.md](./reference.md) |
+| eval | Model-eval analyses, run reports, PlanStepRunner step sets and run outputs, eval research | `evals/` | `eval_<slug>.md` (a step set is a folder `eval_<slug>/`) | [finding.md](./finding.md) |
 
-Create the folder if it does not exist yet.
+Every genre folder has a `closed/` subfolder for history (done, superseded or abandoned). Create a folder
+if it does not exist yet. `docs/current/archive/` holds only frozen pre-taxonomy docs that fit no genre
+and the monthly `closed_*.md` rollups; do not add new docs there.
 
 ## Rules
 
@@ -35,11 +38,13 @@ Create the folder if it does not exist yet.
    defect. State what environment change fixes it, never "the model should have known".
 6. **ASCII-only punctuation** (CLAUDE.md): `-`/`--`, straight quotes, `<=`/`>=`.
 7. **Too small for a file?** A one-line open item belongs in `docs/current/TODO.md`.
-8. **Lifecycle:** a fixed blocker moves to `blockers/resolved/` with a resolution note citing the
-   commit hash. A plan whose status becomes IMPLEMENTED moves to `plans/closed/` with its commit hashes
-   in the Status line (fix relative links when it moves).
-9. **Legacy docs** (anything at the `docs/current/` root, `specs/`, or hyphenated/`-v1` names)
-   predate these rules. Leave them in place; do not copy their layout.
+8. **Lifecycle:** when a doc reaches a closed state (a fixed blocker, an IMPLEMENTED plan or proposal,
+   a FIXED or SUPERSEDED finding, a closed issue, a finished eval), set the Status line (with the commit
+   hashes) and move it to `<genre>/closed/` (`blockers/closed/`, `plans/closed/`, `evals/closed/`, ...);
+   a fixed blocker also gets a resolution note citing the commit hash. Fix relative links when it moves.
+9. **`docs/current/` root** holds only `TODO.md`, `CLOSED.md` and `DOCUMENTATION_INDEX.md`. Every other
+   doc lives in its genre folder under the filename rules above (no hyphenated or `-v1` names, no
+   `specs/`, `obsolete/`, `research/` or `testing/` folders).
 10. **Maintaining this folder:** if the house style changes, change the template first.
 11. **Commit trailers:** the doc ID is the filename without its extension (`plan_semantic_find_replace`).
     A commit that advances a plan, proposal, finding or issue doc carries a `Plan: <id>` trailer; the

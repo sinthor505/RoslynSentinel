@@ -12,7 +12,7 @@ public interface ISolutionProvider
         set;
     }
     /// <summary>The most recently loaded Roslyn solution, or null if none is loaded.</summary>
-    [Obsolete("Ambiguous once staged writes exist -- use IWorkspaceReader.GetSolutionAsync(ReadSource.Committed/.IncludeStaged) instead. See docs/current/design_read_chokepoint.md.", error: false)]
+    [Obsolete("Ambiguous once staged writes exist -- use IWorkspaceReader.GetSolutionAsync(ReadSource.Committed/.IncludeStaged) instead. See docs/current/design/design_read_chokepoint.md.", error: false)]
     Solution? CurrentSolution
     {
         get;
@@ -45,7 +45,7 @@ public interface ISolutionProvider
     }
 
     /// <summary>Returns the current in-memory solution. Roslyn's <see cref="Solution"/> is immutable, so callers can apply speculative edits (e.g. <c>WithDocumentText</c>) without affecting this instance or other callers.</summary>
-    [Obsolete("Ambiguous once staged writes exist -- use IWorkspaceReader.GetSolutionAsync(ReadSource.Committed/.IncludeStaged) instead. See docs/current/design_read_chokepoint.md.", error: false)]
+    [Obsolete("Ambiguous once staged writes exist -- use IWorkspaceReader.GetSolutionAsync(ReadSource.Committed/.IncludeStaged) instead. See docs/current/design/design_read_chokepoint.md.", error: false)]
     Task<Solution> GetCurrentSolutionAsync(CancellationToken cancellationToken);
     /// <summary>Waits up to <paramref name="timeout"/> for any queued or running solution load to finish and returns the status afterwards. <see cref="SolutionLoadStatus.Loading"/> means the wait timed out; a timeout never cancels the load. A cancelled <paramref name="cancellationToken"/> propagates.</summary>
     Task<SolutionLoadStatus> WaitForLoadAsync(TimeSpan timeout, CancellationToken cancellationToken);

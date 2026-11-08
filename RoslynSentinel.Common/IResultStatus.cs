@@ -3,7 +3,7 @@ namespace RoslynSentinel.Common;
 /// <summary>
 /// Canonical outcome vocabulary shared by every status-carrying result type. Which members are errors is
 /// decided in exactly one place, <see cref="ResultStatusExtensions.IsErrorStatus"/>.
-/// See docs/current/proposals/proposal_shared_result_status_interface.md.
+/// See docs/current/proposals/closed/proposal_shared_result_status_interface.md.
 /// </summary>
 public enum ResultStatus
 {

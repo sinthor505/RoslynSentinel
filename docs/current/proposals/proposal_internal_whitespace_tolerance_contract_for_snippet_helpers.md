@@ -70,10 +70,10 @@ No helper reports which stage matched. Defects that follow from that:
 ### Prior art and how this differs
 
 - `CLOSED.md` "`ReplaceSnippet` silently corrupted adjacent lines sharing a trailing substring" (2026-09-10, `CLOSED.md:688-703`): the tolerant path's span length differed from the snippet's, so `ReplaceSnippet` was moved to the exact matcher on purpose; `ApplyDiff` was left loose ("two separate anchoring strictness levels, by design"). This proposal keeps that decision and does not make `ReplaceSnippet` tolerant. It makes the levels explicit and named, and makes the span a checked invariant.
-- `docs/current/plans/plan_replacesnippet_whitespace_tolerant_match.md`: a plan to make `ReplaceSnippet` tolerant. Never applied; rejected here (Alternatives, c).
-- `docs/current/proposal_universal_symbol_resolver.md`: candidate resolution, not text normalization.
-- `docs/current/proposals/proposal_snippet_match_selectors_withinmember_matchline.md`: the selectors. Orthogonal; they filter matches after any tier has produced them (section C keeps them as a separate stage).
-- `docs/current/finding_matchstrictness_internal_param_evaluation.md` (2026-09-28): evaluated an internal `MatchStrictness` (`Strict`/`BestEffort`) parameter for `FindCallersAsync`/`FindImplementationsForMemberAsync` and did not implement it. It concluded the idea clears the premature-abstraction bar because two callers (`SymbolRelationshipImpl.FindReferences`, read-only; `RefactoringStructuralImpl.Member`, mutating) have opposite correctness needs, and that `Member` should always be `Strict`. Differences, from re-reading it 2026-10-13:
+- `docs/current/plans/closed/plan_replacesnippet_whitespace_tolerant_match.md`: a plan to make `ReplaceSnippet` tolerant. Never applied; rejected here (Alternatives, c).
+- `docs/current/proposals/proposal_universal_symbol_resolver.md`: candidate resolution, not text normalization.
+- `docs/current/proposals/closed/proposal_snippet_match_selectors_withinmember_matchline.md`: the selectors. Orthogonal; they filter matches after any tier has produced them (section C keeps them as a separate stage).
+- `docs/current/findings/finding_matchstrictness_internal_param_evaluation.md` (2026-09-28): evaluated an internal `MatchStrictness` (`Strict`/`BestEffort`) parameter for `FindCallersAsync`/`FindImplementationsForMemberAsync` and did not implement it. It concluded the idea clears the premature-abstraction bar because two callers (`SymbolRelationshipImpl.FindReferences`, read-only; `RefactoringStructuralImpl.Member`, mutating) have opposite correctness needs, and that `Member` should always be `Strict`. Differences, from re-reading it 2026-10-13:
   - **Different axis.** It is about candidate ambiguity: pick the closest of several symbol candidates, or throw. This proposal is about text normalization: which whitespace differences a snippet comparison forgives. A `Strict` candidate policy can sit on any whitespace tier.
   - **No default here.** It proposed `Strict` as the default. Here the tolerance is a required argument at every adapter call site (memory `feedback_prefer_mandatory_params_to_close_footgun_roundtrips`).
   - **Existing evidence.** Both policies already exist as hardcoded paths (exact and tolerant families above), chosen implicitly by method name at 50+ call sites; that evaluation weighed a split that did not yet exist.
@@ -266,9 +266,9 @@ None of these blocked slices 2a to 2c. The first blocks 2d and the second blocks
 
 ## Related
 
-- `docs/current/finding_matchstrictness_internal_param_evaluation.md`
+- `docs/current/findings/finding_matchstrictness_internal_param_evaluation.md`
 - `docs/current/CLOSED.md` (splice-corruption entry, 2026-09-10, `:688-703`)
-- `docs/current/plans/plan_replacesnippet_whitespace_tolerant_match.md`
-- `docs/current/proposal_universal_symbol_resolver.md`
-- `docs/current/proposals/proposal_snippet_match_selectors_withinmember_matchline.md`
+- `docs/current/plans/closed/plan_replacesnippet_whitespace_tolerant_match.md`
+- `docs/current/proposals/proposal_universal_symbol_resolver.md`
+- `docs/current/proposals/closed/proposal_snippet_match_selectors_withinmember_matchline.md`
 - Memory: `feedback_prefer_mandatory_params_to_close_footgun_roundtrips`, `project_tool_error_code_taxonomy_proposal`, `project_replacesnippet_tuple_generic_transcription_failure` (a second weak-model `ReplaceSnippet` transcription failure)

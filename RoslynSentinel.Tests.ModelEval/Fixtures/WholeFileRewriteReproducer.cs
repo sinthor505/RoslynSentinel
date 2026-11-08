@@ -2,7 +2,7 @@ namespace RoslynSentinel.Tests.ModelEval.Fixtures;
 
 /// <summary>
 /// Minimal reproduction of a "whole-blob rewrite instead of scoped edit" bug pattern -> the class of
-/// bug plan-9b-model-test-step2.md was written against (a method rebuilds one node and then
+/// bug eval_9b_model_test_step2.md was written against (a method rebuilds one node and then
 /// reformats/rewrites the ENTIRE file instead of just the changed part). Uses plain string
 /// manipulation rather than real Roslyn SyntaxNode APIs so it compiles inside
 /// <see cref="RoslynSentinel.Tests.TestSolutionFixture"/>'s copy of Samples/ContosoOrders, which has
@@ -15,7 +15,7 @@ public static class WholeFileRewriteReproducer
     /// Goes in the fixture at ContosoOrders.Core/FixtureHelpers/BlockEditHelpers.cs -> the "already
     /// has the fix pattern" file, standing in for a file like BasicRefactoringEngine.cs. The scoped-edit
     /// helper is private, so BlockConverter.cs can't call it directly -> the model has to copy the
-    /// method's source into BlockConverter.cs itself, matching plan-9b-model-test-step2.md step 4.
+    /// method's source into BlockConverter.cs itself, matching eval_9b_model_test_step2.md step 4.
     /// </summary>
     public const string HelperFileContent = """
         namespace ContosoOrders.Core.FixtureHelpers;
@@ -120,7 +120,7 @@ public static class WholeFileRewriteReproducer
     /// <summary>
     /// Goes in the fixture at ContosoOrders.Tests/ModelEvalGenerated/BlockConverterTests.cs -> real
     /// xunit tests replacing the byte-for-byte substring checks that previously verified "unrelated
-    /// code unchanged" (see docs/current/modeleval_fixture_test_suite_redesign.md). References
+    /// code unchanged" (see docs/current/evals/closed/eval_modeleval_fixture_test_suite_redesign.md). References
     /// <c>BlockConverter</c> directly rather than through a front door: none of its member names
     /// (<c>ConvertAbstractClassToInterface</c>, <c>UnrelatedMethodBefore</c>,
     /// <c>UnrelatedMethodAfter</c>) are renamed by the fix this fixture asks for, so a test written

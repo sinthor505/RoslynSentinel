@@ -9,7 +9,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
-/// Slice C9 characterization tests (docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md):
+/// Slice C9 characterization tests (docs/current/proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md):
 /// byte-exact pins for how <see cref="AttributeTextEditBuilder"/> renders caller-supplied attribute text (inner spacing,
 /// the passed end-of-line, eol validation) and rejects comments (boundary, inner, sibling), pinned on the code that still
 /// went through a whole-subtree whitespace guard (since deleted), so the self-contained rendering must reproduce them exactly.

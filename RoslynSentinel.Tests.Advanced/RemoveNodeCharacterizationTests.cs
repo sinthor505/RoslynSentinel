@@ -7,7 +7,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Advanced;
 
 /// <summary>
-/// C4a characterization tests (docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
+/// C4a characterization tests (docs/current/proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
 /// Byte-exact pins for the three private "remove a node and format its container" copies
 /// (<c>SemanticRefactoringEngine.InlineVariableAsync</c> unused-variable path,
 /// <c>StructuralRefinementEngine.SafeDeleteSymbolAsync</c>, <c>StructuralRefactoringEngine.InlineFieldAsync</c>)

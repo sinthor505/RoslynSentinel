@@ -7,7 +7,7 @@
     The payloads are synthetic but follow the real wire envelope of SentinelCallToolResult as the server emits it
     (camelCase; toolCall echo, solutionRoot, isServerBinaryStale, isError, successData | errorData, findings,
     totalRecords, hasMoreData, workspaceVersion, statusMessage, listSummary). Sizes match the cases named in
-    docs/current/plans/plan_wire_result_marshaller.md Step 3: a 2000-error Build, a 300-hit Search, a 44 KB
+    docs/current/plans/closed/plan_wire_result_marshaller.md Step 3: a 2000-error Build, a 300-hit Search, a 44 KB
     Git(diff), a 122-site SemanticFindReplace preview and a big error. Deterministic: no randomness, no clock.
     The JSON is checked in; rerun this script only to regenerate it after a deliberate shape change.
 #>

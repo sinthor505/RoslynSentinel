@@ -15,7 +15,7 @@
                 to diagnose without guesswork.) Also enumerates every per-window stdio instance
                 folder under bin-vscode\ (each one built/launched independently by
                 scripts/roslynsentinel-mcp-launch.ps1 - see
-                docs/current/proposal_per_session_mcp_server.md), reporting each instance's exe
+                docs/current/proposals/closed/proposal_per_session_mcp_server.md), reporting each instance's exe
                 mtime and whether its process is currently running.
       start   - Start the HTTP copy if it isn't already running. Leaves an already-running copy
                 alone. Reuses the existing binary as-is; does not rebuild it.

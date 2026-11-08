@@ -122,7 +122,7 @@ public class CompilerErrorLookupHelperTests
 
     /// <summary>
     /// Regression coverage for identical-diagnostic grouping. See
-    /// docs/current/blockers/resolved/blocking_error_movemember_analysisengine_antipatternengine_friction.md
+    /// docs/current/blockers/closed/blocking_error_movemember_analysisengine_antipatternengine_friction.md
     /// -> one bad MoveMember callSiteFixups value produced 86 identical CS7036 lines, which read as 86
     /// separate problems. Same Id + same Message must collapse to one line with a count and a capped
     /// location list, in first-occurrence order; a distinct diagnostic keeps its own single-line form.

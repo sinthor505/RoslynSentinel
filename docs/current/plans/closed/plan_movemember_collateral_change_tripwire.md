@@ -11,7 +11,7 @@ while keeping its EOL style. The compile gate does not help (an unresolved cref 
 makes the damage visible but refuses nothing.
 
 Origin: the MoveMember bug that produced a 1178-line diff for a one-method move
-(`docs/current/blockers/resolved/blocking_error_movemember_reformats_entire_source_and_caller_files.md`). It was fixed by
+(`docs/current/blockers/closed/blocking_error_movemember_reformats_entire_source_and_caller_files.md`). It was fixed by
 building minimal `TextChange`s against the original `SourceText` (`RoslynSentinel.Engines.Basic/MoveMemberTextEdits.cs`),
 but nothing stops a later change from re-adding a whole-file normalizer after those edits are applied.
 

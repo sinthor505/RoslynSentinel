@@ -60,7 +60,7 @@ At the write chokepoint, `PersistentWorkspaceManager.ApplyProposedChangesAsync` 
 files are written, with `hashAfter` computed from the content about to be written. Reasons:
 
 - The blob writer runs after the apply returns ("outside the chokepoint by design",
-  `docs/current/reference-code-file-write-paths-v1.md:97`), so the file is on disk before any entry
+  `docs/current/references/reference_code_file_write_paths.md:97`), so the file is on disk before any entry
   exists. A sibling's watcher event (500 ms debounce) can fire first and find nothing.
 - Blob coverage is incomplete: no blob for `UndoLastApply`, `RetryFailedChanges`,
   `MsToolAugmentEngine` format/using-sort, and Git operations; the Asyncify/`AsyncBatchEngine` batch
@@ -170,9 +170,9 @@ Worth their own TODO entries:
 
 ## Related
 
-- `docs/current/reference-code-file-write-paths-v1.md` (write paths, blob writer "outside the chokepoint").
+- `docs/current/references/reference_code_file_write_paths.md` (write paths, blob writer "outside the chokepoint").
 - `docs/current/references/reference_architecture_map.md` (chokepoint, request pipeline).
-- [external-drift-hard-blocker.md](../ideas/external-drift-hard-blocker.md) (existing drift idea; not re-read for this proposal).
+- [idea_external_drift_hard_blocker.md](../ideas/closed/idea_external_drift_hard_blocker.md) (existing drift idea; not re-read for this proposal).
 - Memories: `project_per_session_mcp_server_isolation`, `project_externaldrift_false_positive_cross_check_gitstatus`,
   `project_concurrent_sessions`, `project_operation_blob_json_gotchas`,
   `reference_central_mcp_request_filter_pipeline`.

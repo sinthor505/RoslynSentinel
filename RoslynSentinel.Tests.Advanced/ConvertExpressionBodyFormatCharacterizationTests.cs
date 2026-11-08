@@ -9,7 +9,7 @@ using RoslynSentinel.Engines.Advanced;
 namespace RoslynSentinel.Tests.Advanced;
 
 /// <summary>
-/// C5c-5 characterization tests (docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
+/// C5c-5 characterization tests (docs/current/proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
 /// Byte-exact pins for <see cref="StructuralRefactoringEngine.ConvertExpressionBodyAsync"/> in both directions, for
 /// methods and properties. The rewrite is routed onto <c>RoslynFormattingHelper.FormatAnnotatedSpansAsync</c> so only
 /// the converted member is formatted and line endings follow the pre-rewrite document.

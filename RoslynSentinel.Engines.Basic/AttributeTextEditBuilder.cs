@@ -18,7 +18,7 @@ namespace RoslynSentinel.Engines.Basic;
 /// This replaces the earlier "rebuild the whole target node, then Formatter.Format it" approach, which
 /// (a) rebuilt a type from its ORIGINAL node and so overwrote a nested member edit made in the same batch, and
 /// (b) re-formatted every unrelated member of a type that only needed one attribute line inserted. See
-/// docs/current/blockers/resolved/blocking_error_modifyattribute_batch_drops_nested_edit_and_reformats_type_body.md.
+/// docs/current/blockers/closed/blocking_error_modifyattribute_batch_drops_nested_edit_and_reformats_type_body.md.
 /// </para>
 /// </summary>
 public static class AttributeTextEditBuilder

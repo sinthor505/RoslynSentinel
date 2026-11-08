@@ -7,7 +7,7 @@ description: Reuse-first rule, NEW-DTO justification format, suffix table and wi
 
 The repo has 400+ DTOs with overlapping shapes and inconsistent suffixes. Survey, measurements and the
 phased plan: `docs/current/proposals/proposal_dto_ownership_role_lineage.md`. Engine result shape decision:
-`docs/current/findings/finding_engine_result_shapes_primitives_and_wrapper_usage.md`.
+`docs/current/findings/closed/finding_engine_result_shapes_primitives_and_wrapper_usage.md`.
 
 ## 1. Reuse before creating
 

@@ -53,7 +53,7 @@ candidates:
   re-derives baselines (`PersistentWorkspaceManager.cs:745-756`), and a reload is needed anyway to make the new project visible
   to the Roslyn workspace. Cost: the full clear also discards unrelated real drift, and a reload of a large solution is slow
   (the code comment at the `_internalChanges` check says tens of seconds). Also couples to
-  [proposal_load_solution_hint_for_unrestored_project.md](proposal_load_solution_hint_for_unrestored_project.md): the reloaded
+  [proposal_load_solution_hint_for_unrestored_project.md](closed/proposal_load_solution_hint_for_unrestored_project.md): the reloaded
   project may need restore first.
 - **C. Route the writes through the chokepoint.** Generate the csproj and template file content in-process and write them with
   `ApplyProposedChangesAsync`, then run only `dotnet sln add` out of band. Largest change; also fixes the EOL-policy gap that the
@@ -106,6 +106,6 @@ only if A proves racy in the test.
 ## Related
 
 - [plan_tests_support_projects_factory_rollout.md](../plans/closed/plan_tests_support_projects_factory_rollout.md) (follow-up 5, Step 1)
-- [plan_session_halt_recovery_and_git_gaps.md](../plans/plan_session_halt_recovery_and_git_gaps.md) (SessionHalted latch and recovery)
+- [plan_session_halt_recovery_and_git_gaps.md](../plans/closed/plan_session_halt_recovery_and_git_gaps.md) (SessionHalted latch and recovery)
 - `docs/current/TODO.md` P2 entry on the `SessionHalted` external-drift latch false positive
-- [proposal_load_solution_hint_for_unrestored_project.md](proposal_load_solution_hint_for_unrestored_project.md)
+- [proposal_load_solution_hint_for_unrestored_project.md](closed/proposal_load_solution_hint_for_unrestored_project.md)

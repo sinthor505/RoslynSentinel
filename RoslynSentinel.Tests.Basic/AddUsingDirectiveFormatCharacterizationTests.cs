@@ -6,7 +6,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
-/// C5b-1 characterization tests (docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
+/// C5b-1 characterization tests (docs/current/proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
 /// Byte-exact pins for <c>BasicRefactoringEngine.AddUsingDirectiveAsync</c>, an annotated-container site routed onto
 /// <c>RoslynFormattingHelper.FormatAnnotatedSpansAsync</c>. The source carries irregular spacing, comments and blank
 /// lines in code the engine does not touch, so a regression that formats the whole document shows up as a diff.

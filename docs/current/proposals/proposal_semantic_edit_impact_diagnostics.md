@@ -149,7 +149,7 @@ Subagent trace; citations are paths under the repo root. Not all lines were re-q
   with **no hint field**: add an additive optional `Hint` (short advice + `GetHelp` pointer) rather than
   overloading `Message`. `ToolErrorMapper` (`Common/ToolException.cs:173`) maps everything unrecognised to
   `Exception` ("failed unexpectedly (TypeName)"), which is the same collapse the taxonomy proposal
-  (`docs/current/proposal_tool_error_code_taxonomy.md`, not built) wants to stop; the playbook is keyed by
+  (`docs/current/proposals/proposal_tool_error_code_taxonomy.md`, not built) wants to stop; the playbook is keyed by
   these codes, so that proposal and this one share a prerequisite. `CompilerErrorLookupHelper` is keyed by
   raw diagnostic-id strings with no registry (CS0103 :102-169, missing member :171-232, CS0122 :234-283,
   duplicate definition :295-347).
@@ -207,6 +207,6 @@ Subagent trace; citations are paths under the repo root. Not all lines were re-q
 
 - `docs/current/plans/plan_replacesnippet_cross_file_edit_guidance.md` (interim fixes, prerequisite)
 - `docs/current/blockers/blocking_error_replacesnippet_schema_invites_anchor_only_edits.md`
-- `docs/current/proposal_tool_error_code_taxonomy.md` and `docs/current/ideas/server_telemetry_idea.md`
+- `docs/current/proposals/proposal_tool_error_code_taxonomy.md` and `docs/current/ideas/closed/idea_server_telemetry.md`
   (shared prerequisite: stable error codes; telemetry counts them)
 - Memory: compiler-error lookup hints, caller-fixup tool audit idea, central MCP request filter pipeline.

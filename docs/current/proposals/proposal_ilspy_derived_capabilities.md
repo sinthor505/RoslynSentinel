@@ -34,7 +34,7 @@ surface. That is an environment gap under the project mission, not a model failu
 - `InspectSymbol` can reach a metadata symbol from a source snippet, but reports only kind, signature,
   accessibility and summary, with no members or body (`SymbolNavigationEngine.cs:420-570`, from the review run).
 - Maintainers already reach for `ilspycmd` by hand for this
-  (`docs/current/proposal_changesignature_full_roslyn_service.md:286`).
+  (`docs/current/proposals/closed/proposal_changesignature_full_roslyn_service.md:286`).
 
 ### Nothing answers "who writes this field?"
 
@@ -223,7 +223,7 @@ Each of these is worth a separate decision later:
   the review run), and it loses in-process caching and structured errors.
 - **Roslyn's metadata-as-source service.** It is not public API and `RoslynSentinel` does not reference Features. A byte
   scan of the Features 5.9.0 DLLs found no decompiler reference. The change-signature work already hit this internal-API
-  wall (`docs/obsolete/blockers/blocking_error_changesignature_internal_roslyn_api.md`).
+  wall (`docs/current/blockers/closed/blocking_error_changesignature_internal_roslyn_api.md`).
 - **Extending `GetMethodSource`.** `filePath` is required and the result implies a file exists, so metadata would need a
   meaningless value in that param. It also covers only methods.
 - **A new `Search` mode.** `Search` is a locator, and its input schema was only recently trimmed by about 46%.
@@ -319,8 +319,8 @@ Tests:
 
 ## Related
 
-- `docs/current/plans/plan_wire_result_marshaller.md` - owns large-result handling for Slice 2.
-- `docs/current/proposal_changesignature_full_roslyn_service.md` - prior manual `ilspycmd` use.
-- `docs/obsolete/blockers/blocking_error_changesignature_internal_roslyn_api.md` - why internal Roslyn services were avoided.
-- `docs/current/docCommentId_description_gap.md` - doc comment ID descriptions, relevant to the `symbol` param.
+- `docs/current/plans/closed/plan_wire_result_marshaller.md` - owns large-result handling for Slice 2.
+- `docs/current/proposals/closed/proposal_changesignature_full_roslyn_service.md` - prior manual `ilspycmd` use.
+- `docs/current/blockers/closed/blocking_error_changesignature_internal_roslyn_api.md` - why internal Roslyn services were avoided.
+- `docs/current/issues/issue_doc_comment_id_description_gap.md` - doc comment ID descriptions, relevant to the `symbol` param.
 - `docs/current/proposals/proposal_dto_ownership_role_lineage.md` - DTO rules applied above.

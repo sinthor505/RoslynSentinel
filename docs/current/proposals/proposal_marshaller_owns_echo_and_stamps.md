@@ -74,5 +74,5 @@ into one finalizer to save two or three JSON parse and reserialize passes per re
 
 ## Related
 
-- [plan_wire_result_marshaller.md](../plans/plan_wire_result_marshaller.md) -- Out of scope item this replaces.
+- [plan_wire_result_marshaller.md](../plans/closed/plan_wire_result_marshaller.md) -- Out of scope item this replaces.
 - [reference_tool_response_pipeline.md](../references/reference_tool_response_pipeline.md) -- filters and the reserve.

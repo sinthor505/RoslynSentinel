@@ -95,8 +95,8 @@ implementers do not re-ask. Plans for the build work live in `docs/current/plans
 
 ## Related
 
-- `docs/current/plans/plan_session_halt_recovery_and_git_gaps.md`, `docs/current/plans/plan_agent_tooling_hooks_and_small_ergonomics.md`
-- `docs/current/proposal_scoped_operation_ledger.md`
+- `docs/current/plans/closed/plan_session_halt_recovery_and_git_gaps.md`, `docs/current/plans/plan_agent_tooling_hooks_and_small_ergonomics.md`
+- `docs/current/plans/closed/plan_scoped_operation_ledger.md`
 
 ## Moved from TODO.md (2026-10-17)
 
@@ -127,7 +127,7 @@ ChangeSignature, RenameSymbol conflicts) do not use it.
 
 **Other tools checked.** `ChangeSignature` refuses the whole change when a call site cannot be relocated ("Nothing was changed"); `MethodSignature` / `ParameterEdit` (method) and `RenameSymbol` are compile-gated; `ParameterEdit` constructor-add refuses with `UnresolvedCallSites` and edits nothing. So no other tool currently produces an intentionally non-compiling interim state that a ledger would track.
 
-**Recommendation.** Do not extend to another tool yet. First add production resolution (a read of open entries plus a way to mark an entry fixed or release the ledger, with a named tool in the refusal text and a `RefusalCode`), because every new opener otherwise adds another block that only a restart clears. The next candidate is `ChangeSignature` (its skipped sites already carry per-site reasons, `BasicRefactoringEngine.cs` ~337/344/437): replace the all-or-nothing refusal (~476-502) with a partial apply plus pending rows, open the ledger in `ChangeSignatureTool` like `MoveMember` does, estimated 3 files plus a new test file. The proposal does not name a tool, so this is an owner decision (see `decisions_autonomous_run_2026-11-05.md`, Needs owner).
+**Recommendation.** Do not extend to another tool yet. First add production resolution (a read of open entries plus a way to mark an entry fixed or release the ledger, with a named tool in the refusal text and a `RefusalCode`), because every new opener otherwise adds another block that only a restart clears. The next candidate is `ChangeSignature` (its skipped sites already carry per-site reasons, `BasicRefactoringEngine.cs` ~337/344/437): replace the all-or-nothing refusal (~476-502) with a partial apply plus pending rows, open the ledger in `ChangeSignatureTool` like `MoveMember` does, estimated 3 files plus a new test file. The proposal does not name a tool, so this is an owner decision (see `decisions_autonomous_run_2026_11_05.md`, Needs owner).
 
 ## Decisions (todo review 2026-11-08)
 

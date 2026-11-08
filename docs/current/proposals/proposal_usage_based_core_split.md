@@ -211,5 +211,5 @@ type, move construction behind factories first.
 - `docs/generated/architecture_projects.md`, `docs/generated/architecture_tools.md`
 - `RoslynSentinel.Server.Basic/ToolClassRegistry.cs`, `RoslynSentinel.Common/ToolsetCatalog.cs`
 - Memory: engine reorg leftovers (open bug 2, cross-project MoveType); server flavours and build configs
-- Ideas: `docs/current/ideas/tool_attribution_idea.md`, `docs/current/ideas/server_telemetry_idea.md`.
+- Ideas: `docs/current/ideas/idea_tool_attribution.md`, `docs/current/ideas/closed/idea_server_telemetry.md`.
   Both overlap with the slice 1 usage report.

@@ -2153,7 +2153,7 @@ public class Calc
     [Test]
     public async Task ReplaceMember_WithContainerName_ScopesToRequestedContainerOnly()
     {
-        // Regression test for docs/current/blockers/resolved/blocking_error_member_replace_ignores_containername_scoping.md:
+        // Regression test for docs/current/blockers/closed/blocking_error_member_replace_ignores_containername_scoping.md:
         // two classes in one file each declare their own same-named Setup() method. Without
         // containerName-based scoping, ReplaceMemberAsync's member lookup fell back to a bare
         // name match and always resolved to the FIRST same-named method in the file, regardless

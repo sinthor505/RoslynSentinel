@@ -41,10 +41,10 @@ thorough, "do NOT edit"):
   output so it does not redo mechanical work.
 - **B - TODO.md + CLOSED.md.** Per entry (heading + line range): DONE / DUPLICATE / SUPERSEDED /
   SHRINK / KEEP / UNSURE with one-line evidence (commit hash or file:line). Verify "done" against
-  `Git` log, CLOSED.md, `blockers/resolved/`, source. Dead links, items superseded by a plan or
+  `Git` log, CLOSED.md, `blockers/closed/`, source. Dead links, items superseded by a plan or
   proposal, estimated post-cleanup size, whether CLOSED.md needs a monthly archive split.
 
-Exclude docs/current/upstream/ (reference copies from the upstream repo, e.g. UNFINISHED*.md) and docs/obsolete/ from every audit: they are not active documentation, so do not treat them as overlapping backlogs or dedupe targets.
+Exclude docs/current/archive/ (frozen pre-taxonomy docs and old backlogs, e.g. unfinished.md) and every `*/closed/` folder under docs/current/ from every audit: they are not active documentation, so do not treat them as overlapping backlogs or dedupe targets.
 
 Both report in tables, <= ~150 lines, no file dumps. Treat UNSURE as "ask the user", never guess.
 

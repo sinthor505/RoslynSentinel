@@ -1,6 +1,6 @@
 # Read-tool metadata envelope (isComplete / truncation flag) - remaining tools
 
-**Status:** NOT DESIGNED 2026-10-17. GetMethodSource and GetFileOutline were done 2026-08-27; the remaining read tools are open. The original spec moved to docs/obsolete/specs.
+**Status:** NOT DESIGNED 2026-10-17. GetMethodSource and GetFileOutline were done 2026-08-27; the remaining read tools are open. The original spec is plans/closed/plan_read_tool_metadata_envelope.md.
 
 ## What happened
 Moved verbatim from the restructured TODO.md.
@@ -33,9 +33,9 @@ suggested defaults). Wired into:
   tuning surface; a `read-limits.json`/env-var loader was judged unnecessary since nothing else in the
   repo loads per-feature JSON config at startup, and this matches the existing precedent
   (`ScanResultHelper.ThresholdBytes` is likewise a hardcoded constant, not file/env-configurable).
-- Step 5 (fold the contract into "the tools-review doc") — that doc is `docs/obsolete/tool_review_v1.md`
+- Step 5 (fold the contract into "the tools-review doc") — that doc is `docs/current/archive/tool_review.md`
   (where `BatchResultSummary` is documented), already retired to `obsolete/`. No live successor exists
-  to fold this into; `tool-terminology-refinement-reference-v1.md` is a different, naming-focused doc,
+  to fold this into; `reference_tool_terminology_refinement.md` is a different, naming-focused doc,
   not a shared-contract catalog. Decided this TODO.md entry plus `ReadEnvelope.cs`'s own doc comments
   are the durable record — no new doc created.
 

@@ -29,7 +29,7 @@ Multi-file signature changes and member moves today have two ways through, and b
    the `validateOnApply: false` + terminal `Build` workaround: about a dozen unvalidated edits in one
    session, because interface, implementers and call sites cannot be moved in any single-file order
    that compiles. The workaround is not discoverable from any tool description or error message.
-2. **Track breakage in a gated worklist.** `ScopedOperationLedger` (`proposal_scoped_operation_ledger.md`)
+2. **Track breakage in a gated worklist.** `ScopedOperationLedger` (`plan_scoped_operation_ledger.md`)
    applies the change, records every unresolved call site, and refuses writes to unrelated files until
    all entries are fixed. Its only production caller is `MoveMember`
    (`RoslynSentinel.Tools.Advanced/AdvancedRefactoringTools.cs:533`). Its state lives in the session,
@@ -79,7 +79,7 @@ Pending work is "references to a deprecated wrapper". That state lives in the fi
 survives server restarts and sessions, needs no gate, and never blocks unrelated work. Progress is
 measured by counting references to the wrapper (`SymbolFinder`). Obsolete warnings with the dedicated
 `DiagnosticId` are a secondary, human-visible signal; they are not authoritative because of the
-warning-reporting history in `blockers/resolved/blocking_error_build_tool_suppresses_cs0618_warnings.md`.
+warning-reporting history in `blockers/closed/blocking_error_build_tool_suppresses_cs0618_warnings.md`.
 
 ### New and changed tools
 
@@ -193,13 +193,13 @@ phase finishes with a rename. Asyncify gets this for free from its `Async` suffi
 
 ## Related
 
-- `docs/current/finding_multifile_signature_change_sequencing_friction.md` - the friction this removes for
+- `docs/current/findings/finding_multifile_signature_change_sequencing_friction.md` - the friction this removes for
   non-interface members.
-- `docs/current/proposal_scoped_operation_ledger.md` - section "Relationship to the existing Asyncify
+- `docs/current/plans/closed/plan_scoped_operation_ledger.md` - section "Relationship to the existing Asyncify
   bridge/ledger machinery" already notes that Asyncify avoids the ledger because its rewrite is
   mechanical; this proposal makes more rewrites mechanical.
-- `docs/current/proposal_movemember_instance_callsite_resolution.md` - delegating stub as the resolution
+- `docs/current/plans/closed/plan_scoped_operation_ledger.md` - delegating stub as the resolution
   strategy.
-- `docs/current/proposal_redirect_calls_tool.md` - narrows to external targets.
-- `docs/current/proposal_changesymboltype_tool.md`, `docs/current/proposal_batch_replacesnippet.md`.
+- `docs/current/proposals/proposal_redirect_calls_tool.md` - narrows to external targets.
+- `docs/current/proposals/proposal_changesymboltype_tool.md`, `docs/current/proposals/closed/proposal_batch_replacesnippet.md`.
 - Memory: `project_caller_fixup_tool_audit_idea` (shared caller-fixup logic across mutating tools).

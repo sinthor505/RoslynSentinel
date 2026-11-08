@@ -18,7 +18,7 @@ namespace RoslynSentinel.Tests.Server;
 /// Coverage for the halt-stamping call-tool filter (<c>AddHaltStampFilter</c>): while any breaker is
 /// tripped it stamps <c>isSessionHalted</c>, <c>sessionHaltKind</c>, <c>sessionHaltReason</c> and
 /// <c>sessionHaltRecovery</c> onto the response - see
-/// docs/current/plans/plan_external_file_drift_tool_and_halt_stamping.md (Decision 3, step 7). Runs against
+/// docs/current/plans/closed/plan_external_file_drift_tool_and_halt_stamping.md (Decision 3, step 7). Runs against
 /// a real in-process <see cref="McpClient"/>/<see cref="McpServer"/> pair (same pattern as
 /// <see cref="ToolCallEchoFilterTests"/>) so the stamp is exercised in position, with the real breaker
 /// filters inside it. The <c>externalDrift</c> kind is covered by <c>HaltInfoTests</c>: real drift

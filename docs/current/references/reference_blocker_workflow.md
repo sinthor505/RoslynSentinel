@@ -12,7 +12,7 @@ blocking finding") stays there.
    [reference_live_server_freshness.md](reference_live_server_freshness.md)) before resuming the original task.
 4. When fixed: add a regression test, compare against the pre-existing-failure baseline, then in the
    same commit add a resolution note (root cause, fix, commit hash, tests) and move the doc from
-   `docs/current/blockers/` to `docs/current/blockers/resolved/`.
+   `docs/current/blockers/` to `docs/current/blockers/closed/`.
 5. If the workspace looks stale (a fix appears missing), reload the solution (`LoadSolution`) before
    concluding anything.
 6. If test runs fail on file locks, kill only stray `testhost` processes that belong to your own session

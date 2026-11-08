@@ -4,7 +4,7 @@
 
 ## Motivation
 `IResultStatus` (Status, Code, Message, IsError) is implemented across the result types
-(`plans/plan_shared_result_status_interface.md`, DONE 2026-10-11), but the envelope a client sees does
+(`plans/closed/plan_shared_result_status_interface.md`, DONE 2026-10-11), but the envelope a client sees does
 not carry it. In `RoslynSentinel.Common/SentinelCallToolResult.cs` the envelope's `Status`, `Code` and
 `Message` are each `[JsonIgnore]` and documented "Not serialized" (lines ~205-231). On the wire a client
 gets `isError`, and on failure `errorData.{errorCode,message,detail}`; on success only a free-text
@@ -169,11 +169,11 @@ Policy: `references/reference_not_found_recovery_ladder.md`.
   1431, 4943` (all verified) and one more at `BasicRefactoringEngine.cs:1782`.
 
 ## Related
-- `proposals/proposal_shared_result_status_interface.md`, `plans/plan_shared_result_status_interface.md`
+- `proposals/closed/proposal_shared_result_status_interface.md`, `plans/closed/plan_shared_result_status_interface.md`
   (the work this extends; its step 7 smoke gate is the model for the gate here).
 - `plans/plan_error_codes_follow_cause.md`; memory `project_tool_error_code_taxonomy_proposal`.
 - `references/reference_not_found_recovery_ladder.md`; `plans/closed/plan_search_text_scan_all_projects_and_recovery_hints.md`.
-- `ideas/server_telemetry_idea.md` (would consume `status`); `scripts/Get-NotFoundRecoveryReport.ps1`.
+- `ideas/closed/idea_server_telemetry.md` (would consume `status`); `scripts/Get-NotFoundRecoveryReport.ps1`.
 
 ## Decisions (todo review 2026-11-08)
 

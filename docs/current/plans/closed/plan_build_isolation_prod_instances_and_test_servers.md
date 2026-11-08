@@ -60,10 +60,10 @@ Evidence (verified 2026-10-23 against source and by running a build):
   out of band (raw JSON-RPC, which models handle well). Documented at
   https://code.claude.com/docs/en/mcp.md.
 
-Related: `docs/current/blockers/resolved/blocking_error_loadsolution_missing_msbuild_workspaces_assembly.md`
-(the recorded launch-vs-launch `obj/` race), `plans/plan_read_block_http_launcher_retention_fileinfo.md`
+Related: `docs/current/blockers/closed/blocking_error_loadsolution_missing_msbuild_workspaces_assembly.md`
+(the recorded launch-vs-launch `obj/` race), `plans/closed/plan_read_block_http_launcher_retention_fileinfo.md`
 (added the HTTP launcher script and the control script's shared `bin-vscode\Advanced.Http` copy),
-`plans/plan_stateless_http_toolset_enablement.md` (toolset enablement over stateless HTTP, relevant to
+`plans/closed/plan_stateless_http_toolset_enablement.md` (toolset enablement over stateless HTTP, relevant to
 test instances), memory `project_per_session_mcp_server_isolation.md` (says instances are keyed by
 `VSCODE_PID`; they are keyed by a random token, lines 141-177 of the launch script).
 

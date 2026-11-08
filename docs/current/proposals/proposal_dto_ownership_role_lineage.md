@@ -228,7 +228,7 @@ rename can change `LargeResultInfo.resultType`):
   - a `domain` enum kept in sync with the namespaces by a test (from name prefixes until Phase 3);
   - `shapeLike` (property names, ranked by overlap).
 - **Result shapes:** every operation result implements the status interface, per
-  `findings/finding_engine_result_shapes_primitives_and_wrapper_usage.md`. The interface `IResultStatus` is renamed
+  `findings/closed/finding_engine_result_shapes_primitives_and_wrapper_usage.md`. The interface `IResultStatus` is renamed
   to `IOperationResult` (73 implementers across Common, Engines and Tools.Basic). The rename is the first slice of
   Phase 2, done with `RenameSymbol`.
 - **Domain namespaces:** survey first. No convention is fixed until a codebase-wide survey of types and
@@ -249,7 +249,7 @@ rename can change `LargeResultInfo.resultType`):
 
 ## Related
 
-- `docs/current/findings/finding_engine_result_shapes_primitives_and_wrapper_usage.md` (OPEN, result envelope standard)
+- `docs/current/findings/closed/finding_engine_result_shapes_primitives_and_wrapper_usage.md` (OPEN, result envelope standard)
 - `docs/current/proposals/proposal_parallel_change_deprecated_wrappers.md` (migration-first)
 - `docs/current/blockers/blocking_error_search_references_by_name_excludes_types.md` (prerequisite for Phase 1)
 - Memory `project_engine_reorg_final_closeout_bugs_1_2_3` (Bug 2: cross-project type relocation)

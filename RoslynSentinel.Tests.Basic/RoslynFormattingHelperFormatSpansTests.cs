@@ -8,7 +8,7 @@ using RoslynSentinel.Common;
 namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
-/// Slice C5a of docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md:
+/// Slice C5a of docs/current/proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md:
 /// <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync(Document, SyntaxNode, string, CancellationToken)"/> (annotated-container sites) and
 /// <see cref="RoslynFormattingHelper.FormatWholeDocumentAsync(Document, string, Microsoft.CodeAnalysis.Text.SourceText?, CancellationToken)"/> (the one named whole-document chokepoint).
 /// Both must leave code the edit did not touch alone (apart from the whitespace and line break the formatter owns

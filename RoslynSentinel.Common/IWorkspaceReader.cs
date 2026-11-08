@@ -21,7 +21,7 @@ public enum ReadSource
 /// <summary>
 /// Read chokepoint for workspace content: answers content questions directly (document text, the
 /// solution itself) instead of handing out a raw <see cref="Microsoft.CodeAnalysis.Solution"/> for
-/// callers to navigate independently. See docs/current/design_read_chokepoint.md.
+/// callers to navigate independently. See docs/current/design/design_read_chokepoint.md.
 ///
 /// This exists alongside <see cref="ISolutionProvider"/> rather than replacing it (yet): the two
 /// serve different questions -- <see cref="ISolutionProvider"/> answers "what solution/metadata is

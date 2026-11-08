@@ -515,7 +515,7 @@ public class GitToolsSmokeTests
     }
 
 
-    // Regression coverage for docs/current/blockers/resolved/blocking_error_git_diff_mojibake_display.md:
+    // Regression coverage for docs/current/blockers/closed/blocking_error_git_diff_mojibake_display.md:
     // RunGitAsync previously decoded git's redirected stdout/stderr using Console.OutputEncoding
     // (the legacy OS codepage) instead of UTF-8, so any non-ASCII multi-byte character in a diffed
     // file's content came back as mojibake. This asserts the actual UTF-8 character round-trips.

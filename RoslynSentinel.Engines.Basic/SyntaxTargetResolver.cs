@@ -461,7 +461,7 @@ public static class SyntaxTargetResolver
     /// Returns every syntax-level declaration matching <paramref name="name"/> in this file's parse
     /// tree, unfiltered by kind or container. Replaces ResolveMemberByNameOrSnippet,
     /// ResolveMemberOrEnumMemberByNameOrSnippet, and ResolveTypeByNameOrSnippet's candidate-collection
-    /// step with one kind-complete query -- see docs/current/proposal_universal_symbol_resolver.md.
+    /// step with one kind-complete query -- see docs/current/proposals/proposal_universal_symbol_resolver.md.
     ///
     /// Never throws: zero matches is an empty list, full stop. This is what preserves the
     /// member-then-type fallback chain callers like AddAttributeAsync depend on (a discarded
@@ -851,7 +851,7 @@ public static class SyntaxTargetResolver
 /// A closed set of declaration kinds recognized by ResolveCandidates, replacing the ad-hoc
 /// per-call-site MemberDeclarationSyntax/BaseTypeDeclarationSyntax/EnumMemberDeclarationSyntax
 /// switch statements previously duplicated across GetMemberName, GetContainerMembersAsync, and
-/// FindImplementationsForMemberAsync (see docs/current/proposal_universal_symbol_resolver.md).
+/// FindImplementationsForMemberAsync (see docs/current/proposals/proposal_universal_symbol_resolver.md).
 /// </summary>
 public enum CandidateKind
 {

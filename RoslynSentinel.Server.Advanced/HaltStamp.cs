@@ -8,7 +8,7 @@ namespace RoslynSentinel.Server.Advanced;
 /// Stamps the four <c>isSessionHalted</c> / <c>sessionHaltKind</c> / <c>sessionHaltReason</c> /
 /// <c>sessionHaltRecovery</c> properties from a <see cref="HaltInfo"/> onto a tool response's first
 /// text block, so a caller learns the exact recovery call without a discovery round trip. Modelled on
-/// <see cref="ToolCallEcho.Stamp"/>. See docs/current/plans/plan_external_file_drift_tool_and_halt_stamping.md
+/// <see cref="ToolCallEcho.Stamp"/>. See docs/current/plans/closed/plan_external_file_drift_tool_and_halt_stamping.md
 /// (Decision 3).
 /// </summary>
 internal static class HaltStamp

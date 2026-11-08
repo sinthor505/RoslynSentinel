@@ -379,7 +379,7 @@ public class OrderPricingRefactorAgentTests
         // test project (ContosoOrders.Tests), whose OrderCheckoutTests front door exercises
         // GetFinalPrice -> the renamed/extracted calculator logic underneath it, rather than
         // scanning for byte-for-byte/whitespace-collapsed-unchanged text (see
-        // docs/current/modeleval_fixture_test_suite_redesign.md). Asserting the total count is
+        // docs/current/evals/closed/eval_modeleval_fixture_test_suite_redesign.md). Asserting the total count is
         // unchanged (not just Failed == 0) closes the loophole where a model "fixes" a failing test
         // by deleting or [Fact(Skip=...)]-ing it instead of fixing the code.
         var testProjectPath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Tests", "ContosoOrders.Tests.csproj");

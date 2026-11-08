@@ -39,7 +39,7 @@ public record MethodAttributeInfo
 /// <summary>
 /// Plain implementation class for the read/navigation slice of workspace tools: GetMethodSourceTool,
 /// GetFileOutlineTool, ListAllTool, SearchSolutionTextTool, GetOperationDetailTool, GetLargeResultTool. Method bodies
-/// are verbatim moves from WorkspaceTools -> see docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md
+/// are verbatim moves from WorkspaceTools -> see docs/current/plans/closed/plan_split_workspace_refactoring_tools_for_di.md
 /// (Decision 1-Amendment). Not an [McpServerToolType]; the MCP surface lives in WorkspaceReadNavigationTools.
 ///
 /// WorkspaceTools.cs still holds the six live/registered copies of these tools (each with a
@@ -51,7 +51,7 @@ public class WorkspaceReadNavigationImpl
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<WorkspaceReadNavigationImpl> _logger;
     // Points at the solution-wide shared instance (RoslynSentinel.Common.SharedJsonOptions.Default)
-    // rather than constructing its own, per docs/current/plans/plan_shared_json_serializer_options.md.
+    // rather than constructing its own, per docs/current/plans/closed/plan_shared_json_serializer_options.md.
     // Kept as a same-named field rather than replacing all 28 call sites with the fully-qualified
     // name, since this is an internal serialize/deserialize round-trip within this class either way.
     private static readonly JsonSerializerOptions _jsonOptions = RoslynSentinel.Common.SharedJsonOptions.Default;

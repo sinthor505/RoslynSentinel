@@ -7,7 +7,7 @@ namespace RoslynSentinel.Tools.Basic;
 /// GetOperationDetail, GetLargeResult). Holds the [McpServerTool] attributes and delegates to
 /// <see cref="WorkspaceReadNavigationImpl"/> (Search to the symbol engines). Registered in ToolClassRegistry and DI;
 /// WorkspaceTools keeps attribute-less delegators for source compatibility. See
-/// docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md (Decision 1-Amendment).
+/// docs/current/plans/closed/plan_split_workspace_refactoring_tools_for_di.md (Decision 1-Amendment).
 /// </summary>
 [McpServerToolType]
 public class WorkspaceReadNavigationTools

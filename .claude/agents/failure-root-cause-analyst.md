@@ -29,7 +29,7 @@ inaccurate about its own cause.
 
 ## Sources — the server log is your primary evidence
 
-Read `docs/current/reference_log_sources_and_cross_referencing.md` for the full map. The critical
+Read `docs/current/references/reference_log_sources_and_cross_referencing.md` for the full map. The critical
 point for your work: `agent.log` shows the *reported* result of a tool call; the **server log shows
 why it was that result** — the real exception, the actual failing branch. Diagnosing from the agent
 side alone is how surface-level "invalid parameters" conclusions get made.
