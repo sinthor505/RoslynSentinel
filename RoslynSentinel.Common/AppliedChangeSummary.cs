@@ -7,6 +7,12 @@ namespace RoslynSentinel.Common;
 /// The change is already written to disk (or, when <see cref="DryRun"/> is true, validated
 /// but deliberately not written) -> there is no separate apply step.
 /// </summary>
+/// <remarks>
+/// Build it with <see cref="From(ApplyOutcome, List{FilePathWrapper}, string, Dictionary{FilePathWrapper, string}?, bool, int?, List{AppliedEditSpan}?)"/>
+/// (or the preview-only overload) so no site forgets <see cref="LineChanges"/> or <see cref="Findings"/>. The primary constructor is
+/// deliberately not [Obsolete]: tests construct it directly and positional deconstruction relies on it, so
+/// <c>From</c> is the convention for tool code rather than a compiler-enforced rule.
+/// </remarks>
 public record AppliedChangeSummary(
     string? ChangeId,
     List<FilePathWrapper> AffectedFiles,
@@ -37,6 +43,60 @@ public record AppliedChangeSummary(
     public string Status => DryRun
         ? "dry_run_ok"
         : NotWritten ? "not_written" : AffectedFiles.Count == 0 ? "no_changes" : "applied";
+
+    /// <summary>
+    /// Builds the summary of a validate-then-apply call from its <see cref="ApplyOutcome"/>: ChangeId, DryRun, Diff, LineChanges and Findings are
+    /// copied from <paramref name="apply"/>, so a site cannot forget the last two. <paramref name="validated"/> defaults to true (the outcome
+    /// went through the compile gate); pass the files' new text as <paramref name="changedContent"/> when the tool echoes it.
+    /// A site that drops the diff unless the caller asked for it uses <c>From(...) with { Diff = ... }</c>.
+    /// </summary>
+    public static AppliedChangeSummary From(
+        ApplyOutcome apply,
+        List<FilePathWrapper> affectedFiles,
+        string description,
+        Dictionary<FilePathWrapper, string>? changedContent = null,
+        bool validated = true,
+        int? workspaceVersion = null,
+        List<AppliedEditSpan>? editSpans = null)
+        => new(
+            apply.ChangeId,
+            affectedFiles,
+            description,
+            apply.DryRun,
+            apply.Diff,
+            workspaceVersion,
+            changedContent,
+            validated,
+            apply.LineChanges,
+            editSpans,
+            apply.Findings);
+
+    /// <summary>
+    /// Builds the summary of a preview-only result that has no <see cref="ApplyOutcome"/> (autoStage=false: proposed contents, nothing written,
+    /// <see cref="ChangeId"/> null). Pass <paramref name="lineChanges"/> from <c>ValidateAndApplyHelper.ComputeLineChangesAsync</c>;
+    /// null/empty is right for a no-op with no affected files. <paramref name="validated"/> defaults to false (nothing went through the compile gate).
+    /// </summary>
+    public static AppliedChangeSummary From(
+        List<FileLineChange>? lineChanges,
+        List<Finding>? findings,
+        List<FilePathWrapper> affectedFiles,
+        string description,
+        bool dryRun = false,
+        string? diff = null,
+        Dictionary<FilePathWrapper, string>? changedContent = null,
+        bool validated = false)
+        => new(
+            null,
+            affectedFiles,
+            description,
+            dryRun,
+            diff,
+            null,
+            changedContent,
+            validated,
+            lineChanges,
+            null,
+            findings);
 
     /// <summary>
     /// true when no-stage result (autoStage=false): proposed contents only, nothing written to disk.

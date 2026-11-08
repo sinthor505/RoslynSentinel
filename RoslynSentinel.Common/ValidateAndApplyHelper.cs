@@ -296,6 +296,20 @@ public static class ValidateAndApplyHelper
         return stats;
     }
 
+    /// <summary>
+    /// Per-file added/removed line counts of <paramref name="changes"/> against each file's current text, for the preview-only
+    /// (autoStage=false) path that has the proposed new text but no <see cref="ApplyOutcome"/>. The pre-image is read like
+    /// <see cref="BuildDiffAsync"/> does (committed workspace document, else disk); a path that is neither is a new file (null before).
+    /// </summary>
+    public static async Task<List<FileLineChange>> ComputeLineChangesAsync(
+        IWorkspaceManager workspaceManager,
+        Dictionary<FilePathWrapper, string> changes,
+        CancellationToken cancellationToken)
+    {
+        var beforeTexts = await ReadBeforeTextsAsync(workspaceManager, changes.Keys.Select(k => (string)k), cancellationToken);
+        return ComputeLineChanges(changes, null, p => beforeTexts.GetValueOrDefault(p));
+    }
+
     public static async Task<string> BuildDiffAsync(
         IWorkspaceManager workspaceManager,
         Dictionary<FilePathWrapper, string> changes,
