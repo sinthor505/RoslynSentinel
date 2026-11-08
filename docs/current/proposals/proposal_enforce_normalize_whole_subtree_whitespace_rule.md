@@ -480,9 +480,9 @@ Whether every engine's tool wrapper already does this is **[unverified]**.
 
 Open engine-level formatting, EOL and trivia defects and the old Advanced-side NormalizeWhitespace sweep list, moved here verbatim from the restructured TODO.md. Open items are indexed in TODO.md; the old sweep list (C0-C6 supersedes it) is kept for history.
 
-### Unrouted EOL flatteners: plural `ReplaceNodesAndFormatReplacementsAsync` and `RemoveMethodParameterAsync` scope (2026-10-17) - partly done
+### Unrouted EOL flatteners: plural `ReplaceNodesAndFormatReplacementsAsync` and `RemoveMethodParameterAsync` scope (2026-10-17) - plural done (c327b75f, verified 2026-11-08)
 
-C5c-2 routed `ReplaceNodeAndFormatReplacementAsync`, the cascade caller-file `NormalizeEol`, `AddTopLevelTypeAsync` (no-namespace path) and `MemberRefactoringEngine.ExtractMethodAsync` onto the changed-lines EOL rule (constructor mixed-EOL tests added). Still open: the plural `ReplaceNodesAndFormatReplacementsAsync` (same raw `Formatter.FormatAsync` + whole-file `NormalizeEol`; route the same way and cover its callers). The original entry text follows.
+Verified 2026-11-08: the plural helper already annotates and formats via `FormatAnnotatedSpansAsync` (c327b75f, C5c-6; `ReplaceNodesFormatCharacterizationTests` pins LF, CRLF and a stray CRLF byte-exact, green). The "still open" sentence below is stale. C5c-2 routed `ReplaceNodeAndFormatReplacementAsync`, the cascade caller-file `NormalizeEol`, `AddTopLevelTypeAsync` (no-namespace path) and `MemberRefactoringEngine.ExtractMethodAsync` onto the changed-lines EOL rule (constructor mixed-EOL tests added). Still open: the plural `ReplaceNodesAndFormatReplacementsAsync` (same raw `Formatter.FormatAsync` + whole-file `NormalizeEol`; route the same way and cover its callers). The original entry text follows.
 
 Found in the C5b-2b review. `RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync` (~:63-67) is a raw span-scoped `Formatter.FormatAsync` followed by a whole-file `NormalizeEol`, and `MemberRefactoringEngine.AddConstructorParameterWithCallSitesAsync` (~:471) does the same `NormalizeEol` on caller files, so `AddConstructorParameter*` flattens a stray CRLF line in LF files. Route both via `FormatAnnotatedSpansAsync` (C5c), then add constructor mixed-EOL tests (the six cascade tests in `RefactoringEngineFormatCharacterizationTests.cs` are guards that would pass on the old finder; fix the header wording "is not a span-scoped Formatter.FormatAsync site" to "not yet routed"). Also: `RemoveMethodParameterAsync` annotates the whole method declaration, so unrelated body whitespace is reformatted (pre-existing); annotating only the `ParameterList`/`ArgumentList` would narrow it.
 
@@ -490,9 +490,9 @@ Found in the C5b-2b review. `RoslynFormattingHelper.ReplaceNodeAndFormatReplacem
 
 `InvertAssignments` swaps the operands together with their leading trivia, so a comment or blank lines directly before an inverted assignment end up on the right-hand side of the result. Found in the C5b-1 review; swap the operands but keep each side's own leading trivia in place.
 
-### `AddUsingDirective` simplifyExisting: `Simplifier.ReduceAsync` simplifies nothing (2026-10-16) - not started
+### `AddUsingDirective` simplifyExisting: `Simplifier.ReduceAsync` simplifies nothing (2026-10-16) - fixed (6eaace53, verified 2026-11-08)
 
-With `simplifyExisting: true`, `BasicRefactoringEngine.AddUsingDirectiveAsync` calls `Simplifier.ReduceAsync(doc, Simplifier.Annotation)`, but no node in the document carries `Simplifier.Annotation` at that point (only the new using has `Formatter.Annotation`), so the reduce step is a no-op and the option shortens no names. Found in the C5b-1 review; annotate the qualified names to reduce (or reduce the whole root) before the call.
+Fixed in 6eaace53: `BasicRefactoringEngine.AnnotateNamesInAddedNamespaceAsync` annotates names resolving into the added namespace before `ReduceAsync`; `AddUsingDirective_SimplifyExisting_ShortensQualifiedNameIntoAddedNamespace` pins it (green). Original report: with `simplifyExisting: true`, `BasicRefactoringEngine.AddUsingDirectiveAsync` calls `Simplifier.ReduceAsync(doc, Simplifier.Annotation)`, but no node in the document carries `Simplifier.Annotation` at that point (only the new using has `Formatter.Annotation`), so the reduce step is a no-op and the option shortens no names. Found in the C5b-1 review; annotate the qualified names to reduce (or reduce the whole root) before the call.
 
 ### `IDEStyleEngine.SimplifyMemberAccess` drops the leading trivia of the `this` token (2026-10-16) - not started
 
