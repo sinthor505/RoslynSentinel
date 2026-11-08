@@ -55,8 +55,30 @@ public class Usage
 
         // Assert preview mode returns success with data
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-        // TODO pin the site count once the SuccessData sites type is confirmed; for now pin preview mode and a non-empty sites list
-        Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("\"mode\":\"preview\"").And.Contain("\"sites\":[{\"FilePath\":"));
+        // SuccessData is an anonymous { mode, sites } object; sites are SemanticReplaceSite rows (PascalCase keys, Role as the enum's
+        // number under a plain JsonSerializer). Preview carries no changeId: nothing was applied, so there is nothing to undo.
+        var payload = System.Text.Json.JsonSerializer.SerializeToNode(result.SuccessData)!.AsObject();
+        Assert.That(payload["mode"]!.GetValue<string>(), Is.EqualTo("preview"));
+        Assert.That(payload.ContainsKey("changeId"), Is.False, "a preview applies nothing, so it has no changeId");
+
+        // Source line numbers (1-based): the declaration is line 3, the usages lines 11, 13 and 14. The declaration row's role is
+        // DeclarationInitializer (the observed classification of the property declaration), the rest are Read / NegatedRead / WriteLiteral.
+        var sites = payload["sites"]!.AsArray();
+        var rows = sites.Select(site => (
+            Line: site!["Line"]!.GetValue<int>(),
+            Role: site["Role"]!.GetValue<int>(),
+            Before: site["Before"]!.GetValue<string>(),
+            After: site["After"]!.GetValue<string>(),
+            Unsupported: site["UnsupportedReason"])).ToList();
+        Assert.That(rows, Has.Count.EqualTo(4), "declaration + 3 usages");
+        Assert.Multiple(() =>
+        {
+            Assert.That(rows[0], Is.EqualTo((3, (int)SemanticReplaceRole.DeclarationInitializer, "IsSuccess", "HasError", (System.Text.Json.Nodes.JsonNode?)null)));
+            Assert.That(rows[1], Is.EqualTo((11, (int)SemanticReplaceRole.Read, "_c.IsSuccess", "!_c.HasError", (System.Text.Json.Nodes.JsonNode?)null)));
+            Assert.That(rows[2], Is.EqualTo((13, (int)SemanticReplaceRole.NegatedRead, "!_c.IsSuccess", "_c.HasError", (System.Text.Json.Nodes.JsonNode?)null)));
+            Assert.That(rows[3], Is.EqualTo((14, (int)SemanticReplaceRole.WriteLiteral, "_c.IsSuccess = false", "_c.HasError = true", (System.Text.Json.Nodes.JsonNode?)null)));
+        });
+        Assert.That(sites.Select(site => site!["FilePath"]!.GetValue<string>()).Distinct().Single(), Does.EndWith("SemanticFindReplaceFixture.cs"), "every site is in the one fixture file");
 
         // Verify file is unchanged
         var content = workspace.ReadText(FixtureRelativePath);

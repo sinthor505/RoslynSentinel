@@ -43,18 +43,111 @@ public class ToolReturnShapeRatchetTests
 
         var baseline = LoadBaseline(baselinePath);
         var current = offenders.Select(offender => offender.Line).ToHashSet(StringComparer.Ordinal);
+        var drift = DescribeBaselineDrift(current, baseline);
+        Assert.That(drift, Is.Null, drift);
+    }
+
+    [Test]
+    public void DescribeBaselineDrift_NewOffender_NamesTheEntryAndSaysToTypeItOrUpdateTheBaseline()
+    {
+        var baseline = new HashSet<string>(StringComparer.Ordinal) { "OldTools.Known | object" };
+        var current = new HashSet<string>(StringComparer.Ordinal) { "OldTools.Known | object", "NewTools.Fresh | string" };
+
+        var message = DescribeBaselineDrift(current, baseline);
+
+        Assert.That(message, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("new offender (not in baseline): NewTools.Fresh | string"));
+            Assert.That(message, Does.Contain("Type the tool's return (a DTO instead of object/string)"));
+            Assert.That(message, Does.Contain(UpdateEnvVar + "=1"));
+            Assert.That(message, Does.Contain("Scan_MatchesBaseline"));
+            Assert.That(message, Does.Not.Contain("OldTools.Known"), "an entry present in both sets is not drift");
+            Assert.That(message, Does.Not.Contain("no longer offends"), "no stale entry in this scenario");
+        });
+    }
+
+    [Test]
+    public void DescribeBaselineDrift_StaleBaselineEntry_SaysTheBaselineIsStale()
+    {
+        var baseline = new HashSet<string>(StringComparer.Ordinal) { "OldTools.Known | object", "OldTools.Migrated | string" };
+        var current = new HashSet<string>(StringComparer.Ordinal) { "OldTools.Known | object" };
+
+        var message = DescribeBaselineDrift(current, baseline);
+
+        Assert.That(message, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("baseline entry no longer offends (remove it): OldTools.Migrated | string"));
+            Assert.That(message, Does.Contain("baseline is stale"));
+            Assert.That(message, Does.Contain(UpdateEnvVar + "=1"));
+            Assert.That(message, Does.Not.Contain("new offender"), "no growth in this scenario");
+        });
+    }
+
+    [Test]
+    public void DescribeBaselineDrift_GrowthAndStaleTogether_ReportsBothInSortedOrder()
+    {
+        var baseline = new HashSet<string>(StringComparer.Ordinal) { "B.Gone | object" };
+        var current = new HashSet<string>(StringComparer.Ordinal) { "Z.Late | object", "A.Early | string" };
+
+        var message = DescribeBaselineDrift(current, baseline);
+
+        Assert.That(message, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(message!.IndexOf("A.Early | string", StringComparison.Ordinal), Is.GreaterThanOrEqualTo(0));
+            Assert.That(message.IndexOf("A.Early | string", StringComparison.Ordinal), Is.LessThan(message.IndexOf("Z.Late | object", StringComparison.Ordinal)), "new offenders are listed in ordinal order");
+            Assert.That(message, Does.Contain("baseline entry no longer offends (remove it): B.Gone | object"));
+        });
+    }
+
+    [Test]
+    public void DescribeBaselineDrift_IdenticalSets_ReturnsNull()
+    {
+        var baseline = new HashSet<string>(StringComparer.Ordinal) { "OldTools.Known | object", "OldTools.Other | string" };
+        var current = new HashSet<string>(StringComparer.Ordinal) { "OldTools.Other | string", "OldTools.Known | object" };
+
+        Assert.That(DescribeBaselineDrift(current, baseline), Is.Null);
+        Assert.That(DescribeBaselineDrift(new HashSet<string>(), new HashSet<string>()), Is.Null, "two empty sets are in sync too");
+    }
+
+    // The compare/format half of Scan_MatchesBaseline, pure so the failure messages can be tested with synthetic sets.
+    // Returns null when the sets match, else the failure text: one line per drifted entry (new offenders first, then stale
+    // baseline entries, each group in ordinal order) followed by how to resolve it.
+    private static string? DescribeBaselineDrift(IReadOnlySet<string> current, IReadOnlySet<string> baseline)
+    {
         var problems = new List<string>();
         foreach (var line in current.Where(line => !baseline.Contains(line)).OrderBy(line => line, StringComparer.Ordinal))
         {
             problems.Add("new offender (not in baseline): " + line);
         }
 
+        var staleCount = 0;
         foreach (var line in baseline.Where(line => !current.Contains(line)).OrderBy(line => line, StringComparer.Ordinal))
         {
             problems.Add("baseline entry no longer offends (remove it): " + line);
+            staleCount++;
         }
 
-        Assert.That(problems, Is.Empty, string.Join(Environment.NewLine, problems));
+        if (problems.Count == 0)
+        {
+            return null;
+        }
+
+        var newCount = problems.Count - staleCount;
+        if (newCount > 0)
+        {
+            problems.Add("Type the tool's return (a DTO instead of object/string); if the untyped return is deliberate, add the line to " + BaselineRelativePath + ".");
+        }
+
+        if (staleCount > 0)
+        {
+            problems.Add("The baseline is stale: those tools are typed now, so remove their lines from " + BaselineRelativePath + ".");
+        }
+
+        problems.Add("To rewrite the baseline from the current scan: set " + UpdateEnvVar + "=1 and run ToolReturnShapeRatchetTests.Scan_MatchesBaseline.");
+        return string.Join(Environment.NewLine, problems);
     }
 
     [Test]
