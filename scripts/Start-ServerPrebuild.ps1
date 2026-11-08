@@ -144,6 +144,9 @@ function Invoke-Worker {
 }
 
 try {
+    # Git hooks export GIT_DIR, GIT_INDEX_FILE, GIT_WORK_TREE and similar to the hook process. The worker and
+    # the launcher must address their own repos only (-C <clone>), so drop those variables before any git call.
+    Get-ChildItem Env: | Where-Object { $_.Name -like 'GIT_*' } | ForEach-Object { Remove-Item -LiteralPath ("Env:" + $_.Name) -ErrorAction SilentlyContinue }
     if (-not $InstancesRoot) { $InstancesRoot = Get-GitConfigValue 'roslynsentinel.instancesRoot' }
     if (-not $InstancesRoot) { $InstancesRoot = $env:ROSLYNSENTINEL_INSTANCES_ROOT }
     if (-not $InstancesRoot) { exit 0 }
