@@ -1187,9 +1187,13 @@ public class LogicSimplificationEngine
         }
 
         var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
-        if (methodNode == null || methodNode.Body == null)
+        if (methodNode == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found or has no body in '{filePath}'.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Use GetFileOutline to list the methods in the file.", "method", methodName);
+        }
+        if (methodNode.Body == null)
+        {
+            throw new ToolTargetIneligibleException($"Method '{methodName}' in '{filePath}' has no block body (it is abstract, extern or expression-bodied).");
         }
 
         // Look for: 

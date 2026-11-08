@@ -136,9 +136,13 @@ public class AsyncOptimizationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodMatches = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>();
         var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
-        if (methodNode == null || methodNode.Body == null)
+        if (methodNode == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found or has no block body (expression-bodied methods are not supported).", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found. Use GetFileOutline to list the methods in the file.", "method", methodName);
+        }
+        if (methodNode.Body == null)
+        {
+            throw new ToolTargetIneligibleException($"Method '{methodName}' has no block body (expression-bodied methods are not supported).");
         }
 
         // This requires complex data flow analysis to ensure no dependencies between awaited tasks.
