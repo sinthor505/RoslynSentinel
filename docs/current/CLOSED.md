@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Tool-call hint static descriptions - resolved (2026-11-08)
+
+Tool-call hint static descriptions (2026-11-08) - add the required parameters to the ~5 `// hint-ok` `[Description]` mentions (ToolParams.cs ~19 and ~24 incl. the Build/RunTest descriptions, GitTools.cs ~82 `hunkIds`); the lean budget (32000 Advanced / 30500 Basic, ~28117 used) now has room; done = `ClaudeLeanSchemaBudgetTests` and `ToolHintRatchetTests` green - [doc](proposals/proposal_tool_hint_builder.md)
+
+Evidence: 88b369e8; ClaudeLeanSchemaBudgetTests + ToolHintRatchetTests green. ToolParams consts keep the hint-ok marker (reworded): the ratchet scans consts, which must stay const for [Description]; the GitTools marker was removed. Advanced budget raised to 32500 (premise of ~28117 used was stale: 31964 before, 32298 after).
+
 ## Battery leak guard sweep - resolved (2026-11-08)
 
 Battery leak guard sweep (2026-11-08) - add `WorkingDirectoryLeakGuard` + `[NonParallelizable]` to the remaining source-writing battery fixtures (about 20 Battery.Advanced files incl. Eleven/Twelve/Fourteen, TwentyFive to TwentyEight, ThirtyFive/ThirtySix; Tools.Basic BatteryTwenty has `[NonParallelizable]` but no guard) by implementer-sweep in slices; out of scope: the two on-disk RenameSymbol tests, optional Parts C/D and leaks outside Battery (issue doc); done = every source-writing battery file calls the guard and a full run leaves no leaked files - [doc](issues/issue_battery_tests_leak_files.md)
