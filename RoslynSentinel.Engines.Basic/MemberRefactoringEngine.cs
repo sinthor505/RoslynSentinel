@@ -506,7 +506,7 @@ public class MemberRefactoringEngine
 
                         // The assignment statement we're removing is itself a reference to the field ->
                         // don't let it count against "still used elsewhere".
-                        if (assignment != null && location.Document.FilePath == filePath && assignment.Span.Contains(location.Location.SourceSpan))
+                        if (assignment != null && string.Equals(location.Document.FilePath, filePath, PathComparison.Comparison) && assignment.Span.Contains(location.Location.SourceSpan))
                         {
                             continue;
                         }
@@ -3408,7 +3408,7 @@ public class MemberRefactoringEngine
             throw new ToolNotFoundException("Base class source file not found.");
         }
 
-        var baseDoc = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.FilePath == baseFile);
+        var baseDoc = DocumentLookup.FindDocumentOrNull(solution, baseFile);
         if (baseDoc == null)
         {
             throw new ToolNotFoundException($"Base class source document not found at '{baseFile}'.");

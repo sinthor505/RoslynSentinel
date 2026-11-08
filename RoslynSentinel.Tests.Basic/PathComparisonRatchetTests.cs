@@ -206,7 +206,6 @@ public class PathComparisonRatchetTests
     {
         // Kind a: ==/!= on a .FilePath/.Absolute string (pre-existing; phase 5b removes these).
         ["RoslynSentinel.Engines.Advanced/DeadCodeEngine.cs::a"] = 1,
-        ["RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs::a"] = 2,
         ["RoslynSentinel.Engines.Basic/ProjectStructureEngine.cs::a"] = 4,
         ["RoslynSentinel.Engines.Basic/SemanticReplaceEngine.cs::a"] = 5,
 
@@ -220,7 +219,6 @@ public class PathComparisonRatchetTests
         ["RoslynSentinel.Engines.Advanced/ControlFlowEngine.cs::c"] = 1,
         ["RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs::c"] = 2,
         ["RoslynSentinel.Engines.Basic/DiagnosticEngine.cs::c"] = 1,
-        ["RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs::c"] = 1,
         ["RoslynSentinel.Engines.Basic/NamedArgumentsEngine.cs::c"] = 1,
         ["RoslynSentinel.Engines.Basic/SemanticReplaceEngine.cs::c"] = 1,
         ["RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs::c"] = 1,

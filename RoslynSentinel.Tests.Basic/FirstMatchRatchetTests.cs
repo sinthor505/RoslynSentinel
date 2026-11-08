@@ -176,7 +176,7 @@ public class FirstMatchRatchetTests
         ["RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs::MoveAllTypesToFilesForDocumentAsync"] = 1,
         ["RoslynSentinel.Engines.Basic/CompilerErrorLookupHelper.cs::DescribeDuplicateDefinitionAsync"] = 1,
         ["RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs::GetConstructorParametersAsync"] = 1,
-        ["RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs::MoveMembersToBaseTypeAsync"] = 2,
+        ["RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs::MoveMembersToBaseTypeAsync"] = 1,
         ["RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs::RemoveConstructorParameterAsync"] = 3,
         ["RoslynSentinel.Engines.Basic/MsToolAugmentEngine.cs::EncapsulateFieldSafeAsync"] = 1,
         ["RoslynSentinel.Engines.Basic/MsToolAugmentEngine.cs::ExtractConstantSafeAsync"] = 1,
