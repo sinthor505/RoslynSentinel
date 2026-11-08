@@ -269,8 +269,7 @@ public record SentinelCallToolResult<TSuccess, TError> : IOperationResult, IFind
     /// Inline payload. A plain passthrough - this record does not decide on its own whether a
     /// value is "too large," since doing that here would need an async disk write inside a
     /// property accessor, which isn't possible. Callers that might produce an oversized payload
-    /// should use <see cref="SentinelCallToolResult{T}.ForPossiblyLargeDataAsync"/> instead of
-    /// setting this directly.
+    /// the result marshaller offloads oversized results centrally, so callers set this directly.
     /// </summary>
     public TSuccess? SuccessData
     {
@@ -415,16 +414,6 @@ public record SentinelCallToolResult<TSuccess, TError> : IOperationResult, IFind
 /// </summary>
 public record SentinelCallToolResult<T> : SentinelCallToolResult<T, ResultError>
 {
-    /// <summary>
-    /// Pass-through kept for migration only: returns a <see cref="SentinelCallToolResult{T}"/> carrying
-    /// <paramref name="data"/> as SuccessData. It never stores to disk; the result marshaller offloads oversized results centrally.
-    /// </summary>
-    [Obsolete("Return the payload; the result marshaller offloads")]
-    public static Task<SentinelCallToolResult<T>> ForPossiblyLargeDataAsync(
-        T data, string? solutionRoot, string resultType, ResultWrapperType wrapperType, int? totalRecords = null, int? workspaceVersion = null, string? statusMessage = null, ListSummary? listSummary = null, CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(new SentinelCallToolResult<T> { IsError = false, SuccessData = data, TotalRecords = totalRecords, WorkspaceVersion = workspaceVersion, StatusMessage = statusMessage, ListSummary = listSummary });
-    }
 }
 
 // ── ErrorData detail ─────────────────────────────────────────────────────────────
@@ -434,8 +423,7 @@ public record ResultError(
     string ErrorCode,
     string Message,
     string? Detail = null,
-    IReadOnlyList<object>? StructuredDetail = null,
-    LargeResultInfo? StructuredDetailLargeResult = null
+    IReadOnlyList<object>? StructuredDetail = null
 ) : IOperationError
 {
     /// <summary>The cause category, derived from <see cref="ErrorCode"/>. Not serialized.</summary>
@@ -445,18 +433,6 @@ public record ResultError(
     /// <summary>Non-fatal observations for this error. Lifted into <see cref="SentinelCallToolResult{TSuccess,TError}.Findings"/>, so it is never serialized inside errorData.</summary>
     [JsonIgnore]
     public IReadOnlyList<Finding>? Findings { get; init; }
-
-    /// <summary>
-    /// Pass-through kept for migration only: returns a <see cref="ResultError"/> carrying
-    /// <paramref name="structuredDetail"/> inline. It never stores to disk; the result marshaller offloads oversized results centrally.
-    /// </summary>
-    [Obsolete("Return the payload; the result marshaller offloads")]
-    public static Task<ResultError> ForPossiblyLargeDetailAsync(
-        string errorCode, string message, string? detail, IReadOnlyList<object>? structuredDetail,
-        string? solutionRoot, CancellationToken cancellationToken)
-    {
-        return Task.FromResult(new ResultError(errorCode, message, detail, structuredDetail));
-    }
 }
 
 // ── Large-result descriptor ───────────────────────────────────────────────────

@@ -11,14 +11,12 @@ public static class LargeResultHelper
     // private) - grepped for external references to LargeResultHelper.JsonOptions before this
     // change; none found outside this file.
     internal static readonly JsonSerializerOptions JsonOptions = SharedJsonOptions.Default;
-    [Obsolete("Use InlineBudgetChars")]
-    public const int OffloadThresholdBytes = InlineBudgetChars;
 
     /// <summary>
     /// The inline size budget in characters of the final wire text: the length the generic offload filter
     /// (<c>AddLargeResultOffloadFilter</c>) compares a response's text against, which is this constant
     /// read as a character count. Introduced by plan_wire_result_marshaller.md Step 4 as the one named chars constant;
-    /// It is the only size constant; OffloadThresholdBytes is obsolete and equals it. Who measures what: docs/current/references/reference_tool_response_pipeline.md.
+    /// It is the only size constant. Who measures what: docs/current/references/reference_tool_response_pipeline.md.
     /// </summary>
     public const int InlineBudgetChars = 15 * 1024;
 
@@ -51,41 +49,9 @@ public static class LargeResultHelper
     }
 
     /// <summary>
-    /// Serializes <paramref name="data"/> and, if it exceeds <see cref="InlineBudgetChars"/>, writes it
-    /// to <c>.roslynsentinel/largeresults/largeresult_<timestamp>_<resultId>.json</c> wrapped in a
-    /// <see cref="ResultWrapper"/> tagged with <paramref name="wrapperType"/> so <c>GetLargeResult</c> can
-    /// deserialize it back. Callers that skip this and hand-write their own file (as GetMethodSource/
-    /// ReadFile once did) produce a file GetLargeResult cannot read - always go through this method
-    /// instead of reimplementing the write.
-    /// </summary>
-    public static async Task<(bool offloaded, FilePathWrapper filePath, string? resultId, byte[] jsonBytes)> StoreLargeResultAsync<T>(
-        T data, string? solutionRoot, ResultWrapperType wrapperType, CancellationToken cancellationToken)
-    {
-        var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(data);
-        if (jsonBytes.Length <= InlineBudgetChars || string.IsNullOrEmpty(solutionRoot) || data == null)
-        {
-            return (false, default, null, jsonBytes);
-        }
-
-        var wrapper = new ResultWrapper
-        {
-            Type = wrapperType,
-            Data = JsonSerializer.SerializeToNode(data, JsonOptions)
-        };
-
-        var resultId = Guid.NewGuid().ToString("N");
-        var dir = Path.Combine(solutionRoot, ".roslynsentinel", "largeresults");
-        Directory.CreateDirectory(dir);
-        var timestamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
-        var filePathString = Path.Combine(dir, $"largeresult_{timestamp}_{resultId}.json");
-        await File.WriteAllTextAsync(filePathString, JsonSerializer.Serialize(wrapper, JsonOptions), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken);
-        return (true, new FilePathWrapper(filePathString, validated: true), resultId, jsonBytes);
-    }
-
-    /// <summary>
     /// Writes already-serialized JSON text verbatim to a <see cref="ResultWrapperType.Raw"/> file,
     /// for callers that only have a final serialized response body -> not a typed value -> such as the
-    /// generic MCP request-filter backstop. Unlike <see cref="StoreLargeResultAsync{T}"/>, this never
+    /// generic MCP request-filter backstop. Unlike the typed-value store, this never
     /// re-serializes: <paramref name="json"/> is parsed once into a <see cref="JsonNode"/> and wrapped
     /// as-is. Mirrors the same <c>.roslynsentinel/largeresults/largeresult_<timestamp>_<resultId>.json</c>
     /// naming convention so <c>GetLargeResult</c>'s existing file-resolution logic finds it unchanged.
