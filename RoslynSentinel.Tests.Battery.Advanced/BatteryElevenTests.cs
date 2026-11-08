@@ -12,17 +12,24 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("SyntaxModernizationEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class ImmutabilityEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task MakeClassImmutable_ClassWithMutableField_AddsReadonlyModifier()
     {
@@ -57,6 +64,8 @@ public class ImmutabilityEngineTests
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("ThreadSafetyEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class ThreadSafetyEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -64,12 +73,17 @@ public class ThreadSafetyEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = Basic.TestEngines.ThreadSafetyEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task MakeMethodThreadSafe_SimpleMethod_AddsLockStatement()
     {
@@ -106,6 +120,8 @@ public class ThreadSafetyEngineTests
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("AsyncAnalysisEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class AsyncSafetyEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -113,12 +129,17 @@ public class AsyncSafetyEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     private void SetSource(string source, string fileName = "Async.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -175,6 +196,8 @@ public class Worker
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("DeadCodeEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class DeadCodeEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -182,12 +205,17 @@ public class DeadCodeEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.DeadCodeEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task FindUnusedPrivateMembers_NeverCalledPrivateMethod_ReportsIt()
     {

@@ -13,6 +13,8 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // A. ValidationEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class ValidationEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -22,6 +24,7 @@ public class ValidationEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _diffEngine = Basic.TestEngines.DiffEngine();
         _engine = Basic.TestEngines.ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
@@ -32,7 +35,11 @@ public class ValidationEngineTests
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
 
     [Test]
     public async Task ValidateChanges_ValidNewContent_SucceedsWithNoErrors()
@@ -121,6 +128,8 @@ public class ValidationEngineTests
 [TestFixture]
 [Category("MetricsEngine")] // sentinel:auto-category
 [Category("SolutionMetrics")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class MetricsEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -129,12 +138,17 @@ public class MetricsEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.MetricsEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
 
     [Test]
     public async Task GetSolutionMetrics_SingleProjectWithClassAndTwoMethods_ReturnsCorrectCounts()
@@ -182,6 +196,8 @@ public class MetricsEngineTests
 [TestFixture]
 [Category("DiagnosticEngine")] // sentinel:auto-category
 [Category("DiagnosticSummary")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class DiagnosticEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -190,6 +206,7 @@ public class DiagnosticEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = Basic.TestEngines.DiagnosticEngine(_workspaceManager);
 
@@ -199,7 +216,11 @@ public class DiagnosticEngineTests
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
 
     [Test]
     public async Task GetFileDiagnostics_CleanFile_ReturnsZeroErrors()
@@ -233,6 +254,8 @@ public class DiagnosticEngineTests
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("SecurityEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class SecurityEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -241,12 +264,17 @@ public class SecurityEngineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.SecurityEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
 
     private void SetSource(string source, string fileName = "Sec.cs")
     {
