@@ -447,6 +447,12 @@ public static class SyntaxTargetResolver
             EnumDeclarationSyntax e => e.Identifier.Text,
             RecordDeclarationSyntax r => r.Identifier.Text,
             StructDeclarationSyntax s => s.Identifier.Text,
+            // Events and indexers have no Identifier-named member in the field/method sense: an accessor
+            // event names itself, a field-like event names its first variable, and an indexer has no
+            // identifier at all, so "this" (the keyword the caller writes) is used as its anchor name.
+            EventDeclarationSyntax ev => ev.Identifier.Text,
+            EventFieldDeclarationSyntax evf => evf.Declaration.Variables.FirstOrDefault()?.Identifier.Text,
+            IndexerDeclarationSyntax => "this",
             _ => null
         };
     }
