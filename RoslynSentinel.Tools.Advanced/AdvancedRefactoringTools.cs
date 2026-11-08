@@ -1090,7 +1090,7 @@ public class AdvancedRefactoringTools
                 var syncGuard = RefactoringToolHelpers.RequireUpdatedText(syncResult, "SyncInterface sync", resolvedFilePath, $"Verify the class and interface names (case-sensitive); use {ToolCallHint.Call("Search", ("mode", "symbol"))} to confirm both exist in the solution.");
                 if (syncGuard != null) return syncGuard;
                 // Cross-file sync: the engine returns the interface's text with the interface's path in FilePath.
-                var syncTargetFile = !string.IsNullOrEmpty(syncResult.FilePath) && !syncResult.FilePath.Equals(resolvedFilePath) ? syncResult.FilePath : resolvedFilePath;
+                var syncTargetFile = !string.IsNullOrEmpty(syncResult.FilePath) && !string.Equals(syncResult.FilePath, resolvedFilePath, PathComparison.Comparison) ? syncResult.FilePath : resolvedFilePath;
                 var syncChanges = new Dictionary<FilePathWrapper, string>
                 {
                     [syncTargetFile] = syncResult.UpdatedText

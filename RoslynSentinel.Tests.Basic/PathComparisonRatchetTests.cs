@@ -210,7 +210,6 @@ public class PathComparisonRatchetTests
         ["RoslynSentinel.Engines.Basic/SemanticReplaceEngine.cs::a"] = 4,
 
         // Kind b: comparer-less string.Equals / x.Equals(y) on a path string (pre-existing; phase 5b removes these).
-        ["RoslynSentinel.Tools.Advanced/AdvancedRefactoringTools.cs::b"] = 1,
 
         // Kind c: hand-rolled .Documents scans on .FilePath outside DocumentLookup (pre-existing; phase 5b removes these).
         ["RoslynSentinel.Common/PersistentWorkspaceManager.cs::c"] = 1,
