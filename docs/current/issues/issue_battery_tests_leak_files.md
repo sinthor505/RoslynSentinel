@@ -140,3 +140,7 @@ there). When this closes, move the TODO entry to `CLOSED.md`.
 ## See also
 
 - [proposal_battery_test_reorganisation_in_memory_and_shared_sources.md](../proposals/proposal_battery_test_reorganisation_in_memory_and_shared_sources.md) - the agreed approach to fix this leak (in-memory tier, WorkspaceAccess on the fake, topic classes).
+
+## Decisions (todo review 2026-11-08)
+
+- Remaining files: implementer-sweep adds `WorkingDirectoryLeakGuard` + `[NonParallelizable]` in slices (READY; not a shared base fixture). Why: mechanical, matches the 11 files already done. Check: every source-writing battery file calls the guard and a full run leaves no leaked files.

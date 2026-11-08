@@ -440,3 +440,7 @@ Step 0 results (2026-10-18):
   `MoveMemberTextEdits.ApplyChanges`, `DiffEngine.cs:105`, test helpers and server raw-string
   templates. Step 5's final-bytes guard catches them regardless; Step 8 should sweep them.
 - Concurrent sessions: other sessions' uncommitted `.cs` edits block Step 2 until committed.
+
+## Decisions (todo review 2026-11-08)
+
+- `NewlineLiteralRatchetTests` baseline: accepted as is, except `ContentHasher.ComputeHash` moves to `ExemptFiles` (READY). Why: the sites only shape returned preview text and the ratchet blocks growth; the hasher is a hash input, never output. Check: the test stays green with 25 keys.

@@ -163,3 +163,6 @@ started as of this pass.
 list; this entry exists so the backlog is discoverable from `TODO.md` without having to know the
 reference doc exists.
 
+## Decisions (todo review 2026-11-08)
+
+- Scope: type `WrapRange` `wrapper` and `ModifyEnum` `values` as enums, and rename `GetMigrationLedger`/`ResetMigrationLedger` to `GetAsyncMigrationState`/`ResetAsyncMigrationState` (READY). Why: "ledger" is overloaded (scoped operation ledger, edit attribution ledger); the new names say Asyncify. Introduce and bare Generate stay reference only. Check: the generated schema shows enum values; no old name remains in docs/generated or prompts.

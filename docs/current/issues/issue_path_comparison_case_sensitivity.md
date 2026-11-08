@@ -28,3 +28,7 @@ same comparer Roslyn's `GetDocumentIdsWithFilePath` uses on every OS) and applie
 `Distinct()`. `FilePathLock` was deliberately left alone: its platform-conditional comparer is a
 separate locking-semantics decision (two spellings of one file can take two different locks on a
 case-sensitive OS). Revisit whether it should use `PathComparison.Comparer` too.
+
+## Decisions (todo review 2026-11-08)
+
+- Scope: one slice for the 6 caller-supplied path sites (MemberRefactoringEngine ~509/~3406, ProjectStructureEngine ~91/~1147, SyntaxTargetResolver ~171, SemanticReplaceEngine ~620) plus the 2 comparer-less `Equals` sites (READY); the rest stays ratchet-guarded. Why: only sites comparing a caller path with a document path can miss on a case-only difference. Check: a differently cased path test per site passes and the `PathComparisonRatchetTests` baseline drops.

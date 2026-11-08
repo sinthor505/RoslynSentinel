@@ -129,3 +129,6 @@ ChangeSignature, RenameSymbol conflicts) do not use it.
 
 **Recommendation.** Do not extend to another tool yet. First add production resolution (a read of open entries plus a way to mark an entry fixed or release the ledger, with a named tool in the refusal text and a `RefusalCode`), because every new opener otherwise adds another block that only a restart clears. The next candidate is `ChangeSignature` (its skipped sites already carry per-site reasons, `BasicRefactoringEngine.cs` ~337/344/437): replace the all-or-nothing refusal (~476-502) with a partial apply plus pending rows, open the ledger in `ChangeSignatureTool` like `MoveMember` does, estimated 3 files plus a new test file. The proposal does not name a tool, so this is an owner decision (see `decisions_autonomous_run_2026-11-05.md`, Needs owner).
 
+## Decisions (todo review 2026-11-08)
+
+- Scoped ledger part (c), writes outside `ApplyProposedChangesAsync`: closed. Why: every solution C# write (WriteFile, DeleteFile, CreateFile, ReplaceSnippet, ApplyDiff, ApplyUnifiedDiff, UndoLastApply, FormatDocumentSafe) routes through it; the bypasses (MsToolAugmentEngine ~782 without a solution, DocumentationTools ~361/~458, ProjectStructureEngine ~1839) write files the ledger does not track. Part (a) stays open.

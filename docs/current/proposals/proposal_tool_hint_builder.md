@@ -178,3 +178,9 @@ each helper and has no way to catch a new hand-written hint. Not chosen; `ToolCa
 - `WriteToolAdviceHelper.IsExposed` (gating, kept separate).
 - `docs/current/proposals/proposal_reduce_tool_schema_token_cost.md` (schema budget that limits C6).
 - CLAUDE.md: "A tool param added to stop a known model failure is mandatory"; failure analysis doctrine.
+
+## Decisions (todo review 2026-11-08)
+
+- Static `// hint-ok` descriptions: add the required parameters now (READY). Why: the lean budget has room (32000/30500 caps vs ~28117 used). Check: `ClaudeLeanSchemaBudgetTests` and `ToolHintRatchetTests` green.
+- Verbatim `<why you call this>` paste: PARKED until the next model-eval round. Why: only an eval can measure it. Check: count verbatim placeholders in the eval logs.
+- `ToolCallHint.Validate` reporting lean-hidden names as unknown: closed, no change. Why: `Validate` is only called from tests (ToolHintRatchetTests ~244, AmbiguousNameTargetToolTests ~173/~206), so no runtime path hits it.

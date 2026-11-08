@@ -1,6 +1,6 @@
 # Redesign InlineMethod so it substitutes arguments, parenthesizes, and picks the right overload
 
-**Status:** PROPOSED 2026-10-19. Findings and open decisions only; no design chosen, awaiting a design session with the owner.
+**Status:** IMPLEMENTED (as targeted fixes, see CLOSED.md InlineMethod entries 2026-10-21/22); the remaining limits are pinned as refusals by the `BUG_InlineMethod_*` tests (todo review 2026-11-08). Originally PROPOSED 2026-10-19.
 
 ## Motivation
 

@@ -174,3 +174,7 @@ Policy: `references/reference_not_found_recovery_ladder.md`.
 - `plans/plan_error_codes_follow_cause.md`; memory `project_tool_error_code_taxonomy_proposal`.
 - `references/reference_not_found_recovery_ladder.md`; `plans/closed/plan_search_text_scan_all_projects_and_recovery_hints.md`.
 - `ideas/server_telemetry_idea.md` (would consume `status`); `scripts/Get-NotFoundRecoveryReport.ps1`.
+
+## Decisions (todo review 2026-11-08)
+
+- `AdvancedStructuralEngine.cs` ~1154 bare "Could not parse file.": name the path like its siblings, with an awaited `Assert.ThrowsAsync` test (READY).

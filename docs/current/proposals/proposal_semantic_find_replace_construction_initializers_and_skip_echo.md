@@ -132,3 +132,9 @@ skipped with the same semantics. Suggested slices:
 - [plan_tests_support_projects_factory_rollout.md](../plans/closed/plan_tests_support_projects_factory_rollout.md) (follow-ups 1, 2; Steps 4, 5b, 5e)
 - [plan_test_construction_factories_pilot.md](../plans/closed/plan_test_construction_factories_pilot.md) (first live use: 119 sites in one call, initializer skips noted)
 - `docs/current/TODO.md` P1 entry on `replaceConstruction` and object initializers
+
+## Decisions (todo review 2026-11-08)
+
+- The 15 `new PersistentWorkspaceManager(...)` test sites are swept by implementer hand edits (READY), not by `SemanticFindReplace`. Why: owner choice; the tool is gated behind `moveExtract` and the client tool list goes stale after a toggle (TODO.md first P1 entry). Check: Build green, no `new PersistentWorkspaceManager(` outside Common and the factory.
+- Storing the full skipped-site list and option 1b (`Action<T>` configure): PARKED. Why: no concrete usage needs them. Unpark: a sweep that skips more than the echo shows, or an initializer no factory parameter takes.
+- The full-build timeout flake (`-nodeReuse:false` trade-off) stays OPEN as its own TODO line.

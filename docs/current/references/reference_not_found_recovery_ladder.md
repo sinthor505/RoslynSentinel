@@ -66,3 +66,7 @@ verified it. Preferred shape:
   message in `Detail`; put ladder results in `Message` once, not in both.
 - Ladder passes must stay bounded (cap candidates, no regex relaxation) so a failure path never
   costs more than one extra scan.
+
+## Decisions (todo review 2026-11-08)
+
+- Unknown-value and failing-run messages get a per-site suffix (valid values or `ToolCallHint.Next`), not a shared helper (READY). Why: the shared-messages idea was closed as superseded by per-site `ToolCallHint`. Check: one test per site asserting the suffix.

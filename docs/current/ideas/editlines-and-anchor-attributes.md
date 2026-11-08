@@ -66,3 +66,7 @@ not how to spell its contents).
    targeted).
 3. Only design anchor attributes if a distinct "can't locate the block"
    failure mode shows up that `EditLines` doesn't fix.
+
+## Decisions (todo review 2026-11-08)
+
+- PARKED in TODO.md (was a memory-only PARKED entry). Unpark when a model-eval run shows ApplyDiff is still a bottleneck.

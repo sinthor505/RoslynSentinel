@@ -594,3 +594,6 @@ Found in C5c-3. ExtractInterfaceAsync (BasicRefactoringEngine) AddBaseListTypes 
 
 AdvancedStructuralEngine ~:1457 (ConvertExpressionBodyAsync): whole-document Formatter.FormatAsync after ReplaceNode(target, NormalizeWholeSubtreeWhitespace(newTarget)); annotate the new target and route via FormatAnnotatedSpansAsync, and decide the NormalizeWholeSubtreeWhitespace call under C6. SemanticRefactoringEngine ~:168 is the near-dead InlineVariableAsync all-replacements-failed fallback; mechanical swap is FormatWholeDocumentAsync(document.WithSyntaxRoot(modifiedRoot), originalText) but no characterization test is possible. UseFieldBackedProperties keeps a blank line after the opening brace when the backing field is removed (pinned as-is).
 
+## Decisions (todo review 2026-11-08)
+
+- The TODO omnibus line is closed (Asyncify sites fixed in a98f89f7, InlineMethod gaps pinned as fixed or refused); the "not started" defects in this proposal get one TODO line of their own (OPEN) instead of one line per defect. Why: keeps the backlog visible without re-verifying each defect now.

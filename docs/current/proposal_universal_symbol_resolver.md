@@ -412,3 +412,7 @@ separate opt-in semantic layer, and a staged obsolete-then-sweep migration foldi
 dispatch-table unification (this section's original scope) as part of the same pass. Not started; a
 multi-session refactor, not a quick patch.
 
+## Decisions (todo review 2026-11-08)
+
+- `GetMemberName` Event/Indexer gap (SyntaxTargetResolver.cs ~430): READY. Check: an awaited test that event and indexer targets resolve or return an actionable error.
+- Section 6 dispatch-table unification: PARKED until a bug stems from the tables diverging.

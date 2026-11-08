@@ -230,3 +230,7 @@ Done via Haiku 5.5 implementer (A1, A2, A3, cap fix) and test-writer. Defects 2-
 - Follow-ups closed 2026-10-15: RequireUpdatedText takes an optional `recoveryHint`, and the three enum branches pass the "Retry using ModifyEnum(...)" hint; ReplaceMemberAsync returns AlreadyInTargetState when the formatted replacement equals the file text, so the non-enum early return in Member is reachable; MemberOutcomeFollowsCauseTests gained 3 tests (enum hint, identical non-enum replace, addMember-after unparsable source), 7 total. Full suite 4472 tests, 0 failures.
 - Remaining leftover: the Member/UsingDirective tool wrappers do not expose autoStage, so the autoStage:false cases are reachable only through the Impl classes (answers the "Unchecked" item above).
 - Full suite 2026-10-15: 4469 tests, 1 failure (T5_GetLargeResult_ReadsFile_PagingWorks_TotalRecordsMatchesT4 NullReferenceException, pre-existing, see plan_scoped_operation_ledger.md).
+
+## Decisions (todo review 2026-11-08)
+
+- Step 4 leftovers: fix the 4 tool-layer codes (DeleteFile ~133 and RetryFailedChanges ~376 to NotFound, InlineClass ~319 to NotFound, SyncTypeAndFilename ~1447 to TargetIneligible) and also split the 4 conflated engine "not found or" messages (READY). Why: the owner wants Step 4 finished rather than recorded as known. Check: one test per code; no "not found or" text left.

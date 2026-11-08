@@ -44,3 +44,9 @@ write, and can be resolved by a follow-up `callSiteFixups`-carrying retry. Audit
 (`UnresolvedCallSites`) before `TryOpen` runs, and keep modes produce no ledger rows. Owner decision:
 should the compile gate allow an apply whose unfixed sites are tracked by the scoped operation ledger,
 or should the `TryOpen` path be removed?
+
+## Decisions (todo review 2026-11-08)
+
+- `LineChanges` adoption: READY as an `AppliedChangeSummary.From(ApplyOutcome, ...)` factory (also fills `Findings`) and a migration of the 53 sites in slices. Why: dry-run `lineChanges` is null at those sites although the Note promises it. Check: no production site constructs the record without `LineChanges`; a dry-run test per tool family shows non-null `lineChanges`.
+- Qualify-receivers pass and alias-using duplicates: stay OPEN, need design.
+- Closed: copy-all-usings (behaviour, not a defect), wrapped call sites (done), global-using duplicates (harmless), D2/Q1/Q2a test-seam nits (low value).
