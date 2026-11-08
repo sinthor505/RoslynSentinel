@@ -13,6 +13,8 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("LogicSimplificationEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class AdvancedLogicEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -20,12 +22,17 @@ public class AdvancedLogicEngineGapTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task ConvertIfToSwitchStatementAsync_ValidMethod_ReturnsNonNull()
     {
@@ -105,6 +112,8 @@ public class Looper {
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("AntiPatternEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class AnalysisEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -112,12 +121,17 @@ public class AnalysisEngineGapTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _antiPatternEngine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task FindInterfaceExtractionCandidatesAsync_SmallClass_ReturnsNonNull()
     {
@@ -252,6 +266,8 @@ namespace Outer.Inner { public interface IBar { void Run(); } }
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("AntiPatternEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class AntiPatternEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -259,12 +275,17 @@ public class AntiPatternEngineGapTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task FindMutablePublicPropertiesAsync_ClassWithMutableProp_ReturnsNonNull()
     {
@@ -332,6 +353,8 @@ public class Service {
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("CodeHealingEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class CodeHealingEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -339,12 +362,17 @@ public class CodeHealingEngineGapTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.CodeHealingEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task AddRetryPolicyAsync_AnyInput_ReturnsNonNull()
     {
@@ -361,6 +389,8 @@ public class CodeHealingEngineGapTests
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("CodeStyleEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class CodeStyleEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -368,12 +398,17 @@ public class CodeStyleEngineGapTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.CodeStyleEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task UseIndexFromEndAsync_FileWithArrayAccess_ReturnsNonNull()
     {
@@ -405,6 +440,8 @@ public class Slicer {
 [TestFixture]
 [Category("ControlFlowEngine")] // sentinel:auto-category
 [Category("DataFlowAnalysisResult")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class ControlFlowEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -412,12 +449,17 @@ public class ControlFlowEngineGapTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.ControlFlowEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task AnalyzeMethodDataFlowAsync_SimpleMethod_ReturnsResult()
     {
@@ -451,6 +493,8 @@ public class Calculator {
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("DeadCodeEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class DeadCodeEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -458,12 +502,17 @@ public class DeadCodeEngineGapTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.DeadCodeEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task DetectUnusedLocalVariablesAsync_MethodWithUnusedVar_ReturnsNonNull()
     {
@@ -497,17 +546,24 @@ public class Calc {
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("DependencyEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class DependencyEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task CheckPackageInconsistencyAsync_InMemorySolution_ReturnsNonNull()
     {
@@ -539,6 +595,8 @@ public class DependencyEngineGapTests
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("DependencyInjectionEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class DependencyInjectionEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -546,12 +604,17 @@ public class DependencyInjectionEngineGapTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.DependencyInjectionEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task AddDependencyAsync_ClassWithNoConstructor_ReturnsNonNull()
     {
@@ -588,17 +651,24 @@ public class DependencyInjectionEngineGapTests
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("StructuralRefactoringEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class GranularRefactoringEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task RunMicroRefactoringAsync_ValidFile_ReturnsAlreadyInTargetStateForNoOp()
     {
@@ -689,6 +759,8 @@ public class Outer {
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("PerformanceEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class PerformanceEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -696,12 +768,17 @@ public class PerformanceEngineGapTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.PerformanceEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task OptimizeResourceDisposalAsync_FileWithNoDisposable_ReturnsNonNull()
     {
@@ -717,6 +794,8 @@ public class PerformanceEngineGapTests
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("BasicRefactoringEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class RefactoringEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -724,12 +803,17 @@ public class RefactoringEngineGapTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _basicRefactoringEngine = Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
 
     [Test]
     public async Task ConvertIndexerToMethodAsync_SimpleIndexer_ReturnsNonNull()
@@ -856,6 +940,8 @@ public class Service {
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("SymbolNavigationEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class SymbolNavigationEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -863,12 +949,17 @@ public class SymbolNavigationEngineGapTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     [Category("SymbolHoverInfo")] // sentinel:auto-category
     public async Task GetSymbolInfoAsync_KnownMethodSnippet_ReturnsNonNull()
@@ -1011,6 +1102,8 @@ public static class StringExtensions {
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class SyntaxUpgradeEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -1018,12 +1111,17 @@ public class SyntaxUpgradeEngineGapTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = Basic.TestEngines.SyntaxUpgradeEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
     [Test]
     public async Task ConvertSwitchExpressionToStatementAsync_FileWithSwitchExpr_ThrowsNotImplemented()
     {
