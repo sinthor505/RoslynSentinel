@@ -2286,9 +2286,14 @@ public class MemberRefactoringEngine
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? [], "Method", methodName);
-        if (method == null || !method.ParameterList.Parameters.Any())
+        if (method == null)
         {
-            throw new ToolNotFoundException("Method not found or has no parameters.", "method", methodName);
+            throw new ToolNotFoundException("Method '" + methodName + "' not found. Use GetFileOutline to list the methods in the file.", "method", methodName);
+        }
+
+        if (!method.ParameterList.Parameters.Any())
+        {
+            throw new ToolTargetIneligibleException("Method '" + methodName + "' has no parameters, so there is nothing to make a params array.");
         }
 
         var lastParam = method.ParameterList.Parameters.Last();

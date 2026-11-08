@@ -30,9 +30,14 @@ public class ThreadSafetyEngine
         }
 
         var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
-        if (method == null || method.Body == null)
+        if (method == null)
         {
-            throw new ToolNotFoundException("Method '" + methodName + "' not found or has no body.", "method", methodName);
+            throw new ToolNotFoundException("Method '" + methodName + "' not found. Use GetFileOutline to list the methods in the file.", "method", methodName);
+        }
+
+        if (method.Body == null)
+        {
+            throw new ToolTargetIneligibleException("Method '" + methodName + "' has no block body (it is abstract, extern or expression-bodied).");
         }
 
         var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
