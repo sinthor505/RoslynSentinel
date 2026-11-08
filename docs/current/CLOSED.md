@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Tool terminology: enums and migration-state rename - resolved (2026-11-08)
+
+Tool terminology: enums and migration-state rename (2026-11-08) - type `WrapRange` `wrapper` and `ModifyEnum` `values` as enums, and rename `GetMigrationLedger`/`ResetMigrationLedger` to `GetAsyncMigrationState`/`ResetAsyncMigrationState` (descriptions, prompts, docs and generated tables follow); the rest of the backlog (Introduce, bare Generate) stays reference only; done = the generated schema shows the enum values and no old tool name remains in docs/generated or prompts - [doc](tool-terminology-refinement-reference-v1.md)
+
+Evidence: 9fe3f2d3 (WrapRange wrapper enum), 5bb484f2 (ModifyEnum values description per owner amended ruling; GetAsyncMigrationState/ResetAsyncMigrationState rename; docs/generated regenerated); Tests.Server 694 passed 0 failed, WrapRange/BlobIntegrity 23 passed, Tests.Asyncify 123 passed. Not done by design: ModifyEnum values stays a string.
+
 ## Tool-call hint static descriptions - resolved (2026-11-08)
 
 Tool-call hint static descriptions (2026-11-08) - add the required parameters to the ~5 `// hint-ok` `[Description]` mentions (ToolParams.cs ~19 and ~24 incl. the Build/RunTest descriptions, GitTools.cs ~82 `hunkIds`); the lean budget (32000 Advanced / 30500 Basic, ~28117 used) now has room; done = `ClaudeLeanSchemaBudgetTests` and `ToolHintRatchetTests` green - [doc](proposals/proposal_tool_hint_builder.md)
