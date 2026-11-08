@@ -209,7 +209,6 @@ public class PathComparisonRatchetTests
         ["RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs::a"] = 2,
         ["RoslynSentinel.Engines.Basic/ProjectStructureEngine.cs::a"] = 4,
         ["RoslynSentinel.Engines.Basic/SemanticReplaceEngine.cs::a"] = 5,
-        ["RoslynSentinel.Engines.Basic/SyntaxTargetResolver.cs::a"] = 1,
 
         // Kind b: comparer-less string.Equals / x.Equals(y) on a path string (pre-existing; phase 5b removes these).
         ["RoslynSentinel.Engines.Basic/NamedArgumentsEngine.cs::b"] = 1,

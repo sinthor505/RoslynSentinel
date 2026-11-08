@@ -168,7 +168,7 @@ public static class SyntaxTargetResolver
                     break;
                 }
 
-                if (document.FilePath != null && document.FilePath == localPath)
+                if (document.FilePath != null && string.Equals(document.FilePath, localPath, PathComparison.Comparison))
                 {
                     continue;
                 }
