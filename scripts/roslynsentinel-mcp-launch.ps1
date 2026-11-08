@@ -652,24 +652,33 @@ function Write-LaunchOutcome {
     }
 }
 
-# --- choose the build: fast path, slow path, or last-good fallback ---
+# --- choose the build: fast path, reuse path, slow path, or last-good fallback ---
 $selectedBuildDir = $null
 $usedFallback = $false
+$selection = $null
 $script:lastBuildFailureText = $null
 if ($sha) {
     $shaDir = Join-Path $buildsRoot $sha.Substring(0, 8)
     if (Test-Path -LiteralPath (Join-Path $shaDir 'complete')) {
         $selectedBuildDir = $shaDir
+        $selection = 'fast'
         Write-LaunchLog "Fast path: builds\$($sha.Substring(0, 8)) is complete; skipping build."
+    }
+    elseif ($reusable = Find-ReusableBuild -BuildsRoot $buildsRoot -SourceDir $sourceDir -HeadSha $sha -PrefixFile (Join-Path $PSScriptRoot 'server-source-paths.txt') -Log { param($m) Write-LaunchLog $m }) {
+        $selectedBuildDir = $reusable.Directory.FullName
+        $selection = 'reuse'
+        Write-LaunchLog "Reuse path: builds\$($reusable.Directory.Name) serves HEAD $($sha.Substring(0, 8)) (no server-source changes in $($reusable.ChangedPathCount) changed paths since)"
     }
     elseif (Invoke-ProdBuild -Sha $sha) {
         $selectedBuildDir = $shaDir
+        $selection = 'built'
     }
 }
 if (-not $selectedBuildDir) {
     $newest = Get-NewestCompleteBuild -BuildsRoot $buildsRoot
     if ($newest) {
         $selectedBuildDir = $newest.FullName
+        $selection = 'fallback'
         $usedFallback = $true
         $warning = "WARNING: could not produce a build for the current source HEAD (sha=$sha); falling back to the newest complete build $($newest.Name). This server is OLDER than the source; see the lines above for the reason."
         Write-LaunchLog $warning
@@ -685,6 +694,10 @@ if (-not $selectedBuildDir) {
 }
 $attemptedShaShort = if ($sha) { $sha.Substring(0, 8) } else { '' }
 Write-LaunchOutcome -BuildFailed:$usedFallback -AttemptedSha $attemptedShaShort -ServedDir $selectedBuildDir
+try {
+    Write-LatestBuildRecord -BuildsRoot $buildsRoot -HeadSha $sha -BuildDir $selectedBuildDir -Selection $selection -BuildFailed $usedFallback -Log { param($m) Write-LaunchLog $m }
+}
+catch { Write-LaunchLog "Latest build record not written: $($_.Exception.Message)" }
 $exePath = Join-Path $selectedBuildDir 'Advanced\RoslynSentinel.Server.Advanced.exe'
 # Stamp the build as in use so another window's sweep (age is measured from this stamp) cannot remove it
 # between now and the server process starting.

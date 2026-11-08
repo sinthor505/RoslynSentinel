@@ -313,3 +313,130 @@ function Sync-RoslynSentinelSource {
     Write-SyncLog "Source: HEAD is $sha (pullOk=$pullOk, cloned=$cloned)."
     return [pscustomobject]@{ Sha = $sha; PullOk = $pullOk; PullError = $pullError; Cloned = $cloned }
 }
+
+# Finds the newest complete build that can serve HEAD without a rebuild: its sha is an ancestor of HeadSha and
+# no commit between the two touches a server-source path (one repo-relative prefix per line in PrefixFile,
+# matched with ordinal StartsWith against git's forward-slash paths). Looks at the MaxCandidates newest complete
+# builds. Returns [pscustomobject]@{ Directory; BuildSha; ChangedPathCount } or $null.
+# Never throws and writes nothing to stdout (the stdio transport owns it); $Log takes one message string.
+function Find-ReusableBuild {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$BuildsRoot,
+        [Parameter(Mandatory)][string]$SourceDir,
+        [Parameter(Mandatory)][string]$HeadSha,
+        [Parameter(Mandatory)][string]$PrefixFile,
+        [scriptblock]$Log,
+        [int]$MaxCandidates = 5
+    )
+
+    function Write-ReuseLog([string]$Message) {
+        if ($Log) { try { & $Log $Message } catch { } }
+    }
+
+    try {
+        if (-not (Test-Path -LiteralPath $PrefixFile -PathType Leaf)) {
+            Write-ReuseLog "Reuse: no server-source rule file at '$PrefixFile'; not reusing a build."
+            return $null
+        }
+        $prefixes = @(Get-Content -LiteralPath $PrefixFile |
+            ForEach-Object { "$_".Trim() } |
+            Where-Object { $_ -ne '' -and -not $_.StartsWith('#') })
+        if ($prefixes.Count -eq 0) {
+            Write-ReuseLog "Reuse: '$PrefixFile' lists no server-source prefixes; not reusing a build."
+            return $null
+        }
+        if (-not (Test-Path -LiteralPath $BuildsRoot)) { return $null }
+
+        $candidates = @(Get-ChildItem -LiteralPath $BuildsRoot -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^[0-9a-f]{8,40}$' -and (Test-Path -LiteralPath (Join-Path $_.FullName 'complete')) } |
+            Sort-Object { (Get-Item -LiteralPath (Join-Path $_.FullName 'complete')).LastWriteTime } -Descending |
+            Select-Object -First $MaxCandidates)
+
+        foreach ($dir in $candidates) {
+            # The marker's first line is "sha=<full sha> builtBy=..."; fall back to the folder name.
+            $candSha = $dir.Name
+            $firstLine = @(Get-Content -LiteralPath (Join-Path $dir.FullName 'complete') -TotalCount 1)
+            if ($firstLine.Count -gt 0) {
+                $m = [regex]::Match("$($firstLine[0])", 'sha=([0-9a-fA-F]{8,40})')
+                if ($m.Success) { $candSha = $m.Groups[1].Value.ToLowerInvariant() }
+            }
+            if ($HeadSha.StartsWith($candSha, [StringComparison]::OrdinalIgnoreCase)) { continue }
+
+            $anc = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $SourceDir, 'merge-base', '--is-ancestor', $candSha, $HeadSha)
+            if ($anc.ExitCode -ne 0) {
+                Write-ReuseLog "Reuse: builds\$($dir.Name) (sha $candSha) is not an ancestor of HEAD; skipping it."
+                continue
+            }
+
+            $diff = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $SourceDir, 'diff', '--name-only', $candSha, $HeadSha)
+            if ($diff.ExitCode -ne 0) {
+                Write-ReuseLog "Reuse: git diff for builds\$($dir.Name) failed (exit $($diff.ExitCode)); skipping it."
+                continue
+            }
+            $paths = @($diff.Output -split '\r?\n' | Where-Object { $_ -ne '' })
+
+            $stale = $null
+            foreach ($p in $paths) {
+                foreach ($prefix in $prefixes) {
+                    if ($p.StartsWith($prefix, [StringComparison]::Ordinal)) { $stale = $p; break }
+                }
+                if ($stale) { break }
+            }
+            if ($stale) {
+                Write-ReuseLog "Reuse: builds\$($dir.Name) is stale; '$stale' changed since $candSha."
+                continue
+            }
+
+            return [pscustomobject]@{ Directory = $dir; BuildSha = $candSha; ChangedPathCount = $paths.Count }
+        }
+        return $null
+    }
+    catch {
+        Write-ReuseLog "Reuse: could not check existing builds ($($_.Exception.Message)); building instead."
+        return $null
+    }
+}
+
+# Writes builds\latest.json (headSha, buildSha8, selection, buildFailed, utc) atomically: a temp file in the same
+# folder, then Move-Item -Force over latest.json. Selection is one of fast, reuse, built, fallback. Never throws;
+# a failure is logged through $Log. Written as ASCII (valid UTF-8 without BOM).
+function Write-LatestBuildRecord {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$BuildsRoot,
+        [string]$HeadSha,
+        [Parameter(Mandatory)][string]$BuildDir,
+        [Parameter(Mandatory)][string]$Selection,
+        [bool]$BuildFailed,
+        [scriptblock]$Log
+    )
+
+    function Write-LatestLog([string]$Message) {
+        if ($Log) { try { & $Log $Message } catch { } }
+    }
+
+    $tmp = $null
+    try {
+        $record = [pscustomobject]@{
+            headSha     = $HeadSha
+            buildSha8   = (Split-Path -Leaf $BuildDir)
+            selection   = $Selection
+            buildFailed = $BuildFailed
+            utc         = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+        }
+        $json = ConvertTo-Json -InputObject $record
+        New-Item -ItemType Directory -Path $BuildsRoot -Force | Out-Null
+        $latest = Join-Path $BuildsRoot 'latest.json'
+        $tmp = Join-Path $BuildsRoot ("latest.json.{0}.tmp" -f (New-RoslynSentinelToken))
+        [System.IO.File]::WriteAllText($tmp, $json, (New-Object System.Text.UTF8Encoding($false)))
+        Move-Item -LiteralPath $tmp -Destination $latest -Force
+        $tmp = $null
+    }
+    catch {
+        Write-LatestLog "Latest build record not written: $($_.Exception.Message)"
+    }
+    finally {
+        if ($tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+    }
+}
