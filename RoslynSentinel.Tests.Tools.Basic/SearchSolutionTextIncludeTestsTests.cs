@@ -44,10 +44,7 @@ public class SearchSolutionTextIncludeTestsTests
 
         // SolutionPath supplies the solution root; without it FilePathWrapper.Relative is empty and
         // a '/'-containing fileGlob (matched against the solution-relative path) matches nothing.
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance)
-        {
-            SolutionPath = Path.Combine(_dir, "Test.slnx")
-        };
+        _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance, solutionPath: Path.Combine(_dir, "Test.slnx"));
         _impl = TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance);
 
         var testsDocPath = Path.Combine(_dir, "TestsProj", "UnitTest1.cs");

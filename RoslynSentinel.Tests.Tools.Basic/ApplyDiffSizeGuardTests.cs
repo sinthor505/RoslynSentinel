@@ -115,7 +115,7 @@ public class ApplyDiffSizeGuardTests
     public async Task ApplyDiffWithConfirmationCode_ConfirmationCodeFromRejectedApply_AppliesOriginalChangesetAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -147,7 +147,7 @@ public class ApplyDiffSizeGuardTests
     public async Task ApplyDiffWithConfirmationCode_ConfirmationCodeUnrecognized_ReturnsInvalidArgumentAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -163,7 +163,7 @@ public class ApplyDiffSizeGuardTests
     public async Task ApplyDiffWithConfirmationCode_ConfirmationCodeMissing_ReturnsInvalidArgumentAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
@@ -177,7 +177,7 @@ public class ApplyDiffSizeGuardTests
     public async Task ApplyDiffWithConfirmationCode_ConfirmationCodeIsSingleUse_SecondReplayFailsAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 

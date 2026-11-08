@@ -68,7 +68,7 @@ public class SearchModeTests
     {
         var fixture = new TestSolutionFixture();
 
-        using (var seedWorkspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance) { SolutionPath = fixture.SolutionPath })
+        using (var seedWorkspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance, solutionPath: fixture.SolutionPath))
         {
             await fixture.AddFileToSolution(seedWorkspaceManager, ProbeFile, ProbeSource, reloadSolution: false);
             await fixture.AddFileToSolution(seedWorkspaceManager, TestProjectFile, TestProjectSource, reloadSolution: false);

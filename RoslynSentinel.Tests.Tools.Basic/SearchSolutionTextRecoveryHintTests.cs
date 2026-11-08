@@ -49,10 +49,7 @@ public class SearchSolutionTextRecoveryHintTests
         Directory.CreateDirectory(_dir);
 
         // SolutionPath supplies the solution root so '/'-containing globs match solution-relative paths.
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance)
-        {
-            SolutionPath = Path.Combine(_dir, "Test.slnx")
-        };
+        _workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance, solutionPath: Path.Combine(_dir, "Test.slnx"));
         _impl = TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance);
 
         var solution = TestSolutionBuilder.CreateEmptySolution();
