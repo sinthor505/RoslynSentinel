@@ -44,7 +44,7 @@ public class LedgerEntry
     public List<LedgerOperation> Operations { get; set; } = new();
 }
 
-/// <summary>Filtered view returned by <c>GetMigrationLedger</c>.</summary>
+/// <summary>Filtered view returned by <c>GetAsyncMigrationState</c>.</summary>
 public class LedgerSnapshot
 {
     public int RunCount

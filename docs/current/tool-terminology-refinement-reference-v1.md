@@ -48,7 +48,7 @@ No action needed on these.
 | Name | Why weak | Suggested alternative |
 |---|---|---|
 | `GetBreakerStatus` / `ResetBreaker` | "Circuit breaker" is trained primarily as a distributed-systems/resilience term (Polly, Hystrix). Here it gates the server's own mutating-tool safety lock after repeated failures — an agent may not connect "breaker" to "why did my edit get refused." | `GetToolSafetyStatus` / `ResetToolSafetyLock` |
-| `GetMigrationLedger` / `ResetMigrationLedger` | "Ledger" evokes accounting/bookkeeping. Actual meaning: a persisted per-run history of touched methods during async migration. | `GetMigrationHistory` / `ClearMigrationHistory` |
+| `GetAsyncMigrationState` / `ResetAsyncMigrationState` (renamed 2026-11-08 from the former Migration Ledger tools) | "Ledger" evokes accounting/bookkeeping and is overloaded (scoped operation ledger, edit attribution ledger). Actual meaning: a persisted per-run history of touched methods during async migration. | done: the new names say Asyncify; `GetMigrationHistory` / `ClearMigrationHistory` was the earlier suggestion |
 | `ClearExternalDrift` | "Drift" is an infrastructure-as-code term (Terraform state drift). Its sibling `ListExternalDiskChanges` uses a plain, concrete phrase for the same underlying concept (files changed on disk outside the tool's own writes) — the pair uses two different metaphors for one concept, which is more inconsistent than either term alone being weak. Already renamed once (see plan-tool-rename-v1.md); flagging again because the inconsistency, not the term itself, is the issue. | `AcknowledgeExternalDiskChanges` — matches its sibling's vocabulary |
 | `BridgeAsyncMethods` / `UpliftCallers` | Invented jargon specific to this codebase's async-migration workflow ("bridge" = sync wrapper delegating to new async method; "uplift" = rewrite callers to call the async method directly). Not guessable without reading the whole Asyncify workflow description. | `CreateAsyncBridgeWrapper` / `RewriteCallersToAsync` |
 | `Apply*Codemod` family (`ApplyFileCodemod`, `ApplyMethodCodemod`, `ApplyClassCodemod`) | "Codemod" is a real term but rooted in the JS/jscodeshift ecosystem — weaker prior for a C#-trained agent than "transform" or "refactor." Compounding issue: the `transform` parameter is an untyped string whose valid values live only in prose / behind `DescribeAdvancedToolOptions`, not in the schema. | Naming is secondary here; the higher-value fix is making `transform` a real enum (see Systemic Issue below) |
@@ -152,7 +152,7 @@ across all dispatcher tools, rather than leaving the agent to discover the patte
 
 **Found:** 2026-08-24, while auditing `docs/tool-terminology-refinement-reference-v1.md` (kept in
 `docs/current/`) for the docs reorganization pass. That reference catalogs weak/ambiguous tool and
-parameter names (`GetBreakerStatus`, `GetMigrationLedger`, `ClearExternalDrift` vs. its sibling
+parameter names (`GetBreakerStatus`, the former `GetMigrationLedger` (now `GetAsyncMigrationState`), `ClearExternalDrift` vs. its sibling
 list tool's inconsistent metaphor (both since merged into `ExternalFileDrift`), the `Apply*Codemod`/`Generate`/`Introduce`/`Inline`
 untyped-string-discriminator family) and recommends, in order: (1) convert small/stable discriminator
 params to real enums; (2) standardize the "call `DescribeAdvancedToolOptions` first" wording across all

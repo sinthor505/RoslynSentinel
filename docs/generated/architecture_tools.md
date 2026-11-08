@@ -25,10 +25,10 @@
 | AsyncifyTools | EventHandlersToAsync | Asyncify | - | Converts all [MigrationCandidate("HandlerToAsyncCandidate")]-flagged methods to the Asyncify-bridge pattern (sync... |
 | AsyncifyTools | ExtractEventHandlers | Asyncify | - | Extracts a nominated code block from inside a method into a new private method, using semantic analysis to produce... |
 | AsyncifyTools | GetAsyncMigrationProgress | Asyncify | - | Returns async migration progress statistics: CancellationToken coverage, pending Asyncify-bridge call sites, and... |
-| AsyncifyTools | GetMigrationLedger | Asyncify | - | Returns the persisted migration ledger: a cross-run record of every method touched by a migration phase and every... |
+| AsyncifyTools | GetAsyncMigrationState | Asyncify | - | Returns the persisted async migration state: a cross-run record of every method touched by a migration phase and... |
 | AsyncifyTools | GetMutationBreakerStatus | Asyncify | - | Returns the current batch-mutation circuit breaker state: severity (ok/caution/halt), trip-condition counters, and... |
 | AsyncifyTools | PropagateCancellationToken | Asyncify | - | Step 4 of the bridge workflow: threads CancellationToken through async call chains in the specified files. |
-| AsyncifyTools | ResetMigrationLedger | Asyncify | - | Clears all entries from the migration ledger and writes the empty state to disk. |
+| AsyncifyTools | ResetAsyncMigrationState | Asyncify | - | Clears all entries from the async migration state and writes the empty state to disk. |
 | AsyncifyTools | ResetMutationBreaker | Asyncify | - | Resets the batch-mutation circuit breaker and all failure counters, re-enabling Asyncify/BulkComment-style batch... |
 | AsyncifyTools | ScanAsyncMigrationCandidates | Asyncify | - | Step 1 of the bridge workflow: flags qualifying methods with [MigrationCandidate] attributes, then reports the results. |
 | AsyncifyTools | UpliftCallers | Asyncify | - | Step 3 of the bridge workflow: updates sync callers of each bridge wrapper to call the async overload directly. |

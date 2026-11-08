@@ -1264,11 +1264,11 @@ public class AsyncifyTools
         };
     }
 
-    // ── Migration ledger query tools ──────────────────────────────────────────
+    // ── Async migration state query tools ──────────────────────────────────────────
 
-    [McpServerTool(Name = "GetMigrationLedger")]
-    [Description("Returns the persisted migration ledger: a cross-run record of every method touched by a migration phase and every idempotency/stale-flag skip. Survives server restarts and accumulates across sessions.")]
-    public SentinelCallToolResult<LedgerSnapshot> GetAsyncMigrationLedgerTool(
+    [McpServerTool(Name = "GetAsyncMigrationState")]
+    [Description("Returns the persisted async migration state: a cross-run record of every method touched by a migration phase and every idempotency/stale-flag skip. Survives server restarts and accumulates across sessions.")]
+    public SentinelCallToolResult<LedgerSnapshot> GetAsyncMigrationStateTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Filters to entries with at least one operation for this phase: Bridge, BridgeStaleSkip, Uplift, UpliftIdempotentSkip, or CtPropagated. Omit to return all entries.")]
         string? phase = null,
@@ -1282,13 +1282,13 @@ public class AsyncifyTools
         };
     }
 
-    [McpServerTool(Name = "ResetMigrationLedger")]
+    [McpServerTool(Name = "ResetAsyncMigrationState")]
     [Description("""
-        Clears all entries from the migration ledger and writes the empty state to disk.
+        Clears all entries from the async migration state and writes the empty state to disk.
         Use before starting a fresh migration session when prior run history is no longer relevant.
         The run counter is also reset to zero.
         """)]
-    public async Task<SentinelCallToolResult<LedgerSnapshot>> ResetAsyncMigrationLedgerTool(
+    public async Task<SentinelCallToolResult<LedgerSnapshot>> ResetAsyncMigrationStateTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         CancellationToken cancellationToken = default)
     {
