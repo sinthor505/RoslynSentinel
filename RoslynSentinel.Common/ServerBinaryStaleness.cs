@@ -40,12 +40,15 @@ public static class ServerBinaryStaleness
     private static volatile string? _loadedSolutionDirectory;
 
     /// <summary>Repo-relative path prefixes whose changes make a stamped binary stale (server source, not tests/docs).</summary>
+    // Keep in sync with scripts/server-source-paths.txt (a test enforces it); the two root files change the built server binary.
     internal static readonly string[] SourcePathPrefixes =
     [
         "RoslynSentinel.Common/",
         "RoslynSentinel.Engines.",
         "RoslynSentinel.Tools.",
         "RoslynSentinel.Server.",
+        "Directory.Build.props",
+        "global.json",
     ];
 
     private static readonly TimeSpan GitTimeout = TimeSpan.FromSeconds(5);

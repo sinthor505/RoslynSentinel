@@ -208,4 +208,27 @@ public class ServerBinaryStalenessTests
         Assert.That(message, Is.Not.Null);
         Assert.That(message, Does.Contain("New.cs"));
     }
+
+    [Test]
+    public void SourcePathPrefixes_MatchScriptsServerSourcePathsFile()
+    {
+        var dir = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
+        {
+            dir = dir.Parent;
+        }
+
+        if (dir == null)
+        {
+            Assert.Fail("Could not find RoslynSentinel.slnx walking up from " + TestContext.CurrentContext.TestDirectory);
+            return;
+        }
+
+        var listed = File.ReadAllLines(Path.Combine(dir.FullName, "scripts", "server-source-paths.txt"))
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0 && !line.StartsWith('#'))
+            .ToArray();
+
+        Assert.That(listed, Is.EqualTo(ServerBinaryStaleness.SourcePathPrefixes));
+    }
 }

@@ -1,0 +1,11 @@
+# Repo-relative path prefixes that count as server source (one per line).
+# Matched with ordinal StartsWith against forward-slash repo-relative paths.
+# Must stay identical to ServerBinaryStaleness.SourcePathPrefixes (enforced by the test
+# ServerBinaryStalenessTests.SourcePathPrefixes_MatchScriptsServerSourcePathsFile).
+# Read by the stdio launcher.
+RoslynSentinel.Common/
+RoslynSentinel.Engines.
+RoslynSentinel.Tools.
+RoslynSentinel.Server.
+Directory.Build.props
+global.json
