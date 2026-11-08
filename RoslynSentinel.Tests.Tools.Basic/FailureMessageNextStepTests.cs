@@ -53,8 +53,8 @@ public class FailureMessageNextStepTests
 
         Assert.That(result.IsError, Is.True);
         var expectedHint = result.ErrorData!.ErrorCode == ToolErrorCode.NotFound
-            ? "ListWorkspaceSolutions"
-            : "retry LoadSolution";
+            ? "Next: ListWorkspaceSolutions("
+            : "Next: LoadSolution(";
         Assert.That(result.ErrorData.Message, Does.Contain(expectedHint));
     }
 }

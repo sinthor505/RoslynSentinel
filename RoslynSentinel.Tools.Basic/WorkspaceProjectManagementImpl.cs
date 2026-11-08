@@ -749,7 +749,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsError = true,
-                ErrorData = new ResultError(codeAndMessage.Item1, $"LoadSolution '{solutionPath}' {codeAndMessage.Item2}" + (codeAndMessage.Item1 == ToolErrorCode.NotFound ? " Use ListWorkspaceSolutions to find the solution file, then call LoadSolution again with its path." : " Check the server log for MSBuild errors, then retry LoadSolution (add forceReload: true if a solution is already loaded)."))
+                ErrorData = new ResultError(codeAndMessage.Item1, $"LoadSolution '{solutionPath}' {codeAndMessage.Item2}" + (codeAndMessage.Item1 == ToolErrorCode.NotFound ? " " + ToolCallHint.Next("ListWorkspaceSolutions", "to find the solution file path.") : " Check the server log for MSBuild errors first. " + ToolCallHint.Next("LoadSolution", "with forceReload: true if a solution is already loaded.", ("solutionPath", solutionPath))))
             };
         }
     }

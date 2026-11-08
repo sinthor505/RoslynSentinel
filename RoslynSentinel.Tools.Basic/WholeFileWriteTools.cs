@@ -130,7 +130,7 @@ public class WholeFileWriteTools
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.NotFound, $"DeleteFile: '{filePathResolved}' does not exist. Use ListSolutionItems or Search to find the right path.")
+                    ErrorData = new ResultError(ToolErrorCode.NotFound, $"DeleteFile: '{filePathResolved}' does not exist. " + ToolCallHint.Next("Search", "to find the right path.", ("mode", "text")))
                 };
             }
 
