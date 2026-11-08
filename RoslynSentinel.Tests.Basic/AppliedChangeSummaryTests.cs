@@ -29,8 +29,7 @@ public class AppliedChangeSummaryTests
             Description: "test",
             DryRun: false,
             ChangedContent: new Dictionary<FilePathWrapper, string> { { filePath, "content" } },
-            Validated: true,
-            ChangedContentResultId: null);
+            Validated: true);
 
         Assert.That(summary.ChangedContent, Is.Null);
     }
@@ -48,8 +47,7 @@ public class AppliedChangeSummaryTests
             DryRun: true,
             ChangedContent: content,
             Validated: true,
-            LineChanges: lineChanges,
-            ChangedContentResultId: null);
+            LineChanges: lineChanges);
 
         Assert.That(summary.ChangedContent, Is.Null, "a dry run is compact by default: no whole-file content");
         Assert.That(summary.LineChanges, Is.EqualTo(lineChanges));
@@ -67,8 +65,7 @@ public class AppliedChangeSummaryTests
             Description: "test",
             DryRun: false,
             ChangedContent: content,
-            Validated: false,
-            ChangedContentResultId: null);
+            Validated: false);
 
         Assert.That(summary.ChangedContent, Is.EqualTo(content));
     }
@@ -109,7 +106,7 @@ public class AppliedChangeSummaryTests
     }
 
     [Test]
-    public void RealApply_SerializedJsonOmitsChangedContentAndTheObsoleteResultId()
+    public void RealApply_SerializedJsonOmitsChangedContent()
     {
         DetachChangedFilesOnTheCall();
         var filePath = new FilePathWrapper("test.cs");
@@ -121,13 +118,11 @@ public class AppliedChangeSummaryTests
             ChangedContent: null,
             Validated: true);
 
-        // The wire options omit nulls, so the never-populated obsolete id is absent from the response.
         var json = JsonSerializer.Serialize(summary, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
         using var doc = JsonDocument.Parse(json);
 
         Assert.That(doc.RootElement.TryGetProperty("changedContent", out _), Is.False);
         Assert.That(doc.RootElement.TryGetProperty("ChangedContent", out _), Is.False);
-        Assert.That(json, Does.Not.Contain("changedContentResultId"));
     }
 
     [Test]
@@ -147,8 +142,7 @@ public class AppliedChangeSummaryTests
                 Description: "test",
                 DryRun: false,
                 ChangedContent: content,
-                Validated: true,
-                ChangedContentResultId: null);
+                Validated: true);
 
             Assert.That(summary.ChangedContent, Is.EqualTo(content));
         }
@@ -170,8 +164,7 @@ public class AppliedChangeSummaryTests
             DryRun: true,
             ChangedContent: content,
             Validated: true,
-            LineChanges: new List<FileLineChange> { FileLineChange.Compute(filePath, "old", "content") },
-            ChangedContentResultId: null);
+            LineChanges: new List<FileLineChange> { FileLineChange.Compute(filePath, "old", "content") });
 
         var json = JsonSerializer.Serialize(summary, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
         using var doc = JsonDocument.Parse(json);
@@ -191,8 +184,7 @@ public class AppliedChangeSummaryTests
             DryRun: true,
             Diff: "--- test.cs\n-old\n+content",
             ChangedContent: new Dictionary<FilePathWrapper, string> { { filePath, "content" } },
-            Validated: true,
-            ChangedContentResultId: null);
+            Validated: true);
 
         var json = JsonSerializer.Serialize(summary, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
         using var doc = JsonDocument.Parse(json);
@@ -218,8 +210,7 @@ public class AppliedChangeSummaryTests
                 Description: "test",
                 DryRun: true,
                 ChangedContent: content,
-                Validated: true,
-                ChangedContentResultId: null);
+                Validated: true);
 
             Assert.That(summary.ChangedContent, Is.EqualTo(content));
             Assert.That(summary.Note, Does.Contain("changedContent"));
@@ -240,8 +231,7 @@ public class AppliedChangeSummaryTests
             Description: "test",
             DryRun: true,
             ChangedContent: new Dictionary<FilePathWrapper, string> { { filePath, "content" } },
-            Validated: true,
-            ChangedContentResultId: null);
+            Validated: true);
 
         Assert.That(summary.Note, Does.Contain("returnDiff: true"));
         Assert.That(summary.Note, Does.Contain("lineChanges"));
@@ -258,8 +248,7 @@ public class AppliedChangeSummaryTests
             Description: "test",
             DryRun: true,
             Diff: "--- test.cs\n-old\n+content",
-            Validated: true,
-            ChangedContentResultId: null);
+            Validated: true);
 
         Assert.That(summary.Note, Does.Contain("The diff is the preview."));
         Assert.That(summary.Note, Does.Not.Contain("returnDiff"));
@@ -277,8 +266,7 @@ public class AppliedChangeSummaryTests
             Description: "test",
             DryRun: false,
             ChangedContent: content,
-            Validated: false,
-            ChangedContentResultId: null);
+            Validated: false);
 
         var json = JsonSerializer.Serialize(summary, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
@@ -295,8 +283,7 @@ public class AppliedChangeSummaryTests
             Description: "test",
             DryRun: false,
             ChangedContent: new Dictionary<FilePathWrapper, string> { { filePath, "content" } },
-            Validated: false,
-            ChangedContentResultId: null);
+            Validated: false);
 
         Assert.That(summary.Status, Is.EqualTo("not_written"));
         Assert.That(summary.Note, Does.Contain("autoStage"));
@@ -313,8 +300,7 @@ public class AppliedChangeSummaryTests
             Description: "test",
             DryRun: false,
             ChangedContent: null,
-            Validated: false,
-            ChangedContentResultId: null);
+            Validated: false);
 
         Assert.That(summary.Status, Is.EqualTo("applied"));
     }
@@ -329,8 +315,7 @@ public class AppliedChangeSummaryTests
             Description: "test",
             DryRun: false,
             ChangedContent: new Dictionary<FilePathWrapper, string> { { filePath, "content" } },
-            Validated: true,
-            ChangedContentResultId: null);
+            Validated: true);
 
         Assert.That(summary.Status, Is.EqualTo("applied"));
     }

@@ -17,7 +17,6 @@ public record AppliedChangeSummary(
     Dictionary<FilePathWrapper, string>? ChangedContent = null,
     bool Validated = false,
     List<FileLineChange>? LineChanges = null,
-    [property: Obsolete("Use largeResult (the stored changedFiles payload)")] string? ChangedContentResultId = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<AppliedEditSpan>? EditSpans = null,
     // Write-chokepoint findings copied from ApplyOutcome.Findings; not serialized here, the result envelope lifts them (SentinelCallToolResult.Findings).
     [property: JsonIgnore] List<Finding>? Findings = null

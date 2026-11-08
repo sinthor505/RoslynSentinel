@@ -14,7 +14,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 /// (docs/current/plans/plan_mutating_and_test_tool_result_noise.md, Step 2). Dry runs and autoStage=false results
 /// still carry the content: nothing was written, so the content is the result.
 /// Runs on an InMemoryWorkspace, which has no solution root: the offloaded content file cannot be written there, so
-/// ChangedContentResultId is null by design (fail-closed) and is not asserted.
+/// the response carries no large-result handle by design (fail-closed) and that is not asserted.
 /// NonParallelizable: another fixture flips the process-wide ChangedContentOptions.InlineOnApply, which these
 /// assertions depend on.
 /// </summary>

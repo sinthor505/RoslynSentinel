@@ -289,7 +289,7 @@ public class GenerationTools
             var apply = await ValidateAndApplyAsync(changes, $"Generate mapping from '{fromType}' to '{toType}'.", "GenerateMapping", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
-            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [newFilePath], $"Generated mapping from '{fromType}' to '{toType}' in new file {Path.GetFileName(newFilePath)}.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId, Findings: apply.Findings) };
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [newFilePath], $"Generated mapping from '{fromType}' to '{toType}' in new file {Path.GetFileName(newFilePath)}.", apply.DryRun, apply.Diff, Findings: apply.Findings) };
         }
         catch (Exception ex)
         {
