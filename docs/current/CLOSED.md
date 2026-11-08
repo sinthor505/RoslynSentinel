@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Tool-call hint verbatim-placeholder check - resolved (2026-11-08)
+
+Tool-call hint verbatim-placeholder check (2026-10-25) - unmeasured whether a model pastes `<why you call this>` verbatim; parked because it needs a model eval; unpark at the next model-eval round (count verbatim placeholders in its logs) - [doc](proposals/proposal_tool_hint_builder.md)
+
+Evidence: ModelEval 2026-11-08, unsloth/qwen3.5-9b on host 113, 12 tests: 12 placeholder-hint results, 0 verbatim pastes (0/12); host 112 unreachable
+
 ## AppliedChangeSummary.From factory and migration - resolved (2026-11-08)
 
 `AppliedChangeSummary.From` factory (2026-11-08) - add `AppliedChangeSummary.From(ApplyOutcome, ...)` that fills `LineChanges` and `Findings`, then migrate in slices the 53 of 82 production `new AppliedChangeSummary(` sites that omit `LineChanges` (their dry-run `lineChanges` is null although the Note promises it); done = no production site constructs the record without `LineChanges`, and a dry-run test per tool family shows non-null `lineChanges` - [doc](issues/issue_movemember_open_followups.md)

@@ -182,5 +182,5 @@ each helper and has no way to catch a new hand-written hint. Not chosen; `ToolCa
 ## Decisions (todo review 2026-11-08)
 
 - Static `// hint-ok` descriptions: add the required parameters now (READY). Why: the lean budget has room (32000/30500 caps vs ~28117 used). Check: `ClaudeLeanSchemaBudgetTests` and `ToolHintRatchetTests` green.
-- Verbatim `<why you call this>` paste: PARKED until the next model-eval round. Why: only an eval can measure it. Check: count verbatim placeholders in the eval logs.
+- Verbatim `<why you call this>` paste: measured 2026-11-08 (unsloth/qwen3.5-9b on host 113, 12 ModelEval tests, 322 tool calls): 12 tool results carried a placeholder hint, 0 following model calls pasted a `<...>` value (0/12), verdict no verbatim pastes, close (112 host unreachable, so a single model).
 - `ToolCallHint.Validate` reporting lean-hidden names as unknown: closed, no change. Why: `Validate` is only called from tests (ToolHintRatchetTests ~244, AmbiguousNameTargetToolTests ~173/~206), so no runtime path hits it.
