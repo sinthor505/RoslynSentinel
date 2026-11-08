@@ -166,3 +166,4 @@ reference doc exists.
 ## Decisions (todo review 2026-11-08)
 
 - Scope: type `WrapRange` `wrapper` and `ModifyEnum` `values` as enums, and rename `GetMigrationLedger`/`ResetMigrationLedger` to `GetAsyncMigrationState`/`ResetAsyncMigrationState` (READY). Why: "ledger" is overloaded (scoped operation ledger, edit attribution ledger); the new names say Asyncify. Introduce and bare Generate stay reference only. Check: the generated schema shows enum values; no old name remains in docs/generated or prompts.
+- Amended (todo punchlist 2026-11-08): `ModifyEnum` `values` stays a string named `values`, because it takes a free-form list (`A, B=2` or a JSON array of `Name[=Int]`) that an enum cannot express; instead its `[Description]` states the exact format with an example. No `memberListDsl` rename.

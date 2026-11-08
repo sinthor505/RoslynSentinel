@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Hidden-test-hit hints (symbol search with results) - resolved (2026-11-08)
+
+Hidden-test-hit hints: `typesWithAttribute` and a `symbol` search with zero results now count and name hidden test hits (2026-11-07); `symbol` with some results still skips test projects (counting there means compiling them on every call, so only do it if timing allows). The `attributeUsages`/`hasAttribute`/broaden-on-empty gaps and `includeTests` for `implementorsOf`/`objectCreations`/`extensionsFor`/`methodsByReturnType` are fixed (2026-11-05) - [doc](plans/closed/plan_search_text_scan_all_projects_and_recovery_hints.md)
+
+Evidence: Owner ruling 2026-11-08 (todo punchlist): keep the current status text for a symbol search with results ("N test project(s) were excluded ... pass includeTests: true"); naming hits per project would cost an extra scan. Zero-result paths already name hidden hits.
+
 ## Build-isolation follow-ups (prod-instances launcher) - resolved (2026-11-08)
 
 Build-isolation follow-ups (2026-10-23) - flip the prod-instances launcher on for live windows (env `ROSLYNSENTINEL_INSTANCES_ROOT` in `C:\Users\Administrator\.mcp.json`, startup timeout above 60 s) and check the first cold build (item 19(c) test-instance job object done 2026-11-05: `KillOnCloseJob`, live-checked - `taskkill /F` on test instance A killed its child instance B, no `[job]` warning) - [doc](plans/closed/plan_build_isolation_prod_instances_and_test_servers.md)

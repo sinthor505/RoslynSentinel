@@ -48,5 +48,6 @@ or should the `TryOpen` path be removed?
 ## Decisions (todo review 2026-11-08)
 
 - `LineChanges` adoption: READY as an `AppliedChangeSummary.From(ApplyOutcome, ...)` factory (also fills `Findings`) and a migration of the 53 sites in slices. Why: dry-run `lineChanges` is null at those sites although the Note promises it. Check: no production site constructs the record without `LineChanges`; a dry-run test per tool family shows non-null `lineChanges`.
+- Amended (todo punchlist 2026-11-08): the 16 sites with no `ApplyOutcome` (preview-only, `ChangeId: null`; mostly AdvancedRefactoringTools) get a second overload `AppliedChangeSummary.From(lineChanges, findings, ...)`, so all production sites migrate.
 - Qualify-receivers pass and alias-using duplicates: stay OPEN, need design.
 - Closed: copy-all-usings (behaviour, not a defect), wrapped call sites (done), global-using duplicates (harmless), D2/Q1/Q2a test-seam nits (low value).
