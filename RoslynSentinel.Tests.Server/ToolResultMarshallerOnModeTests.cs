@@ -437,7 +437,7 @@ public class ToolResultMarshallerOnModeTests
         var result = new SentinelCallToolResult<object> { IsError = false, SuccessData = new { contents = files } };
         Assert.That(FullText(result).Length, Is.GreaterThan(LargeResultHelper.InlineBudgetChars), "fixture sanity");
 
-        // Fit's omitted list alone (one entry per emptied string) can exceed the budget here: Decided 9's reason for [NeverInline].
+        // Fit's omitted list alone (one entry per emptied string) can exceed the budget here.
         var (_, pointer, _) = await MarshalPagedAsync(result, checkLength: false);
 
         Assert.That(pointer["omitted"]!.AsArray(), Is.Not.Empty);

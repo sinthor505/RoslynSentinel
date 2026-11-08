@@ -93,23 +93,6 @@ public class ResultPagerTests
         public bool RegexPatternValid { get; set; }
     }
 
-    public sealed class NeverInlineProbeData
-    {
-        public int Count { get; set; }
-
-        [NeverInline]
-        public string Contents { get; set; } = string.Empty;
-
-        [NeverInline]
-        [JsonPropertyName("full_list")]
-        public List<string> FullList { get; set; } = [];
-
-        [NeverInline]
-        public object? Blob { get; set; }
-
-        public List<string> Visible { get; set; } = [];
-    }
-
     // ---- golden payloads ----
 
     [Test]
@@ -377,8 +360,8 @@ public class ResultPagerTests
         JsonObject original = Envelope(new JsonObject { ["records"] = records, ["notes"] = bigText.ToString() });
         int budget = Len(original) - 600; // less than the 100 short records weigh, so the declared list can absorb it alone
 
-        var (hinted, hintedOmitted) = ResultPager.Fit(original, budget, Wire, "successData.records", []);
-        var (inferred, inferredOmitted) = ResultPager.Fit(original, budget, Wire, null, []);
+        var (hinted, hintedOmitted) = ResultPager.Fit(original, budget, Wire, recordsPath: "successData.records");
+        var (inferred, inferredOmitted) = ResultPager.Fit(original, budget, Wire, recordsPath: null);
 
         Assert.That(Len(hinted), Is.LessThanOrEqualTo(budget));
         Assert.That(hintedOmitted.Select(p => (p.Path, p.Inferred)), Is.EqualTo(new[] { ("successData.records", false) }));
@@ -426,56 +409,22 @@ public class ResultPagerTests
     // ---- hints ----
 
     [Test]
-    public void ResolveHints_MapsToWireNames_AndIsCached()
+    public void ResolveRecordsPath_MapsToWireNames_AndIsCached()
     {
-        var first = ResultPager.ResolveHints(typeof(NeverInlineProbeData), Wire);
-        var second = ResultPager.ResolveHints(typeof(NeverInlineProbeData), Wire);
-        var search = ResultPager.ResolveHints(typeof(SearchProbeData), Wire);
+        string? first = ResultPager.ResolveRecordsPath(typeof(SearchProbeData), Wire);
+        string? second = ResultPager.ResolveRecordsPath(typeof(SearchProbeData), Wire);
 
-        Assert.That(first.RecordsPath, Is.Null);
-        Assert.That(first.NeverInlinePaths, Is.EquivalentTo(new[] { "successData.contents", "successData.full_list", "successData.blob" }));
-        Assert.That(second.NeverInlinePaths, Is.SameAs(first.NeverInlinePaths), "cached per type");
-        Assert.That(search.RecordsPath, Is.EqualTo("successData.regexResults"));
-        Assert.That(search.NeverInlinePaths, Is.Empty);
-        var none = ResultPager.ResolveHints(null, Wire);
-        Assert.That(none.RecordsPath, Is.Null);
-        Assert.That(none.NeverInlinePaths, Is.Empty);
-        Assert.That(ResultPager.ResolveHints(typeof(string), Wire).RecordsPath, Is.Null);
+        Assert.That(first, Is.EqualTo("successData.regexResults"));
+        Assert.That(second, Is.EqualTo(first), "cached per type");
+        Assert.That(ResultPager.ResolveRecordsPath(null, Wire), Is.Null);
+        Assert.That(ResultPager.ResolveRecordsPath(typeof(string), Wire), Is.Null);
     }
 
     [Test]
-    public void ResolveHints_TextSearchResult_RecordsPathIsLiteralResults()
+    public void ResolveRecordsPath_TextSearchResult_IsLiteralResults()
     {
-        var hints = ResultPager.ResolveHints(typeof(TextSearchResult), Wire);
+        string? recordsPath = ResultPager.ResolveRecordsPath(typeof(TextSearchResult), Wire);
 
-        Assert.That(hints.RecordsPath, Is.EqualTo("successData.literalResults"));
-        Assert.That(hints.NeverInlinePaths, Is.Empty);
-    }
-
-    [Test]
-    public void NeverInline_IsAlwaysMovedOut_EvenWhenTheEnvelopeFits()
-    {
-        JsonObject original = Envelope(new JsonObject
-        {
-            ["count"] = 2,
-            ["contents"] = "first\nsecond\nthird\n",
-            ["full_list"] = new JsonArray("x", "y"),
-            ["blob"] = new JsonObject { ["k"] = "v" },
-            ["visible"] = new JsonArray("stays"),
-        });
-
-        var (inline, omitted) = ResultPager.Fit(original, 1_000_000, Wire, typeof(NeverInlineProbeData));
-
-        Assert.That(inline["successData"]!["count"]!.GetValue<int>(), Is.EqualTo(2));
-        Assert.That(inline["successData"]!["visible"]!.AsArray(), Has.Count.EqualTo(1));
-        Assert.That(inline["successData"]!["contents"]!.GetValue<string>(), Is.Empty);
-        Assert.That(inline["successData"]!["full_list"]!.AsArray(), Is.Empty);
-        Assert.That(inline["successData"]!.AsObject().ContainsKey("blob"), Is.False, "a node of another kind is removed");
-
-        Assert.That(omitted.All(p => !p.Inferred && p.Returned == 0), Is.True);
-        Assert.That((Part(omitted, "successData.contents").Total, Part(omitted, "successData.contents").Unit), Is.EqualTo((3, "lines")));
-        Assert.That((Part(omitted, "successData.full_list").Total, Part(omitted, "successData.full_list").Unit), Is.EqualTo((2, "items")));
-        Assert.That(Part(omitted, "successData.blob").Unit, Is.EqualTo("chars"));
-        AssertPinnedKeysSurvive(original, inline);
+        Assert.That(recordsPath, Is.EqualTo("successData.literalResults"));
     }
 }

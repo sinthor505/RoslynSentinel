@@ -12,7 +12,7 @@ namespace RoslynSentinel.Common;
 /// Pure pager for a tool result's wire envelope. <see cref="ToolResultMarshaller"/> uses it for a result with no
 /// <see cref="SequencePager"/> sequence, and <c>GetLargeResult</c> to page such a result by path
 /// (docs/current/references/reference_tool_response_pipeline.md).
-/// <see cref="Fit(JsonNode, int, JsonSerializerOptions, string?, IReadOnlyCollection{string})"/> takes the
+/// <see cref="Fit(JsonNode, int, JsonSerializerOptions, string?)"/> takes the
 /// envelope as a <see cref="JsonNode"/>, a budget in characters and the wire <see cref="JsonSerializerOptions"/>, and
 /// returns a fitted copy plus one <see cref="OmittedPart"/> per cut. The input is never modified.
 /// </summary>
@@ -25,7 +25,7 @@ namespace RoslynSentinel.Common;
 /// itself counts when it is an array or string).
 /// </para>
 /// <para>
-/// <b>Order of work.</b> Nodes named <see cref="NeverInlineAttribute"/> are always moved out first. While the
+/// <b>Order of work.</b> While the
 /// envelope is over budget the declared records node (<see cref="ResultRecordsAttribute"/>) is cut, else the bulk node with
 /// the longest serialized form. An array keeps a prefix of elements, a string keeps a prefix of whole lines
 /// (line terminators kept), found by binary search for the longest prefix that fits, and never fewer than one element
@@ -46,36 +46,30 @@ public static class ResultPager
     /// <summary><see cref="OmittedPart.Unit"/> for string lines.</summary>
     public const string UnitLines = "lines";
 
-    /// <summary><see cref="OmittedPart.Unit"/> for a node of another kind moved out whole (serialized characters).</summary>
-    public const string UnitChars = "chars";
-
     private const string SuccessKey = "successData";
     private const string ErrorKey = "errorData";
 
-    private static readonly ConcurrentDictionary<(Type Type, JsonNamingPolicy? Policy), (string? RecordsPath, IReadOnlyList<string> NeverInlinePaths)> HintCache = new();
+    private static readonly ConcurrentDictionary<(Type Type, JsonNamingPolicy? Policy), string?> RecordsPathCache = new();
 
     /// <summary>
-    /// Resolves the hints declared on <paramref name="successDataType"/>'s public properties: the one
-    /// <see cref="ResultRecordsAttribute"/> property and every <see cref="NeverInlineAttribute"/> property, as wire
-    /// paths under <c>successData</c> (<c>[JsonPropertyName]</c>, else the options' naming policy, else the C# name).
-    /// Cached per type and naming policy. A null type or one without hints gives (null, empty).
+    /// Resolves the records path declared on <paramref name="successDataType"/>'s public properties: the one
+    /// <see cref="ResultRecordsAttribute"/> property, as a wire path under <c>successData</c> (<c>[JsonPropertyName]</c>,
+    /// else the options' naming policy, else the C# name). Cached per type and naming policy. A null type or one
+    /// without the attribute gives null.
     /// </summary>
-    public static (string? RecordsPath, IReadOnlyList<string> NeverInlinePaths) ResolveHints(Type? successDataType, JsonSerializerOptions wireOptions)
+    public static string? ResolveRecordsPath(Type? successDataType, JsonSerializerOptions wireOptions)
     {
         ArgumentNullException.ThrowIfNull(wireOptions);
         if (successDataType is null)
         {
-            return (null, []);
+            return null;
         }
 
-        return HintCache.GetOrAdd((successDataType, wireOptions.PropertyNamingPolicy), static key => ReflectHints(key.Type, key.Policy));
+        return RecordsPathCache.GetOrAdd((successDataType, wireOptions.PropertyNamingPolicy), static key => ReflectRecordsPath(key.Type, key.Policy));
     }
 
-    private static (string? RecordsPath, IReadOnlyList<string> NeverInlinePaths) ReflectHints(Type type, JsonNamingPolicy? policy)
+    private static string? ReflectRecordsPath(Type type, JsonNamingPolicy? policy)
     {
-        string? recordsPath = null;
-        var neverInline = new List<string>();
-
         foreach (PropertyInfo property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             if (!property.CanRead || property.GetIndexParameters().Length != 0)
@@ -83,9 +77,7 @@ public static class ResultPager
                 continue;
             }
 
-            bool records = property.GetCustomAttribute<ResultRecordsAttribute>() is not null;
-            bool never = property.GetCustomAttribute<NeverInlineAttribute>() is not null;
-            if (!records && !never)
+            if (property.GetCustomAttribute<ResultRecordsAttribute>() is null)
             {
                 continue;
             }
@@ -93,20 +85,10 @@ public static class ResultPager
             string wireName = property.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name
                 ?? policy?.ConvertName(property.Name)
                 ?? property.Name;
-            string path = SuccessKey + "." + wireName;
-
-            if (records)
-            {
-                recordsPath ??= path;
-            }
-
-            if (never)
-            {
-                neverInline.Add(path);
-            }
+            return SuccessKey + "." + wireName;
         }
 
-        return (recordsPath, neverInline);
+        return null;
     }
 
     /// <summary>
@@ -116,35 +98,28 @@ public static class ResultPager
     public static (JsonNode Inline, IReadOnlyList<OmittedPart> Omitted) Fit(
         JsonNode envelope, int budgetChars, JsonSerializerOptions wireOptions, Type? successDataType)
     {
-        var (recordsPath, neverInlinePaths) = ResolveHints(successDataType, wireOptions);
-        return Fit(envelope, budgetChars, wireOptions, recordsPath, neverInlinePaths);
+        string? recordsPath = ResolveRecordsPath(successDataType, wireOptions);
+        return Fit(envelope, budgetChars, wireOptions, recordsPath);
     }
 
     /// <summary>
     /// Fits <paramref name="envelope"/> to <paramref name="budgetChars"/>. <paramref name="recordsPath"/> is the declared
-    /// records path (null when not declared); <paramref name="neverInlinePaths"/> are moved out unconditionally.
+    /// records path (null when not declared).
     /// </summary>
     public static (JsonNode Inline, IReadOnlyList<OmittedPart> Omitted) Fit(
         JsonNode envelope,
         int budgetChars,
         JsonSerializerOptions wireOptions,
-        string? recordsPath,
-        IReadOnlyCollection<string> neverInlinePaths)
+        string? recordsPath)
     {
         ArgumentNullException.ThrowIfNull(envelope);
         ArgumentNullException.ThrowIfNull(wireOptions);
-        ArgumentNullException.ThrowIfNull(neverInlinePaths);
 
         JsonNode root = envelope.DeepClone();
         var omitted = new List<OmittedPart>();
         if (root is not JsonObject rootObject)
         {
             return (root, omitted);
-        }
-
-        foreach (string path in neverInlinePaths)
-        {
-            MoveOut(rootObject, path, omitted);
         }
 
         // Phase 1: cut. A node with one element or line left is not cuttable any more.
@@ -185,7 +160,7 @@ public static class ResultPager
     /// <summary>
     /// Selects the node an <see cref="OmittedPart.Path"/> names: property names separated by dots and <c>[i]</c> array
     /// indexes (<c>successData.regexResults</c>, <c>successData.groups[0].items</c>). Null when any step is missing or of the
-    /// wrong kind. The empty path selects <paramref name="root"/>. The same syntax <see cref="Fit(JsonNode, int, JsonSerializerOptions, string?, IReadOnlyCollection{string})"/> writes.
+    /// wrong kind. The empty path selects <paramref name="root"/>. The same syntax <see cref="Fit(JsonNode, int, JsonSerializerOptions, string?)"/> writes.
     /// </summary>
     public static JsonNode? SelectNode(JsonNode root, string path)
     {
@@ -467,7 +442,7 @@ public static class ResultPager
         Upsert(omitted, new OmittedPart(node.Path, 0, originalTotal, unit, inferred));
     }
 
-    // A NeverInline node: always empty inline. Arrays and strings keep their shape (empty); any other kind is removed.
+    // Moves a node out whole: arrays and strings keep their shape (empty); any other kind is left untouched.
     internal static void MoveOut(JsonObject root, string path, List<OmittedPart> omitted)
     {
         string[] segments = path.Split('.');
@@ -507,12 +482,6 @@ public static class ResultPager
                     Upsert(omitted, new OmittedPart(path, 0, CountLines(text), UnitLines, Inferred: false));
                 }
 
-                break;
-
-            default:
-                int length = node.ToJsonString().Length;
-                current.Remove(leaf);
-                Upsert(omitted, new OmittedPart(path, 0, length, UnitChars, Inferred: false));
                 break;
         }
     }

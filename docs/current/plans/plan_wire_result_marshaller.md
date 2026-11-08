@@ -52,7 +52,7 @@ there (`:77`) but does not expose it on `McpServerToolCreateOptions`, and the to
 3. **One measure, one form.** Budget is chars of the final wire text. The stored file holds the same wire JSON,
    so disk equals wire and replay needs no type.
 4. **Paging by path.** Every cut is recorded as `{path, returned, total, unit}`. A declared hint on the DTO
-   (`[ResultRecords]`, `[NeverInline]`) wins; without one the pager cuts the largest array (prefix) or longest
+   (`[ResultRecords]`; `[NeverInline]` existed until it was removed 2026-11-07, see Step 10) wins; without one the pager cuts the largest array (prefix) or longest
    string (whole lines) and marks the cut `inferred`. A missing hint degrades to inferred paging, never to a char
    window. `GetLargeResult(resultId, path, offset, limit)` pages a path through the same pager.
 5. **Domain vs offload metadata.** `TotalRecords`/`HasMoreData`/`NextOffset` on the envelope keep only their

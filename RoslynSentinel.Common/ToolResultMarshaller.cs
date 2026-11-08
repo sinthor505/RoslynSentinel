@@ -256,7 +256,7 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
         SequencePage page = SequencePager.BuildPage(parsed, sequence, 0, 0, budget, options);
 
         // The parts outside the sequence are over budget by themselves: only Fit can cut those (stage 2 moves such results to
-        // [NeverInline] / bounded shapes). Named in the server log so the offenders can be found.
+        // bounded shapes). Named in the server log so the offenders can be found.
         if (page.PartsOutsideOverBudget)
         {
             _logger.LogWarning(
@@ -595,8 +595,8 @@ public sealed class ToolResultMarshaller : IToolResultMarshaller
         return WithPointerFirst(final, detachment.PointerNode, options);
     }
 
-    // The runtime type of SentinelCallToolResult<TSuccess, TError>.SuccessData, where the typed hints ([ResultRecords],
-    // [NeverInline]) live; null for any other result shape or an empty SuccessData.
+    // The runtime type of SentinelCallToolResult<TSuccess, TError>.SuccessData, where the typed hint ([ResultRecords])
+    // lives; null for any other result shape or an empty SuccessData.
     private static Type? SuccessDataTypeOf(object? result)
     {
         for (Type? type = result?.GetType(); type is not null; type = type.BaseType)

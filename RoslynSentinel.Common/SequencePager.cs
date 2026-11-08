@@ -107,7 +107,7 @@ public static class SequencePager
             }
         }
 
-        string? declared = ResultPager.ResolveHints(successDataType, wireOptions).RecordsPath;
+        string? declared = ResultPager.ResolveRecordsPath(successDataType, wireOptions);
         if (declared is not null && ResultPager.SelectNode(envelope, declared) is JsonArray { Count: > 0 })
         {
             return new SequenceDescriptor(SequenceKind.Lists, [declared], PagingOrder.Interleaved, 0);

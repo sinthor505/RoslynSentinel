@@ -91,7 +91,7 @@ fills the budget; a given `limit` is an upper bound.
 | --- | --- | --- |
 | `[ResultRecords]` | Property on the `SuccessData` type | The default sequence would pick the wrong list. Today: `TextSearchResult.LiteralResults`, `EnvelopePageResult.Items`, `BuildResult.Errors` |
 | `SentinelCallToolResult.Paging` (`PagingHints`) | Set on the envelope; never serialized | Several lists form one sequence, or anonymous and bare-list shapes that cannot carry an attribute |
-| `[NeverInline]` | DTO property | Always moved to the store. No production use yet (plan Step 8) |
+| `SentinelCallToolResult.Detach(name, list)` / `ToolCallContext.DetachCurrent` | Set on the result or the call context; never serialized | A payload that must be stored, not inline (RunTest `fullResults`, apply `changedFiles`). Must be an array or string |
 
 ### Call-tool filters
 

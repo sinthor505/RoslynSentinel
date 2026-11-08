@@ -208,8 +208,8 @@ RunTest and changed-content payloads are dropped (not inlined); Build lists appe
 
 ## Open questions
 
-1. Does `[NeverInline]` stay as the declarative form for a future DTO whose property is always large, or is it removed in
-   Step 10 if nothing uses it? Default: keep until Step 10, decide there.
+1. DECIDED 2026-11-07 (owner): `[NeverInline]` is removed (attribute, `ResultPager` never-inline paths, `MoveOut` default
+   branch, tests). The detached-payload slot is the declarative way to store a payload. (Was: keep until Step 10, decide there.)
 2. Not checked: `SequencePager.BuildPage` with an emptied array; per-row sizes of `DiagnosticInfo` and `TestCaseResult` and
    timing for a 2,000-error build; how `FilePathWrapper` serializes and whether the stored path form changes from absolute
    to wire-relative under `WirePathRelativize`; the exact `GetDiagnostics` DTO shapes and tests; how the offload filter,
