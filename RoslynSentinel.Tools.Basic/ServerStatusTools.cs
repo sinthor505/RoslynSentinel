@@ -155,7 +155,15 @@ public class ServerStatusTools
             // The mode is fixed per process (see AgentOperatingModeOptions), so the main session can read it here.
             OperatingMode: AgentOperatingModeOptions.Effective.ToString(),
             OperatingModeSource: AgentOperatingModeOptions.Source,
-            CallerAgentId: ToolCallContext.Current?.AgentId
+            CallerAgentId: ToolCallContext.Current?.AgentId,
+            // The stdio server's own idle restart; LastUnmetGuard and LastCheckedUtc come from the monitor's last tick.
+            IdleRestart: new McpServerStatusIdleRestart(
+                Enabled: IdleRestartOptions.Enabled,
+                Minutes: IdleRestartOptions.Minutes,
+                LastActivityUtc: ServerActivityTracker.Shared.LastActivityUtc,
+                InFlightCount: ServerActivityTracker.Shared.InFlightCount,
+                LastUnmetGuard: IdleRestartState.LastUnmetGuard,
+                LastCheckedUtc: IdleRestartState.LastCheckedUtc)
         )
         };
     }
@@ -221,6 +229,14 @@ public sealed record McpServerStatusToolSurface(
 /// roslynsentinel-vscode-control.ps1's stopallstdio/stopallhttp/stopalltypes actions, as reported by
 /// McpServerStatusTool.</summary>
 public sealed record McpServerStatusStoppedByScript(bool WasFound, string? Details);
+/// <summary>
+/// The stdio server's own idle restart (IdleRestartMonitor). When Enabled, the server exits once it has been
+/// idle for Minutes and the launcher has a newer ready build for HEAD. LastUnmetGuard names what currently keeps
+/// it running; values are the IdleRestartPolicy.Guard* constants. LastCheckedUtc is null until the monitor has
+/// ticked. InFlightCount includes the McpServerStatus call that produces this record, since that call runs inside
+/// the tool-telemetry filter.
+/// </summary>
+public sealed record McpServerStatusIdleRestart(bool Enabled, int Minutes, DateTime LastActivityUtc, int InFlightCount, string? LastUnmetGuard, DateTime? LastCheckedUtc);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Named shape mirroring <see cref="ServerStatusTools.McpServerStatusTool"/>'s anonymous return
@@ -260,7 +276,8 @@ public sealed record McpServerStatusResult(
     // OperatingModeSource: where it came from. CallerAgentId: agent id of the call that asked (null when the host supplies none).
     string? OperatingMode = null,
     string? OperatingModeSource = null,
-    string? CallerAgentId = null);
+    string? CallerAgentId = null,
+    McpServerStatusIdleRestart? IdleRestart = null);
 /// <summary>
 /// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
 /// by McpServerStatusTool's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this

@@ -27,12 +27,6 @@ namespace RoslynSentinel.Server.Advanced
             _logger = logger;
         }
 
-        /// <summary>Guard that blocked the last tick; null when the last tick chose to exit.</summary>
-        internal string? LastUnmetGuard { get; private set; }
-
-        /// <summary>UTC time of the last completed tick; null before the first tick.</summary>
-        internal DateTime? LastCheckedUtc { get; private set; }
-
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             if (!IdleRestartOptions.Enabled)
@@ -92,13 +86,12 @@ namespace RoslynSentinel.Server.Advanced
                 OwnBuildSha: ServerBuildInfo.BuildSha);
 
             var guard = IdleRestartPolicy.FirstUnmetGuard(request);
-            if (guard != LastUnmetGuard)
+            if (guard != IdleRestartState.LastUnmetGuard)
             {
                 _logger.LogDebug("Idle restart guard: {Guard}", guard ?? "none (exit)");
             }
 
-            LastUnmetGuard = guard;
-            LastCheckedUtc = nowUtc;
+            IdleRestartState.Record(guard, nowUtc);
 
             if (guard is not null)
             {

@@ -124,6 +124,12 @@ simply stay up.
   the next start reports (same consume-on-start pattern as `ServerStartupHelpers.ReadAndConsumeStoppedByScriptMarker`,
   `ServerStartupHelpers.cs:603`). `McpServerStatus.idleRestart` reports enabled, minutes, `lastActivityUtc` and
   the first unmet guard. Keep the evaluation a pure function of its inputs so it can be unit-tested.
+- As built (2026-11-07), in slices 6a-6d: the restart-reason marker is dropped. The respawned server gets a new
+  instance folder and has no stable key for the session that owned the old one, so a marker could be read by the
+  wrong session; `McpServerStatus.isFreshStartup` already says a restart happened. The monitor reaches the halt
+  flag and the ledger through the registered `IWorkspaceManager` (neither interface is registered on its own) and
+  never restarts when it cannot resolve it. The guard state lives in Common (`IdleRestartState`) because
+  `ServerStatusTools` cannot see Server.Advanced.
 - Done when: unit tests cover each guard blocking an exit and the all-clear case; a live check with
   `ROSLYNSENTINEL_IDLE_RESTART_MINUTES=1` after a server-source commit plus prebuild shows the instance exiting,
   the next tool call respawning on the new build (fast path in `launch.log`), and `McpServerStatus` reporting the
