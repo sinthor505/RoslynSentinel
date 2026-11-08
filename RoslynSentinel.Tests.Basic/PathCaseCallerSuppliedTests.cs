@@ -85,4 +85,20 @@ public class Svc
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.NoCandidatesFound));
     }
+
+    [Test]
+    public async Task NamedArgumentsConvertAsync_FileScopeUpperCaseCallerPath_ConvertsTheDocument()
+    {
+        const string source = "public class C { public void M(int first, int second) { } public void Run() { M(1, 2); } }";
+        var filePath = Path.Combine(Path.GetTempPath(), "TestProj", "Calls.cs");
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(filePath, source)]);
+        _workspaceManager.SetTestSolution(solution);
+        var engine = new NamedArgumentsEngine(_workspaceManager);
+
+        // The workspace holds the document in its original case; the caller passes the same file upper-cased.
+        var outcome = await engine.ConvertAsync(NamedArgumentsScope.file, filePath.ToUpperInvariant(), null, new NamedArgumentsOptions(), CancellationToken.None);
+
+        Assert.That(outcome.Changes, Has.Count.EqualTo(1));
+        Assert.That(outcome.Changes.Values.Single(), Does.Contain("M(first: 1, second: 2)"));
+    }
 }

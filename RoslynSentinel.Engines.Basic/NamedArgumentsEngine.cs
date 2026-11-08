@@ -155,7 +155,10 @@ public sealed class NamedArgumentsEngine
                 }
 
                 var wanted = new FilePathWrapper(scopeName);
-                var matches = solution.Projects.SelectMany(p => p.Documents).Where(d => d.FilePath is not null && wanted.Equals(d.FilePath)).ToList();
+                var found = DocumentLookup.FindDocumentOrNull(solution, wanted);
+                var matches = found?.FilePath is null
+                    ? new List<Document>()
+                    : solution.Projects.SelectMany(p => p.Documents).Where(d => string.Equals(d.FilePath, found.FilePath, PathComparison.Comparison)).ToList();
                 if (matches.Count == 0)
                 {
                     return ([], new ResultError(ToolErrorCode.NotFound, $"File '{scopeName}' is not part of the loaded solution."));
