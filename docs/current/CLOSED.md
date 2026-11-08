@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Error codes follow cause: Step 4 leftovers - resolved (2026-11-08)
+
+Error codes follow cause: Step 4 leftovers (2026-11-08) - fix the codes at DeleteFile missing file (WholeFileWriteTools.cs ~133, to NotFound), RetryFailedChanges "File not found." (WorkspaceTools.cs ~376, NotFound), InlineClass not-found (AdvancedRefactoringTools.cs ~319, NotFound) and SyncTypeAndFilename "already exists" (RefactoringStructuralImpl.cs ~1447, TargetIneligible), and split the 4 conflated engine "not found or" messages (AsyncOptimizationEngine ~141, LogicOptimizationEngine ~1192, MemberRefactoringEngine ~2291, ThreadSafetyEngine ~35); done = one test per code and no "not found or" text left - [doc](plans/plan_error_codes_follow_cause.md)
+
+Evidence: d619b9b4, 1314b913 (4 engine splits + ErrorCodeFollowsCauseEngineTests), 9e210285 (DeleteFile NotFound), abc9b5b0 (InlineClass: engine returned an unconsumed "__error__" dictionary key, now throws NotFound/TargetIneligible; BatteryThirtyOneTests), 05ce8aaf (SyncTypeAndFilename TargetIneligible; SyncTypeAndFilenameTests). WorkspaceTools.cs ~376 was inside a block-commented dead ApplyDiffWithConfirmationCode copy: stale, nothing to fix
+
+## Bare "Could not parse file." - resolved (2026-11-08)
+
+Bare "Could not parse file." (2026-11-08) - `AdvancedStructuralEngine.cs` ~1154 throws it without the path; name the path like its siblings (AdvancedRefactoringEngine ~58 and ~240, StructuralRefinementEngine ~166); done = an awaited `Assert.ThrowsAsync` test asserts the path is in the message - [doc](proposals/proposal_result_status_and_code_on_the_wire.md)
+
+Evidence: 56bb885d; IntroduceParameterObject_NullSyntaxRoot_ErrorNamesThePath (root==null unreachable from a fixture, so the test goes through the new public static RequireSyntaxRoot seam)
+
 ## Tool terminology: enums and migration-state rename - resolved (2026-11-08)
 
 Tool terminology: enums and migration-state rename (2026-11-08) - type `WrapRange` `wrapper` and `ModifyEnum` `values` as enums, and rename `GetMigrationLedger`/`ResetMigrationLedger` to `GetAsyncMigrationState`/`ResetAsyncMigrationState` (descriptions, prompts, docs and generated tables follow); the rest of the backlog (Introduce, bare Generate) stays reference only; done = the generated schema shows the enum values and no old tool name remains in docs/generated or prompts - [doc](tool-terminology-refinement-reference-v1.md)
