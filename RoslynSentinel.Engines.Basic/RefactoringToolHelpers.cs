@@ -71,7 +71,7 @@ public static class RefactoringToolHelpers
             return new SentinelCallToolResult<object>
             {
                 IsError = false,
-                SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: [], Description: description, DryRun: false),
+                SuccessData = AppliedChangeSummary.From(lineChanges: [], findings: null, affectedFiles: [], description: description, dryRun: false),
                 StatusMessage = description
             };
         }
@@ -84,7 +84,7 @@ public static class RefactoringToolHelpers
             return new SentinelCallToolResult<object>
             {
                 IsError = false,
-                SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: [], Description: nothingDoneText, DryRun: false),
+                SuccessData = AppliedChangeSummary.From(lineChanges: [], findings: null, affectedFiles: [], description: nothingDoneText, dryRun: false),
                 StatusMessage = nothingDoneText
             };
         }
