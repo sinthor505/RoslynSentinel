@@ -18,6 +18,8 @@ public class PathCaseCallerSuppliedTests
 
     private SymbolNavigationEngine _symbolNavigationEngine = null!;
 
+    private SolutionStructureEngine _solutionStructureEngine = null!;
+
     [SetUp]
     public void Setup()
     {
@@ -27,6 +29,7 @@ public class PathCaseCallerSuppliedTests
             _workspaceManager,
             _symbolNavigationEngine,
             Battery.Basic.TestEngines.ValidationEngine(_workspaceManager));
+        _solutionStructureEngine = Battery.Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Battery.Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
@@ -68,5 +71,18 @@ public class Svc
         var result = await _memberRefactoringEngine.RemoveConstructorParameterAsync("SVC.CS", "Svc", "name");
 
         Assert.That(result.UpdatedText, Does.Not.Contain("_name"));
+    }
+
+    [Test]
+    public async Task PreviewMoveFileToNamespaceFolder_UpperCaseCallerPath_StaysAlreadyInCorrectFolder()
+    {
+        // The document sits in the folder its namespace implies, so the correct spelling needs no move.
+        var filePath = Path.Combine(Path.GetTempPath(), "TestProj", "Order.cs");
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(filePath, "namespace TestProj;\npublic class Order { }\n")]);
+        _workspaceManager.SetTestSolution(solution);
+
+        var result = await _solutionStructureEngine.PreviewMoveFileToNamespaceFolderAsync(filePath.ToUpperInvariant());
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.NoCandidatesFound));
     }
 }

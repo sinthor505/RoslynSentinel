@@ -88,7 +88,7 @@ public class SolutionStructureEngine
         var relativePath = relativeFolderNamespace.Replace('.', Path.DirectorySeparatorChar);
         var expectedDir = relativePath.Length > 0 ? Path.Combine(projectDir, relativePath) : projectDir;
         var expectedPath = Path.Combine(expectedDir, Path.GetFileName(filePath));
-        if (filePath != expectedPath)
+        if (!string.Equals(filePath, expectedPath, PathComparison.Comparison))
         {
             return new ProjectEditResult
             {
@@ -1144,7 +1144,7 @@ public class SolutionStructureEngine
             var docs = project.Documents.AsEnumerable();
             if (!string.IsNullOrEmpty(filePath))
             {
-                docs = docs.Where(d => d.Name == filePath || d.FilePath == filePath || (d.FilePath != null && d.FilePath.EndsWith(filePath, StringComparison.OrdinalIgnoreCase)));
+                docs = docs.Where(d => d.Name == filePath || string.Equals(d.FilePath, filePath, PathComparison.Comparison) || (d.FilePath != null && d.FilePath.EndsWith(filePath, StringComparison.OrdinalIgnoreCase)));
             }
 
             foreach (var doc in docs)
