@@ -1109,8 +1109,10 @@ public static class RoslynSentinelServiceExtensionsBasic
         filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
             ModelContextProtocol.Protocol.CallToolRequestParams,
             ModelContextProtocol.Protocol.CallToolResult>(
-            (context, cancellationToken) =>
+            async (context, cancellationToken) =>
             {
+                using var activity = ServerActivityTracker.Shared.Enter();
+
                 ToolTelemetry? telemetry = null;
                 try
                 {
@@ -1121,7 +1123,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                     Debug.WriteLine($"Tool telemetry lookup failed: {ex}");
                 }
 
-                return ToolTelemetryRecorder.RecordAsync(telemetry, context.Params?.Name, () => next(context, cancellationToken));
+                return await ToolTelemetryRecorder.RecordAsync(telemetry, context.Params?.Name, () => next(context, cancellationToken));
             }));
     }
 

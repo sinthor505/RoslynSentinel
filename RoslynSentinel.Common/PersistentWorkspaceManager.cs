@@ -1822,6 +1822,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         IReadOnlyCollection<FilePathWrapper>? deletePaths = null,
         bool exactRestore = false, string? operationLabel = null)
     {
+        // A long single tool call (batch edits) keeps resetting the idle clock at every write.
+        ServerActivityTracker.Shared.Touch();
         deletePaths ??= [];
 
         // Session-wide fatal latch (see docs/current/ideas/external-drift-hard-blocker.md
