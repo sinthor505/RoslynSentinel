@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## AppliedChangeSummary.From factory and migration - resolved (2026-11-08)
+
+`AppliedChangeSummary.From` factory (2026-11-08) - add `AppliedChangeSummary.From(ApplyOutcome, ...)` that fills `LineChanges` and `Findings`, then migrate in slices the 53 of 82 production `new AppliedChangeSummary(` sites that omit `LineChanges` (their dry-run `lineChanges` is null although the Note promises it); done = no production site constructs the record without `LineChanges`, and a dry-run test per tool family shows non-null `lineChanges` - [doc](issues/issue_movemember_open_followups.md)
+
+Evidence: 25f440fe (factory, ComputeLineChangesAsync, tests), 40bd5fd4, 93f0db87, 0ac39a4a, f7163659, 58f6f761, caf751fc (82 production sites migrated, 0 TODO-marked; Search text finds no production new AppliedChangeSummary(), enforced by AppliedChangeSummaryConstructionRatchetTests), 4cb71605 (DryRunLineChangesTests per family); full RunTest 7526 total, 0 failed, 32 skipped. Primary constructor left non-Obsolete (19 test sites, positional deconstruction). The autoStage=false preview branches are dormant (autoStage hardcoded true) but now compute LineChanges.
+
 ## Path comparison: caller-supplied path sites - resolved (2026-11-08)
 
 Path comparison: caller-supplied path sites (2026-11-08) - route the 6 sites that compare a caller-supplied path with a document path (MemberRefactoringEngine ~509 and ~3406, ProjectStructureEngine ~91 and ~1147, SyntaxTargetResolver ~171, SemanticReplaceEngine ~620) and the 2 comparer-less `Equals` sites through `DocumentLookup` / `PathComparison.Comparer` (first check whether upstream normalization already fixes the case); the other baseline sites stay ratchet-guarded; done = a differently cased path test per site passes and the `PathComparisonRatchetTests` baseline drops by the fixed sites - [doc](issues/issue_path_comparison_case_sensitivity.md)
