@@ -297,7 +297,7 @@ public class WorkspaceBuildTestImpl
                 var failureMessage = (driftHint is not null ? buildSummary + " " + driftHint : buildSummary) + " " + ToolCallHint.Next("Build", "after fixing the errors in this result (root-cause project first).", ("level", "quickBuild"));
                 // The build ran and failed: report isError:true like RunTestTool does for an incomplete run, but keep the
                 // BuildResult payload (inline or offloaded) so the caller still gets the error details.
-                return buildToolResult with { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, failureMessage), Findings = WithForeignWriterFindings(result.Findings, buildResult.FullDiagnostics?.Errors ?? buildResult.Errors), StatusMessage = failureMessage };
+                return buildToolResult with { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, failureMessage), Findings = WithForeignWriterFindings(result.Findings, buildResult.Errors), StatusMessage = failureMessage };
             }
 
             return buildToolResult with { Findings = result.Findings, StatusMessage = buildSummary };

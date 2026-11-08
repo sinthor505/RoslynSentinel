@@ -14,7 +14,7 @@ public class BuildResultProjectorTests
     private static DiagnosticInfo Warn(string project, string file, int line = 1) =>
         new("CS0168", "Warning", $"The variable 'v{line}' is declared but never used", file, line, 1, line, 2, project);
 
-    // Mirrors what the engine hands over: capped Errors/Warnings, the uncapped lists in FullDiagnostics.
+    // Mirrors what the engine hands over: every error and warning, uncapped.
     private static BuildResult Failed(
         List<DiagnosticInfo> errors,
         List<DiagnosticInfo>? warnings = null,
@@ -31,16 +31,15 @@ public class BuildResultProjectorTests
             DiagnosticsComplete: true,
             ErrorCount: errorCount ?? errors.Count,
             WarningCount: warnings.Count,
-            Errors: errors.Take(50).ToList(),
-            Warnings: warnings.Take(50).ToList(),
+            Errors: errors,
+            Warnings: warnings,
             ErrorSummary: errors.GroupBySeverity(10),
             WarningSummary: warnings.GroupBySeverity(10),
             StdoutTail: stdout,
             StderrTail: stderr,
             Duration: TimeSpan.FromSeconds(3),
             ExitCode: 1,
-            Detail: detail,
-            FullDiagnostics: new BuildFullDiagnostics(errors, warnings));
+            Detail: detail);
     }
 
     // FilePathWrapper canonicalizes separators, so expected file keys go through it too.
@@ -151,7 +150,7 @@ public class BuildResultProjectorTests
         Assert.That(projected.Errors, Has.Count.EqualTo(100), "MaxDetails (20) no longer caps errors; the result marshaller pages a long list");
         Assert.That(projected.Errors.Select(e => e.StartLine), Is.EqualTo(Enumerable.Range(1, 100)), "original order is kept");
         Assert.That(projected.Breakdown!.ByProject.Single().ErrorCount, Is.EqualTo(100));
-        Assert.That(projected.FullDiagnostics!.Errors, Has.Count.EqualTo(100), "the engine carrier is left untouched");
+        Assert.That(errors, Has.Count.EqualTo(100), "the engine's list is left untouched");
     }
 
     [Test]
@@ -215,7 +214,7 @@ public class BuildResultProjectorTests
         Assert.That(loud.Errors, Has.Count.EqualTo(1));
 
         var greenWithOutput = BuildResultProjector.Project(
-            full with { Outcome = BuildOutcome.Succeeded, ErrorCount = 0, Errors = [], FullDiagnostics = null },
+            full with { Outcome = BuildOutcome.Succeeded, ErrorCount = 0, Errors = [] },
             new BuildProjection(MaxDetails: 20, IncludeOutput: true, IncludeWarnings: false),
             null);
         Assert.That(greenWithOutput.StdoutTail, Is.EqualTo("stdout tail"), "includeOutput keeps the tails even on a green build");
@@ -247,11 +246,11 @@ public class BuildResultProjectorTests
         Assert.That(projected.Errors[2].Message, Is.EqualTo("short"));
         Assert.That(projected.Warnings[0].Message, Has.Length.LessThanOrEqualTo(300));
         Assert.That(projected.ErrorSummary.All(s => s.MessageTemplate.Length <= 300), Is.True);
-        Assert.That(projected.FullDiagnostics!.Errors[0].Message, Has.Length.EqualTo(1000), "the carrier keeps the full text");
+        Assert.That(errors[0].Message, Has.Length.EqualTo(1000), "the engine's list keeps the full text");
     }
 
     [Test]
-    public void ProjectedFailedResult_KeepsEveryErrorAndDoesNotSerializeTheCarrier()
+    public void ProjectedFailedResult_KeepsEveryError()
     {
         // Realistic failed build: 100 errors over three projects and many files, compiler-length messages.
         // The payload is no longer kept under the inline budget here: the result marshaller pages a long errors list.
@@ -274,10 +273,8 @@ public class BuildResultProjectorTests
         };
 
         var projected = BuildResultProjector.Project(Failed(errors), Defaults, deps);
-        string json = JsonSerializer.Serialize(projected, SharedJsonOptions.Default);
 
         Assert.That(projected.ErrorSummary.All(s => s.Locations.Count <= BuildResultProjector.MaxSummaryLocations), Is.True);
-        Assert.That(json, Does.Not.Contain("\"FullDiagnostics\"").IgnoreCase, "the carrier is [JsonIgnore]");
         Assert.That(projected.Errors, Has.Count.EqualTo(100));
     }
 }

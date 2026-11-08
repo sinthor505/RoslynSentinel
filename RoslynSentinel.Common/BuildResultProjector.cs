@@ -32,7 +32,7 @@ public static class BuildResultProjector
     /// Shrinks <paramref name="full"/> for the wire. <paramref name="transitiveDependencies"/> maps a project name
     /// to the names of the projects it transitively depends on; null means no graph is known, so every project
     /// that has errors counts as a root cause. A project absent from the map is treated as having no dependencies.
-    /// Leaves <see cref="BuildResult.FullDiagnostics"/> untouched.
+    /// <paramref name="full"/> carries every error and warning; warnings are capped by <see cref="BuildProjection.MaxDetails"/>.
     /// </summary>
     public static BuildResult Project(
         BuildResult full,
@@ -42,8 +42,8 @@ public static class BuildResultProjector
         ArgumentNullException.ThrowIfNull(full);
         ArgumentNullException.ThrowIfNull(options);
 
-        List<DiagnosticInfo> errors = full.FullDiagnostics?.Errors ?? full.Errors ?? [];
-        List<DiagnosticInfo> warnings = full.FullDiagnostics?.Warnings ?? full.Warnings ?? [];
+        List<DiagnosticInfo> errors = full.Errors ?? [];
+        List<DiagnosticInfo> warnings = full.Warnings ?? [];
         int maxDetails = Math.Max(0, options.MaxDetails);
 
         List<DiagnosticInfo> projectedWarnings = options.IncludeWarnings ? CapAndCut(warnings, maxDetails) : [];

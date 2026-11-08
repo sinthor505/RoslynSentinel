@@ -106,14 +106,11 @@ public class BuildEngine
                     $"Quick build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to nothing -- no compile verdict is available. Call {ToolCallHint.Call("ListAll", ("kind", "all"))} to see valid project/file names."));
         }
 
-        var allErrors = summary!.Details.Where(d => d.Severity == "Error").ToList();
-        var allWarnings = summary!.Details.Where(d => d.Severity == "Warning").ToList();
-        // Solution scope fetched the uncapped list (int.MaxValue) so FullDiagnostics is complete; the
-        // lists callers see are still capped to maxDetails. File/project scopes were never capped here.
-        bool capToMaxDetails = scope is not (ToolScope.file or ToolScope.project);
-        var errors = capToMaxDetails ? allErrors.Take(maxDetails).ToList() : allErrors;
-        // Same combined cap as before: errors first, warnings only fill what is left of maxDetails.
-        var warnings = capToMaxDetails ? allWarnings.Take(Math.Max(0, maxDetails - errors.Count)).ToList() : allWarnings;
+        // The engine returns every diagnostic: solution scope fetched the uncapped list (int.MaxValue) and
+        // BuildResultProjector caps warnings by maxDetails; the result marshaller pages errors.
+        // TODO maxDetails is no longer used by RunQuickBuildAsync/RunFullBuildAsync; drop the parameter and its callers' arguments.
+        var errors = summary!.Details.Where(d => d.Severity == "Error").ToList();
+        var warnings = summary.Details.Where(d => d.Severity == "Warning").ToList();
         const int SummaryTopN = 50;
 
         return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, new BuildResult(
@@ -125,7 +122,6 @@ public class BuildEngine
             WarningCount: summary.Warnings,
             Errors: errors,
             Warnings: warnings,
-            FullDiagnostics: new BuildFullDiagnostics(allErrors, allWarnings),
             ErrorSummary: errors.GroupBySeverity(SummaryTopN),
             WarningSummary: warnings.GroupBySeverity(SummaryTopN),
             StdoutTail: null,
@@ -409,14 +405,11 @@ public class BuildEngine
             ExitCode: process.ExitCode,
             ErrorCount: errors.Count,
             WarningCount: warnings.Count,
-            // Capped by maxDetails, same as RunQuickBuildAsync -> the raw per-diagnostic lists
-            // previously shipped uncapped regardless of the caller's maxDetails value (a confirmed
-            // 2,160-error / ~880KB response, since Build's own maxDetails parameter was never
-            // forwarded to this method at all). ErrorSummary/WarningSummary below remain the
-            // uncapped grouped-by-Id view for spotting one cause behind many errors.
-            Errors: errors.Take(maxDetails).ToList(),
-            Warnings: warnings.Take(maxDetails).ToList(),
-            FullDiagnostics: new BuildFullDiagnostics(errors, warnings),
+            // Every diagnostic: BuildResultProjector caps warnings by maxDetails and the result marshaller
+            // pages errors, so the engine no longer caps. ErrorSummary/WarningSummary below are the
+            // grouped-by-Id view for spotting one cause behind many errors.
+            Errors: errors,
+            Warnings: warnings,
             ErrorSummary: errors.GroupBySeverity(SummaryTopN),
             WarningSummary: warnings.GroupBySeverity(SummaryTopN),
             StdoutTail: Tail(stdoutText),
