@@ -49,20 +49,6 @@ public static class LargeResultHelper
     }
 
     /// <summary>
-    /// Writes already-serialized JSON text verbatim to a <see cref="ResultWrapperType.Raw"/> file,
-    /// for callers that only have a final serialized response body -> not a typed value -> such as the
-    /// generic MCP request-filter backstop. Unlike the typed-value store, this never
-    /// re-serializes: <paramref name="json"/> is parsed once into a <see cref="JsonNode"/> and wrapped
-    /// as-is. Mirrors the same <c>.roslynsentinel/largeresults/largeresult_<timestamp>_<resultId>.json</c>
-    /// naming convention so <c>GetLargeResult</c>'s existing file-resolution logic finds it unchanged.
-    /// Fails closed: if no solution root is available, returns <c>offloaded: false</c> rather than
-    /// throwing, so a guardrail can never itself break the call it's guarding.
-    /// </summary>
-    public static Task<(bool offloaded, FilePathWrapper filePath, string? resultId)> StoreRawJsonAsync(
-        string json, string? solutionRoot, CancellationToken cancellationToken) =>
-        StoreWrappedJsonAsync(json, solutionRoot, ResultWrapperType.Raw, cancellationToken);
-
-    /// <summary>
     /// Writes the full wire text of a tool result envelope to a <see cref="ResultWrapperType.Envelope"/> file: the
     /// same JSON the SDK would have sent, as <c>Data</c>, so a reader needs no type to replay it. Same naming,
     /// folder and retention as every other large result. Returns <c>offloaded: false</c> when there is no solution
@@ -165,53 +151,12 @@ public record ResultWrapper
     }
 }
 
+/// <summary>
+/// The kind of a stored large-result file. Envelope is the only kind written or read: older files (Raw, typed list wrappers) carry a
+/// name that no longer exists, so loading one throws a JsonException that GetLargeResult reports as "written by an older server".
+/// </summary>
 public enum ResultWrapperType
 {
-    MigrationCandidateFindingList,
-    ApiSurfaceEntryList,
-    CodeInventoryReport,
-    MethodSource,
-    FileSource,
-    MigrationScanSummary,
-    MemberChangedContent,
-    AppliedChangeSummaryResult,
-    BreakingChangeList,
-    TextSearchMatchList,
-    ProjectFileList,
-    ProjectInfoList,
-    SolutionItemFileList,
-    SolutionItemsAllResult,
-    SolutionSymbolEntryList,
-    SymbolRelationshipResultList,
-    BroadenedSymbolRelationshipResults,
-    Raw,
-    ErrorStructuredDetailList,
-    /// <summary>The full wire envelope of a tool result as the SDK would have sent it (<see cref="LargeResultHelper.StoreEnvelopeAsync"/>). Appended last: stored files carry the name, never the number.</summary>
+    /// <summary>The full wire envelope of a tool result as the SDK would have sent it (<see cref="LargeResultHelper.StoreEnvelopeAsync"/>).</summary>
     Envelope
-}
-
-/// <summary>Offloaded payload shape for a whole-file ReadFile result too large to inline (mirrors the anonymous shape ReadFile returns inline for the non-offloaded case).</summary>
-public record FileSourceResult
-{
-    public string FilePath { get; init; } = "";
-    public int StartLine
-    {
-        get; init;
-    }
-    public int EndLine
-    {
-        get; init;
-    }
-    public int TotalLines
-    {
-        get; init;
-    }
-    public string Source { get; init; } = "";
-}
-
-/// <summary>Offloaded payload shape for a mutating member/constructor-parameter tool's changed content, too large to inline.</summary>
-public record MemberChangedContentResult
-{
-    public AppliedChangeSummary Summary { get; init; } = null!;
-    public string ChangedContent { get; init; } = "";
 }

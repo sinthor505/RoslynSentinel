@@ -22,7 +22,7 @@ public class BareFileWriteRatchetTests
         ["RoslynSentinel.Common/AgentLoop/ModelAgentRunner.cs::FormatForAgentLog"] = 1,
         ["RoslynSentinel.Common/AgentLoop/ModelAgentRunner.cs::WriteTranscriptAsync"] = 1,
         // Large-result cache under .roslynsentinel/largeresults (server state, not workspace files).
-        ["RoslynSentinel.Common/LargeResultHelper.cs::StoreWrappedJsonAsync"] = 1, // shared by StoreRawJsonAsync and StoreEnvelopeAsync
+        ["RoslynSentinel.Common/LargeResultHelper.cs::StoreWrappedJsonAsync"] = 1, // used by StoreEnvelopeAsync
         // Migration ledger state file (server state).
         ["RoslynSentinel.Common/MigrationLedger.cs::SaveAsync"] = 1,
         // Undo and operation blobs (server state, not workspace files).

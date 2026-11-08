@@ -647,8 +647,8 @@ public class WorkspaceTools
     // limit null = fill the size budget (see GetLargeResult); a non-null value is an upper bound.
     public Task<SentinelCallToolResult<object>> GetLargeResultTool(
         ToolCallReason reason, string? resultId = null, string? filePath = null, int? limit = null, int offset = 0,
-        int? charLimit = null, string? path = null, CancellationToken cancellationToken = default)
-        => _readNavTools.GetLargeResultTool(reason, resultId, filePath, limit, offset, charLimit, path, cancellationToken);
+        string? path = null, CancellationToken cancellationToken = default)
+        => _readNavTools.GetLargeResultTool(reason, resultId, filePath, limit, offset, path, cancellationToken);
 
     private readonly SymbolNavigationImpl _symbolNavigation;
 

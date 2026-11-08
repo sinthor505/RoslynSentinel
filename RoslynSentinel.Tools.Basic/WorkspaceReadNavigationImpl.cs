@@ -1807,13 +1807,26 @@ public class WorkspaceReadNavigationImpl
         return Build(count, WarningFor(count));
     }
 
+    // Returned for a stored file GetLargeResult cannot read: one written before the result marshaller (Raw or a typed list wrapper,
+    // plan_wire_result_marshaller.md Step 10) or with a Type name that no longer exists. Only Envelope files are written now.
+    private const string StoredResultFromOlderServerMessage =
+        "This stored result was written by an older server version and cannot be paged; repeat the original call.";
+
+    private static SentinelCallToolResult<object> StoredResultFromOlderServer() =>
+    new()
+    {
+        IsError = true,
+        ErrorData = new ResultError(ToolErrorCode.NotFound, StoredResultFromOlderServerMessage)
+    };
+
     public async Task<SentinelCallToolResult<object>> GetLargeResult(
         ToolCallReason reason,
         string? resultId = null,
         string? filePath = null,
         int? limitOrNull = null,
         int offset = 0,
-        CancellationToken cancellationToken = default, int? charLimit = null, string? path = null)
+        string? path = null,
+        CancellationToken cancellationToken = default)
     {
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         var solutionRoot = _workspaceManager.GetSolutionRoot();
@@ -1859,13 +1872,13 @@ public class WorkspaceReadNavigationImpl
                                                SolutionNotLoadedMessage.Build(_workspaceManager.LoadState) + " Offloaded results are stored under the solution root, so they cannot be located until a solution is loaded; the file itself is still on disk under .roslynsentinel/largeresults.")
                 };
             }
-            
+
             var message = "Result file not found. Supply a valid resultId or filePath pointing to a largeresult_*.json file in the largeresults directory.";
             if (!string.IsNullOrEmpty(resultId))
             {
                 message += $" (resultId looked up: {resultId})";
             }
-            
+
             return new SentinelCallToolResult<object>
             {
                 IsError = true,
@@ -1873,527 +1886,51 @@ public class WorkspaceReadNavigationImpl
             };
         }
 
-        ResultWrapper all;
         try
         {
             var json = await File.ReadAllTextAsync(resolvedPath, cancellationToken);
-            all = JsonSerializer.Deserialize<ResultWrapper>(
-                      json,
-                      _jsonOptions)
-                  ?? new ResultWrapper();
+            ResultWrapper all = JsonSerializer.Deserialize<ResultWrapper>(json, _jsonOptions) ?? new ResultWrapper();
 
             if (all.Data == null)
             {
                 return new SentinelCallToolResult<object>
                 {
                     IsError = true,
-                    ErrorData = new ResultError("Exception", "Result file has no SuccessData payload - it may be corrupt.")
+                    ErrorData = new ResultError(ToolErrorCode.Exception, "Result file has no SuccessData payload - it may be corrupt.")
                 };
             }
 
-            // Envelope (the result marshaller's store): the full wire envelope, paged by path with ResultPager. Old types below are untouched.
-            if (all.Type == ResultWrapperType.Envelope)
+            // Only Envelope files are written now. A numeric Type that names no member is the one old file that deserializes without a
+            // JsonException (an unknown Type name throws one, handled below).
+            if (all.Type != ResultWrapperType.Envelope)
             {
-                // A stored sequence (marshaller sequence pager) is paged by unit; files without one (older stores, Fit-path results) keep the path flow.
-                if (all.Sequence is { Kind: not SequenceKind.None } && all.Data is JsonObject)
-                {
-                    return PageSequence(all, path, offset, limitOrNull, resultId, filePath);
-                }
-
-                return PageEnvelope(all, path, offset, limitOrNull, resultId, filePath);
+                return StoredResultFromOlderServer();
             }
 
-            // Legacy list and text paths below keep the old default of 50 when limit is omitted.
-            int limit = limitOrNull ?? 50;
-
-            // Raw (the generic MCP request-filter offload backstop, see
-            // docs/current/proposal_centralized_large_result_filter.md) has no known element shape ->
-            // the filter that wrote it only ever saw opaque serialized text, never a typed value -> so
-            // the list-shaped Skip(offset).Take(limit) paging every other case below uses does not
-            // apply. Instead this pages over the stored raw text itself as a byte/char window, sized
-            // and offset by the caller's charLimit/offset (a dedicated character-count parameter,
-            // distinct from limit's record-count meaning used by every other case below), capped so
-            // a single response can never itself exceed OffloadThresholdBytes. Without this cap,
-            // returning the whole stored payload here would let the very filter that offloaded it
-            // catch this response on the way back out and re-offload it under a new resultId -> an
-            // unbounded fetch/still-too-big/re-offload loop.
-            if (all.Type == ResultWrapperType.Raw)
+            // A stored sequence (marshaller sequence pager) is paged by unit; files without one (Fit-path results) keep the path flow.
+            if (all.Sequence is { Kind: not SequenceKind.None } && all.Data is JsonObject)
             {
-                // JsonNode.ToString() uses the default encoder (it escapes the angle brackets of generic types as unicode escapes) and indents
-                // with CRLF, which made each char window carry ~24% less data than compact relaxed output.
-                var rawText = all.Data.ToJsonString(SharedJsonOptions.Compact);
-                var start = Math.Clamp(offset, 0, rawText.Length);
-
-                // The offload filter's threshold check is on the raw response TEXT LENGTH (see
-                // AddCallToolFilter's block.Text.Length check in ServiceRegistrationExtensionsBasic.cs),
-                // i.e. the length of THIS method's own serialized SentinelCallToolResult, not just the raw slice
-                // we embed in it. Two things inflate the final size past the slice length: the
-                // envelope's own field names/punctuation (text/offset/nextOffset/totalChars, the
-                // outer success/data/totalRecords/hasMorePages wrapper), and JSON string-escaping of
-                // the slice content itself -> every '"' or '\' in the slice doubles in size once
-                // embedded as a JSON string value, and stored Raw payloads are frequently
-                // already-serialized JSON (quote-dense), so escaping overhead cannot be treated as a
-                // small fixed constant.
-                //
-                // Start from a worst-case bound (every slice char could double under escaping) and
-                // then verify by actually serializing the candidate response, shrinking if reality
-                // still exceeds the threshold. This guarantees the response this method returns can
-                // never itself be large enough for the filter to re-offload it, regardless of how
-                // quote-dense the stored content is.
-                const int envelopeOverheadBytes = 256;
-                var worstCaseMaxSlice = Math.Max(1, (LargeResultHelper.InlineBudgetChars - envelopeOverheadBytes) / 2);
-                var requestedWindow = charLimit is > 0 && charLimit < worstCaseMaxSlice ? charLimit.Value : worstCaseMaxSlice;
-                var length = Math.Min(requestedWindow, rawText.Length - start);
-
-                object BuildRawPage(int candidateLength)
-                {
-                    var candidateSlice = rawText.Substring(start, candidateLength);
-                    var candidateNextOffset = start + candidateLength;
-                    var candidateHasMore = candidateNextOffset < rawText.Length;
-                    return new
-                    {
-                        text = candidateSlice,
-                        offset = start,
-                        nextOffset = candidateHasMore ? candidateNextOffset : (int?)null,
-                        totalChars = rawText.Length
-                    };
-                }
-
-                var pageData = BuildRawPage(length);
-                while (length > 0 && JsonSerializer.Serialize(pageData, _jsonOptions).Length > LargeResultHelper.InlineBudgetChars - envelopeOverheadBytes)
-                {
-                    length /= 2;
-                    pageData = BuildRawPage(length);
-                }
-
-                var nextOffset = start + length;
-                var hasMoreRaw = nextOffset < rawText.Length;
-
-                return new SentinelCallToolResult<object>
-                {
-                    IsError = false,
-                    SuccessData = pageData,
-                    // Raw payload has no known record shape: the character count is in successData.totalChars and TotalRecords is a record count, so it stays null.
-                    HasMoreData = hasMoreRaw,
-                    NextOffset = hasMoreRaw ? nextOffset : null,
-                    WarningDetails = hasMoreRaw
-                        ? $"Raw result truncated to a {length}-char window. Call {(!string.IsNullOrEmpty(resultId) ? RoslynSentinel.Common.LargeResultHints.FetchCall(resultId, offset: nextOffset) : RoslynSentinel.Common.LargeResultHints.FetchCallForFile(filePath!, offset: nextOffset))} to continue reading."
-                        : null
-                };
+                return PageSequence(all, path, offset, limitOrNull, resultId, filePath);
             }
 
-            SentinelCallToolResult<object> result;
-
-            // Set by branches whose stored payload is not a single JSON array, so the post-switch totals block
-            // cannot derive the total or the returned-row count from the payload's first property.
-            int? textSearchTotal = null;
-            int? textSearchReturned = null;
-
-            switch (all.Type)
-            {
-                case ResultWrapperType.MigrationCandidateFindingList:
-                    {
-                        var findings = JsonSerializer.Deserialize<List<MigrationCandidateFinding>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        // limit/offset were previously accepted but never applied -> the full
-                        // on-disk list was returned regardless of the requested page.
-                        var requested = Math.Min(limit, Math.Max(0, findings.Count - offset));
-                        var page = ShrinkListToFit(findings.Skip(offset).Take(limit).ToList(), _jsonOptions);
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = page,
-                            WarningDetails = page.Count < requested
-                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
-                                : null
-                        };
-                        break;
-                    }
-
-                case ResultWrapperType.ApiSurfaceEntryList:
-                    {
-                        var entries = JsonSerializer.Deserialize<List<ApiSurfaceEntry>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        var requested = Math.Min(limit, Math.Max(0, entries.Count - offset));
-                        var page = ShrinkListToFit(entries.Skip(offset).Take(limit).ToList(), _jsonOptions);
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = page,
-                            WarningDetails = page.Count < requested
-                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
-                                : null
-                        };
-                        break;
-                    }
-                case ResultWrapperType.SolutionSymbolEntryList:
-                    {
-                        var entries = JsonSerializer.Deserialize<List<SolutionSymbolEntry>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        var requested = Math.Min(limit, Math.Max(0, entries.Count - offset));
-                        var page = ShrinkListToFit(entries.Skip(offset).Take(limit).ToList(), _jsonOptions);
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = page,
-                            WarningDetails = page.Count < requested
-                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
-                                : null
-                        };
-                        break;
-                    }
-                case ResultWrapperType.CodeInventoryReport:
-                    {
-                        var entries = JsonSerializer.Deserialize<List<ApiSurfaceEntry>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        var requested = Math.Min(limit, Math.Max(0, entries.Count - offset));
-                        var page = ShrinkListToFit(entries.Skip(offset).Take(limit).ToList(), _jsonOptions);
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = page,
-                            WarningDetails = page.Count < requested
-                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
-                                : null
-                        };
-                        break;
-                    }
-                case ResultWrapperType.MethodSource:
-                    {
-                        // Single object, not a list - limit/offset don't apply, matching the shape
-                        // GetMethodSourceTool returns inline when the result is small enough not to offload.
-                        var methodSource = JsonSerializer.Deserialize<MethodSourceResult>(all.Data.ToString(), _jsonOptions);
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = methodSource
-                        };
-                        break;
-                    }
-                case ResultWrapperType.MigrationScanSummary:
-                    {
-                        // Single object, not a list - limit/offset don't apply, matching the shape
-                        // returned inline when the summary is small enough not to offload.
-                        var migrationScanSummary = JsonSerializer.Deserialize<MigrationScanSummary>(all.Data.ToString(), _jsonOptions);
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = migrationScanSummary
-                        };
-                        break;
-                    }
-                case ResultWrapperType.FileSource:
-                    {
-                        // Single object, not a list - limit/offset don't apply, matching the shape
-                        // ReadFileTool returns inline when the result is small enough not to offload.
-                        var fileSource = JsonSerializer.Deserialize<FileSourceResult>(all.Data.ToString(), _jsonOptions);
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = fileSource
-                        };
-                        break;
-                    }
-                case ResultWrapperType.MemberChangedContent:
-                    {
-                        // Single object, not a list - limit/offset don't apply, matching the shape
-                        // returned inline when the changed content is small enough not to offload.
-                        var memberChangedContent = JsonSerializer.Deserialize<MemberChangedContentResult>(all.Data.ToString(), _jsonOptions);
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = memberChangedContent
-                        };
-                        break;
-                    }
-                case ResultWrapperType.AppliedChangeSummaryResult:
-                    {
-                        // Single object, not a list - limit/offset don't apply, matching the shape
-                        // returned inline when the change summary is small enough not to offload.
-                        var appliedChangeSummary = JsonSerializer.Deserialize<AppliedChangeSummary>(all.Data.ToString(), _jsonOptions);
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = appliedChangeSummary
-                        };
-                        break;
-                    }
-                case ResultWrapperType.BreakingChangeList:
-                    {
-                        var changes = JsonSerializer.Deserialize<List<BreakingChange>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        var requested = Math.Min(limit, Math.Max(0, changes.Count - offset));
-                        var page = ShrinkListToFit(changes.Skip(offset).Take(limit).ToList(), _jsonOptions);
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = page,
-                            WarningDetails = page.Count < requested
-                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
-                                : null
-                        };
-                        break;
-                    }
-                case ResultWrapperType.TextSearchMatchList:
-                    {
-                        var searchResult = JsonSerializer.Deserialize<TextSearchResult>(all.Data.ToString(), _jsonOptions);
-                        if (searchResult is null)
-                        {
-                            result = new SentinelCallToolResult<object> { IsError = false, SuccessData = null };
-                            break;
-                        }
-
-                        // Literal and regex matches are paged as ONE flat sequence (literal first, then regex), so
-                        // offset/limit/totalRecords/hasMoreData mean the same thing as for every list-shaped result and
-                        // a caller advancing offset by the rows returned sees every row exactly once.
-                        var literalAll = searchResult.LiteralResults;
-                        var regexAll = searchResult.RegexResults;
-                        textSearchTotal = literalAll.Count + regexAll.Count;
-
-                        (List<TextSearchMatch> Literal, List<TextSearchMatch> Regex) BuildTextSearchPage(int rowCount)
-                        {
-                            var literalPart = literalAll.Skip(offset).Take(rowCount).ToList();
-                            var regexPart = regexAll.Skip(Math.Max(0, offset - literalAll.Count)).Take(Math.Max(0, rowCount - literalPart.Count)).ToList();
-                            return (literalPart, regexPart);
-                        }
-
-                        var requestedRows = Math.Max(0, Math.Min(limit, textSearchTotal.Value - Math.Max(0, offset)));
-                        var pageRows = requestedRows;
-                        var (literalPage, regexPage) = BuildTextSearchPage(pageRows);
-                        const int envelopeOverheadBytes = 256;
-                        // Never shrink below one row: a zero-row page would hand the caller an endless no-progress loop.
-                        while (pageRows > 1 &&
-                               JsonSerializer.Serialize(searchResult with
-                               {
-                                   LiteralResults = literalPage,
-                                   RegexResults = regexPage
-                               }, _jsonOptions).Length
-                                   > LargeResultHelper.InlineBudgetChars - envelopeOverheadBytes)
-                        {
-                            pageRows = Math.Max(1, pageRows / 2);
-                            (literalPage, regexPage) = BuildTextSearchPage(pageRows);
-                        }
-
-                        var returnedRows = literalPage.Count + regexPage.Count;
-                        textSearchReturned = returnedRows;
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = searchResult with { LiteralResults = literalPage, RegexResults = regexPage },
-                            WarningDetails = returnedRows < requestedRows
-                                ? $"Page shrunk from {requestedRows} to {returnedRows} record(s) ({literalPage.Count} literal + {regexPage.Count} regex) to stay under the size threshold. Call again with offset: {offset + returnedRows} to continue."
-                                : null
-                        };
-                        break;
-                    }
-                case ResultWrapperType.ProjectFileList:
-                    {
-                        var files = JsonSerializer.Deserialize<List<string>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        var requested = Math.Min(limit, Math.Max(0, files.Count - offset));
-                        var page = ShrinkListToFit(files.Skip(offset).Take(limit).ToList(), _jsonOptions);
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = page,
-                            WarningDetails = page.Count < requested
-                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
-                                : null
-                        };
-                        break;
-                    }
-                case ResultWrapperType.ProjectInfoList:
-                    {
-                        var projects = JsonSerializer.Deserialize<List<ProjectInfoEntry>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        var requested = Math.Min(limit, Math.Max(0, projects.Count - offset));
-                        var page = ShrinkListToFit(projects.Skip(offset).Take(limit).ToList(), _jsonOptions);
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = page,
-                            WarningDetails = page.Count < requested
-                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
-                                : null
-                        };
-                        break;
-                    }
-                case ResultWrapperType.SolutionItemFileList:
-                    {
-                        var solutionItems = JsonSerializer.Deserialize<List<SolutionItemFile>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        var requested = Math.Min(limit, Math.Max(0, solutionItems.Count - offset));
-                        var page = ShrinkListToFit(solutionItems.Skip(offset).Take(limit).ToList(), _jsonOptions);
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = page,
-                            WarningDetails = page.Count < requested
-                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
-                                : null
-                        };
-                        break;
-                    }
-                case ResultWrapperType.SolutionItemsAllResult:
-                    {
-                        // Single object, not a list - limit/offset don't apply, matching the shape
-                        // ListSolutionItemsTool(kind: all) returns inline when small enough not to offload.
-                        var solutionItemsAll = JsonSerializer.Deserialize<SolutionItemsAllResult>(all.Data.ToString(), _jsonOptions);
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = solutionItemsAll
-                        };
-                        break;
-                    }
-                case ResultWrapperType.SymbolRelationshipResultList:
-                    {
-                        // Element shape varies by searchKind (ImplementationInfo, AttributeUsageSite,
-                        // ObjectCreationSite, ExtensionMethodInfo, SearchResult) - pass through as raw
-                        // JSON nodes instead of a single concrete record type.
-                        var items = (all.Data as JsonArray) ?? [];
-                        var requested = Math.Min(limit, Math.Max(0, items.Count - offset));
-                        var page = ShrinkListToFit(items.Skip(offset).Take(limit).ToList(), _jsonOptions);
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = page,
-                            WarningDetails = page.Count < requested
-                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
-                                : null
-                        };
-                        break;
-                    }
-                case ResultWrapperType.BroadenedSymbolRelationshipResults:
-                    {
-                        // Dictionary<searchKind name, List<object>> - a map, not a flat list, so
-                        // limit/offset (list-shaped paging) don't apply; return the whole map.
-                        var broadenedMap = JsonSerializer.Deserialize<Dictionary<string, List<JsonNode?>>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = broadenedMap
-                        };
-                        break;
-                    }
-                case ResultWrapperType.ErrorStructuredDetailList:
-                    {
-                        // Offloaded ResultError.StructuredDetail (see ResultError.ForPossiblyLargeDetailAsync).
-                        // Element shape varies by which tool/branch produced it (LedgerEntryBase-derived
-                        // entries, SkippedCallSite, DiagnosticReport.Diagnostics, ...) - pass through as raw
-                        // JSON nodes instead of a single concrete record type, same as
-                        // SymbolRelationshipResultList above.
-                        var items = (all.Data as JsonArray) ?? [];
-                        var requested = Math.Min(limit, Math.Max(0, items.Count - offset));
-                        var page = ShrinkListToFit(items.Skip(offset).Take(limit).ToList(), _jsonOptions);
-                        result = new SentinelCallToolResult<object>
-                        {
-                            IsError = false,
-                            SuccessData = page,
-                            WarningDetails = page.Count < requested
-                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
-                                : null
-                        };
-                        break;
-                    }
-                default:
-                    {
-                        return new SentinelCallToolResult<object>
-                        {
-                            IsError = true,
-                            ErrorData = new ResultError("Exception",
-                                          "Unknown scan result type.")
-                        };
-                    }
-            }
-            ;
-
-            // MethodSource/FileSource/MigrationScanSummary/MemberChangedContent wrap a single object, not a list - the array-shaped
-            // TotalRecords/HasMorePages computation below doesn't apply (and AsArray() on a
-            // single-object payload's first property, e.g. a string Signature, throws rather than
-            // returning null, since it's the wrong node kind rather than a missing one).
-            int totalRecords;
-            bool hasMorePages;
-            if (all.Type is ResultWrapperType.MethodSource or ResultWrapperType.FileSource or ResultWrapperType.MigrationScanSummary or ResultWrapperType.MemberChangedContent or ResultWrapperType.AppliedChangeSummaryResult or ResultWrapperType.SolutionItemsAllResult)
-            {
-                totalRecords = 1;
-                hasMorePages = false;
-            }
-            else if (all.Type is ResultWrapperType.BroadenedSymbolRelationshipResults)
-            {
-                // Map-shaped, not a flat list - report the number of relationship kinds that had
-                // results (matching the in-band WarningDetails summary), not a paged item count.
-                totalRecords = all.Data?.AsObject().Count ?? 0;
-                hasMorePages = false;
-            }
-            else
-            {
-                if (textSearchTotal is int searchTotal)
-                {
-                    totalRecords = searchTotal;
-                }
-                else
-                {
-                    var dataArray = all.Data as JsonArray
-                        ?? all.Data?.AsObject().FirstOrDefault().Value?.AsArray()
-                        ?? [];
-                    totalRecords = dataArray.Count;
-                }
-
-                // Compare against the rows actually returned, not the requested limit: a page shrunk to fit the
-                // size threshold returns fewer rows than limit and the remainder is still unread.
-                var returnedCount = textSearchReturned
-                    ?? (result.SuccessData as System.Collections.ICollection)?.Count
-                    ?? limit;
-                hasMorePages = (offset + returnedCount) < totalRecords;
-            }
-
-            return new SentinelCallToolResult<object>
-            {
-                IsError = false,
-                // Unwrap: `result` is itself a SentinelCallToolResult<object> built above per ResultWrapperType.
-                // Returning it as-is here double-wraps the payload (SuccessData.SuccessData instead of SuccessData),
-                // which doesn't match every other tool's flat SentinelCallToolResult<object> shape.
-                SuccessData = result.SuccessData,
-                TotalRecords = totalRecords,
-                HasMoreData = hasMorePages,
-                NextOffset = hasMorePages ? offset + (textSearchReturned ?? (result.SuccessData as System.Collections.ICollection)?.Count ?? limit) : null,
-                // The branch-built "page shrunk ... call again with offset" hint must reach the caller.
-                WarningDetails = result.WarningDetails,
-            };
+            return PageEnvelope(all, path, offset, limitOrNull, resultId, filePath);
+        }
+        catch (JsonException ex)
+        {
+            // An old file whose Type name was deleted (Raw, a typed list wrapper) cannot be deserialized. The exception text names
+            // internal types and paths, so it goes to the server log only.
+            _logger.LogInformation(ex, "GetLargeResult could not deserialize stored result {ResultId}; treating it as written by an older server", resultId ?? filePath ?? "(unknown)");
+            return StoredResultFromOlderServer();
         }
         catch (Exception ex)
         {
+            _logger.LogWarning(ex, "GetLargeResult failed to read stored result {ResultId}", resultId ?? filePath ?? "(unknown)");
             return new SentinelCallToolResult<object>
             {
                 IsError = true,
-                ErrorData = new ResultError("Exception",
-                              "Failed to read scan file.", ex.Message)
+                ErrorData = new ResultError(ToolErrorCode.Exception,
+                              "Failed to read the stored result file. See the server log for details.")
             };
         }
-    }
-
-    // Mirrors the Raw branch's worst-case-then-shrink loop (see the ResultWrapperType.Raw case in
-    // GetLargeResultTool) so every list-shaped switch branch there gets the same guarantee: the page
-    // this method hands back can never itself be large enough for the generic offload filter
-    // (ServiceRegistrationExtensionsBasic.cs's "Generic large-result offload backstop") to re-catch
-    // it and wrap it under a brand-new resultId, which would otherwise hand the caller an
-    // unterminating fetch/still-too-big/re-offload loop - see
-    // docs/current/blockers/blocking_error_getlargeresult_typed_branch_reoffload_loop.md. Halves the
-    // candidate page until the actual serialized size (not a guess) fits under
-    // OffloadThresholdBytes minus a fixed envelope overhead, verifying by real serialization the
-    // same way the Raw branch does, since element size varies too much across the ~10 record types
-    // this feeds to bound analytically.
-    private static List<T> ShrinkListToFit<T>(List<T> candidatePage, JsonSerializerOptions jsonOptions)
-    {
-        const int envelopeOverheadBytes = 256;
-        var page = candidatePage;
-        while (page.Count > 1 && JsonSerializer.Serialize(page, jsonOptions).Length > LargeResultHelper.InlineBudgetChars - envelopeOverheadBytes)
-        {
-            page = page.Take(Math.Max(1, page.Count / 2)).ToList();
-        }
-
-        return page;
     }
 }

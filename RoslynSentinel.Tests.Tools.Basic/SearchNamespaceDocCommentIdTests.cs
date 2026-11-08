@@ -19,7 +19,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 /// <summary>
 /// docCommentId on Search declaration-kind rows: only Kind "namespace" rows carry "N:Full.Name";
 /// every other kind is null and the property is omitted from the wire JSON. Covers the ListAll
-/// fill, the NamespaceDocCommentId helper and the large-result round trip.
+/// fill, the NamespaceDocCommentId helper and the serializer round trip.
 /// </summary>
 [TestFixture]
 [Category("WorkspaceTools")] // sentinel:auto-category
@@ -178,29 +178,9 @@ public class SearchNamespaceDocCommentIdTests
         Assert.That(WorkspaceReadNavigationImpl.NamespaceDocCommentId(compilationUnit), Is.Null);
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // 5 - large-result round trip: written with SharedJsonOptions.Default (the options
-    //     GetLargeResult deserializes with), read back through GetLargeResultTool.
-    // ══════════════════════════════════════════════════════════════════════════
-
-    private void WriteLargeResultFile<T>(T data, ResultWrapperType type, string resultId)
+    [Test]
+    public void SerializerRoundTrip_NamespaceDocCommentIdSurvives()
     {
-        var dir = Path.Combine(_tempDir, ".roslynsentinel", "largeresults");
-        Directory.CreateDirectory(dir);
-        var ts = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
-        var filePath = Path.Combine(dir, $"largeresult_{ts}_{resultId}.json");
-        var wrapper = new ResultWrapper
-        {
-            Type = type,
-            Data = JsonSerializer.SerializeToNode(data, SharedJsonOptions.Default),
-        };
-        File.WriteAllText(filePath, JsonSerializer.Serialize(wrapper, SharedJsonOptions.Default), new UTF8Encoding(false));
-    }
-
-    [Test, CancelAfter(10000)]
-    public async Task LargeResultRoundTrip_NamespaceDocCommentIdSurvives()
-    {
-        SetSources();
         var entries = new List<SolutionSymbolEntry>
         {
             new SolutionSymbolEntry(new FilePathWrapper("AB.cs", null), "namespace", "A.B", null, 1, 1, "N:A.B"),
@@ -211,16 +191,5 @@ public class SearchNamespaceDocCommentIdTests
         var reparsed = JsonSerializer.Deserialize<List<SolutionSymbolEntry>>(serialized, SharedJsonOptions.Default)!;
         Assert.That(reparsed[0].DocCommentId, Is.EqualTo("N:A.B"), "serializer round trip");
         Assert.That(reparsed[1].DocCommentId, Is.Null, "serializer round trip of a class row");
-
-        var resultId = Guid.NewGuid().ToString("N");
-        WriteLargeResultFile(entries, ResultWrapperType.SolutionSymbolEntryList, resultId);
-
-        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: resultId, limit: 10, offset: 0);
-
-        Assert.That(result.IsError, Is.False);
-        var returned = result.SuccessData as List<SolutionSymbolEntry>;
-        Assert.That(returned, Is.Not.Null, "Data should be List<SolutionSymbolEntry>.");
-        Assert.That(returned!.Single(e => e.Name == "A.B").DocCommentId, Is.EqualTo("N:A.B"));
-        Assert.That(returned!.Single(e => e.Name == "C").DocCommentId, Is.Null);
     }
 }

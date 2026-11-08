@@ -163,7 +163,7 @@ public class RefactoringSignatureImpl
             residualNote = ResidualMentionSummarizer.Note(result.OldName, residualMentions.Count, detailResultId is not null);
         }
 
-        // Deliberately not wired into ForPossiblyLargeDataAsync/MemberChangedContentResult: this
+        // Deliberately not wired into ForPossiblyLargeDataAsync: this
         // already returns rich custom SuccessData (oldName/newName/residualMentions/updatedHandle) instead
         // of a bare AppliedChangeSummary, and newName is caller-supplied verbatim -> there is no
         // separate "new content" fragment the offload mechanism would add value for.

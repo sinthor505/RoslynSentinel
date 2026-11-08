@@ -102,7 +102,7 @@ public class LargeResultOffloadFilterTests
         Environment.SetEnvironmentVariable(RoslynSentinel.Common.ResultMarshallerOptions.EnvVarName, _previousMarshallerMode);
     }
 
-    // Pages a stored backstop result to its end through GetLargeResult with NO charLimit: the backstop now stores a marshaller-compatible
+    // Pages a stored backstop result to its end through GetLargeResult with offset only: the backstop now stores a marshaller-compatible
     // Envelope, so the Envelope reader answers {path, offset, returned, total, unit, nextOffset, hasMoreData, items|text} (paged on the
     // largest array or string, inferred). Every page must be a native page, never another offload stub or a second largeResult pointer.
     private async Task<(string Unit, int Total, int ReturnedSum, int ItemCount, string Reassembled, int PageCount)> PageStoredResultToEndAsync(string resultId)
@@ -184,7 +184,7 @@ public class LargeResultOffloadFilterTests
                 "The request-filter backstop must store an Envelope, not a Raw wrapper.");
         }
 
-        // Round-trip: GetLargeResult pages the stored envelope on its largest array (inferred, no path) with no charLimit; the pages
+        // Round-trip: GetLargeResult pages the stored envelope on its largest array (inferred, no path); the pages
         // must cover the whole caller list the filter swapped out, not just replay the pointer. PageStoredResultToEndAsync also fails
         // the test if any page is itself an offload stub or carries a second largeResult pointer.
         var paged = await PageStoredResultToEndAsync(resultId!);
@@ -340,7 +340,7 @@ public class LargeResultOffloadFilterTests
         var resultId = pointer.RootElement.GetProperty("resultId").GetString();
         Assert.That(resultId, Is.Not.Null.And.Not.Empty);
 
-        // Default limits and no charLimit on purpose: the very first page must already be real data, not another offload stub.
+        // Default limits on purpose: the very first page must already be real data, not another offload stub.
         // The backstop stored an Envelope, so GetLargeResult answers with the Envelope reader's page ({path, offset, returned, total,
         // unit, nextOffset, hasMoreData, items|text}); PageStoredResultToEndAsync fails on any page that is a stub or carries a
         // second largeResult pointer (the former re-offload loop), and the pages together must cover the whole implementor list.

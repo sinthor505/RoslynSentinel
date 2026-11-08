@@ -23,11 +23,11 @@ public class LargeResultHintsTests
     }
 
     [Test]
-    public void FetchCall_AppendsOffsetAndCharLimitOnlyWhenSupplied()
+    public void FetchCall_AppendsOffsetAndPathOnlyWhenSupplied()
     {
-        Assert.That(LargeResultHints.FetchCall("abc123"), Does.Not.Contain("offset:").And.Not.Contain("charLimit:"));
-        Assert.That(LargeResultHints.FetchCall("abc123", 10, 500), Does.Contain(", offset: 10, charLimit: 500)"));
-        Assert.That(LargeResultHints.FetchCall("abc123", offset: 5), Does.Contain(", offset: 5)").And.Not.Contain("charLimit:"));
+        Assert.That(LargeResultHints.FetchCall("abc123"), Does.Not.Contain("offset:").And.Not.Contain("path:"));
+        Assert.That(LargeResultHints.FetchCall("abc123", 10, "successData.items"), Does.Contain(", offset: 10, path: "));
+        Assert.That(LargeResultHints.FetchCall("abc123", offset: 5), Does.Contain(", offset: 5)").And.Not.Contain("path:"));
     }
 
     // Guard: a required GetLargeResult parameter missing from the hint would make the first call fail.

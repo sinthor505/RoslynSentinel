@@ -53,6 +53,5 @@ public enum ToolOptionTag
     SearchMode,
     ConfirmationCode,
     OldContent,
-    NewContent,
-    CharLimit
+    NewContent
 }
