@@ -138,7 +138,7 @@ public class AsyncOptimizationEngine
         var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
         if (methodNode == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found. Use GetFileOutline to list the methods in the file.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found. " + ToolCallHint.Next("GetFileOutline", "to list the methods in the file.", ("filePath", filePath.ToString())), "method", methodName);
         }
         if (methodNode.Body == null)
         {

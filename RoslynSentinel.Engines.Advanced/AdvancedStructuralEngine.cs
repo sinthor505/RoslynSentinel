@@ -175,7 +175,7 @@ public class StructuralRefactoringEngine
         var sourceDoc = solution.GetDocumentIdsWithFilePath(sourceFilePath).Select(solution.GetDocument).FirstOrDefault();
         if (sourceDoc == null)
         {
-            throw new ToolNotFoundException($"Source file '{Path.GetFileName(sourceFilePath)}' not found in solution. Use GetFileOutline to check the file and class names.", "file", sourceFilePath);
+            throw new ToolNotFoundException($"Source file '{Path.GetFileName(sourceFilePath)}' not found in solution. " + ToolCallHint.Next("GetFileOutline", "to check the file and class names.", ("filePath", sourceFilePath)), "file", sourceFilePath);
         }
 
         var sourceRoot = await sourceDoc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
@@ -187,7 +187,7 @@ public class StructuralRefactoringEngine
         var sourceClass = RoslynSentinel.Common.NameTargetLookup.RequireSingle(sourceRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         if (sourceClass == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' not found in '{Path.GetFileName(sourceFilePath)}'. Use GetFileOutline to check the file and class names.", "class", className);
+            throw new ToolNotFoundException($"Class '{className}' not found in '{Path.GetFileName(sourceFilePath)}'. " + ToolCallHint.Next("GetFileOutline", "to check the file and class names.", ("filePath", sourceFilePath)), "class", className);
         }
 
         // Capture class symbol BEFORE modification so SymbolFinder can resolve all references
@@ -222,7 +222,7 @@ public class StructuralRefactoringEngine
             var targetDoc = solution.GetDocumentIdsWithFilePath(targetFilePath).Select(solution.GetDocument).FirstOrDefault();
             if (targetDoc == null)
             {
-                throw new ToolNotFoundException($"Target file '{Path.GetFileName(targetFilePath)}' not found in solution. Use GetFileOutline to check the file and class names.", "file", targetFilePath);
+                throw new ToolNotFoundException($"Target file '{Path.GetFileName(targetFilePath)}' not found in solution. " + ToolCallHint.Next("GetFileOutline", "to check the file and class names.", ("filePath", targetFilePath)), "file", targetFilePath);
             }
 
             var targetRoot = await targetDoc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
@@ -1120,7 +1120,7 @@ public class StructuralRefactoringEngine
     {
         if (root == null)
         {
-            throw new ToolInvalidArgumentException($"Could not parse '{filePath}' into a syntax tree, so the parameter object cannot be introduced. Check the file is valid C# with GetDiagnostics(filePath: ...) and retry.");
+            throw new ToolInvalidArgumentException($"Could not parse '{filePath}' into a syntax tree, so the parameter object cannot be introduced. " + ToolCallHint.Next("GetDiagnostics", "to check the file is valid C#, then retry.", ("filePath", filePath)));
         }
 
         return root;
