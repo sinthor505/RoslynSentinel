@@ -377,4 +377,13 @@ public class AdvancedStructuralFormatCharacterizationTests
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         Assert.That(ex.Message, Does.Contain("not inside any method named 'Run'"));
     }
+
+    [Test]
+    public void IntroduceParameterObject_NullSyntaxRoot_ErrorNamesThePath()
+    {
+        var ex = Assert.Throws<ToolInvalidArgumentException>(
+            () => StructuralRefactoringEngine.RequireSyntaxRoot(null, "Some/Dir/Missing.cs"));
+
+        Assert.That(ex!.Message, Does.Contain("Some/Dir/Missing.cs"));
+    }
 }

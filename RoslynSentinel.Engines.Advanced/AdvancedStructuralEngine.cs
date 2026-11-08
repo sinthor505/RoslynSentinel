@@ -1139,6 +1139,18 @@ public class StructuralRefactoringEngine
             .WithConstraintClauses(SyntaxFactory.List(constraintClauses));
     }
 
+    // Public (not internal) because Engines.Advanced has no InternalsVisibleTo for the test project. It exists so a
+    // test can reach the otherwise unreachable null-root branch of IntroduceParameterObjectAsync.
+    public static SyntaxNode RequireSyntaxRoot(SyntaxNode? root, string filePath)
+    {
+        if (root == null)
+        {
+            throw new ToolInvalidArgumentException($"Could not parse '{filePath}' into a syntax tree, so the parameter object cannot be introduced. Check the file is valid C# with GetDiagnostics(filePath: ...) and retry.");
+        }
+
+        return root;
+    }
+
     public async Task<DocumentEditResult> IntroduceParameterObjectAsync(FilePathWrapper filePath, string methodName, string? newTypeName = null, string[]? parameterNames = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -1148,11 +1160,7 @@ public class StructuralRefactoringEngine
             throw new ToolNotFoundException("File not found.", "file");
         }
 
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null)
-        {
-            throw new ToolInvalidArgumentException("Could not parse file.");
-        }
+        var root = RequireSyntaxRoot(await document.GetSyntaxRootAsync(cancellationToken), filePath.ToString());
 
         var sourceText = await document.GetTextAsync(cancellationToken);
         // Overloads share the name: never take the first one silently. The OrderBy keeps the non-interface
