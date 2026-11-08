@@ -9,19 +9,19 @@ public static class ToolParams
         "quickBuild: in-memory diagnostics. fullBuildThrowaway (default): `dotnet build` into .roslynsentinel/build/<instance>/, projects' bin/ untouched. fullBuild: builds the projects' own bin/obj; only this level updates bin/ (isServerBinaryStale).";
 
     public const string BuildDescription =
-        "Compiles the solution. level=quickBuild: in-memory Roslyn diagnostics (fast). Default level=fullBuildThrowaway: runs `dotnet build` (slower; also catches NuGet restore, resource and post-build failures) into a per-server output folder. Success returns the outcome, projects compiled and error/warning counts. Failure returns error counts by project/file/code, all errors (root-cause project first) and SuppressedDownstreamErrorCount; when the result is large the response pages errors (offset/limit) via GetLargeResult. Output tails and warnings need includeOutput / includeWarnings. Full builds honour scope=project/file (that project only)."; // hint-ok: static [Description]/const text, schema budget
+        "Compiles the solution. level=quickBuild: in-memory Roslyn diagnostics (fast). Default level=fullBuildThrowaway: runs `dotnet build` (slower; also catches NuGet restore, resource and post-build failures) into a per-server output folder. Success returns the outcome, projects compiled and error/warning counts. Failure returns error counts by project/file/code, all errors (root-cause project first) and SuppressedDownstreamErrorCount; when the result is large the response pages errors (offset/limit) via GetLargeResult(reason: \"<why you call this>\", resultId: \"<resultId>\"). Output tails and warnings need includeOutput / includeWarnings. Full builds honour scope=project/file (that project only)."; // hint-ok: const [Description] text cannot call ToolCallHint; names required params
 
     public const string RunTestDescription =
-        "Runs `dotnet test` on the solution or one project. Returns TotalCount/PassedCount/FailedCount/SkippedCount, a FailureSummary grouping failures by shared cause, and a Results list (resultsType, default failed; capped by maxDetails; summary=true omits it). Failed tests carry their captured Output. filter goes to `dotnet test --filter`; an unresolvable filter is a distinct error from zero matches. Failed tests' unprojected rows are stored: largeResult.resultId + path successData.fullResults reach them via GetLargeResult. OmittedResultCount counts rows beyond maxDetails."; // hint-ok: static [Description]/const text, schema budget
+        "Runs `dotnet test` on the solution or one project. Returns TotalCount/PassedCount/FailedCount/SkippedCount, a FailureSummary grouping failures by shared cause, and a Results list (resultsType, default failed; capped by maxDetails; summary=true omits it). Failed tests carry their captured Output. filter goes to `dotnet test --filter`; an unresolvable filter is a distinct error from zero matches. Failed tests' unprojected rows are stored: largeResult.resultId + path successData.fullResults reach them via GetLargeResult(reason: \"<why you call this>\", resultId: \"<resultId>\"). OmittedResultCount counts rows beyond maxDetails."; // hint-ok: const [Description] text cannot call ToolCallHint; names required params
 
     public const string ProjectName =
-        "Project name returned by Search(mode: symbol) in the projectName field. " +
-        "Must match exactly - case-sensitive."; // hint-ok: static [Description]/const text, schema budget
+        "Project name returned by Search(reason: \"<why you call this>\", mode: \"symbol\") in the projectName field. " +
+        "Must match exactly - case-sensitive."; // hint-ok: const [Description] text cannot call ToolCallHint; names required params
 
     public const string DocCommentId =
         "Uniquely identifies the symbol across the codebase. " +
-        "Use the Search(mode: symbol) tool to obtain this value. " +
-        "Do not construct this value - pass it exactly as returned by Search(mode: symbol)."; // hint-ok: static [Description]/const text, schema budget
+        "Use the Search(reason: \"<why you call this>\", mode: \"symbol\") tool to obtain this value. " +
+        "Do not construct this value - pass it exactly as returned by Search(reason: \"<why you call this>\", mode: \"symbol\")."; // hint-ok: const [Description] text cannot call ToolCallHint; names required params
 
     // Validate-and-apply workflow
     public const string AutoStage =
