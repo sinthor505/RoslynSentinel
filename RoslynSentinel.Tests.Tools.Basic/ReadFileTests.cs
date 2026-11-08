@@ -204,7 +204,6 @@ public class ReadFileTests
         var result = await _tools.ReadFileTool(reason: "test message", bigDocPath);
 
         Assert.That(!result.IsError, Is.True);
-        Assert.That(result.LargeResult, Is.Null);
         var data = result.SuccessData!;
         var source = (string)data.GetType().GetProperty("source")!.GetValue(data)!;
         Assert.That(source.Length, Is.EqualTo(bigSource.Length));
@@ -241,7 +240,6 @@ public class ReadFileTests
         var source = (string)GetProp(data, "source")!;
 
         // The whole requested range, no shortened status that would point at a re-query, no offload at the tool level.
-        Assert.That(result.LargeResult, Is.Null);
         Assert.That(startLine, Is.EqualTo(1));
         Assert.That(endLine, Is.EqualTo(800));
         Assert.That(source.Count(c => c == '\n'), Is.EqualTo(800));

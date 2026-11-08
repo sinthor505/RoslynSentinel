@@ -16,7 +16,7 @@ namespace RoslynSentinel.Tests.Asyncify;
 ///   T1  – summarize=true returns MigrationScanSummary with all 5 bucket keys.
 ///   T2  – paginated scan (inline, fits) sets TotalRecords / HasMore / SuccessDetails.
 ///   T3  – ~9 KB result (~50-60 candidates) stays inline (threshold regression anchor).
-///   T4  – genuinely large result triggers file write (LargeResult populated, SuccessDetails null).
+///   T4  – genuinely large page is still returned inline by the tool (the result marshaller, not run here, offloads it).
 ///   T5  – get_large_result reads T4's file, paging works, TotalRecords matches.
 ///   T6  – full absolute filePath gives the same records as filename-only input.
 ///   T7  – filePath matching nothing -> IsSuccess=false, ErrorCode="InvalidArgument".
@@ -123,7 +123,7 @@ public class MigrationScanResultTests
     /// Adapts a plain <see cref="SentinelCallToolResult{object}"/> to a typed <see cref="MigrationEnvelope{T}"/>.
     /// The migration-scan-result-handling spec (v2) this test file was written against expected
     /// scan tools to return a nested envelope (SuccessDetails = MigrationEnvelope&lt;T&gt;). The shipped
-    /// implementation flattens that: IsError/ErrorDetails/TotalRecords/HasMorePages/LargeResult all live
+    /// implementation flattens that: IsError/ErrorDetails/TotalRecords/HasMorePages all live
     /// directly on the outer SentinelCallToolResult&lt;object&gt;, and SuccessDetails is the plain T. Rather than rewrite
     /// every assertion in this file against the outer result, wrap it back into the shape the
     /// tests already expect.
@@ -135,7 +135,6 @@ public class MigrationScanResultTests
             IsError = raw.IsError,
             SuccessData = raw.SuccessData as T,
             ErrorData = raw.ErrorData,
-            LargeResult = raw.LargeResult,
             TotalRecords = raw.TotalRecords,
             HasMoreData = raw.HasMoreData,
         };
@@ -233,7 +232,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T2 – paginated scan (page fits) -> SuccessDetails non-null, TotalRecords set, LargeResult null
+    // T2 – paginated scan (page fits) -> SuccessDetails non-null, TotalRecords set
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -248,7 +247,6 @@ public class Svc
         Assert.That(result, Is.Not.Null);
         Assert.That(!result!.IsError, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null, "Inline SuccessDetails should be populated.");
-        Assert.That(result.LargeResult, Is.Null, "LargeResult should be null for a small page.");
         Assert.That(result.SuccessData!.Count, Is.EqualTo(3), "Page should contain 3 items.");
         Assert.That(result.TotalRecords, Is.EqualTo(10), "TotalRecords should reflect all candidates.");
         Assert.That(result.HasMoreData, Is.True, "More pages exist beyond offset 2 + limit 3 = 5 < 10.");
@@ -257,8 +255,8 @@ public class Svc
     // ══════════════════════════════════════════════════════════════════════════
     // T3 – ~9 KB result (~50-60 candidates) -> stays inline (threshold regression anchor)
     //
-    // If this test FAILS (LargeResult is populated), the threshold is measuring the wrong
-    // thing. Fix the measurement, not this assertion.
+    // The direct call bypasses the result marshaller, so the inline threshold itself is not exercised here (see the
+    // ToolResultMarshaller tests); this keeps the default-limit page shape (50 of 55) as a regression anchor.
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(15000)]
@@ -276,15 +274,12 @@ public class Svc
         var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
         Assert.That(result, Is.Not.Null);
         Assert.That(!result!.IsError, Is.True);
-        Assert.That(result.LargeResult, Is.Null,
-            "A ~9 KB page must NOT trigger the server-side file-write threshold (15 KB). " +
-            "If this fails, check that the threshold measures serialized bytes, not item count.");
         Assert.That(result.SuccessData, Is.Not.Null);
         Assert.That(result.SuccessData!.Count, Is.EqualTo(50), "Default limit of 50 should be applied.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T4 – large scan page -> inline SuccessData, LargeResult null, TotalRecords = full count, HasMoreData true
+    // T4 – large scan page -> inline SuccessData, TotalRecords = full count, HasMoreData true
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(60000)]
@@ -302,7 +297,6 @@ public class Svc
         var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
         Assert.That(result, Is.Not.Null);
         Assert.That(!result!.IsError, Is.True);
-        Assert.That(result.LargeResult, Is.Null, "The tool no longer offloads to a file itself; LargeResult is set by the central marshaller.");
         Assert.That(result.SuccessData, Is.Not.Null, "The requested page must be returned inline.");
         Assert.That(result.SuccessData!.Count, Is.EqualTo(100), "Page should contain the requested 100 items.");
         Assert.That(result.TotalRecords, Is.EqualTo(500), "TotalRecords should reflect the full post-filter count, not the page size.");
@@ -735,9 +729,8 @@ public class Svc
         Assert.That(patternTotal, Is.EqualTo(summary.TotalCandidates),
             "Sum of ByPattern counts must equal TotalCandidates.");
 
-        // Result must be inline (no offload).
-        Assert.That(result.LargeResult, Is.Null,
-            "summarize=true result must always be inline.");
+        // Inline: the summary object itself is the successData (these direct calls bypass the result marshaller).
+        Assert.That(result.SuccessData, Is.Not.Null, "summarize=true result must always be inline.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════

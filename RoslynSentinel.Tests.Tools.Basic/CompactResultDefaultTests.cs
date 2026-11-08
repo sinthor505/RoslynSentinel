@@ -81,7 +81,6 @@ public class CompactResultDefaultTests
             Assert.That(summary.Status, Is.EqualTo("applied"));
             Assert.That(summary.ChangedContent, Is.Null, "a real apply must not echo the file");
             Assert.That(summary.LineChanges, Is.Not.Null.And.Not.Empty);
-            Assert.That(result.LargeResult, Is.Null, "the compact result itself must not be offloaded");
             Assert.That(summary.Note, Does.Contain("ReadFile"));
         });
         Assert.That(workspace.ReadText(FixtureRelativePath), Does.Contain("public virtual int Target()"), "the edit must have landed");

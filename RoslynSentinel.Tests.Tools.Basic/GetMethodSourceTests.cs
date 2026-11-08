@@ -210,7 +210,6 @@ public class GetMethodSourceTests
         var result = await _tools.GetMethodSourceTool(reason: "test message", bigDocPath, "Huge");
 
         Assert.That(!result.IsError, Is.True);
-        Assert.That(result.LargeResult, Is.Null);
         Assert.That(result.SuccessData!.Source, Is.Not.Null);
         var inlineSource = result.SuccessData!.Source!;
         Assert.That(inlineSource.Length, Is.GreaterThan(LargeResultHelper.InlineBudgetChars));

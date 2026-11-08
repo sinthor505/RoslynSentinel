@@ -81,7 +81,6 @@ public class MemberAddResultSizeTests
             Assert.That(summary.ChangedContent, Is.Null, "an applied add must not echo the whole file");
             Assert.That(summary.LineChanges, Is.Not.Null.And.Not.Empty);
             Assert.That(summary.Note, Does.Contain("ReadFile"));
-            Assert.That(result.LargeResult, Is.Null);
         });
         Assert.That(workspace.ReadText(FixtureRelativePath), Does.Contain("public int Added() => 42;"), "the add must have landed");
     }
@@ -122,7 +121,6 @@ public class MemberAddResultSizeTests
             Assert.That(summary.ChangedContent, Is.Null, "an applied addTopLevelType must not echo the whole file");
             Assert.That(summary.LineChanges, Is.Not.Null.And.Not.Empty);
             Assert.That(summary.Note, Does.Contain("ReadFile"));
-            Assert.That(result.LargeResult, Is.Null);
         });
         Assert.That(workspace.ReadText(FixtureRelativePath), Does.Contain("class AddedTopLevelType"), "the type must have landed");
     }

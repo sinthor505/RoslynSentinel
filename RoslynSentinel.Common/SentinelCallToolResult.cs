@@ -200,7 +200,8 @@ public interface IFindingsEnvelope
 
 /// <summary>
 /// Typed envelope returned by Tool scan tools.
-/// Exactly one of <see cref="SuccessData"/>, <see cref="ErrorData"/>, or <see cref="LargeResult"/> is populated.
+/// Exactly one of <see cref="SuccessData"/> or <see cref="ErrorData"/> is populated. A <c>largeResult</c> pointer is
+/// written onto the wire envelope by the result marshaller, never carried on this type.
 /// </summary>
 /// <remarks>
 /// Two generic parameters: <typeparamref name="TSuccess"/> for <see cref="SuccessData"/>,
@@ -339,15 +340,6 @@ public record SentinelCallToolResult<TSuccess, TError> : IOperationResult, IFind
 
     /// <inheritdoc />
     public object WithAddedFindings(IReadOnlyList<Finding> extra) => this with { Findings = [.. Findings, .. extra] };
-
-    /// <summary>
-    /// Present when the result exceeded the inline-size threshold and was written to disk.
-    /// Use <c>get_large_result</c> with <see cref="LargeResultInfo.ResultId"/> to page through it.
-    /// </summary>
-    public LargeResultInfo? LargeResult
-    {
-        get; init;
-    }
 
     /// <summary>
     /// Total number of records before pagination was applied.

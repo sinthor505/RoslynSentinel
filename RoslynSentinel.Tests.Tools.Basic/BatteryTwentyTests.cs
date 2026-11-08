@@ -387,9 +387,10 @@ public class BatteryTwentyTests
         Assert.That(result.WarningDetails, Does.Contain("mode: symbol"));
         Assert.That(result.WarningDetails, Does.Contain((WorkspaceReadNavigationTools.KindListingMaxItems + 5).ToString()));
 
-        // Returned row count: check both in-memory and offloaded cases
-        var returnedCount = (result.SuccessData as List<SolutionSymbolEntry>)?.Count ?? result.LargeResult!.TotalRecords;
-        Assert.That(returnedCount, Is.EqualTo(WorkspaceReadNavigationTools.KindListingMaxItems));
+        // Returned row count: the tool returns the capped list itself (offloading is the result marshaller's job).
+        var rows = result.SuccessData as List<SolutionSymbolEntry>;
+        Assert.That(rows, Is.Not.Null, "the tool returns its rows inline");
+        Assert.That(rows!.Count, Is.EqualTo(WorkspaceReadNavigationTools.KindListingMaxItems));
 
         // Truncated results carry a summary over ALL matches, not just the returned rows.
         var summary = result.ListSummary;
