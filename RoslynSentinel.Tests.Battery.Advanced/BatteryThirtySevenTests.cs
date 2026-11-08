@@ -18,6 +18,8 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 [TestFixture]
 [Category("SolutionStructureEngine")] // sentinel:auto-category
 [Category("StructuralSmellType")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class BatteryThirtySevenTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -27,13 +29,18 @@ public class BatteryThirtySevenTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _antiPatternEngine = TestEnginesAdvanced.AntiPatternEngine(_workspaceManager);
         _structureEngine = Basic.TestEngines.SolutionStructureEngine(_workspaceManager, Basic.TestEngines.SentinelConfiguration());
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
 
     private void SetProject(string projectName, string source, string fileName = "Test.cs")
     {

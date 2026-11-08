@@ -22,6 +22,8 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 /// </summary>
 [TestFixture]
 [Category("StackOverflowEngine")] // sentinel:auto-category
+// Runs exclusively: SetUp/TearDown wipe every top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard).
+[NonParallelizable]
 public class BatteryThirtyNineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -30,12 +32,17 @@ public class BatteryThirtyNineTests
     [SetUp]
     public void Setup()
     {
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = TestEnginesAdvanced.StackOverflowEngine(_workspaceManager);
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
 
     private void SetProject(string source, string fileName = "Test.cs")
     {
