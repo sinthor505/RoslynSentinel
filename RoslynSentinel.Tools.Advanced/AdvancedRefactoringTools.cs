@@ -1277,8 +1277,8 @@ public class AdvancedRefactoringTools
     [Produces(DataTag.ChangeId)]
     [Description("Wraps a line range or snippet in a try/catch, using, or #region block.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: exactly one of (startLine and endLine) or contextSnippet must be supplied. name is required for wrapper=using/region; optional for wrapper=tryCatch (defaults to exception type "Exception"). None of these is individually required by the schema.
-    // TOOL-OPTION-REQUIRED-FLAG-STALE: wrapper carries a C# default ("") purely so it can stay after startLine/endLine in parameter order (existing positional call sites depend on this order); it is actually unconditionally required -> the body always falls through to an "Unknown wrapper" error when it doesn't match tryCatch/using/region. The schema wrongly reports it optional.
-    public async Task<SentinelCallToolResult<AppliedChangeSummary>> WrapRangeTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Description("Provide both startLine and endLine, or use contextSnippet instead.")][Consumes(DataTag.StartLine)] int startLine = 0, [Description("Provide both startLine and endLine, or use contextSnippet instead.")][Consumes(DataTag.EndLine)] int endLine = 0, [Description("tryCatch/using/region - which block to wrap in (using/region also require name).")][ExternalInputRequired(DataTag.Wrapper)] string wrapper = "", [Description("tryCatch: exception type name (default \"Exception\"). using: disposal variable name (required). region: region label (required).")][ExternalInputRequired(DataTag.SymbolName)] string? name = null, [Description("wrapper=tryCatch only: exception variable name.")][ExternalInputRequired(DataTag.SymbolName)] string catchVariableName = "ex", [Description("wrapper=tryCatch only: catch-block statements. Defaults to empty.")][ExternalInputRequired(DataTag.SourceCode)] string? catchBody = null, [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null, [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null, [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null, // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
+    // TOOL-OPTION-REQUIRED-FLAG-STALE: wrapper is now a nullable enum (WrapRangeWrapper) with a null default, kept after startLine/endLine so existing positional call sites still bind; the schema still reports it optional, and a null wrapper is rejected with "wrapper is required".
+    public async Task<SentinelCallToolResult<AppliedChangeSummary>> WrapRangeTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Description("Provide both startLine and endLine, or use contextSnippet instead.")][Consumes(DataTag.StartLine)] int startLine = 0, [Description("Provide both startLine and endLine, or use contextSnippet instead.")][Consumes(DataTag.EndLine)] int endLine = 0, [Description("Which block to wrap in (using/region also require name).")][ExternalInputRequired(DataTag.Wrapper)] WrapRangeWrapper? wrapper = null, [Description("tryCatch: exception type name (default \"Exception\"). using: disposal variable name (required). region: region label (required).")][ExternalInputRequired(DataTag.SymbolName)] string? name = null, [Description("wrapper=tryCatch only: exception variable name.")][ExternalInputRequired(DataTag.SymbolName)] string catchVariableName = "ex", [Description("wrapper=tryCatch only: catch-block statements. Defaults to empty.")][ExternalInputRequired(DataTag.SourceCode)] string? catchBody = null, [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null, [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null, [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null, // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       // [Description(ToolParams.AutoStage)][ToolOptionAttribute(ToolOptionTag.AutoStage)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, // RequestContext<CallToolRequestParams> requestParams = null,
  CancellationToken cancellationToken = default)
@@ -1292,7 +1292,7 @@ public class AdvancedRefactoringTools
             if (!string.IsNullOrWhiteSpace(contextSnippet))
             {
                 // Derive startLine/endLine from contextSnippet
-                if (wrapper == "tryCatch")
+                if (wrapper == WrapRangeWrapper.tryCatch)
                 {
                     var exceptionType = name ?? "Exception";
                     var updated = await _refactoringEngine.WrapInTryCatchAsync(resolvedFilePath, contextSnippet, lineBefore, lineAfter, exceptionType, catchVariableName, catchBody, cancellationToken);
@@ -1328,7 +1328,7 @@ public class AdvancedRefactoringTools
                     };
                 }
 
-                if (wrapper == "using")
+                if (wrapper == WrapRangeWrapper.@using)
                 {
                     if (string.IsNullOrEmpty(name))
                     {
@@ -1372,7 +1372,7 @@ public class AdvancedRefactoringTools
                     };
                 }
 
-                if (wrapper == "region")
+                if (wrapper == WrapRangeWrapper.region)
                 {
                     if (string.IsNullOrEmpty(name))
                     {
@@ -1419,13 +1419,13 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown wrapper '{wrapper}'. Valid values: tryCatch, using, region.")
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "wrapper is required. Valid values: tryCatch, using, region.")
                 };
             }
             else if (startLine > 0 && endLine > 0)
             {
                 // Use existing line-based path
-                if (wrapper == "tryCatch")
+                if (wrapper == WrapRangeWrapper.tryCatch)
                 {
                     var exceptionType = name ?? "Exception";
                     var updated = await _refactoringEngine.WrapInTryCatchAsync(resolvedFilePath, startLine, endLine, exceptionType, catchVariableName, catchBody, cancellationToken);
@@ -1461,7 +1461,7 @@ public class AdvancedRefactoringTools
                     };
                 }
 
-                if (wrapper == "using")
+                if (wrapper == WrapRangeWrapper.@using)
                 {
                     if (string.IsNullOrEmpty(name))
                     {
@@ -1505,7 +1505,7 @@ public class AdvancedRefactoringTools
                     };
                 }
 
-                if (wrapper == "region")
+                if (wrapper == WrapRangeWrapper.region)
                 {
                     if (string.IsNullOrEmpty(name))
                     {
@@ -1552,7 +1552,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown wrapper '{wrapper}'. Valid values: tryCatch, using, region.")
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "wrapper is required. Valid values: tryCatch, using, region.")
                 };
             }
             else

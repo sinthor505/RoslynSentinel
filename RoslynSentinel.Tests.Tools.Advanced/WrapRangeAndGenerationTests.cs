@@ -1,3 +1,4 @@
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
@@ -52,7 +53,7 @@ public class Holder
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
         var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
-        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Order.cs"), 11, 12, "tryCatch");
+        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Order.cs"), 11, 12, WrapRangeWrapper.tryCatch);
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         var text = workspace.ReadText("Order.cs");
         Assert.That(text, Does.Contain("try"));
@@ -65,7 +66,7 @@ public class Holder
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
         var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
-        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Order.cs"), 8, 10, "tryCatch");
+        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Order.cs"), 8, 10, WrapRangeWrapper.tryCatch);
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.Message, Does.Contain("Choose a range"));
@@ -80,7 +81,7 @@ public class Holder
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
         var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
-        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Order.cs"), 3, 6, "region", "Properties");
+        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Order.cs"), 3, 6, WrapRangeWrapper.region, "Properties");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("#region Properties"));
     }
@@ -114,7 +115,7 @@ public class Writer
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
         var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
-        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Order.cs"), 11, 12, "using", "resource");
+        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Order.cs"), 11, 12, WrapRangeWrapper.@using, "resource");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
         Assert.That(result.ErrorData!.Message, Does.Contain("IDisposable"));
@@ -127,7 +128,7 @@ public class Writer
     {
         using var workspace = InMemoryWorkspace.Create(("Writer.cs", DisposableRangeSource.ReplaceLineEndings("\r\n")));
         var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
-        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Writer.cs"), 9, 11, "using", "s");
+        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Writer.cs"), 9, 11, WrapRangeWrapper.@using, "s");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         var text = workspace.ReadText("Writer.cs");
         Assert.That(text, Does.Contain("using (var s = new MemoryStream())"));
@@ -141,7 +142,7 @@ public class Writer
     {
         using var workspace = InMemoryWorkspace.Create(("Writer.cs", DisposableRangeSource.ReplaceLineEndings("\r\n")));
         var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
-        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Writer.cs"), 16, 17, "using", "n");
+        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Writer.cs"), 16, 17, WrapRangeWrapper.@using, "n");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
         Assert.That(result.ErrorData!.Message, Does.Contain("IDisposable"));
@@ -154,7 +155,7 @@ public class Writer
     {
         using var workspace = InMemoryWorkspace.Create(("Writer.cs", DisposableRangeSource.ReplaceLineEndings("\r\n")));
         var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
-        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Writer.cs"), 9, 11, "using", "stream");
+        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Writer.cs"), 9, 11, WrapRangeWrapper.@using, "stream");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.Message, Does.Contain("'stream'"));
         Assert.That(result.ErrorData!.Message, Does.Contain("'s'"));

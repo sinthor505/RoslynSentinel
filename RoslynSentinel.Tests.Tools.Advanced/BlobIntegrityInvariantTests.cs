@@ -15,6 +15,8 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
+
 using RoslynSentinel.Tools.Advanced;
 
 #pragma warning disable CS8618
@@ -91,7 +93,7 @@ public class BlobIntegrityInvariantTests
 
         var result = await _advancedRefactoringTools.WrapRangeTool(
             reason: "test message", _targetFile, startLine: bodyLine, endLine: bodyLine,
-            wrapper: "region", name: "TestRegion", dryRun: false);
+            wrapper: WrapRangeWrapper.region, name: "TestRegion", dryRun: false);
 
         AssertChangeIdIsRedeemable(result, "WrapRange");
     }

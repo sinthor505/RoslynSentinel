@@ -60,6 +60,17 @@ public enum ChangeSignatureOldSignature
 }
 
 /// <summary>
+/// Which block WrapRange wraps a range in.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum WrapRangeWrapper
+{
+    tryCatch,
+    @using,
+    region
+}
+
+/// <summary>
 /// Which files a stage/commit operation acts on. Replaces the former <c>stageAll</c> boolean, which
 /// could silently override an explicit <c>files</c> list (a <c>files</c>+<c>stageAll:true</c> call
 /// ran <c>git add -A</c> and staged unrelated untracked files). Scope and file list are now one
