@@ -147,8 +147,19 @@ public class CommentingTools
             if (seedApply.IsError)
             {
                 var diagnosticCount = seedApply.ValidationResult?.Diagnostics.Count ?? 0;
-                _logger.LogWarning("BulkComment: validation found {Count} error(s) in seed-phase changes; aborting before the work phase",
-                    diagnosticCount);
+                string seedAbortReason;
+                if (seedApply.RefusalCode != null)
+                {
+                    _logger.LogWarning("BulkComment: seed-phase write refused: {Summary}; aborting before the work phase",
+                        seedApply.Summary);
+                    seedAbortReason = $"seed_write_refused: {seedApply.Summary}; no seed or comment changes were written this call";
+                }
+                else
+                {
+                    _logger.LogWarning("BulkComment: validation found {Count} error(s) in seed-phase changes; aborting before the work phase",
+                        diagnosticCount);
+                    seedAbortReason = $"seed_validation_failed ({diagnosticCount} diagnostic(s)); no seed or comment changes were written this call";
+                }
 
                 // Abort here rather than falling through to Phase 2: the seed writes were rejected,
                 // so FindStaleMembersAsync would see the pre-seed workspace and every stale member's
@@ -170,7 +181,7 @@ public class CommentingTools
                 ApplySampling(abortResult, seedChanges.Keys.Select(path => new FailureDetail
                 {
                     FilePath = path,
-                    Reason = $"seed_validation_failed ({diagnosticCount} diagnostic(s)); no seed or comment changes were written this call",
+                    Reason = seedAbortReason,
                     Outcome = ItemRecordOutcome.Failed,
                 }).ToList());
                 return abortResult;
@@ -309,7 +320,9 @@ public class CommentingTools
 
             if (applyResult.IsError)
             {
-                var reason = applyResult.ValidationResult != null
+                var reason = applyResult.RefusalCode != null
+                    ? $"write refused: {applyResult.Summary}"
+                    : applyResult.ValidationResult != null
                     ? $"apply validation failed ({applyResult.ValidationResult.Diagnostics.Count} diagnostic(s))"
                     : "apply failed";
                 foreach (var site in toProcess.Where(s => succeededSites.Contains(s)))

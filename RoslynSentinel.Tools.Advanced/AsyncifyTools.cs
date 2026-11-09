@@ -1739,7 +1739,28 @@ public class AsyncifyTools
         if (allChanges.Count > 0)
         {
             var applyResult941 = await _workspaceManager.ApplyProposedChangesAsync(allChanges, validateChanges: true);
-            if (applyResult941.PreImages != null)
+            if (applyResult941.IsError)
+            {
+                var refusedReason = DescribeRefusedApply(applyResult941)!;
+                foreach (var item in items)
+                {
+                    if (item.Outcome == ItemRecordOutcome.Succeeded)
+                    {
+                        item.Outcome = ItemRecordOutcome.Failed;
+                        item.Reason = refusedReason;
+                    }
+                }
+                foreach (var changedPath in allChanges.Keys)
+                {
+                    if (failures.Count < 10)
+                    {
+                        failures.Add(new FailureDetail { FilePath = changedPath, Reason = refusedReason, Outcome = ItemRecordOutcome.Failed });
+                    }
+                }
+                succeeded -= allChanges.Count;
+                failed += allChanges.Count;
+            }
+            else if (applyResult941.PreImages != null)
             {
                 foreach (var item in items)
                 {
@@ -2080,7 +2101,7 @@ public class AsyncifyTools
 
     /// <summary>
     /// Null when the apply succeeded. Otherwise the Failed-item reason: "Write refused: &lt;Summary&gt;" when the write was refused
-    /// before validation ran (ValidationResult null), or "Validation: N error(s) - [id] msg" when validation rejected the change.
+    /// by the chokepoint (RefusalCode set) or before validation ran (ValidationResult null), or "Validation: N error(s) - [id] msg" when validation rejected the change.
     /// </summary>
     private static string? DescribeRefusedApply(ApplyChangesResult applyResult)
     {
@@ -2089,7 +2110,7 @@ public class AsyncifyTools
             return null;
         }
 
-        if (applyResult.ValidationResult == null)
+        if (applyResult.RefusalCode != null || applyResult.ValidationResult == null)
         {
             return $"Write refused: {applyResult.Summary}";
         }
@@ -3124,7 +3145,7 @@ public class AsyncifyTools
                     validateChanges: true, cancellationToken: state.InnerToken);
                 if (applyResult3a.IsError)
                 {
-                    if (applyResult3a.ValidationResult == null)
+                    if (applyResult3a.RefusalCode != null || applyResult3a.ValidationResult == null)
                     {
                         throw new InvalidOperationException($"Write refused: {applyResult3a.Summary}");
                     }
@@ -3234,7 +3255,7 @@ public class AsyncifyTools
                     validateChanges: true, cancellationToken: state.InnerToken);
                 if (applyResult3b.IsError)
                 {
-                    if (applyResult3b.ValidationResult == null)
+                    if (applyResult3b.RefusalCode != null || applyResult3b.ValidationResult == null)
                     {
                         throw new InvalidOperationException($"Write refused: {applyResult3b.Summary}");
                     }
@@ -3631,6 +3652,18 @@ public class AsyncifyTools
 
                 var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { { filePath, updatedSource } });
+            var refusedReason = DescribeRefusedApply(applyResult);
+                if (refusedReason != null)
+                {
+                    items.Add(new OperationItemRecord { FilePath = filePath, MethodName = methodName, Outcome = ItemRecordOutcome.Failed, Reason = refusedReason });
+                    if (failures.Count < 10)
+                    {
+                        failures.Add(new FailureDetail { FilePath = filePath, MethodName = methodName, Reason = refusedReason, Outcome = ItemRecordOutcome.Failed });
+                    }
+                    failed++;
+                    _logger.LogWarning("HandlerToAsync: {File} in {Method} refused: {Reason}", filePath, methodName, refusedReason);
+                    continue;
+                }
 
                 string? beforeSource = null;
                 _ = applyResult.PreImages?.TryGetValue(filePath, out beforeSource);
@@ -3847,6 +3880,18 @@ public class AsyncifyTools
                 var updatedContent = extractResult.UpdatedContent!;
                 var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedContent } });
+                var refusedReason = DescribeRefusedApply(applyResult);
+                if (refusedReason != null)
+                {
+                    items.Add(new OperationItemRecord { FilePath = target.FilePath, MethodName = target.NewMethodName, Outcome = ItemRecordOutcome.Failed, Reason = refusedReason });
+                    if (failures.Count < 10)
+                    {
+                        failures.Add(new FailureDetail { FilePath = target.FilePath, MethodName = target.NewMethodName, Reason = refusedReason, Outcome = ItemRecordOutcome.Failed });
+                    }
+                    failed++;
+                    _logger.LogWarning("HandlerExtract: {File} in {Method} refused: {Reason}", target.FilePath, target.NewMethodName, refusedReason);
+                    continue;
+                }
 
                 string? beforeSource = null;
                 _ = applyResult.PreImages?.TryGetValue(target.FilePath, out beforeSource);
