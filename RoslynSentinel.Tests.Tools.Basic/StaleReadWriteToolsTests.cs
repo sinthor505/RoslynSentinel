@@ -232,4 +232,115 @@ public class StaleReadWriteToolsTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Test]
+    public async Task WriteFileReplaceFile_UnobservedExistingTarget_SucceedsWithUnobservedFinding()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager(file, Original);
+            AsAgent("agentA");
+            var tools = BuildWholeFileWriteTools(manager);
+
+            var result = await tools.WriteFileTool(
+                reason: "test message", operation: WriteFileOperation.ReplaceFile, filePath: file,
+                content: Edited, validateOnApply: false);
+
+            Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Edited));
+            var finding = result.Findings.Single(f => f.Message.Contains("read them first"));
+            Assert.That(finding.Source, Is.EqualTo("WriteChokepoint"));
+            Assert.That(finding.Message, Does.Contain(Path.GetFileName(file)));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task WriteFileReplaceFile_ObservedUnchangedTarget_HasNoUnobservedFinding()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager(file, Original);
+            AsAgent("agentA");
+            manager.RecordObserved(new FilePathWrapper(file), Original);
+            var tools = BuildWholeFileWriteTools(manager);
+
+            var result = await tools.WriteFileTool(
+                reason: "test message", operation: WriteFileOperation.ReplaceFile, filePath: file,
+                content: Edited, validateOnApply: false);
+
+            Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Edited));
+            Assert.That((result.Findings ?? []).Any(f => f.Message.Contains("read them first")), Is.False,
+                "An observed, unchanged target must not be reported as unobserved.");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task DeleteFile_UnobservedExistingTarget_SucceedsWithUnobservedFinding()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager(file, Original);
+            AsAgent("agentA");
+            var tools = BuildWholeFileWriteTools(manager);
+
+            var result = await tools.DeleteFileTool(reason: "test message", filePath: file);
+
+            Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+            Assert.That(File.Exists(file), Is.False);
+            var finding = result.Findings.Single(f => f.Message.Contains("read them first"));
+            Assert.That(finding.Source, Is.EqualTo("WriteChokepoint"));
+            Assert.That(finding.Message, Does.Contain(Path.GetFileName(file)));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ApplyDiffFilesFormat_UnobservedExistingTarget_SucceedsWithUnobservedFinding()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager(file, Original);
+            AsAgent("agentA");
+            var tools = BuildWholeFileWriteTools(manager);
+
+            // One line changed, so the size guard (50% line and active-code shrink) does not fire first.
+            var result = await tools.ApplyDiffTool(
+                reason: "test message", changesetFormat: ChangesetFormat.files, action: ProposedChangeAction.apply,
+                changes: new Dictionary<string, string> { [file] = Edited }, validateOnApply: false);
+
+            Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Edited));
+            var finding = result.Findings.Single(f => f.Message.Contains("read them first"));
+            Assert.That(finding.Source, Is.EqualTo("WriteChokepoint"));
+            Assert.That(finding.Message, Does.Contain(Path.GetFileName(file)));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

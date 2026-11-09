@@ -2038,6 +2038,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 }
             }
 
+            // Targets written without a prior read by this agent; reported as an info finding on success.
+            var unobservedTargets = new List<FilePathWrapper>();
+
             // Stale-read guard (observed-content ledger): refuse the whole batch, non-latching, when a target this agent has read
             // changed since (in memory or on disk). Targets without a ledger entry are allowed. exactRestore (UndoLastApply) is exempt.
             if (staleReadPolicy == StaleReadPolicy.RefuseIfObservedStale && !exactRestore)
@@ -2047,7 +2050,11 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 {
                     if (!TryGetObservedHash(target, out var observedHash))
                     {
-                        // unobserved target: allowed
+                        // unobserved target: allowed, but reported as a finding when it exists on disk (a new file cannot have been read)
+                        if (preImages.TryGetValue(target, out var unobservedDiskText) && unobservedDiskText is not null)
+                        {
+                            unobservedTargets.Add(target);
+                        }
                         continue;
                     }
 
@@ -2354,11 +2361,18 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 summary += $" The operation was successful. The old and new content of {noOp.Count} file(s) were semantically identical: {string.Join(", ", noOp.Select(Path.GetFileName))}.";
             }
 
+            // Merge EOL findings with the unobserved-target finding; the list stays empty (null on the result) when neither applies.
+            var resultFindings = new List<Finding>(eolFindings);
+            if (unobservedTargets.Count > 0)
+            {
+                resultFindings.Add(BuildUnobservedTargetFinding(unobservedTargets));
+            }
+
             return new ApplyChangesResult(!(failed.Count == 0), succeeded, failed, summary,
                 workspaceInSync, _workspaceVersion, preImages, validationReport,
                 rolledBack.Count > 0 ? rolledBack : null,
                 noOp.Count > 0 ? noOp : null,
-                Findings: eolFindings is { Count: > 0 } ? eolFindings : null,
+                Findings: resultFindings is { Count: > 0 } ? resultFindings : null,
                 NeedsFullReload: needsFullReload);
         }
         finally
@@ -2612,6 +2626,15 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         }
 
         return (contentsToWrite, findings, null, null);
+    }
+
+    /// <summary>
+    /// Builds the info finding reported when a batch wrote existing files this agent never read, so the stale-read guard could not check them.
+    /// </summary>
+    private static Finding BuildUnobservedTargetFinding(IReadOnlyList<FilePathWrapper> targets)
+    {
+        var message = $"{targets.Count} target file(s) were changed without this agent having read them first, so staleness could not be checked: {string.Join(", ", targets.Select(t => Path.GetFileName((string)t)))}. Next: read a file with {ToolCallHint.Call("ReadFile", ("filePath", (string)targets[0]))} before editing it so a concurrent change is detected.";
+        return new Finding("WriteChokepoint", message, FindingSeverity.Info);
     }
 
     // A document whose text was just folded into CurrentSolution from disk (WithDocumentText/AddDocument)

@@ -1104,8 +1104,10 @@ public class CreateFileDeleteFileTests
         var result = await wholeFileWriteTools.WriteFileTool(reason: "test message", WriteFileOperation.ReplaceFile, targetFile, "public class Replaced { }\n", validateOnApply: false);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-        Assert.That(result.Findings?.Count ?? 0, Is.EqualTo(1));
-        Assert.That(result.Findings![0].Source, Is.EqualTo("WriteChokepoint"));
+        // The unobserved-target finding is excluded because these tests cover EOL attribution only.
+        var eolFindings = (result.Findings ?? []).Where(f => !f.Message.Contains("read them first")).ToList();
+        Assert.That(eolFindings.Count, Is.EqualTo(1));
+        Assert.That(eolFindings[0].Source, Is.EqualTo("WriteChokepoint"));
     }
 
     [Test]
@@ -1127,7 +1129,9 @@ public class CreateFileDeleteFileTests
         var result = await wholeFileWriteTools.WriteFileTool(reason: "test message", WriteFileOperation.ReplaceFile, targetFile, "public class Replaced { }\n", validateOnApply: false);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-        Assert.That(result.Findings?.Count ?? 0, Is.Zero);
+        // The unobserved-target finding is excluded because these tests cover EOL attribution only.
+        var eolFindings = (result.Findings ?? []).Where(f => !f.Message.Contains("read them first")).ToList();
+        Assert.That(eolFindings, Is.Empty);
     }
 
     [Test]

@@ -322,4 +322,150 @@ public class StaleReadGuardTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Test]
+    public async Task UnobservedExistingTarget_WriteSucceedsAndCarriesUnobservedFinding()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager((file, Original));
+            AsAgent("agentA");
+
+            var result = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [file] = Variant(2)
+                }, retryCount: 0, validateChanges: false,
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Variant(2)));
+            Assert.That(result.Findings, Has.Count.EqualTo(1));
+            Assert.That(result.Findings[0].Source, Is.EqualTo("WriteChokepoint"));
+            Assert.That(result.Findings[0].Message, Does.Contain(Path.GetFileName(file)));
+            Assert.That(result.Findings[0].Message, Does.Contain("read them first"));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ObservedUnchangedTarget_WriteSucceedsWithoutUnobservedFinding()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager((file, Original));
+            AsAgent("agentA");
+            manager.RecordObserved(new FilePathWrapper(file), Original);
+
+            var result = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [file] = Variant(2)
+                }, retryCount: 0, validateChanges: false,
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Variant(2)));
+            Assert.That((result.Findings ?? []).Any(f => f.Message.Contains("read them first")), Is.False,
+                "An observed, unchanged target was read by this agent, so it must not be reported as unobserved.");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task UnobservedDelete_SucceedsAndCarriesUnobservedFinding()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager((file, Original));
+            AsAgent("agentA");
+
+            var result = await manager.ApplyProposedChangesAsync(
+                new(), retryCount: 0, validateChanges: false,
+                deletePaths: [new FilePathWrapper(file)],
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(File.Exists(file), Is.False);
+            Assert.That(result.Findings, Has.Count.EqualTo(1));
+            Assert.That(result.Findings[0].Source, Is.EqualTo("WriteChokepoint"));
+            Assert.That(result.Findings[0].Message, Does.Contain(Path.GetFileName(file)));
+            Assert.That(result.Findings[0].Message, Does.Contain("read them first"));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task NewFileTarget_NotReportedAsUnobserved()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "New.cs");
+            using var manager = NewManager();
+            AsAgent("agentA");
+
+            var result = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [file] = Variant(2)
+                }, retryCount: 0, validateChanges: false,
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Variant(2)));
+            Assert.That((result.Findings ?? []).Any(f => f.Message.Contains("read them first")), Is.False,
+                "A target with no disk pre-image has nothing to have been read, so it must not be reported as unobserved.");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task DefaultPolicy_UnobservedTarget_NoFinding()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager((file, Original));
+            AsAgent("agentA");
+
+            var result = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [file] = Variant(2)
+                }, retryCount: 0, validateChanges: false);
+
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Variant(2)));
+            Assert.That((result.Findings ?? []).Any(f => f.Message.Contains("read them first")), Is.False,
+                "The default policy does not check the ledger, so no unobserved finding is produced.");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }
