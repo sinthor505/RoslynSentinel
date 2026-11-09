@@ -20,6 +20,9 @@ public static class WriteRefusal
             case ToolErrorCode.StaleRead:
                 error = StaleReadError(toolName, result);
                 return true;
+            case ToolErrorCode.FoldPending:
+                error = FoldPendingError(toolName, result);
+                return true;
             default:
                 return false;
         }
@@ -45,5 +48,20 @@ public static class WriteRefusal
         // TODO per-file attribution: name the writer that changed each file once proposal_cross_session_write_journal.md lands
         var message = $"{toolName}: {count} target file(s) changed after you last read them; nothing was written: {list}. Next: {reread}, then repeat the edit against the fresh content. If refused again, wait a moment (the server may still be syncing an external change).";
         return new ResultError(ToolErrorCode.StaleRead, message, StructuredDetail: structuredDetail);
+    }
+
+    private static ResultError FoldPendingError(string toolName, ApplyChangesResult result)
+    {
+        var files = result.FailedFiles;
+        var count = files.Count;
+        var list = count == 0
+            ? "(no file names reported)"
+            : string.Join("; ", files.Take(MaxListedFiles).Select(f => f.Key))
+              + (count > MaxListedFiles ? $"; and {count - MaxListedFiles} more" : string.Empty);
+        IReadOnlyList<object>? structuredDetail = count > MaxListedFiles
+            ? files.Select(f => (object)f.Key).ToList()
+            : null;
+        var message = $"{toolName}: {list} is changing on disk; retry in a moment. Nothing was written.";
+        return new ResultError(ToolErrorCode.FoldPending, message, StructuredDetail: structuredDetail);
     }
 }

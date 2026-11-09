@@ -181,6 +181,13 @@ public static class ToolErrorCode
     public const string StaleRead = "StaleRead";
 
     /// <summary>
+    /// The write chokepoint refused a batch because a target file's in-memory document differs from its disk text
+    /// (an external change not yet folded in). Nothing was written; the session is NOT halted. Retry in a moment.
+    /// Distinct from <see cref="StaleRead"/> (the caller's own observed content is stale).
+    /// </summary>
+    public const string FoldPending = "FoldPending";
+
+    /// <summary>
     /// The operation was cancelled before it finished.
     /// </summary>
     public const string Cancelled = "Cancelled";
