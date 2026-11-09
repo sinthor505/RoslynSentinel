@@ -402,6 +402,8 @@ public class WorkspaceReadNavigationImpl
             var items = ExtractOutlineItems(root);
 
             var fileText = await document.GetTextAsync(cancellationToken);
+            // records the whole-file hash so a later write is checked for staleness; success path only
+            _workspaceManager.RecordObserved(filePathResolved, fileText.ToString());
             var fileLineCount = fileText.Lines.Count;
             var fileByteCount = System.Text.Encoding.UTF8.GetByteCount(fileText.ToString());
             var envelope = ReadEnvelopeBuilder.Build(fileLineCount, fileByteCount, returnedFromLine: 1, returnedToLine: fileLineCount);

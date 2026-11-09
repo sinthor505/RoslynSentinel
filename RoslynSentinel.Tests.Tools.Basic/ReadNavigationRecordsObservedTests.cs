@@ -13,7 +13,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 
 // Read-navigation tools record the WHOLE-file text hash in the observed-content ledger on their content-returning
 // success paths: GetMethodSource (the file containing the method) and SearchSolutionText (each returned document,
-// once). Failure branches record nothing, GetFileOutline and ListAll never record, and a document whose hits were
+// once). Failure branches record nothing, ListAll never records, and a document whose hits were
 // cut by maxResults is not recorded. GetMethodSource cases run on the fake; SearchSolutionText cases run on the real
 // PersistentWorkspaceManager because FakeWorkspaceManager throws NotImplementedException on the text-search path.
 // Read-back uses TryGetObservedHash, which keys entries per agent.
@@ -114,18 +114,6 @@ public class ReadNavigationRecordsObservedTests
         Assert.That(result.IsError, Is.True);
         Assert.That(TryObserved(missing, out _), Is.False, "A file-not-found read must not record an observed hash.");
         Assert.That(TryObserved(present, out _), Is.False, "Nothing in the solution may be recorded by a failed read.");
-    }
-
-    [Test]
-    public async Task GetFileOutline_SolutionDocument_RecordsNothing()
-    {
-        var path = Path.Combine(_dir, "Widget.cs");
-        UseSolutionWith((path, WidgetSource));
-
-        var result = await _impl.GetFileOutline(reason: "test observed file outline", path);
-
-        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
-        Assert.That(TryObserved(path, out _), Is.False, "GetFileOutline must not record an observed hash.");
     }
 
     [Test]

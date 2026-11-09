@@ -9,13 +9,13 @@ public class SymbolNavigationImpl
 {
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly ImpactAnalyzer _impactAnalyzer;
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger _logger;
 
     public SymbolNavigationImpl(
         SymbolNavigationEngine symbolNavigationEngine,
         ImpactAnalyzer impactAnalyzer,
-        ISolutionProvider workspaceManager,
+        IWorkspaceManager workspaceManager,
         ILogger logger)
     {
         _symbolNavigationEngine = symbolNavigationEngine;
@@ -130,6 +130,11 @@ public class SymbolNavigationImpl
                         IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.NotFound, errorMsg)
                     };
+                }
+                // records the DECLARING file (metadata symbols have no DefinedInFile and record nothing)
+                if (!string.IsNullOrEmpty(symbolInfo.DefinedInFile))
+                {
+                    await _workspaceManager.RecordWholeFileObservedAsync(_workspaceManager.ResolveFromWire(symbolInfo.DefinedInFile), cancellationToken);
                 }
                 return new SentinelCallToolResult<object>
                 {
