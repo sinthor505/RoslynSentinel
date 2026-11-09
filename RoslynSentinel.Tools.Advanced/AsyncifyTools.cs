@@ -486,7 +486,7 @@ public class AsyncifyTools
 
             if (!dryRun && engineResult.Changes.Count > 0)
             {
-                var applyResult = await _workspaceManager.ApplyProposedChangesAsync(engineResult.Changes, validateChanges: true);
+                var applyResult = await _workspaceManager.ApplyProposedChangesAsync(engineResult.Changes, validateChanges: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                 if (applyResult.IsError)
                 {
                     return new SentinelCallToolResult<BatchResultSummary>
@@ -1477,7 +1477,7 @@ public class AsyncifyTools
                     }
 
                     var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                        new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } }, validateChanges: true);
+                        new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } }, validateChanges: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                     if (applyResult.IsError)
                     {
                         var refusedReason = $"Write refused: {applyResult.Summary}";
@@ -1523,7 +1523,7 @@ public class AsyncifyTools
                             {
                                 var ctApplyResult = await _workspaceManager.ApplyProposedChangesAsync(
                                     new Dictionary<FilePathWrapper, string> { { target.FilePath, ctResult.UpdatedText } },
-                                    validateChanges: true);
+                                    validateChanges: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                                 if (!ctApplyResult.IsError)
                                 {
                                     string? beforeSrc = null;
@@ -1738,7 +1738,7 @@ public class AsyncifyTools
 
         if (allChanges.Count > 0)
         {
-            var applyResult941 = await _workspaceManager.ApplyProposedChangesAsync(allChanges, validateChanges: true);
+            var applyResult941 = await _workspaceManager.ApplyProposedChangesAsync(allChanges, validateChanges: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
             if (applyResult941.IsError)
             {
                 var refusedReason = DescribeRefusedApply(applyResult941)!;
@@ -2148,7 +2148,7 @@ public class AsyncifyTools
                 if (!input.DryRun && engineResult.Changes.Count > 0)
                 {
                     var applyResult1126 = await _workspaceManager.ApplyProposedChangesAsync(
-                        engineResult.Changes, validateChanges: true, cancellationToken: cancellationToken);
+                        engineResult.Changes, validateChanges: true, cancellationToken: cancellationToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                     if (applyResult1126.IsError && applyResult1126.ValidationResult != null)
                         _logger.LogWarning("FlagMigrationCandidates: validation found {Count} error(s) in attribute changes - skipping write",
                             applyResult1126.ValidationResult.Diagnostics.Count);
@@ -2293,7 +2293,7 @@ public class AsyncifyTools
                 if (allChanges.Count > 0 && !input.DryRun)
                 {
                     var applyResult1223 = await _workspaceManager.ApplyProposedChangesAsync(
-                        allChanges, validateChanges: true);
+                        allChanges, validateChanges: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                     if (applyResult1223.IsError && applyResult1223.ValidationResult != null)
                         _logger.LogWarning("FlagMigrationCandidates: validation found {Count} error(s) in attribute changes - skipping write",
                             applyResult1223.ValidationResult.Diagnostics.Count);
@@ -2588,7 +2588,7 @@ public class AsyncifyTools
 
                 var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { { candidate.FilePath, extractResult.UpdatedContent! } },
-                    validateChanges: true);
+                    validateChanges: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                 if (applyResult.IsError)
                 {
                     var applyReason = $"apply refused [{applyResult.RefusalCode ?? MigrationErrorCode.Exception}]: {applyResult.Summary}";
@@ -2653,7 +2653,7 @@ public class AsyncifyTools
             if (!input.DryRun && flagResult.Changes.Count > 0)
             {
                 var applyResult1317 = await _workspaceManager.ApplyProposedChangesAsync(
-                    flagResult.Changes, validateChanges: true);
+                    flagResult.Changes, validateChanges: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                 if (applyResult1317.IsError && applyResult1317.ValidationResult != null)
                     _logger.LogWarning("AsyncifyCore Phase 1: validation found {Count} error(s) in flag attribute changes - skipping write",
                         applyResult1317.ValidationResult.Diagnostics.Count);
@@ -2815,7 +2815,7 @@ public class AsyncifyTools
                 if (!input.DryRun && allChanges.Count > 0)
                 {
                     var applyResult1421 = await _workspaceManager.ApplyProposedChangesAsync(
-                        allChanges, validateChanges: true);
+                        allChanges, validateChanges: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                     if (applyResult1421.IsError && applyResult1421.ValidationResult != null)
                         _logger.LogWarning("AsyncifyCore Phase 1: validation found {Count} error(s) in explicit-target flag changes - skipping write",
                             applyResult1421.ValidationResult.Diagnostics.Count);
@@ -3142,7 +3142,7 @@ public class AsyncifyTools
 
                 var applyResult3a = await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { { candidate.FilePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable
-                    validateChanges: true, cancellationToken: state.InnerToken);
+                    validateChanges: true, cancellationToken: state.InnerToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                 if (applyResult3a.IsError)
                 {
                     if (applyResult3a.RefusalCode != null || applyResult3a.ValidationResult == null)
@@ -3252,7 +3252,7 @@ public class AsyncifyTools
 
                 var applyResult3b = await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { { handler.FilePath, handlerResult.UpdatedText } },
-                    validateChanges: true, cancellationToken: state.InnerToken);
+                    validateChanges: true, cancellationToken: state.InnerToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                 if (applyResult3b.IsError)
                 {
                     if (applyResult3b.RefusalCode != null || applyResult3b.ValidationResult == null)
@@ -3286,7 +3286,7 @@ public class AsyncifyTools
                         cancellationToken: state.InnerToken);
                     if (removeResult.Changes.Count > 0)
                     {
-                        var cleanupApply1 = await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
+                        var cleanupApply1 = await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                         cleanupNote ??= CleanupFailureNote(cleanupApply1);
                     }
                 }
@@ -3319,7 +3319,7 @@ public class AsyncifyTools
                         cancellationToken: state.InnerToken);
                     if (removeResult.Changes.Count > 0)
                     {
-                        var cleanupApply2 = await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
+                        var cleanupApply2 = await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                         cleanupNote ??= CleanupFailureNote(cleanupApply2);
                     }
 
@@ -3328,7 +3328,7 @@ public class AsyncifyTools
                         score: 0,
                         reason: "Handler has blocking calls but no Asyncify-bridge wrappers - manual async conversion required",
                         cancellationToken: state.InnerToken);
-                    var cleanupApply3 = await _workspaceManager.ApplyProposedChangesAsync(neeReviewResult.Changes);
+                    var cleanupApply3 = await _workspaceManager.ApplyProposedChangesAsync(neeReviewResult.Changes, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                     cleanupNote ??= CleanupFailureNote(cleanupApply3);
                 }
                 catch (Exception removeEx)
@@ -3359,7 +3359,7 @@ public class AsyncifyTools
                         cancellationToken: state.InnerToken);
                     if (removeResult.Changes.Count > 0)
                     {
-                        var cleanupApply4 = await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
+                        var cleanupApply4 = await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                         cleanupNote ??= CleanupFailureNote(cleanupApply4);
                     }
 
@@ -3368,7 +3368,7 @@ public class AsyncifyTools
                         score: 0,
                         reason: $"Handler in-place: {ex.Message}",
                         cancellationToken: state.InnerToken);
-                    var cleanupApply5 = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                    var cleanupApply5 = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                     cleanupNote ??= CleanupFailureNote(cleanupApply5);
                 }
                 catch (Exception flagEx)
@@ -3651,7 +3651,7 @@ public class AsyncifyTools
                 }
 
                 var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePathWrapper, string> { { filePath, updatedSource } });
+                    new Dictionary<FilePathWrapper, string> { { filePath, updatedSource } }, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
             var refusedReason = DescribeRefusedApply(applyResult);
                 if (refusedReason != null)
                 {
@@ -3879,7 +3879,7 @@ public class AsyncifyTools
             {
                 var updatedContent = extractResult.UpdatedContent!;
                 var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedContent } });
+                    new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedContent } }, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                 var refusedReason = DescribeRefusedApply(applyResult);
                 if (refusedReason != null)
                 {
