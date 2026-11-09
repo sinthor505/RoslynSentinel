@@ -227,9 +227,17 @@ public static class EditImpactAnalyzer
                 {
                     var lead = $"This edit renames {name} to {change.NewName} and {files} file(s) still use {name}: ";
                     // Built only when active: ToolCallHint.Call records the tool as suggested guidance.
-                    return isToolActive("RenameSymbol")
-                        ? lead + $"use {ToolCallHint.Call("RenameSymbol", ("newName", change.NewName!))} instead."
-                        : lead + batch;
+                    if (!isToolActive("RenameSymbol"))
+                    {
+                        return lead + batch;
+                    }
+
+                    var rename = lead + $"use {ToolCallHint.Call("RenameSymbol", ("newName", change.NewName!))} instead.";
+
+                    // The edit also changed the accessibility: the rename keeps the old one, so name the follow-up (only when callable).
+                    return change.NewAccessibility is not null && isToolActive("ChangeAccessibility")
+                        ? rename + $" The edit also makes it {change.NewAccessibility}; after the rename apply that with {ToolCallHint.Call("ChangeAccessibility", ("targetName", change.NewName!), ("accessibility", change.NewAccessibility))}."
+                        : rename;
                 }
 
             case SymbolChangeKind.SignatureChanged:

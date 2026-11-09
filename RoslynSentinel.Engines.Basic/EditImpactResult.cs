@@ -15,7 +15,7 @@ public enum SymbolChangeKind
     /// <summary>Same container, kind, name, parameters and return type; only the declared accessibility differs.</summary>
     AccessibilityChanged,
 
-    /// <summary>Exactly one removed and one added declaration of the same kind in the same container with equal signature.</summary>
+    /// <summary>One removed and one added declaration of the same kind in the same container with equal parameter types and return type, unique on both sides; the name, and possibly the accessibility, differ.</summary>
     Renamed,
 }
 
@@ -32,6 +32,7 @@ public enum SymbolChangeKind
 /// <param name="OldSignature">Rendered parameter list and return type before the edit (null for an added declaration).</param>
 /// <param name="NewSignature">Rendered parameter list and return type after the edit (null for a removed declaration).</param>
 /// <param name="AccessibilityNarrowed">True for <see cref="SymbolChangeKind.AccessibilityChanged"/> when the new accessibility is more restrictive.</param>
+/// <param name="NewAccessibility">For <see cref="SymbolChangeKind.Renamed"/> of a member whose declared accessibility also changed: the new accessibility (for example "internal"); otherwise null.</param>
 public sealed record SymbolChange(
     SymbolChangeKind Kind,
     string DeclarationKind,
@@ -42,7 +43,8 @@ public sealed record SymbolChange(
     int Line,
     string? OldSignature,
     string? NewSignature,
-    bool AccessibilityNarrowed = false);
+    bool AccessibilityNarrowed = false,
+    string? NewAccessibility = null);
 
 /// <summary>
 /// What a rejected edit did to the symbols it touched, and which diagnostics in files the edit did not change follow from it.

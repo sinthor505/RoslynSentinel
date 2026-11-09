@@ -166,6 +166,67 @@ public class EditImpactAnalyzerTests
         Assert.That(result.NextStepLine, Does.Not.Contain("RenameSymbol"), "RenameSymbol would not fix a removal");
     }
 
+    [Test]
+    public async Task NameAndAccessibilityChangedTogether_IsARename_NextStepIsRenameSymbolThenChangeAccessibility()
+    {
+        // Same shape as the model's edit: rename plus public -> internal in one text edit.
+        var edited = Calculator.Replace(
+            "public decimal CalcDisc(decimal amount, decimal rate, bool isPreferredCustomer)",
+            "internal decimal CalculateDiscountedTotal(decimal amount, decimal rate, bool isPreferredCustomer)");
+
+        var (result, report) = await GateAndAnalyzeAsync(Texts((CalculatorFile, edited)), Active("RenameSymbol", "ChangeAccessibility", "ReplaceSnippet"));
+
+        Assert.That(report.IsError, Is.True);
+        Assert.That(result, Is.Not.Null);
+        var rename = result!.Changes.Single(c => c.Kind == SymbolChangeKind.Renamed);
+        Assert.That((rename.OldName, rename.NewName, rename.NewAccessibility), Is.EqualTo(("CalcDisc", "CalculateDiscountedTotal", "internal")));
+        Assert.That(result.Changes.Select(c => c.Kind), Does.Not.Contain(SymbolChangeKind.Removed));
+        Assert.That(result.NextStepLine, Does.Contain("use RenameSymbol"));
+        Assert.That(result.NextStepLine, Does.Contain("internal").And.Contain("ChangeAccessibility"), "the accessibility change follows the rename");
+        Assert.That(result.NextStepLine, Does.Not.Contain("removes CalcDisc"));
+    }
+
+    [Test]
+    public async Task NameAndAccessibilityChangedTogether_ChangeAccessibilityNotCallable_NamesOnlyRenameSymbol()
+    {
+        var edited = Calculator.Replace(
+            "public decimal CalcDisc(decimal amount, decimal rate, bool isPreferredCustomer)",
+            "internal decimal CalculateDiscountedTotal(decimal amount, decimal rate, bool isPreferredCustomer)");
+
+        var (result, _) = await GateAndAnalyzeAsync(Texts((CalculatorFile, edited)), Active("RenameSymbol", "ReplaceSnippet"));
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.NextStepLine, Does.Contain("use RenameSymbol"));
+        Assert.That(result.Text, Does.Not.Contain("ChangeAccessibility"), "a tool that is not callable must never be named");
+    }
+
+    [Test]
+    public void DiffSymbols_RenameWithAccessibilityParameterNameAndExtraHelper_IsStillARename()
+    {
+        // The extra added method has a different shape, so it does not make the pairing ambiguous.
+        var diff = EditImpactAnalyzer.DiffSymbols(
+            Single(CalculatorFile, "class C { public decimal CalcDisc(decimal a, decimal rate, bool b) => a; }"),
+            Single(CalculatorFile, "class C { internal decimal CalculateDiscountedTotal(decimal a, decimal discountRate, bool b) => a; private decimal Raw(decimal a, decimal r) => a; }"));
+
+        var rename = diff.Single(c => c.Kind == SymbolChangeKind.Renamed);
+        Assert.That((rename.OldName, rename.NewName, rename.NewAccessibility), Is.EqualTo(("CalcDisc", "CalculateDiscountedTotal", "internal")));
+        Assert.That(diff.Where(c => c.Kind == SymbolChangeKind.Added).Select(c => c.OldName), Is.EquivalentTo(new[] { "Raw" }));
+    }
+
+    [Test]
+    public void DiffSymbols_NameAndAccessibilityAndParameterTypeChanged_IsNotARename()
+    {
+        var diff = EditImpactAnalyzer.DiffSymbols(
+            Single(CalculatorFile, "class C { public decimal CalcDisc(decimal a) => a; }"),
+            Single(CalculatorFile, "class C { internal decimal CalculateDiscountedTotal(double a) => 0; }"));
+
+        Assert.That(diff.Select(c => c.Kind), Does.Not.Contain(SymbolChangeKind.Renamed));
+        Assert.That(diff.Select(c => (c.Kind, c.OldName)), Is.EquivalentTo(new[]
+        {
+            (SymbolChangeKind.Removed, "CalcDisc"), (SymbolChangeKind.Added, "CalculateDiscountedTotal"),
+        }));
+    }
+
     // ---- the other attributed kinds from the spec table ----
 
     [Test]

@@ -202,6 +202,49 @@ public class RejectedSnippetEditTests
         Assert.That(second.ErrorData!.Message, Does.Contain(RejectedOriginNote), second.ErrorData.Message);
     }
 
+    // The MCP pipeline builds a fresh tool-class instance per call, and the WorkspaceTools facade constructs its own
+    // WorkspaceFileEditImpl in its constructor (eval run 20261109-215824-979 T11 -> T12): the rejected-edit memory must
+    // not live on the instance. Two separate instances over one workspace stand in for two calls.
+    [Test]
+    public async Task ReplaceSnippet_RejectedOnOneImplInstance_NoteFiresOnAFreshInstanceAsync()
+    {
+        using var workspace = CreateWorkspace();
+
+        var rejected = await ReplaceAsync(CreateImpl(workspace), workspace, OldDeclaration, RenamedDeclaration);
+        Assert.That(rejected.IsError, Is.True, "precondition: the first edit must be rejected by the gate");
+
+        var second = await ReplaceAsync(CreateImpl(workspace), workspace, RenamedDeclaration, "public decimal CalculateDiscountedTotal(decimal a) => a + 1;");
+
+        Assert.That(second.IsError, Is.True);
+        Assert.That(second.ErrorData!.Message, Does.Contain(RejectedOriginNote), second.ErrorData.Message);
+    }
+
+    [Test]
+    public async Task ReplaceSnippetBatch_RejectedOnOneImplInstance_NoteFiresOnAFreshInstanceForSingleAndBatchAsync()
+    {
+        using var workspace = CreateWorkspace();
+
+        // Rejected through the batch path on instance 1 ...
+        var rejected = await CreateImpl(workspace).ReplaceSnippet(
+            new ToolCallReason("rename the discount method through a batch edit"),
+            ProposedChangeAction.apply,
+            batchEdits: [new SnippetEdit { FilePath = workspace.PathOf(PricingRelativePath), OldContent = OldDeclaration, NewContent = RenamedDeclaration }]);
+        Assert.That(rejected.IsError, Is.True, "precondition: the batch must be rejected by the gate");
+
+        // ... explained on instance 2 (single edit) and instance 3 (batch).
+        var single = await ReplaceAsync(CreateImpl(workspace), workspace, RenamedDeclaration, "public decimal CalculateDiscountedTotal(decimal a) => a + 1;");
+        var batch = await CreateImpl(workspace).ReplaceSnippet(
+            new ToolCallReason("anchor a batch edit on the rejected text"),
+            ProposedChangeAction.apply,
+            batchEdits: [new SnippetEdit { FilePath = workspace.PathOf(PricingRelativePath), OldContent = RenamedDeclaration, NewContent = "public decimal CalculateDiscountedTotal(decimal a) => a + 1;" }]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(single.ErrorData!.Message, Does.Contain(RejectedOriginNote), single.ErrorData.Message);
+            Assert.That(batch.ErrorData!.Message, Does.Contain(RejectedOriginNote), batch.ErrorData.Message);
+        });
+    }
+
     [Test]
     public async Task ReplaceSnippet_OrdinaryTypoInOldContent_NotFoundHasNoRejectedEditNoteAsync()
     {

@@ -120,6 +120,128 @@ public class CompilerErrorLookupHelperTests
         Assert.That(description, Does.Contain("ReplaceBlockFormatted"));
     }
 
+    private const string PricingInterface = """
+        namespace TestProj;
+
+        public interface IOrderPricingCalculator
+        {
+            decimal CalculateDiscountedTotal(decimal amount);
+        }
+        """;
+
+    /// <summary>
+    /// CS0266 from retyping a field to an interface the class does not implement yet (model-eval 2026-11-09 T7/T8): the
+    /// hint says to add the interface to the class declaration in the same atomic edit.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_Cs0266ClassDoesNotImplementTargetInterface_SaysToAddInterfaceInSameEdit()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("IOrderPricingCalculator.cs", PricingInterface),
+            ("StandardOrderPricingCalculator.cs", """
+            namespace TestProj;
+
+            public class StandardOrderPricingCalculator
+            {
+                public decimal CalculateDiscountedTotal(decimal amount) => amount;
+            }
+            """),
+            ("OrderCheckout.cs", """
+            namespace TestProj;
+
+            public class OrderCheckout
+            {
+                private readonly IOrderPricingCalculator _calculator = new StandardOrderPricingCalculator();
+            }
+            """));
+
+        Assert.That(report.Diagnostics.Select(d => d.Id), Does.Contain("CS0266"), "fixture must produce the CS0266");
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("'StandardOrderPricingCalculator' does not implement 'IOrderPricingCalculator'. Add ': IOrderPricingCalculator' to StandardOrderPricingCalculator's declaration in the same atomic edit as this change."));
+    }
+
+    [Test]
+    public async Task DescribeAsync_Cs0266NumericNarrowing_HasNoHint()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Narrow.cs", """
+            namespace TestProj;
+
+            public class Narrow
+            {
+                public int F(double d)
+                {
+                    int i = d;
+                    return i;
+                }
+            }
+            """));
+
+        Assert.That(report.Diagnostics.Select(d => d.Id), Does.Contain("CS0266"));
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Not.Contain("does not implement"));
+        Assert.That(description, Does.Not.Contain("  Add "), "no hint line for a numeric CS0266");
+    }
+
+    [Test]
+    public async Task DescribeAsync_Cs0266InterfaceDowncastToClass_HasNoHint()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("IOrderPricingCalculator.cs", PricingInterface),
+            ("StandardOrderPricingCalculator.cs", """
+            namespace TestProj;
+
+            public class StandardOrderPricingCalculator : IOrderPricingCalculator
+            {
+                public decimal CalculateDiscountedTotal(decimal amount) => amount;
+            }
+            """),
+            ("OrderCheckout.cs", """
+            namespace TestProj;
+
+            public class OrderCheckout
+            {
+                public StandardOrderPricingCalculator Get(IOrderPricingCalculator c)
+                {
+                    StandardOrderPricingCalculator s = c;
+                    return s;
+                }
+            }
+            """));
+
+        Assert.That(report.Diagnostics.Select(d => d.Id), Does.Contain("CS0266"));
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Not.Contain("does not implement"));
+    }
+
+    /// <summary>CS0737 (model-eval 2026-11-09 T11): an internal member cannot implement an interface member.</summary>
+    [Test]
+    public async Task DescribeAsync_Cs0737NonPublicImplementingMember_SaysToMakeItPublic()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("IOrderPricingCalculator.cs", PricingInterface),
+            ("StandardOrderPricingCalculator.cs", """
+            namespace TestProj;
+
+            public class StandardOrderPricingCalculator : IOrderPricingCalculator
+            {
+                internal decimal CalculateDiscountedTotal(decimal amount) => amount;
+            }
+            """));
+
+        Assert.That(report.Diagnostics.Select(d => d.Id), Does.Contain("CS0737"), "fixture must produce the CS0737");
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("The implementing member must be public; make 'StandardOrderPricingCalculator.CalculateDiscountedTotal(decimal)' public (interface members are implemented by public members)."));
+    }
+
     /// <summary>
     /// Regression coverage for identical-diagnostic grouping. See
     /// docs/current/blockers/closed/blocking_error_movemember_analysisengine_antipatternengine_friction.md

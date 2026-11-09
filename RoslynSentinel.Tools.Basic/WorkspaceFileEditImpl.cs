@@ -37,7 +37,16 @@ public class WorkspaceFileEditImpl
     // Which tools this server can serve; null (unit tests, hosts without a surface) = treat every tool as callable.
     private readonly ActiveToolSurface? _activeToolSurface;
 
-    private readonly RejectedEditMemory _rejectedEdits = new();
+    // One memory per process, shared by every instance. The MCP tool pipeline builds a fresh tool-class instance per call
+    // (McpToolSchemaPatcher.CreateTarget uses ActivatorUtilities, not the registered singleton), and the legacy
+    // WorkspaceTools facade does `new WorkspaceFileEditImpl(...)` in its constructor, so an instance field was empty at the
+    // next call (eval run 20261109-215824-979 T11 -> T12: the note never fired). A static, rather than a DI singleton passed
+    // through, because it also covers the facade, tests and any host that wires the Impl differently. Entries are keyed by
+    // full file path (unique per workspace, so tests do not leak into each other), bounded per file, and dropped on a
+    // successful write.
+    private static readonly RejectedEditMemory SharedRejectedEdits = new();
+
+    private readonly RejectedEditMemory _rejectedEdits = SharedRejectedEdits;
 
     private const string RejectedOriginNote = "This oldContent comes from your rejected edit's newContent. That edit was not applied, so the file still has the old text: read it again before editing.";
 
@@ -75,8 +84,7 @@ public class WorkspaceFileEditImpl
     // often builds its next oldContent from its own rejected newContent, believing the edit applied (eval run
     // 20261109-202110-210: four "oldContent was not found" errors in a row); a later not-found whose oldContent comes from
     // here gets a note saying so. Bounded per file, and a file's entries are dropped when it is successfully written.
-    // NOTE: the singleton WorkspaceFileEditImpl owns it, so it spans calls; the legacy WorkspaceTools facade builds its own
-    // instance and so has its own memory.
+    // NOTE: shared process-wide through SharedRejectedEdits, so it spans calls and every WorkspaceFileEditImpl instance.
     private sealed class RejectedEditMemory
     {
         private const int MaxEntriesPerFile = 3;
@@ -917,6 +925,7 @@ public class WorkspaceFileEditImpl
                 }
                 catch (Exception ex)
                 {
+                    // TODO an expected ToolException (a plain ToolNotFoundException from ResolveEditMatch) is logged here as "unexpected exception" at Error level; log ToolException at Information/Warning instead
                     _logger.LogError(ex, "ReplaceSnippet {Action} unexpected exception for '{FilePathWrapper}'", action, filePathResolved);
                     return new SentinelCallToolResult<ReplaceSnippetResult>()
                     {

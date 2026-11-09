@@ -183,8 +183,11 @@ internal static class EditImpactSymbolDiff
     }
 
     /// <summary>
-    /// The conservative rename rule: within one (container, kind), exactly one removed and exactly one added declaration
-    /// with equal parameter types and equal return type. Anything looser is left as removed plus added.
+    /// The conservative rename rule: within one (container, kind), a removed and an added declaration pair up when their
+    /// parameter types and return type are equal and each is the only such match on the other side. The name differs;
+    /// accessibility and other modifiers and the parameter names are free to differ (a model often renames and widens or
+    /// narrows in one edit), and other added declarations with a different shape do not block the pair. Two candidates
+    /// of the same shape on either side are ambiguous and stay removed plus added.
     /// </summary>
     private static List<(Declaration Removed, Declaration Added)> PairRenames(List<Declaration> removed, List<Declaration> added)
     {
@@ -193,20 +196,27 @@ internal static class EditImpactSymbolDiff
         {
             var removedHere = group.ToList();
             var addedHere = added.Where(a => a.Container == group.Key.Container && a.Kind == group.Key.Kind).ToList();
-            if (removedHere.Count == 1 && addedHere.Count == 1
-                && removedHere[0].Params == addedHere[0].Params
-                && removedHere[0].ReturnType == addedHere[0].ReturnType
-                && removedHere[0].Name != addedHere[0].Name)
+            foreach (var r in removedHere)
             {
-                pairs.Add((removedHere[0], addedHere[0]));
+                var addedMatches = addedHere.Where(a => SameShape(r, a)).ToList();
+                if (addedMatches.Count != 1 || removedHere.Count(o => SameShape(o, addedMatches[0])) != 1)
+                {
+                    continue;
+                }
+
+                pairs.Add((r, addedMatches[0]));
             }
         }
 
         return pairs;
     }
 
+    private static bool SameShape(Declaration removed, Declaration added)
+        => removed.Name != added.Name && removed.Params == added.Params && removed.ReturnType == added.ReturnType;
+
     private static SymbolChange RenameChange(Declaration removed, Declaration added)
-        => new(SymbolChangeKind.Renamed, removed.Kind, removed.Container, removed.Name, added.Name, added.File, added.Line, Render(removed), Render(added));
+        => new(SymbolChangeKind.Renamed, removed.Kind, removed.Container, removed.Name, added.Name, added.File, added.Line, Render(removed), Render(added),
+            NewAccessibility: !removed.IsType && removed.Accessibility != added.Accessibility ? added.Accessibility : null);
 
     private static SymbolChange Change(SymbolChangeKind kind, Declaration? removed, Declaration? added)
     {

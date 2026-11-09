@@ -278,8 +278,10 @@ public class OrderPricingRefactorChainAgentTests
            `OrderCheckout.cs` - that call site must also be updated to the new name; a rename that
            only changes the method's declaration and misses its caller is not complete.
 
-        3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
-           to `internal`, so other classes in the same project could call it directly if needed.
+        3. **Change accessibility**: Change the helper method you extracted in step 1 (the one that
+           returns `amount * rate`) from `private` to `internal`, so other classes in the same project
+           could call it directly if needed. `CalculateDiscountedTotal` itself keeps its current
+           accessibility.
 
         4. **Inline**: in the standard-customer branch of `CalculateDiscountedTotal` (formerly
            `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
@@ -312,8 +314,8 @@ public class OrderPricingRefactorChainAgentTests
            Both branches must call the new method - re-read both branches, not just one.
         2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
            `OrderCheckout.cs` updated to the new name - not just one of the two?
-        3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
-           not still `private`?
+        3. Is the helper you extracted in step 1 (the one returning `amount * rate`) actually
+           `internal` in the file on disk right now? Is `CalculateDiscountedTotal` still `public`?
         4. Is the `standardDiscount` local variable actually gone from the standard-customer branch,
            with the extracted method's call result subtracted directly in the `return` statement? Is
            the preferred-customer branch's `discount` local still present, untouched?
@@ -377,8 +379,10 @@ public class OrderPricingRefactorChainAgentTests
            `OrderCheckout.cs` - that call site must also be updated to the new name; a rename that
            only changes the method's declaration and misses its caller is not complete.
 
-        3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
-           to `internal`, so other classes in the same project could call it directly if needed.
+        3. **Change accessibility**: Change the helper method you extracted in step 1 (the one that
+           returns `amount * rate`) from `private` to `internal`, so other classes in the same project
+           could call it directly if needed. `CalculateDiscountedTotal` itself keeps its current
+           accessibility.
 
         4. **Inline**: in the standard-customer branch of `CalculateDiscountedTotal` (formerly
            `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
@@ -419,8 +423,8 @@ public class OrderPricingRefactorChainAgentTests
            Both branches must call the new method - re-read both branches, not just one.
         2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
            `OrderCheckout.cs` updated to the new name - not just one of the two?
-        3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
-           not still `private`?
+        3. Is the helper you extracted in step 1 (the one returning `amount * rate`) actually
+           `internal` in the file on disk right now? Is `CalculateDiscountedTotal` still `public`?
         4. Is the `standardDiscount` local variable actually gone from the standard-customer branch,
            with the extracted method's call result subtracted directly in the `return` statement? Is
            the preferred-customer branch's `discount` local still present, untouched?
@@ -509,8 +513,10 @@ public class OrderPricingRefactorChainAgentTests
            `OrderCheckout.cs` - that call site must also be updated to the new name; a rename that
            only changes the method's declaration and misses its caller is not complete.
 
-        3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
-           to `internal`, so other classes in the same project could call it directly if needed.
+        3. **Change accessibility**: Change the helper method you extracted in step 1 (the one that
+           returns `amount * rate`) from `private` to `internal`, so other classes in the same project
+           could call it directly if needed. `CalculateDiscountedTotal` itself keeps its current
+           accessibility.
 
         4. **Inline**: in the standard-customer branch of `CalculateDiscountedTotal` (formerly
            `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
@@ -558,8 +564,8 @@ public class OrderPricingRefactorChainAgentTests
            Both branches must call the new method - re-read both branches, not just one.
         2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
            `OrderCheckout.cs` updated to the new name - not just one of the two?
-        3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
-           not still `private`?
+        3. Is the helper you extracted in step 1 (the one returning `amount * rate`) actually
+           `internal` in the file on disk right now? Is `CalculateDiscountedTotal` still `public`?
         4. Is the `standardDiscount` local variable actually gone from the standard-customer branch,
            with the extracted method's call result subtracted directly in the `return` statement? Is
            the preferred-customer branch's `discount` local still present, untouched?
@@ -688,8 +694,10 @@ public class OrderPricingRefactorChainAgentTests
            `OrderCheckout.cs` - that call site must also be updated to the new name; a rename that
            only changes the method's declaration and misses its caller is not complete.
 
-        3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
-           to `internal`, so other classes in the same project could call it directly if needed.
+        3. **Change accessibility**: Change the helper method you extracted in step 1 (the one that
+           returns `amount * rate`) from `private` to `internal`, so other classes in the same project
+           could call it directly if needed. `CalculateDiscountedTotal` itself keeps its current
+           accessibility.
 
         4. **Inline**: in the standard-customer branch of `CalculateDiscountedTotal` (formerly
            `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
@@ -745,8 +753,8 @@ public class OrderPricingRefactorChainAgentTests
            Both branches must call the new method - re-read both branches, not just one.
         2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
            `OrderCheckout.cs` updated to the new name - not just one of the two?
-        3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
-           not still `private`?
+        3. Is the helper you extracted in step 1 (the one returning `amount * rate`) actually
+           `internal` in the file on disk right now? Is `CalculateDiscountedTotal` still `public`?
         4. Is the `standardDiscount` local variable actually gone from the standard-customer branch,
            with the extracted method's call result subtracted directly in the `return` statement? Is
            the preferred-customer branch's `discount` local still present, untouched?
@@ -876,8 +884,10 @@ public class OrderPricingRefactorChainAgentTests
            `OrderCheckout.cs` - that call site must also be updated to the new name; a rename that
            only changes the method's declaration and misses its caller is not complete.
 
-        3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
-           to `internal`, so other classes in the same project could call it directly if needed.
+        3. **Change accessibility**: Change the helper method you extracted in step 1 (the one that
+           returns `amount * rate`) from `private` to `internal`, so other classes in the same project
+           could call it directly if needed. `CalculateDiscountedTotal` itself keeps its current
+           accessibility.
 
         4. **Inline**: in the standard-customer branch of `CalculateDiscountedTotal` (formerly
            `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
@@ -945,8 +955,8 @@ public class OrderPricingRefactorChainAgentTests
            Both branches must call the new method - re-read both branches, not just one.
         2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
            `OrderCheckout.cs` updated to the new name - not just one of the two?
-        3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
-           not still `private`?
+        3. Is the helper you extracted in step 1 (the one returning `amount * rate`) actually
+           `internal` in the file on disk right now? Is `CalculateDiscountedTotal` still `public`?
         4. Is the `standardDiscount` local variable actually gone from the standard-customer branch,
            with the extracted method's call result subtracted directly in the `return` statement? Is
            the preferred-customer branch's `discount` local still present, untouched?
@@ -1087,8 +1097,10 @@ public class OrderPricingRefactorChainAgentTests
            `OrderCheckout.cs` - that call site must also be updated to the new name; a rename that
            only changes the method's declaration and misses its caller is not complete.
 
-        3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
-           to `internal`, so other classes in the same project could call it directly if needed.
+        3. **Change accessibility**: Change the helper method you extracted in step 1 (the one that
+           returns `amount * rate`) from `private` to `internal`, so other classes in the same project
+           could call it directly if needed. `CalculateDiscountedTotal` itself keeps its current
+           accessibility.
 
         4. **Inline**: in the standard-customer branch of `CalculateDiscountedTotal` (formerly
            `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
@@ -1159,7 +1171,8 @@ public class OrderPricingRefactorChainAgentTests
            preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result)?
         2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
            `OrderCheckout.cs` updated to the new name?
-        3. Is the extracted method's accessibility actually `internal` in the file on disk right now?
+        3. Is the helper you extracted in step 1 (the one returning `amount * rate`) actually
+           `internal` in the file on disk right now? Is `CalculateDiscountedTotal` still `public`?
         4. Is the `standardDiscount` local variable actually gone, with the extracted method's call
            result subtracted directly in the `return` statement?
         5. Is `CalculateDiscountedTotal`'s own parameter actually named `discountRate` now, at its
@@ -1299,8 +1312,10 @@ public class OrderPricingRefactorChainAgentTests
            `OrderCheckout.cs` - that call site must also be updated to the new name; a rename that
            only changes the method's declaration and misses its caller is not complete.
 
-        3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
-           to `internal`, so other classes in the same project could call it directly if needed.
+        3. **Change accessibility**: Change the helper method you extracted in step 1 (the one that
+           returns `amount * rate`) from `private` to `internal`, so other classes in the same project
+           could call it directly if needed. `CalculateDiscountedTotal` itself keeps its current
+           accessibility.
 
         4. **Inline**: in the standard-customer branch of `CalculateDiscountedTotal` (formerly
            `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
@@ -1376,7 +1391,8 @@ public class OrderPricingRefactorChainAgentTests
            preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result)?
         2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
            `OrderCheckout.cs` updated to the new name?
-        3. Is the extracted method's accessibility actually `internal` in the file on disk right now?
+        3. Is the helper you extracted in step 1 (the one returning `amount * rate`) actually
+           `internal` in the file on disk right now? Is `CalculateDiscountedTotal` still `public`?
         4. Is the `standardDiscount` local variable actually gone, with the extracted method's call
            result subtracted directly in the `return` statement?
         5. Is `CalculateDiscountedTotal`'s own parameter actually named `discountRate` now, at its
@@ -1576,9 +1592,9 @@ public class OrderPricingRefactorChainAgentTests
             $"repeated inline in both branches (found {inlineDiscountExpressionCount} occurrences in code). " +
             $"Transcript: {result.TranscriptPath}");
 
-        Assert.That(calculatorText, Does.Match(@"internal\s+(?:static\s+)?decimal\s+\w+\s*\("),
+        Assert.That(calculatorText, Does.Match(@"internal\s+(?:static\s+)?decimal\s+(?!CalculateDiscountedTotal\b)\w+\s*\("),
             $"The method extracted in step 1 should have its accessibility raised to internal (found no " +
-            $"'internal decimal SomeMethod(' in OrderPricingCalculator.cs). Transcript: {result.TranscriptPath}");
+            $"an 'internal decimal <helper>(' other than CalculateDiscountedTotal in the calculator file). Transcript: {result.TranscriptPath}");
         Assert.That(calculatorText, Does.Not.Match(@"private\s+(?:static\s+)?decimal\s+(?!CalculateDiscountedTotal\b)\w+\s*\("),
             $"The extracted discount method should no longer be private. Transcript: {result.TranscriptPath}");
 

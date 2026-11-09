@@ -26,6 +26,8 @@ public static class CompilerErrorLookupHelper
     private static readonly Regex Cs0122InaccessibleRegex = new(@"'([^']+)' is inaccessible due to its protection level", RegexOptions.Compiled);
     private static readonly Regex Cs0101DuplicateNamespaceMemberRegex = new(@"The namespace '([^']+)' already contains a definition for '([^']+)'", RegexOptions.Compiled);
     private static readonly Regex Cs0111DuplicateMemberRegex = new(@"Type '([^']+)' already defines a member called '([^']+)'", RegexOptions.Compiled);
+    private static readonly Regex Cs0266ConvertRegex = new(@"Cannot implicitly convert type '([^']+)' to '([^']+)'", RegexOptions.Compiled);
+    private static readonly Regex Cs0737NotPublicRegex = new(@"'([^']+)' cannot implement an interface member because it is not public", RegexOptions.Compiled);
 
     // TODO pass editedFilePaths to DescribeAsync at the remaining callers
     public static async Task<string> DescribeAsync(
@@ -99,7 +101,75 @@ public static class CompilerErrorLookupHelper
             return await DescribeDuplicateDefinitionAsync(diagnostic, symbolNavigationEngine, cancellationToken);
         }
 
+        if (diagnostic.Id == "CS0266")
+        {
+            return await DescribeCs0266Async(diagnostic, symbolNavigationEngine, cancellationToken);
+        }
+
+        if (diagnostic.Id == "CS0737")
+        {
+            return DescribeCs0737(diagnostic);
+        }
+
         return null;
+    }
+
+    /// <summary>
+    /// CS0266 where the target is an interface the source class does not implement: the field or parameter was retyped to the
+    /// interface in an edit that does not also add the interface to the class. Verified from the committed semantic model
+    /// (target is an interface, source is a non-interface type that does not list it); any other CS0266 (numeric narrowing,
+    /// explicit-cast cases, generics, unresolvable names) gets no hint.
+    /// </summary>
+    private static async Task<string?> DescribeCs0266Async(
+        DiagnosticInfo diagnostic,
+        SymbolNavigationEngine symbolNavigationEngine,
+        CancellationToken cancellationToken)
+    {
+        var match = Cs0266ConvertRegex.Match(diagnostic.Message);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var source = match.Groups[1].Value;
+        var target = match.Groups[2].Value;
+        if (source.Contains('<') || target.Contains('<') || source.Contains('[') || target.Contains('['))
+        {
+            return null;
+        }
+
+        var sourceName = source.Split('.').Last();
+        var targetName = target.Split('.').Last();
+        try
+        {
+            var targetReport = await symbolNavigationEngine.GetTypeHierarchyAsync(targetName, cancellationToken: cancellationToken);
+            if (targetReport.IsError || !targetReport.IsInterface)
+            {
+                return null;
+            }
+
+            var sourceReport = await symbolNavigationEngine.GetTypeHierarchyAsync(sourceName, cancellationToken: cancellationToken);
+            if (sourceReport.IsError || sourceReport.IsInterface
+                || sourceReport.ImplementedInterfaces.Any(i => i.Split('.').Last() == targetName))
+            {
+                return null;
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
+
+        return $"  '{sourceName}' does not implement '{targetName}'. Add ': {targetName}' to {sourceName}'s declaration in the same atomic edit as this change.";
+    }
+
+    /// <summary>CS0737: the member that would implement the interface member is not public; the message already names it.</summary>
+    private static string? DescribeCs0737(DiagnosticInfo diagnostic)
+    {
+        var match = Cs0737NotPublicRegex.Match(diagnostic.Message);
+        return match.Success
+            ? $"  The implementing member must be public; make '{match.Groups[1].Value}' public (interface members are implemented by public members)."
+            : null;
     }
 
     private static async Task<string> DescribeCs0103Async(

@@ -56,9 +56,11 @@ public class ReplaceSnippetCrossFileRejectionTests
         var message = result.ErrorData?.Message ?? string.Empty;
         Assert.Multiple(() =>
         {
-            Assert.That(message, Does.Contain("this edit did not change"));
+            // The edit-impact analyzer recognises the rename and replaces the generic
+            // untouched-file sentence with a RenameSymbol next step.
+            Assert.That(message, Does.Contain("renamed CalcDisc -> CalculateDiscountedTotal"));
             Assert.That(message, Does.Contain("OrderCheckout.cs"));
-            Assert.That(message, Does.Contain("batchEdits"));
+            Assert.That(message, Does.Contain("RenameSymbol("));
             Assert.That(message, Does.Contain("is declared in"));
             Assert.That(message, Does.Not.Contain("isn't accessible the way it was called"));
         });
