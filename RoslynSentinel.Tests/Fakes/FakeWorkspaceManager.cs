@@ -197,7 +197,7 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
         }
 
         // Stale-read guard: a separate copy of the logic in PersistentWorkspaceManager; a green fake test says nothing about the production path.
-        if (staleReadPolicy == StaleReadPolicy.RefuseIfObservedStale && !exactRestore)
+        if (staleReadPolicy != StaleReadPolicy.None && !exactRestore)
         {
             var staleFiles = new Dictionary<FilePathWrapper, string>();
             foreach (var target in changes.Keys.Concat(deletePaths ?? []))

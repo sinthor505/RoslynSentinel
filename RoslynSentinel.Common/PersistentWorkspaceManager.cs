@@ -2043,7 +2043,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
             // Stale-read guard (observed-content ledger): refuse the whole batch, non-latching, when a target this agent has read
             // changed since (in memory or on disk). Targets without a ledger entry are allowed. exactRestore (UndoLastApply) is exempt.
-            if (staleReadPolicy == StaleReadPolicy.RefuseIfObservedStale && !exactRestore)
+            if (staleReadPolicy != StaleReadPolicy.None && !exactRestore)
             {
                 var staleFiles = new Dictionary<FilePathWrapper, string>();
                 foreach (var target in changes.Keys.Concat(deletePaths))
@@ -2051,7 +2051,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     if (!TryGetObservedHash(target, out var observedHash))
                     {
                         // unobserved target: allowed, but reported as a finding when it exists on disk (a new file cannot have been read)
-                        if (preImages.TryGetValue(target, out var unobservedDiskText) && unobservedDiskText is not null)
+                        if (staleReadPolicy == StaleReadPolicy.RefuseIfObservedStale && preImages.TryGetValue(target, out var unobservedDiskText) && unobservedDiskText is not null)
                         {
                             unobservedTargets.Add(target);
                         }

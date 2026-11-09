@@ -10,6 +10,8 @@ public enum StaleReadPolicy
     /// observed-content-ledger entry for the calling agent whose hash differs from the current in-memory text or the disk text.
     /// </summary>
     RefuseIfObservedStale,
+    /// <summary>Same refusal as RefuseIfObservedStale; does not report unobserved targets as a finding. For engine tools that edit many files.</summary>
+    RefuseIfObservedStaleQuiet,
 }
 
 /// <summary>The sanctioned path for loading a solution and writing changes back to disk.</summary>

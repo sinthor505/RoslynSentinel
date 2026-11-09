@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 
 using RoslynSentinel.Common;
+using RoslynSentinel.Tests.Fakes;
 
 namespace RoslynSentinel.Tests.Basic;
 
@@ -467,5 +468,122 @@ public class StaleReadGuardTests
         {
             Directory.Delete(dir, recursive: true);
         }
+    }
+
+    [Test]
+    public async Task QuietPolicy_ObservedStaleOnDisk_RefusesWithStaleReadAndWritesNothing()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager((file, Original));
+            AsAgent("agentA");
+            manager.RecordObserved(new FilePathWrapper(file), Original);
+            File.WriteAllText(file, Variant(3));
+
+            var result = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [file] = Variant(2)
+                }, retryCount: 0, validateChanges: false,
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
+
+            Assert.That(result.IsError, Is.True, result.Summary);
+            Assert.That(result.RefusalCode, Is.EqualTo(ToolErrorCode.StaleRead));
+            Assert.That(result.FailedFiles.ContainsKey(new FilePathWrapper(file)), Is.True);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Variant(3)),
+                "The externally written disk text must be left untouched.");
+            Assert.That(manager.IsSessionHalted(), Is.False, "A stale read is non-latching under the Quiet policy too.");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task QuietPolicy_UnobservedExistingTarget_WriteSucceedsWithoutUnobservedFinding()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager((file, Original));
+            AsAgent("agentA");
+
+            var result = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [file] = Variant(2)
+                }, retryCount: 0, validateChanges: false,
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
+
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Variant(2)));
+            Assert.That((result.Findings ?? []).Any(f => f.Message.Contains("read them first")), Is.False,
+                "The Quiet policy must not report unobserved targets as a finding.");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task StrictPolicy_UnobservedExistingTarget_ReportsExactlyOneUnobservedFinding()
+    {
+        // Control for the Quiet test above: the same setup must produce the finding under the strict policy,
+        // otherwise the Quiet test's "no finding" assertion could pass for the wrong reason.
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager((file, Original));
+            AsAgent("agentA");
+
+            var result = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [file] = Variant(2)
+                }, retryCount: 0, validateChanges: false,
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(result.Findings, Has.Count.EqualTo(1));
+            Assert.That(result.Findings[0].Message, Does.Contain("read them first"));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // Row B, FAKE ONLY: exception to the header rule above. FakeWorkspaceManager keeps its own copy of the stale-read
+    // logic, so this green result says nothing about PersistentWorkspaceManager; the real-manager cases are the
+    // QuietPolicy_ tests above.
+    [Test]
+    public async Task FakeQuietPolicy_ObservedStaleEntry_RefusesWithStaleRead()
+    {
+        var file = Path.Combine(Path.GetTempPath(), "StaleReadGuard", "FakeOnly", "A.cs");
+        var fake = FakeWorkspaceManager.ReadWrite();
+        fake.SetTestSolution(SolutionWithDocuments((file, Variant(4))));
+        AsAgent("agentA");
+        fake.RecordObserved(new FilePathWrapper(file), Original);
+
+        var result = await fake.ApplyProposedChangesAsync(
+            new()
+            {
+                [file] = Variant(2)
+            }, retryCount: 0, validateChanges: false,
+            staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
+
+        Assert.That(result.IsError, Is.True, result.Summary);
+        Assert.That(result.RefusalCode, Is.EqualTo(ToolErrorCode.StaleRead));
+        Assert.That(result.FailedFiles.ContainsKey(new FilePathWrapper(file)), Is.True);
+        Assert.That(result.SucceededFiles, Is.Empty);
     }
 }
