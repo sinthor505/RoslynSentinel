@@ -834,9 +834,11 @@ public class WorkspaceProjectManagementImpl
             {
                 [filePathResolved] = result.UpdatedText
             };
-            var apply = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount: 3, validateChanges: true, cancellationToken: cancellationToken);
+            var apply = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount: 3, validateChanges: true, cancellationToken: cancellationToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
             if (apply.IsError)
             {
+                if (WriteRefusal.TryMap("DeleteUnusedSymbol", apply, out var refusal))
+                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = refusal };
                 var reason = apply.ValidationResult is not null ? $"introduces new compiler errors - change not applied. Fix diagnostics and retry: {apply.ValidationResult.Diagnostics.ToJson()}" : $"failed to write to disk: {apply.Summary}";
                 return new SentinelCallToolResult<object>()
                 {

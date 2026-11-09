@@ -377,4 +377,33 @@ public class StaleReadEngineToolsTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Test]
+    public async Task DeleteUnusedSymbol_ObservedThenChangedFile_IsRefusedAsStaleReadAsync()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            const string withUnused = "namespace T;\r\npublic class A\r\n{\r\n    public int X() => 1;\r\n    private int Unused() => 5;\r\n}\r\n";
+            const string externalWithUnused = "namespace T;\r\npublic class A\r\n{\r\n    public int X() => 1;\r\n    private int Unused() => 6;\r\n}\r\n";
+            File.WriteAllText(file, withUnused);
+            using var manager = NewManager(file, withUnused);
+            AsAgent("agentA");
+            manager.RecordObserved(new FilePathWrapper(file), withUnused);
+            File.WriteAllText(file, externalWithUnused);
+            var config = TestEngines.SentinelConfiguration();
+            var impl = new WorkspaceProjectManagementImpl(
+                manager, TestEngines.StructuralRefinementEngine(manager, config), NullLogger<WorkspaceProjectManagementImpl>.Instance, TestEngines.SolutionStructureEngine(manager, config));
+
+            var result = await impl.DeleteUnusedSymbol(reason: "test message", filePath: file, symbolName: "Unused");
+
+            AssertStaleRead(result, Path.GetFileName(file));
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(externalWithUnused), "the externally written disk text must be left untouched");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }
