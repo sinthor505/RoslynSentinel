@@ -74,8 +74,8 @@ public class WholeFileWriteTools
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = normalizedContent };
             var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: validateOnApply, cancellationToken: cancellationToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
-            if (result.IsError && result.RefusalCode == ToolErrorCode.StaleRead)
-                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = StaleReadError("WriteFile", result) };
+            if (WriteRefusal.TryMap("WriteFile", result, out var refusal))
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = refusal };
 
             if (result.IsError && result.ValidationResult != null)
             {
@@ -142,8 +142,8 @@ public class WholeFileWriteTools
                 cancellationToken: cancellationToken,
                 deletePaths: [filePathResolved],
                 staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
-            if (result.IsError && result.RefusalCode == ToolErrorCode.StaleRead)
-                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = StaleReadError("DeleteFile", result) };
+            if (WriteRefusal.TryMap("DeleteFile", result, out var refusal))
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = refusal };
 
             if (result.IsError)
             {
@@ -305,13 +305,6 @@ public class WholeFileWriteTools
         return merged.Distinct().ToList();
     }
 
-    /// <summary>Builds the StaleRead refusal for a write the chokepoint refused because a target changed after it was last read.</summary>
-    // TODO remove once the three callers move to WriteRefusal.TryMap (plan step 2b)
-    private static ResultError StaleReadError(string toolName, ApplyChangesResult result)
-    {
-        return WriteRefusal.TryMap(toolName, result, out var mapped) ? mapped : new ResultError(ToolErrorCode.StaleRead, $"{toolName}: a target file changed after you last read it; nothing was written.");
-    }
-
     /// <summary>
     /// A files-format apply where any file would lose more than this fraction of its line count
     /// (see <see cref="PercentLinesRemoved"/>), or of its active C# code lines (see
@@ -421,8 +414,8 @@ public class WholeFileWriteTools
                     }
 
                     var result = await _workspaceManager.ApplyProposedChangesAsync(normalizedChanges, retryCount, validateChanges: validateOnApply, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
-                    if (result.IsError && result.RefusalCode == ToolErrorCode.StaleRead)
-                        return new SentinelCallToolResult<object>() { IsError = true, ErrorData = StaleReadError("ApplyDiff", result) };
+                    if (WriteRefusal.TryMap("ApplyDiff", result, out var refusal))
+                        return new SentinelCallToolResult<object>() { IsError = true, ErrorData = refusal };
                     if (result.IsError && result.ValidationResult != null)
                         return new SentinelCallToolResult<object>()
                         {
