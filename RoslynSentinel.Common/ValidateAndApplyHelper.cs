@@ -88,7 +88,12 @@ public static class ValidateAndApplyHelper
         CancellationToken cancellationToken = default,
         IReadOnlyCollection<FilePathWrapper>? deletePaths = null,
         Func<DiagnosticReport, CancellationToken, Task<string>>? describeValidationFailure = null,
-        IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits = null)
+        // Deliberate deviation from the chokepoint's default-None pattern (owner decision 2026-11-09):
+        // engine tools opt in to the stale-read guard once, here. The Quiet value refuses an
+        // observed-then-changed target but does not add the "not read first" finding, because engine
+        // tools edit many files.
+        IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits = null,
+        StaleReadPolicy staleReadPolicy = StaleReadPolicy.RefuseIfObservedStaleQuiet)
     {
         // The pre-images feed the per-file changed-line counts and the collateral-change tripwire below.
         // EOL conversion is done by the chokepoint (PersistentWorkspaceManager.ApplyProposedChangesAsync).
@@ -194,14 +199,17 @@ public static class ValidateAndApplyHelper
         var applyResult = await workspaceManager.ApplyProposedChangesAsync(
             changes, retryCount: 3, validateChanges: false, rollbackOnPartialFailure: true,
             progress: progress, cancellationToken: cancellationToken, deletePaths: deletePaths,
-            operationLabel: operationName);
+            operationLabel: operationName,
+            staleReadPolicy: staleReadPolicy);
 
         if (applyResult.IsError)
         {
             // The chokepoint's own EOL backstop reports RefusalCode; surface it as its distinct code.
-            var applyError = applyResult.RefusalCode != null
-                ? new ResultError(applyResult.RefusalCode, applyResult.Summary)
-                : new ResultError(ToolErrorCode.Exception, $"{operationName} apply failed", Detail: applyResult.Summary);
+            var applyError = WriteRefusal.TryMap(operationName, applyResult, out var mappedRefusal)
+                ? mappedRefusal
+                : applyResult.RefusalCode != null
+                    ? new ResultError(applyResult.RefusalCode, applyResult.Summary)
+                    : new ResultError(ToolErrorCode.Exception, $"{operationName} apply failed", Detail: applyResult.Summary);
             // ConcurrentEditRefused's Summary already names the writer, so the lookup is skipped for it.
             var refusedPaths = applyResult.RefusalCode == ToolErrorCode.ConcurrentEditRefused
                 ? Array.Empty<string>()
