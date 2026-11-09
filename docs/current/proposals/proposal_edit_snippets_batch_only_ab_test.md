@@ -1,6 +1,6 @@
 # A/B-test a batch-only EditSnippets tool against ReplaceSnippet
 
-**Status:** PROPOSED 2026-11-08. Approved in principle by the owner; to be built in a fresh session.
+**Status:** PROPOSED 2026-11-08. Built in `1ad60262` and first A/B run 2026-11-09 (`evals/eval_edit_snippets_ab_2026_11_09.md`): both arms 21/22 pass, arm B less friction; outcome undecided pending a harder rung or weaker model.
 
 ## Motivation
 
