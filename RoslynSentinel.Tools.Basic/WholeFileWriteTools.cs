@@ -73,7 +73,10 @@ public class WholeFileWriteTools
             }
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = normalizedContent };
-            var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: validateOnApply, cancellationToken: cancellationToken);
+            var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: validateOnApply, cancellationToken: cancellationToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+            if (result.IsError && result.RefusalCode == ToolErrorCode.StaleRead)
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = StaleReadError("WriteFile", result) };
+
             if (result.IsError && result.ValidationResult != null)
             {
                 return new SentinelCallToolResult<object>()
@@ -137,7 +140,11 @@ public class WholeFileWriteTools
             var result = await _workspaceManager.ApplyProposedChangesAsync(
                 changes: [],
                 cancellationToken: cancellationToken,
-                deletePaths: [filePathResolved]);
+                deletePaths: [filePathResolved],
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+            if (result.IsError && result.RefusalCode == ToolErrorCode.StaleRead)
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = StaleReadError("DeleteFile", result) };
+
             if (result.IsError)
             {
                 return new SentinelCallToolResult<object>()
@@ -298,6 +305,15 @@ public class WholeFileWriteTools
         return merged.Distinct().ToList();
     }
 
+    /// <summary>Builds the StaleRead refusal for a write the chokepoint refused because a target changed after it was last read.</summary>
+    private static ResultError StaleReadError(string toolName, ApplyChangesResult result)
+    {
+        var list = string.Join("; ", result.FailedFiles.Select(f => $"{f.Key} ({f.Value})"));
+        var firstPath = (string)result.FailedFiles.Keys.First();
+        var message = $"{toolName}: {result.FailedFiles.Count} target file(s) changed after you last read them; nothing was written: {list}. Next: re-read with {ToolCallHint.Call("ReadFile", ("filePath", firstPath))}, then repeat the edit against the fresh content. If refused again, wait a moment (the server may still be syncing an external change).";
+        return new ResultError(ToolErrorCode.StaleRead, message);
+    }
+
     /// <summary>
     /// A files-format apply where any file would lose more than this fraction of its line count
     /// (see <see cref="PercentLinesRemoved"/>), or of its active C# code lines (see
@@ -406,7 +422,9 @@ public class WholeFileWriteTools
                         normalizedChanges[changeTargetPath] = normalizedContent;
                     }
 
-                    var result = await _workspaceManager.ApplyProposedChangesAsync(normalizedChanges, retryCount, validateChanges: validateOnApply);
+                    var result = await _workspaceManager.ApplyProposedChangesAsync(normalizedChanges, retryCount, validateChanges: validateOnApply, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+                    if (result.IsError && result.RefusalCode == ToolErrorCode.StaleRead)
+                        return new SentinelCallToolResult<object>() { IsError = true, ErrorData = StaleReadError("ApplyDiff", result) };
                     if (result.IsError && result.ValidationResult != null)
                         return new SentinelCallToolResult<object>()
                         {
@@ -415,6 +433,8 @@ public class WholeFileWriteTools
                                 "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
+                    if (result.IsError)
+                        return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(result.RefusalCode ?? ToolErrorCode.Exception, $"ApplyDiff failed to apply the change set: {result.Summary}") };
                     await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result, cancellationToken: cancellationToken);
                     // PreImages (full pre-edit file content) is dropped from the default response -
                     // it's already captured in the undo blob written above (GetOperationDetailTool/
