@@ -84,7 +84,25 @@ file of the returned symbol (whole-file hash). `ListAll` does NOT record. `Inspe
 - Fold-on-read: `ReadFile`, `GetMethodSource` and `Search` text mode synchronously fold the one pending or differing file first (under `_solutionLock`, briefly under the write lock), then record.
 - Ordered after F1 (reason in Execution rules).
 
-**Open, with my recommendation (not decided):** see Risks and open decisions 1-10.
+**Owner, 2026-11-09 (second round):**
+- **FoldPending is bounded: refuse once per fold.** Refuse, enqueue the file for a fold; the next attempt after
+  that fold proceeds. Owner asked for a normalized-comparison fallback; adopted as a ladder evaluated before
+  refusing: (1) exact text equal -> proceed; (2) equal after stripping a BOM, normalizing EOLs and trimming
+  trailing whitespace per line -> treat as converged, proceed with an Info finding; (3) otherwise refuse once
+  per fold, then proceed with a Finding pointing at `LoadSolution(forceReload: true)`. NOT a Roslyn
+  `IsEquivalentTo`/syntax-equivalence compare: it ignores all trivia including comments, so an external
+  comment edit would count as "equal" and be silently overwritten by the in-memory-based write.
+- **Acknowledge after 8c clears the visibility list only.** Descriptions, docs and the peer-coordination skill
+  stop telling agents to acknowledge on a halt.
+- **CLAUDE.md may be edited in step 8e** (replace the drift-halt recovery line; run
+  `scripts/Test-GuidanceHygiene.ps1`).
+- **Accepted defaults:** no halt on watcher overflow (overflow already forces a full reload; the earlier brief's
+  premise was wrong); the up-to-10 s lock wait inside `_solutionLock` is accepted for v1; the blob write stays
+  outside the lock (accepted gap, the journal proposal closes it).
+- **9f replaced:** apply pending reloads (`_pendingChanges`) before `Search`, `ReadFile` and `GetMethodSource`,
+  instead of folding each returned Search document (see Step 9f).
+
+**Open, with my recommendation (not decided):** see Risks and open decisions 1-10 (1, 2, 3, 5, 6, 7 settled above).
 
 ## Execution rules
 
@@ -397,16 +415,57 @@ Restate the lock-order and re-entrancy rules (Execution rules) in every brief.
 - Out of scope: Search (9f); `GetFileOutline`; `InspectSymbol`.
 - Test-writer step (T9e): row Z (tool level): `ReadFile` on a file changed on disk inside the window returns the new text, records its hash, and a following `WriteFile` is not refused (no `StaleRead`, no `FoldPending`).
 
-#### Step 9f - `Search` text mode folds returned documents (recommended: do not build; owner confirms)
-- Files (1): `RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs` (Search text mode; default `maxResults` 200 at `:992`).
-- Change (~3 edits if built): fold only the distinct documents that produced results before returning them.
-- Cost, measured: up to 200 results but at most 200 distinct files, so at most 200 disk reads per call (p95 file about 47 KB, so roughly 10 MB read worst case); typical Search calls return far fewer files.
-- Recommendation: skip. Search returns snippets, not text the agent will edit from; recording the in-memory hash of a stale match only makes a later write conservative (a `StaleRead` or `FoldPending` retry), and with 8b in place that is the designed fallback. The worst-case read bill is high and it sits on the most frequently called read tool. Revisit if row Z-style failures show up in real runs through Search. Open decision 6.
-- Tier if built: D1. Test-writer step (T9f): row Z (Search variant).
+#### Step 9f - apply pending reloads before `Search`, `ReadFile` and `GetMethodSource` (owner decision 2026-11-09)
+- Replaces the earlier "Search folds returned documents" design (up to 200 disk reads per call, and it could not
+  fix a MISSED match: a file whose stale in-memory text has no hit is never returned, so never folded).
+- Change: before these three tools read, fold the paths currently queued in `_pendingChanges` (the watcher's
+  pending set the debounce timer would fold ~500 ms later) synchronously, under `_solutionLock` and briefly under
+  the write lock (9c's bounded wait; busy lock fails open: proceed on the in-memory text). Cost scales with the
+  number of pending changes (usually 0), not with hits or solution size. A pending `.sln`/`.csproj` or a watcher
+  overflow keeps the existing reload path (do not run a full reload inline; proceed and let the debounce handle it).
+- `ReadFile`/`GetMethodSource` keep 9d/9e's single-file disk compare as well (one read per call; catches a change
+  the watcher has not delivered yet).
+- Files: `RoslynSentinel.Common/PersistentWorkspaceManager.cs` (a `FlushPendingFoldsAsync` beside the debounce
+  handler, sharing its fold code), `RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs`,
+  `RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs`. Measure the debounce handler before slicing; split PWM
+  and the two tools if over D1.
+- Remaining gap, named: the milliseconds before the OS delivers the watcher event.
+- Test-writer step (T9f): row Z (Search variant): an external write queued but not yet debounced; Search finds
+  the new text immediately; with nothing pending, no fold runs.
 
 #### Step 9g - docs for F7 (Markdown, main session)
 - Files: `reference_file_watcher_and_drift_detection.md` (write path, debounce fold, lock), `reference_code_file_write_paths.md` (the lock step and the excluded writers), `reference_architecture_map.md` (chokepoint order, lock order), `proposal_cross_session_write_journal.md` (the lock and holder sidecar are now the attribution hook for `WriteLockBusy`; link this plan).
 - Done when: docs match the source; the lock-order and re-entrancy rules appear in the architecture map where the next change to the chokepoint will read them.
+- Also document Step 9h (zero-hit Search hint) in the watcher reference.
+
+#### Step 9h - zero-hit Search hint from recent operation blobs (owner decision 2026-11-09)
+Runs after 9f; independent of the lock. Two slices.
+- **9h-1, cross-file blob evidence in `Common`.** Files: `RoslynSentinel.Common/NotFoundEvidence.cs` (+ a test
+  file). Extract from `SearchBlobs` (`NotFoundEvidence.cs:79`) a variant with no `filePath` filter that walks
+  recent blobs newest first (same `MaxBlobsOpened` cap, same `Classify` self/foreign rule, skips the caller's own
+  writes and `Skipped`/`Failed`/`RolledBack` items) and returns at most a few notes of two kinds:
+  - **Removed** (window: the existing `DefaultWindow`, 60 min): `BeforeSource` holds the term and `AfterSource`
+    does not -> "'<term>' was removed from <file> by <agent> (<other session>) via <tool> <age> ago: <reason>".
+    Same wording builder as `BlobNote`.
+  - **Added, not loaded yet** (window: 15 s): `AfterSource` holds the term -> "'<term>' appears in <file> as
+    written by <agent> <age> ago; the server has not loaded it yet - retry". The caller confirms the in-memory
+    text lacks the term (it just searched it).
+  - Term matching: literal via the existing `Holds` for text/symbol names; for a regex query, match the regex
+    (with a timeout) against the blob text. Respect `MinNameLength`; clip reason with `MaxReasonChars`.
+  - Never throws (same catch-and-empty policy as `Find`); the single-file `Find` keeps working unchanged.
+  - Tier: D1 (1-2 files). Done when: `Build` 0 errors; T9h-1 green.
+- **9h-2, call it from Search on zero results.** Files: `RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs`
+  (text mode `SearchSolutionText`; symbol/declaration modes where a zero-result return is built). When the
+  result has zero matches, add the notes as Info `Findings` (source as in `NotFoundEvidence.FindingSource`). No
+  change when there are hits. Re-measure the zero-result return points first; if they span more than one file,
+  split. Tier: D1.
+- **Limits, named:** no hint does not mean nothing changed (editors, git and shell writes leave no blob; 5 chokepoint
+  paths write none, see the journal proposal's blob-coverage note). The write journal stores hashes only and
+  cannot replace this term search; 9h stays blob-based.
+- **Test-writer steps:** T9h-1 (unit, temp `.roslynsentinel/operations` fixture): foreign removal inside 60 min
+  -> Removed note; foreign add inside 15 s -> Added note; add older than 15 s -> no Added note; own-agent write
+  -> nothing; regex query; short term skipped; corrupt blob ignored. T9h-2 (tool): Search with zero hits and a
+  matching foreign blob returns the Finding; Search with hits returns none.
 
 ## Test strategy
 
@@ -478,7 +537,7 @@ Open decisions (not decided; do not route around).
 3. **`FoldPending` persistent mismatch.** If the in-memory text keeps differing from disk after a fold has run (for example a normalization difference between document text and disk text, or a file the workspace failed to refresh), every write to that file is refused forever. Recommend: refuse at most once per path per completed fold; if the mismatch persists after a fold, proceed and add a finding, or refuse with a message that names the existing full-reload operation (verify the tool name at dispatch). The comparison must use the same normalization as the stale-read check (it does today for `StaleRead`; Step 8b reuses that lookup).
 4. **Unchecked-target rule for `FoldPending`:** a target with no document or no readable disk pre-image is not checked. Protects the ~675 `SetTestSolution` usages and new files; the cost is that a file missing from the workspace (not yet added) is never guarded. Recommend accept.
 5. **Full-reload locking:** 9c releases the write lock before a full reload. If a reload can race a cross-process writer, `FoldPending` and the ledger still catch the files the agent touched. Recommend accept; revisit only with an observed torn reload.
-6. **`Search` fold-on-read (Step 9f):** recommended skip (cost and role of Search, above). Owner confirms; the owner brief listed it, so it is written as a step rather than dropped.
+6. **`Search` fold-on-read (Step 9f):** SETTLED 2026-11-09: replaced by "apply pending reloads before Search, ReadFile and GetMethodSource".
 7. **Lock configuration and holder fields:** the 10 s wait is a default in an options record; wiring a startup argument follows the `LlmOptions` pattern and is not measured here. Which of session id, tool name and reason `ToolCallContext` already carries is not measured; the holder record may start with agent id plus operation name and gain fields later.
 8. **`WriteRefusal` message cap:** list at most 10 stale files plus "and N more" with the full list in `StructuredDetail` (Step 2). Recommended, not decided.
 9. **Generic non-mapped refusal at the four anchor sites** (for example `ConcurrentEditRefused`) still falls through to `IsError = false`: fix in Step 4 or leave the `// TODO`. Plan leaves the `// TODO`; fixing changes behavior for disk-write failures and needs its own tests.
