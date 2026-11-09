@@ -17,6 +17,7 @@ public class BuildCascadeFixtureTests
     // flaky and gone unnoticed. Not worth chasing each time - re-run it alone before treating it as new.
     [Test]
     [NonParallelizable]
+    // TODO hit the 5-minute full-build timeout on a full solution test run (2026-11-09, other sessions building); passes when run alone.
     public async Task FullBuild_UpstreamProjectFails_DownstreamProjectsReportNoErrors()
     {
         var root = Path.Combine(Path.GetTempPath(), "RoslynSentinelB1_" + Guid.NewGuid().ToString("n"));

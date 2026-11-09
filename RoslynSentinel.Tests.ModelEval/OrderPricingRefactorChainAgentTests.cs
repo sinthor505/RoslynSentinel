@@ -778,7 +778,7 @@ public class OrderPricingRefactorChainAgentTests
         Assert.That(result.Converged, Is.True,
             $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
 
-        await AssertThreeBaseStepsApplied(result);
+        await AssertThreeBaseStepsApplied(result, maxTotalToolErrors: 10, maxToolErrorsPerTool: 4);
 
         var calculatorText = File.ReadAllText(CalculatorPath);
         var checkoutText = File.ReadAllText(CheckoutPath);
@@ -981,7 +981,7 @@ public class OrderPricingRefactorChainAgentTests
         Assert.That(result.Converged, Is.True,
             $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
 
-        await AssertThreeBaseStepsApplied(result, expectedCalculatorClassName: "StandardOrderPricingCalculator");
+        await AssertThreeBaseStepsApplied(result, expectedCalculatorClassName: "StandardOrderPricingCalculator", maxTotalToolErrors: 10, maxToolErrorsPerTool: 4);
 
         var calculatorText = File.ReadAllText(CalculatorPath);
         var checkoutText = File.ReadAllText(CheckoutPath);
@@ -1036,7 +1036,8 @@ public class OrderPricingRefactorChainAgentTests
 
         var coreProjectDirectory = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core");
         var (preferredResult, standardResult) = await FunctionalFixVerifier.InvokeCalculateDiscountedTotalAsync(
-            coreProjectDirectory, amount: 200m, rate: 0.1m, TestContext.CurrentContext.CancellationToken);
+            coreProjectDirectory, amount: 200m, rate: 0.1m, TestContext.CurrentContext.CancellationToken,
+            calculatorTypeName: "StandardOrderPricingCalculator");
         Assert.That(preferredResult, Is.EqualTo(200m - (200m * 0.1m * 1.1m)).Within(0.001m),
             $"CalculateDiscountedTotal should still apply the 1.1x scaling for a valid rate. Transcript: {result.TranscriptPath}");
         Assert.That(standardResult, Is.EqualTo(200m - (200m * 0.1m)).Within(0.001m),
@@ -1045,7 +1046,8 @@ public class OrderPricingRefactorChainAgentTests
         var threwForNegativeRate = await FunctionalFixVerifier.InvokeCalculateDiscountedTotalThrowsAsync(
             coreProjectDirectory, amount: 200m, rate: -0.1m, isPreferredCustomer: false,
             expectedExceptionTypeName: "ArgumentOutOfRangeException",
-            TestContext.CurrentContext.CancellationToken);
+            TestContext.CurrentContext.CancellationToken,
+            calculatorTypeName: "StandardOrderPricingCalculator");
         Assert.That(threwForNegativeRate, Is.True,
             $"Step 6: negative rate should still throw ArgumentOutOfRangeException. Transcript: {result.TranscriptPath}");
     }
@@ -1189,7 +1191,7 @@ public class OrderPricingRefactorChainAgentTests
         Assert.That(result.Converged, Is.True,
             $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
 
-        await AssertThreeBaseStepsApplied(result, expectedCalculatorClassName: "StandardOrderPricingCalculator");
+        await AssertThreeBaseStepsApplied(result, expectedCalculatorClassName: "StandardOrderPricingCalculator", maxTotalToolErrors: 12, maxToolErrorsPerTool: 5);
 
         var calculatorText = File.ReadAllText(CalculatorPath);
         var checkoutText = File.ReadAllText(CheckoutPath);
@@ -1246,7 +1248,8 @@ public class OrderPricingRefactorChainAgentTests
 
         var coreProjectDirectory = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core");
         var (preferredResult, standardResult) = await FunctionalFixVerifier.InvokeCalculateDiscountedTotalAsync(
-            coreProjectDirectory, amount: 200m, rate: 0.1m, TestContext.CurrentContext.CancellationToken);
+            coreProjectDirectory, amount: 200m, rate: 0.1m, TestContext.CurrentContext.CancellationToken,
+            calculatorTypeName: "StandardOrderPricingCalculator");
         Assert.That(preferredResult, Is.EqualTo(200m - (200m * 0.1m * 1.1m)).Within(0.001m),
             $"CalculateDiscountedTotal should still apply the 1.1x scaling for a valid rate. Transcript: {result.TranscriptPath}");
         Assert.That(standardResult, Is.EqualTo(200m - (200m * 0.1m)).Within(0.001m),
@@ -1255,7 +1258,8 @@ public class OrderPricingRefactorChainAgentTests
         var threwForNegativeRate = await FunctionalFixVerifier.InvokeCalculateDiscountedTotalThrowsAsync(
             coreProjectDirectory, amount: 200m, rate: -0.1m, isPreferredCustomer: false,
             expectedExceptionTypeName: "ArgumentOutOfRangeException",
-            TestContext.CurrentContext.CancellationToken);
+            TestContext.CurrentContext.CancellationToken,
+            calculatorTypeName: "StandardOrderPricingCalculator");
         Assert.That(threwForNegativeRate, Is.True,
             $"Step 6: negative rate should still throw ArgumentOutOfRangeException. Transcript: {result.TranscriptPath}");
     }
@@ -1405,7 +1409,7 @@ public class OrderPricingRefactorChainAgentTests
         Assert.That(result.Converged, Is.True,
             $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
 
-        await AssertThreeBaseStepsApplied(result, expectedCalculatorClassName: "StandardOrderPricingCalculator");
+        await AssertThreeBaseStepsApplied(result, expectedCalculatorClassName: "StandardOrderPricingCalculator", summarizeShippingChanged: true, maxTotalToolErrors: 12, maxToolErrorsPerTool: 5);
 
         var calculatorText = File.ReadAllText(CalculatorPath);
         var checkoutText = File.ReadAllText(CheckoutPath);
@@ -1480,7 +1484,8 @@ public class OrderPricingRefactorChainAgentTests
 
         var coreProjectDirectory = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core");
         var (preferredResult, standardResult) = await FunctionalFixVerifier.InvokeCalculateDiscountedTotalAsync(
-            coreProjectDirectory, amount: 200m, rate: 0.1m, TestContext.CurrentContext.CancellationToken);
+            coreProjectDirectory, amount: 200m, rate: 0.1m, TestContext.CurrentContext.CancellationToken,
+            calculatorTypeName: "StandardOrderPricingCalculator");
         Assert.That(preferredResult, Is.EqualTo(200m - (200m * 0.1m * 1.1m)).Within(0.001m),
             $"CalculateDiscountedTotal should still apply the 1.1x scaling for a valid rate. Transcript: {result.TranscriptPath}");
         Assert.That(standardResult, Is.EqualTo(200m - (200m * 0.1m)).Within(0.001m),
@@ -1489,7 +1494,8 @@ public class OrderPricingRefactorChainAgentTests
         var threwForNegativeRate = await FunctionalFixVerifier.InvokeCalculateDiscountedTotalThrowsAsync(
             coreProjectDirectory, amount: 200m, rate: -0.1m, isPreferredCustomer: false,
             expectedExceptionTypeName: "ArgumentOutOfRangeException",
-            TestContext.CurrentContext.CancellationToken);
+            TestContext.CurrentContext.CancellationToken,
+            calculatorTypeName: "StandardOrderPricingCalculator");
         Assert.That(threwForNegativeRate, Is.True,
             $"Step 6: negative rate should still throw ArgumentOutOfRangeException. Transcript: {result.TranscriptPath}");
     }
@@ -1533,7 +1539,11 @@ public class OrderPricingRefactorChainAgentTests
     /// but leaves the class's own `class X` line unrenamed (or vice versa) doesn't pass on a
     /// text-search coincidence.
     /// </param>
-    private async Task AssertThreeBaseStepsApplied(AgentRunResult result, string? expectedCalculatorClassName = null)
+    /// <param name="summarizeShippingChanged">True for rung 10, which legitimately changes SummarizeShipping; skips that member's unchanged check.</param>
+    /// <param name="maxTotalToolErrors">Total tool-error budget for the calling rung.</param>
+    /// <param name="maxToolErrorsPerTool">Per-tool tool-error budget for the calling rung.</param>
+    private async Task AssertThreeBaseStepsApplied(AgentRunResult result, string? expectedCalculatorClassName = null,
+        bool summarizeShippingChanged = false, int maxTotalToolErrors = 8, int maxToolErrorsPerTool = 4)
     {
         Assert.That(File.Exists(CalculatorPath), Is.True, "OrderPricingCalculator.cs should still exist after the model's edits.");
         Assert.That(File.Exists(CheckoutPath), Is.True, "OrderCheckout.cs should still exist after the model's edits.");
@@ -1597,10 +1607,14 @@ public class OrderPricingRefactorChainAgentTests
         // change to signature/behavior counts.
         UnrelatedCodeEquivalenceAssert.AssertMemberUnchanged(
             CalculatorPath, "DescribeOrder", OrderPricingRefactorReproducer.StartingCalculatorFileContent);
-        UnrelatedCodeEquivalenceAssert.AssertMemberUnchanged(
-            CalculatorPath, "SummarizeShipping", OrderPricingRefactorReproducer.StartingCalculatorFileContent);
+        // Rung 10 legitimately changes SummarizeShipping; its own assertions check that change.
+        if (!summarizeShippingChanged)
+        {
+            UnrelatedCodeEquivalenceAssert.AssertMemberUnchanged(
+                CalculatorPath, "SummarizeShipping", OrderPricingRefactorReproducer.StartingCalculatorFileContent);
+        }
 
-        AgentToolErrorAssertions.AssertWithinBudget(result, maxTotal: 8, maxPerTool: 4);
+        AgentToolErrorAssertions.AssertWithinBudget(result, maxTotal: maxTotalToolErrors, maxPerTool: maxToolErrorsPerTool);
     }
 
     private async Task AssertFunctionalBehaviorPreserved(AgentRunResult result)

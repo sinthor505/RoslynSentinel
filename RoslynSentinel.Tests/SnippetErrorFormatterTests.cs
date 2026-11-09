@@ -304,6 +304,23 @@ public class SnippetErrorFormatterTests
     }
 
     [Test]
+    public void Ambiguous_WithAdjacentLinesUnsupported_NeverMentionsLineBeforeOrLineAfter()
+    {
+        const string source = "a();\nx();\nb();\nc();\nx();\nd();";
+        var result = Resolve(source, "x();");
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.Ambiguous));
+
+        var ex = SnippetErrorFormatter.Build(result, SourceText.From(source), "x();", "oldContent", null,
+            selectorsSupported: true, adjacentLinesSupported: false);
+
+        Assert.That(ex, Is.InstanceOf<ToolAmbiguousMatchException>());
+        var message = ex.Message;
+        Assert.That(message, Does.Not.Contain("lineBefore"));
+        Assert.That(message, Does.Not.Contain("lineAfter"));
+        Assert.That(message, Does.Contain("matchLine="));
+    }
+
+    [Test]
     public void Ambiguous_WithSelectors_ListsMatchLineAndOnlyUniqueMemberNames_AndRoundTripsViaMatchLine()
     {
         var text = SourceText.From(SelectorSource);

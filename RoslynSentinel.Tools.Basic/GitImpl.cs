@@ -1580,6 +1580,10 @@ public class GitImpl : IGitOperations
                 error = "";
                 return fromSolution;
             }
+
+            // A loaded solution is authoritative: do not fall through to the base or working directory.
+            error = $"The loaded solution's directory ('{solutionRoot}') is not inside a git repository, so there is nothing for Git to operate on. Git does not fall back to the server's own repository when a solution is loaded. Pass repoPath (status/log/diff/show) to inspect another repository."; // hint-ok: names the Git tool's own repoPath parameter, not a call to another tool
+            return null;
         }
 
         // 2. Walk up from the server's base directory. Common case when no solution is loaded
@@ -1600,16 +1604,10 @@ public class GitImpl : IGitOperations
             return fromCurrentDirectory;
         }
 
-        if (solutionRoot is not null)
-        {
-            error = $"No git repository found. Searched upward from the loaded solution's directory ('{solutionRoot}'), the server's base directory, and the working directory without finding a .git entry. Git operations need a git working tree, not a loaded solution.";
-            return null;
-        }
-
         error = $"No git repository found. Searched upward from the server's base directory and working directory without finding a .git entry, and no solution is loaded to search from either. If the repository is elsewhere, call {ToolCallHint.Call("LoadSolution", ("solutionPath", "<path to .slnx>"))} with a solution inside it first.";
         return null;
     }
-       /// <summary>
+    /// <summary>
     /// Walks up from <paramref name="startDirectory"/> looking for a <c>.git</c> entry. Accepts a
     /// <c>.git</c> <b>file</b> as well as a directory: linked worktrees and submodules use a
     /// <c>.git</c> file holding a gitdir pointer, and a directory-only check silently walks past

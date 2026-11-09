@@ -55,6 +55,7 @@ public class BuildEngineTests
     // one that silently lost it before BuildEngine.cs's "--no-incremental" fix.
     [NonParallelizable]
     [Test]
+    // TODO hit the 5-minute full-build timeout on a full solution test run (2026-11-09, other sessions building); passes when run alone.
     public async Task RunFullBuildAsync_CalledTwiceWithObsoleteCallSite_BothCallsReportTheWarningAsync()
     {
         const string obsoleteSource = """

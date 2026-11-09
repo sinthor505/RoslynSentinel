@@ -109,9 +109,11 @@ internal static class FunctionalFixVerifier
     /// only text-scanning the edited source. Looked up by name directly (rather than by declared
     /// parameter types, which the model isn't asked to change) since the method's accessibility is
     /// expected to have changed to internal as part of the task.
+    /// <param name="calculatorTypeName">Simple name of the calculator class in ContosoOrders.Core.FixtureHelpers; rungs that rename the class pass the new name.</param>
     /// </summary>
     public static async Task<(decimal Preferred, decimal Standard)> InvokeCalculateDiscountedTotalAsync(
-        string coreProjectDirectory, decimal amount, decimal rate, CancellationToken cancellationToken)
+        string coreProjectDirectory, decimal amount, decimal rate, CancellationToken cancellationToken,
+        string calculatorTypeName = "OrderPricingCalculator")
     {
         var csprojPath = Path.Combine(coreProjectDirectory, "ContosoOrders.Core.csproj");
         if (!File.Exists(csprojPath))
@@ -130,7 +132,7 @@ internal static class FunctionalFixVerifier
         }
 
         (decimal Preferred, decimal Standard) result;
-        var loadContextRef = InvokeCalculateDiscountedTotalInCollectibleContext(assemblyPath, amount, rate, out result);
+        var loadContextRef = InvokeCalculateDiscountedTotalInCollectibleContext(assemblyPath, amount, rate, calculatorTypeName, out result);
 
         for (var i = 0; i < 10 && loadContextRef.IsAlive; i++)
         {
@@ -142,15 +144,15 @@ internal static class FunctionalFixVerifier
     }
 
     private static WeakReference InvokeCalculateDiscountedTotalInCollectibleContext(
-        string assemblyPath, decimal amount, decimal rate, out (decimal Preferred, decimal Standard) result)
+        string assemblyPath, decimal amount, decimal rate, string calculatorTypeName, out (decimal Preferred, decimal Standard) result)
     {
         var loadContext = new AssemblyLoadContext("FunctionalFixVerifier", isCollectible: true);
         try
         {
             var assembly = loadContext.LoadFromAssemblyPath(assemblyPath);
-            var calculatorType = assembly.GetType("ContosoOrders.Core.FixtureHelpers.OrderPricingCalculator")
+            var calculatorType = assembly.GetType($"ContosoOrders.Core.FixtureHelpers.{calculatorTypeName}")
                 ?? throw new InvalidOperationException(
-                    "FunctionalFixVerifier: type 'ContosoOrders.Core.FixtureHelpers.OrderPricingCalculator' " +
+                    $"FunctionalFixVerifier: type 'ContosoOrders.Core.FixtureHelpers.{calculatorTypeName}' " +
                     "not found in the built assembly - the model's edit may have renamed or removed it.");
             var method = calculatorType.GetMethod(
                     "CalculateDiscountedTotal",
@@ -158,9 +160,9 @@ internal static class FunctionalFixVerifier
                     [typeof(decimal), typeof(decimal), typeof(bool)])
                 ?? throw new InvalidOperationException(
                     "FunctionalFixVerifier: method 'CalculateDiscountedTotal(decimal, decimal, bool)' not " +
-                    "found on OrderPricingCalculator - the rename or signature may be wrong.");
+                    $"found on {calculatorTypeName} - the rename or signature may be wrong.");
             var instance = Activator.CreateInstance(calculatorType)
-                ?? throw new InvalidOperationException("FunctionalFixVerifier: could not construct OrderPricingCalculator.");
+                ?? throw new InvalidOperationException($"FunctionalFixVerifier: could not construct {calculatorTypeName}.");
 
             try
             {
@@ -192,10 +194,12 @@ internal static class FunctionalFixVerifier
     /// exception type's name somewhere in the source text). Looked up by parameter TYPES rather
     /// than names so a prior rung's parameter rename (<c>rate</c> to <c>discountRate</c>) doesn't
     /// break this lookup.
+    /// <param name="calculatorTypeName">Simple name of the calculator class in ContosoOrders.Core.FixtureHelpers; rungs that rename the class pass the new name.</param>
     /// </summary>
     public static async Task<bool> InvokeCalculateDiscountedTotalThrowsAsync(
         string coreProjectDirectory, decimal amount, decimal rate, bool isPreferredCustomer,
-        string expectedExceptionTypeName, CancellationToken cancellationToken)
+        string expectedExceptionTypeName, CancellationToken cancellationToken,
+        string calculatorTypeName = "OrderPricingCalculator")
     {
         var csprojPath = Path.Combine(coreProjectDirectory, "ContosoOrders.Core.csproj");
         if (!File.Exists(csprojPath))
@@ -215,7 +219,7 @@ internal static class FunctionalFixVerifier
 
         bool threwExpectedType;
         var loadContextRef = InvokeCalculateDiscountedTotalThrowsInCollectibleContext(
-            assemblyPath, amount, rate, isPreferredCustomer, expectedExceptionTypeName, out threwExpectedType);
+            assemblyPath, amount, rate, isPreferredCustomer, expectedExceptionTypeName, calculatorTypeName, out threwExpectedType);
 
         for (var i = 0; i < 10 && loadContextRef.IsAlive; i++)
         {
@@ -228,15 +232,15 @@ internal static class FunctionalFixVerifier
 
     private static WeakReference InvokeCalculateDiscountedTotalThrowsInCollectibleContext(
         string assemblyPath, decimal amount, decimal rate, bool isPreferredCustomer,
-        string expectedExceptionTypeName, out bool threwExpectedType)
+        string expectedExceptionTypeName, string calculatorTypeName, out bool threwExpectedType)
     {
         var loadContext = new AssemblyLoadContext("FunctionalFixVerifier", isCollectible: true);
         try
         {
             var assembly = loadContext.LoadFromAssemblyPath(assemblyPath);
-            var calculatorType = assembly.GetType("ContosoOrders.Core.FixtureHelpers.OrderPricingCalculator")
+            var calculatorType = assembly.GetType($"ContosoOrders.Core.FixtureHelpers.{calculatorTypeName}")
                 ?? throw new InvalidOperationException(
-                    "FunctionalFixVerifier: type 'ContosoOrders.Core.FixtureHelpers.OrderPricingCalculator' " +
+                    $"FunctionalFixVerifier: type 'ContosoOrders.Core.FixtureHelpers.{calculatorTypeName}' " +
                     "not found in the built assembly - the model's edit may have renamed or removed it.");
             var method = calculatorType.GetMethod(
                     "CalculateDiscountedTotal",
@@ -244,9 +248,9 @@ internal static class FunctionalFixVerifier
                     [typeof(decimal), typeof(decimal), typeof(bool)])
                 ?? throw new InvalidOperationException(
                     "FunctionalFixVerifier: method 'CalculateDiscountedTotal(decimal, decimal, bool)' not " +
-                    "found on OrderPricingCalculator - the rename or signature may be wrong.");
+                    $"found on {calculatorTypeName} - the rename or signature may be wrong.");
             var instance = Activator.CreateInstance(calculatorType)
-                ?? throw new InvalidOperationException("FunctionalFixVerifier: could not construct OrderPricingCalculator.");
+                ?? throw new InvalidOperationException($"FunctionalFixVerifier: could not construct {calculatorTypeName}.");
 
             try
             {

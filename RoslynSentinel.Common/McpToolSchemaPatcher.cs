@@ -497,10 +497,8 @@ public static class McpToolSchemaPatcher
             propertiesObj,
             "newContent",
             $"Verbatim replacement text for oldContent. Limit: {ReplaceSnippetOptions.MaxNewContentLines} lines / {ReplaceSnippetOptions.MaxNewContentChars} chars (excluding leading indentation).");
-        // ReplaceSnippet has no contextSnippet parameter, so the shared "Line before contextSnippet."
-        // text (ToolParams.LineBefore/LineAfter) misleads here; anchors only disambiguate oldContent.
-        anyPatched |= PatchDescription(propertiesObj, "lineBefore", ToolParams.ReplaceSnippetAnchorLine);
-        anyPatched |= PatchDescription(propertiesObj, "lineAfter", ToolParams.ReplaceSnippetAnchorLine);
+        // TODO remove ReplaceSnippet's lineBefore/lineAfter parameters and SnippetEdit.LineBefore/LineAfter once no caller sends them (hidden from the schema 2026-11-09; widen oldContent or use matchLine instead).
+        anyPatched |= RemoveAnchorProperties(schemaObj, propertiesObj);
         anyPatched |= PatchBatchEditItems(schemaObj, propertiesObj);
 
         if (anyPatched)
@@ -551,9 +549,27 @@ public static class McpToolSchemaPatcher
                 requiredArray.Add("oldContent");
             }
 
-            PatchDescription(itemProps, "lineBefore", ToolParams.ReplaceSnippetAnchorLine);
-            PatchDescription(itemProps, "lineAfter", ToolParams.ReplaceSnippetAnchorLine);
+            RemoveAnchorProperties(itemSchema, itemProps);
             return true;
+        }
+
+        static bool RemoveAnchorProperties(JsonObject schemaObj, JsonObject propertiesObj)
+        {
+            bool removed = propertiesObj.Remove("lineBefore");
+            removed |= propertiesObj.Remove("lineAfter");
+            if (schemaObj["required"] is JsonArray requiredArray)
+            {
+                for (int i = requiredArray.Count - 1; i >= 0; i--)
+                {
+                    if (requiredArray[i] is JsonValue v && v.TryGetValue(out string? s) && (s is "lineBefore" or "lineAfter"))
+                    {
+                        requiredArray.RemoveAt(i);
+                        removed = true;
+                    }
+                }
+            }
+
+            return removed;
         }
 
         static bool PatchDescription(JsonObject propertiesObj, string parameterName, string description)

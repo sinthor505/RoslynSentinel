@@ -1,6 +1,5 @@
 // Guards the emitted ReplaceSnippetTool schema (blocker: replacesnippet_schema_invites_anchor_only_edits, slice 2):
-// each batchEdits item lists oldContent as required, and lineBefore/lineAfter describe oldContent anchors
-// rather than the nonexistent contextSnippet.
+// each batchEdits item lists oldContent as required, and lineBefore/lineAfter are hidden from the emitted schema.
 using System.Text.Json.Nodes;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -12,9 +11,6 @@ namespace RoslynSentinel.Tests.Server;
 [TestFixture]
 public class ReplaceSnippetSchemaTests
 {
-    private const string ExpectedAnchorText =
-        "Optional extra filter, applied after matchLine/withinMember: the single line just before the first line (lineBefore) or just after the last line (lineAfter) of oldContent.";
-
     private static JsonObject BuildSchema()
     {
         var services = new ServiceCollection().BuildServiceProvider();
@@ -54,15 +50,15 @@ public class ReplaceSnippetSchemaTests
     }
 
     [Test]
-    public void LineBeforeAndAfter_DescribeOldContentAnchors_TopLevelAndInBatchItems()
+    public void LineBeforeAndAfter_AreHiddenFromSchema_TopLevelAndInBatchItems()
     {
         var schema = BuildSchema();
         var item = ResolveItemSchema(schema);
 
         foreach (var props in new[] { (JsonObject)schema["properties"]!, (JsonObject)item["properties"]! })
         {
-            Assert.That(props["lineBefore"]!["description"]!.GetValue<string>(), Is.EqualTo(ToolParams.ReplaceSnippetAnchorLine));
-            Assert.That(props["lineAfter"]!["description"]!.GetValue<string>(), Is.EqualTo(ToolParams.ReplaceSnippetAnchorLine));
+            Assert.That(props.ContainsKey("lineBefore"), Is.False);
+            Assert.That(props.ContainsKey("lineAfter"), Is.False);
         }
     }
 

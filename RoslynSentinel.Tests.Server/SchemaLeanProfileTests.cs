@@ -148,8 +148,7 @@ public class SchemaLeanProfileTests
         foreach (var schema in SchemasFor(schemas, "ReplaceSnippet"))
         {
             var items = schema.GetProperty("properties").GetProperty("batchEdits").GetRawText();
-            Assert.That(items, Does.Contain("lineBefore"), "batchEdits items keep their own lineBefore under Lean.");
-            Assert.That(items, Does.Contain("lineAfter"), "batchEdits items keep their own lineAfter under Lean.");
+            Assert.That(items, Does.Contain("filePath"), "batchEdits items keep their own filePath under Lean (Lean hides only top-level names).");
         }
     }
 
@@ -161,7 +160,7 @@ public class SchemaLeanProfileTests
         Assert.That(SchemaOptions.Profile, Is.EqualTo(SchemaProfile.Full));
         foreach (var schema in SchemasFor(schemas, "ReplaceSnippet"))
         {
-            Assert.That(TopLevelProperties(schema), Is.SupersetOf(new[] { "returnDiff", "validateOnApply", "lineBefore", "lineAfter" }));
+            Assert.That(TopLevelProperties(schema), Is.SupersetOf(new[] { "returnDiff", "validateOnApply" }));
         }
 
         foreach (var schema in SchemasFor(schemas, "Member"))

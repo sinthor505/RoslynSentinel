@@ -288,13 +288,29 @@ public class SnippetSelectorTests
     {
         const string source = "x();\nb();\nx();";
 
-        var beforeFirst = ResolveIn(source, "x();", new SnippetSelectors(LineBefore: "", MatchLine: 1));
-        var afterLast = ResolveIn(source, "x();", new SnippetSelectors(LineAfter: "", MatchLine: 3));
+        // "b();" exists in the file only on the middle line, so it is never the line before line 1 or after line 3.
+        var beforeFirst = ResolveIn(source, "x();", new SnippetSelectors(LineBefore: "b();", MatchLine: 1));
+        var afterLast = ResolveIn(source, "x();", new SnippetSelectors(LineAfter: "b();", MatchLine: 3));
 
         Assert.Multiple(() =>
         {
             Assert.That(beforeFirst.Outcome, Is.EqualTo(SnippetMatchOutcome.AdjacentLineMismatch));
             Assert.That(afterLast.Outcome, Is.EqualTo(SnippetMatchOutcome.AdjacentLineMismatch));
+        });
+    }
+
+    [Test]
+    public void BlankAdjacentLines_AtTheEdgesOfTheFile_AreIgnored()
+    {
+        const string source = "x();\nb();\nx();";
+
+        var beforeFirst = ResolveIn(source, "x();", new SnippetSelectors(LineBefore: "", MatchLine: 1));
+        var afterLast = ResolveIn(source, "x();", new SnippetSelectors(LineAfter: "  ", MatchLine: 3));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(beforeFirst.Outcome, Is.EqualTo(SnippetMatchOutcome.Matched));
+            Assert.That(afterLast.Outcome, Is.EqualTo(SnippetMatchOutcome.Matched));
         });
     }
 

@@ -70,9 +70,10 @@ namespace RoslynSentinel.Common.SnippetMatching
         /// <param name="snippetLabel">The caller's parameter name for the snippet (for example oldContent or contextSnippet), used in the wording.</param>
         /// <param name="memberNameAt">Maps a character offset to its enclosing member name, to name each candidate's member; optional.</param>
         /// <param name="selectorsSupported">True when the calling tool accepts matchLine (and withinMember); changes the advice and adds matchLine to each candidate.</param>
+        /// <param name="adjacentLinesSupported">True when the calling tool still accepts lineBefore/lineAfter; false (ReplaceSnippet) keeps them out of the advice, candidate values and tie notes.</param>
         public static ToolException Build(
             SnippetMatchResult result, SourceText sourceText, string snippet, string snippetLabel,
-            Func<int, string?>? memberNameAt = null, bool selectorsSupported = false)
+            Func<int, string?>? memberNameAt = null, bool selectorsSupported = false, bool adjacentLinesSupported = true)
         {
             ArgumentNullException.ThrowIfNull(result);
             ArgumentNullException.ThrowIfNull(sourceText);
@@ -88,20 +89,20 @@ namespace RoslynSentinel.Common.SnippetMatching
                     return BuildLooser(result, snippetLabel);
 
                 case SnippetMatchOutcome.Ambiguous:
-                    return BuildAmbiguous(result, sourceText, snippetLabel, memberNameAt, selectorsSupported, stillAmbiguous: false);
+                    return BuildAmbiguous(result, sourceText, snippetLabel, memberNameAt, selectorsSupported, adjacentLinesSupported, stillAmbiguous: false);
 
                 case SnippetMatchOutcome.StillAmbiguous:
                 case SnippetMatchOutcome.TrueTie:
-                    return BuildAmbiguous(result, sourceText, snippetLabel, memberNameAt, selectorsSupported, stillAmbiguous: true);
+                    return BuildAmbiguous(result, sourceText, snippetLabel, memberNameAt, selectorsSupported, adjacentLinesSupported, stillAmbiguous: true);
 
                 case SnippetMatchOutcome.SelectorMismatch:
-                    return BuildSelectorMismatch(result, sourceText, snippetLabel, memberNameAt, selectorsSupported);
+                    return BuildSelectorMismatch(result, sourceText, snippetLabel, memberNameAt, selectorsSupported, adjacentLinesSupported);
 
                 case SnippetMatchOutcome.AdjacentLineMismatch:
-                    return BuildAdjacentLineMismatch(result, sourceText, snippetLabel, memberNameAt, selectorsSupported);
+                    return BuildAdjacentLineMismatch(result, sourceText, snippetLabel, memberNameAt, selectorsSupported, adjacentLinesSupported);
 
                 case SnippetMatchOutcome.InvalidDisambiguator:
-                    return BuildInvalidDisambiguator(result, selectorsSupported);
+                    return BuildInvalidDisambiguator(result, selectorsSupported, adjacentLinesSupported);
 
                 case SnippetMatchOutcome.Matched:
                     throw new InvalidOperationException(
@@ -245,71 +246,81 @@ namespace RoslynSentinel.Common.SnippetMatching
 
         private static ToolAmbiguousMatchException BuildAmbiguous(
             SnippetMatchResult result, SourceText sourceText, string label, Func<int, string?>? memberNameAt,
-            bool selectorsSupported, bool stillAmbiguous)
+            bool selectorsSupported, bool adjacentLinesSupported, bool stillAmbiguous)
         {
             var matches = result.Matches;
-            var candidates = DescribeMatches(sourceText, matches, memberNameAt, selectorsSupported, out var anyMember, out var before, out var after);
+            var candidates = DescribeMatches(sourceText, matches, memberNameAt, selectorsSupported, adjacentLinesSupported, out var anyMember, out var before, out var after);
             var sb = new StringBuilder();
             if (stillAmbiguous)
             {
                 sb.Append($"{label} is still ambiguous: {matches.Count} matches remain after the selectors you supplied.");
                 AppendTrail(sb, result);
-                sb.Append('\n').Append("Narrow it further: ").Append(AmbiguityAdvice(label, selectorsSupported, anyMember));
+                sb.Append('\n').Append("Narrow it further: ").Append(AmbiguityAdvice(label, selectorsSupported, adjacentLinesSupported, anyMember));
             }
             else
             {
                 var tier = matches.Count > 0 ? matches[0].Tier.ToString() : result.RequestedTolerance.ToString();
                 sb.Append($"{label} is ambiguous: it matches {matches.Count} places in the file (at {tier}). Select one: ");
-                sb.Append(AmbiguityAdvice(label, selectorsSupported, anyMember));
+                sb.Append(AmbiguityAdvice(label, selectorsSupported, adjacentLinesSupported, anyMember));
             }
 
             sb.Append('\n').Append("Candidates in file order (the file's own text, with the values that select each):");
             var listed = ListCandidates(sb, candidates, matches.Count, "candidate(s)");
-            AppendTieNote(sb, label, selectorsSupported, before, after, listed);
+            AppendTieNote(sb, label, selectorsSupported, adjacentLinesSupported, before, after, listed);
             return new ToolAmbiguousMatchException(sb.ToString(), snippet: SnippetFailureDetail.From(result));
         }
 
-        private static string AmbiguityAdvice(string label, bool selectorsSupported, bool anyMember)
+        private static string AmbiguityAdvice(string label, bool selectorsSupported, bool adjacentLinesSupported, bool anyMember)
         {
+            var member = anyMember ? " (and withinMember where listed)" : string.Empty;
+            if (!adjacentLinesSupported)
+            {
+                return $"pass matchLine{member} copied from one candidate below, or widen {label} with a neighbouring line.";
+            }
+
             if (!selectorsSupported)
             {
                 return $"pass lineBefore and/or lineAfter copied verbatim from one candidate below, or widen {label} so it matches one place only.";
             }
 
-            var member = anyMember ? " (and withinMember where listed)" : string.Empty;
             return $"pass matchLine{member} copied from one candidate below, optionally with lineBefore/lineAfter, or widen {label} so it matches one place only.";
         }
 
         private static ToolNotFoundException BuildSelectorMismatch(
-            SnippetMatchResult result, SourceText sourceText, string label, Func<int, string?>? memberNameAt, bool selectorsSupported)
+            SnippetMatchResult result, SourceText sourceText, string label, Func<int, string?>? memberNameAt, bool selectorsSupported, bool adjacentLinesSupported)
         {
             var matches = result.PreFilterMatches;
             var supplied = SuppliedSelectors(result, "matchLine", "withinMember");
-            var candidates = DescribeMatches(sourceText, matches, memberNameAt, selectorsSupported, out _, out var before, out var after);
+            var candidates = DescribeMatches(sourceText, matches, memberNameAt, selectorsSupported, adjacentLinesSupported, out _, out var before, out var after);
             var sb = new StringBuilder();
             sb.Append($"{label} was found ({matches.Count} match(es)), but not at the {supplied} you supplied; nothing was located.");
             AppendTrail(sb, result);
             sb.Append('\n').Append(
                 $"Candidates in file order (the file's own text; pass the matchLine/withinMember shown for the one you meant, or widen {label}):");
             var listed = ListCandidates(sb, candidates, matches.Count, "candidate(s)");
-            AppendTieNote(sb, label, selectorsSupported, before, after, listed);
+            AppendTieNote(sb, label, selectorsSupported, adjacentLinesSupported, before, after, listed);
             return new ToolNotFoundException(sb.ToString(), snippet: SnippetFailureDetail.From(result));
         }
 
         private static ToolNotFoundException BuildAdjacentLineMismatch(
-            SnippetMatchResult result, SourceText sourceText, string label, Func<int, string?>? memberNameAt, bool selectorsSupported)
+            SnippetMatchResult result, SourceText sourceText, string label, Func<int, string?>? memberNameAt, bool selectorsSupported, bool adjacentLinesSupported)
         {
             var matches = result.SelectorSurvivors.Count > 0 ? result.SelectorSurvivors : result.PreFilterMatches;
             var supplied = SuppliedSelectors(result, "lineBefore", "lineAfter");
-            var candidates = DescribeMatches(sourceText, matches, memberNameAt, selectorsSupported, out _, out var before, out var after);
+            var candidates = DescribeMatches(sourceText, matches, memberNameAt, selectorsSupported, adjacentLinesSupported, out _, out var before, out var after);
             var sb = new StringBuilder();
             sb.Append($"{label} was found ({matches.Count} match(es)), but not next to the {supplied} you supplied; nothing was located. ");
             sb.Append("lineBefore/lineAfter must be the single real line immediately before/after the match.");
+            if (!adjacentLinesSupported)
+            {
+                sb.Append($" lineBefore/lineAfter are deprecated for this tool: omit them and widen {label} or pass matchLine instead.");
+            }
+
             AppendTrail(sb, result);
             sb.Append('\n').Append(
-                $"Candidates in file order (the file's own text; copy the lineBefore/lineAfter shown for the one you meant, or widen {label}):");
+                $"Candidates in file order (the file's own text; {(adjacentLinesSupported ? "copy the lineBefore/lineAfter shown for the one you meant" : "copy the matchLine shown for the one you meant")}, or widen {label}):");
             var listed = ListCandidates(sb, candidates, matches.Count, "candidate(s)");
-            AppendTieNote(sb, label, selectorsSupported, before, after, listed);
+            AppendTieNote(sb, label, selectorsSupported, adjacentLinesSupported, before, after, listed);
             return new ToolNotFoundException(sb.ToString(), snippet: SnippetFailureDetail.From(result));
         }
 
@@ -332,7 +343,7 @@ namespace RoslynSentinel.Common.SnippetMatching
         }
 
         private static List<Candidate> DescribeMatches(
-            SourceText sourceText, IReadOnlyList<SnippetMatch> matches, Func<int, string?>? memberNameAt, bool selectorsSupported,
+            SourceText sourceText, IReadOnlyList<SnippetMatch> matches, Func<int, string?>? memberNameAt, bool selectorsSupported, bool adjacentLinesSupported,
             out bool anyWithinMember, out List<string> beforeValues, out List<string> afterValues)
         {
             string? MemberOf(SnippetMatch m) => memberNameAt?.Invoke(SnippetSelectorFilter.FirstNonWhitespacePosition(sourceText, m));
@@ -379,17 +390,26 @@ namespace RoslynSentinel.Common.SnippetMatching
                     selectors.Append($"matchLine={anchorLine} ");
                 }
 
-                selectors.Append($"lineBefore=\"{before}\" lineAfter=\"{after}\"");
+                if (adjacentLinesSupported)
+                {
+                    selectors.Append($"lineBefore=\"{before}\" lineAfter=\"{after}\"");
+                }
+
                 candidates.Add(new Candidate(
-                    $"Candidate {i + 1} of {matches.Count} ({span}{inMember}):", new[] { selectors.ToString() }, lines));
+                    $"Candidate {i + 1} of {matches.Count} ({span}{inMember}):", new[] { selectors.ToString().TrimEnd() }, lines));
             }
 
             return candidates;
         }
 
         private static void AppendTieNote(
-            StringBuilder sb, string label, bool selectorsSupported, List<string> before, List<string> after, int listed)
+            StringBuilder sb, string label, bool selectorsSupported, bool adjacentLinesSupported, List<string> before, List<string> after, int listed)
         {
+            if (!adjacentLinesSupported)
+            {
+                return;
+            }
+
             var groups = Enumerable.Range(0, Math.Min(listed, before.Count))
                 .GroupBy(i => (before[i], after[i])).Where(g => g.Count() > 1);
             foreach (var group in groups)
@@ -405,7 +425,7 @@ namespace RoslynSentinel.Common.SnippetMatching
 
         // ---- InvalidDisambiguator ----
 
-        private static ToolNotFoundException BuildInvalidDisambiguator(SnippetMatchResult result, bool selectorsSupported)
+        private static ToolNotFoundException BuildInvalidDisambiguator(SnippetMatchResult result, bool selectorsSupported, bool adjacentLinesSupported)
         {
             var name = result.InvalidParameterName ?? "selector";
             var value = Quote(result.InvalidParameterValue ?? string.Empty, MaxParameterEchoChars);
@@ -419,7 +439,7 @@ namespace RoslynSentinel.Common.SnippetMatching
                         $"Pass only the one real source line immediately {direction} the match (the nearest distinguishing line, not a multi-line block).", snippet: SnippetFailureDetail.From(result));
 
                 case "withinMember":
-                    var alternative = selectorsSupported ? "matchLine, lineBefore or lineAfter" : "lineBefore or lineAfter";
+                    var alternative = !adjacentLinesSupported ? "matchLine" : selectorsSupported ? "matchLine, lineBefore or lineAfter" : "lineBefore or lineAfter";
                     return new ToolNotFoundException(
                         $"Invalid argument: withinMember (\"{value}\") cannot be applied here because member names cannot be resolved for this lookup. " +
                         $"Remove withinMember and narrow with {alternative} instead.", snippet: SnippetFailureDetail.From(result));

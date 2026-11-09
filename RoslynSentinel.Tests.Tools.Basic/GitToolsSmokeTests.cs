@@ -464,6 +464,29 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    public void Git_TryGetGitRoot_LoadedSolutionOutsideAnyRepo_ReturnsNullWithoutFallingBackToServerRepo()
+    {
+        // A plain temp folder with no .git entry above it. The server's own base directory sits
+        // inside the dev repo, so before the fix this silently resolved to that repo instead of failing.
+        var outsideDir = Path.Combine(Path.GetTempPath(), "RoslynSentinelNoRepo_" + Guid.NewGuid());
+        Directory.CreateDirectory(outsideDir);
+        try
+        {
+            using var workspaceManager = new FakeWorkspaceManager(WorkspaceAccess.ReadOnly) { SolutionPath = Path.Combine(outsideDir, "Fake.sln") };
+            var gitImpl = new GitImpl(workspaceManager, NullLogger<GitImpl>.Instance);
+
+            var root = gitImpl.TryGetGitRoot(out var error);
+
+            Assert.That(root, Is.Null);
+            Assert.That(error, Does.Contain("not inside a git repository"));
+        }
+        finally
+        {
+            Directory.Delete(outsideDir, recursive: true);
+        }
+    }
+
+    [Test]
     [Category("GitCommitResult")] // sentinel:auto-category
     public async Task Git_Commit_ReturnsCommitHashLengthMatchingActualHashAsync()
     {

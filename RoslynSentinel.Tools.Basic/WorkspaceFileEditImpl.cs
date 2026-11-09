@@ -623,7 +623,7 @@ public class WorkspaceFileEditImpl
             new SnippetSelectors(withinMember, matchLine, lineBefore, lineAfter), memberNameAt);
         if (result.Outcome != SnippetMatchOutcome.Matched)
         {
-            throw SnippetErrorFormatter.Build(result, sourceText, oldContent, "oldContent", memberNameAt, selectorsSupported: true);
+            throw SnippetErrorFormatter.Build(result, sourceText, oldContent, "oldContent", memberNameAt, selectorsSupported: true, adjacentLinesSupported: false);
         }
 
         return result.Matches.Single();
@@ -880,7 +880,7 @@ public class WorkspaceFileEditImpl
             }
             if (string.IsNullOrEmpty(edit.OldContent))
             {
-                perEditErrors.Add($"batchEdits[{i}] ({edit.FilePath}): oldContent is required; lineBefore/lineAfter only disambiguate it.");
+                perEditErrors.Add($"batchEdits[{i}] ({edit.FilePath}): oldContent is required; widen oldContent or pass matchLine to disambiguate it.");
                 continue;
             }
             if (edit.NewContent == null)
@@ -1026,7 +1026,7 @@ public class WorkspaceFileEditImpl
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
                 IsError = true,
-                ErrorData = new ResultError(errorCode, "ReplaceSnippet batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
+                ErrorData = new ResultError(errorCode, "ReplaceSnippet batch rejected - nothing was changed; every file is exactly as you last read it:\n" + string.Join("\n", perEditErrors))
             };
         }
 
@@ -1053,7 +1053,7 @@ public class WorkspaceFileEditImpl
                 {
                     IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception,
-                        "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors - no changes were written. " +
+                        "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors, so nothing was changed; every file is exactly as you last read it. " +
                         (untouchedNote is null ? "" : untouchedNote + " ") +
                         "Fix the issue(s) below and retry:\n" +
                         "[COMPILER ERROR]\n" +

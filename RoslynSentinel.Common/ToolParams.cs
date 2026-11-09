@@ -53,11 +53,6 @@ public static class ToolParams
     public const string LineAfter =
         "Line after contextSnippet.";
 
-    // ReplaceSnippet has no contextSnippet parameter: its anchors disambiguate oldContent. Applied to the
-    // emitted schema by McpToolSchemaPatcher.ApplyReplaceSnippetLimits (top-level and batchEdits items).
-    public const string ReplaceSnippetAnchorLine =
-        "Optional filter: the single line just before (lineBefore) or just after (lineAfter) oldContent.";
-
     // ReplaceSnippet match selectors: values are printed by the ambiguity error.
     public const string ReplaceSnippetWithinMember =
         "Name of the member containing the intended oldContent match, as printed by the ambiguity error.";
@@ -71,8 +66,7 @@ public static class ToolParams
         "(ReadFile/GetMethodSource/etc.), not retyped from memory. Matched as a literal substring " +
         "first, falling back to whitespace-normalized matching. Must be short (a startup-configured " +
         "line/char limit, reported in the error if exceeded) - this tool is for small, localized " +
-        "edits only. If oldContent matches more than once in the file, use lineBefore/lineAfter to " +
-        "disambiguate.";
+        "edits only. If it matches more than once, widen it with a neighbouring line or pass matchLine from the error's candidate list.";
 
     */
     public const string OldContent = "Verbatim text to find and replace using literal substring match. Default limit of 2000 characters.";

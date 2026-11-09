@@ -253,7 +253,7 @@ public class RefactoringStructuralImpl
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = true,
-                ErrorData = new ResultError(BatchErrorCode(engineErrorCodes, perEditErrors.Count), "ModifyModifier batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
+                ErrorData = new ResultError(BatchErrorCode(engineErrorCodes, perEditErrors.Count), "ModifyModifier batch rejected - nothing was changed; every file is exactly as you last read it:\n" + string.Join("\n", perEditErrors))
             };
         }
 
@@ -401,7 +401,7 @@ public class RefactoringStructuralImpl
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = true,
-                ErrorData = new ResultError(BatchErrorCode(engineErrorCodes, perEditErrors.Count), "ModifyAttribute batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
+                ErrorData = new ResultError(BatchErrorCode(engineErrorCodes, perEditErrors.Count), "ModifyAttribute batch rejected - nothing was changed; every file is exactly as you last read it:\n" + string.Join("\n", perEditErrors))
             };
         }
 
@@ -414,7 +414,7 @@ public class RefactoringStructuralImpl
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ModifyAttribute batch changed nothing - no changes were written. No effect: " + string.Join(", ", noEffect) + ". For action 'remove' this means the attribute is not present on the target.")
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ModifyAttribute batch changed nothing; every file is exactly as you last read it. No effect: " + string.Join(", ", noEffect) + ". For action 'remove' this means the attribute is not present on the target.")
             };
         }
 
@@ -512,7 +512,7 @@ public class RefactoringStructuralImpl
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = true,
-                ErrorData = new ResultError(BatchErrorCode(engineErrorCodes, perEditErrors.Count), "ModifyBaseType batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
+                ErrorData = new ResultError(BatchErrorCode(engineErrorCodes, perEditErrors.Count), "ModifyBaseType batch rejected - nothing was changed; every file is exactly as you last read it:\n" + string.Join("\n", perEditErrors))
             };
         }
 

@@ -6,10 +6,9 @@ namespace RoslynSentinel.Common.SnippetMatching;
 /// Optional selectors a caller uses to narrow a multi-match result to the one intended match, applied by
 /// <see cref="SnippetResolver.Resolve(SourceText, string, WhitespaceTolerance, SnippetCaseMode, SnippetSelectors?, Func{int, string?}?)"/>
 /// after tier resolution, to the matches at the winning tier. A blank selector means "not supplied": a null, empty or
-/// whitespace <see cref="WithinMember"/> and a <see cref="MatchLine"/> of 0 or less are ignored, because weak models send
+/// whitespace <see cref="WithinMember"/>, <see cref="LineBefore"/>, <see cref="LineAfter"/> and a <see cref="MatchLine"/> of 0 or less are ignored, because weak models send
 /// "" or 0 for an unused parameter and that must not filter out every match (the same rule as
-/// the exact ReplaceSnippet matcher this replaced). <see cref="LineBefore"/> and <see cref="LineAfter"/> are different: any
-/// non-null value, including an empty string, is a supplied selector.
+/// the exact ReplaceSnippet matcher this replaced).
 /// <para>Precedence rule: <see cref="WithinMember"/> and <see cref="MatchLine"/> act first and are intersected; only the
 /// matches that survive them are then filtered by <see cref="LineBefore"/> and <see cref="LineAfter"/>.</para>
 /// </summary>
@@ -45,8 +44,8 @@ internal static class SnippetSelectorFilter
 
         var withinMember = string.IsNullOrWhiteSpace(selectors.WithinMember) ? null : selectors.WithinMember;
         int? matchLine = selectors.MatchLine is > 0 ? selectors.MatchLine : null;
-        var lineBefore = selectors.LineBefore;
-        var lineAfter = selectors.LineAfter;
+        var lineBefore = string.IsNullOrWhiteSpace(selectors.LineBefore) ? null : selectors.LineBefore;
+        var lineAfter = string.IsNullOrWhiteSpace(selectors.LineAfter) ? null : selectors.LineAfter;
 
         // Validation runs before matching in ContextHelper too, so a malformed selector wins over NoMatch.
         if (withinMember != null && memberNameAt == null)

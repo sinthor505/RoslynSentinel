@@ -1,6 +1,6 @@
 # Semantic edit-impact diagnostics, a playbook and GetHelp: explain a rejected edit by what it changed
 
-**Status:** PROPOSED 2026-10-19. Awaiting review; nothing built. Open questions were investigated 2026-10-19 (answers inline); a few remain.
+**Status:** PROPOSED 2026-10-19. First slice (symbol diff, attribution, next-step line at the shared gate) approved 2026-11-09, see "First slice"; the rest is unreviewed. Open questions were investigated 2026-10-19 (answers inline); a few remain.
 
 ## Motivation
 
@@ -112,6 +112,44 @@ Migration-first, each slice compile-green: (a) playbook catalog + completeness t
 (Q3) with the fixture regression test (OrderPricingCalculator/OrderCheckout, no model); (d) repeat
 detection; (e) `GetHelp`; (f) reason capture + hints; (g) tier 3 advisor. The old per-error hint stays as
 a fallback for diagnostics the analyzer cannot attribute.
+
+### First slice, approved 2026-11-09: rollout (b) + (c), minimal
+
+Evidence: the 10-chain runs of 2026-11-09 (`evals/eval_edit_snippets_ab_2026_11_09.md`; runs
+`20261109-170327-522` and `-173949-849`). qwen3.5-9b never called RenameSymbol and lost its turns pushing renames
+through ReplaceSnippet. Haiku used RenameSymbol for both cross-file renames, finished in 18 calls and
+never met the gate.
+
+- **Scope:** a symbol diff plus attribution plus one next-step line. It is wired once in
+  `ValidateAndApplyHelper`, so every gated tool gains it. Not in this slice: the playbook, GetHelp, repeat
+  detection, reason hints and tier 3.
+- **Symbol diff:** compare the members declared in each edited document between baseline and candidate,
+  keyed by containing type, name, kind and parameter types.
+  - Classify each change as removed, added, signature-changed or accessibility-changed.
+  - Rename: exactly one removed and one added member in the same type, of the same kind and with equal
+    parameter types. Otherwise report "removed X, added Y" and claim no rename.
+  - Type renames follow the same rule at type level.
+- **Attribution:** link each diagnostic in an unedited file to a diff entry when the diagnostic's
+  identifier is the removed or changed member's old name. Unattributed diagnostics stay listed as today.
+- **Next step,** naming only tools active in the current mode:
+
+  | Attributed change | Diagnostics | Next step |
+  | --- | --- | --- |
+  | rename X -> Y | CS1061, CS0103, CS0117, CS0246 | "This edit renames X to Y and N file(s) still use X: use RenameSymbol on X instead." |
+  | signature change | CS7036, CS1501, CS1503 | ChangeSignature or MethodSignature, which update callers |
+  | accessibility narrowed | CS0122 | ChangeAccessibility |
+  | anything else | - | one batch covering every affected file (the current text) |
+
+- **Active-tool source:** nothing at the gate knows the active tool set today. `ToolAllowList` is
+  registered only for claude-lean or `--hide-tools`. The slice adds one DI-registered source of the
+  registered tool names, readable from the gate.
+- **Gaps fixed in the same slice:**
+  - The batch and CreateFile messages build their own text.
+  - The f0830fc9 `DescribeUntouchedFileErrors` text is the fallback row of the table above.
+- **Done when:** a fixture test (OrderPricingCalculator/OrderCheckout, no model) checks three cases:
+  - a single-file rename of `CalcDisc` gets the RenameSymbol line when RenameSymbol is registered;
+  - the same rename gets the batch line when RenameSymbol is not registered;
+  - a correct two-file batch passes with no report.
 
 ## Findings from the open-question review (2026-10-19)
 
