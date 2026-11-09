@@ -23,8 +23,11 @@
 # *contains* a covered git command as text (a test fixture, an echo, a quoted single-line
 # literal) is blocked too. .cs detection is token-based (Test-CsPathToken): only a path-shaped
 # .cs token counts (`src/Foo.cs`, `'src/Foo.cs'`, `**/*.cs`), not a name inside prose
-# (`see Foo.cs`, `Foo.cs:12`); the residual false positive is a bare path-shaped literal such as
-# `.Replace('Foo.cs','Bar.cs')` in a non-.cs write - use the DeliberateHookBypass keyword. PowerShell here-string and bash heredoc BODIES are
+# (`see Foo.cs`, `Foo.cs:12`). On top of that, the shell writer rule judges the parsed write TARGET
+# (Test-CsShellWrite) and the reader rule lets a reader whose file arguments are all non-C# through
+# (Test-ReaderStatementClean), so `.Replace('Foo.cs','Bar.cs')` in a docs edit no longer blocks; the
+# token judgment remains only for targets the parser cannot resolve. The block messages name Edit/Write
+# as the route for a non-.cs file. PowerShell here-string and bash heredoc BODIES are
 # stripped before scanning (Remove-HereStrings), so prose appended to a doc that way is fine.
 # Put other such content in a file rather than on the command line - see
 # enforce-dogfood.Tests.ps1, which exists in file form for exactly this reason.
@@ -50,7 +53,7 @@
 #     staged, or scope=all/tracked with no paths list while the tree is dirty.
 #
 # Deliberate bypass (out-of-repo auto-exempt, inline keyword, token file): see the
-# "Deliberate bypass" block below and CLAUDE.md "Hook bypass".
+# "Deliberate bypass" block below and docs/current/references/reference_hook_bypass.md.
 #
 # Tests: pwsh -NoProfile -File .claude/hooks/enforce-dogfood.Tests.ps1
 
@@ -67,8 +70,8 @@ function Deny([string]$reason) {
 }
 
 # --- Deliberate bypass --------------------------------------------------------------
-# A reflexive call stays blocked; a deliberate one can pass. Policy: CLAUDE.md "Hook bypass".
-# Three routes, none advertised by the block messages themselves (they only point at CLAUDE.md,
+# A reflexive call stays blocked; a deliberate one can pass. Policy: reference_hook_bypass.md.
+# Three routes, none advertised by the block messages themselves (they only point at that doc,
 # so the keyword does not become a reflex):
 #   1. Out-of-repo path: Edit/Write/Grep on a .cs path outside this repo's root needs nothing -
 #      the MCP tools cannot see those files, so blocking them is a false positive.
@@ -86,7 +89,7 @@ $bypassTokenPath  = Join-Path $repoRoot '.claude\bypass.local.json'
 $bypassTtlMinutes = 10
 $bypassFooter = @"
 
-A deliberate, justified exception is described in CLAUDE.md ("Hook bypass").
+A deliberate, justified exception is described in docs/current/references/reference_hook_bypass.md.
 "@
 
 function DenyBypassable([string]$reason) { Deny ($reason + $bypassFooter) }
@@ -426,6 +429,7 @@ function Get-CsReaderHit([string]$scan, [string]$readers) {
     try { $stmts = @(Get-ShellStatements $scan) } catch { $stmts = @() }
     if ($stmts.Count -eq 0) { $stmts = @([pscustomobject]@{ Start = 0; Text = $scan }) }
     $tainted = New-Object 'System.Collections.Generic.List[string]'
+    $readerVars = $null
     foreach ($st in $stmts) {
         $t = [string]$st.Text
         $hasCs = Test-CsPathToken $t -QuotedNeedsDir
@@ -448,10 +452,416 @@ function Get-CsReaderHit([string]$scan, [string]$readers) {
         }
         if ($t -match "(^\s*|[;&|(\r\n]\s*|\bxargs\s+)($readers)(\s|$)") {
             $verb = $Matches[2]
-            if (-not (Test-ShellCsTargetsOutsideRepo $t -QuotedNeedsDir -LocationScan $scan)) { return $verb }
+            if (-not (Test-ShellCsTargetsOutsideRepo $t -QuotedNeedsDir -LocationScan $scan)) {
+                # Parser check (deviation): a reader whose file arguments are all known non-C# files is not a C# read,
+                # even when the statement names a .cs path as data (`(Get-Content x.md) -replace 'src/Foo.cs','x'`).
+                if ($null -eq $readerVars) { $readerVars = Get-VarMap $scan }
+                if (-not (Test-ReaderStatementClean $t $readerVars $scan)) { return $verb }
+            }
         }
     }
     return $null
+}
+
+# --- Parser-based target analysis (deviation: the writer rule and the reader rule's clean check) -----------------
+# The token scan above asks "does the command NAME a .cs path"; these helpers ask "what does it READ or WRITE",
+# using the PowerShell parser, so a .cs path that is only data (`.Replace('Foo.cs','Bar.cs')`, `Set-Content notes.md
+# 'Foo.cs'`) no longer blocks a non-C# write. Each statement (Get-ShellStatements) is parsed alone, so && / || never
+# reach the Windows PowerShell 5.1 parser; Bash statements parse well enough for cp/mv/tee/cat/grep/redirects. A
+# statement that does not parse, or a target that cannot be resolved, falls back to the token judgment.
+# Values: a resolved string; $null = unknown; a string containing $script:unk ([char]1) = partly known (the text before
+# the marker is a reliable prefix, so "$env:TEMP\x_$(guid)" is still known to be under TEMP).
+$script:unk = [string][char]1
+$csWriters   = 'Set-Content|Add-Content|Out-File|Copy-Item|Move-Item|Rename-Item|New-Item|tee|cp|mv|copy|move|ren|sc|ac'
+$csWriteApis = '\b(WriteAllText|WriteAllLines|WriteAllBytes|AppendAllText|AppendAllLines)\b'
+$csRedirect  = '>{1,2}\s*["'']?[^\s"''|;&]*\.cs\b'
+
+function Join-PathValue($a, $b) {
+    if ($null -eq $a) { return $null }
+    if ($null -eq $b) { $b = $script:unk }
+    return ([string]$a).TrimEnd('\', '/') + '\' + ([string]$b).TrimStart('\', '/')
+}
+
+function Get-ParamCanon([string]$pn) {
+    # Single-letter flags are switches (Bash -r/-n/-a); PowerShell needs 2+ letters to tell these apart anyway.
+    $pn = $pn.ToLowerInvariant()
+    if ($pn.Length -lt 2) { return $null }
+    if ($pn -eq 'lp') { return 'literalpath' }
+    foreach ($c in 'literalpath', 'path', 'filepath', 'pspath', 'destination', 'newname', 'name', 'childpath') { if ($c.StartsWith($pn)) { return $c } }
+    foreach ($c in 'value', 'encoding', 'itemtype', 'inputobject', 'filter', 'include', 'exclude', 'width', 'stream', 'credential',
+                   'delimiter', 'target', 'pattern', 'context', 'totalcount', 'tail', 'head', 'readcount', 'first', 'last', 'skip') { if ($c.StartsWith($pn)) { return '#' + $c } }
+    return $null
+}
+
+function Resolve-ArgValue($a, [hashtable]$vars, [int]$depth = 0) {
+    if ($null -eq $a -or $depth -gt 6) { return $null }
+    switch ($a.GetType().Name) {
+        'StringConstantExpressionAst' { return [string]$a.Value }
+        'ConstantExpressionAst'       { return [string]$a.Value }
+        'CommandExpressionAst'        { return Resolve-ArgValue $a.Expression $vars ($depth + 1) }
+        'ParenExpressionAst'          { return Resolve-ArgValue $a.Pipeline $vars ($depth + 1) }
+        'SubExpressionAst' {
+            if (@($a.SubExpression.Statements).Count -eq 1) { return Resolve-ArgValue $a.SubExpression.Statements[0] $vars ($depth + 1) }
+            return $null
+        }
+        'PipelineAst' {
+            if (@($a.PipelineElements).Count -ne 1) { return $null }
+            return Resolve-ArgValue $a.PipelineElements[0] $vars ($depth + 1)
+        }
+        'CommandAst' {
+            # Join-Path a b (positional or -Path/-ChildPath); anything else is unknown.
+            if ([string]$a.GetCommandName() -ne 'Join-Path') { return $null }
+            $parts = @{}; $pos = New-Object 'System.Collections.Generic.List[object]'
+            $els = $a.CommandElements
+            for ($i = 1; $i -lt $els.Count; $i++) {
+                $e = $els[$i]
+                if ($e -is [System.Management.Automation.Language.CommandParameterAst]) {
+                    $cn = Get-ParamCanon $e.ParameterName
+                    $v = $e.Argument
+                    if (-not $v -and ($i + 1) -lt $els.Count) { $i++; $v = $els[$i] }
+                    if ($cn) { $parts[$cn] = $v }
+                    continue
+                }
+                $pos.Add($e)
+            }
+            $p = if ($parts.ContainsKey('path')) { $parts['path'] } elseif ($pos.Count -gt 0) { $pos[0] } else { $null }
+            $c = if ($parts.ContainsKey('childpath')) { $parts['childpath'] } elseif ($parts.ContainsKey('path') -and $pos.Count -gt 0) { $pos[0] } elseif ($pos.Count -gt 1) { $pos[1] } else { $null }
+            if ($null -eq $p) { return $null }
+            return Join-PathValue (Resolve-ArgValue $p $vars ($depth + 1)) $(if ($c) { Resolve-ArgValue $c $vars ($depth + 1) } else { '' })
+        }
+        'VariableExpressionAst' {
+            $vp = $a.VariablePath
+            if ($vp.DriveName -eq 'env') { return [Environment]::GetEnvironmentVariable($vp.UserPath.Substring(4)) }
+            $k = $vp.UserPath.ToLowerInvariant()
+            if ($k -eq 'null') { return '' }
+            if ($vars.ContainsKey($k)) { return $vars[$k] }
+            return $null
+        }
+        'BinaryExpressionAst' {
+            if ([string]$a.Operator -ne 'Plus') { return $null }
+            $l = Resolve-ArgValue $a.Left $vars ($depth + 1)
+            $r = Resolve-ArgValue $a.Right $vars ($depth + 1)
+            if ($null -eq $l -and $null -eq $r) { return $null }
+            return $(if ($null -eq $l) { $script:unk } else { $l }) + $(if ($null -eq $r) { $script:unk } else { $r })
+        }
+        'InvokeMemberExpressionAst' {
+            if (-not $a.Static -or $a.Expression -isnot [System.Management.Automation.Language.TypeExpressionAst]) { return $null }
+            if ($a.Expression.TypeName.FullName -notmatch '^(System\.)?IO\.Path$') { return $null }
+            $m = [string]$a.Member.Value
+            if ($m -eq 'GetTempPath') { return [System.IO.Path]::GetTempPath() }
+            if ($m -eq 'Combine' -and @($a.Arguments).Count -ge 1) {
+                $acc = Resolve-ArgValue $a.Arguments[0] $vars ($depth + 1)
+                for ($j = 1; $j -lt @($a.Arguments).Count; $j++) { $acc = Join-PathValue $acc (Resolve-ArgValue $a.Arguments[$j] $vars ($depth + 1)) }
+                return $acc
+            }
+            return $null
+        }
+        'ExpandableStringExpressionAst' {
+            $text = $a.Extent.Text; $base = $a.Extent.StartOffset
+            $sb = New-Object System.Text.StringBuilder
+            $pos = 0
+            foreach ($n in @($a.NestedExpressions | Sort-Object { $_.Extent.StartOffset })) {
+                $s = $n.Extent.StartOffset - $base
+                if ($s -lt $pos) { continue }
+                [void]$sb.Append($text.Substring($pos, $s - $pos))
+                $v = Resolve-ArgValue $n $vars ($depth + 1)
+                [void]$sb.Append($(if ($null -eq $v) { $script:unk } else { $v }))
+                $pos = $n.Extent.EndOffset - $base
+            }
+            [void]$sb.Append($text.Substring($pos))
+            $out = $sb.ToString()
+            if ($out.Length -ge 2 -and $out[0] -eq [char]34 -and $out[$out.Length - 1] -eq [char]34) { $out = $out.Substring(1, $out.Length - 2) }
+            return $out
+        }
+    }
+    return $null
+}
+
+# Variables with one statically known value: PowerShell `$x = <literal/Join-Path/env/...>` and Bash `x=literal`.
+# A name assigned more than once, or by a foreach, maps to $null (unknown). Fail-safe: empty map on any error.
+function Get-VarMap([string]$text) {
+    $map = @{}
+    try {
+        foreach ($st in @(Get-ShellStatements $text)) {
+            $tk = $null; $er = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseInput([string]$st.Text, [ref]$tk, [ref]$er)
+            foreach ($n in $ast.FindAll({ param($x) $x -is [System.Management.Automation.Language.AssignmentStatementAst] -or $x -is [System.Management.Automation.Language.ForEachStatementAst] -or $x -is [System.Management.Automation.Language.CommandAst] }, $true)) {
+                $name = $null; $val = $null
+                if ($n -is [System.Management.Automation.Language.ForEachStatementAst]) { $name = $n.Variable.VariablePath.UserPath }
+                elseif ($n -is [System.Management.Automation.Language.AssignmentStatementAst]) {
+                    if ($n.Left -isnot [System.Management.Automation.Language.VariableExpressionAst]) { continue }
+                    $name = $n.Left.VariablePath.UserPath
+                    if ([string]$n.Operator -eq 'Equals') { $val = Resolve-ArgValue $n.Right $map }
+                }
+                else {
+                    if (@($n.CommandElements).Count -ne 1 -or [string]$n.GetCommandName() -notmatch '^(?<n>[A-Za-z_]\w*)=(?<v>[^$`"'']+)$') { continue }
+                    $name = $Matches['n']; $val = $Matches['v']
+                }
+                $k = $name.ToLowerInvariant()
+                $map[$k] = $(if ($map.ContainsKey($k)) { $null } else { $val })
+            }
+        }
+    }
+    catch { return @{} }
+    return $map
+}
+
+# Classifies a resolved target: Cs = names a .cs file; Out = outside this repo (or a harness Worktree); Known = fully resolved.
+function Get-PathClass($v, [string]$locScan) {
+    $r = @{ Cs = $false; Out = $false; Known = $false }
+    if ($null -eq $v) { return $r }
+    $s = ([string]$v).Trim().Trim('"', "'")
+    if ($s -eq '') { $r.Known = $true; return $r }
+    $r.Cs = $s -match '\.cs$'
+    if ($s -match '[\\/]Worktree[\\/]') { $r.Out = $true; $r.Known = $true; return $r }
+    $ui = $s.IndexOf($script:unk)
+    if ($ui -ge 0) {
+        # Partly known: outside only when the known prefix ends in a directory that is outside the repo and is not one of
+        # its ancestors (C:\Users\x\ + unknown could still be the repo). Short 8.3 names are not expanded here.
+        $prefix = Convert-LocationPath $s.Substring(0, $ui)
+        $cut = $prefix.LastIndexOfAny([char[]]@('\', '/'))
+        if ($cut -gt 0) {
+            try {
+                $dir = $prefix.Substring(0, $cut)
+                if ([System.IO.Path]::IsPathRooted($dir)) {
+                    $full = [System.IO.Path]::GetFullPath($dir).TrimEnd('\', '/')
+                    $isAncestor = $repoRoot.StartsWith("$full\", [StringComparison]::OrdinalIgnoreCase)
+                    $r.Out = (-not $isAncestor) -and ((Test-PathOutsideRepo $full) -or (Test-UnderOutsideRoot $full))
+                }
+            }
+            catch { }
+        }
+        return $r
+    }
+    $r.Known = $true
+    $p = Convert-LocationPath $s
+    try {
+        if ([System.IO.Path]::IsPathRooted($p)) { $r.Out = (Test-PathOutsideRepo $p) -or (Test-UnderOutsideRoot $p) }
+        elseif ($p -notmatch '(^|[\\/])\.\.([\\/]|$)' -and $p -notmatch '[$~]') { $r.Out = Test-AllLocationsOutside @(Get-CommandLocations $locScan) }
+    }
+    catch { }
+    return $r
+}
+
+# Splits a CommandAst into resolved named path values (literalpath/path/filepath/pspath/destination/newname/name),
+# positional elements, flag-ish elements (a parameter, or a positional starting with '-') and an inner shell command
+# line (powershell/pwsh -Command, bash/sh -c, cmd /c).
+function Split-CommandArgs($c, [hashtable]$vars) {
+    $name = ([string]$c.GetCommandName()).ToLowerInvariant() -replace '\.exe$', ''
+    $info = @{ Name = $name; Named = @{}; Pos = (New-Object 'System.Collections.Generic.List[object]'); Flags = (New-Object 'System.Collections.Generic.List[object]'); Inner = $null }
+    $isShell = $name -in @('powershell', 'pwsh', 'bash', 'sh', 'cmd')
+    $els = $c.CommandElements
+    for ($i = 1; $i -lt $els.Count; $i++) {
+        $e = $els[$i]
+        if ($e -is [System.Management.Automation.Language.CommandParameterAst]) {
+            $pn = $e.ParameterName.ToLowerInvariant()
+            if ($isShell -and $pn -in @('c', 'command', 'lc', 'ic') -and ($i + 1) -lt $els.Count) {
+                $i++; $info.Inner = [string]$els[$i].Extent.Text.Trim('"', "'"); continue
+            }
+            $cn = Get-ParamCanon $pn
+            if (-not $cn) { $info.Flags.Add($e); continue }
+            $v = $e.Argument
+            if (-not $v -and ($i + 1) -lt $els.Count -and $els[$i + 1] -isnot [System.Management.Automation.Language.CommandParameterAst]) { $i++; $v = $els[$i] }
+            # A non-path value (-Include *.cs, -Filter) still counts as a flag for the reader's .cs check; -Pattern does not.
+            if ($cn.StartsWith('#') -and $cn -ne '#pattern' -and $v) { $info.Flags.Add($v) }
+            if ($cn.StartsWith('#')) { $info.Named[$cn] = $true }
+            elseif ($v) {
+                if (-not $info.Named.ContainsKey($cn)) { $info.Named[$cn] = New-Object 'System.Collections.Generic.List[object]' }
+                $info.Named[$cn].Add((Resolve-ArgValue $v $vars))
+            }
+            continue
+        }
+        if ($name -eq 'cmd' -and $info.Pos.Count -eq 0 -and $e.Extent.Text -match '^/[cCkK]$') {
+            $info.Inner = (@($els | Select-Object -Skip ($i + 1) | ForEach-Object { $_.Extent.Text }) -join ' '); break
+        }
+        if ($e.Extent.Text -match '^-') { $info.Flags.Add($e); continue }
+        $info.Pos.Add($e)
+    }
+    return $info
+}
+
+function Get-NamedValues($info, [string[]]$keys) {
+    $l = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($k in $keys) { if ($info.Named.ContainsKey($k)) { foreach ($v in $info.Named[$k]) { $l.Add($v) } } }
+    return , $l
+}
+
+# Appends one op per write found in $text: Kind 'write' (Targets), 'copy' (Dest, Sources) or 'unknown' (a statement
+# that did not parse but looks like a write - the caller falls back to the token judgment).
+function Add-ShellWriteOps([string]$text, [hashtable]$vars, [System.Collections.Generic.List[object]]$ops, [int]$depth = 0) {
+    $L = 'System.Management.Automation.Language'
+    foreach ($st in @(Get-ShellStatements $text)) {
+        $stText = [string]$st.Text
+        if (-not $stText.Trim()) { continue }
+        $tk = $null; $er = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($stText, [ref]$tk, [ref]$er)
+        if ($er -and @($er).Count -gt 0) {
+            if ($stText -match "(^|[;&|(\r\n]\s*)($csWriters)(\s|$)" -or $stText -match $csWriteApis -or $stText -match $csRedirect) {
+                $ops.Add([pscustomobject]@{ Kind = 'unknown'; Targets = @(); Dest = $null; Sources = @() })
+            }
+            continue
+        }
+        foreach ($r in $ast.FindAll({ param($x) $x -is [System.Management.Automation.Language.FileRedirectionAst] }, $true)) {
+            $ops.Add([pscustomobject]@{ Kind = 'write'; Targets = @(, (Resolve-ArgValue $r.Location $vars)); Dest = $null; Sources = @() })
+        }
+        foreach ($m in $ast.FindAll({ param($x) $x -is [System.Management.Automation.Language.InvokeMemberExpressionAst] }, $true)) {
+            if ($m.Member -is [System.Management.Automation.Language.StringConstantExpressionAst] -and $m.Member.Value -match '^(WriteAllText|WriteAllLines|WriteAllBytes|AppendAllText|AppendAllLines)$' -and @($m.Arguments).Count -ge 1) {
+                $ops.Add([pscustomobject]@{ Kind = 'write'; Targets = @(, (Resolve-ArgValue $m.Arguments[0] $vars)); Dest = $null; Sources = @() })
+            }
+        }
+        foreach ($c in $ast.FindAll({ param($x) $x -is [System.Management.Automation.Language.CommandAst] }, $true)) {
+            if (-not $c.GetCommandName()) { continue }
+            $info = Split-CommandArgs $c $vars
+            if ($info.Inner) {
+                if ($depth -lt 3) { Add-ShellWriteOps (Remove-HereStrings $info.Inner) $vars $ops ($depth + 1) }
+                continue
+            }
+            $posV = New-Object 'System.Collections.Generic.List[object]'
+            foreach ($p in $info.Pos) { $posV.Add((Resolve-ArgValue $p $vars)) }
+            $pathV = Get-NamedValues $info @('path', 'literalpath', 'filepath', 'pspath')
+            switch -regex ($info.Name) {
+                '^(set-content|add-content|out-file|sc|ac|tee-object|new-item|ni)$' {
+                    $t = New-Object 'System.Collections.Generic.List[object]'
+                    foreach ($v in $pathV) { $t.Add($v) }
+                    if ($t.Count -eq 0 -and $posV.Count -gt 0) { $t.Add($posV[0]) }
+                    $names = Get-NamedValues $info @('name')
+                    if ($names.Count -gt 0) {
+                        $bases = $t.ToArray(); $t.Clear()
+                        foreach ($nm in $names) {
+                            if ($bases.Count -eq 0) { $t.Add($nm) } else { foreach ($b in $bases) { $t.Add((Join-PathValue $b $nm)) } }
+                        }
+                    }
+                    if ($t.Count -gt 0) { $ops.Add([pscustomobject]@{ Kind = 'write'; Targets = $t.ToArray(); Dest = $null; Sources = @() }) }
+                }
+                '^tee$' { if ($posV.Count -gt 0) { $ops.Add([pscustomobject]@{ Kind = 'write'; Targets = $posV.ToArray(); Dest = $null; Sources = @() }) } }
+                '^(copy-item|cp|copy|cpi)$' {
+                    $destV = Get-NamedValues $info @('destination')
+                    $src = New-Object 'System.Collections.Generic.List[object]'
+                    foreach ($v in $pathV) { $src.Add($v) }
+                    $dest = $null; $destIdx = -1
+                    if ($destV.Count -gt 0) { $dest = $destV[0] }
+                    elseif ($pathV.Count -gt 0 -and $posV.Count -gt 0) { $destIdx = 0 }
+                    elseif ($posV.Count -ge 2) { $destIdx = $posV.Count - 1 }
+                    for ($k = 0; $k -lt $posV.Count; $k++) { if ($k -eq $destIdx) { $dest = $posV[$k] } else { $src.Add($posV[$k]) } }
+                    $ops.Add([pscustomobject]@{ Kind = 'copy'; Targets = @(); Dest = $dest; Sources = $src.ToArray() })
+                }
+                '^(move-item|mv|move|mi|rename-item|ren|rni)$' {
+                    $t = New-Object 'System.Collections.Generic.List[object]'
+                    foreach ($v in $pathV) { $t.Add($v) }
+                    foreach ($v in $posV) { $t.Add($v) }
+                    foreach ($nn in (Get-NamedValues $info @('newname'))) {
+                        # -NewName is relative to the renamed item's folder.
+                        $b = if ($t.Count -gt 0 -and $null -ne $t[0]) { [string]$t[0] } else { $null }
+                        $cut = if ($b) { $b.LastIndexOfAny([char[]]@('\', '/')) } else { -1 }
+                        $t.Add($(if ($cut -gt 0) { Join-PathValue $b.Substring(0, $cut) $nn } else { $nn }))
+                    }
+                    if ($t.Count -gt 0) { $ops.Add([pscustomobject]@{ Kind = 'write'; Targets = $t.ToArray(); Dest = $null; Sources = @() }) }
+                }
+            }
+        }
+    }
+}
+
+# Writer rule verdict: $true = a C# write (block unless bypassed). $command is the raw command (parsed with its own
+# variable map, so `$p='docs/x.md'; [IO.File]::WriteAllText($p, ...)` resolves); $scan is the expanded copy used for
+# cd/Set-Location locations and for the token fallback.
+function Test-CsShellWrite([string]$command, [string]$scan) {
+    $text = Remove-HereStrings $command
+    $vars = Get-VarMap $text
+    $ops = New-Object 'System.Collections.Generic.List[object]'
+    Add-ShellWriteOps $text $vars $ops
+    $unknown = $false
+    foreach ($op in $ops) {
+        if ($op.Kind -eq 'unknown') { $unknown = $true; continue }
+        if ($op.Kind -eq 'write') {
+            foreach ($t in $op.Targets) {
+                $c = Get-PathClass $t $scan
+                if ($c.Cs -and -not $c.Out) { return $true }
+                if (-not $c.Known -and -not $c.Out) { $unknown = $true }
+            }
+            continue
+        }
+        # copy: reading a .cs out of the repo is not a C# write; a .cs destination, or a .cs source copied to a
+        # destination in the repo, is.
+        $d = Get-PathClass $op.Dest $scan
+        if ($d.Out) { continue }
+        if ($d.Cs) { return $true }
+        foreach ($s in $op.Sources) {
+            $sc = Get-PathClass $s $scan
+            if ($sc.Cs) { return $true }
+            if (-not $sc.Known) { $unknown = $true }
+        }
+        if (-not $d.Known) { $unknown = $true }
+    }
+    if (-not $unknown) { return $false }
+    $redirTargets = @([regex]::Matches($scan, '>{1,2}\s*["'']?([^\s"''|;&]*\.cs)\b') | ForEach-Object { $_.Groups[1].Value })
+    return (Test-CsPathToken $scan) -and -not (Test-ShellCsTargetsOutsideRepo $scan -ExtraTokens $redirTargets)
+}
+
+# Reader clean check: $true only when the statement parses and every reader command in it reads named files that are
+# all known non-C# (or outside the repo), or reads stdin from such a reader through pass-through filters. Anything
+# else (unparsed, unknown file argument, a .cs-bearing flag such as --include=*.cs, stdin from git/a variable) is $false,
+# which keeps the token judgment.
+$script:readerNames = '^(grep|egrep|fgrep|rg|ag|ack|findstr|select-string|sls|cat|type|get-content|gc|head|tail|less|more|sed|awk)$'
+$script:passThrough = '^(where-object|where|\?|select-object|select|foreach-object|%|sort-object|sort|out-string|measure-object|measure|group-object|format-table|ft|format-list|fl|uniq|cut|wc|tr)$'
+function Get-ReaderClass($c, [hashtable]$vars, [string]$locScan) {
+    $info = Split-CommandArgs $c $vars
+    $files = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($v in (Get-NamedValues $info @('path', 'literalpath', 'filepath', 'pspath'))) { $files.Add($v) }
+    # Positional file arguments: all of them for cat/Get-Content-style readers; after the pattern for search tools
+    # (none when Select-String has -Path, whose positional is then the pattern); findstr's /x options are skipped.
+    # .ToArray(), not @(...): Windows PowerShell 5.1 throws "Argument types do not match" on @() over this List[object].
+    $pos = $info.Pos.ToArray()
+    if ($info.Name -match '^(select-string|sls)$') {
+        $pos = if ($files.Count -gt 0) { @() } elseif ($info.Named.ContainsKey('#pattern')) { $pos } else { @($pos | Select-Object -Skip 1) }
+    }
+    elseif ($info.Name -match '^(grep|egrep|fgrep|rg|ag|ack|findstr|sed|awk)$') {
+        if ($info.Name -eq 'findstr') { $pos = @($pos | Where-Object { $_.Extent.Text -notmatch '^/' }) }
+        $hasE = @($info.Flags | Where-Object { $_.Extent.Text -match '^(-e|-f|--regexp|--file|--expression)\b' }).Count -gt 0
+        if (-not $hasE) { $pos = @($pos | Select-Object -Skip 1) }
+    }
+    foreach ($p in $pos) { $files.Add((Resolve-ArgValue $p $vars)) }
+    foreach ($f in $info.Flags) { if ($f.Extent.Text -match '\.cs\b') { return 'unknown' } }
+    if ($files.Count -eq 0) { return 'stdin' }
+    $res = 'clean'
+    foreach ($f in $files) {
+        $pc = Get-PathClass $f $locScan
+        if ($pc.Cs -and -not $pc.Out) { return 'cs' }
+        if (-not $pc.Known -and -not $pc.Out) { $res = 'unknown' }
+    }
+    return $res
+}
+
+function Test-ReaderStatementClean([string]$stmt, [hashtable]$vars, [string]$locScan) {
+    try {
+        $tk = $null; $er = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($stmt, [ref]$tk, [ref]$er)
+        if ($er -and @($er).Count -gt 0) { return $false }
+        $readers = @($ast.FindAll({ param($x) $x -is [System.Management.Automation.Language.CommandAst] -and ([string]$x.GetCommandName()).ToLowerInvariant() -match $script:readerNames }, $true))
+        if ($readers.Count -eq 0) { return $false }
+        foreach ($c in $readers) {
+            $cls = Get-ReaderClass $c $vars $locScan
+            if ($cls -eq 'clean') { continue }
+            if ($cls -ne 'stdin') { return $false }
+            # stdin: walk left through pass-through filters to the producing element, which must be a clean reader.
+            $pipe = $c.Parent
+            if ($pipe -isnot [System.Management.Automation.Language.PipelineAst]) { return $false }
+            $els = @($pipe.PipelineElements)
+            $idx = [array]::IndexOf($els, $c) - 1
+            $ok = $false
+            while ($idx -ge 0) {
+                $p = $els[$idx]
+                if ($p -isnot [System.Management.Automation.Language.CommandAst]) { break }
+                $pn = ([string]$p.GetCommandName()).ToLowerInvariant()
+                if ($pn -match $script:passThrough) { $idx--; continue }
+                if ($pn -match $script:readerNames -and (Get-ReaderClass $p $vars $locScan) -eq 'clean') { $ok = $true }
+                break
+            }
+            if (-not $ok) { return $false }
+        }
+        return $true
+    }
+    catch { return $false }
 }
 
 function Get-InlineBypassReason([string]$text) {
@@ -532,7 +942,8 @@ function Write-BlockLog([string]$reason) {
             elseif ($ti.prompt)  { $pr = [string]$ti.prompt; $target = $pr.Substring(0, [Math]::Min(100, $pr.Length)) }
         }
         $target = ($target -replace '\s+', ' ').Trim()
-        if ($target.Length -gt 100) { $target = $target.Substring(0, 100) }
+        # 400, not 100: a compound shell command is unreviewable when cut before the statement that tripped the rule.
+        if ($target.Length -gt 400) { $target = $target.Substring(0, 400) }
 
         $agent = 'main'
         if ($payload.agent_id) { $agent = '{0}:{1}' -f $payload.agent_type, $payload.agent_id }
@@ -990,31 +1401,23 @@ Shell text tools only see raw text. Use the RoslynSentinel tools instead:
 
 If no MCP tool covers what you need, or the right one is broken, that is a
 BLOCKING finding: stop, write docs/current/blockers/blocking_error_<slug>.md,
-and end the turn. Do not reword the command to get past this hook.
+and end the turn.
 
-For docs, notes or scratchpad output use the Edit/Write tool on the non-.cs file; the hook allows that. Do not reword the command to get past this hook.
+If you are reading or editing a NON-.cs file (the .cs name is only text in it), use the Read/Edit/Write/Grep
+tool on that file instead: that is the sanctioned route, not rewording. Do not reword the shell command to
+get past this hook.
 "@
         }
 
         # --- shell writes/moves of C#----------------------------------------------------
         # The Edit/Write rule above covers only the built-in tools; a shell writer is the same
         # policy violation by another route (implementers wrote C# via Set-Content / here-strings).
-        # Deny, on the here-string-stripped $scan, when the command names a .cs file AND has a
-        # writer verb at a command position, a .NET file-write call, or a redirection to a .cs
-        # target. "Names a .cs file" means a PATH-SHAPED token (Test-CsPathToken), so a .cs name inside
-        # prose (`Set-Content notes.md "see Foo.cs"`, `.Replace('Foo.cs:1','x')`) does not trip it.
-        # Residual false positive: a bare path-shaped literal as text (`Set-Content notes.md 'Foo.cs'`,
-        # `.Replace('Foo.cs','Bar.cs')`) - use the DeliberateHookBypass keyword for that.
-        # .csproj/.cshtml never match. Harness worktrees stay exempt.
-        $csWriters = 'Set-Content|Add-Content|Out-File|Copy-Item|Move-Item|Rename-Item|New-Item|tee|cp|mv|copy|move|ren|sc|ac'
-        $csWriteApis = '\b(WriteAllText|WriteAllLines|WriteAllBytes|AppendAllText|AppendAllLines)\b'
-        $csRedirect = '>{1,2}\s*["'']?[^\s"''|;&]*\.cs\b'
-        # Same out-of-repo exemption as the reader rule (deviation); redirect targets are classified too, because
-        # the tokenizer does not split on `>`.
-        $csRedirectTargets = @([regex]::Matches($scan, '>{1,2}\s*["'']?([^\s"''|;&]*\.cs)\b') | ForEach-Object { $_.Groups[1].Value })
-        if ((Test-CsPathToken $scan) -and $command -notmatch '[\\/]Worktree[\\/]' -and
-            ($scan -match "(^|[;&|(\r\n]\s*)($csWriters)(\s|$)" -or $scan -match $csWriteApis -or $scan -match $csRedirect) -and
-            -not (Test-ShellCsTargetsOutsideRepo $scan -ExtraTokens $csRedirectTargets)) {
+        # Deny when a write TARGET is an in-repo .cs file (Test-CsShellWrite: Set-Content/Add-Content/Out-File/
+        # New-Item/tee paths, Copy/Move/Rename destinations and moved sources, WriteAll*/AppendAll* first argument,
+        # > / >> redirects). A .cs path that is only data in a non-C# write is allowed. When a target cannot be resolved
+        # (an unknown variable, a statement that does not parse), the old token judgment applies: a path-shaped .cs token
+        # not all outside the repo blocks. .csproj/.cshtml never match. Harness worktrees stay exempt.
+        if ($command -notmatch '[\\/]Worktree[\\/]' -and $scan -match '\.cs\b' -and (Test-CsShellWrite $command $scan)) {
             Exit-IfBypassed "$command`n$([string]$toolInput.description)" $null
             DenyBypassable @"
 BLOCKED by dog-fooding policy: shell write/move/copy of a C# file.
@@ -1031,9 +1434,11 @@ C# writes go through the RoslynSentinel MCP tools, not the shell. Use the one th
 
 If the right tool has no equivalent operation (for example repairing line endings or a BOM),
 that is a finding to report - stop, write docs/current/blockers/blocking_error_<slug>.md, and
-end the turn. It is not something to do by shell. Do not reword the command to get past this hook.
+end the turn. It is not something to do by shell.
 
-For docs, notes or scratchpad output use the Edit/Write tool on the non-.cs file; the hook allows that. Do not reword the command to get past this hook.
+If the file you are writing is NOT a .cs file (the .cs name is only text in it), redo the change with the
+Edit/Write tool on that file: that is the sanctioned route, not rewording. Do not reword the shell command
+to get past this hook.
 "@
         }
 

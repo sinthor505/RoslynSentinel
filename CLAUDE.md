@@ -93,8 +93,8 @@ on this repo's own source.
 | shell `git status/log/diff/add/commit/revert` | `Git(operation: ...)` (shell only for rebase, merge, cherry-pick, restore, clean, stash drop/clear, tag push, worktree prune/lock/move) |
 | `dotnet build/test` | `Build`, `RunTest` |
 
-Edit/Grep/shell are fine for Markdown, JSON, `.ps1`, `.csproj`, other non-C# files and files outside
-the repo. Why: chokepointing surfaces drift and sequencing bugs; falling back when a tool is awkward
+Use Edit/Write/Grep (not shell text replacement) for Markdown, JSON, `.ps1`, `.csproj` and other
+non-C# files; shell is fine for files outside the repo. Why: chokepointing surfaces drift and sequencing bugs; falling back when a tool is awkward
 hides them - the awkwardness is the finding.
 
 Edit-tool traps (batch edits, exact snippet match, enum `values`, parameter order):
@@ -109,8 +109,9 @@ unreachable or has no equivalent (and no staged route exists), finish in-flight 
 speculatively or route around it with shell tools.
 
 `.claude/hooks/enforce-dogfood.ps1` blocks common violations (including `Read` on an in-repo `.cs`); use
-the MCP tool instead, no report needed. It matches literal text, so it can block a benign command that
-merely mentions `.cs` or `git log`: report that false positive and stop - do not reword to slip past it. A read-only command on another repo, with its absolute path after `git -C`, is an allowed route, not rewording.
+the MCP tool instead, no report needed. It can still block a benign command that merely mentions
+`.cs` or `git log`: if the command reads or edits a non-C# file, redo it with Read/Edit/Write/Grep;
+otherwise report the false positive and stop - never reword a shell command to slip past it. A read-only command on another repo, with its absolute path after `git -C`, is an allowed route, not rewording.
 A custom subagent that lists `Read` must also list `ReadFile`/`GetMethodSource`/`Search`.
 
 - **Successful bypass** (a `Read`/`Edit`/`Write`/shell call on a `.cs`, or shell git, that went through

@@ -1,7 +1,7 @@
 # Deliberate hook bypass
 
-**Status:** CURRENT 2026-10-17. Detail moved out of CLAUDE.md "Hook bypass"; the rule stays there.
-The authoritative behaviour is the header of `.claude/hooks/enforce-dogfood.ps1`.
+**Status:** CURRENT 2026-11-09. The rule is in CLAUDE.md "Tool failures and hooks"; the block
+messages point here. The authoritative behaviour is the header of `.claude/hooks/enforce-dogfood.ps1`.
 
 A deliberate bypass is legitimate for a `.cs` file outside this repo, or a manual repo edit/read/git
 call you have decided is right (e.g. raw bytes, or a halted `Git` tool you already reported). Never for
@@ -21,6 +21,12 @@ Accepted bypasses are logged to `.claude/journal/hook-bypass.jsonl` and are jour
 
 ## Known false positives
 
-The hook matches literal text: a PowerShell/Bash command that merely mentions `.cs` in a search pattern
-or `git log` in an echoed string can be blocked. Reword the command (use `Search`/`Git` where they fit);
-use the bypass only when the intent is genuinely a manual C#/git operation.
+The shell `.cs` rules judge what a command reads or writes (parsed targets), so a `.cs` path used only
+as data in a docs edit passes. They fall back to literal text when a target cannot be resolved (an
+unknown variable, a statement the parser cannot read), and the git rule always matches literal text, so
+a benign command can still be blocked. Never reword the shell command. Instead:
+
+- Reading or editing a non-C# file: use Read/Edit/Write/Grep on it (the hook ignores those for non-`.cs`).
+- A C# or git operation an MCP tool covers: use `Search`/`ReadFile`/`Git`.
+- A genuinely manual C#/git operation (see above): use a bypass route.
+- Otherwise: report the false positive and stop.

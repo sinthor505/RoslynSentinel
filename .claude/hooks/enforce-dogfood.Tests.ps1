@@ -249,9 +249,57 @@ $cases = @(
        p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "`$content = @'`nnamespace X { class Y {} }`n'@`nSet-Content -Path $repo\Y.cs -Value `$content" } } }
     @{ n = 'PS Set-Content .cs under Worktree/'; want = 'allow'
        p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Set-Content -Path C:\runs\x\Worktree\Foo.cs -Value x' } } }
-    # Known false positive of the writer rule (.cs named only as text); the bypass keyword is the escape.
-    @{ n = 'PS Set-Content notes.md naming Foo.cs (known FP)'; want = 'DENY'
+    # Former false positive of the writer rule: the parsed target is notes.md, so the .cs value is only data.
+    @{ n = 'PS Set-Content notes.md naming Foo.cs (target is .md)'; want = 'allow'
        p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Set-Content notes.md 'Foo.cs'" } } }
+
+    # --- writer rule judges the parsed write target (Test-CsShellWrite) ---
+    @{ n = 'tgt: $p=md; WriteAllText($p, Replace(Foo.cs,Bar.cs))'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '$p=''docs/x.md''; $t=Get-Content $p -Raw; [IO.File]::WriteAllText($p,$t.Replace(''src/Foo.cs'',''src/Bar.cs''))' } } }
+    @{ n = 'tgt: (Get-Content md) -replace src/Foo.cs | Set-Content md'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '(Get-Content docs/x.md) -replace ''src/Foo.cs'',''src/Bar.cs'' | Set-Content docs/x.md' } } }
+    @{ n = 'tgt: Set-Content -LiteralPath md -Value src/Foo.cs'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Set-Content -LiteralPath docs\x.md -Value ''src/Foo.cs'' -Encoding utf8' } } }
+    @{ n = 'tgt: Bash sed -i on md replacing a .cs path'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'sed -i ''s#src/Foo.cs#src/Bar.cs#'' docs/x.md' } } }
+    @{ n = 'tgt: Bash echo .cs path >> md'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'echo src/Foo.cs >> docs/x.md' } } }
+    @{ n = 'tgt: Set-Content via "$r\Foo.cs" ($r in repo)'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "`$r='$repo'; Set-Content `"`$r\Foo.cs`" 'x'" } } }
+    @{ n = 'tgt: New-Item -Path dir -Name Foo.cs in repo'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "New-Item -Path $repo\src -Name Foo.cs -Value x" } } }
+    @{ n = 'tgt: Rename-Item md -NewName Foo.cs'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Rename-Item $repo\x.txt -NewName Foo.cs" } } }
+    @{ n = 'tgt: Copy-Item repo .cs to TEMP (read, not a C# write)'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Copy-Item $repo\Samples\A.cs -Destination `$env:TEMP\fx\A.cs" } } }
+    @{ n = 'tgt: Copy-Item .cs into a repo folder'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Copy-Item C:\tmp\A.cs $repo\src\" } } }
+    @{ n = 'tgt: $d = Join-Path TEMP (guid); write $d\Foo.cs'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '$d = Join-Path $env:TEMP (''rs-'' + [guid]::NewGuid().ToString(''N'')); New-Item -ItemType Directory $d | Out-Null; Set-Content (Join-Path $d ''Foo.cs'') ''class A {}''' } } }
+    @{ n = 'tgt: write "$env:TEMP\x_$(guid)\Foo.cs"'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Set-Content "$env:TEMP\x_$([guid]::NewGuid())\Foo.cs" ''x''' } } }
+    @{ n = 'tgt: ForEach over *.cs Set-Content $_ (unknown target)'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Get-ChildItem src -Filter *.cs | ForEach-Object { Set-Content $_.FullName ''x'' }' } } }
+    @{ n = 'tgt: cmd /c copy onto .cs'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'cmd /c copy C:\tmp\new.txt src\Foo.cs' } } }
+    @{ n = 'tgt: redirect to $null with .cs data'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Set-Content docs/x.md ''src/Foo.cs'' > $null' } } }
+
+    # --- reader rule: a reader whose file arguments are all non-C# is not a C# read (Test-ReaderStatementClean) ---
+    @{ n = 'rd: Get-Content md | Select-String src/Foo.cs'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Get-Content docs/x.md | Select-String ''src/Foo.cs''' } } }
+    @{ n = 'rd: grep for src/Foo.cs in md'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'grep -n src/Foo.cs docs/x.md' } } }
+    @{ n = 'rd: Select-String -Path md -Pattern src/Foo.cs'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Select-String -Path docs/x.md -Pattern ''src/Foo.cs''' } } }
+    @{ n = 'rd: Get-ChildItem *.cs | Get-Content still blocked'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Get-ChildItem src/*.cs | Get-Content' } } }
+    @{ n = 'rd: Get-Content -Include *.cs still blocked'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Get-Content -Path src\* -Include *.cs' } } }
+    @{ n = 'rd: git diff .cs | Select-String still blocked'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'git diff -- src/Foo.cs | Select-String foo' } } }
+    @{ n = 'rd: xargs grep over .cs list still blocked'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'ls src/*.cs | xargs grep foo' } } }
     @{ n = 'PS Set-Content notes.md naming Foo.cs + bypass'; want = 'allow'; fx = 'tok'
        p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Set-Content notes.md 'Foo.cs' # DeliberateHookBypass: prose mentions a file name" } } }
     @{ n = 'PS Set-Content x.csproj (not .cs)'; want = 'allow'
@@ -296,7 +344,8 @@ $cases = @(
        p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '[IO.File]::WriteAllText($unknown, $t); Get-Item src/Foo.cs' } } }
     @{ n = 'tok: nested pwsh -Command naming a .cs write'; want = 'DENY'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'powershell -Command "[IO.File]::WriteAllText(''src/Foo.cs'', $t)"' } } }
-    @{ n = 'tok: bare path-shaped Replace literal in md write (residual FP)'; want = 'DENY'
+    # $p is unknown here (never assigned in the command), so the target cannot be resolved and the token judgment applies.
+    @{ n = 'tok: unknown target + path-shaped Replace literal'; want = 'DENY'
        p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '[IO.File]::WriteAllText($p,$t.Replace(''Foo.cs'',''Bar.cs''))' } } }
     @{ n = 'tok: residual FP + bypass keyword'; want = 'allow'; fx = 'tok'
        p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '[IO.File]::WriteAllText($p,$t.Replace(''Foo.cs'',''Bar.cs'')) # DeliberateHookBypass: prose rename in a md file' } } }
