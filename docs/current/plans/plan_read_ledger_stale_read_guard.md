@@ -1,6 +1,6 @@
 # Plan: refuse caller-authored writes to files changed since the server last returned their content
 
-**Status:** IN PROGRESS 2026-11-08. Steps 1-3b done (7b703f18, 50afbe7b, 59ca6ad6, eb2c5cf8). Per-agent observed-content ledger that makes WriteFile, ApplyDiff (files format) and DeleteFile refuse a stale target with a non-latching, per-file `StaleRead` error; read "Review 2026-11-08: corrections" before any step, it overrides stale anchors below.
+**Status:** IN PROGRESS 2026-11-08. Steps 1-4b done (7b703f18, 50afbe7b, 59ca6ad6, eb2c5cf8, 02fe37f0, 14e9dcec). Per-agent observed-content ledger that makes WriteFile, ApplyDiff (files format) and DeleteFile refuse a stale target with a non-latching, per-file `StaleRead` error; read "Review 2026-11-08: corrections" before any step, it overrides stale anchors below.
 
 ## Problem
 
@@ -77,6 +77,8 @@ Recommended (mine, open for review): `RecordObserved` lives on a new narrow inte
 - **Open questions 2-6 accepted as the review recommended:** coexist with the latch, F1 stays deferred (2);
   keep explicit `RecordObserved` calls (3); `IObservedContentLedger` placement (4); the derived decisions
   in 5, with the ordering corrected below; do not clear on reload (6).
+- **Row F seam (2026-11-09):** add an internal drift-latch test seam on PWM and complete row F, as a small
+  slice before step 5.
 - **Run:** Batched mode, owner present. Batch A = steps 1-3b, B = 4a-4b, C = 5-6; step 7 (docs) by the
   main session.
 
@@ -299,6 +301,8 @@ opt-in (step 5), so the check exists but is inert until a tool both records and 
 - **Test-writer step (T3b):** rows G-I in Test strategy (own-write refresh, mixed-EOL, delete, rollback).
 
 ### Step 4a - record from `ReadFile`
+- Done: 02fe37f0. No-solution path keys by static `FilePathWrapper.ResolveFromWire(path, null)` (the
+  manager's `ResolveFromWire` returns an empty wrapper with no solution loaded).
 - **Files (1):** `Tools.Basic/WorkspaceFileEditImpl.cs` (`ReadFile` ~301-461,
   `ReadFileWithoutSolutionAsync` ~194-267, `TrimRangeToInlineBudget` 269-299 for reference).
 - **Change:** ~5 edits, one `RecordObserved(path, wholeFileText)` per branch that returns file content:
@@ -319,6 +323,7 @@ opt-in (step 5), so the check exists but is inert until a tool both records and 
 - **Test-writer step (T4a):** rows J-K in Test strategy.
 
 ### Step 4b - record from `GetMethodSource` and Search text mode
+- Done: 14e9dcec
 - **Files (1):** `Tools.Basic/WorkspaceReadNavigationImpl.cs` (`GetMethodSource` 94-189,
   `SearchSolutionText` 459-667; `GetFileOutline` 191-244 stays untouched).
 - **Change:** ~3 edits. `GetMethodSource`: record the whole file text of the document it resolved.
