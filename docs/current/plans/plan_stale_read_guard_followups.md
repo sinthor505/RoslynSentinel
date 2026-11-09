@@ -1,6 +1,6 @@
 # Plan: extend the stale-read guard (F3 anchor and engine tools, F4 outline/InspectSymbol), replace the drift latch with per-file protection (F1), add a cross-process write lock and fold-on-read (F7); F5 blocked
 
-**Status:** APPROVED 2026-11-09. Reviewed against source, all open decisions settled (third round in Decision), Batched run with the owner present; F5 stays blocked on staged writes. Builds on [plan_read_ledger_stale_read_guard.md](closed/plan_read_ledger_stale_read_guard.md) (IMPLEMENTED 2026-11-09, 7b703f18..5d9ee8d2). Per-file attribution of refusals is deferred to [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md) ("Revision 2026-11-09"); this plan leaves it a lock, a holder record and a message-builder hook.
+**Status:** IN PROGRESS 2026-11-09. Steps 1-3 done (20440d38, a10b26ee, e95c2b15, 458f2fa3, d5fe3d6b). Batched run with the owner present; F5 stays blocked on staged writes. Builds on [plan_read_ledger_stale_read_guard.md](closed/plan_read_ledger_stale_read_guard.md) (IMPLEMENTED 2026-11-09, 7b703f18..5d9ee8d2). Per-file attribution of refusals is deferred to [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md) ("Revision 2026-11-09"); this plan leaves it a lock, a holder record and a message-builder hook.
 
 ## Problem
 
@@ -198,6 +198,7 @@ Order: policy value, shared mapper, helper (engine tools), anchor tools, direct 
 changed except Step 2's pure move.
 
 ### Step 1 - `StaleReadPolicy.RefuseIfObservedStaleQuiet` in both managers
+- Done: 20440d38
 - Files (3): `RoslynSentinel.Common/IWorkspaceMutator.cs`, `RoslynSentinel.Common/PersistentWorkspaceManager.cs`, `RoslynSentinel.Tests/Fakes/FakeWorkspaceManager.cs`.
 - Symbols: enum `StaleReadPolicy` (`IWorkspaceMutator.cs:4`); PWM `ApplyProposedChangesAsync` stale block (`:2046` region) and unobserved add (`:2054-2056` region); fake `ApplyProposedChangesAsync` (`:200`).
 - Change (~5 edits): add the enum value with a doc comment ("same refusal as RefuseIfObservedStale; does not report unobserved targets; for engine tools that edit many files");
@@ -210,6 +211,7 @@ changed except Step 2's pure move.
 - Test-writer step (T1): rows A, B in Test strategy. Real PWM for A; the fake copy of the check is separate and a fake test does not cover production.
 
 ### Step 2 - shared non-latching refusal mapper `WriteRefusal` in `Common`
+- Done: a10b26ee, e95c2b15 (tool-hint ratchet fix)
 Generalized from the first draft's `StaleReadRefusal`: one mapper for every non-latching chokepoint refusal, so the later codes (`FoldPending`, `WriteLockBusy`) reach every tool through the same call and add no tool-site edits.
 - Files (2): `RoslynSentinel.Common/WriteRefusal.cs` (new), `RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs`.
 - Symbols: new `public static class WriteRefusal { public static bool TryMap(string toolName, ApplyChangesResult result, out ResultError error) }`. This step maps only `ToolErrorCode.StaleRead`; later steps add `FoldPending` (8b) and `WriteLockBusy` (9a) as further cases of the same switch.
@@ -225,12 +227,14 @@ Generalized from the first draft's `StaleReadRefusal`: one mapper for every non-
 - Test-writer step (T2): mapper unit tests: single file, many files (cap if adopted), empty `FailedFiles` does not throw, code is `StaleRead` not `Exception`, an unmapped code returns false.
 
 ### Step 2b - move the three `WholeFileWriteTools` callers to `WriteRefusal.TryMap`
+- Done: 458f2fa3
 - Files (1): `RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs`.
 - Change (~6 edits): at `:78` (WriteFile), `:146` (DeleteFile), `:427` (ApplyDiff files format) replace the `StaleRead`-specific branch with `if (WriteRefusal.TryMap("<ToolName>", result, out var refusal))` returning the same result type; delete `StaleReadError`. Reason this is required, not cosmetic: without it, a `FoldPending` or `WriteLockBusy` refusal reaching `WriteFile` falls to whatever generic branch the site has today (not measured; the files-format fix at `:425-438` handled only `StaleRead`).
 - Call-site measurement: 3 callers, 1 file, 1 project. Tier: D1. Done when: `Build` 0 errors; `StaleReadWriteToolsTests` pass unchanged. Out of scope: other tools.
 - Test-writer step (T2b): none beyond the existing `StaleReadWriteToolsTests`; they exercise all three moved sites (WriteFile, DeleteFile, ApplyDiff files). Say so in the brief.
 
 ### Step 3 - engine tools opt in once, through `ValidateAndApplyHelper`
+- Done: d5fe3d6b. Known and accepted: the helper's compile gate runs before the chokepoint, so a stale AND compile-breaking edit reports the compile error, not `StaleRead`.
 - Files (1): `RoslynSentinel.Common/ValidateAndApplyHelper.cs`.
 - Symbols: `ValidateAndApplyHelper.ValidateAndApplyAsync` (declaration `:78`, chokepoint call `:194`, refusal mapping ~`:197-211`).
 - Change (~3 edits): add optional last parameter `StaleReadPolicy staleReadPolicy = StaleReadPolicy.RefuseIfObservedStaleQuiet` with a comment that the default deviates from
