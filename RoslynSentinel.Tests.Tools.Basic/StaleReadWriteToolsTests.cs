@@ -58,11 +58,11 @@ public class StaleReadWriteToolsTests
     private static WholeFileWriteTools BuildWholeFileWriteTools(IWorkspaceManager workspaceManager) =>
         TestTools.WholeFileWriteTools(workspaceManager, TestTools.WorkspaceTools(workspaceManager));
 
-    private static void AssertStaleRead(SentinelCallToolResult<object> result, string fileName)
+    private static void AssertStaleRead<T>(SentinelCallToolResult<T> result, string fileName)
     {
         Assert.That(result.IsError, Is.True, "a stale target must be refused");
         Assert.That(result.ErrorData, Is.Not.Null, "a refusal must carry a ResultError");
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.StaleRead));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.StaleRead), result.ErrorData.Message);
         Assert.That(result.ErrorData.ErrorCode, Is.Not.EqualTo(ToolErrorCode.Exception), "StaleRead must not be flattened to Exception");
         Assert.That(result.ErrorData.Message, Does.Contain(fileName));
         Assert.That(result.ErrorData.Message, Does.Contain("ReadFile"));
@@ -178,7 +178,7 @@ public class StaleReadWriteToolsTests
 
     // Row O: out-of-scope boundary. A stale entry must not turn the anchor/diff-format tools into StaleRead refusals in v1.
     [Test]
-    public async Task ApplyDiffDiffFormat_StaleEntry_IsNotRefusedAsStaleReadAsync()
+    public async Task ApplyDiffDiffFormat_StaleEntry_IsRefusedAsStaleReadAsync()
     {
         var dir = NewTempDir();
         try
@@ -196,8 +196,8 @@ public class StaleReadWriteToolsTests
                 reason: "test message", changesetFormat: ChangesetFormat.diff, action: ProposedChangeAction.apply,
                 filePath: file, unifiedDiff: diff, validateOnApply: false);
 
-            Assert.That(result.ErrorData == null || result.ErrorData.ErrorCode != ToolErrorCode.StaleRead, Is.True,
-                "ApplyDiff diff format is out of scope for the stale-read guard in v1");
+            AssertStaleRead(result, Path.GetFileName(file));
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(External), "the externally written disk text must be left untouched");
         }
         finally
         {
@@ -206,7 +206,7 @@ public class StaleReadWriteToolsTests
     }
 
     [Test]
-    public async Task ApplyUnifiedDiff_StaleEntry_IsNotRefusedAsStaleReadAsync()
+    public async Task ApplyUnifiedDiff_StaleEntry_IsRefusedAsStaleReadAsync()
     {
         var dir = NewTempDir();
         try
@@ -224,8 +224,8 @@ public class StaleReadWriteToolsTests
                 reason: "test message", action: ProposedChangeAction.apply, filePath: file,
                 unifiedDiff: diff, validateOnApply: false);
 
-            Assert.That(result.ErrorData == null || result.ErrorData.ErrorCode != ToolErrorCode.StaleRead, Is.True,
-                "ApplyUnifiedDiff is out of scope for the stale-read guard in v1");
+            AssertStaleRead(result, Path.GetFileName(file));
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(External), "the externally written disk text must be left untouched");
         }
         finally
         {
@@ -337,6 +337,163 @@ public class StaleReadWriteToolsTests
             var finding = result.Findings.Single(f => f.Message.Contains("read them first"));
             Assert.That(finding.Source, Is.EqualTo("WriteChokepoint"));
             Assert.That(finding.Message, Does.Contain(Path.GetFileName(file)));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // Row F (plan T4, Step 4): the single-snippet anchor tool opts in to the stale-read guard.
+    [Test]
+    public async Task ReplaceSnippet_ObservedThenChangedOnDisk_RefusesWithStaleReadAndWritesNothingAsync()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager(file, Original);
+            AsAgent("agentA");
+            manager.RecordObserved(new FilePathWrapper(file), Original);
+            File.WriteAllText(file, External);
+            var tools = TestTools.WorkspaceTools(manager);
+
+            var result = await tools.ReplaceSnippetTool(
+                reason: "test message", action: ProposedChangeAction.apply, filePath: file,
+                oldContent: "=> 1;", newContent: "=> 2;", validateOnApply: false);
+
+            AssertStaleRead(result, Path.GetFileName(file));
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(External), "the externally written disk text must be left untouched");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // Row F (plan T4, Step 4): the batch form of ReplaceSnippet goes through the same guarded chokepoint call.
+    [Test]
+    public async Task ReplaceSnippetBatch_ObservedThenChangedOnDisk_RefusesWithStaleReadAndWritesNothingAsync()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager(file, Original);
+            AsAgent("agentA");
+            manager.RecordObserved(new FilePathWrapper(file), Original);
+            File.WriteAllText(file, External);
+            var tools = TestTools.WorkspaceTools(manager);
+
+            var result = await tools.ReplaceSnippetTool(
+                reason: "test message", action: ProposedChangeAction.apply,
+                batchEdits:
+                [
+                    new SnippetEdit { FilePath = file, OldContent = "=> 1;", NewContent = "=> 2;" }
+                ],
+                validateOnApply: false);
+
+            AssertStaleRead(result, Path.GetFileName(file));
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(External), "the externally written disk text must be left untouched");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // Row G (plan T4, Step 4): anchor tools stay non-quiet, so a never-read existing target still gets the finding.
+    [Test]
+    public async Task ReplaceSnippet_UnobservedExistingTarget_SucceedsWithUnobservedFindingAsync()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager(file, Original);
+            AsAgent("agentA");
+            var tools = TestTools.WorkspaceTools(manager);
+
+            var result = await tools.ReplaceSnippetTool(
+                reason: "test message", action: ProposedChangeAction.apply, filePath: file,
+                oldContent: "=> 1;", newContent: "=> 2;", validateOnApply: false);
+
+            Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Edited));
+            var finding = (result.Findings ?? []).Single(f => f.Message.Contains("read them first"));
+            Assert.That(finding.Source, Is.EqualTo("WriteChokepoint"));
+            Assert.That(finding.Message, Does.Contain(Path.GetFileName(file)));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // Row K, anchor path (plan T4, Step 4): ReplaceSnippet's own write refreshes the observed entry for the next ReplaceSnippet.
+    [Test]
+    public async Task ReplaceSnippet_TwoEditsAfterOneRead_SecondEditWithoutReReadSucceedsAsync()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager(file, Original);
+            AsAgent("agentA");
+            manager.RecordObserved(new FilePathWrapper(file), Original);
+            var tools = TestTools.WorkspaceTools(manager);
+
+            var first = await tools.ReplaceSnippetTool(
+                reason: "test message", action: ProposedChangeAction.apply, filePath: file,
+                oldContent: "=> 1;", newContent: "=> 2;", validateOnApply: false);
+            Assert.That(first.IsError, Is.False, first.ErrorData?.Message);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Edited));
+
+            var second = await tools.ReplaceSnippetTool(
+                reason: "test message", action: ProposedChangeAction.apply, filePath: file,
+                oldContent: "=> 2;", newContent: "=> 3;", validateOnApply: false);
+
+            Assert.That(second.IsError, Is.False, second.ErrorData?.Message);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(External));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // Row K, unified-diff anchor path (plan T4, Step 4): ApplyUnifiedDiff's own write refreshes the observed entry.
+    [Test]
+    public async Task ApplyUnifiedDiff_TwoEditsAfterOneRead_SecondEditWithoutReReadSucceedsAsync()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager(file, Original);
+            AsAgent("agentA");
+            manager.RecordObserved(new FilePathWrapper(file), Original);
+            var tools = BuildWholeFileWriteTools(manager);
+
+            var firstDiff = "--- a/A.cs\n+++ b/A.cs\n@@ -2,4 +2,4 @@\n public class A\n {\n-    public int X() => 1;\n+    public int X() => 2;\n }\n";
+            var first = await tools.ApplyUnifiedDiffTool(
+                reason: "test message", action: ProposedChangeAction.apply, filePath: file,
+                unifiedDiff: firstDiff, validateOnApply: false);
+            Assert.That(first.IsError, Is.False, first.ErrorData?.Message);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Edited));
+
+            var secondDiff = "--- a/A.cs\n+++ b/A.cs\n@@ -2,4 +2,4 @@\n public class A\n {\n-    public int X() => 2;\n+    public int X() => 3;\n }\n";
+            var second = await tools.ApplyUnifiedDiffTool(
+                reason: "test message", action: ProposedChangeAction.apply, filePath: file,
+                unifiedDiff: secondDiff, validateOnApply: false);
+
+            Assert.That(second.IsError, Is.False, second.ErrorData?.Message);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(External));
         }
         finally
         {

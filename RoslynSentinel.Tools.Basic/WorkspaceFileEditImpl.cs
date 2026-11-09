@@ -784,7 +784,10 @@ public class WorkspaceFileEditImpl
                         };
                     }
 
-                    var result = await _workspaceManager.ApplyProposedChangesAsync(snippetChanges, validateChanges: validateOnApply);
+                    var result = await _workspaceManager.ApplyProposedChangesAsync(snippetChanges, validateChanges: validateOnApply, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+                    // TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)
+                    if (WriteRefusal.TryMap("ReplaceSnippet", result, out var refusal))
+                        return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
                     var untouchedNote = result.IsError && result.ValidationResult != null
                         ? ValidateAndApplyHelper.DescribeUntouchedFileErrors(snippetChanges.Keys.Select(k => (string)k), result.ValidationResult.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath")
                         : null;
@@ -1044,7 +1047,10 @@ public class WorkspaceFileEditImpl
 
         try
         {
-            var result = await _workspaceManager.ApplyProposedChangesAsync(finalContents, validateChanges: validateOnApply);
+            var result = await _workspaceManager.ApplyProposedChangesAsync(finalContents, validateChanges: validateOnApply, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+            // TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)
+            if (WriteRefusal.TryMap("ReplaceSnippet", result, out var refusal))
+                return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
             var untouchedNote = result.IsError && result.ValidationResult != null
                 ? ValidateAndApplyHelper.DescribeUntouchedFileErrors(finalContents.Keys.Select(k => (string)k), result.ValidationResult.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath")
                 : null;

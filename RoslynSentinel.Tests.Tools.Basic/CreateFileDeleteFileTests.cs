@@ -1220,7 +1220,9 @@ public class CreateFileDeleteFileTests
         var result = await wholeFileWriteTools.ApplyUnifiedDiffTool(reason: "test message", ProposedChangeAction.apply, sourceFile, diff);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-        Assert.That(result.Findings.Count(f => f.Source == "WriteChokepoint"), Is.EqualTo(1), "the mixed pre-image finding must reach the ApplyUnifiedDiff response exactly once");
+        // The unobserved-target finding is excluded because this test covers EOL attribution only.
+        var eolFindings = (result.Findings ?? []).Where(f => !f.Message.Contains("read them first")).ToList();
+        Assert.That(eolFindings.Count(f => f.Source == "WriteChokepoint"), Is.EqualTo(1), "the mixed pre-image finding must reach the ApplyUnifiedDiff response exactly once");
         Assert.That(result.Findings.Count(f => f.Source == "DiffHunkAnalyzer"), Is.EqualTo(1), "the existing hunk-analyzer finding must still be present");
     }
 
