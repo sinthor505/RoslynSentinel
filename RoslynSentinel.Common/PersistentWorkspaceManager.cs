@@ -426,6 +426,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         return _externalChanges.Distinct(PathComparison.Comparer).ToList();
     }
 
+    // Test-only seam: flags a path as externally drifted so tests can exercise the drift latch, which runs before the stale-read guard in ApplyProposedChangesAsync.
+    internal void AddExternalChangeForTest(string path) => _externalChanges.Add(path);
+
     /// <summary>
     /// Clears the drift list, indicating the AI has acknowledged and synced with disk.
     /// </summary>

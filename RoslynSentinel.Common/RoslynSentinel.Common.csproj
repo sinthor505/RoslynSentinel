@@ -28,6 +28,8 @@
 			<InternalsVisibleTo Include="RoslynSentinel.Tests.Server" />
 			<!-- TestInstanceLauncher runs git (GitProcess) for the build-source stamp. -->
 			<InternalsVisibleTo Include="RoslynSentinel.Engines.Basic" />
+			<!-- StaleReadGuardTests uses the internal AddExternalChangeForTest drift seam. -->
+			<InternalsVisibleTo Include="RoslynSentinel.Tests.Basic" />
 	</ItemGroup>
 
 </Project>

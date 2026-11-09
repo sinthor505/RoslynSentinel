@@ -10,8 +10,9 @@ namespace RoslynSentinel.Tests.Basic;
 
 // Stale-read guard at the write chokepoint (observed-content ledger, read-ledger plan step 3a): a batch is refused
 // with ToolErrorCode.StaleRead when a target this agent recorded via RecordObserved no longer matches the disk
-// pre-image or the in-memory document. Uses only the public API (RecordObserved, ApplyProposedChangesAsync) because
-// this project has no InternalsVisibleTo for Common. Every test uses the real manager, never FakeWorkspaceManager.
+// pre-image or the in-memory document. Uses the public API (RecordObserved, ApplyProposedChangesAsync) plus the
+// test-only AddExternalChangeForTest seam (Common has InternalsVisibleTo for this project). Every test uses the real
+// manager, never FakeWorkspaceManager.
 [TestFixture]
 public class StaleReadGuardTests
 {
@@ -192,9 +193,8 @@ public class StaleReadGuardTests
         }
     }
 
-    // TODO row F: drift-flagged target + stale ledger entry (latch must win) needs a test seam for PersistentWorkspaceManager._externalChanges; only the unrecoverable-breaker ordering is covered.
     // Covers the session-halt-first ordering using the public unrecoverable breaker, which the manager checks before
-    // the stale-read guard. It does not exercise a drift-flagged target: no public seam sets the drift latch.
+    // the stale-read guard.
     [Test]
     public async Task SessionHaltTripped_WinsOverStaleLedgerEntry_ThrowsSessionHaltedException()
     {
@@ -214,6 +214,36 @@ public class StaleReadGuardTests
                 staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale));
 
             Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Variant(3)));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task DriftFlaggedTarget_WithStaleLedgerEntry_LatchWins_ThrowsSessionHalted()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager((file, Original));
+            AsAgent("agentA");
+            manager.RecordObserved(new FilePathWrapper(file), Original);
+            File.WriteAllText(file, Variant(3));
+            manager.AddExternalChangeForTest(file);
+
+            await Assert.ThrowsAsync<SessionHaltedException>(async () => await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [file] = Variant(2)
+                }, retryCount: 0, validateChanges: false,
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale));
+
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Variant(3)));
+            Assert.That(manager.IsSessionHalted(), Is.True, "The drift latch must halt the session before the stale-read guard runs.");
         }
         finally
         {
