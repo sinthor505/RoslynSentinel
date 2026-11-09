@@ -306,12 +306,10 @@ public class WholeFileWriteTools
     }
 
     /// <summary>Builds the StaleRead refusal for a write the chokepoint refused because a target changed after it was last read.</summary>
+    // TODO remove once the three callers move to WriteRefusal.TryMap (plan step 2b)
     private static ResultError StaleReadError(string toolName, ApplyChangesResult result)
     {
-        var list = string.Join("; ", result.FailedFiles.Select(f => $"{f.Key} ({f.Value})"));
-        var firstPath = (string)result.FailedFiles.Keys.First();
-        var message = $"{toolName}: {result.FailedFiles.Count} target file(s) changed after you last read them; nothing was written: {list}. Next: re-read with {ToolCallHint.Call("ReadFile", ("filePath", firstPath))}, then repeat the edit against the fresh content. If refused again, wait a moment (the server may still be syncing an external change).";
-        return new ResultError(ToolErrorCode.StaleRead, message);
+        return WriteRefusal.TryMap(toolName, result, out var mapped) ? mapped : new ResultError(ToolErrorCode.StaleRead, $"{toolName}: a target file changed after you last read it; nothing was written.");
     }
 
     /// <summary>
