@@ -173,6 +173,14 @@ public static class ToolErrorCode
     public const string ConcurrentEditRefused = "ConcurrentEditRefused";
 
     /// <summary>
+    /// The write chokepoint refused a caller-authored write because the target file changed after this agent last
+    /// read it (observed-content ledger). Nothing was written; the session is NOT halted. The message names the
+    /// file(s) and says to re-read. Distinct from <see cref="SessionHalted"/> (latch) and
+    /// <see cref="ConcurrentEditRefused"/> (another agent wrote during this call).
+    /// </summary>
+    public const string StaleRead = "StaleRead";
+
+    /// <summary>
     /// The operation was cancelled before it finished.
     /// </summary>
     public const string Cancelled = "Cancelled";

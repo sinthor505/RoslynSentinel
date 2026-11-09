@@ -15,7 +15,7 @@ namespace RoslynSentinel.Common;
 /// </summary>
 public interface IWorkspaceManager :
     ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker,
-    IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IWorkspaceReader
+    IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IWorkspaceReader, IObservedContentLedger
 {
     /// <summary>Releases workspace resources. DI container owns lifetime; no production caller as of this writing.</summary>
     void Dispose();

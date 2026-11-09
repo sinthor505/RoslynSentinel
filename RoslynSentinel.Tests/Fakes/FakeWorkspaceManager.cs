@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 
@@ -10,14 +11,31 @@ namespace RoslynSentinel.Tests.Fakes;
 // undo throw NotImplementedException - extend as a test actually needs a member. If a test needs a real on-disk
 // solution (actual file I/O, MSBuild load, watcher behavior), use RoslynSentinel.Tests.TestSolutionFixture (backed by
 // PersistentWorkspaceManager) instead of this class.
-public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader
+public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader, IObservedContentLedger
 
 {
     private readonly ScopedOperationLedgerEngine _ledger = new();
 
+    // Mirrors PersistentWorkspaceManager's observed-content ledger (per-agent key); not the scoped operation ledger.
+    private readonly ConcurrentDictionary<(string AgentKey, FilePathWrapper Path), string> _observedHashes = new();
+
     public FakeWorkspaceManager(WorkspaceAccess access)
     {
         Access = access;
+    }
+
+    public void RecordObserved(FilePathWrapper path, string text) => _observedHashes[(ToolCallContext.Current?.AgentId ?? "", path)] = ContentFingerprint.Compute(text);
+
+    public bool TryGetObservedHash(FilePathWrapper path, out string hash)
+    {
+        if (_observedHashes.TryGetValue((ToolCallContext.Current?.AgentId ?? "", path), out var found))
+        {
+            hash = found;
+            return true;
+        }
+
+        hash = "";
+        return false;
     }
 
     /// <summary>For a test that never applies edits; a refused apply throws and is counted.</summary>
