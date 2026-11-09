@@ -201,6 +201,10 @@ public class CodeTransformTools
                     };
                 case "format_document_safe":
                     var result2 = await _msToolAugmentEngine.FormatDocumentSafeAsync(resolvedFilePath, preview, cancellationToken);
+                    if (result2.IsError)
+                    {
+                        return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(result2.ErrorCode ?? ToolErrorCode.Exception, result2.Error ?? "format_document_safe failed") };
+                    }
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = false,
@@ -329,6 +333,11 @@ public class CodeTransformTools
                                 IsError = false,
                                 SuccessData = $"No unsorted or duplicate using directives found in '{resolvedFilePath}'."
                             };
+                        }
+
+                        if (result17.ErrorCode != null)
+                        {
+                            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(result17.ErrorCode, result17.Error ?? "sort_and_deduplicate_usings failed to write") };
                         }
 
                         return new SentinelCallToolResult<object>()

@@ -406,4 +406,62 @@ public class StaleReadEngineToolsTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Test]
+    public async Task SortAndDeduplicateUsings_ObservedThenChangedFile_ReportsStaleReadNotWrittenAsync()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            const string withDuplicateUsing = "using System;\r\nusing System;\r\n\r\nnamespace T;\r\npublic class A\r\n{\r\n    public int X() => 1;\r\n}\r\n";
+            const string externalText = "using System;\r\nusing System.Linq;\r\n\r\nnamespace T;\r\npublic class A\r\n{\r\n    public int X() => 3;\r\n}\r\n";
+            File.WriteAllText(file, withDuplicateUsing);
+            using var manager = NewManager(file, withDuplicateUsing);
+            AsAgent("agentA");
+            manager.RecordObserved(new FilePathWrapper(file), withDuplicateUsing);
+            File.WriteAllText(file, externalText);
+            var engine = TestEngines.MsToolAugmentEngine(manager);
+
+            var result = await engine.SortAndDeduplicateUsingsAsync(new FilePathWrapper(file), writeToFile: true);
+
+            Assert.That(result.WrittenToDisk, Is.False, "a stale target must not be written");
+            Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.StaleRead), result.Error);
+            Assert.That(result.Error, Is.Not.Null.And.Not.Empty, "a refusal must carry a message");
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(externalText), "the externally written disk text must be left untouched");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task FormatDocumentSafe_ObservedThenChangedFile_ReportsStaleReadAsync()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            const string withText = "namespace T;\r\npublic class A\r\n{\r\n    public int X() => 1;\r\n}\r\n";
+            // Deliberately unformatted so the formatter's output differs from disk and the write reaches the guard.
+            const string externalText = "namespace T;\r\npublic class A{public int X()=>3;}\r\n";
+            File.WriteAllText(file, withText);
+            using var manager = NewManager(file, withText);
+            AsAgent("agentA");
+            manager.RecordObserved(new FilePathWrapper(file), withText);
+            File.WriteAllText(file, externalText);
+            var engine = TestEngines.MsToolAugmentEngine(manager);
+
+            var result = await engine.FormatDocumentSafeAsync(new FilePathWrapper(file), preview: false);
+
+            Assert.That(result.IsError, Is.True, "a stale target must be refused");
+            Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.StaleRead), result.Error);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(externalText), "the externally written disk text must be left untouched");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

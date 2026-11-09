@@ -42,7 +42,9 @@ public record UsingsCleanupResult(
     int OriginalCount,
     int RemovedDuplicates,
     string UpdatedContent,
-    bool WrittenToDisk = false);
+    bool WrittenToDisk = false,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Error = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? ErrorCode = null);
 
 // ── New result types for MS bug-fix augmented tools (Tools 6–10) ─────────────
 
@@ -620,9 +622,13 @@ public class MsToolAugmentEngine
 
         if (writeToFile)
         {
-            await _workspaceManager.ApplyProposedChangesAsync(
+            var apply = await _workspaceManager.ApplyProposedChangesAsync(
                 new Dictionary<FilePathWrapper, string> { [filePath] = updatedContent },
-                cancellationToken: cancellationToken);
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet, cancellationToken: cancellationToken);
+            if (apply.IsError)
+            {
+                return new UsingsCleanupResult(originalCount, removedDuplicates, updatedContent, WrittenToDisk: false, Error: apply.Summary, ErrorCode: apply.RefusalCode ?? ToolErrorCode.Exception);
+            }
         }
 
         return new UsingsCleanupResult(originalCount, removedDuplicates, updatedContent, WrittenToDisk: writeToFile);
@@ -767,10 +773,10 @@ public class MsToolAugmentEngine
                 // drift detection, pre-image capture, and workspace resync like every other tool.
                 var result = await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { [filePath] = formatted },
-                    cancellationToken: cancellationToken);
+                    staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet, cancellationToken: cancellationToken);
                 if (result.IsError)
                 {
-                    return MsAugmentResult.Fail($"Could not write file '{filePath}': {result.Summary}");
+                    return MsAugmentResult.Fail($"Could not write file '{filePath}': {result.Summary}", result.RefusalCode);
                 }
             }
             else
