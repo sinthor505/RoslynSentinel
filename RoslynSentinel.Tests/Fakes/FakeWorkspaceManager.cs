@@ -26,6 +26,26 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
 
     public void RecordObserved(FilePathWrapper path, string text) => _observedHashes[(ToolCallContext.Current?.AgentId ?? "", path)] = ContentFingerprint.Compute(text);
 
+    // Refreshes only the writer's own entry, and only when that key already has one for the path.
+    // Never creates an entry from a write.
+    private void RefreshObservedForWriter(FilePathWrapper path, string hash)
+    {
+        var key = (ToolCallContext.Current?.AgentId ?? "", path);
+        if (_observedHashes.TryGetValue(key, out var existing))
+        {
+            _observedHashes.TryUpdate(key, hash, existing);
+        }
+    }
+
+    // A removed path has no content any agent can still be measured against: drop it under every agent key.
+    private void RemoveObservedForAllAgents(FilePathWrapper path)
+    {
+        foreach (var key in _observedHashes.Keys.Where(k => k.Path.Equals(path)).ToList())
+        {
+            _observedHashes.TryRemove(key, out _);
+        }
+    }
+
     public bool TryGetObservedHash(FilePathWrapper path, out string hash)
     {
         if (_observedHashes.TryGetValue((ToolCallContext.Current?.AgentId ?? "", path), out var found))
@@ -234,6 +254,7 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
             }
 
             succeeded.Add(key);
+            RefreshObservedForWriter(key, ContentFingerprint.Compute(newText));
         }
 
         foreach (var path in deletePaths ?? [])
@@ -248,6 +269,7 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
             preImages[key] = (await solution.GetDocument(documentId)!.GetTextAsync(cancellationToken)).ToString();
             solution = solution.RemoveDocument(documentId);
             succeeded.Add(key);
+            RemoveObservedForAllAgents(key);
         }
 
         CurrentSolution = solution;

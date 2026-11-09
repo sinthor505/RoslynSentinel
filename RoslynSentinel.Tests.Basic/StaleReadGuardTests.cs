@@ -192,6 +192,7 @@ public class StaleReadGuardTests
         }
     }
 
+    // TODO row F: drift-flagged target + stale ledger entry (latch must win) needs a test seam for PersistentWorkspaceManager._externalChanges; only the unrecoverable-breaker ordering is covered.
     // Covers the session-halt-first ordering using the public unrecoverable breaker, which the manager checks before
     // the stale-read guard. It does not exercise a drift-flagged target: no public seam sets the drift latch.
     [Test]

@@ -532,6 +532,26 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         return false;
     }
 
+    // Refreshes only the writer's own ledger entry, and only when that key already has one for the
+    // path. Never creates an entry from a write.
+    private void RefreshObservedForWriter(FilePathWrapper path, string hash)
+    {
+        var key = (ObservedAgentKey(), path);
+        if (_observedHashes.TryGetValue(key, out var existing))
+        {
+            _observedHashes.TryUpdate(key, hash, existing);
+        }
+    }
+
+    // A removed path has no content any agent can still be measured against: drop it under every agent key.
+    private void RemoveObservedForAllAgents(FilePathWrapper path)
+    {
+        foreach (var key in _observedHashes.Keys.Where(k => k.Path.Equals(path)).ToList())
+        {
+            _observedHashes.TryRemove(key, out _);
+        }
+    }
+
     // Same decoding as File.ReadAllText (UTF-8 default, BOM detection) so hashes/comparisons are
     // byte-identical, but opened FileShare.ReadWrite | Delete: File.ReadAllText uses FileShare.Read, which
     // makes a concurrent File.Delete/rename of the same path by another fixture or process fail with an
@@ -2098,6 +2118,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     await FileIoHelper.DeleteAsync(filePath, cancellationToken);
                     succeeded.Add(filePath);
                     _knownFileHashes.TryRemove(filePath, out _);
+                    RemoveObservedForAllAgents(filePath);
                     if (_logger.IsEnabled(LogLevel.Information))
                     {
                         _logger.LogInformation("Deleted {FilePathWrapper}", filePath);
@@ -2186,6 +2207,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         // Update the hash baseline with what we just wrote -> no extra I/O, contentToWrite
                         // is already in memory. See _knownFileHashes's declaration-site comment.
                         _knownFileHashes[filePath] = ComputeContentHash(contentToWrite);
+                        // Hash of contentToWrite (the EOL-normalized text that reached disk), not newContent.
+                        RefreshObservedForWriter(filePath, ComputeContentHash(contentToWrite));
                         if (_logger.IsEnabled(LogLevel.Information))
                         {
                             _logger.LogInformation("Wrote changes to {FilePathWrapper} (Attempt {Attempt})", filePath, attempt + 1);
@@ -2242,11 +2265,13 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         {
                             await FileIoHelper.DeleteAsync(filePath, CancellationToken.None);
                             _knownFileHashes.TryRemove(filePath, out _);
+                            RemoveObservedForAllAgents(filePath);
                         }
                         else
                         {
                             await FileIoHelper.WriteAllTextAsync(filePath, original, _knownFileBomPresence.TryGetValue(filePath, out var hadBomOnRestore) && hadBomOnRestore ? new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true) : null, CancellationToken.None);
                             _knownFileHashes[filePath] = ComputeContentHash(original);
+                            RefreshObservedForWriter(filePath, ComputeContentHash(original));
                         }
                         rolledBack.Add(filePath);
                     }
