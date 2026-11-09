@@ -37,6 +37,17 @@ Note things like: one call doing what used to take many; a confusing description
 parameter; an error message that did (or did not) get you unstuck; reaching for a shell
 or built-in tool on C# because no MCP tool fit. Brief, high-level - not a blocker/finding.
 "@)
+
+    # After compaction the deferred MCP tool schemas are unloaded; calls made from memory miss
+    # required params (e.g. 'reason') and get refused. A just-in-time line beats a CLAUDE.md rule.
+    if ([string]$payload.source -eq 'compact') {
+        $p = 'mcp__root_roslyn_sentinel_advanced_stdio__'
+        [Console]::Out.WriteLine(@"
+
+Context was compacted: MCP tool schemas are no longer loaded. Before the first RoslynSentinel
+call, load the ones you need, e.g. ToolSearch(query: "select:${p}Search,${p}ReadFile,${p}Git,${p}Build,${p}RunTest").
+"@)
+    }
     exit 0
 }
 catch { exit 0 }
