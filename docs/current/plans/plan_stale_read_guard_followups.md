@@ -1,6 +1,6 @@
 # Plan: extend the stale-read guard (F3 anchor and engine tools, F4 outline/InspectSymbol), replace the drift latch with per-file protection (F1), add a cross-process write lock and fold-on-read (F7); F5 blocked
 
-**Status:** IN PROGRESS 2026-11-09. Steps 1-4, 5a, 5b, 5d done (20440d38, a10b26ee, e95c2b15, 458f2fa3, d5fe3d6b, 96996473, f45f07c8, 4a73f333, 088220fb). Batched run with the owner present; F5 stays blocked on staged writes. Builds on [plan_read_ledger_stale_read_guard.md](closed/plan_read_ledger_stale_read_guard.md) (IMPLEMENTED 2026-11-09, 7b703f18..5d9ee8d2). Per-file attribution of refusals is deferred to [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md) ("Revision 2026-11-09"); this plan leaves it a lock, a holder record and a message-builder hook.
+**Status:** IN PROGRESS 2026-11-09. Steps 1-6 done (20440d38, a10b26ee, e95c2b15, 458f2fa3, d5fe3d6b, 96996473, f45f07c8, 4a73f333, 088220fb, a170f724, 46f61b62, 333a0740, 233a04ab, fe1afbee, b57208a7); Step 7 merged into 8e. Batched run with the owner present; F5 stays blocked on staged writes. Builds on [plan_read_ledger_stale_read_guard.md](closed/plan_read_ledger_stale_read_guard.md) (IMPLEMENTED 2026-11-09, 7b703f18..5d9ee8d2). Per-file attribution of refusals is deferred to [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md) ("Revision 2026-11-09"); this plan leaves it a lock, a holder record and a message-builder hook.
 
 ## Problem
 
@@ -293,6 +293,7 @@ The sites surface a refusal as text, not a typed code (measured below), so Step 
 - Test-writer step (T5b): row H (batch-engine family) plus the ratchet.
 
 #### Step 5c - `MsToolAugmentEngine.cs` and `DeleteUnusedSymbol` (D1, one hand edit)
+- Done: 5c-a a170f724, 5c-b 46f61b62 (`UsingsCleanupResult.Error`/`ErrorCode`, omitted from JSON when null); BulkComment per-file refusal test b57208a7
 - **Review 2026-11-09, split (owner: fix Ms too):** the hypothesis below is false. `MsToolAugmentEngine.cs:623` discards the
   `ApplyChangesResult` and returns `WrittenToDisk: writeToFile`, so a refused sort-usings write reports as written.
   `FormatDocumentSafeAsync` (`:768`) already returns `MsAugmentResult.Fail`, and `MsAugmentResult` has an `ErrorCode`. Callers are
@@ -330,6 +331,7 @@ The sites surface a refusal as text, not a typed code (measured below), so Step 
 - Tier: D1. Done when: `Build` 0 errors. Out of scope: AsyncBatchEngine. Test-writer step (T5d): one Asyncify tool test through a real PWM asserting the refusal text contains `StaleRead`.
 
 #### Step 5e - ratchet test (test-writer only; accepted)
+- Done: 333a0740 (ran after 5c so the Ms sites were opted in first)
 - Files (1, test): `RoslynSentinel.Tests.Basic/StaleReadPolicyRatchetTests.cs` (new).
 - Change: syntax scan of production projects (precedent `BareFileWriteRatchetTests`): every `ApplyProposedChangesAsync(` invocation outside `Common` must pass a `staleReadPolicy:` argument or be allowlisted as
   `<file>::<member>` with a reason (`WorkspaceFileEditImpl::UndoLastApply` exactRestore, `WorkspaceFileEditImpl::CreateFile`). The count may only shrink. Block-commented code (`WorkspaceTools.cs:184-455`) must not count; a syntax scan ignores comments.
@@ -337,6 +339,7 @@ The sites surface a refusal as text, not a typed code (measured below), so Step 
 
 ### Step 6 - F4: record from `GetFileOutline` and `InspectSymbol`
 #### Step 6a - shared whole-file recorder
+- Done: 233a04ab
 - Files (2): `RoslynSentinel.Common/ObservedContentExtensions.cs` (new), `RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs`.
 - Symbols: extension `RecordWholeFileObservedAsync(this IWorkspaceManager, FilePathWrapper, CancellationToken)` in `Common`; `WorkspaceFileEditImpl.RecordWholeFileObservedAsync` (`:348-366`, private) becomes a delegate.
 - Change (~3 edits): move the body verbatim (resolve the document through `DocumentLookup.FindDocumentOrNull`, else `FileIoHelper.ReadAllTextIfExistsAsync`, then `RecordObserved`). `DocumentLookup` and `FileIoHelper` are already in `Common`.
@@ -345,6 +348,7 @@ The sites surface a refusal as text, not a typed code (measured below), so Step 
 - Test-writer step (T6a): none beyond the existing `ReadFile` recording tests (they exercise the moved body); say so in the brief.
 
 #### Step 6b - the two recording calls
+- Done: fe1afbee (`SymbolNavigationImpl` now takes `IWorkspaceManager` instead of `ISolutionProvider`; the old `GetFileOutline_SolutionDocument_RecordsNothing` test was removed as it pinned the reversed behavior)
 - Files (2): `RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs`, `RoslynSentinel.Tools.Basic/SymbolNavigationImpl.cs`.
 - Symbols: `WorkspaceReadNavigationImpl.GetFileOutline` (`:372-425`); `SymbolNavigationImpl.InspectSymbol` (`:101-174`); `SymbolHoverInfo.DefinedInFile` (set from `symbol.Locations.FirstOrDefault(l => l.IsInSource).SourceTree.FilePath` in `SymbolNavigationEngine.GetSymbolInfoAsync`, `:405-599`).
 - Change (~3 edits): `GetFileOutline`: after the document is found and `fileText` is read (the text is already materialized for the byte count), call `_workspaceManager.RecordObserved(filePathResolved, fileText.ToString())` on the success path only, with the same key shape `GetMethodSource` uses (`:336`).
@@ -355,6 +359,7 @@ The sites surface a refusal as text, not a typed code (measured below), so Step 
 - Test-writer step (T6b): rows I, J, plus one assertion that `InspectSymbol(blastRadius)` records nothing (row J).
 
 ### Step 7 - docs for F3/F4 (Markdown, main session)
+- 2026-11-09: merged into Step 8e (F1 lands in the same run; one doc pass over the same three references).
 - Files (3): `docs/current/references/reference_file_watcher_and_drift_detection.md` (section 5 "Checked by" list and the Gotcha stating that anchor and engine tools do not check),
   `docs/current/references/reference_code_file_write_paths.md` (step 7b "Opted in" list), `docs/current/references/reference_architecture_map.md` (the "Stale-read guard" paragraph, ~`:144`).
 - Change: list the new opted-in families, the `Quiet` value, the helper default, the recorded reads (outline, InspectSymbol info) and the non-recorded one (`ListAll`, `blastRadius`). Move the closed plan's "follow-ups F3-F4" to done; keep F5 open (F1 is Step 8, F7 is Step 9).
