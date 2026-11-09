@@ -1,6 +1,6 @@
-# Stamp a top-level workspaceChanged flag on every response from a tool that can write
+# Stamp a top-level editResult field on every response from a tool that can write
 
-**Status:** PROPOSED 2026-11-09. Awaiting review; build after the other session releases `SentinelCallToolResult.cs` and the stale-read follow-up work.
+**Status:** PROPOSED 2026-11-09. Field shape decided with the owner on 2026-11-09 (`editResult`, replacing the first draft's `workspaceChanged` boolean). Build after the other session releases `SentinelCallToolResult.cs` and finishes its stale-read follow-up work.
 
 ## Motivation
 
@@ -30,20 +30,24 @@ remain, and prose is a weaker signal than a field with a fixed name.
 
 ## Proposal
 
-### The field (decided: one boolean, fixed name)
+### The field (decided 2026-11-09: one computed enum, fixed name)
 
-- `workspaceChanged: true|false` at the top level of the response.
+- `editResult: "applied" | "rejected" | "unchanged" | "partial"` at the top level of the response.
 - It is present on every response from a tool that can write, including errors, refusals and `validate`
-  or dry-run calls, which report `false`. It is absent on read-only tools, so its presence also marks a
-  write tool.
-- It reports what happened, not what was asked:
+  or dry-run calls. It is absent on read-only tools, so its presence also marks a write tool.
+- The server computes it, so the model never has to combine two signals itself. It reports what happened,
+  not what was asked:
 
-  | isError | workspaceChanged | Meaning |
-  | --- | --- | --- |
-  | true | false | rejected, nothing written (the common case to make unmistakable) |
-  | false | true | applied |
-  | false | false | succeeded with no effect (validate, identical content, nothing to do) |
-  | true | true | partly applied; the error explains what (rare; must be visible, not hidden) |
+  | isError | something was written | editResult | Meaning |
+  | --- | --- | --- | --- |
+  | true | no | `rejected` | nothing written (the common case to make unmistakable) |
+  | false | yes | `applied` | the change is on disk and in the workspace |
+  | false | no | `unchanged` | succeeded with no effect (validate, identical content, nothing to do) |
+  | true | yes | `partial` | partly applied; the error explains what (rare; must be visible, not hidden) |
+
+- No `workspaceChanged` boolean beside it: it would only add a second signal to cross-check. `isError`
+  stays, because the MCP protocol requires it.
+- camelCase words, not `No-op`. `unchanged` says what happened to the files.
 
 ### Where it is computed (decided: centrally, from the writes that happened)
 
@@ -59,7 +63,8 @@ remain, and prose is a weaker signal than a field with a fixed name.
   one line per write tool. That line can drift from what was actually written, and a thrown error never
   reaches it.
 - **Why not compare workspace versions:** a before/after version diff is simpler, but another agent writing
-  on the same server during the call would make it `true` falsely. Multi-agent sessions are normal here.
+  on the same server during the call would make a rejected call look `applied` or `partial`. Multi-agent
+  sessions are normal here.
 
 ### Which tools count as "can write"
 
@@ -83,9 +88,9 @@ write chokepoint carries it. See Open questions.
   misleading reading does not add the missing signal.
 - **Prose only (fix 2 of 2026-11-09).** Already done for six messages. Prose varies, and a weak model
   reasons over it, as in run 173949 T22.
-- **`editOutcome: changeApplied|changeRejected|noChange|partial`.** It carries the same information as the
-  table above, but as a vocabulary the model has to learn. The boolean plus `isError` is two fields the
-  model already sees on every call.
+- **A `workspaceChanged: true|false` boolean (this proposal's first draft).** The model would have to
+  combine it with `isError` to tell `rejected` from `unchanged`. That two-signal inference is exactly what
+  weak models get wrong. The self-explanatory enum removes it.
 
 ## Open questions
 
@@ -98,13 +103,15 @@ write chokepoint carries it. See Open questions.
 - Whether Git `commit`/`stage`, which change the index but not the files, count as "workspace changed".
   Lean: no, files only.
 - Effect on the `EchoReserveChars` budget: about 25 characters per write-tool response.
+- Whether the name `editResult` reads well on DeleteFile and on Git working-tree changes. Lean: keep one name
+  everywhere rather than per-tool names.
 
 ## Cost / risk
 
 - **Touches:** the filter table in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs`, a new filter, the
   write chokepoint, `ToolCallContext`, and tests pinning filter order and the field on representative write
   tools (applied, rejected, validate, thrown error).
-- **Risk:** a missed write path reports `false` after a real write. That is worse than no field. Mitigate
+- **Risk:** a missed write path reports `rejected` or `unchanged` after a real write. That is worse than no field. Mitigate
   with the "every write path marks the context" trace and a test per write tool class.
 - **Coordination:** another session is currently editing `SentinelCallToolResult.cs` and the write path
   (stale-read follow-ups). Build only after it releases those files.
