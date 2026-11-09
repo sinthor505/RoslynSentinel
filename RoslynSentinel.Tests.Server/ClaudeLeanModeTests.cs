@@ -62,7 +62,8 @@ public class ClaudeLeanModeTests
 
     private static async Task<string[]> ListToolNamesAsync(string mode, IReadOnlySet<string>? hideTools = null)
     {
-        var activeModes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { mode };
+        // A comma list ("WorkspaceFileContent,EditSnippetsExperiment") activates several modes at once.
+        var activeModes = new HashSet<string>(mode.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries), StringComparer.OrdinalIgnoreCase);
         var clientToServer = new Pipe();
         var serverToClient = new Pipe();
 
@@ -133,6 +134,22 @@ public class ClaudeLeanModeTests
         var names = await ListToolNamesAsync("claude-lean", new HashSet<string>(["NoSuchTool"], StringComparer.OrdinalIgnoreCase));
 
         Assert.That(names, Is.EquivalentTo(CoreTools));
+    }
+
+    [Test]
+    public async Task HideTools_OutsideClaudeLean_RemovesOnlyTheNamedTool()
+    {
+        // Outside claude-lean, --hide-tools builds an allow-list of every discovered tool minus the hidden names.
+        // ReadFile, ReplaceSnippet and EditSnippets share WorkspaceFileEditTools, so only a per-tool hide separates them.
+        var baseline = await ListToolNamesAsync("WorkspaceFileContent");
+        var names = await ListToolNamesAsync("WorkspaceFileContent,EditSnippetsExperiment", new HashSet<string>(["ReplaceSnippet"], StringComparer.OrdinalIgnoreCase));
+
+        Assert.That(baseline, Does.Contain("ReplaceSnippet"));
+        Assert.That(baseline, Does.Not.Contain("EditSnippets"));
+        Assert.That(names, Does.Not.Contain("ReplaceSnippet"));
+        Assert.That(names, Does.Contain("ReadFile"));
+        Assert.That(names, Does.Contain("EditSnippets"));
+        Assert.That(names, Does.Contain("McpServerStatus"));
     }
 
     // ---- registry and startup parsing ----

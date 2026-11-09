@@ -116,7 +116,21 @@ public class OrderPricingRefactorChainAgentTests
             new InMemoryMcpTaskStore(),
             o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
         //mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes); // Temporarily commented out to give the model access to the full Advanced tool catalog as ExtractInterface is not in the Basic catalog and is required for rung 7.
-        mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ActiveModes);
+        // A/B arm switch for proposal_edit_snippets_batch_only_ab_test; unset = arm A (ReplaceSnippet).
+        var editArm = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_MODELEVAL_EDIT_ARM");
+        var editSnippetsArm = string.Equals(editArm, "EditSnippets", StringComparison.OrdinalIgnoreCase);
+        TestContext.Out.WriteLine(editSnippetsArm ? "Edit arm: EditSnippets" : "Edit arm: ReplaceSnippet (default)");
+        if (editSnippetsArm)
+        {
+            mcpBuilder.AddRoslynSentinelToolsAdvanced(
+                services,
+                new HashSet<string>(ActiveModes, StringComparer.OrdinalIgnoreCase) { "EditSnippetsExperiment" },
+                hideTools: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "ReplaceSnippet" });
+        }
+        else
+        {
+            mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ActiveModes);
+        }
 
         if (BlockWriteFile)
         {

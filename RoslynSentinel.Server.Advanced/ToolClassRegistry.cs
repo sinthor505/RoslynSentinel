@@ -33,6 +33,13 @@ public static class ToolClassRegistry
         new HashSet<string>([ClaudeLeanMode, ExperimentalMode], StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Modes that apply only when named explicitly (for example --mode=EditSnippetsExperiment); "all" skips them.
+    /// They are not part of the default surface, so their tools cost no prompt tokens unless asked for.
+    /// </summary>
+    public static readonly IReadOnlySet<string> OptInModes =
+        new HashSet<string>(["EditSnippetsExperiment"], StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// The MCP tool names the <see cref="ClaudeLeanMode"/> mode exposes: the proposal's Core set minus
     /// FindReferencesTool and LocateSymbolTool (reachable via Search mode: references and mode: symbol, which saves
     /// their schema tokens) plus McpToolsetControlTool, which switches the on-demand toolsets (<see cref="ToolsetCatalog"/>) at runtime.
@@ -116,6 +123,8 @@ public static class ToolClassRegistry
             ["SemanticFindReplace"] = ["SemanticFindReplaceTools"],
             [ClaudeLeanMode] = ClaudeLeanToolClasses,
             [ExperimentalMode] = ["CodeTransformTools"],
+            // experiment-only (proposal_edit_snippets_batch_only_ab_test); opt-in, never part of all/Claude
+            ["EditSnippetsExperiment"] = ["EditSnippetsTools"],
 
             // Fine-grained sub-modes added by Decision 7 step 4 (docs/current/plans/
             // plan_split_workspace_refactoring_tools_for_di.md, Decision 4 + Addendum A/B):

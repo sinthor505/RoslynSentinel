@@ -476,7 +476,7 @@ public static class McpToolSchemaPatcher
     /// </remarks>
     private static void ApplyReplaceSnippetLimits(McpServerTool tool, MethodInfo toolMethod)
     {
-        if (toolMethod.Name != "ReplaceSnippetTool")
+        if (toolMethod.Name is not ("ReplaceSnippetTool" or "EditSnippetsTool"))
         {
             return;
         }
@@ -512,7 +512,9 @@ public static class McpToolSchemaPatcher
         // the batch form omits it), and its anchors get the same ReplaceSnippet-specific wording.
         static bool PatchBatchEditItems(JsonObject schemaObj, JsonObject propertiesObj)
         {
-            if (!propertiesObj.TryGetPropertyValue("batchEdits", out JsonNode? batchNode) ||
+            // EditSnippets names its batch parameter 'edits' (proposal_edit_snippets_batch_only_ab_test); accept either name.
+            string batchName = propertiesObj.ContainsKey("edits") ? "edits" : "batchEdits";
+            if (!propertiesObj.TryGetPropertyValue(batchName, out JsonNode? batchNode) ||
                 batchNode is not JsonObject batchObj ||
                 batchObj["items"] is not JsonObject itemsObj)
             {

@@ -57,6 +57,7 @@ public static class ToolServiceCollectionExtensionsBasic
     {
         services.TryAddSingleton<AdminTools>();
         services.TryAddSingleton<DeclarationTools>();
+services.TryAddSingleton<EditSnippetsTools>();
         services.TryAddSingleton<DocumentationTools>();
         services.TryAddSingleton<GitRemoteTools>();
         services.TryAddSingleton<GitTools>();

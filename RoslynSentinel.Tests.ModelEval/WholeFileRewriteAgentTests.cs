@@ -312,7 +312,21 @@ public class WholeFileRewriteAgentTests
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
             o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
-        mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
+        // A/B arm switch for proposal_edit_snippets_batch_only_ab_test; unset = arm A (ReplaceSnippet).
+        var editArm = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_MODELEVAL_EDIT_ARM");
+        var editSnippetsArm = string.Equals(editArm, "EditSnippets", StringComparison.OrdinalIgnoreCase);
+        TestContext.Out.WriteLine(editSnippetsArm ? "Edit arm: EditSnippets" : "Edit arm: ReplaceSnippet (default)");
+        if (editSnippetsArm)
+        {
+            mcpBuilder.AddRoslynSentinelToolsBasic(
+                services,
+                new HashSet<string>(ActiveModes, StringComparer.OrdinalIgnoreCase) { "EditSnippetsExperiment" },
+                hideTools: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "ReplaceSnippet" });
+        }
+        else
+        {
+            mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
+        }
 
         _runDirectory = Path.Combine(
             TestContext.CurrentContext.WorkDirectory,

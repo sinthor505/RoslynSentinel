@@ -78,11 +78,12 @@ public static class ServerStartupHelpers
         // "all" expands to the full allModes set; when combined with other entries (e.g.
         // "all,admin") those extras are unioned in rather than being treated as literal mode
         // names alongside a no-op "all" -> otherwise "all" could only ever be used alone.
-        // Exclusive modes (claude-lean) restrict the tool surface rather than add to it, so "all"
-        // must not pick them up; they apply only when named explicitly.
+        // Exclusive modes (claude-lean) restrict the tool surface rather than add to it, and opt-in
+        // modes (OptInModes, e.g. the EditSnippets experiment) are experiment-only; so "all" must
+        // pick up neither; they apply only when named explicitly.
         activeModes = requestedModes.Contains("all")
             ? new HashSet<string>(
-                allModes.Where(m => !ToolClassRegistry.ExclusiveModes.Contains(m)),
+                allModes.Where(m => !ToolClassRegistry.ExclusiveModes.Contains(m) && !ToolClassRegistry.OptInModes.Contains(m)),
                 StringComparer.OrdinalIgnoreCase)
             : requestedModes;
         if (requestedModes.Contains("all"))

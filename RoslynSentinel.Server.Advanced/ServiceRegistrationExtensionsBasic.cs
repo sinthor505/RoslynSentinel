@@ -130,10 +130,17 @@ public static class RoslynSentinelServiceExtensionsBasic
         // Per-tool hiding (--hide-tools) exists because WriteFile shares a class with DeleteFile, so the
         // per-class --exclude-tools cannot hide it alone. WriteToolAdviceHelper and ActiveToolSurface read
         // toolAllowList.ToolNames, so advice and status follow the filtered list automatically.
-        // hideTools is ignored outside claude-lean (no allow-list).
+        // Outside claude-lean, hideTools builds an allow-list of every discovered RoslynSentinel tool minus the hidden
+        // names, so hiding one tool of a shared class works in every mode. Class gating still applies on top.
         var toolAllowList = activeModes.Contains(ToolClassRegistry.ClaudeLeanMode)
             ? new ToolAllowList(ToolClassRegistry.ClaudeLeanToolNames.Where(n => hideTools is null || !hideTools.Contains(n)))
-            : null;
+            : hideTools is { Count: > 0 }
+                ? new ToolAllowList(McpToolSchemaPatcher.DiscoverToolMethods(
+                        AppDomain.CurrentDomain.GetAssemblies()
+                            .Where(a => a.GetName().Name?.StartsWith("RoslynSentinel", StringComparison.Ordinal) == true))
+                    .Select(t => t.ToolName)
+                    .Where(n => !hideTools.Contains(n)))
+                : null;
         if (toolAllowList is not null)
         {
             services.AddSingleton(toolAllowList);
@@ -173,7 +180,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         // startup. The per-tool allow-list already makes WithSentinelTools register none of the non-Core
         // tools, so widening the set here registers dependencies only. Rebinding (not mutating) keeps the
         // ActiveToolSurface/WriteToolAdviceHelper sets above - what McpServerStatusTool and advice report - exact.
-        if (toolAllowList is not null)
+        if (activeModes.Contains(ToolClassRegistry.ClaudeLeanMode))
         {
             bool toolsetControlActive = activeToolClasses.Contains("ToolsetControlTools");
             bool declarationActive = activeToolClasses.Contains("DeclarationTools");
@@ -264,6 +271,13 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.TryAddSingleton<WorkspaceReadNavigationTools>();
             services.AddSingleton<WorkspaceFileEditTools>();
             mcpBuilder.WithSentinelTools<WorkspaceFileEditTools>();
+        }
+        // Experiment-only (proposal_edit_snippets_batch_only_ab_test). Reached only via the opt-in
+        // EditSnippetsExperiment mode; WorkspaceFileEditImpl comes from AddRoslynSentinelToolImplsBasic.
+        if (activeToolClasses.Contains("EditSnippetsTools"))
+        {
+            services.AddSingleton<EditSnippetsTools>();
+            mcpBuilder.WithSentinelTools<EditSnippetsTools>();
         }
         if (activeToolClasses.Contains("WorkspaceBuildTestTools"))
         {
