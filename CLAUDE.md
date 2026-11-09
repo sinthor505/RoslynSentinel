@@ -53,17 +53,18 @@ not missing. Before concluding it is missing or building a duplicate, call
 call, make it yourself. If it names a mode or flag, stop and report the tool and hint (a configuration
 decision for the user, not a blocker). Only if the listing is empty, try `Search(mode: "text", query: "Name = \"ToolName\"")`.
 
-## Subagents (hard rules)
+## Subagents
 
-- **Implementation is never done in the main session** - not even small edits, unless the user asks and
-  approves for that task (approval does not carry over); the one exception is a `// TODO` comment the
-  session already knows about, added with `ReplaceSnippet`/`Member`. Dispatch `implementer` (several edits, few
-  files), `implementer-sweep` (one mechanical operation, many files), `implementer-senior` (over the
-  limits) or `test-writer`. The main session plans, briefs, dispatches, reviews and commits; reading,
-  searching, building, tests, git and Markdown edits stay. Load the `dispatch-implementer` skill before
-  the first dispatch (limits, and the two-concurrent-agents trial rule); the `enforce-dogfood.ps1` hook
-  refuses a non-conforming brief. If about to call `ReplaceSnippet`/`Member`/`ApplyDiff`/`RenameSymbol`/
-  `MoveMember` on source, write a brief instead. Why: implementation churn crowds out planning in the main context.
+- **Edit directly when small and on-topic; dispatch when it would sidetrack.** The main session's job
+  is design, planning and orchestration. Edit directly when the change is small (up to ~3 edits in
+  2 files) and part of the current discussion: files already in context (non-C# files, comments, a
+  small `.cs` change the session has just read), with the MCP tools for `.cs`. If it will exceed those
+  caps, ask first. Dispatch `implementer` (several edits, few files), `implementer-sweep` (one
+  mechanical operation, many files), `implementer-senior` (over the limits) or `test-writer` when the
+  work is larger, needs code the session has not read, or would interrupt design or orchestration still
+  in progress. Unsure: ask. Load the `dispatch-implementer` skill before the first dispatch (limits, and
+  the two-concurrent-agents trial rule); the `enforce-dogfood.ps1` hook refuses a non-conforming brief.
+  Why: implementation churn crowds out planning in the main context.
 - **Exploration and review are dispatched.** The main session does only small reads (one outline,
   method, file or `git status`). Anything broader goes to `explore-tier1` (symbol/usage lookups) or
   `explore-tier2` (multi-file investigation, reviews; pass `model: sonnet` for a hard review). If it
