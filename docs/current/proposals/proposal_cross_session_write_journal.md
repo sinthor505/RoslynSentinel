@@ -1,6 +1,51 @@
 # Cross-session write journal: attribute file changes to the server instance that made them
 
-**Status:** PROPOSED 2026-11-05. Awaiting review; nothing built. File:line citations come from an audit on 2026-10-13 and have not been re-verified since.
+**Status:** PROPOSED 2026-11-05, REVISED 2026-11-09. Attribution layer only; behaviour on drift is now owned by plan_stale_read_guard_followups.md (F1 option d) and a cross-process write lock (F7). Read "Revision 2026-11-09" first; it overrides the sections below where they disagree. File:line citations in the original text come from a 2026-10-13 audit and are stale.
+
+## Revision 2026-11-09 (owner-approved direction)
+
+- **Premises that changed.** `ToolCallContext` (`Common/ToolCallContext.cs`, AsyncLocal, set at the tool
+  boundary) now carries agent id, agent type, tool name, reason and start sequence for every call, so the
+  "no AsyncLocal; add a request filter" plumbing below is already built. Operation blob items now carry
+  `AppliedByReason`, `AppliedByAgentId`, `AppliedBySessionId` and `AppliedByAgentType`
+  (`Common/OperationItemRecord.cs`, filled in `OperationBlobWriter.WriteAsync`), and `NotFoundEvidence`
+  already reads them across windows. Still true of blobs: written after the files are on disk, coverage gaps
+  (see "Blob coverage" below), full source per item, no retention, no schema version. The journal is still
+  the right attribution store; blobs stay the payload/undo store and an optional fallback for older history.
+- **Append point.** Inside `ApplyProposedChangesAsync`, reading `ToolCallContext.Current`, before the files
+  are written, and inside the cross-process write lock (below) so a sibling that takes the lock next always
+  finds the entry. No new parameters, no new request filter.
+- **Lookup point.** NOT in `OnFileSystemChanged`: the watcher callback must stay cheap or the 64 KB buffer
+  overflows (`reference_file_watcher_and_drift_detection.md`). Look up lazily when building a refusal
+  (`StaleRead` and the per-file drift refusal) and in `ExternalFileDrift(List/Status)` / `Git(status)`, or
+  at the latest in the debounce step.
+- **Auto-adopt vs annotate: settled as annotate only.** Under F1 option (d) a sibling's change to a file the
+  agent never read or edited never refuses or halts (the debounce fold already adopts the content); a change
+  to a file it read or edited is refused per agent with `StaleRead` whoever wrote it. The journal supplies
+  only the explanation line ("changed by session <sid>, agent <id>, via <tool> <age> ago: <reason>").
+- **Write lock (complementary, not an alternative).** The original rejected a lock file because the goal was
+  explanation. The lock's goal is different: make the stale check atomic with the write across servers and
+  stop two servers interleaving writes. Design: an OS-held exclusive handle on `.roslynsentinel/write.lock`
+  in the working tree (released by the OS if the process dies), holder metadata (session, agent, tool,
+  reason, since) for the busy message, bounded wait then a non-latching `WriteLockBusy` error, held from
+  pre-image capture through the journal append, file writes and blob write. Per working tree (files are per
+  tree); the journal can stay under the git common dir. `.roslynsentinel/` is gitignored as a whole since
+  2026-11-09. Specified in plan_stale_read_guard_followups.md F7.
+- **Writes are not atomic today.** `FileIoHelper.WriteAllTextAsync` is `File.WriteAllTextAsync` under the
+  in-process `FilePathLock` (truncate, then write), so another process can read a partial file. F7 has the
+  debounce fold take the write lock briefly before reading disk. Temp-file-plus-replace would also fix it,
+  but the watcher treats Renamed events as drift, so that needs its own design.
+- **Blob coverage (measured 2026-11-09).** 45 direct `ApplyProposedChangesAsync` sites in 9 production
+  files; the chokepoint writes no blob itself. 35 reach a blob write (19 in the same method, 16 via a caller
+  or Asyncify summary chain), 5 confirmed without (`UndoLastApply` WorkspaceFileEditImpl.cs:142,
+  `RetryFailedChanges` -> PWM.RetryFailedChangesAsync, CommentingTools BulkComment seed phase :146,
+  MsToolAugmentEngine sort-usings :623 and format :768), 5 untraced (AsyncifyTools
+  RunHandlerConvertPhaseAsync cleanup applies :3268-3350). `GitImpl` writes no blob and bypasses the
+  chokepoint; file-changing operations: stash apply/pop/push, reset --merge, reset soft/mixed, checkout,
+  revert, pull, worktree add/remove. A chokepoint-level journal append covers all 45 sites; Git needs its
+  own append.
+- **Dropped open questions:** the AsyncLocal-coverage question (answered by `ToolCallContext`) and
+  auto-adopt (above). Still open: Git mutations, liveness, retention, worktree root, clock handling.
 
 ## Motivation
 
@@ -127,7 +172,7 @@ up in the other sessions' journals:
 - **Add `toolName`/`reason` parameters to `ApplyProposedChangesAsync`.** 50 call sites in 11 files for
   data an ambient context carries equally well.
 - **Shell/process-level locking or a lock file per repo.** Serialises sessions rather than informing
-  them; wrong goal.
+  them; wrong goal. (2026-11-09: adopted separately as F7 for atomicity, not attribution; see Revision.)
 
 ## Open questions
 
@@ -163,10 +208,10 @@ up in the other sessions' journals:
 Worth their own TODO entries:
 
 - No retention for `.roslynsentinel/operations/` blobs.
-- `.roslynsentinel/` is ignored only by the blanket `*.json` gitignore rule.
+- `.roslynsentinel/` is ignored only by the blanket `*.json` gitignore rule. (FIXED 2026-11-09: `/.roslynsentinel/` ignored.)
 - `UndoLastApply` cannot undo a file creation (null `BeforeSource` is filtered out; returns
   `NoReversibleItems`), and `UndoLastApply` itself writes no blob.
-- `Reason` is never populated on successful blob items.
+- `Reason` is never populated on successful blob items. (Superseded: `AppliedByReason` is populated from `ToolCallContext`.)
 
 ## Related
 

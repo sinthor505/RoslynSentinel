@@ -60,5 +60,5 @@ PlanStepRunner/
 docs/known-build-warnings.Solution.txt
 *.tmp
 /.scratch
-/.roslynsentinel/build/
-/.roslynsentinel/schema-sizes/
+# Server runtime state (operation blobs, large results, scans, test instances, write lock). Nothing here is tracked.
+/.roslynsentinel/
