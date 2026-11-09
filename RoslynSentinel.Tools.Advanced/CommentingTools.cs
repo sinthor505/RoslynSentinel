@@ -2,6 +2,8 @@ using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Common;
+
 using RoslynSentinel.Engines.Advanced;
 
 namespace RoslynSentinel.Tools.Advanced;
@@ -143,7 +145,7 @@ public class CommentingTools
 
         if (seedChanges.Count > 0 && !dryRun)
         {
-            var seedApply = await _workspaceManager.ApplyProposedChangesAsync(seedChanges, validateChanges: true, cancellationToken: cancellationToken);
+            var seedApply = await _workspaceManager.ApplyProposedChangesAsync(seedChanges, validateChanges: true, cancellationToken: cancellationToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
             if (seedApply.IsError)
             {
                 var diagnosticCount = seedApply.ValidationResult?.Diagnostics.Count ?? 0;
@@ -316,7 +318,7 @@ public class CommentingTools
             }
 
             var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<FilePathWrapper, string> { { currentFilePath, finalText } }, validateChanges: true, cancellationToken: cancellationToken);
+                new Dictionary<FilePathWrapper, string> { { currentFilePath, finalText } }, validateChanges: true, cancellationToken: cancellationToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
 
             if (applyResult.IsError)
             {

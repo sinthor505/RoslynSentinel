@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Engines.Advanced;
 
@@ -564,7 +565,7 @@ public class AsyncBatchEngine
                             string? beforeSource = File.Exists(candidate.FilePath)
                                 ? await File.ReadAllTextAsync(candidate.FilePath, cancellationToken) : null;
                             var ctApply = await _workspaceManager.ApplyProposedChangesAsync(
-                                new Dictionary<FilePathWrapper, string> { { candidate.FilePath, ctResult.UpdatedText } });
+                                new Dictionary<FilePathWrapper, string> { { candidate.FilePath, ctResult.UpdatedText } }, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                             if (ctApply.IsError)
                             {
                                 _logger.LogWarning("CT-add write refused for '{AsyncMethod}' in {File}: {Summary}",
@@ -619,7 +620,7 @@ public class AsyncBatchEngine
                                 string? beforeSource = File.Exists(candidate.FilePath)
                                     ? await File.ReadAllTextAsync(candidate.FilePath, cancellationToken) : null;
                                 var bodyApply = await _workspaceManager.ApplyProposedChangesAsync(
-                                    new Dictionary<FilePathWrapper, string> { { candidate.FilePath, bodyRewrite.UpdatedText } });
+                                    new Dictionary<FilePathWrapper, string> { { candidate.FilePath, bodyRewrite.UpdatedText } }, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                                 if (bodyApply.IsError)
                                 {
                                     _logger.LogWarning("Body-rewrite write refused for '{AsyncMethod}' in {File}: {Summary}",
@@ -672,7 +673,7 @@ public class AsyncBatchEngine
                                     cancellationToken: cancellationToken);
                                 if (stripResult.Changes.Count > 0)
                                 {
-                                    var stripApply = await _workspaceManager.ApplyProposedChangesAsync(stripResult.Changes);
+                                    var stripApply = await _workspaceManager.ApplyProposedChangesAsync(stripResult.Changes, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                                     if (stripApply.IsError)
                                     {
                                         _logger.LogWarning("Stale AsyncBridgeCandidate strip refused for '{Method}' in {File}: {Summary}",
@@ -721,7 +722,7 @@ public class AsyncBatchEngine
                         reason: $"Bridge pre-condition: {ex.Message}",
                         progress: progress,
                         cancellationToken: cancellationToken);
-                    var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                    var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                     if (flagApply.IsError)
                     {
                         _logger.LogWarning("NeedsManualReview flag write refused for {Method} in {File}: {Summary}",
@@ -753,7 +754,7 @@ public class AsyncBatchEngine
                         reason: $"Unexpected bridge error: {ex.Message}",
                         progress: progress,
                         cancellationToken: cancellationToken);
-                    var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                    var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                     if (flagApply.IsError)
                     {
                         _logger.LogWarning("NeedsManualReview flag write refused for {Method} in {File}: {Summary}",
@@ -843,7 +844,7 @@ public class AsyncBatchEngine
                         reason: $"Bridge produced {validation.Diagnostics.Count} compiler error(s){DiagSummary(validation.Diagnostics)}",
                         progress: progress,
                         cancellationToken: cancellationToken);
-                    var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                    var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                     if (flagApply.IsError)
                     {
                         _logger.LogWarning("NeedsManualReview flag write refused for {Method} in {File}: {Summary}",
@@ -880,7 +881,7 @@ public class AsyncBatchEngine
                 : null;
 
             var bridgeApply = await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<FilePathWrapper, string> { { candidate.FilePath, sourceToValidate } });
+                new Dictionary<FilePathWrapper, string> { { candidate.FilePath, sourceToValidate } }, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
 
             // The chokepoint can refuse the write (EOL-style change, open ledger entry, I/O failure) without
             // throwing; recording such a bridge as applied would send the uplift and CT phases after a method
@@ -1217,7 +1218,7 @@ public class AsyncBatchEngine
 
                 var upliftApply = await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { { callerFilePath, transformed! } },
-                    cancellationToken: cancellationToken);
+                    cancellationToken: cancellationToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
 
                 if (upliftApply.IsError)
                 {
@@ -1922,7 +1923,7 @@ public class AsyncBatchEngine
                                 score: 90,
                                 reason: $"PropagateCtBatch produced {validation.Diagnostics.Count} compiler error(s)",
                                 cancellationToken: cancellationToken);
-                            var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                            var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
                             if (flagApply.IsError)
                             {
                                 _logger.LogWarning("NeedsManualReview flag write refused for {Method} in {File}: {Summary}",
@@ -1952,7 +1953,7 @@ public class AsyncBatchEngine
 
             var ctApply = await _workspaceManager.ApplyProposedChangesAsync(
                 new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } },
-                cancellationToken: cancellationToken);
+                cancellationToken: cancellationToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
 
             if (ctApply.IsError)
             {
@@ -2096,7 +2097,7 @@ public class AsyncBatchEngine
                 reason: $"{producer} produced {diagnostics.Count} compiler error(s){DiagSummary(diagnostics)}",
                 progress: progress,
                 cancellationToken: cancellationToken);
-            var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes, cancellationToken: cancellationToken);
+            var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes, cancellationToken: cancellationToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);
             if (flagApply.IsError)
             {
                 _logger.LogWarning("NeedsManualReview flag write refused for {Method} in {File}: {Summary}",
