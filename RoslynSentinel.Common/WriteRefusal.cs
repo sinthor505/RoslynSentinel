@@ -37,7 +37,7 @@ public static class WriteRefusal
             : string.Join("; ", files.Take(MaxListedFiles).Select(f => $"{f.Key} ({f.Value})"))
               + (count > MaxListedFiles ? $"; and {count - MaxListedFiles} more" : string.Empty);
         var reread = count == 0
-            ? "re-read the file(s) you are editing with ReadFile"
+            ? $"re-read the file(s) you are editing with {ToolCallHint.Call("ReadFile", ("filePath", "<file you are editing>"))}"
             : $"re-read with {ToolCallHint.Call("ReadFile", ("filePath", (string)files.Keys.First()))}";
         IReadOnlyList<object>? structuredDetail = count > MaxListedFiles
             ? files.Select(f => (object)$"{f.Key} ({f.Value})").ToList()
