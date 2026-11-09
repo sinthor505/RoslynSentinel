@@ -17,9 +17,12 @@ public class WholeFileWriteTools
     private readonly ValidationEngine _validationEngine;
     private readonly DiffEngine _diffEngine;
     private readonly ILogger<WholeFileWriteTools> _logger;
+    // Which tools this server can serve; null (unit tests, hosts without a surface) = treat every tool as callable.
+    private readonly ActiveToolSurface? _activeToolSurface;
 
-    public WholeFileWriteTools(IWorkspaceManager workspaceManager, WorkspaceTools workspaceTools, ValidationEngine validationEngine, DiffEngine diffEngine, ILogger<WholeFileWriteTools> logger, SymbolNavigationEngine symbolNavigationEngine)
+    public WholeFileWriteTools(IWorkspaceManager workspaceManager, WorkspaceTools workspaceTools, ValidationEngine validationEngine, DiffEngine diffEngine, ILogger<WholeFileWriteTools> logger, SymbolNavigationEngine symbolNavigationEngine, ActiveToolSurface? activeToolSurface = null)
     {
+        _activeToolSurface = activeToolSurface;
         _workspaceManager = workspaceManager;
         _workspaceTools = workspaceTools;
         _validationEngine = validationEngine;
@@ -84,7 +87,7 @@ public class WholeFileWriteTools
                     IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception,
                         "WriteFile: this content would introduce new compiler errors - not written to disk. Fix the issue(s) below and retry:\n" +
-                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
+                        await EditImpactGate.PrependAsync(_workspaceManager, changes, result.ValidationResult, _activeToolSurface, await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken))
                 };
             }
 
@@ -422,7 +425,7 @@ public class WholeFileWriteTools
                             IsError = true,
                             ErrorData = new ResultError(ToolErrorCode.Exception,
                                 "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
-                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
+                                await EditImpactGate.PrependAsync(_workspaceManager, normalizedChanges, result.ValidationResult, _activeToolSurface, await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken))
                         };
                     if (result.IsError)
                         return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(result.RefusalCode ?? ToolErrorCode.Exception, $"ApplyDiff failed to apply the change set: {result.Summary}") };
@@ -560,7 +563,7 @@ public class WholeFileWriteTools
                                 IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.Exception,
                                     "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
-                                    await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
+                                    await EditImpactGate.PrependAsync(_workspaceManager, diffChanges, result.ValidationResult, _activeToolSurface, await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken))
                             };
                         await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result, cancellationToken: cancellationToken);
                         var strippedDiffResult = result with { PreImages = null };
@@ -698,7 +701,7 @@ public class WholeFileWriteTools
                             IsError = true,
                             ErrorData = new ResultError(ToolErrorCode.Exception,
                                 "ApplyUnifiedDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
-                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
+                                await EditImpactGate.PrependAsync(_workspaceManager, diffChanges, result.ValidationResult, _activeToolSurface, await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken))
                         };
                     await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_unified_diff", result, cancellationToken: cancellationToken);
                     var strippedDiffResult = result with { PreImages = null };

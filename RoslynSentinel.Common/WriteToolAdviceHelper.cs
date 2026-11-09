@@ -105,10 +105,11 @@ public sealed class WriteToolAdviceHelper
             ["ApplyDiff"] = "WholeFileWriteTools",
             ["ApplyUnifiedDiff"] = "WholeFileWriteTools",
             ["Member"] = "RefactoringStructuralTools",
-            ["RenameSymbol"] = "RefactoringStructuralTools",
+            // RenameSymbol and ExtractMethod are declared in their own classes, not RefactoringStructuralTools.
+            ["RenameSymbol"] = "RefactoringSignatureTools",
             // ChangeSignature is declared in AdvancedRefactoringTools, not RefactoringStructuralTools.
             ["ChangeSignature"] = "AdvancedRefactoringTools",
-            ["ExtractMethod"] = "RefactoringStructuralTools",
+            ["ExtractMethod"] = "RefactoringExtractionDocsTools",
         };
 
     private readonly HashSet<string> _activeToolClasses;

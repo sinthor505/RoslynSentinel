@@ -37,6 +37,29 @@ public class WorkspaceFileEditImpl
     // Which tools this server can serve; null (unit tests, hosts without a surface) = treat every tool as callable.
     private readonly ActiveToolSurface? _activeToolSurface;
 
+    private readonly RejectedEditMemory _rejectedEdits = new();
+
+    private const string RejectedOriginNote = "This oldContent comes from your rejected edit's newContent. That edit was not applied, so the file still has the old text: read it again before editing.";
+
+    /// <summary>
+    /// The edit tool a "split into smaller calls" or "use X instead" sentence may name: ReplaceSnippet when callable, else
+    /// EditSnippets (the eval arm that hides ReplaceSnippet but runs the same code), else ReplaceSnippet.
+    /// </summary>
+    private string CallableSnippetTool()
+        => _activeToolSurface is null || _activeToolSurface.IsCallable("ReplaceSnippet") || !_activeToolSurface.IsCallable("EditSnippets")
+            ? "ReplaceSnippet"
+            : "EditSnippets";
+
+    /// <summary>Call hints for the tools that edit an existing file, limited to the ones this server can serve (see <see cref="CallableSnippetTool"/>).</summary>
+    private List<string> ExistingFileEditToolHints()
+    {
+        var hints = new List<string>();
+        if (_activeToolSurface is null || _activeToolSurface.IsCallable("Member"))
+            hints.Add(ToolCallHint.Call("Member", ("operation", "replace")));
+        hints.Add(ToolCallHint.Call(CallableSnippetTool()));
+        return hints;
+    }
+
     public WorkspaceFileEditImpl(IWorkspaceManager workspaceManager, WorkspaceReadNavigationImpl readNav, ILogger logger, ValidationEngine validationEngine, SymbolNavigationEngine symbolNavigationEngine, WriteToolAdviceHelper writeAdvice, ActiveToolSurface? activeToolSurface = null)
     {
         _activeToolSurface = activeToolSurface;
@@ -46,6 +69,84 @@ public class WorkspaceFileEditImpl
         _validationEngine = validationEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
         _writeAdvice = writeAdvice;
+    }
+
+    // Per-file memory of the newContent of recent ReplaceSnippet edits the compile gate REJECTED. After a rejection a model
+    // often builds its next oldContent from its own rejected newContent, believing the edit applied (eval run
+    // 20261109-202110-210: four "oldContent was not found" errors in a row); a later not-found whose oldContent comes from
+    // here gets a note saying so. Bounded per file, and a file's entries are dropped when it is successfully written.
+    // NOTE: the singleton WorkspaceFileEditImpl owns it, so it spans calls; the legacy WorkspaceTools facade builds its own
+    // instance and so has its own memory.
+    private sealed class RejectedEditMemory
+    {
+        private const int MaxEntriesPerFile = 3;
+        private readonly Dictionary<string, List<string>> _byFile = new(StringComparer.OrdinalIgnoreCase);
+        private readonly object _gate = new();
+
+        private static string Key(string path)
+        {
+            try
+            {
+                return Path.GetFullPath(path);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                return path;
+            }
+        }
+
+        private static string NormalizeEol(string text) => text.Replace("\r\n", "\n").Replace('\r', '\n');
+
+        private static IEnumerable<string> TrimmedLines(string text)
+            => NormalizeEol(text).Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0);
+
+        public void Remember(string path, string? newContent)
+        {
+            // A pure deletion leaves nothing the model could mistake for file text.
+            if (string.IsNullOrWhiteSpace(newContent))
+                return;
+            lock (_gate)
+            {
+                var key = Key(path);
+                if (!_byFile.TryGetValue(key, out var entries))
+                    _byFile[key] = entries = [];
+                entries.Add(newContent);
+                while (entries.Count > MaxEntriesPerFile)
+                    entries.RemoveAt(0);
+            }
+        }
+
+        public void Forget(string path)
+        {
+            lock (_gate)
+                _byFile.Remove(Key(path));
+        }
+
+        /// <summary>
+        /// True when the not-found <paramref name="oldContent"/> looks copied from a remembered rejected newContent: it holds
+        /// at least one line the file lacks, and every such line sits in one remembered newContent. An ordinary typo
+        /// produces lines no rejected newContent holds, so it gets no note.
+        /// </summary>
+        public bool Explains(string path, string oldContent, string fileText)
+        {
+            List<string> remembered;
+            lock (_gate)
+            {
+                if (!_byFile.TryGetValue(Key(path), out var entries) || entries.Count == 0)
+                    return false;
+                remembered = [.. entries];
+            }
+
+            var fileLines = new HashSet<string>(TrimmedLines(fileText), StringComparer.Ordinal);
+            var missing = TrimmedLines(oldContent).Where(l => !fileLines.Contains(l)).Distinct().ToList();
+            if (missing.Count == 0)
+                return false;
+            return remembered.Any(rejected =>
+            {
+                var rejectedLines = new HashSet<string>(TrimmedLines(rejected), StringComparer.Ordinal);
+                return missing.All(rejectedLines.Contains);
+            });
+        }
     }
 
     public async Task<SentinelCallToolResult<object>> RetryFailedChanges(ToolCallReason reason, List<string>? specificFiles = null,
@@ -725,7 +826,7 @@ public class WorkspaceFileEditImpl
                 // gated off, so the one instruction the model was given was unfollowable.
                 // The shape lets the advice stop recommending Member(replace) for content that holds several
                 // members or usings.
-                var advice = _writeAdvice.AdviseForOversizedEdit("ReplaceSnippet", RejectedContentClassifier.Classify(newContent));
+                var advice = _writeAdvice.AdviseForOversizedEdit(CallableSnippetTool(), RejectedContentClassifier.Classify(newContent));
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsError = true,
@@ -757,9 +858,18 @@ public class WorkspaceFileEditImpl
                     // lines when a fallback match fired (see
                     // project_replacesnippet_silent_splice_corruption_adjacent_lines memory).
                     var root = await document.GetSyntaxRootAsync(cancellationToken);
-                    var match = ResolveEditMatch(
-                        oldText, oldContent, lineBefore, lineAfter, memberNameAt: MemberNameResolverFor(root),
-                        withinMember: withinMember, matchLine: matchLine);
+                    SnippetMatch match;
+                    try
+                    {
+                        match = ResolveEditMatch(
+                            oldText, oldContent, lineBefore, lineAfter, memberNameAt: MemberNameResolverFor(root),
+                            withinMember: withinMember, matchLine: matchLine);
+                    }
+                    catch (ToolNotFoundException notFound) when (_rejectedEdits.Explains((string)(document.FilePath ?? filePathResolved), oldContent, oldText.ToString()))
+                    {
+                        // Same error and code; only the text grows, so callers branching on NotFound are unaffected.
+                        throw new ToolNotFoundException(notFound.Message + " " + RejectedOriginNote, notFound.MissingTargetKind, notFound.MissingTargetName, notFound.Snippet, notFound.Candidates);
+                    }
                     var newFileContent = oldText.ToString().Remove(match.Start, match.Length).Insert(match.Start, newContent);
                     var targetPath = document.FilePath ?? filePathResolved;
                     var targetEol = _workspaceManager.ResolveEol((string)targetPath, oldText.ToString());
@@ -788,9 +898,15 @@ public class WorkspaceFileEditImpl
                     // TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)
                     if (WriteRefusal.TryMap("ReplaceSnippet", result, out var refusal))
                         return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
-                    var untouchedNote = result.IsError && result.ValidationResult != null
-                        ? ValidateAndApplyHelper.DescribeUntouchedFileErrors(snippetChanges.Keys.Select(k => (string)k), result.ValidationResult.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath")
-                        : null;
+                    string? untouchedNote = null;
+                    if (result.IsError && result.ValidationResult != null)
+                    {
+                        _rejectedEdits.Remember((string)targetPath, newContent);
+                        // The edit-impact report, when it can attribute the errors to unedited files, replaces the generic
+                        // untouched-file sentence (it already covers it); null keeps that sentence.
+                        untouchedNote = await EditImpactGate.DescribeAsync(_workspaceManager, snippetChanges, result.ValidationResult, _activeToolSurface, cancellationToken: cancellationToken)
+                            ?? ValidateAndApplyHelper.DescribeUntouchedFileErrors(snippetChanges.Keys.Select(k => (string)k), result.ValidationResult.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath");
+                    }
                     if (result.IsError && result.ValidationResult != null)
                         return new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
@@ -802,6 +918,8 @@ public class WorkspaceFileEditImpl
                                 "[COMPILER ERROR]\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, snippetChanges.Keys.Select(k => (string)k).ToList()))
                         };
+                    if (!result.IsError)
+                        _rejectedEdits.Forget((string)targetPath);
                     await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet", result, cancellationToken: cancellationToken);
                     var strippedResult = result with { PreImages = null };
                     string? diffContent = returnDiff
@@ -907,7 +1025,7 @@ public class WorkspaceFileEditImpl
             // Same escape-hatch advice as the single-edit path, appended once (not per edit) and only
             // when a size bound tripped - it is noise for e.g. a missing newContent.
             var sizeAdvice = anySizeBoundExceeded
-                ? "\n" + _writeAdvice.AdviseForOversizedEdit("ReplaceSnippet", oversizedShape).Sentence
+                ? "\n" + _writeAdvice.AdviseForOversizedEdit(CallableSnippetTool(), oversizedShape).Sentence
                 : "";
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
@@ -922,6 +1040,7 @@ public class WorkspaceFileEditImpl
             .GroupBy(pair => _workspaceManager.ResolveFromWire(pair.edit.FilePath));
 
         var finalContents = new Dictionary<FilePathWrapper, string>();
+        var newContentsByFile = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var fileGroup in editsByFile)
         {
             var filePathResolved = fileGroup.Key;
@@ -972,7 +1091,10 @@ public class WorkspaceFileEditImpl
                 }
                 catch (ToolException toolEx)
                 {
-                    perEditErrors.Add($"batchEdits[{index}] ({filePathResolved}): {toolEx.Message}"); failureCodes.Add(toolEx.ErrorCode);
+                    var rejectedOriginNote = toolEx is ToolNotFoundException && _rejectedEdits.Explains((string)canonicalPath, edit.OldContent, originalString)
+                        ? " " + RejectedOriginNote
+                        : "";
+                    perEditErrors.Add($"batchEdits[{index}] ({filePathResolved}): {toolEx.Message}{rejectedOriginNote}"); failureCodes.Add(toolEx.ErrorCode);
                 }
             }
 
@@ -1017,6 +1139,7 @@ public class WorkspaceFileEditImpl
             var targetEol = _workspaceManager.ResolveEol((string)canonicalPath, originalString);
             var normalizedSpliced = EolUtilities.NormalizeEol(spliced, targetEol);
             finalContents[canonicalPath] = normalizedSpliced;
+            newContentsByFile[(string)canonicalPath] = resolved.Select(r => r.newContent).ToList();
         }
 
         if (perEditErrors.Count > 0)
@@ -1051,9 +1174,17 @@ public class WorkspaceFileEditImpl
             // TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)
             if (WriteRefusal.TryMap("ReplaceSnippet", result, out var refusal))
                 return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
-            var untouchedNote = result.IsError && result.ValidationResult != null
-                ? ValidateAndApplyHelper.DescribeUntouchedFileErrors(finalContents.Keys.Select(k => (string)k), result.ValidationResult.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath")
-                : null;
+            string? untouchedNote = null;
+            if (result.IsError && result.ValidationResult != null)
+            {
+                foreach (var (rejectedPath, rejectedNewContents) in newContentsByFile)
+                    foreach (var rejectedNewContent in rejectedNewContents)
+                        _rejectedEdits.Remember(rejectedPath, rejectedNewContent);
+                // The edit-impact report, when it can attribute the errors to unedited files, replaces the generic
+                // untouched-file sentence (it already covers it); null keeps that sentence.
+                untouchedNote = await EditImpactGate.DescribeAsync(_workspaceManager, finalContents, result.ValidationResult, _activeToolSurface, cancellationToken: cancellationToken)
+                    ?? ValidateAndApplyHelper.DescribeUntouchedFileErrors(finalContents.Keys.Select(k => (string)k), result.ValidationResult.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath");
+            }
             if (result.IsError && result.ValidationResult != null)
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
@@ -1066,6 +1197,11 @@ public class WorkspaceFileEditImpl
                         await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, finalContents.Keys.Select(k => (string)k).ToList()),
                         StructuredDetail: result.ValidationResult.Diagnostics),
                 };
+            if (!result.IsError)
+            {
+                foreach (var writtenPath in newContentsByFile.Keys)
+                    _rejectedEdits.Forget(writtenPath);
+            }
             await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet_batch", result, cancellationToken: cancellationToken);
             var strippedResult = result with { PreImages = null };
             string? diffContent = returnDiff
@@ -1117,7 +1253,7 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"CreateFile: '{filePathResolved}' already exists. CreateFile never overwrites - use {ToolCallHint.Call("Member", ("operation", "replace"))}/{ToolCallHint.Call("ReplaceSnippet")} to edit an existing file.")
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"CreateFile: '{filePathResolved}' already exists. CreateFile never overwrites - use {string.Join("/", ExistingFileEditToolHints())} to edit an existing file.")
                 };
             }
 
@@ -1176,7 +1312,7 @@ public class WorkspaceFileEditImpl
                     ErrorData = new ResultError(ToolErrorCode.Exception,
                         "CreateFile: this content would introduce new compiler errors - not written to disk. Fix the issue(s) below and retry:\n" +
                         "[COMPILER ERROR]\n" +
-                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
+                        await EditImpactGate.PrependAsync(_workspaceManager, changes, result.ValidationResult, _activeToolSurface, await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken))
                 };
             }
 
