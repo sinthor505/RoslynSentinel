@@ -1836,7 +1836,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         IProgress<EngineProgress>? progress = default,
         CancellationToken cancellationToken = default,
         IReadOnlyCollection<FilePathWrapper>? deletePaths = null,
-        bool exactRestore = false, string? operationLabel = null)
+        bool exactRestore = false, string? operationLabel = null, StaleReadPolicy staleReadPolicy = StaleReadPolicy.None)
     {
         // A long single tool call (batch edits) keeps resetting the idle clock at every write.
         ServerActivityTracker.Shared.Touch();
@@ -2012,6 +2012,54 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     {
                         _logger.LogWarning("Pre-image capture failed for {FilePathWrapper}: {Message}", key, ex.Message);
                     }
+                }
+            }
+
+            // Stale-read guard (observed-content ledger): refuse the whole batch, non-latching, when a target this agent has read
+            // changed since (in memory or on disk). Targets without a ledger entry are allowed. exactRestore (UndoLastApply) is exempt.
+            if (staleReadPolicy == StaleReadPolicy.RefuseIfObservedStale && !exactRestore)
+            {
+                var staleFiles = new Dictionary<FilePathWrapper, string>();
+                foreach (var target in changes.Keys.Concat(deletePaths))
+                {
+                    if (!TryGetObservedHash(target, out var observedHash))
+                    {
+                        // unobserved target: allowed
+                        continue;
+                    }
+
+                    // null = file missing or unreadable: counts as stale
+                    preImages.TryGetValue(target, out var diskText);
+                    var diskMatches = diskText is not null && ContentFingerprint.Compute(diskText) == observedHash;
+
+                    // no document: disk-only comparison
+                    var memoryDocumentId = CurrentSolution.GetDocumentIdsWithFilePath(target).FirstOrDefault();
+                    var memoryMatches = true;
+                    if (memoryDocumentId is not null)
+                    {
+                        var memoryText = (await CurrentSolution.GetDocument(memoryDocumentId)!.GetTextAsync(cancellationToken)).ToString();
+                        memoryMatches = ContentFingerprint.Compute(memoryText) == observedHash;
+                    }
+
+                    if (!diskMatches || !memoryMatches)
+                    {
+                        staleFiles[target] = diskMatches ? "changed in the workspace since you last read it" : "changed on disk since you last read it";
+                    }
+                }
+
+                if (staleFiles.Count > 0)
+                {
+                    var firstStale = staleFiles.Keys.First();
+                    return new ApplyChangesResult(
+                        true,
+                        [],
+                        staleFiles,
+                        $"{ToolErrorCode.StaleRead}: {staleFiles.Count} target file(s) changed after you last read them; nothing was written. Next: re-read with {ToolCallHint.Call("ReadFile", ("filePath", (string)firstStale))}, then repeat the edit against the fresh content. If refused again, wait a moment (the server may still be syncing an external change).",
+                        WorkspaceInSync: true,
+                        WorkspaceVersion: _workspaceVersion,
+                        PreImages: preImages,
+                        ValidationResult: validationReport,
+                        RefusalCode: ToolErrorCode.StaleRead);
                 }
             }
 

@@ -116,7 +116,7 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
 
     public Task<SolutionLoadStatus> WaitForLoadAsync(TimeSpan timeout, CancellationToken cancellationToken) => Task.FromResult(SolutionLoadStatus);
 
-    public async Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<EngineProgress>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null, bool exactRestore = false, string? operationLabel = null) // ignored: the fake does no EOL work
+    public async Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<EngineProgress>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null, bool exactRestore = false, string? operationLabel = null, StaleReadPolicy staleReadPolicy = StaleReadPolicy.None) // ignored: the fake does no EOL work
     {
         if (ApplyException is not null)
         {
@@ -173,6 +173,44 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
                     FailedFiles: [],
                     Summary: $"Validation failed with {validationReport.Diagnostics.Count} new error(s); no files written.",
                     ValidationResult: validationReport);
+            }
+        }
+
+        // Stale-read guard: a separate copy of the logic in PersistentWorkspaceManager; a green fake test says nothing about the production path.
+        if (staleReadPolicy == StaleReadPolicy.RefuseIfObservedStale && !exactRestore)
+        {
+            var staleFiles = new Dictionary<FilePathWrapper, string>();
+            foreach (var target in changes.Keys.Concat(deletePaths ?? []))
+            {
+                if (!TryGetObservedHash(target, out var observedHash))
+                {
+                    continue;
+                }
+
+                // no document in the fake (no disk): treated as stale
+                var memoryDocumentId = solution.GetDocumentIdsWithFilePath(target).FirstOrDefault();
+                var memoryMatches = false;
+                if (memoryDocumentId is not null)
+                {
+                    var memoryText = (await solution.GetDocument(memoryDocumentId)!.GetTextAsync(cancellationToken)).ToString();
+                    memoryMatches = ContentFingerprint.Compute(memoryText) == observedHash;
+                }
+
+                if (!memoryMatches)
+                {
+                    staleFiles[target] = "changed in the workspace since you last read it";
+                }
+            }
+
+            if (staleFiles.Count > 0)
+            {
+                return new ApplyChangesResult(
+                    IsError: true,
+                    SucceededFiles: [],
+                    FailedFiles: staleFiles,
+                    Summary: $"StaleRead: {staleFiles.Count} target file(s) changed after you last read them; nothing was written. Next: re-read them with ReadFile, then repeat the edit against the fresh content.",
+                    WorkspaceInSync: true,
+                    RefusalCode: ToolErrorCode.StaleRead);
             }
         }
 
