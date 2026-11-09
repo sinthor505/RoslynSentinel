@@ -105,6 +105,49 @@ public class StaleReadCommentingTests
     }
 
     [Test, CancelAfter(60000)]
+    public async Task BulkComment_File_ObservedThenChangedOnDisk_PerFileWriteRefusedWithStaleReadAsync()
+    {
+        // Every taggable member already carries a [ContentHash] whose hash no longer matches its body, so the seed
+        // phase has nothing to write and FindStaleMembersAsync reports the member as stale for the per-file phase.
+        // The attribute class is declared in the fixture with a primary constructor (not a taggable member) so the
+        // seed phase does not try to stamp it.
+        var stagedSource = """
+            using System;
+
+            public sealed class ContentHashAttribute(string purpose, string hash) : Attribute { }
+
+            public class OrderService
+            {
+                [ContentHash("Comment", "stale-hash")]
+                public int Count() => 1;
+            }
+            """.Replace("\r\n", "\n");
+        SetSource(stagedSource, "OrderService.cs");
+        var path = PathOf("OrderService.cs");
+
+        // The agent READ the file (RecordObserved, as the read tools do), then another session rewrote it on disk.
+        var observed = File.ReadAllText(path);
+        AsAgent("agentA");
+        ((IObservedContentLedger)_workspaceManager).RecordObserved(new FilePathWrapper(path), observed);
+        var external = observed + "// changed on disk by another session\n";
+        File.WriteAllText(path, external);
+
+        var result = await _commentingTools.BulkCommentTool(
+            reason: "test message", scope: ToolScope.file, filePath: path, dryRun: false);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.ToString());
+        Assert.That(result.SuccessData, Is.Not.Null);
+        Assert.That(result.SuccessData!.Seeded, Is.Zero, "The seed phase must have nothing to write for this fixture.");
+        var reasons = result.SuccessData.SkippedByReason.Keys.ToList();
+        Assert.That(reasons, Has.Some.Contain("write refused"),
+            "The per-file write must be refused with a write-refused reason. Reasons: " + string.Join(" | ", reasons));
+        Assert.That(reasons, Has.Some.Contain("StaleRead"),
+            "The per-file refusal must carry the StaleRead summary. Reasons: " + string.Join(" | ", reasons));
+        Assert.That(File.ReadAllText(path), Is.EqualTo(external),
+            "A refused per-file write must leave the externally written disk text untouched.");
+    }
+
+    [Test, CancelAfter(60000)]
     public async Task BulkComment_File_NeverObservedThenChangedOnDisk_SeedsNormally()
     {
         SetSource(Source.Replace("\r\n", "\n"), "OrderService.cs");
