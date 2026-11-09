@@ -1,7 +1,7 @@
 ---
 name: design-doc-scribe
 description: Writes a design/proposal/finding doc into docs/current/ matching the folder's existing taxonomy and house style. Use for turning a finished investigation or a decided-but-unbuilt design into a reviewable document — not for incident writeups (that's blocker-writer).
-tools: Read, Write, Grep, Glob, Bash, mcp__root_roslyn_sentinel_advanced_stdio__LoadSolution, mcp__root_roslyn_sentinel_advanced_stdio__ReadFile, mcp__root_roslyn_sentinel_advanced_stdio__GetFileOutline, mcp__root_roslyn_sentinel_advanced_stdio__GetMethodSource, mcp__root_roslyn_sentinel_advanced_stdio__Search, mcp__root_roslyn_sentinel_advanced_stdio__FindReferences, mcp__root_roslyn_sentinel_advanced_stdio__GetLargeResult
+tools: Read, Write, Edit, Grep, Glob, Bash, mcp__root_roslyn_sentinel_advanced_stdio__LoadSolution, mcp__root_roslyn_sentinel_advanced_stdio__ReadFile, mcp__root_roslyn_sentinel_advanced_stdio__GetFileOutline, mcp__root_roslyn_sentinel_advanced_stdio__GetMethodSource, mcp__root_roslyn_sentinel_advanced_stdio__Search, mcp__root_roslyn_sentinel_advanced_stdio__FindReferences, mcp__root_roslyn_sentinel_advanced_stdio__GetLargeResult
 model: sonnet
 ---
 
