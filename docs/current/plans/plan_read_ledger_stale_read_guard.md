@@ -1,6 +1,6 @@
 # Plan: refuse caller-authored writes to files changed since the server last returned their content
 
-**Status:** APPROVED 2026-11-08. Per-agent observed-content ledger that makes WriteFile, ApplyDiff (files format) and DeleteFile refuse a stale target with a non-latching, per-file `StaleRead` error; read "Review 2026-11-08: corrections" before any step, it overrides stale anchors below.
+**Status:** IN PROGRESS 2026-11-08. Steps 1-3b done (7b703f18, 50afbe7b, 59ca6ad6, eb2c5cf8). Per-agent observed-content ledger that makes WriteFile, ApplyDiff (files format) and DeleteFile refuse a stale target with a non-latching, per-file `StaleRead` error; read "Review 2026-11-08: corrections" before any step, it overrides stale anchors below.
 
 ## Problem
 
@@ -208,6 +208,7 @@ Order is: store, composition, check, refresh, recording, opt-in, docs. Recording
 opt-in (step 5), so the check exists but is inert until a tool both records and opts in.
 
 ### Step 1 - ledger store, shared hash, `RecordObserved` (no callers)
+- Done: 7b703f18
 - **Files (3):** `Common/IObservedContentLedger.cs` (new), `Common/ContentFingerprint.cs` (new),
   `Common/PersistentWorkspaceManager.cs`.
 - **Symbols:** `IObservedContentLedger.RecordObserved(FilePathWrapper path, string text)`;
@@ -229,6 +230,7 @@ opt-in (step 5), so the check exists but is inert until a tool both records and 
   throw, final value is one of the inputs). Covers the store only; says nothing about the check.
 
 ### Step 2 - compose into `IWorkspaceManager`, fake implementation, `StaleRead` code
+- Done: 50afbe7b
 - **Files (3):** `Common/IWorkspaceManager.cs`, `RoslynSentinel.Tests/Fakes/FakeWorkspaceManager.cs`,
   `Common/SentinelCallToolResult.cs`.
 - **Change:** ~4 edits: add `IObservedContentLedger` to the base list; fake implements it with a real
@@ -244,6 +246,9 @@ opt-in (step 5), so the check exists but is inert until a tool both records and 
   the same text (shared `ContentFingerprint`).
 
 ### Step 3a - `StaleReadPolicy` parameter and the pre-write check (default `None`)
+- Done: 59ca6ad6. Row F only partly covered (no drift-latch test seam; TODO in `StaleReadGuardTests.cs`).
+  Tests on one process need the reading agent's `StartSeq` past the write, or `ConcurrentEditRefused`
+  pre-empts `StaleRead`.
 - **Files (3):** `Common/IWorkspaceMutator.cs`, `Common/PersistentWorkspaceManager.cs`,
   `RoslynSentinel.Tests/Fakes/FakeWorkspaceManager.cs`.
 - **Symbols:** `enum StaleReadPolicy { None, RefuseIfObservedStale }` declared in `IWorkspaceMutator.cs`
@@ -274,6 +279,7 @@ opt-in (step 5), so the check exists but is inert until a tool both records and 
   logic and a green fake test says nothing about the production path.
 
 ### Step 3b - ledger refresh after write, entry removal on delete, rollback restore
+- Done: eb2c5cf8
 - **Files (1-2):** `Common/PersistentWorkspaceManager.cs` (+ the fake if it mirrors writes).
 - **Change:** ~5 edits, at the existing `_knownFileHashes` sites: after the write-side
   `_knownFileHashes[filePath] = ComputeContentHash(contentToWrite)` (~1779) set the ledger entry to the
