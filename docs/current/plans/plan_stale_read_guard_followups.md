@@ -1,6 +1,6 @@
 # Plan: extend the stale-read guard (F3 anchor and engine tools, F4 outline/InspectSymbol), replace the drift latch with per-file protection (F1), add a cross-process write lock and fold-on-read (F7); F5 blocked
 
-**Status:** DRAFT 2026-11-09. Owner decisions recorded for F3, F4, F1 (option d) and F7; F5 is blocked on staged writes; call-site and test measurement done, nothing built. Builds on [plan_read_ledger_stale_read_guard.md](closed/plan_read_ledger_stale_read_guard.md) (IMPLEMENTED 2026-11-09, 7b703f18..5d9ee8d2). Per-file attribution of refusals is deferred to [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md) ("Revision 2026-11-09"); this plan leaves it a lock, a holder record and a message-builder hook.
+**Status:** APPROVED 2026-11-09. Reviewed against source, all open decisions settled (third round in Decision), Batched run with the owner present; F5 stays blocked on staged writes. Builds on [plan_read_ledger_stale_read_guard.md](closed/plan_read_ledger_stale_read_guard.md) (IMPLEMENTED 2026-11-09, 7b703f18..5d9ee8d2). Per-file attribution of refusals is deferred to [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md) ("Revision 2026-11-09"); this plan leaves it a lock, a holder record and a message-builder hook.
 
 ## Problem
 
@@ -102,7 +102,32 @@ file of the returned symbol (whole-file hash). `ListAll` does NOT record. `Inspe
 - **9f replaced:** apply pending reloads (`_pendingChanges`) before `Search`, `ReadFile` and `GetMethodSource`,
   instead of folding each returned Search document (see Step 9f).
 
-**Open, with my recommendation (not decided):** see Risks and open decisions 1-10 (1, 2, 3, 5, 6, 7 settled above).
+**Owner, 2026-11-09 (third round, after the pre-implementation review):**
+- **Leftovers accepted as recommended:** open decisions 4 (no FoldPending check for a target with no document or
+  no disk pre-image), 5 (release the write lock before a full reload), 7 (holder = `AgentId`, `SessionId`,
+  `ToolName`, `Reason` from `ToolCallContext`, all verified to exist, `ToolCallContext.cs`, built at
+  `Server.Advanced/AgentIdentityCapture.cs:53`; may be null; the debounce thread uses a synthetic holder; 10 s default
+  in an options record), 8 (cap the stale list at 10 plus "and N more", full list in `StructuredDetail`), 9 (leave
+  the `// TODO` at the four anchor sites). A delete creates no ledger entry (current removal kept).
+- **8a rollback hole (review defect 4):** the success refresh at PWM `:2221` runs inside the write loop before any
+  rollback, so a rolled-back batch would keep a created entry. Decision: create-on-write is deferred until after the
+  rollback decision (batch known to have succeeded); inside the loop only existing entries are updated.
+- **8b self-heal:** fold the refused files inline, under the `_solutionLock` the chokepoint already holds, at the
+  moment of refusal (not enqueue plus timer: that never completes for `SetTestSolution` managers, whose debounce
+  handler returns early, and makes refuse-once timing-dependent). "Refuse once per fold" state lives beside
+  `_unfoldedFiles` and is cleared in `NoteFileFolded`. Reuse `WorkspaceStaleText.Recovery` for the
+  `LoadSolution(forceReload: true)` hint.
+- **Step 5 reshaped (review defects 1-3):** 5d runs FIRST and is rewritten (see Step 5d). The three Asyncify sites that
+  ignore `IsError` (`AsyncifyTools.cs` `:1741` AddCancellationToken, `:3632` HandlerToAsync, `:3848` ExtractEventHandlers)
+  already misreport validation failures and rollbacks as success today; they are fixed to respect `IsError`.
+  `MsToolAugmentEngine` is fixed too (owner chose "fix Ms too"): the sort-usings path stops discarding the apply
+  result and `UsingsCleanupResult` gains a way to report a refused write (Step 5c-b, DTO change).
+- **9h:** the "Added, not loaded yet" note reads the named file from disk (foreign blob under 15 s old) instead of
+  `AfterSource`, which chokepoint blobs never store. 9h-2 is two slices: text mode, then a zero-result post-process in
+  `DispatchSearch` for the other modes. Storing `AfterSource` in blobs is a separate idea doc, not this plan.
+- **Run:** owner present, Batched mode.
+
+**Open, with my recommendation (not decided):** none; Risks and open decisions 1-10 are all settled above.
 
 ## Execution rules
 
@@ -120,6 +145,10 @@ file of the returned symbol (whole-file hash). `ListAll` does NOT record. `Inspe
   that should land on a quiet chokepoint. F7 does not need to wait for F1 to compile; the order is for reuse and risk. Accepted exposure between 8c and 9b: with the halt gone and no lock, a torn cross-process write can be seen by another process's pre-image read; `FoldPending` (8b) catches the in-memory-differs-from-disk case but not a half-written file that happens to equal the in-memory text. Keep 8c and 9b close together in time.
 - **Lock-order and re-entrancy rules for F7** (every F7 slice brief must restate these): (a) always `_solutionLock` first, then the OS write lock; never the reverse. (b) The OS lock is a `FileShare.None` `FileStream`: it is NOT re-entrant, a second open from the same process fails like another process's. So the lock is acquired only at entry points
   (chokepoint, debounce handler, fold-on-read), and `ApplyInMemoryDocumentUpdatesAsync` NEVER acquires it; its two callers (`:1455` debounce, `:2316` chokepoint) already run under `_solutionLock` and own the lock decision. (c) Never held across compile validation or a full MSBuild reload.
+
+- **Batches (review 2026-11-09), one orchestrator each, in order:** B1 Steps 1, 2, 2b, 3 (full `Tests.Basic` + `Tests.Tools.Basic`
+  after 3); B2 Step 4; B3 Steps 5d, 5a, 5b, 5e (5d first); B4 Steps 5c-a, 5c-b; B5 Steps 6a, 6b, then Step 7 docs (main session);
+  B6 Steps 8a, 8b-1, 8b-2, 8c, 8d, then 8e docs; B7 Steps 9a, 9b, 9c, 9d + 9f-1, 9e + 9f-2; B8 Steps 9h-1, 9h-2a, 9h-2b, then 9g docs.
 
 ## Call-site measurement (2026-11-09, `Search` text/callers, production projects only)
 
@@ -192,6 +221,7 @@ Generalized from the first draft's `StaleReadRefusal`: one mapper for every non-
 - Tier: D1 (2 files, ~4 edits).
 - Done when: `Build` 0 errors; `StaleReadWriteToolsTests` rows N still pass (message still contains the file name, `ReadFile`, `wait a moment`).
 - Out of scope: moving the 3 callers (Step 2b); any opt-in.
+- Review 2026-11-09: `TryMap` returns true only when `result.IsError` and the code is mapped (today's call sites test only `RefusalCode`). The cap (decision 8) is adopted.
 - Test-writer step (T2): mapper unit tests: single file, many files (cap if adopted), empty `FailedFiles` does not throw, code is `StaleRead` not `Exception`, an unmapped code returns false.
 
 ### Step 2b - move the three `WholeFileWriteTools` callers to `WriteRefusal.TryMap`
@@ -256,6 +286,15 @@ The sites surface a refusal as text, not a typed code (measured below), so Step 
 - Test-writer step (T5b): row H (batch-engine family) plus the ratchet.
 
 #### Step 5c - `MsToolAugmentEngine.cs` and `DeleteUnusedSymbol` (D1, one hand edit)
+- **Review 2026-11-09, split (owner: fix Ms too):** the hypothesis below is false. `MsToolAugmentEngine.cs:623` discards the
+  `ApplyChangesResult` and returns `WrittenToDisk: writeToFile`, so a refused sort-usings write reports as written.
+  `FormatDocumentSafeAsync` (`:768`) already returns `MsAugmentResult.Fail`, and `MsAugmentResult` has an `ErrorCode`. Callers are
+  `Tools.Experimental/CodeTransformTools.cs` `:203`, `:324` (Experimental mode only), which wrap the result in `IsError = false`.
+  - **5c-a:** `DeleteUnusedSymbol` only (`WorkspaceProjectManagementImpl.cs:837`): policy plus `TryMap` BEFORE the
+    `ValidationResult is not null` check (a StaleRead refusal carries a non-null `ValidationResult`). D1.
+  - **5c-b:** Ms engine: policy at both calls; the usings path checks `IsError` and reports the refusal (add an error
+    path to `UsingsCleanupResult`: load `dto-conventions`, reuse-first); the format path forwards the refusal code in
+    `MsAugmentResult.ErrorCode`; `CodeTransformTools` reports both as tool errors. Measure at dispatch; ~3 files, ~8 edits, D1.
 - Files (2): `RoslynSentinel.Engines.Basic/MsToolAugmentEngine.cs` (`:623`, `:768`), `RoslynSentinel.Tools.Basic/WorkspaceProjectManagementImpl.cs` (`:837`).
 - Change (~4 edits): pass the policy at the 3 calls; in `DeleteUnusedSymbol.ApplyAndRespondAsync` (`:~838-846`) map with `WriteRefusal.TryMap("DeleteUnusedSymbol", apply, out var refusal)`
   before the existing `ToolErrorCode.Exception` branch (today every refusal becomes `Exception` with "failed to write to disk").
@@ -267,6 +306,15 @@ The sites surface a refusal as text, not a typed code (measured below), so Step 
 - Test-writer step (T5c): row H (DeleteUnusedSymbol returns code `StaleRead`).
 
 #### Step 5d - refusal surfacing at throw sites (D1, after 5a)
+- **Review 2026-11-09, rewritten; runs BEFORE 5a and 5b.** The PWM StaleRead refusal returns a non-null `ValidationResult`
+  (PWM `:2091`) when `validateChanges: true`, so sites keyed on `ValidationResult == null` print "Validation: 0 error(s)".
+  Scope (1-2 files, ~10 edits, D1): (1) `DescribeRefusedApply` (`AsyncifyTools.cs:2086-2096`, used by `:2129`, `:2274`, `:2634`,
+  presumably `:2796`) checks `RefusalCode` first; (2) the throw sites `:3129`, `:3239` likewise; (3) the three sites that ignore
+  `IsError` (`:1741` AddCancellationToken: on `IsError` flip every `Succeeded` item to `Failed` with the summary, nothing
+  was written, adjust counts, no blob for unwritten items; `:3632` HandlerToAsync and `:3848` ExtractEventHandlers: record
+  the item `Failed` with the summary); (4) `CommentingTools.cs` `:146` and `:307` report the refusal summary instead of
+  "validation found 0 error(s)". These are pre-existing defects (validation failures and rollbacks are already reported as success).
+  The text below is superseded where it differs.
 - Files (1): `RoslynSentinel.Tools.Advanced/AsyncifyTools.cs`.
 - Change: measured sites that turn a refusal into `throw new InvalidOperationException($"Write refused: {applyResult3a.Summary}")` (`:3129`, `:3239`): the typed code is lost to the
   `ToolErrorMapper` `Exception` mapping. Per the accepted decision the text carries the refusal (it already contains the `StaleRead:` prefix and the re-read call); the step only checks each throw site keeps the summary text and forwards the typed code where the site already forwards `RefusalCode` (`:490-496`, `:2573`). Other Asyncify sites were not
@@ -310,6 +358,11 @@ Order inside the group: 8a, 8b (both additive), then 8c (the behavior flip), the
 #### Step 8a - writes create the writer's observed entry
 - Files (2 production + tests): `RoslynSentinel.Common/PersistentWorkspaceManager.cs`, `RoslynSentinel.Tests/Fakes/FakeWorkspaceManager.cs`.
 - Symbols: `RefreshObservedForWriter` (`PersistentWorkspaceManager.cs:540-545`, update-only today); its two callers `:2221` (after a successful write) and `:2284` (rollback restore); fake `RefreshObservedForWriter` (`FakeWorkspaceManager.cs:34-36`).
+- **Review 2026-11-09 (decided):** the success refresh `:2221` runs inside the write loop, before rollback, so the
+  rule below cannot hold as written. Instead: inside the loop keep the update-only refresh; after the loop, once the
+  batch is known not to have rolled back, create entries for the written targets that have none. Only inversion
+  needed: `StaleReadLedgerRefreshTests.cs:128` (no test asserts "read them first" on a second write).
+  `RemoveObservedForAllAgents` (private, PWM `:550`; callers `:2131` delete success, `:2278` rollback of a new file) is unchanged.
 - Change (~4 edits): give `RefreshObservedForWriter` a `createIfMissing` argument (upsert when true: `_observedHashes[key] = hash`). The success call `:2221` passes true. The rollback call `:2284` stays update-only: a rolled-back batch must not create an entry whose hash describes content the agent never saw (a restore writes the pre-image back; creating an entry there would
   claim the agent observed it). Mirror both in the fake. Because every writer (anchor, engine, direct) reaches the chokepoint, engine tools get entries with no tool edit. Delete: a delete creates nothing (Open, coordinator recommends no; an existing entry for a deleted path is left to its current behavior, to be confirmed when `RemoveObservedForAllAgents` callers are re-measured at dispatch).
 - Call-site measurement: 2 callers of `RefreshObservedForWriter` in PWM (+ the fake's own copy); 0 tool call sites change. NOT measured: existing tests that assert the "read them first" finding on a SECOND write by an agent with no entry (the finding stops after the first write); re-measure at dispatch with a text search for `read them first` in tests.
@@ -319,6 +372,18 @@ Order inside the group: 8a, 8b (both additive), then 8c (the behavior flip), the
 - Test-writer step (T8a): rows O, P. Invert `StaleReadLedgerRefreshTests.AgentWithNoEntry_StaysUnobservedAcrossWrites` (`:128`) to assert the agent now HAS an entry after its own write and a later external change makes its next write `StaleRead`; add the rollback case (no entry created when a batch rolls back).
 
 #### Step 8b - `FoldPending` guard (non-latching, every policy except exactRestore)
+- **Review 2026-11-09, split; supersedes the self-heal and lookup text below.** `preImages` (PWM ~`:2020-2037`) is reusable;
+  the in-memory lookup (~`:2063-2072`) is inside the policy-gated, observed-only stale block and hashes, so it is not:
+  add a separate loop over all targets (also under policy `None`) or extract a helper returning raw text.
+  - **8b-1:** `FoldComparison` helper in `Common` (the owner's ladder: exact equal -> proceed; equal after BOM strip,
+    EOL normalization and per-line trailing-whitespace trim -> proceed with an Info finding; else mismatch),
+    `ToolErrorCode.FoldPending` (`SentinelCallToolResult.cs`, beside `StaleRead` `:181`), `WriteRefusal` case. 3 files, ~7 edits.
+  - **8b-2:** PWM wiring: the comparison loop after the stale check; refuse once per path per fold (state beside
+    `_unfoldedFiles` `:173`, cleared in `NoteFileFolded` `:217-226`); on refusal fold the files INLINE under the held
+    `_solutionLock` (decided); after a fold, a persisting mismatch proceeds with a Finding built from
+    `WorkspaceStaleText.Recovery` (`LoadSolution(forceReload: true)`). 1 file, ~10-12 edits.
+  - `StaleReadGuardTests` fixtures (`:60-76`) deliberately diverge disk from memory with `File.WriteAllText`; expect
+    FoldPending to change their outcomes and list them in the 8b-2 brief after a measuring run.
 - Files (3): `RoslynSentinel.Common/PersistentWorkspaceManager.cs`, `RoslynSentinel.Common/SentinelCallToolResult.cs` (new `ToolErrorCode.FoldPending`, beside `StaleRead` `:178`), `RoslynSentinel.Common/WriteRefusal.cs` (new `FoldPending` case).
 - Symbols: PWM chokepoint, directly AFTER the stale-read check (`:2046` region) so `StaleRead` wins for an agent that is stale (the agent really read old text), and BEFORE the EOL pre-pass and any write.
 - Change (~8 edits): for every target (writes; deletes included, recommended) that has an in-memory document, compare the disk pre-image text already captured for the write with the document text from the stale-read check's lookup. If they differ and the call is not `exactRestore`:
@@ -339,6 +404,7 @@ Order inside the group: 8a, 8b (both additive), then 8c (the behavior flip), the
 - Tier: D1 (1 file, ~2 edits).
 - Done when: `Build` 0 errors; the tests in T8c are inverted in the same dispatch; `RunTest` `Tests.Basic`, `Tests.Tools.Basic` and `Tests.Battery.Basic` show no other new failure (`UnrecoverableBreakerTests.cs:117` must still pass: the breaker still halts).
 - Out of scope: `Acknowledge` semantics (8d); removing the dead latch; the overflow halt (open decision 1).
+- Review 2026-11-09: the drift test is `StaleReadGuardTests.cs:225-249`; `:199-212` trips the halt through `IUnrecoverableBreaker.Trip` and is unchanged. `DeleteFile_DriftedFile_RefusesDeleteAsync` (`CreateFileDeleteFileTests.cs:394-428`) uses the real watcher through `TestSolutionFixture` and would race after 8b+8c: rewrite it deterministically (assert the new behavior, no polling for drift).
 - Test-writer step (T8c): rows Q, R, T, U. Invert `StaleReadGuardTests.DriftFlaggedTarget_WithStaleLedgerEntry_LatchWins_ThrowsSessionHalted` (`:236-238`, the row F test of the closed plan): drift plus a stale ledger entry now yields `StaleRead`, not `SessionHalted`. Re-read `SessionHaltTripped_WinsOverStaleLedgerEntry_ThrowsSessionHaltedException` (`:199-212`): if it trips the halt through the drift path it is inverted too; if it sets `_sessionHalted` by reflection it is unchanged.
   Re-measure and, if it depends on the drift halt, invert the `DeleteFile_DriftedFile` test in `CreateFileDeleteFileTests.cs` (~`:385-432`). Add: drift on a never-touched file is written without refusal; drift on a read file refuses with `StaleRead`; re-read then retry succeeds; `ExternalFileDrift(List)` still lists the file.
 
@@ -391,7 +457,7 @@ Restate the lock-order and re-entrancy rules (Execution rules) in every brief.
 - Change (~6 edits): acquire with a short bounded wait (default 2 s, a named constant) before the fold reads disk; on busy, re-enqueue the changes into `_pendingChanges`, re-arm the timer and return WITHOUT reading disk or latching; release right after the fold and BEFORE any full reload (`needsReloadAfterAll`): a full MSBuild reload reads many files for seconds and must not hold other processes' writers off (open decision 5).
   `ApplyInMemoryDocumentUpdatesAsync` itself is NOT changed and never acquires the lock (rule b).
 - Call-site measurement: 1 handler, 1 file. Tier: D1 (1 file, ~6 edits).
-- Done when: `Build` 0 errors; `RunTest` `Tests.Basic` no new failure (existing watcher/debounce tests have a null root, so they take no lock).
+- Done when: `Build` 0 errors; `RunTest` `Tests.Basic` no new failure. Review 2026-11-09: watcher/debounce tests use `TestSolutionFixture` (real MSBuild load, real solution root), so they DO take the OS lock; the run must show they still pass. `.roslynsentinel/` is not watched (`IsWatchedExtension`, PWM `:1020-1026`).
 - Out of scope: the full-reload path; fold-on-read.
 - Test-writer step (T9c): row Y (lock busy: no disk read, changes re-queued, no halt; lock free: fold as before; lock released before a reload).
 
@@ -409,6 +475,7 @@ Restate the lock-order and re-entrancy rules (Execution rules) in every brief.
 
 #### Step 9e - `ReadFile` and `GetMethodSource` fold first, then record
 - Files (2): `RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs` (`ReadFile`, around the `RecordWholeFileObservedAsync` call `:395`), `RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs` (`GetMethodSource`, record at `:336`).
+- Review 2026-11-09: `ReadFile:395` is only the `memberName` path; the line-range path records at `:451` and the whole-file path at `:493`. All three get the fold. Batched with 9f-2 (same files).
 - Change (~4 edits): call `SyncFileFromDiskIfStaleAsync` before reading the document text, then record as today. `GetFileOutline` (Step 6b) is NOT given fold-on-read (decision lists three tools); mention in the brief so it is not added by analogy.
 - Call-site measurement: 2 read tools, 2 files, 1 project. Tier: D1 (2 files, ~4 edits).
 - Done when: `Build` 0 errors; `RunTest` `Tests.Tools.Basic` no new failure; the existing `ReadFile` recording tests still pass.
@@ -430,6 +497,10 @@ Restate the lock-order and re-entrancy rules (Execution rules) in every brief.
   `RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs`. Measure the debounce handler before slicing; split PWM
   and the two tools if over D1.
 - Remaining gap, named: the milliseconds before the OS delivers the watcher event.
+- Review 2026-11-09, split: the fold is one call (`ApplyInMemoryDocumentUpdatesAsync`) plus `_workspaceVersion` increment; the
+  shareable part is the structural-file classification loop (`:1383-1403`), extract as a helper. **9f-1:** PWM + interface +
+  fake (`FlushPendingFoldsAsync`), dispatched with 9d (same 3 files). **9f-2:** `ReadFile`, `GetMethodSource`, `SearchSolutionText`
+  call it, dispatched with 9e (same files).
 - Test-writer step (T9f): row Z (Search variant): an external write queued but not yet debounced; Search finds
   the new text immediately; with nothing pending, no fold runs.
 
@@ -450,13 +521,19 @@ Runs after 9f; independent of the lock. Two slices.
   - **Added, not loaded yet** (window: 15 s): `AfterSource` holds the term -> "'<term>' appears in <file> as
     written by <agent> <age> ago; the server has not loaded it yet - retry". The caller confirms the in-memory
     text lacks the term (it just searched it).
+  - **Review 2026-11-09 (decided):** chokepoint blobs never set `AfterSource` (only 3 Asyncify sites do). Removed uses
+    `BeforeSource` alone (the zero-hit Search already proves memory lacks the term). Added: for a foreign blob under 15 s
+    old, read the named file from DISK and check it holds the term; no blob schema change. Storing `AfterSource` is a separate idea doc.
   - Term matching: literal via the existing `Holds` for text/symbol names; for a regex query, match the regex
     (with a timeout) against the blob text. Respect `MinNameLength`; clip reason with `MaxReasonChars`.
   - Never throws (same catch-and-empty policy as `Find`); the single-file `Find` keeps working unchanged.
   - Tier: D1 (1-2 files). Done when: `Build` 0 errors; T9h-1 green.
 - **9h-2, call it from Search on zero results.** Files: `RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs`
   (text mode `SearchSolutionText`; symbol/declaration modes where a zero-result return is built). When the
-  result has zero matches, add the notes as Info `Findings` (source as in `NotFoundEvidence.FindingSource`). No
+  result has zero matches, add the notes as Info `Findings` (review 2026-11-09: two slices. **9h-2a** text mode, the one
+  zero-result return ~`:1196-1250`, merging into the existing `Findings = justTripped ? [...] : []`; **9h-2b** the other modes,
+  which dispatch from `DispatchSearchCore` (`WorkspaceReadNavigationTools.cs:171-195`) to LocateSymbol, FindReferences,
+  QuerySymbolRelationships and ListAll: one post-process on `TotalRecords == 0`, verify the seam at dispatch) (source as in `NotFoundEvidence.FindingSource`). No
   change when there are hits. Re-measure the zero-result return points first; if they span more than one file,
   split. Tier: D1.
 - **Limits, named:** no hint does not mean nothing changed (editors, git and shell writes leave no blob; 5 chokepoint
