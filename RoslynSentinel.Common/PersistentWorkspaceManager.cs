@@ -22,7 +22,7 @@ namespace RoslynSentinel.Common;
 /// <c>RoslynSentinel.Tests.TestSolutionFixture</c>, which stands up a disposable on-disk copy of
 /// the Samples/ContosoOrders scenario and loads it through this class.
 /// </summary>
-public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader, IWorkspaceReloadFailureProvider, IEditAttributionLedgerProvider
+public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader, IWorkspaceReloadFailureProvider, IEditAttributionLedgerProvider, IObservedContentLedger
 {
     private readonly ILogger<IWorkspaceManager> _logger;
     private MSBuildWorkspace? _workspace;
@@ -88,6 +88,10 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // a no-op, regardless of path-key formatting or timing -> see the hard-blocker doc for why this
     // closes a whole class of false positive, not just today's two known bugs.
     private readonly ConcurrentDictionary<FilePathWrapper, string> _knownFileHashes = new();
+    // Observed-content ledger: what each agent was last shown per file (SHA-256). NOT the scoped
+    // operation ledger and NOT the edit attribution ledger. Not cleared on reload, because the
+    // comparison is by content.
+    private readonly ConcurrentDictionary<(string AgentKey, FilePathWrapper Path), string> _observedHashes = new();
     // BOM tracking: path (normalized via FilePathWrapper) -> whether the original file on disk
     // has a UTF-8 BOM. Populated wholesale on LoadSolutionAsync, updated per-file on a successful
     // ApplyProposedChangesAsync write (checked by reading the file's first bytes after initial load).
@@ -510,10 +514,22 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // OnFileSystemChanged). Not a security boundary -> just a fast, collision-safe-enough content
     // fingerprint -> so SHA-256 is used for its BCL support and zero extra dependency, not because
     // cryptographic strength matters here.
-    private static string ComputeContentHash(string content)
+    private static string ComputeContentHash(string content) => ContentFingerprint.Compute(content);
+
+    private static string ObservedAgentKey() => ToolCallContext.Current?.AgentId ?? "";
+
+    public void RecordObserved(FilePathWrapper path, string text) => _observedHashes[(ObservedAgentKey(), path)] = ContentFingerprint.Compute(text);
+
+    internal bool TryGetObservedHash(FilePathWrapper path, out string hash)
     {
-        var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(content));
-        return Convert.ToHexStringLower(bytes);
+        if (_observedHashes.TryGetValue((ObservedAgentKey(), path), out var found))
+        {
+            hash = found;
+            return true;
+        }
+
+        hash = "";
+        return false;
     }
 
     // Same decoding as File.ReadAllText (UTF-8 default, BOM detection) so hashes/comparisons are
