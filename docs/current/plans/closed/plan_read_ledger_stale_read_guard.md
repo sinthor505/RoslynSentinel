@@ -1,6 +1,6 @@
 # Plan: refuse caller-authored writes to files changed since the server last returned their content
 
-**Status:** IN PROGRESS 2026-11-09. Steps 1-6 and row F done (7b703f18, 50afbe7b, 59ca6ad6, eb2c5cf8, 02fe37f0, 14e9dcec, d787caf8, 504852069be2, 0d376f646b97); only step 7 (docs) remains. Per-agent observed-content ledger that makes WriteFile, ApplyDiff (files format) and DeleteFile refuse a stale target with a non-latching, per-file `StaleRead` error; read "Review 2026-11-08: corrections" before any step, it overrides stale anchors below.
+**Status:** IMPLEMENTED 2026-11-09. 7b703f18, 50afbe7b, 59ca6ad6, eb2c5cf8, 02fe37f0, 14e9dcec, d787caf8, 50485206, 0d376f64, deaabe6c, plus the docs close commit; follow-ups F1, F3-F5 unscheduled. Per-agent observed-content ledger that makes WriteFile, ApplyDiff (files format) and DeleteFile refuse a stale target with a non-latching, per-file `StaleRead` error; read "Review 2026-11-08: corrections" before any step, it overrides stale anchors below.
 
 ## Problem
 
@@ -248,7 +248,7 @@ opt-in (step 5), so the check exists but is inert until a tool both records and 
   the same text (shared `ContentFingerprint`).
 
 ### Step 3a - `StaleReadPolicy` parameter and the pre-write check (default `None`)
-- Done: 59ca6ad6. Row F only partly covered (no drift-latch test seam; TODO in `StaleReadGuardTests.cs`).
+- Done: 59ca6ad6. Row F completed by d787caf8 (`AddExternalChangeForTest` seam).
   Tests on one process need the reading agent's `StartSeq` past the write, or `ConcurrentEditRefused`
   pre-empts `StaleRead`.
 - **Files (3):** `Common/IWorkspaceMutator.cs`, `Common/PersistentWorkspaceManager.cs`,
@@ -375,6 +375,10 @@ opt-in (step 5), so the check exists but is inert until a tool both records and 
   needs its own 2-3 slices or `implementer-senior`. Marked derived, not decided.
 
 ### Step 7 - docs (no code)
+- Done 2026-11-09 (the close commit): watcher reference section 5 + gotchas (F2 confirmed fixed by
+  `RecordFoldedDocumentBaseline`), write-paths step 7b and the refresh/rollback note, architecture map
+  "Stale-read guard" paragraph and the read-chokepoint sentence. The map's 389-call-site figure was left as
+  cited (not re-measured).
 - **Files (3, Markdown):** `docs/current/references/reference_file_watcher_and_drift_detection.md`,
   `docs/current/references/reference_code_file_write_paths.md`,
   `docs/current/references/reference_architecture_map.md`.
@@ -394,7 +398,8 @@ opt-in (step 5), so the check exists but is inert until a tool both records and 
 ### Step 8 - deferred follow-ups (do not schedule yet)
 - **F1.** Narrow the latch to per-file refusals once the ledger has proven itself. Contradicts
   `idea_external_drift_hard_blocker.md`; needs its own proposal.
-- **F2.** Bug, independent of this plan: `OnDebounceTimerElapsed` folds disk text into `CurrentSolution`
+- **F2.** FIXED before this plan ran (`ApplyInMemoryDocumentUpdatesAsync` calls `RecordFoldedDocumentBaseline`).
+  Original note: bug, independent of this plan: `OnDebounceTimerElapsed` folds disk text into `CurrentSolution`
   but does not refresh `_knownFileHashes`, so a later event for the same file mismatches the stale baseline
   and is flagged again. Add a `docs/current/TODO.md` line if one is not there; it can be fixed first or
   last.
@@ -405,7 +410,7 @@ opt-in (step 5), so the check exists but is inert until a tool both records and 
 - **F4.** Widen recording to `GetFileOutline`, `ListAll`, `InspectSymbol`.
 - **F5.** Per-snapshot hashes when staged writes (`proposal_staged_writes.md`) make `Committed` and
   `IncludeStaged` diverge.
-- **F6.** A caller/session identity (does not exist on stdio today) would let the ledger be per-agent and
+- **F6.** RESOLVED by the per-agent key (`ToolCallContext.AgentId`). Original note: a caller/session identity (does not exist on stdio today) would let the ledger be per-agent and
   remove open question 1.
 
 ## Test strategy

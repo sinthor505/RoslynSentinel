@@ -141,6 +141,13 @@ only for a call whose gate passed, `ToolCallContext.GatePassed`). `UndoLastApply
 `GetDiagnostics`, compile-gate failures and `Git(status)`. `Common/NotFoundEvidence.cs` adds them to not-found errors by searching
 the operation blobs, which every window shares, and then Git.
 
+**Stale-read guard.** The observed-content ledger (`_observedHashes` in `PersistentWorkspaceManager`, interface
+`Common/IObservedContentLedger.cs`, hash `Common/ContentFingerprint.cs`) holds, per agent key and path, the hash of the file text
+last returned to that agent by `ReadFile`, `GetMethodSource` or Search text mode. After pre-image capture and before the EOL
+pre-pass, a call passing `StaleReadPolicy.RefuseIfObservedStale` (`WriteFile`, `DeleteFile`, `ApplyDiff` files format) is refused
+with the non-latching `StaleRead` code if a target's entry differs from disk or memory. Detail:
+`reference_file_watcher_and_drift_detection.md` section 5.
+
 **Session halt and acknowledge.** The drift latch is `_sessionHalted` in `PersistentWorkspaceManager`; the halt-stamp
 filter (pipeline item 5) shows it, and any tripped breaker, on every response. `ExternalFileDrift(operation:
 Acknowledge)` (`Tools.Basic/AdminTools.cs`) clears the latch even when only some files are named. Files not named stay
@@ -156,6 +163,8 @@ clears only drift state and the chokepoint still refuses every write.
 `CloneDetectionEngine`. Everything else still takes `ISolutionProvider` / `PersistentWorkspaceManager` and calls
 `GetCurrentSolutionAsync` (389 call sites in 78 files as of 2026-09-24, per the design doc). It is the
 prerequisite for staged writes: see `docs/current/design/design_read_chokepoint.md`, `docs/current/proposals/proposal_staged_writes.md`.
+The observed-content ledger (stale-read guard, above) is read-side bookkeeping that does not depend on this reader: read tools
+call `RecordObserved` explicitly, because the reader is solution-granular and cannot know which file a caller saw.
 
 ## Usage
 

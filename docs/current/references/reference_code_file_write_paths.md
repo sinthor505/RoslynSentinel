@@ -1,6 +1,6 @@
 # Reference: Code File Write Paths
 
-**Status:** CURRENT 2026-10-26. The chokepoint step list and callers table were verified 2026-10-04; the EOL policy sections and steps 8-9 were re-verified against source on 2026-10-26 (plan_eol_policy_and_write_chokepoint.md Steps 4-8). Update when a write-to-disk call site is added anywhere in the solution.
+**Status:** CURRENT 2026-11-09. Step 7b (stale-read check) added for plan_read_ledger_stale_read_guard. The chokepoint step list and callers table were verified 2026-10-04; the EOL policy sections and steps 8-9 were re-verified against source on 2026-10-26 (plan_eol_policy_and_write_chokepoint.md Steps 4-8). Update when a write-to-disk call site is added anywhere in the solution.
 
 ## Purpose
 
@@ -29,7 +29,14 @@ In order, the method:
    Recovery is `ExternalFileDrift(operation: List)` then `ExternalFileDrift(operation: Acknowledge)` (`ClearSessionHalt`).
 6. Optionally compile-validates the whole batch (`validateChanges`, via `ValidationEngine`) before taking the lock.
 7. Takes `_solutionLock`, then captures a **pre-image** of every target (null = file did not exist), used for
-   `OperationItemRecord.BeforeSource` and `UndoLastApply`.
+   `OperationItemRecord.BeforeSource` and `UndoLastApply`. (Just before the capture, under the lock,
+   `CheckConcurrentEditConflict` refuses with `ToolErrorCode.ConcurrentEditRefused` when another known agent wrote a
+   target after this call started.)
+7b. Stale-read check, only when the caller passes `staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale` (default
+   `None`; `exactRestore` is exempt): for each target with an observed-content entry under the writer's agent key, refuses
+   the whole batch with `ToolErrorCode.StaleRead` if that hash differs from the disk pre-image or the in-memory document
+   text. Non-latching. Targets with no entry are allowed and get a `WriteChokepoint` Info finding. Opted in: `WriteFile`
+   (ReplaceFile), `DeleteFile`, `ApplyDiff` files format. Details: `reference_file_watcher_and_drift_detection.md` section 5.
 8. EOL pre-pass (`ComputeEolPrePass`, see "EOL policy" below): for every target it computes the bytes to write (the whole file
    converted to the resolved EOL) and refuses with `ToolErrorCode.EolChangeRefused` only if the converted text is not a
    single line-ending style. Nothing is deleted or written before this pass finishes.
@@ -43,7 +50,9 @@ In order, the method:
    marks `_internalChanges` (watcher-loop suppression), then writes through `FileIoHelper.WriteAllTextAsync`
    (per-path lock) with retry on `IOException` (`retryCount`, 500 ms apart). Failed content is cached in `_failedChangesCache`
    for `RetryFailedChanges`.
-10. If `rollbackOnPartialFailure` and some files failed after others succeeded, restores the succeeded files to their pre-images.
+10. If `rollbackOnPartialFailure` and some files failed after others succeeded, restores the succeeded files to their pre-images
+    (and the writer's observed-content entries to the pre-image hashes). After each successful write the writer's existing
+    observed-content entry is refreshed to the written bytes; a delete drops the path's entries for every agent.
 11. Resyncs the in-memory workspace (`ApplyInMemoryDocumentUpdatesAsync`, bumps `_workspaceVersion`), invalidates the affected
     projects' compilation-cache entries (or all of them on a full reload), and returns `ApplyChangesResult`.
 
