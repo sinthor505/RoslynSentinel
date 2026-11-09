@@ -446,25 +446,8 @@ public class WorkspaceFileEditImpl
         }
     }
 
-    private async Task RecordWholeFileObservedAsync(FilePathWrapper path, CancellationToken cancellationToken)
-    {
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = DocumentLookup.FindDocumentOrNull(solution, path);
-
-        string? wholeText;
-        if (document != null)
-        {
-            wholeText = (await document.GetTextAsync(cancellationToken)).ToString();
-        }
-        else
-        {
-            wholeText = await FileIoHelper.ReadAllTextIfExistsAsync(path, cancellationToken);
-        }
-        if (wholeText != null)
-        {
-            _workspaceManager.RecordObserved(path, wholeText);
-        }
-    }
+    private Task RecordWholeFileObservedAsync(FilePathWrapper path, CancellationToken cancellationToken) =>
+        _workspaceManager.RecordWholeFileObservedAsync(path, cancellationToken);
 
     public async Task<SentinelCallToolResult<object>> ReadFile(ToolCallReason reason, string filePath, int? startLine = null,
         int? endLine = null, string? memberName = null, string? containerName = null, LineEndingDisplay showLineEndings = LineEndingDisplay.None, CancellationToken cancellationToken = default)
