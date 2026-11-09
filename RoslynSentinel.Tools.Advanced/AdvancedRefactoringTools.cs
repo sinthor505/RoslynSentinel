@@ -36,6 +36,8 @@ public class AdvancedRefactoringTools
     private readonly ValidationEngine _validationEngine;
     private readonly SentinelConfiguration _config;
     private readonly ILogger<AdvancedRefactoringTools> _logger;
+    // Which tools this server can serve, for the edit-impact next step; null (unit tests, hosts without a surface) = every tool callable.
+    private readonly ActiveToolSurface? _activeToolSurface;
     public AdvancedRefactoringTools(IWorkspaceManager workspaceManager)
     {
         _validationEngine = new ValidationEngine(workspaceManager);
@@ -53,8 +55,9 @@ public class AdvancedRefactoringTools
         _logger = NullLogger<AdvancedRefactoringTools>.Instance;
     }
 
-    public AdvancedRefactoringTools(BasicRefactoringEngine refactoringEngine, AdvancedRefactoringEngine advancedRefactoringEngine, StructuralRefactoringEngine advancedStructuralEngine, MemberRefactoringEngine memberRefactoringEngine, SemanticRefactoringEngine semanticRefactoringEngine, MappingEngine mappingEngine, SyntaxModernizationEngine modernizationEngine, MsToolAugmentEngine augmentEngine, CodeGenerationEngine codeGenerationEngine, SymbolNavigationEngine symbolNavigationEngine, IWorkspaceManager workspaceManager, ValidationEngine validationEngine, SentinelConfiguration config, ILogger<AdvancedRefactoringTools> logger)
+    public AdvancedRefactoringTools(BasicRefactoringEngine refactoringEngine, AdvancedRefactoringEngine advancedRefactoringEngine, StructuralRefactoringEngine advancedStructuralEngine, MemberRefactoringEngine memberRefactoringEngine, SemanticRefactoringEngine semanticRefactoringEngine, MappingEngine mappingEngine, SyntaxModernizationEngine modernizationEngine, MsToolAugmentEngine augmentEngine, CodeGenerationEngine codeGenerationEngine, SymbolNavigationEngine symbolNavigationEngine, IWorkspaceManager workspaceManager, ValidationEngine validationEngine, SentinelConfiguration config, ILogger<AdvancedRefactoringTools> logger, ActiveToolSurface? activeToolSurface = null)
     {
+        _activeToolSurface = activeToolSurface;
         _refactoringEngine = refactoringEngine;
         _advancedRefactoringEngine = advancedRefactoringEngine;
         _advancedStructuralEngine = advancedStructuralEngine;
@@ -94,7 +97,7 @@ public class AdvancedRefactoringTools
     /// intermediate staging step). Rolls back any already-written files if a multi-file change
     /// partially fails, so a change never lands half-applied.
     /// </summary>
-    private Task<ApplyOutcome> ValidateAndApplyAsync(Dictionary<FilePathWrapper, string> changes, string description, string operationName, bool dryRun = false, bool returnDiff = false, IProgress<EngineProgress>? progress = default, IReadOnlyCollection<FilePathWrapper>? removePaths = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null, IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits = null) => ValidateAndApplyHelper.ValidateAndApplyAsync(_validationEngine, _workspaceManager, _logger, changes, operationName, dryRun, returnDiff, progress, removePaths, cancellationToken: cancellationToken, deletePaths, describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct), expectedEdits: expectedEdits);
+    private Task<ApplyOutcome> ValidateAndApplyAsync(Dictionary<FilePathWrapper, string> changes, string description, string operationName, bool dryRun = false, bool returnDiff = false, IProgress<EngineProgress>? progress = default, IReadOnlyCollection<FilePathWrapper>? removePaths = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null, IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits = null) => ValidateAndApplyHelper.ValidateAndApplyAsync(_validationEngine, _workspaceManager, _logger, changes, operationName, dryRun, returnDiff, progress, removePaths, cancellationToken: cancellationToken, deletePaths, describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct), expectedEdits: expectedEdits, describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, removePaths, deletePaths));
     private Task<string> BuildDiffAsync(Dictionary<FilePathWrapper, string> changes, CancellationToken cancellationToken = default) => ValidateAndApplyHelper.BuildDiffAsync(_workspaceManager, changes, cancellationToken);
     private static string BuildDiffFromPreImages(Dictionary<FilePathWrapper, string> changes, IReadOnlyDictionary<string, string?>? preImages) => ValidateAndApplyHelper.BuildDiffFromPreImages(changes, preImages);
 

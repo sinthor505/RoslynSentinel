@@ -23,6 +23,9 @@ public class RefactoringStructuralImpl
     private readonly ValidationEngine _validationEngine;
     private readonly ILogger _logger;
 
+    // Which tools this server can serve, for the edit-impact next step; null (unit tests, hosts without a surface) = every tool callable.
+    private readonly ActiveToolSurface? _activeToolSurface;
+
     // Reuses ReplaceSnippetTool's batch cap (WorkspaceTools.MaxSnippetEditsPerBatch) as a starting
     // value -> these are keyword/name batchEdits rather than text blocks, so the limit is purely count-based,
     // not size-derived.
@@ -35,8 +38,10 @@ public class RefactoringStructuralImpl
         SymbolNavigationEngine symbolNavigationEngine,
         IWorkspaceManager workspaceManager,
         ValidationEngine validationEngine,
-        ILogger logger)
+        ILogger logger,
+        ActiveToolSurface? activeToolSurface = null)
     {
+        _activeToolSurface = activeToolSurface;
         _refactoringEngine = refactoringEngine;
         _memberRefactoringEngine = memberRefactoringEngine;
         _structuralRefinementEngine = structuralRefinementEngine;
@@ -65,7 +70,8 @@ public class RefactoringStructuralImpl
         ValidateAndApplyHelper.ValidateAndApplyAsync(
             _validationEngine, _workspaceManager, _logger, changes, operationName,
             dryRun, returnDiff, progress, removePaths, cancellationToken, deletePaths,
-            describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct, changes.Keys.Select(k => (string)k).ToList()));
+            describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct, changes.Keys.Select(k => (string)k).ToList()),
+            describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, removePaths, deletePaths));
 
     private static string DescribeMemberOutcome(DocumentEditResult updated, string fallbackLabel)
     {

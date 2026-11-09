@@ -394,7 +394,7 @@ public class OrderPricingRefactorChainAgentTests
            method's own parameter name(s) exactly as you already chose them in step 1 - this step
            only renames `CalculateDiscountedTotal`'s own parameter, not the extracted method's
            signature. `OrderCheckout.cs` calls this method positionally (not with named arguments),
-           so its call site does not need to change for this step.
+           so its call site does not need to change for this step. Rename only this one parameter: other methods' parameters (for example `GetFinalPrice`'s in `OrderCheckout.cs`) keep their names, and callers keep passing their own arguments unchanged.
 
         ## Constraints
 
@@ -525,7 +525,7 @@ public class OrderPricingRefactorChainAgentTests
            the call to your extracted method from step 1) to the new name. Leave the extracted
            method's own parameter name(s) exactly as you already chose them in step 1. `OrderCheckout.cs`
            calls this method positionally (not with named arguments), so its call site does not need
-           to change for this step.
+           to change for this step. Rename only this one parameter: other methods' parameters (for example `GetFinalPrice`'s in `OrderCheckout.cs`) keep their names, and callers keep passing their own arguments unchanged.
 
         6. **Add a guard clause**: at the very top of `CalculateDiscountedTotal`'s body, before any
            existing logic, add a check that throws `System.ArgumentOutOfRangeException` if
@@ -702,7 +702,7 @@ public class OrderPricingRefactorChainAgentTests
         5. **Rename a parameter**: rename the `rate` parameter of `CalculateDiscountedTotal` to
            `discountRate`. Update every use of it inside `CalculateDiscountedTotal` (including in
            the call to your extracted method from step 1) to the new name. Leave the extracted
-           method's own parameter name(s) exactly as you already chose them in step 1.
+           method's own parameter name(s) exactly as you already chose them in step 1. Rename only this one parameter: other methods' parameters (for example `GetFinalPrice`'s in `OrderCheckout.cs`) keep their names, and callers keep passing their own arguments unchanged.
 
         6. **Add a guard clause**: at the very top of `CalculateDiscountedTotal`'s body, before any
            existing logic, add a check that throws `System.ArgumentOutOfRangeException` if
@@ -718,7 +718,7 @@ public class OrderPricingRefactorChainAgentTests
            `SummarizeShipping` to the interface). Then change `OrderCheckout`'s `_calculator` field
            in `OrderCheckout.cs` to be declared as `IOrderPricingCalculator` instead of the concrete
            `OrderPricingCalculator` type (the field can still be *constructed* with
-           `new OrderPricingCalculator()` - only its declared/static type changes to the interface).
+           `new OrderPricingCalculator()` - only its declared/static type changes to the interface). Use exactly this signature, including the parameter name `discountRate` from step 5.
 
         ## Constraints
 
@@ -890,7 +890,7 @@ public class OrderPricingRefactorChainAgentTests
         5. **Rename a parameter**: rename the `rate` parameter of `CalculateDiscountedTotal` to
            `discountRate`. Update every use of it inside `CalculateDiscountedTotal` (including in
            the call to your extracted method from step 1) to the new name. Leave the extracted
-           method's own parameter name(s) exactly as you already chose them in step 1.
+           method's own parameter name(s) exactly as you already chose them in step 1. Rename only this one parameter: other methods' parameters (for example `GetFinalPrice`'s in `OrderCheckout.cs`) keep their names, and callers keep passing their own arguments unchanged.
 
         6. **Add a guard clause**: at the very top of `CalculateDiscountedTotal`'s body, before any
            existing logic, add a check that throws `System.ArgumentOutOfRangeException` if
@@ -906,7 +906,7 @@ public class OrderPricingRefactorChainAgentTests
            `SummarizeShipping` to the interface). Then change `OrderCheckout`'s `_calculator` field
            in `OrderCheckout.cs` to be declared as `IOrderPricingCalculator` instead of the concrete
            `OrderPricingCalculator` type (the field can still be *constructed* with
-           `new OrderPricingCalculator()` - only its declared/static type changes to the interface).
+           `new OrderPricingCalculator()` - only its declared/static type changes to the interface). Use exactly this signature, including the parameter name `discountRate` from step 5.
 
         8. **Rename the class**: rename the `OrderPricingCalculator` class itself to
            `StandardOrderPricingCalculator`. Update its declaration (including the `: IOrderPricingCalculator`
@@ -1101,7 +1101,7 @@ public class OrderPricingRefactorChainAgentTests
         5. **Rename a parameter**: rename the `rate` parameter of `CalculateDiscountedTotal` to
            `discountRate`. Update every use of it inside `CalculateDiscountedTotal` (including in
            the call to your extracted method from step 1) to the new name. Leave the extracted
-           method's own parameter name(s) exactly as you already chose them in step 1.
+           method's own parameter name(s) exactly as you already chose them in step 1. Rename only this one parameter: other methods' parameters (for example `GetFinalPrice`'s in `OrderCheckout.cs`) keep their names, and callers keep passing their own arguments unchanged.
 
         6. **Add a guard clause**: at the very top of `CalculateDiscountedTotal`'s body, before any
            existing logic, add a check that throws `System.ArgumentOutOfRangeException` if
@@ -1116,7 +1116,7 @@ public class OrderPricingRefactorChainAgentTests
            `OrderCheckout`'s `_calculator` field in `OrderCheckout.cs` to be declared as
            `IOrderPricingCalculator` instead of the concrete `OrderPricingCalculator` type (the
            field can still be *constructed* with `new OrderPricingCalculator()` - only its
-           declared/static type changes to the interface).
+           declared/static type changes to the interface). Use exactly this signature, including the parameter name `discountRate` from step 5.
 
         8. **Rename the class**: rename the `OrderPricingCalculator` class itself to
            `StandardOrderPricingCalculator`. Update its declaration (including the
@@ -1313,7 +1313,7 @@ public class OrderPricingRefactorChainAgentTests
         5. **Rename a parameter**: rename the `rate` parameter of `CalculateDiscountedTotal` to
            `discountRate`. Update every use of it inside `CalculateDiscountedTotal` (including in
            the call to your extracted method from step 1) to the new name. Leave the extracted
-           method's own parameter name(s) exactly as you already chose them in step 1.
+           method's own parameter name(s) exactly as you already chose them in step 1. Rename only this one parameter: other methods' parameters (for example `GetFinalPrice`'s in `OrderCheckout.cs`) keep their names, and callers keep passing their own arguments unchanged.
 
         6. **Add a guard clause**: at the very top of `CalculateDiscountedTotal`'s body, before any
            existing logic, add a check that throws `System.ArgumentOutOfRangeException` if
@@ -1328,7 +1328,7 @@ public class OrderPricingRefactorChainAgentTests
            `OrderCheckout`'s `_calculator` field in `OrderCheckout.cs` to be declared as
            `IOrderPricingCalculator` instead of the concrete `OrderPricingCalculator` type (the
            field can still be *constructed* with `new OrderPricingCalculator()` - only its
-           declared/static type changes to the interface).
+           declared/static type changes to the interface). Use exactly this signature, including the parameter name `discountRate` from step 5.
 
         8. **Rename the class**: rename the `OrderPricingCalculator` class itself to
            `StandardOrderPricingCalculator`. Update its declaration (including the

@@ -17,14 +17,19 @@ public class RefactoringExtractionDocsImpl
     private readonly ValidationEngine _validationEngine;
     private readonly ILogger _logger;
 
+    // Which tools this server can serve, for the edit-impact next step; null (unit tests, hosts without a surface) = every tool callable.
+    private readonly ActiveToolSurface? _activeToolSurface;
+
     public RefactoringExtractionDocsImpl(
         BasicRefactoringEngine refactoringEngine,
         MsToolAugmentEngine msToolAugmentEngine,
         SymbolNavigationEngine symbolNavigationEngine,
         IWorkspaceManager workspaceManager,
         ValidationEngine validationEngine,
-        ILogger logger)
+        ILogger logger,
+        ActiveToolSurface? activeToolSurface = null)
     {
+        _activeToolSurface = activeToolSurface;
         _refactoringEngine = refactoringEngine;
         _msToolAugmentEngine = msToolAugmentEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
@@ -52,7 +57,8 @@ public class RefactoringExtractionDocsImpl
         ValidateAndApplyHelper.ValidateAndApplyAsync(
             _validationEngine, _workspaceManager, _logger, changes, operationName,
             dryRun, returnDiff, progress, removePaths, cancellationToken, deletePaths,
-            describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct));
+            describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct),
+            describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, removePaths, deletePaths));
 
     public async Task<SentinelCallToolResult<object>> UsingDirective(
         ToolCallReason reason,

@@ -28,6 +28,9 @@ public class WorkspaceTools
     private readonly WorkspaceReadNavigationImpl _readNav;
     private readonly WriteToolAdviceHelper _writeAdvice;
 
+    // Which tools this server can serve, for the edit-impact next step; null (unit tests, hosts without a surface) = every tool callable.
+    private readonly ActiveToolSurface? _activeToolSurface;
+
     private readonly WorkspaceProjectManagementTools _projectManagement;
 
     private readonly WorkspaceBuildTestTools _buildTest;
@@ -40,6 +43,7 @@ public class WorkspaceTools
 
     public WorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, StructuralRefinementEngine structuralRefinementEngine, SentinelConfiguration config, ILogger<WorkspaceTools> logger, BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine, TestRunEngine testRunEngine, WorkspaceReadNavigationImpl readNav, WriteToolAdviceHelper writeAdvice, ActiveToolSurface? activeToolSurface = null)
     {
+        _activeToolSurface = activeToolSurface;
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
         _diagnosticEngine = diagnosticEngine;
@@ -283,7 +287,7 @@ public class WorkspaceTools
                             IsSuccess = false,
                             ErrorData =  new ResultError(ToolErrorCode.Exception,
                                 "ApplyDiffTool: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n[COMPILER ERROR]\n" +
-                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
+                                await EditImpactGate.PrependAsync(_workspaceManager, changes, result.ValidationResult, _activeToolSurface, await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken))
                         };
                     await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result);
                     // PreImages (full pre-edit file content) is dropped from the default response -
@@ -391,7 +395,7 @@ public class WorkspaceTools
                                 IsSuccess = false,
                                 ErrorData =  new ResultError(ToolErrorCode.Exception,
                                     "ApplyDiffTool: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n[COMPILER ERROR]\n" +
-                                    await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
+                                    await EditImpactGate.PrependAsync(_workspaceManager, diffChanges, result.ValidationResult, _activeToolSurface, await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken))
                             };
                         await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result);
                         var strippedDiffResult = result with { PreImages = null };

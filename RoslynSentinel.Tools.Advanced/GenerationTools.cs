@@ -20,6 +20,9 @@ public class GenerationTools
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<GenerationTools> _logger;
 
+    // Which tools this server can serve, for the edit-impact next step; null (unit tests, hosts without a surface) = every tool callable.
+    private readonly ActiveToolSurface? _activeToolSurface;
+
     public GenerationTools(
     IWorkspaceManager workspaceManager,
     ILogger<GenerationTools> logger)
@@ -40,8 +43,10 @@ public class GenerationTools
         SymbolNavigationEngine symbolNavigationEngine,
         ValidationEngine validationEngine,
         IWorkspaceManager workspaceManager,
-        ILogger<GenerationTools> logger)
+        ILogger<GenerationTools> logger,
+        ActiveToolSurface? activeToolSurface = null)
     {
+        _activeToolSurface = activeToolSurface;
         _codeGenerationEngine = codeGenerationEngine;
         _apiGenerationEngine = apiGenerationEngine;
         _mappingEngine = mappingEngine;
@@ -70,7 +75,8 @@ public class GenerationTools
         ValidateAndApplyHelper.ValidateAndApplyAsync(
             _validationEngine, _workspaceManager, _logger, changes, operationName,
             dryRun, returnDiff, progress, removePaths, cancellationToken, deletePaths,
-            describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct));
+            describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct),
+            describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, removePaths, deletePaths));
 
     [McpServerTool(Name = "GenerateClassesFromJson")]
     [Produces(DataTag.ResultOnly)]

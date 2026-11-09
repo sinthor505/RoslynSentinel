@@ -21,14 +21,19 @@ public class RefactoringSignatureImpl
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly ILogger _logger;
 
+    // Which tools this server can serve, for the edit-impact next step; null (unit tests, hosts without a surface) = every tool callable.
+    private readonly ActiveToolSurface? _activeToolSurface;
+
     public RefactoringSignatureImpl(
         BasicRefactoringEngine refactoringEngine,
         MemberRefactoringEngine memberRefactoringEngine,
         IWorkspaceManager workspaceManager,
         ValidationEngine validationEngine,
         SymbolNavigationEngine symbolNavigationEngine,
-        ILogger logger)
+        ILogger logger,
+        ActiveToolSurface? activeToolSurface = null)
     {
+        _activeToolSurface = activeToolSurface;
         _refactoringEngine = refactoringEngine;
         _memberRefactoringEngine = memberRefactoringEngine;
         _workspaceManager = workspaceManager;
@@ -56,7 +61,8 @@ public class RefactoringSignatureImpl
         ValidateAndApplyHelper.ValidateAndApplyAsync(
             _validationEngine, _workspaceManager, _logger, changes, operationName,
             dryRun, returnDiff, progress, removePaths, cancellationToken, deletePaths,
-            describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct));
+            describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct),
+            describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, removePaths, deletePaths));
 
     public async Task<SentinelCallToolResult<object>> RenameSymbol(
         ToolCallReason reason,

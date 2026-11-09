@@ -93,7 +93,10 @@ public static class ValidateAndApplyHelper
         // observed-then-changed target but does not add the "not read first" finding, because engine
         // tools edit many files.
         IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits = null,
-        StaleReadPolicy staleReadPolicy = StaleReadPolicy.RefuseIfObservedStaleQuiet)
+        StaleReadPolicy staleReadPolicy = StaleReadPolicy.RefuseIfObservedStaleQuiet,
+        // Edit-impact report (EditImpactGate.Describer in Engines.Basic; Common cannot call an engine). A non-null text
+        // replaces the untouched-file sentence, which it already covers; null keeps DescribeUntouchedFileErrors as the fallback.
+        Func<DiagnosticReport, CancellationToken, Task<string?>>? describeEditImpact = null)
     {
         // The pre-images feed the per-file changed-line counts and the collateral-change tripwire below.
         // EOL conversion is done by the chokepoint (PersistentWorkspaceManager.ApplyProposedChangesAsync).
@@ -169,7 +172,8 @@ public static class ValidateAndApplyHelper
         if (validation.IsError)
         {
             var detail = validation.Diagnostics;
-            var untouchedText = DescribeUntouchedFileErrors(changes.Keys.Select(k => (string)k), detail.Select(d => d.FilePath.ToString()));
+            var impactText = describeEditImpact != null ? await describeEditImpact(validation, cancellationToken) : null;
+            var untouchedText = impactText ?? DescribeUntouchedFileErrors(changes.Keys.Select(k => (string)k), detail.Select(d => d.FilePath.ToString()));
             var detailString = describeValidationFailure != null
                 ? await describeValidationFailure(validation, cancellationToken)
                 : validation.Diagnostics.ToJson();
