@@ -333,6 +333,7 @@ public class WorkspaceReadNavigationImpl
             var signature = BuildSignature(method);
             _logger.LogInformation("GetMethodSource: {SizeBytes} bytes for '{MethodName}'", methodBytes, methodName);
             var fileText = await document.GetTextAsync(cancellationToken);
+            _workspaceManager.RecordObserved(filePathResolved, fileText.ToString());
             var fileLineCount = fileText.Lines.Count;
             var methodSpan = method.GetLocation().GetLineSpan();
             // Source is ToFullString() (leading comments and attributes' trivia included), so the reported range starts where that text
@@ -1160,7 +1161,10 @@ public class WorkspaceReadNavigationImpl
                     renderedDocumentId = hit.Document.Id;
                     var documentText = await hit.Document.GetTextAsync(cancellationToken);
                     renderedText = documentText;
-                    renderedLines = documentText.ToString().Split('\n');
+                    // Runs once per document among the returned hits only; documents cut by maxResults are never recorded.
+                    var wholeText = documentText.ToString();
+                    _workspaceManager.RecordObserved(hit.FilePath, wholeText);
+                    renderedLines = wholeText.Split('\n');
                     renderedRoot = await hit.Document.GetSyntaxRootAsync(cancellationToken);
                 }
 
