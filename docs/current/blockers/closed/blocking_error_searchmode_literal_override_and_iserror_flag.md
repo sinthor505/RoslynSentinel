@@ -8,10 +8,10 @@ literal override, and MCP IsError signaling"):
   `validateOnApply: true` catches breaks in callers, not just the edited project's own call graph.
 - Issue 1 (searchMode literal override): confirmed `searchMode: literal` no longer silently
   coerces to regex — it stays literal and only warns
-  ([SentinelWorkspaceTools.cs:1531-1539](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1531-L1539)).
+  ([WorkspaceReadNavigationImpl.cs:989-1284](../../../../RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs#L989-L1284)).
 - Issue 3 (missing MCP `IsError`): a `CallToolFilter` now sets `CallToolResult.IsError = true`
   whenever the response body's top-level `success` field is false
-  ([ServiceRegistrationExtensionsBasic.cs:197-233](../../../../RoslynSentinel.Server.Basic/ServiceRegistrationExtensionsBasic.cs#L197-L233)).
+  ([ServiceRegistrationExtensionsBasic.cs:413-464](../../../../RoslynSentinel.Server.Advanced/ServiceRegistrationExtensionsBasic.cs#L413-L464)).
 
 A separate, related fix (commit `5561d58`) added a whole-file-rewrite size guard to `ApplyDiff`
 (files-format applies that would shrink a file >50% are rejected with a confirmation-code escape
@@ -56,7 +56,7 @@ transcript misdiagnoses this several times):
    — i.e. it submitted **only the 5 using-directive lines** as the file's entire new content,
    intending this as "step 1 of 3" (add a using directive) rather than a full-file replacement.
    `changesetFormat: files` is documented as whole-file replacement
-   ([SentinelWorkspaceTools.cs:400](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L400)),
+   ([WholeFileWriteTools.cs:322](../../../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L322)),
    so the tool did exactly what it was told: log line 323 confirms
    `Wrote changes to ...AdvancedStructuralEngine.cs (Attempt 1)`, and the call legitimately
    returned `success:true`. **This truncated the 552-line file to 6 lines, correctly, per the
@@ -93,7 +93,7 @@ a process/prompt concern, not something to fix in the MCP tools themselves).
 The user pushed back on the above and asked the sharper question directly: the first `ApplyDiff`
 call's response wasn't just "success" — it carried `validationResult: {success:true, diagnostics:[]}`.
 `validateOnApply` defaults to `true`
-([SentinelWorkspaceTools.cs:401](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L401)),
+([WholeFileWriteTools.cs:334](../../../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L334)),
 so this was the tool's actual pre-apply safety check reporting a clean bill of health for a change
 that deleted every public method of a class — `ConvertAbstractClassToInterfaceAsync`,
 `ReplaceConstructorWithFactoryAsync`, `ExtractSuperclassAsync`, `ExtractClassAsync`,
@@ -157,7 +157,7 @@ This codebase has evidently already been updated since the earlier
 write-up: `isRegex: bool` has become
 `searchMode: TextSearchMode` (`literal` | `regex`) — exactly the "mandatory enum instead of
 optional bool" fix direction that was suggested there. Confirmed at
-[SentinelWorkspaceTools.cs:1418](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1418).
+SentinelWorkspaceTools.cs:1418.
 
 But the new implementation has a worse problem than the one it replaced:
 
@@ -335,7 +335,7 @@ Investigated because a 25-minute wait for what should be a sub-second parse-and-
 explaining even though the *outcome* (rejection) was correct both times this diff was submitted.
 
 - The exception is thrown from `SentinelWorkspaceTools.ApplyDiff` at
-  [SentinelWorkspaceTools.cs:624](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L624)
+  [WholeFileWriteTools.cs:536](../../../../RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs#L536)
   (`_diffEngine.ApplyDiff(oldText, unifiedDiff)`), caught immediately by the `catch` two lines
   below it — so all the wall-clock time was spent before or during that call, not in some later
   handler.

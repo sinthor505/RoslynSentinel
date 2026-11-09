@@ -124,7 +124,7 @@ live where the live server cannot reach them:
     first tool call arrives; `LoadSolution` is called explicitly instead (`Program.cs:209-216`), which
     blocks until the real load completes.
   - `Program.cs:198-202` documents a basename-collision hazard: `--testing` puts `ProjectDoc` on
-    `docs/testing/` instead of `docs/`, because the worktree is a copy of the same repo and shares
+    `docs/current/evals/` instead of `docs/`, because the worktree is a copy of the same repo and shares
     plan/doc basenames with the production copy - without it, `ProjectDoc`'s basename fallback
     silently resolved to the *production* file, and run `20260910-013550-398` spent all 60 turns
     implementing a plan nobody asked for as a result.

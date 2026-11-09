@@ -38,8 +38,8 @@ grep -oE '"message":"[^"]{0,320}' agent.log | sort | uniq -c | sort -rn
 
 ## A1 — `ProjectDoc` read silently returns a *different* document (CRITICAL)
 
-**Files:** [SentinelDocumentationTools.cs:109-186](RoslynSentinel.Server.Basic/SentinelDocumentationTools.cs#L109-L186)
-(`ReadFile`), [SentinelDocumentationTools.cs:193-211](RoslynSentinel.Server.Basic/SentinelDocumentationTools.cs#L193-L211)
+**Files:** [DocumentationTools.cs:178-296](../../../../RoslynSentinel.Tools.Basic/DocumentationTools.cs#L178-L296)
+(`ReadFile`), [DocumentationTools.cs:317-335](../../../../RoslynSentinel.Tools.Basic/DocumentationTools.cs#L317-L335)
 (`FindByBasename`)
 **Introduced by:** commit `91a0a5e` "Fix ProjectDoc read to fall back across all of docs/, not just the requested docType"
 **Severity:** Critical — this single defect caused the whole run to execute the wrong work
@@ -66,7 +66,7 @@ path that was asked for.
 ### Root cause (verified)
 
 `FindByBasename` discards the directory component at
-[line 200](RoslynSentinel.Server.Basic/SentinelDocumentationTools.cs#L200):
+[FindByBasename](../../../../RoslynSentinel.Tools.Basic/DocumentationTools.cs#L317-L335):
 
 ```csharp
 string wantStem = Path.GetFileNameWithoutExtension(Path.GetFileName(name));
@@ -74,11 +74,11 @@ string wantStem = Path.GetFileNameWithoutExtension(Path.GetFileName(name));
 
 `Path.GetFileName("tests/plan-…-runner/01-baseline.md")` → `"01-baseline.md"` → stem
 `"01-baseline"`. The caller's directory is thrown away, then
-[line 206-210](RoslynSentinel.Server.Basic/SentinelDocumentationTools.cs#L206-L210)
+[FindByBasename](../../../../RoslynSentinel.Tools.Basic/DocumentationTools.cs#L317-L335)
 matches that stem against **every** file under `subdir`, recursively.
 
 `docs/current/` exists, so `GetDocTypeSubdirRoot`
-([line 103-107](RoslynSentinel.Server.Basic/SentinelDocumentationTools.cs#L103-L107))
+([GetDocTypeSubdirRoot](../../../../RoslynSentinel.Tools.Basic/DocumentationTools.cs#L156-L160))
 makes `subdir` = `docs/current/plans`. Verified contents:
 
 ```bash
@@ -90,15 +90,15 @@ docs/current/plans/plan-eval-defect-remediation-v2-steps/01-baseline.md
 docs/tests/plan-eval-defect-remediation-v2-steps-runner/01-baseline.md    # the one wanted
 ```
 
-Fallback 1 ([line 125-134](RoslynSentinel.Server.Basic/SentinelDocumentationTools.cs#L125-L134))
+Fallback 1 ([ReadFile](../../../../RoslynSentinel.Tools.Basic/DocumentationTools.cs#L178-L296))
 finds `matches.Count == 1` and returns it as an unambiguous hit. Because Fallback 1
 succeeds, **Fallback 2 (line 149-179) — the `docs/`-wide search that 91a0a5e added, and
 the only branch that could reach `docs/tests/` — is never executed.** The requested file
 is unreachable via `ProjectDoc` under any `docType`.
 
 The `Count > 1` ambiguity guards at
-[136-144](RoslynSentinel.Server.Basic/SentinelDocumentationTools.cs#L136-L144) and
-[171-179](RoslynSentinel.Server.Basic/SentinelDocumentationTools.cs#L171-L179) do not fire:
+[ReadFile primary scope](../../../../RoslynSentinel.Tools.Basic/DocumentationTools.cs#L178-L296) and
+[ReadFile root scope](../../../../RoslynSentinel.Tools.Basic/DocumentationTools.cs#L178-L296) do not fire:
 the two candidates live in *different* search scopes, so neither scope ever sees a count of 2.
 
 Same substitution recurred at turn 5 (`02-phase1-types.md`) and turn 22
@@ -124,9 +124,9 @@ live in `RoslynSentinel.Tests.*/SentinelDocumentationToolsTests.cs` (also touche
 
 ## A2 — `ReplaceSnippet` size limit points at a tool that is not exposed (CRITICAL)
 
-**File:** [SentinelWorkspaceTools.cs:585-596](RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L585-L596)
+**File:** [WorkspaceFileEditImpl.cs:547-571](../../../../RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs#L547-L571)
 **Constants:** `MaxOldContentLines = 20`, `MaxContentChars = 200`
-([lines 537-538](RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L537-L538))
+([WorkspaceFileEditImpl.cs:527-535](../../../../RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs#L527-L535))
 **Severity:** Critical — terminal livelock; consumed turns 38–60 (~23 of 60 turns).
 
 ### What happened
@@ -185,11 +185,11 @@ class of problem (size threshold pushing a local model into a loop).
 
 ## A3 — `UndoLastApply` cannot revert a change `WrapRange` reported as applied
 
-**Files:** [SentinelWorkspaceTools.cs:1693-1712](RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1693-L1712)
+**Files:** [WorkspaceFileEditImpl.cs:73-198](../../../../RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs#L73-L198)
 (`UndoLastApply` / `OperationBlobWriter.FindBlobPath`),
-[SentinelAdvancedRefactoringTools.cs:850-996](RoslynSentinel.Server.Advanced/SentinelAdvancedRefactoringTools.cs#L850-L996)
+[AdvancedRefactoringTools.cs:1270-1570](../../../../RoslynSentinel.Tools.Advanced/AdvancedRefactoringTools.cs#L1270-L1570)
 (`WrapRange`; region path at
-[line 924](RoslynSentinel.Server.Advanced/SentinelAdvancedRefactoringTools.cs#L924))
+[WrapRangeTool region branch](../../../../RoslynSentinel.Tools.Advanced/AdvancedRefactoringTools.cs#L1369))
 **Severity:** High — the model could not undo its own bad edit and had to work around it.
 
 ### What happened
@@ -250,9 +250,9 @@ consistent: **a mutating tool succeeds and returns a `changeId` that undo cannot
 
 ## A4 — `SearchSolutionText` literal mode defeats regex patterns (4 wasted turns)
 
-**File:** [WorkspaceReadNavigationImpl.cs:429](RoslynSentinel.Server.Basic/WorkspaceReadNavigationImpl.cs#L429)
+**File:** [WorkspaceReadNavigationImpl.cs:989-1284](../../../../RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs#L989-L1284)
 **Known issue:** memory `project_searchmode_literal_override_bug`; existing test at
-[BatteryTwentyTests.cs:207](RoslynSentinel.Tests.Battery/BatteryTwentyTests.cs#L207)
+[BatteryTwentyTests.cs:233](../../../../RoslynSentinel.Tests.Tools.Basic/BatteryTwentyTests.cs#L233)
 **Severity:** Medium — pure turn waste, model always recovered.
 
 Three failures, all the same shape (turns 17, 18, 25):

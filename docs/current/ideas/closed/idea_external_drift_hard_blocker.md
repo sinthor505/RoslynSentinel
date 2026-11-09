@@ -26,7 +26,7 @@ a hard blocker. Every other place below uses the real names: `ListExternalDiskCh
 
 ## Context
 
-[eval_planimplementverify_5run_result.md](../project_planimplementverify_5run_result.md)'s
+[eval_planimplementverify_5run_result.md](../../evals/closed/eval_planimplementverify_5run_result.md)'s
 one failing run spent turns 13-23 (of 24) stuck in a reload loop triggered by a false-positive
 "External file changes detected... Modified externally since last sync" drift warning — itself
 caused by confirmed bugs (`FilePath` never canonicalizing `/` vs `\` separators, and
@@ -118,7 +118,7 @@ never be something the in-task model is asked to adjudicate; it should stop the 
 
 This makes false positives much more expensive (no self-service recovery), so it must ship
 **after**, not instead of, the detection fixes already queued in
-[eval_planimplementverify_5run_result.md](../project_planimplementverify_5run_result.md):
+[eval_planimplementverify_5run_result.md](../../evals/closed/eval_planimplementverify_5run_result.md):
 `FilePath` separator canonicalization and `LoadSolutionAsync` clearing `_externalChanges`. But
 those two fixes alone patch specific instances of a structurally fragile detection design — a
 content-hash baseline is the stronger fix that makes the message actually *true* rather than just

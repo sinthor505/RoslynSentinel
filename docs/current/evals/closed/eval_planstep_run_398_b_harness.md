@@ -64,7 +64,7 @@ about the harness having **no independent enforcement** of a constraint it state
 
 ## B1 — Step content is passed by path, not by value (CRITICAL)
 
-**File:** [Program.cs:167-179](RoslynSentinel.Tools.PlanStepRunner/Program.cs#L167-L179)
+**File:** [Program.cs:168-287](../../../../RoslynSentinel.Utilities.PlanStepRunner/Program.cs#L168-L287)
 
 ```csharp
 var relativeStepPath = Path.GetRelativePath(options.SourceRepo, step.FilePath);
@@ -106,7 +106,7 @@ all, independent of whether A1 is fixed.
 
 ## B2 — `--include-tools` default omits `WriteFile`, which error text tells the model to use
 
-**File:** [RunnerOptions.cs:41-42](RoslynSentinel.Tools.PlanStepRunner/RunnerOptions.cs#L41-L42)
+**File:** RunnerOptions.cs:41-42
 
 ```csharp
 var includeTools = GetArg(args, "--include-tools")
@@ -136,7 +136,7 @@ positively rather than pointing at something unavailable.
 
 ## B3 — No enforcement that a read-only step stays read-only
 
-**File:** [Program.cs:92-104](RoslynSentinel.Tools.PlanStepRunner/Program.cs#L92-L104)
+**File:** [Program.cs:25-166](../../../../RoslynSentinel.Utilities.PlanStepRunner/Program.cs#L25-L166)
 
 ```csharp
 var buildOptional = KnownBuildOptionalSteps.Contains(step.FileName);
@@ -186,7 +186,7 @@ if (step.ReadOnly)
 Even without a `readOnly` flag, a **general** scope check is worth adding: warn (or halt)
 when a step's committed diff touches files no part of that step's text mentions.
 
-Note `KnownBuildOptionalSteps` ([Program.cs:228](RoslynSentinel.Tools.PlanStepRunner/Program.cs#L228))
+Note `KnownBuildOptionalSteps` (Program.cs:228)
 is currently an empty set, with a long comment explaining every step must build clean. That
 comment's reasoning — "the next step's worktree is built from this one's committed tip" — is
 exactly why an unscoped commit is dangerous.
@@ -195,9 +195,9 @@ exactly why an unscoped commit is dangerous.
 
 ## B4 — No repeated-failure circuit breaker; turn cap absorbs the loop
 
-**File:** [Program.cs:161-165](RoslynSentinel.Tools.PlanStepRunner/Program.cs#L161-L165)
+**File:** [Program.cs:219-232](../../../../RoslynSentinel.Utilities.PlanStepRunner/Program.cs#L219-L232)
 (`ModelAgentRunner`, `turnCap: options.TurnCap`, default 40 —
-[RunnerOptions.cs:39](RoslynSentinel.Tools.PlanStepRunner/RunnerOptions.cs#L39); this run used 60)
+[RunnerOptions.cs:47](../../../../RoslynSentinel.Utilities.PlanStepRunner/RunnerOptions.cs#L47); this run used 60)
 
 The last 23 turns were the same tool, same file, same `errorCode`, same message. The only
 thing that stopped it was exhausting the turn budget, ~13 minutes later.
@@ -215,13 +215,13 @@ turn. The model did not do this — and the harness has no mechanism to make it.
    check whether it is wired into this runner's path, since it plainly did not fire here.
 2. **Auto-write the blocker doc** on trip, capturing tool, args, error, and turn range.
    Removes the dependence on the model choosing to comply.
-3. **Surface it in `StepOutcome`** ([Program.cs:274-276](RoslynSentinel.Tools.PlanStepRunner/Program.cs#L274-L276))
+3. **Surface it in `StepOutcome`** ([Program.cs:459-462](../../../../RoslynSentinel.Utilities.PlanStepRunner/Program.cs#L459-L462))
    so the summary line distinguishes "ran out of turns making progress" from "looped on one
    error for 23 turns."
 
 ### Secondary: `LooksBlocked` detection is fragile
 
-[Program.cs:211-215](RoslynSentinel.Tools.PlanStepRunner/Program.cs#L211-L215) matches
+[Program.cs:385-389](../../../../RoslynSentinel.Utilities.PlanStepRunner/Program.cs#L385-L389) matches
 substrings against the final message only:
 
 ```csharp

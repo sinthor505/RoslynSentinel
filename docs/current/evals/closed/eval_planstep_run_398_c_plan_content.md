@@ -86,7 +86,7 @@ to any other step.
 ## Gate
 
 No gate — this step only records a number. Proceed to
-[02-phase1-types.md](02-phase1-types.md) once you have the baseline counts.
+[02-phase1-types.md](eval_defect_remediation_v2_steps/02-phase1-types.md) once you have the baseline counts.
 ```
 
 Two differences, both decisive:
@@ -112,7 +112,7 @@ in the model's context.
 That is the **unsplit** `-v2.md` plan (a single file), not the `-v2-steps/` directory. The
 split directory appears to be a superseded intermediate: `RunnerOptions.Parse` describes
 `--plan-dir` as *"the runner-specific copy whose prompts omit the load-solution step the
-runner already does itself"* ([RunnerOptions.cs:20-21](RoslynSentinel.Tools.PlanStepRunner/RunnerOptions.cs#L20-L21)),
+runner already does itself"* ([RunnerOptions.cs:66-67](../../../../RoslynSentinel.Utilities.PlanStepRunner/RunnerOptions.cs#L66-L67)),
 implying the runner copy is the live one and `-v2-steps/` is its ancestor.
 
 **Confirm before deleting** — this is the one judgment call in these three documents that
@@ -121,7 +121,7 @@ needs a human. If `-v2-steps/` is genuinely superseded, it should not be in `doc
 ### Fix options
 
 1. **Move `-v2-steps/` to `docs/obsolete/`.** The `GetDocTypeSubdirRoot` helper
-   ([SentinelDocumentationTools.cs:103-107](RoslynSentinel.Server.Basic/SentinelDocumentationTools.cs#L103-L107))
+   ([DocumentationTools.cs:156-160](../../../../RoslynSentinel.Tools.Basic/DocumentationTools.cs#L156-L160))
    explicitly documents `docs/obsolete/` as the retirement location for exactly this
    purpose, and roots `docType` subdirs at `docs/current/` when present — so moving it makes
    the old copy unreachable through `docType:plan` and the collision disappears.

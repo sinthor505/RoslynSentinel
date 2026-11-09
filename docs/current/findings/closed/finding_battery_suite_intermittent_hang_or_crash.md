@@ -21,7 +21,7 @@ Across 5 consecutive full-suite runs of `RoslynSentinel.Tests.Battery` on 2026-0
    `Get-Process` — a real stall, not a tracker artifact. Killed via `Stop-Process -Force`.
 4. One run, identical command plus a 30-second NUnit `DefaultTimeout` via `--settings
    diag.runsettings`, completed cleanly in 3.8 minutes: 874 passed, 1 failed (known pre-existing —
-   see [reference_known_failing_tests.md](reference_known_failing_tests.md)), 89 skipped (needs
+   see [reference_known_failing_tests.md](../../references/reference_known_failing_tests.md)), 89 skipped (needs
    `ROSLYN_SENTINEL_TEST_SLN`). No test ever hit the 30s timeout.
 
 Run 4 is the same 874/1/89 result as the last confirmed-clean baseline (see

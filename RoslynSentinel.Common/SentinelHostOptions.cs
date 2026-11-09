@@ -15,7 +15,7 @@ public enum OperatingMode
 
     /// <summary>
     /// An automated evaluation run (e.g. PlanStepRunner) executing against a worktree of a real
-    /// repository. Only <c>ProjectDoc</c> branches on this -> it reads out of <c>docs/testing/</c>
+    /// repository. Only <c>ProjectDoc</c> branches on this -> it reads out of <c>docs/current/evals/</c>
     /// instead of <c>docs/</c> so a test fixture and the production doc it mirrors can share a
     /// filename without one silently resolving to the other.
     /// </summary>

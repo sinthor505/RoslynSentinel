@@ -1,6 +1,6 @@
 # Plan: typed large-result offload - IPageableResult, PagedArray read branch, first users, list-case fold
 
-**Status:** SUPERSEDED 2026-11-02 by [plan_wire_result_marshaller.md](../plan_wire_result_marshaller.md) (never started;
+**Status:** SUPERSEDED 2026-11-02 by [plan_wire_result_marshaller.md](plan_wire_result_marshaller.md) (never started;
 kept for its source re-verification). Was: DRAFT 2026-11-02. Built from a source re-verification of
 [proposal_central_large_result_offload.md](../../proposals/closed/proposal_central_large_result_offload.md); decisions D1-D4
 below deviate from the proposal and need confirmation before Step 1 is dispatched.

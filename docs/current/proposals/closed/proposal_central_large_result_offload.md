@@ -1,6 +1,6 @@
 # Typed large-result offload: IPageableResult, PagedArray and line records (retire the Raw window as a normal path)
 
-**Status:** SUPERSEDED 2026-11-02 by [plan_wire_result_marshaller.md](../../plans/plan_wire_result_marshaller.md):
+**Status:** SUPERSEDED 2026-11-02 by [plan_wire_result_marshaller.md](../../plans/closed/plan_wire_result_marshaller.md):
 offload moves to one marshaller at the SDK `MarshalResult` seam instead of a tool-side typed helper; Slices 1-5
 were never started. Was: PROPOSED 2026-10-28, REVISED 2026-10-29 after review. Slice 0 is DONE (commit 22a081bb,
 test `T12b`). Slices 1-5 are not started. Decided in review: the mechanism is a tool-side typed helper,

@@ -722,7 +722,7 @@ public static class ServerStartupHelpers
                 includeTools is { Count: > 0 } ? string.Join(", ", includeTools) : "(none)",
                 excludeTools is { Count: > 0 } ? string.Join(", ", excludeTools) : "(none)",
                 operatingMode,
-                operatingMode == OperatingMode.Testing ? "docs/testing/" : "docs/",
+                operatingMode == OperatingMode.Testing ? "docs/current/evals/" : "docs/",
                 ServerBuildInfo.BinaryPath, ServerBuildInfo.Pid);
         }
 

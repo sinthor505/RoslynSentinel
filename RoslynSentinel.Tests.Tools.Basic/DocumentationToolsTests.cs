@@ -210,7 +210,7 @@ public class DocumentationToolsTests
         Assert.That(result.Warning, Does.Contain("plan-x-steps/01-baseline.md"));
     }
 
-    // ── OperatingMode.Testing (docs/testing/, docType ignored) ─────────────────
+    // ── OperatingMode.Testing (docs/current/evals/, docType ignored) ─────────────────
     //
     // Both modes are exercised from this one fixture with no [NonParallelizable]: OperatingMode is
     // injected, so "production" and "testing" are two objects rather than two writes to a static.
@@ -219,7 +219,7 @@ public class DocumentationToolsTests
     public void Read_TestingMode_IgnoresDocTypeAndResolvesAnywhereUnderDocsTesting()
     {
         // The run-398 request shape: docType=plan for a file that lives in no docType subdir.
-        WriteDoc(Path.Combine("testing", "plan-x-steps-runner", "01-baseline.md"), "runner baseline");
+        WriteDoc(Path.Combine("current", "evals", "plan-x-steps-runner", "01-baseline.md"), "runner baseline");
         var tools = BuildTools(OperatingMode.Testing);
 
         var result = (DocReadResult)tools.ProjectDocCore("test", DocAction.read, DocType.plan,
@@ -246,8 +246,8 @@ public class DocumentationToolsTests
     [Test]
     public void Read_TestingMode_AmbiguityWithinTestingRootStillErrors()
     {
-        WriteDoc(Path.Combine("testing", "run-a", "01-baseline.md"), "content A");
-        WriteDoc(Path.Combine("testing", "run-b", "01-baseline.md"), "content B");
+        WriteDoc(Path.Combine("current", "evals", "run-a", "01-baseline.md"), "content A");
+        WriteDoc(Path.Combine("current", "evals", "run-b", "01-baseline.md"), "content B");
         var tools = BuildTools(OperatingMode.Testing);
 
         var result = (DocReadResult)tools.ProjectDocCore("test", DocAction.read, DocType.plan,
@@ -262,11 +262,11 @@ public class DocumentationToolsTests
     [Test]
     public void Read_ProductionMode_DoesNotReachDocsTesting()
     {
-        // The reverse containment check: docs/testing/ IS under docs/, so a production-mode bare
+        // The reverse containment check: docs/current/evals/ IS under docs/, so a production-mode bare
         // name could reach it via the docs/-wide fallback. That's acceptable (it is a real file
         // under docs/), but a production request must never prefer it over the docType subdir.
         WriteDoc(Path.Combine("current", "plans", "01-baseline.md"), "PRODUCTION plan");
-        WriteDoc(Path.Combine("testing", "01-baseline.md"), "TESTING fixture");
+        WriteDoc(Path.Combine("current", "evals", "01-baseline.md"), "TESTING fixture");
 
         var result = (DocReadResult)_tools.ProjectDocCore("test", DocAction.read, DocType.plan,
             name: "01-baseline.md");

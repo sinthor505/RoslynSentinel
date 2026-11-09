@@ -33,20 +33,20 @@ just a slow/stuck call, not a separate bug; not investigated further here.
 Two independent size thresholds disagree about when a `ReadFile` result should be offloaded to a
 scan file, and the disagreement zone crashes:
 
-1. **[SentinelWorkspaceTools.cs:1200](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1200)**
+1. **SentinelWorkspaceTools.cs:1200**
    — `ReadFile`'s own gate: `const int thresholdBytes = 8 * 1024`. Any whole-file read over **8KB**
    decides to offload and calls `ScanResultHelper.StoreScanResultAsync`.
-2. **[ScanResultHelper.cs:19](../../../../RoslynSentinel.Common/ScanResultHelper.cs#L19)** —
+2. **ScanResultHelper.cs:19** —
    `ScanResultHelper.ThresholdBytes = 30 * 1024`. `StoreScanResultAsync` only actually writes a
    scan file (and returns a non-null `scanId`) if the serialized payload exceeds **30KB**;
    otherwise it returns `(offloaded: false, filePath: default, scanId: null, jsonBytes)` —
    `scanId` is `null` by design for anything under 30KB.
 3. Back in `ReadFile`
-   ([SentinelWorkspaceTools.cs:1209](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1209)),
+   (SentinelWorkspaceTools.cs:1209),
    the result is used unconditionally: `scanId: stored.scanId!` — a null-forgiving `!` on a value
    that state (2) can genuinely leave null.
 4. `LargeResultInfo`'s constructor
-   ([ToolResult.cs:219](../../../../RoslynSentinel.Common/ToolResult.cs#L219)) enforces non-null:
+   (ToolResult.cs:219) enforces non-null:
    `this.ScanId = scanId ?? throw new ArgumentNullException(nameof(scanId));` — this is the exact
    throw site matching the transcript's error text.
 
@@ -57,7 +57,7 @@ environment-specific. `AdvancedStructuralEngine.cs` is ~24-25KB, squarely in the
 
 The `LargeResultInfo`/offload wiring is already known to be inconsistent across tools — this is a
 concrete instance of that inconsistency, not a new category of problem. `ReadFile`'s own doc comment
-([SentinelWorkspaceTools.cs:1146](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1146))
+([WorkspaceFileEditTools.cs:42](../../../../RoslynSentinel.Tools.Basic/WorkspaceFileEditTools.cs#L42))
 says "Whole-file reads past the size threshold are written to .roslynsentinel/scans and returned as
 a scanId" — implying one threshold, when there are actually two disagreeing ones.
 

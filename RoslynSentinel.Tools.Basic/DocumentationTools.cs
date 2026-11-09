@@ -125,7 +125,7 @@ public class DocumentationTools
 
     /// <summary>
     /// Resolves the docs root and returns it, or populates <paramref name="error"/> and returns null.
-    /// Under <see cref="OperatingMode.Testing"/> this is <c>docs/testing/</c>, not <c>docs/</c>.
+    /// Under <see cref="OperatingMode.Testing"/> this is <c>docs/current/evals/</c>, not <c>docs/</c>.
     /// </summary>
     private string? TryGetDocsRoot(out string error)
     {
@@ -138,12 +138,12 @@ public class DocumentationTools
 
         error = "";
 
-        // docs/testing/ is kept entirely separate from docs/ (rather than being a subdirectory
-        // reachable from it) so an eval fixture can carry the same filename as the production doc
-        // it mirrors without either resolving to the other -> the collision that made run
+        // Testing mode resolves only inside docs/current/evals/ -- never the docType subdirectories or
+        // the docs/-wide fallback -- so an eval fixture can carry the same filename as the production
+        // doc it mirrors without either resolving to the other -> the collision that made run
         // 20260910-013550-398 execute a different plan than the one it asked for.
         return IsTestingMode
-            ? Path.Combine(solutionRoot, "docs", "testing")
+            ? Path.Combine(solutionRoot, "docs", "current", "evals")
             : Path.Combine(solutionRoot, "docs");
     }
 
@@ -173,7 +173,7 @@ public class DocumentationTools
     /// <param name="docTypeSubdirRoot">The directory those subdirs sit in -> docs/current/ when it
     /// exists, else docs/. Distinct from <paramref name="docsRoot"/>, and the base that action:list
     /// paths for a docs/current/ layout are most naturally written against.</param>
-    /// <param name="docsRoot">docs/ (or docs/testing/ in testing mode).</param>
+    /// <param name="docsRoot">docs/ (or docs/current/evals/ in testing mode).</param>
     /// <param name="ignoreDocType">Testing mode: resolve against <paramref name="docsRoot"/> alone.</param>
     private static DocReadResult ReadFile(string subdir, string filename, DocType docType, string docTypeSubdirRoot, string docsRoot, bool ignoreDocType)
     {

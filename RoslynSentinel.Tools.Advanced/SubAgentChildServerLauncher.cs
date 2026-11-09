@@ -55,7 +55,7 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
         "--exclude-tools=" + string.Join(",", ExcludedToolClasses),
         // Per-tool hiding: WriteFile is not reachable through --exclude-tools (see HiddenTools).
         "--hide-tools=" + string.Join(",", HiddenTools),
-        // --testing puts ProjectDoc on docs/testing/: the worktree is a copy of this very repo, so
+        // --testing puts ProjectDoc on docs/current/evals/: the worktree is a copy of this very repo, so
         // runner-specific docs and production docs share basenames (see PlanStepRunner/Program.cs).
         "--testing",
         "--llm-model=" + model,

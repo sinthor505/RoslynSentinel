@@ -30,7 +30,7 @@ suggestions, never returned as hits. A zero-result lookup is not an error when "
 answer; it is an error only when the caller needed a target (edit, rename, move).
 
 Reference implementation: `Search(mode: text)`, see
-[plan_search_text_scan_all_projects_and_recovery_hints.md](../plans/plan_search_text_scan_all_projects_and_recovery_hints.md).
+[plan_search_text_scan_all_projects_and_recovery_hints.md](../plans/closed/plan_search_text_scan_all_projects_and_recovery_hints.md).
 
 ## Usage
 Wording to avoid: "There are 0 matches for X in the solution" when scope, container or name shape

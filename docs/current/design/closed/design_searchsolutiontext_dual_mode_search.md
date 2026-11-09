@@ -14,7 +14,7 @@ This is the second time this parameter's shape has caused real friction:
   making the choice a mandatory enum ([resolved: searchmode_literal_override_and_iserror_flag](../../blockers/closed/blocking_error_searchmode_literal_override_and_iserror_flag.md)).
 - The enum fix closed the "silent override" bug but didn't close the underlying problem: the
   model still has to *correctly guess* which of two modes it wants, and gets zero results with
-  no automatic recovery when it guesses wrong (see [blocking_error_searchsolutiontext_02_phase1_types_and_engine_fix.md](../blockers/blocking_error_searchsolutiontext_02_phase1_types_and_engine_fix.md),
+  no automatic recovery when it guesses wrong (see [blocking_error_searchsolutiontext_02_phase1_types_and_engine_fix.md](../../blockers/closed/blocking_error_searchsolutiontext_02_phase1_types_and_engine_fix.md),
   a real occurrence of exactly this: `searchMode: literal` + regex-escaped pattern `\.ExitCode`
   correctly found nothing, because the caller wanted `.ExitCode`).
 

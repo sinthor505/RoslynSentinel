@@ -14,8 +14,8 @@ model to track line numbers.
 
 **However**: several `ApplyDiff`/`DiffEngine` bugs (hunk/line-number
 miscalculation) were fixed since this idea was raised — see
-[project_applydiff_fixes_unblocked_model_eval.md](../project_applydiff_fixes_unblocked_model_eval.md)
-and [project_diffengine_trailing_blank_anchor_fix.md](../project_diffengine_trailing_blank_anchor_fix.md).
+project_applydiff_fixes_unblocked_model_eval.md
+and project_diffengine_trailing_blank_anchor_fix.md.
 Those fixes already unblocked a model that was previously stuck. Revisit
 whether either idea below is still worth building only after further
 model-eval runs show ApplyDiff is still a bottleneck post-fix.

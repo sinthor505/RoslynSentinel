@@ -6,7 +6,7 @@ content" below. The 2026-11-07 survey facts are kept because the slices depend o
 
 ## Motivation
 
-[plan_wire_result_marshaller.md](../../plans/plan_wire_result_marshaller.md) Step 8 wants the last three writers that store a
+[plan_wire_result_marshaller.md](../../plans/closed/plan_wire_result_marshaller.md) Step 8 wants the last three writers that store a
 file outside the marshaller (`LargeResultHelper.StoreRawJsonAsync`) to go away, so every stored result is a marshaller
 `Envelope` and Step 10 can delete the `Raw` wrapper type and its reader. Two read-only surveys on 2026-11-07 (explore-tier2,
 source only, nothing run) established what exists. Verified facts carry file:line; items under "Not checked" are hypotheses.
@@ -227,7 +227,7 @@ RunTest and changed-content payloads are dropped (not inlined); Build lists appe
 
 ## Related
 
-- [plan_wire_result_marshaller.md](../../plans/plan_wire_result_marshaller.md) -- Step 8 (HOLD note), Step 10.
+- [plan_wire_result_marshaller.md](../../plans/closed/plan_wire_result_marshaller.md) -- Step 8 (HOLD note), Step 10.
 - [proposal_sequence_pager.md](../proposal_sequence_pager.md) -- the default sequence rule and the dictionary note.
 - [reference_tool_response_pipeline.md](../../references/reference_tool_response_pipeline.md) -- marshaller decisions 3-7 and the
   hints table (`[NeverInline]`: no production use yet).

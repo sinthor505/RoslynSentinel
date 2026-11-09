@@ -3,11 +3,11 @@
 **RESOLVED** — fixed as part of commit `b537249` ("Fix validation scope, searchMode literal
 override, and MCP IsError signaling") and a related follow-up. The `isRegex: bool` parameter this
 doc describes has since been replaced by an explicit `TextSearchMode searchMode` enum
-([SentinelWorkspaceTools.cs:1522](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1522)),
+(SentinelWorkspaceTools.cs:1522),
 removing the silent-default-bool root complaint. The salience problem itself is also gone: the
 generic "Solution-Folder scope limitations" warning that used to bury the specific regex-metachar
 warning is now commented out
-([SentinelWorkspaceTools.cs:1614](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1614)),
+(SentinelWorkspaceTools.cs:1614),
 so a zero-result literal search with a regex-like pattern surfaces only the specific, actionable
 warning. Verified against current code 2026-08-29. Moved here for history; no further action
 needed.
@@ -42,7 +42,7 @@ to surface.)
 
 ### Root cause — confirmed by reading the source, not just inferred
 
-[SentinelWorkspaceTools.cs:1377-1497](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1377-L1497)
+[WorkspaceReadNavigationImpl.cs:989-1284](../../../../RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs#L989-L1284)
 (`SearchSolutionText`):
 
 1. The detection logic is real and correct:

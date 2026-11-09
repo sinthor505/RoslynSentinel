@@ -423,7 +423,7 @@ the omitted-`limit` path is covered by unit tests T18-T20 only. Step 6 live chec
 `maxDetails`), so it never reaches the marshaller; its `errorSummary.byProject` reads "(unknown)" (separate issue).
 Still not run: SemanticFindReplace preview (tool hidden in the same session after `McpToolsetControl(moveExtract)`;
 needs a fresh session). Step 7's remaining `[ResultRecords]` item for Search callers/implementations/references is now
-a design proposal: [proposal_search_relationship_result_dtos.md](../proposals/proposal_search_relationship_result_dtos.md)
+a design proposal: [proposal_search_relationship_result_dtos.md](../../proposals/closed/proposal_search_relationship_result_dtos.md)
 (inference already gives the same message and counts; the open question is named DTOs for identification). Supersedes
 [plan_typed_large_result_offload.md](plan_typed_large_result_offload.md) and
 [proposal_central_large_result_offload.md](../../proposals/closed/proposal_central_large_result_offload.md), and subsumes

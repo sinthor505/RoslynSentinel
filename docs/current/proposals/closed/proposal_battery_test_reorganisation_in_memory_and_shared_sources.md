@@ -28,7 +28,7 @@
 4. **Ad-hoc input and construction.** An earlier survey (session efbf4503, 2026-10-15) found about 1,267
    class-skeleton literals in 155 test files and 139 private `SetSource`/`SetMultipleFiles` copies in 70 files
    (approximate). Engine/tool construction repeats at about 1,800 sites:
-   [plan_test_construction_factories_pilot.md](../plans/plan_test_construction_factories_pilot.md).
+   [plan_test_construction_factories_pilot.md](../../plans/closed/plan_test_construction_factories_pilot.md).
 
 ## Survey result (2026-10-20, explore-sonnet, static; not spot-checked)
 
@@ -237,7 +237,7 @@ doc comment to describe all three tiers (table above).
 
 - [issue_battery_tests_leak_files.md](../../issues/closed/issue_battery_tests_leak_files.md) - the defect and options A-D (its fixture count is overstated per the survey above).
 - [plan_in_memory_test_tier_for_battery.md](../../plans/plan_in_memory_test_tier_for_battery.md) - the in-memory tier and conversion steps.
-- [plan_test_construction_factories_pilot.md](../plans/plan_test_construction_factories_pilot.md) - `TestTools`/`TestEngines` factories and `SemanticFindReplace(replaceConstruction)`.
+- [plan_test_construction_factories_pilot.md](../../plans/closed/plan_test_construction_factories_pilot.md) - `TestTools`/`TestEngines` factories and `SemanticFindReplace(replaceConstruction)`.
 - `.claude/handoff/2026-10-17_337a42c9.md` (local-only) - factories pilot handoff.
 - Session transcript efbf4503-0571-42d5-afdd-575bebddc976 (2026-10-15, local) - the shared-sources discussion and duplication survey.
 - `docs/current/findings/finding_battery_basic_slow_test_classification.md` - the earlier Battery.Basic classification, the model for this one.
