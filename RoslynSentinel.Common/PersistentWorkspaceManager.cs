@@ -171,6 +171,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // Changed .cs files the per-file fold could not read, so CurrentSolution still holds their old text. Non-empty means the
     // workspace is not in sync with disk; a later successful fold of the file, or any successful full load, removes it.
     private readonly ConcurrentDictionary<string, byte> _unfoldedFiles = new(StringComparer.OrdinalIgnoreCase);
+    // Paths already refused once with FoldPending since their last fold; a second mismatch for a path in here proceeds with a
+    // Finding instead of refusing again. Cleared per path in NoteFileFolded and wholesale in ClearReloadFailure.
+    private readonly ConcurrentDictionary<string, byte> _foldRefusedFiles = new(StringComparer.OrdinalIgnoreCase);
     private readonly Timer _debounceTimer;
     // Bounded automatic retry of a failed debounce reload; every attempt holds _solutionLock for a full MSBuild load, so keep it bounded.
     private int _debounceRetryCount;
@@ -200,6 +203,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     {
         Volatile.Write(ref _reloadFailure, null);
         _unfoldedFiles.Clear();
+        _foldRefusedFiles.Clear();
     }
 
     /// <summary>True when a changed file could not be read by the per-file fold, so the loaded solution is behind disk for it.</summary>
@@ -220,6 +224,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // file and the record is still the one RecordUnfoldedFile wrote (a later reload failure of another kind is left alone).
     private void NoteFileFolded(string filePath)
     {
+        _foldRefusedFiles.TryRemove(filePath, out _);
         if (_unfoldedFiles.TryRemove(filePath, out _)
             && _unfoldedFiles.IsEmpty
             && Volatile.Read(ref _reloadFailure) is { Trigger: WorkspaceReloadTriggerKind.SourceFileChange })
@@ -2098,6 +2103,18 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 }
             }
 
+            // Fold-pending guard: runs for every policy (deletes included) and before any write or delete, so a target whose
+            // in-memory text lags disk is folded and refused rather than written over. StaleRead above takes precedence.
+            var foldFindings = new List<Finding>();
+            if (!exactRestore)
+            {
+                var foldRefusal = await CheckFoldPendingAsync(changes.Keys.Concat(deletePaths), preImages, validationReport, foldFindings, cancellationToken);
+                if (foldRefusal is not null)
+                {
+                    return foldRefusal;
+                }
+            }
+
             // Resolver-based EOL pre-pass: computes the bytes to write per file and any attribution findings, and
             // refuses (before any delete or write) only on a non-uniform result.
             var prePass = ComputeEolPrePass(changes, preImages, exactRestore, operationLabel);
@@ -2381,6 +2398,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
             // Merge EOL findings with the unobserved-target finding; the list stays empty (null on the result) when neither applies.
             var resultFindings = new List<Finding>(eolFindings);
+            resultFindings.AddRange(foldFindings);
             if (unobservedTargets.Count > 0)
             {
                 resultFindings.Add(BuildUnobservedTargetFinding(unobservedTargets));
@@ -2653,6 +2671,79 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     {
         var message = $"{targets.Count} target file(s) were changed without this agent having read them first, so staleness could not be checked: {string.Join(", ", targets.Select(t => Path.GetFileName((string)t)))}. Next: read a file with {ToolCallHint.Call("ReadFile", ("filePath", (string)targets[0]))} before editing it so a concurrent change is detected.";
         return new Finding("WriteChokepoint", message, FindingSeverity.Info);
+    }
+
+    // Fold-pending guard (non-latching). Runs only under the held _solutionLock. A target whose in-memory text differs from its
+    // disk pre-image (beyond the BOM/EOL/trailing-whitespace trivia FoldComparison converges) is folded once from disk and
+    // refused with FoldPending; a path already refused since its last fold proceeds with a Warning finding instead.
+    private async Task<ApplyChangesResult?> CheckFoldPendingAsync(IEnumerable<FilePathWrapper> targets, Dictionary<string, string?> preImages, DiagnosticReport? validationReport, List<Finding> foldFindings, CancellationToken cancellationToken)
+    {
+        var refuse = new List<FilePathWrapper>();
+        foreach (var target in targets.Distinct())
+        {
+            var documentId = CurrentSolution.GetDocumentIdsWithFilePath(target).FirstOrDefault();
+            if (documentId is null || !preImages.TryGetValue(target, out var diskText) || diskText is null)
+            {
+                continue;
+            }
+
+            var memoryText = (await CurrentSolution.GetDocument(documentId)!.GetTextAsync(cancellationToken)).ToString();
+            var fileName = Path.GetFileName((string)target);
+            switch (FoldComparison.Compare(diskText, memoryText))
+            {
+                case FoldComparisonOutcome.Converged:
+                    foldFindings.Add(new Finding("WriteChokepoint", $"{fileName}: the in-memory text and the disk text differ only by a BOM, line endings or trailing whitespace; treated as converged.", FindingSeverity.Info));
+                    break;
+                case FoldComparisonOutcome.Mismatch:
+                    if (_foldRefusedFiles.ContainsKey((string)target))
+                    {
+                        foldFindings.Add(new Finding("WriteChokepoint", $"{fileName} still differs from disk after a fold; the write proceeded against the in-memory text. {WorkspaceStaleText.Recovery}", FindingSeverity.Warning));
+                    }
+                    else
+                    {
+                        refuse.Add(target);
+                    }
+                    break;
+            }
+        }
+
+        if (refuse.Count == 0)
+        {
+            return null;
+        }
+
+        // Fold the refused files from disk now (the lock is already held) so the retry sees the fresh text.
+        await ApplyInMemoryDocumentUpdatesAsync(refuse.Select(p => (string)p).ToList(), CancellationToken.None);
+        Interlocked.Increment(ref _workspaceVersion);
+
+        // Re-compare after the fold. Marking must follow the fold, because NoteFileFolded clears the marker.
+        var refused = new Dictionary<FilePathWrapper, string>();
+        foreach (var target in refuse)
+        {
+            refused[target] = "changing on disk; retry in a moment";
+            var documentId = CurrentSolution.GetDocumentIdsWithFilePath(target).FirstOrDefault();
+            if (documentId is null || !preImages.TryGetValue(target, out var diskText) || diskText is null)
+            {
+                continue;
+            }
+
+            var memoryText = (await CurrentSolution.GetDocument(documentId)!.GetTextAsync(cancellationToken)).ToString();
+            if (FoldComparison.Compare(diskText, memoryText) == FoldComparisonOutcome.Mismatch)
+            {
+                _foldRefusedFiles[(string)target] = 0;
+            }
+        }
+
+        return new ApplyChangesResult(
+            true,
+            [],
+            refused,
+            $"{ToolErrorCode.FoldPending}: {refused.Count} target file(s) are changing on disk; nothing was written. Next: retry the same call in a moment.",
+            WorkspaceInSync: true,
+            WorkspaceVersion: _workspaceVersion,
+            PreImages: preImages,
+            ValidationResult: validationReport,
+            RefusalCode: ToolErrorCode.FoldPending);
     }
 
     // A document whose text was just folded into CurrentSolution from disk (WithDocumentText/AddDocument)

@@ -107,6 +107,8 @@ public class StaleReadWriteToolsTests
             using var manager = NewManager(file, Original);
             AsAgent("agentA");
             File.WriteAllText(file, External);
+            // Fold the external change into memory so disk and the in-memory document agree; otherwise FoldPending refuses.
+            await manager.ApplyInMemoryDocumentUpdatesAsync(new List<string> { file }, CancellationToken.None);
             var tools = BuildWholeFileWriteTools(manager);
 
             var result = await tools.WriteFileTool(

@@ -128,6 +128,8 @@ public class StaleReadGuardTests
             AsAgent("agentA");
             manager.RecordObserved(new FilePathWrapper(file), Original);
             File.WriteAllText(file, Variant(3));
+            // Fold the external change into memory so disk and the in-memory document agree; otherwise FoldPending refuses.
+            await manager.ApplyInMemoryDocumentUpdatesAsync(new List<string> { file }, CancellationToken.None);
 
             var result = await manager.ApplyProposedChangesAsync(
                 new() { [file] = Variant(2) }, retryCount: 0, validateChanges: false);
@@ -153,6 +155,8 @@ public class StaleReadGuardTests
             using var manager = NewManager((file, Original));
             AsAgent("agentA");
             File.WriteAllText(file, Variant(3));
+            // Fold the external change into memory so disk and the in-memory document agree; otherwise FoldPending refuses.
+            await manager.ApplyInMemoryDocumentUpdatesAsync(new List<string> { file }, CancellationToken.None);
 
             var result = await manager.ApplyProposedChangesAsync(
                 new() { [file] = Variant(2) }, retryCount: 0, validateChanges: false,

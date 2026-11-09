@@ -567,7 +567,7 @@ public class BatteryTwentyTests
             Assert.That(before.WorkspaceVersion, Is.Not.Null);
 
             const string updatedContent = "namespace TestProj; public class Foo { public int Bar() => 2; public int Baz() => 3; }";
-            await File.WriteAllTextAsync(tempFile, updatedContent);
+            // No disk-only pre-write: memory still equals disk, so FoldPending does not refuse; the apply itself is the mutation.
             var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
                 new Dictionary<FilePathWrapper, string> { [tempFile] = updatedContent });
             Assert.That(!applyResult.IsError, Is.True);
