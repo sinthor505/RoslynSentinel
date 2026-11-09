@@ -1,6 +1,6 @@
 # Plan: extend the stale-read guard (F3 anchor and engine tools, F4 outline/InspectSymbol), replace the drift latch with per-file protection (F1), add a cross-process write lock and fold-on-read (F7); F5 blocked
 
-**Status:** IN PROGRESS 2026-11-09. Steps 1-3 done (20440d38, a10b26ee, e95c2b15, 458f2fa3, d5fe3d6b). Batched run with the owner present; F5 stays blocked on staged writes. Builds on [plan_read_ledger_stale_read_guard.md](closed/plan_read_ledger_stale_read_guard.md) (IMPLEMENTED 2026-11-09, 7b703f18..5d9ee8d2). Per-file attribution of refusals is deferred to [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md) ("Revision 2026-11-09"); this plan leaves it a lock, a holder record and a message-builder hook.
+**Status:** IN PROGRESS 2026-11-09. Steps 1-4, 5a, 5b, 5d done (20440d38, a10b26ee, e95c2b15, 458f2fa3, d5fe3d6b, 96996473, f45f07c8, 4a73f333, 088220fb). Batched run with the owner present; F5 stays blocked on staged writes. Builds on [plan_read_ledger_stale_read_guard.md](closed/plan_read_ledger_stale_read_guard.md) (IMPLEMENTED 2026-11-09, 7b703f18..5d9ee8d2). Per-file attribution of refusals is deferred to [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md) ("Revision 2026-11-09"); this plan leaves it a lock, a holder record and a message-builder hook.
 
 ## Problem
 
@@ -250,6 +250,7 @@ Generalized from the first draft's `StaleReadRefusal`: one mapper for every non-
 - Test-writer step (T3): rows C, D, E, N, K (helper path) in Test strategy.
 
 ### Step 4 - anchor tools opt in: `ReplaceSnippet` (single, batch), `ApplyDiff` diff format, `ApplyUnifiedDiff`
+- Done: 96996473
 - Files (2): `RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs`, `RoslynSentinel.Tools.Basic/WholeFileWriteTools.cs`.
 - Symbols: `ReplaceSnippet` call `:787` and `ReplaceSnippetBatch` call `:1047` (`SentinelCallToolResult<ReplaceSnippetResult>`); `ApplyDiffTool` diff branch `:562`; `ApplyUnifiedDiffTool` `:697`.
 - Change (~8 edits): at each of the 4 calls pass `staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale` (non-quiet: anchor tools keep the "not read first" finding, per decision; `ReplaceSnippetBatch` included, accepted);
@@ -271,6 +272,7 @@ Four independent slices plus the ratchet; any order after Step 1. Each passes `s
 The sites surface a refusal as text, not a typed code (measured below), so Step 5d handles the exceptions. Accepted: batch tools carry the refusal in summary text; typed code only where a site already forwards `RefusalCode`.
 
 #### Step 5a - `AsyncifyTools.cs` (S0, mechanical)
+- Done: 4a73f333 (carries the T5d tests, which need the policy to fire)
 - Files (1): `RoslynSentinel.Tools.Advanced/AsyncifyTools.cs`.
 - Symbols: 18 `ApplyProposedChangesAsync` calls, `:489`, `:1479`, `:1524`, `:1741`, `:2129`, `:2274`, `:2568`, `:2634`, `:2796`, `:3122`, `:3232`, `:3268`, `:3301`, `:3310`, `:3341`, `:3350`, `:3632`, `:3848`.
 - Change: one operation, "add the named argument to every `ApplyProposedChangesAsync` call", 18 sites.
@@ -281,6 +283,7 @@ The sites surface a refusal as text, not a typed code (measured below), so Step 
 - Test-writer step (T5a): row H (Asyncify family) plus the ratchet (row L).
 
 #### Step 5b - `AsyncBatchEngine.cs` and `CommentingTools.cs` (S0, mechanical)
+- Done: 088220fb. Gap: the BulkComment test covers the seed-phase refusal only, not the per-file "write refused:" branch (follow-up test in B4).
 - Files (2): `RoslynSentinel.Engines.Advanced/AsyncBatchEngine.cs` (11 calls: `:566`, `:621`, `:675`, `:724`, `:756`, `:846`, `:882`, `:1218`, `:1925`, `:1953`, `:2099`), `RoslynSentinel.Tools.Advanced/CommentingTools.cs` (2 calls: `:146`, `:307`).
 - Change: same single operation, 13 sites.
 - Call-site measurement: 13 sites, 2 files, 2 projects (S0 limits met).
@@ -310,6 +313,7 @@ The sites surface a refusal as text, not a typed code (measured below), so Step 
 - Test-writer step (T5c): row H (DeleteUnusedSymbol returns code `StaleRead`).
 
 #### Step 5d - refusal surfacing at throw sites (D1, after 5a)
+- Done: f45f07c8
 - **Review 2026-11-09, rewritten; runs BEFORE 5a and 5b.** The PWM StaleRead refusal returns a non-null `ValidationResult`
   (PWM `:2091`) when `validateChanges: true`, so sites keyed on `ValidationResult == null` print "Validation: 0 error(s)".
   Scope (1-2 files, ~10 edits, D1): (1) `DescribeRefusedApply` (`AsyncifyTools.cs:2086-2096`, used by `:2129`, `:2274`, `:2634`,
