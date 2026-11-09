@@ -1,6 +1,6 @@
 # Plan: refuse caller-authored writes to files changed since the server last returned their content
 
-**Status:** IN PROGRESS 2026-11-08. Steps 1-4b done (7b703f18, 50afbe7b, 59ca6ad6, eb2c5cf8, 02fe37f0, 14e9dcec). Per-agent observed-content ledger that makes WriteFile, ApplyDiff (files format) and DeleteFile refuse a stale target with a non-latching, per-file `StaleRead` error; read "Review 2026-11-08: corrections" before any step, it overrides stale anchors below.
+**Status:** IN PROGRESS 2026-11-09. Steps 1-6 and row F done (7b703f18, 50afbe7b, 59ca6ad6, eb2c5cf8, 02fe37f0, 14e9dcec, d787caf8, 504852069be2, 0d376f646b97); only step 7 (docs) remains. Per-agent observed-content ledger that makes WriteFile, ApplyDiff (files format) and DeleteFile refuse a stale target with a non-latching, per-file `StaleRead` error; read "Review 2026-11-08: corrections" before any step, it overrides stale anchors below.
 
 ## Problem
 
@@ -338,6 +338,10 @@ opt-in (step 5), so the check exists but is inert until a tool both records and 
 - **Test-writer step (T4b):** rows L-M in Test strategy.
 
 ### Step 5 - opt in `WriteFile`, `ApplyDiff` (files format), `DeleteFile`; map the refusal
+- Done: 504852069be2. `StaleReadError` helper in `WholeFileWriteTools.cs`; the StaleRead check sits BEFORE the
+  `ValidationResult != null` check because the chokepoint refusal carries a ValidationResult. The ApplyDiff files
+  branch now also returns an error for any other `IsError` result (it used to report success). Tests: rows N, O in
+  `Tests.Tools.Basic/StaleReadWriteToolsTests.cs`.
 - **Files (1-2):** `Tools.Basic/WholeFileWriteTools.cs` (`WriteFileTool` 30-114, call at 76;
   `DeleteFileTool` 116-165, call at 135; `ApplyDiffTool` 297-585, files-format call at 391) and, if the
   mapping is shared, `Common/ValidateAndApplyHelper.cs` (the `RefusalCode` -> `ResultError` mapping is at
@@ -357,6 +361,13 @@ opt-in (step 5), so the check exists but is inert until a tool both records and 
   `StaleRead`, not `Exception`, and that the message names the file.
 
 ### Step 6 - `observed:false` on results (optional; measure before scheduling)
+- Done 2026-11-09 as a Finding, no new field: 0d376f646b97. An allowed write or delete to an EXISTING target the
+  writer never observed adds one `WriteChokepoint` / Info finding ("... read them first ...") to
+  `ApplyChangesResult.Findings` (policy `RefuseIfObservedStale` only; new files are not reported). The three tools
+  already lift `result.Findings`. Two EOL tests in `CreateFileDeleteFileTests.cs` now exclude that finding.
+  Step 4a follow-up deaabe6c: `RecordWholeFileObservedAsync` uses `DocumentLookup` (path-comparison ratchet).
+  Row F: d787caf8 added `PersistentWorkspaceManager.AddExternalChangeForTest` and `InternalsVisibleTo` for
+  `RoslynSentinel.Tests.Basic`.
 - Allowed-unobserved writes should be distinguishable to the caller (decision 3). This needs a field on
   `ApplyChangesResult` (43 lines, positional optionals ending in `string? RefusalCode = null`) and on the
   three tools' result payloads. The number of payload types and tests that construct them is NOT measured;
