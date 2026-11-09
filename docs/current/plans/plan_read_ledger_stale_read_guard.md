@@ -1,6 +1,6 @@
 # Plan: refuse caller-authored writes to files changed since the server last returned their content
 
-**Status:** DRAFT 2026-10-18. Process-wide observed-content ledger that makes WriteFile, ApplyDiff (files format) and DeleteFile refuse a stale target with a non-latching, per-file `StaleRead` error; not yet implemented, runs beside the external-drift latch.
+**Status:** APPROVED 2026-11-08. Per-agent observed-content ledger that makes WriteFile, ApplyDiff (files format) and DeleteFile refuse a stale target with a non-latching, per-file `StaleRead` error; read "Review 2026-11-08: corrections" before any step, it overrides stale anchors below.
 
 ## Problem
 
@@ -60,6 +60,63 @@ Decided (from the brief; not re-litigated here):
 
 Recommended (mine, open for review): `RecordObserved` lives on a new narrow interface
 `IObservedContentLedger`, composed into `IWorkspaceManager`. See "Interface impact".
+
+### 2026-11-08 (owner, at review)
+
+- **Per-agent key (supersedes decision 1's key and open question 1).** `_observedHashes` is keyed by
+  `(agentKey, FilePathWrapper)` where `agentKey = ToolCallContext.Current?.AgentId ?? ""`
+  (`Common/ToolCallContext.cs:36`). `RecordObserved` writes the caller's key; the stale check compares only
+  the writer's key; the post-write refresh (decision 4) updates only the writer's key and only if that key
+  already has an entry. Delete removes the path under every key; rollback restores the writer's key.
+  Calls without an AgentId share the `""` key (the original process-wide behavior). F6 is resolved by this.
+- **Step 6 shape: a Finding, no new field.** An allowed write to a target the writer never observed adds an
+  "unobserved target" entry to the existing `ApplyChangesResult.Findings` channel (only when the policy is
+  `RefuseIfObservedStale`). No new DTO field.
+- **Large-file `ReadFile`** (now returns the first part inline and stores the rest, not an outline): records
+  the whole-file hash, consistent with decision 2 (a partial read counts as observing the whole file).
+- **Open questions 2-6 accepted as the review recommended:** coexist with the latch, F1 stays deferred (2);
+  keep explicit `RecordObserved` calls (3); `IObservedContentLedger` placement (4); the derived decisions
+  in 5, with the ordering corrected below; do not clear on reload (6).
+- **Run:** Batched mode, owner present. Batch A = steps 1-3b, B = 4a-4b, C = 5-6; step 7 (docs) by the
+  main session.
+
+### Review 2026-11-08: corrections (override the anchors and claims below)
+
+Nothing was implemented before 2026-11-08. Line numbers below are from the review; re-verify before editing.
+
+- **Signature:** `ApplyProposedChangesAsync` now ends `..., bool exactRestore, string? operationLabel`
+  (`IWorkspaceMutator.cs:12`, PWM `:1815`, `FakeWorkspaceManager.cs:101`). Append `staleReadPolicy` AFTER
+  `operationLabel`. Callers: 124 references in 30 files (all compile unchanged with a defaulted parameter).
+- **PWM anchors (file is ~3143 lines):** `_knownFileHashes` `:90`; `ComputeContentHash` `:513`; drift
+  check/latch `:1917-1924`; `CheckConcurrentEditConflict` (edit attribution, `ConcurrentEditRefused`)
+  `:1980`; pre-image loop `:~1990-2000`; EOL pre-pass `:2005`, refusal `:2011-2016`; delete removal
+  `:2036`; write refresh `:2124`; rollback `:2171-2190`; `RecordFoldedDocumentBaseline` `:2527-2531`.
+- **Check ordering (step 3a):** drift latch, then `CheckConcurrentEditConflict`, then pre-image capture, then
+  the stale-read check, then the EOL guard. Both concurrent-edit and stale-read refusals are non-latching.
+- **`ToolErrorCode`** is at `SentinelCallToolResult.cs:75`, beside `ConcurrentEditRefused`,
+  `ScopedLedgerBlocked`, `CollateralChangeRefused`. `ApplyChangesResult.Code` already returns
+  `RefusalCode ?? Exception`.
+- **Step 4a:** `ReadFile` `WorkspaceFileEditImpl.cs:345-525`, `ReadFileWithoutSolutionAsync` `:271-343`; member
+  branch `:352-369`; range and whole-file share one `sourceText` `:380-400`; no `TrimRangeToInlineBudget`.
+  Large file: records (decision above); test row J's "outline does NOT record" is obsolete.
+- **Step 4b:** `GetMethodSource` `WorkspaceReadNavigationImpl.cs:244-369`; `SearchSolutionText` `:989-1284`.
+  The parallel scan collects into a `ConcurrentBag`; `maxResults` is applied afterwards (`uniqueHits.Take`,
+  `:1156`, text fetched `:1161`). Record in that sequential loop over returned hits; there is no
+  per-document early exit, so row M becomes "records only documents among the returned hits".
+- **Step 5:** call sites `WholeFileWriteTools.cs` WriteFile `:76`, DeleteFile `:137`, ApplyDiff files `:409`
+  (diff format `:542`, ApplyUnifiedDiff `:677` stay on `None`). `ValidateAndApplyHelper.cs:139-147` already
+  maps any `RefusalCode` generically: do not touch it. The three tools still need mapping: WriteFile and
+  DeleteFile map every error to `Exception`; ApplyDiff files branch appears to return `IsError=false` for
+  non-validation refusals. Build the re-read instruction with `ToolCallHint.Call("ReadFile", ...)` (a ratchet
+  forbids hand-written hints), plus "if refused again, wait a moment" (debounce window).
+- **Hash domain verified:** `ReadAllTextIfExistsAsync` and `ReadAllTextAsync` both use
+  `File.ReadAllTextAsync` (`FileIoHelper.cs:16-30`), identical BOM/EOL handling. Unverified hypothesis:
+  MSBuild-loaded documents decode via Roslyn and may differ for non-UTF-8 files.
+- **Test seam (row B) exists:** a real PWM with `SetTestSolution(new AdhocWorkspace().CurrentSolution)` plus a
+  document whose `FilePath` is a temp file with different disk text (precedent
+  `EditAttributionConflictRefusalTests.cs:35`). Prefer it over `TestSolutionFixture`.
+- **F2 appears fixed:** `OnDebounceTimerElapsed` folds via `ApplyInMemoryDocumentUpdatesAsync`, which calls
+  `RecordFoldedDocumentBaseline`. Step 7 confirms and updates the watcher reference.
 
 ## Background: prior design that overlaps, conflicts or is superseded
 
