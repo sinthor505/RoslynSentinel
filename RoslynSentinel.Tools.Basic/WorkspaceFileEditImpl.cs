@@ -301,6 +301,8 @@ public class WorkspaceFileEditImpl
                 }
 
                 // The requested range is returned whole; an over-budget range is paged by lines by the result marshaller.
+                // instance ResolveFromWire yields an empty path while no solution is loaded
+                _workspaceManager.RecordObserved(FilePathWrapper.ResolveFromWire(absolutePath, null), diskContent);
                 var slice = sourceText.ToString(TextSpan.FromBounds(sourceText.Lines[from - 1].Start, sourceText.Lines[to - 1].EndIncludingLineBreak));
                 return new SentinelCallToolResult<object>()
                 {
@@ -322,6 +324,7 @@ public class WorkspaceFileEditImpl
                 };
             }
 
+            _workspaceManager.RecordObserved(FilePathWrapper.ResolveFromWire(absolutePath, null), diskContent);
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
@@ -339,6 +342,27 @@ public class WorkspaceFileEditImpl
                 IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReadFile")
             };
+        }
+    }
+
+    private async Task RecordWholeFileObservedAsync(FilePathWrapper path, CancellationToken cancellationToken)
+    {
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var normalizedPath = Path.GetFullPath(path);
+        var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
+
+        string? wholeText;
+        if (document != null)
+        {
+            wholeText = (await document.GetTextAsync(cancellationToken)).ToString();
+        }
+        else
+        {
+            wholeText = await FileIoHelper.ReadAllTextIfExistsAsync(path, cancellationToken);
+        }
+        if (wholeText != null)
+        {
+            _workspaceManager.RecordObserved(path, wholeText);
         }
     }
 
@@ -368,6 +392,8 @@ public class WorkspaceFileEditImpl
             {
                 // GetMemberSourceAsync throws on failure and returns Modified with a non-null source.
                 var (_, _, _, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, null, null, null, true, cancellationToken);
+                // Extra whole-file fetch the member read costs (the member slice alone cannot be recorded).
+                await RecordWholeFileObservedAsync(filePathResolved, cancellationToken);
                 return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source!) };
             }
             catch (Exception ex)
@@ -423,6 +449,7 @@ public class WorkspaceFileEditImpl
                     };
                 }
 
+                _workspaceManager.RecordObserved(filePathResolved, sourceText.ToString());
                 // The requested range is returned whole; an over-budget range is paged by lines by the result marshaller.
                 var start = sourceText.Lines[from - 1].Start;
                 var end = sourceText.Lines[to - 1].EndIncludingLineBreak;
@@ -464,6 +491,7 @@ public class WorkspaceFileEditImpl
             }
 
             var fullText = sourceText.ToString();
+            _workspaceManager.RecordObserved(filePathResolved, fullText);
             var mixedEol = EolUtilities.DescribeMixedLineEndings(fullText);
             var textBytes = System.Text.Encoding.UTF8.GetByteCount(fullText);
             const int thresholdBytes = LargeResultHelper.InlineBudgetChars;
