@@ -535,14 +535,19 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         return false;
     }
 
-    // Refreshes only the writer's own ledger entry, and only when that key already has one for the
-    // path. Never creates an entry from a write.
-    private void RefreshObservedForWriter(FilePathWrapper path, string hash)
+    // Refreshes the writer's own ledger entry. Update-only by default. Creates the entry only when
+    // createIfMissing is true, which the success path passes after the rollback decision (a
+    // rolled-back batch creates nothing). The in-loop and rollback refreshes stay update-only.
+    private void RefreshObservedForWriter(FilePathWrapper path, string hash, bool createIfMissing = false)
     {
         var key = (ObservedAgentKey(), path);
         if (_observedHashes.TryGetValue(key, out var existing))
         {
             _observedHashes.TryUpdate(key, hash, existing);
+        }
+        else if (createIfMissing)
+        {
+            _observedHashes[key] = hash;
         }
     }
 
@@ -2294,6 +2299,19 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     }
                 }
                 succeeded.Clear();
+            }
+
+            // Ledger creation happens here, after the rollback decision, not in the write loop above:
+            // a rolled-back batch has cleared succeeded and so creates nothing. The in-loop refresh
+            // stays update-only. No-op writes (noOp) changed nothing, so they are skipped.
+            foreach (var change in changes)
+            {
+                var filePath = change.Key;
+                if (!succeeded.Contains(filePath) || noOp.Contains(filePath))
+                {
+                    continue;
+                }
+                RefreshObservedForWriter(filePath, ComputeContentHash(contentsToWrite[filePath]), createIfMissing: true);
             }
 
             if (succeeded.Count > 0)

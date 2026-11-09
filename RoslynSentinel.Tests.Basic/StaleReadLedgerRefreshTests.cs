@@ -125,7 +125,7 @@ public class StaleReadLedgerRefreshTests
     }
 
     [Test]
-    public async Task AgentWithNoEntry_StaysUnobservedAcrossWrites()
+    public async Task AgentWithNoEntry_GainsEntryFromItsOwnWrite_ThenExternalChangeMakesNextWriteStaleRead()
     {
         var dir = NewTempDir();
         try
@@ -138,13 +138,17 @@ public class StaleReadLedgerRefreshTests
             var first = await WriteAsync(manager, file, Variant(2));
             Assert.That(first.IsError, Is.False, first.Summary);
 
-            // An external change would be stale for an observed agent; agent C never observed the file.
+            // A successful write creates the writer's entry, hashed from the text that reached disk.
+            Assert.That(manager.TryGetObservedHash(new FilePathWrapper(file), out var observed), Is.True);
+            Assert.That(observed, Is.EqualTo(ContentFingerprint.Compute(Variant(2))));
+
+            // Agent C now observed the file through its own write, so an external change is stale for it.
             File.WriteAllText(file, Variant(7));
             var second = await WriteAsync(manager, file, Variant(3));
 
-            Assert.That(second.IsError, Is.False, second.Summary);
-            Assert.That(second.RefusalCode, Is.Not.EqualTo(ToolErrorCode.StaleRead));
-            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Variant(3)));
+            Assert.That(second.IsError, Is.True, second.Summary);
+            Assert.That(second.RefusalCode, Is.EqualTo(ToolErrorCode.StaleRead));
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Variant(7)));
         }
         finally
         {
@@ -259,6 +263,77 @@ public class StaleReadLedgerRefreshTests
                 File.SetAttributes(fileB, FileAttributes.Normal);
             }
 
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task RollbackOfPartialFailure_CreatesNoEntryForWriter()
+    {
+        var dir = NewTempDir();
+        var fileA = Path.Combine(dir, "A.cs");
+        var fileB = Path.Combine(dir, "B.cs");
+        try
+        {
+            File.WriteAllText(fileA, Original);
+            File.WriteAllText(fileB, Original);
+            using var manager = NewManager((fileA, Original), (fileB, Original));
+            AsAgent("agentA");
+
+            // Agent A has no entry for either file. B is read-only, so A's write lands and is then rolled back.
+            File.SetAttributes(fileB, FileAttributes.ReadOnly);
+            var batch = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [fileA] = Variant(2),
+                    [fileB] = Variant(2)
+                }, retryCount: 0, validateChanges: false,
+                rollbackOnPartialFailure: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+            Assert.That(batch.IsError, Is.True, batch.Summary);
+            Assert.That(batch.RolledBackFiles, Does.Contain(fileA));
+            Assert.That(await File.ReadAllTextAsync(fileA), Is.EqualTo(Original));
+
+            // The rolled-back write created nothing: neither file has an entry for agent A.
+            Assert.That(manager.TryGetObservedHash(new FilePathWrapper(fileA), out _), Is.False);
+            Assert.That(manager.TryGetObservedHash(new FilePathWrapper(fileB), out _), Is.False);
+        }
+        finally
+        {
+            if (File.Exists(fileB))
+            {
+                File.SetAttributes(fileB, FileAttributes.Normal);
+            }
+
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task WriteThroughIWorkspaceMutator_CreatesWriterEntryWithoutToolEdit()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager((file, Original));
+            AsAgent("agentA");
+
+            // An engine or helper caller holds only the interface: no RecordObserved and no tool-side edit.
+            IWorkspaceMutator mutator = manager;
+            var result = await mutator.ApplyProposedChangesAsync(
+                new()
+                {
+                    [file] = Variant(2)
+                }, retryCount: 0, validateChanges: false,
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+            Assert.That(result.IsError, Is.False, result.Summary);
+
+            Assert.That(manager.TryGetObservedHash(new FilePathWrapper(file), out var observed), Is.True);
+            Assert.That(observed, Is.EqualTo(ContentFingerprint.Compute(Variant(2))));
+        }
+        finally
+        {
             Directory.Delete(dir, recursive: true);
         }
     }

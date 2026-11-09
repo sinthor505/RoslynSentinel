@@ -26,14 +26,18 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
 
     public void RecordObserved(FilePathWrapper path, string text) => _observedHashes[(ToolCallContext.Current?.AgentId ?? "", path)] = ContentFingerprint.Compute(text);
 
-    // Refreshes only the writer's own entry, and only when that key already has one for the path.
-    // Never creates an entry from a write.
-    private void RefreshObservedForWriter(FilePathWrapper path, string hash)
+    // Refreshes the writer's own entry. Update-only by default. Creates the entry only when
+    // createIfMissing is true (the fake has no rollback, so a successful write creates it).
+    private void RefreshObservedForWriter(FilePathWrapper path, string hash, bool createIfMissing = false)
     {
         var key = (ToolCallContext.Current?.AgentId ?? "", path);
         if (_observedHashes.TryGetValue(key, out var existing))
         {
             _observedHashes.TryUpdate(key, hash, existing);
+        }
+        else if (createIfMissing)
+        {
+            _observedHashes[key] = hash;
         }
     }
 
@@ -254,7 +258,7 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
             }
 
             succeeded.Add(key);
-            RefreshObservedForWriter(key, ContentFingerprint.Compute(newText));
+            RefreshObservedForWriter(key, ContentFingerprint.Compute(newText), createIfMissing: true);
         }
 
         foreach (var path in deletePaths ?? [])
