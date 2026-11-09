@@ -1958,20 +1958,10 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                          $"{string.Join(", ", overlap.Select(f => Path.GetFileName(f)))}.");
         }
 
-        // Confirmed external drift: a proposed change is always computed against
-        // CurrentSolution's in-memory text; if the target file was touched on disk after that
-        // and the hash-baseline gate (OnFileSystemChanged) still flagged it as real drift, the
-        // proposed content is stale and writing it would silently clobber whatever changed it
-        // externally. Under the single-session/no-concurrent-actors assumption this is an
-        // anomaly, not something for the in-task model to reconcile -> trip the session-wide
-        // latch and fail rather than returning a soft, retryable result.
-        var drift = new HashSet<string>(GetExternalFileChanges(), StringComparer.OrdinalIgnoreCase);
-        var driftedTargets = changes.Keys.Concat(deletePaths).Where(k => drift.Contains(k)).Distinct().ToList();
-        if (driftedTargets.Count > 0)
-        {
-            _sessionHalted = true;
-            throw new SessionHaltedException(DriftMessages.DriftHaltMessage);
-        }
+        // External drift no longer halts the session (replaced by per-file protection): drift on a file the agent
+        // read or edited is caught per agent by StaleRead (observed-content ledger), and an in-memory document that
+        // differs from disk is caught by FoldPending. _externalChanges is kept for ExternalFileDrift visibility only.
+        // TODO _sessionHalted can no longer be set; remove the dead latch and its readers (HaltInfo, IdleRestartPolicy, HaltStamp) in a cleanup slice
 
         // Pre-lock validation: compiles an in-memory fork without holding the write lock,
         // consistent with the existing external validate-then-apply pattern.

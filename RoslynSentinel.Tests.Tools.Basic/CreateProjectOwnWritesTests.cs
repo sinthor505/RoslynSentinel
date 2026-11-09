@@ -68,7 +68,7 @@ public class CreateProjectOwnWritesTests
         var unrelated = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         await File.WriteAllTextAsync(unrelated, await File.ReadAllTextAsync(unrelated) + "\n// unrelated external edit\n");
 
-        // Poll for the watcher to flag the edit (same pattern as DeleteFile_DriftedFile_RefusesDeleteAsync).
+        // Poll for the watcher to flag the edit (real-watcher path; the DeleteFile drift tests use AddExternalChangeForTest instead).
         var flagDeadline = DateTime.UtcNow.AddSeconds(5);
         while (!workspaceManager.GetExternalFileChanges().Contains(unrelated, StringComparer.OrdinalIgnoreCase) && DateTime.UtcNow < flagDeadline)
         {

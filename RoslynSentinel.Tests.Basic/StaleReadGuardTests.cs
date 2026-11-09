@@ -227,7 +227,7 @@ public class StaleReadGuardTests
     }
 
     [Test]
-    public async Task DriftFlaggedTarget_WithStaleLedgerEntry_LatchWins_ThrowsSessionHalted()
+    public async Task DriftFlaggedTarget_WithStaleLedgerEntry_RefusedWithStaleRead_NoLatch()
     {
         var dir = NewTempDir();
         try
@@ -240,15 +240,139 @@ public class StaleReadGuardTests
             File.WriteAllText(file, Variant(3));
             manager.AddExternalChangeForTest(file);
 
-            await Assert.ThrowsAsync<SessionHaltedException>(async () => await manager.ApplyProposedChangesAsync(
+            var result = await manager.ApplyProposedChangesAsync(
                 new()
                 {
                     [file] = Variant(2)
                 }, retryCount: 0, validateChanges: false,
-                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale));
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
 
-            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Variant(3)));
-            Assert.That(manager.IsSessionHalted(), Is.True, "The drift latch must halt the session before the stale-read guard runs.");
+            Assert.That(result.IsError, Is.True, result.Summary);
+            Assert.That(result.RefusalCode, Is.EqualTo(ToolErrorCode.StaleRead));
+            Assert.That(result.FailedFiles.ContainsKey(new FilePathWrapper(file)), Is.True);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Variant(3)),
+                "The externally written disk text must be left untouched.");
+            Assert.That(manager.IsSessionHalted(), Is.False, "Drift is non-latching; only the unrecoverable breaker halts the session.");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task DriftFlaggedTarget_NeverObserved_MemoryEqualsDisk_WriteSucceedsWithoutHalt()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager((file, Original));
+            AsAgent("agentA");
+            manager.AddExternalChangeForTest(file);
+
+            var result = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [file] = Variant(2)
+                }, retryCount: 0, validateChanges: false,
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Variant(2)));
+            Assert.That(manager.IsSessionHalted(), Is.False, "An unobserved drift-flagged target must not halt the session.");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task DriftFlaggedTarget_ReadThenReObserved_RetrySucceeds()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Original);
+            using var manager = NewManager((file, Original));
+            AsAgent("agentA");
+            manager.RecordObserved(new FilePathWrapper(file), Original);
+            File.WriteAllText(file, Variant(3));
+            manager.AddExternalChangeForTest(file);
+
+            var refused = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [file] = Variant(2)
+                }, retryCount: 0, validateChanges: false,
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+
+            Assert.That(refused.IsError, Is.True, refused.Summary);
+            Assert.That(refused.RefusalCode, Is.EqualTo(ToolErrorCode.StaleRead));
+
+            // The agent re-reads: fold the disk change into memory, then record the current disk text as observed.
+            await manager.ApplyInMemoryDocumentUpdatesAsync(new List<string> { file }, CancellationToken.None);
+            manager.RecordObserved(new FilePathWrapper(file), Variant(3));
+
+            var retried = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [file] = Variant(2)
+                }, retryCount: 0, validateChanges: false,
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+
+            Assert.That(retried.IsError, Is.False, retried.Summary);
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Variant(2)));
+            Assert.That(manager.IsSessionHalted(), Is.False);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task DriftFlaggedPath_StaysListedAcrossOtherWrite_ClearByPathEmptiesListWithoutChangingWrites()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var flagged = Path.Combine(dir, "A.cs");
+            var other = Path.Combine(dir, "B.cs");
+            File.WriteAllText(flagged, Original);
+            File.WriteAllText(other, Original);
+            using var manager = NewManager((flagged, Original), (other, Original));
+            AsAgent("agentA");
+            manager.AddExternalChangeForTest(flagged);
+
+            var firstWrite = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [other] = Variant(2)
+                }, retryCount: 0, validateChanges: false,
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+
+            Assert.That(firstWrite.IsError, Is.False, firstWrite.Summary);
+            Assert.That(manager.GetExternalFileChanges(), Does.Contain(flagged),
+                "A drift flag is visibility only; a write elsewhere must not clear it.");
+
+            manager.ClearExternalFileChanges(new List<string> { flagged });
+
+            Assert.That(manager.GetExternalFileChanges(), Is.Empty);
+
+            var secondWrite = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [other] = Variant(4)
+                }, retryCount: 0, validateChanges: false,
+                staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+
+            Assert.That(secondWrite.IsError, Is.False, secondWrite.Summary);
+            Assert.That(await File.ReadAllTextAsync(other), Is.EqualTo(Variant(4)));
+            Assert.That(manager.IsSessionHalted(), Is.False);
         }
         finally
         {

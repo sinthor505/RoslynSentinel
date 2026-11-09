@@ -391,7 +391,7 @@ public class CreateFileDeleteFileTests
     }
 
     [Test]
-    public async Task DeleteFile_DriftedFile_RefusesDeleteAsync()
+    public async Task DeleteFile_DriftedUnreadFile_DeletesWithoutSessionHaltAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -402,28 +402,49 @@ public class CreateFileDeleteFileTests
         WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
-        // Modify the file directly on disk (bypassing ApplyProposedChangesAsync) without
-        // reloading/clearing drift, so DeleteFileTool sees it as externally modified since last sync.
-        await fixture.ModifyFileInSolution(workspaceManager, Path.GetRelativePath(fixture.SolutionDirectory, targetFile), await File.ReadAllTextAsync(targetFile) + "\n// drift\n", reloadSolution: false);
-
-        // ApplyProposedChangesAsync's drift check (GetExternalFileChanges()) reads a set populated
-        // asynchronously by a FileSystemWatcher callback (OnFileSystemChanged), not synchronously by
-        // the write above -> under heavy concurrent disk I/O from other test assemblies in a full
-        // parallel run, the watcher event can lag past the point where DeleteFileTool below checks it,
-        // making the delete wrongly succeed (root-caused 2026-09-06, was previously a documented
-        // flake here). Poll for the watcher to actually report the drift before proceeding, instead
-        // of assuming it already has.
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (!workspaceManager.GetExternalFileChanges().Contains(targetFile, StringComparer.OrdinalIgnoreCase) && DateTime.UtcNow < deadline)
-        {
-            await Task.Delay(25);
-        }
+        // Flag the file through the test seam instead of waiting on the FileSystemWatcher, so the outcome does not depend on watcher timing.
+        // The agent never read this file, so there is no observed-content entry for StaleRead to compare against.
+        workspaceManager.AddExternalChangeForTest(targetFile);
 
         var result = await wholeFileWriteTools.DeleteFileTool(reason: "test message", targetFile);
 
-        Assert.That(!result.IsError, Is.False);
-        Assert.That(result.Message, Does.Contain("ExternalFileDrift"));
-        Assert.That(File.Exists(targetFile), Is.True);
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(File.Exists(targetFile), Is.False);
+        Assert.That(workspaceManager.IsSessionHalted(), Is.False, "Drift is non-latching; only the unrecoverable breaker halts the session.");
+    }
+
+    [Test]
+    public async Task DeleteFile_DriftedReadFile_RefusedWithStaleReadAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = Basic.TestEngines.DiffEngine();
+        var validationEngine = Basic.TestEngines.ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        WholeFileWriteTools wholeFileWriteTools = Basic.TestTools.WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, Basic.TestEngines.SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+
+        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        ToolCallContext.Set(new ToolCallContext("agentA", null, "DeleteFile", null, 0));
+        try
+        {
+            // The agent reads the file (recorded in the observed-content ledger), then the file changes on disk and is flagged.
+            var observedText = await File.ReadAllTextAsync(targetFile);
+            workspaceManager.RecordObserved(new FilePathWrapper(targetFile), observedText);
+            await fixture.ModifyFileInSolution(workspaceManager, Path.GetRelativePath(fixture.SolutionDirectory, targetFile), observedText + "\n// drift\n", reloadSolution: false);
+            workspaceManager.AddExternalChangeForTest(targetFile);
+
+            var result = await wholeFileWriteTools.DeleteFileTool(reason: "test message", targetFile);
+
+            Assert.That(result.IsError, Is.True, "Deleting a file the agent read and that then changed must be refused.");
+            Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.StaleRead));
+            Assert.That(File.Exists(targetFile), Is.True);
+            Assert.That(workspaceManager.IsSessionHalted(), Is.False, "A stale read is non-latching.");
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
     }
 
     // Timestamp-only touch of a workspace document that has NO recorded baseline hash must not be
