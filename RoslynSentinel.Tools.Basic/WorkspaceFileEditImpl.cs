@@ -758,14 +758,19 @@ public class WorkspaceFileEditImpl
                     }
 
                     var result = await _workspaceManager.ApplyProposedChangesAsync(snippetChanges, validateChanges: validateOnApply);
+                    var untouchedNote = result.IsError && result.ValidationResult != null
+                        ? ValidateAndApplyHelper.DescribeUntouchedFileErrors(snippetChanges.Keys.Select(k => (string)k), result.ValidationResult.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath")
+                        : null;
                     if (result.IsError && result.ValidationResult != null)
                         return new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
                             IsError = true,
                             ErrorData = new ResultError(ToolErrorCode.Exception,
-                                "ReplaceSnippet: the edit matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
+                                "ReplaceSnippet: the edit matched the target file, but the resulting code introduces new compiler errors - change not applied. " +
+                                (untouchedNote is null ? "" : untouchedNote + " ") +
+                                "Fix the issue(s) below and retry:\n" +
                                 "[COMPILER ERROR]\n" +
-                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
+                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, snippetChanges.Keys.Select(k => (string)k).ToList()))
                         };
                     await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet", result, cancellationToken: cancellationToken);
                     var strippedResult = result with { PreImages = null };
@@ -1013,14 +1018,19 @@ public class WorkspaceFileEditImpl
         try
         {
             var result = await _workspaceManager.ApplyProposedChangesAsync(finalContents, validateChanges: validateOnApply);
+            var untouchedNote = result.IsError && result.ValidationResult != null
+                ? ValidateAndApplyHelper.DescribeUntouchedFileErrors(finalContents.Keys.Select(k => (string)k), result.ValidationResult.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath")
+                : null;
             if (result.IsError && result.ValidationResult != null)
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception,
-                        "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors - no changes were written. Fix the issue(s) below and retry:\n" +
+                        "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors - no changes were written. " +
+                        (untouchedNote is null ? "" : untouchedNote + " ") +
+                        "Fix the issue(s) below and retry:\n" +
                         "[COMPILER ERROR]\n" +
-                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken),
+                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, finalContents.Keys.Select(k => (string)k).ToList()),
                         StructuredDetail: result.ValidationResult.Diagnostics),
                 };
             await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet_batch", result, cancellationToken: cancellationToken);

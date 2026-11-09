@@ -209,6 +209,7 @@ public static class McpToolSchemaPatcher
         }
 
         ApplyConsumesTags(tool, toolMethod);
+        ApplyBatchItemFields(tool, toolMethod);
         ApplyReplaceSnippetLimits(tool, toolMethod);
         ApplyLeanProfile(tool, toolMethod);
         return tool;
@@ -282,6 +283,106 @@ public static class McpToolSchemaPatcher
         SerializerOptions = serializerOptions,
         SchemaCreateOptions = SchemaCreateOptions,
     };
+
+    /// <summary>
+    /// Post-processes <paramref name="tool"/>'s already-built <see cref="Tool.InputSchema"/> so every batch item
+    /// property marked <see cref="BatchItemFieldAttribute"/> gets its description and, when required, a slot in
+    /// the item's <c>required</c> array. Reparses by parameter name, as <see cref="ApplyConsumesTags"/> does.
+    /// </summary>
+    private static void ApplyBatchItemFields(McpServerTool tool, MethodInfo toolMethod)
+    {
+        // Generic successor of PatchBatchEditItems' oldContent rule: any List/IEnumerable/array parameter whose element type has attributed properties.
+        JsonNode? schemaNode = JsonNode.Parse(tool.ProtocolTool.InputSchema.GetRawText());
+        if (schemaNode is not JsonObject schemaObj ||
+            !schemaObj.TryGetPropertyValue("properties", out JsonNode? propertiesNode) ||
+            propertiesNode is not JsonObject propertiesObj)
+        {
+            return;
+        }
+
+        bool anyChanged = false;
+        foreach (ParameterInfo parameter in toolMethod.GetParameters())
+        {
+            Type paramType = parameter.ParameterType;
+            Type? itemType = paramType.IsArray
+                ? paramType.GetElementType()
+                : paramType.IsGenericType && paramType.GetGenericArguments().Length == 1 &&
+                  (paramType.GetGenericTypeDefinition() == typeof(List<>) || paramType.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+                    ? paramType.GetGenericArguments()[0]
+                    : null;
+            if (itemType is null || parameter.Name is null ||
+                !propertiesObj.TryGetPropertyValue(parameter.Name, out JsonNode? paramNode) ||
+                paramNode is not JsonObject paramObj ||
+                paramObj["items"] is not JsonObject itemsObj)
+            {
+                continue;
+            }
+
+            // The exporter may emit the item schema inline or as a $ref into $defs.
+            JsonObject itemSchema = itemsObj;
+            if (itemsObj["$ref"] is JsonValue refValue &&
+                refValue.TryGetValue(out string? refPath) &&
+                refPath is not null &&
+                refPath.StartsWith("#/$defs/", StringComparison.Ordinal) &&
+                schemaObj["$defs"] is JsonObject defsObj &&
+                defsObj[refPath["#/$defs/".Length..]] is JsonObject resolved)
+            {
+                itemSchema = resolved;
+            }
+
+            if (itemSchema["properties"] is not JsonObject itemProps)
+            {
+                continue;
+            }
+
+            foreach (PropertyInfo property in itemType.GetProperties(BindingFlags.Instance | BindingFlags.Public))
+            {
+                BatchItemFieldAttribute? field = property.GetCustomAttribute<BatchItemFieldAttribute>();
+                if (field is null)
+                {
+                    continue;
+                }
+
+                string jsonName = property.GetCustomAttribute<System.Text.Json.Serialization.JsonPropertyNameAttribute>()?.Name
+                    ?? JsonNamingPolicy.CamelCase.ConvertName(property.Name);
+                if (!itemProps.TryGetPropertyValue(jsonName, out JsonNode? propNode) || propNode is not JsonObject propObj)
+                {
+                    continue;
+                }
+
+                if (propObj["description"] is null)
+                {
+                    propObj["description"] = field.Description;
+                    anyChanged = true;
+                }
+
+                if (!field.Required)
+                {
+                    continue;
+                }
+
+                if (itemSchema["required"] is not JsonArray requiredArray)
+                {
+                    requiredArray = [];
+                    itemSchema["required"] = requiredArray;
+                    anyChanged = true;
+                }
+
+                bool alreadyRequired = requiredArray.Any(n =>
+                    n is JsonValue v && v.TryGetValue(out string? s) && s == jsonName);
+                if (!alreadyRequired)
+                {
+                    requiredArray.Add(jsonName);
+                    anyChanged = true;
+                }
+            }
+        }
+
+        if (anyChanged)
+        {
+            tool.ProtocolTool.InputSchema = JsonSerializer.SerializeToElement(schemaNode);
+        }
+    }
 
     internal static object CreateTarget(IServiceProvider? services, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type type) =>
         services is null ? Activator.CreateInstance(type)! : ActivatorUtilities.CreateInstance(services, type);

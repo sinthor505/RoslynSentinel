@@ -1,6 +1,6 @@
 # Plan: Teach ReplaceSnippet's description, schema and errors the atomic cross-file batch
 
-**Status:** DRAFT 2026-10-19. Five environment fixes from the AppliesThreeChainedRefactors analysis; not started, awaiting approval.
+**Status:** DRAFT 2026-10-19. Five environment fixes from the AppliesThreeChainedRefactors analysis; Steps 2-4 widened to every batch tool and in progress via `findings/finding_batch_edit_item_schema_hides_required_fields.md` (2026-11-08); Steps 1 and 5 still open.
 
 ## Problem
 

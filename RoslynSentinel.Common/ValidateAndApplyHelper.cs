@@ -15,6 +15,66 @@ namespace RoslynSentinel.Common;
 /// </summary>
 public static class ValidateAndApplyHelper
 {
+    /// <summary>
+    /// Names the files a failed compile gate reports new errors in that the edit did not change, so the caller can
+    /// say which other files still use what the edit removed or renamed. Returns null when every such file was edited.
+    /// </summary>
+    /// <param name="atomicRouteHint">Optional wording for the one-call route; defaults to a batch or a call-site-updating refactoring tool.</param>
+    public static string? DescribeUntouchedFileErrors(IEnumerable<string> editedFilePaths, IEnumerable<string?> diagnosticFilePaths, string? atomicRouteHint = null)
+    {
+        var edited = editedFilePaths.Select(NormalizeSeparators).ToList();
+        var untouched = diagnosticFilePaths
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => NormalizeSeparators(p!))
+            .Where(p => !edited.Any(e => SameFile(e, p)))
+            .Select(p => Path.GetFileName(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (untouched.Count == 0)
+        {
+            return null;
+        }
+
+        var shown = string.Join(", ", untouched.Take(5));
+        var more = untouched.Count > 5 ? $" and {untouched.Count - 5} more" : string.Empty;
+        var route = atomicRouteHint ?? "a batch with one item per file (each item has its own filePath), or a refactoring tool that updates call sites";
+        return $"The new errors are in file(s) this edit did not change: {shown}{more}. They still use what this edit removed or renamed. " +
+            $"Make the change and every affected use in ONE call: {route}.";
+
+        static string NormalizeSeparators(string path) => path.Trim().Replace('/', '\\');
+
+        // A workspace-relative path matches an absolute one when the absolute path ends with it.
+        static bool SameFile(string a, string b)
+        {
+            if (string.Equals(a, b, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            bool aRooted = Path.IsPathRooted(a);
+            bool bRooted = Path.IsPathRooted(b);
+            if (aRooted != bRooted)
+            {
+                var (absolute, relative) = aRooted ? (a, b) : (b, a);
+                return absolute.EndsWith("\\" + relative, StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (!aRooted)
+            {
+                return false;
+            }
+
+            try
+            {
+                return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+            {
+                return false;
+            }
+        }
+    }
+
     public static async Task<ApplyOutcome> ValidateAndApplyAsync(
         ValidationEngine validationEngine,
         IWorkspaceManager workspaceManager,
@@ -104,12 +164,14 @@ public static class ValidateAndApplyHelper
         if (validation.IsError)
         {
             var detail = validation.Diagnostics;
+            var untouchedText = DescribeUntouchedFileErrors(changes.Keys.Select(k => (string)k), detail.Select(d => d.FilePath.ToString()));
             var detailString = describeValidationFailure != null
                 ? await describeValidationFailure(validation, cancellationToken)
                 : validation.Diagnostics.ToJson();
             var validationError = new ResultError(
                 ToolErrorCode.ValidationFailed,
                 $"{operationName}: the change was valid and matched its target(s), but introduces new compiler errors - change not applied. " +
+                (untouchedText is null ? "" : untouchedText + " ") +
                 $"Fix the issue(s) below and retry.",
                 detailString,
                 detail.Cast<object>().ToList());

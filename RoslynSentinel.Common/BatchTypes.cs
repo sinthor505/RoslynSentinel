@@ -563,10 +563,13 @@ public class SnippetEdit
 {
     // Wire type is string, not FilePathWrapper -> see comment on HandlerExtractTarget.FilePath above.
     /// <summary>Absolute path of the .cs file this edit applies to.</summary>
+    [BatchItemField("Path of the .cs file this edit applies to. Every item needs its own filePath.", Required = true)]
     public string FilePath { get; set; } = "";
     /// <summary>Verbatim text to find and replace, matched exactly against the file's original content.</summary>
+    [BatchItemField("Verbatim text to find and replace, matched exactly against the file's original content.", Required = true)]
     public string OldContent { get; set; } = "";
     /// <summary>Verbatim replacement text. May be empty (pure deletion) or longer than OldContent (net insertion).</summary>
+    [BatchItemField("Verbatim replacement text. May be empty (pure deletion) or longer than OldContent (net insertion).", Required = true)]
     public string NewContent { get; set; } = "";
     /// <summary>Optional line immediately before OldContent, for disambiguation.</summary>
     public string? LineBefore
@@ -579,11 +582,13 @@ public class SnippetEdit
         get; set;
     }
     /// <summary>Optional name of the member containing the intended OldContent match.</summary>
+    [BatchItemField("Optional name of the member containing the intended OldContent match.")]
     public string? WithinMember
     {
         get; set;
     }
     /// <summary>Optional 1-based line (in the original file) where the intended OldContent match starts.</summary>
+    [BatchItemField("Optional 1-based line (in the original file) where the intended OldContent match starts.")]
     public int? MatchLine
     {
         get; set;
@@ -594,24 +599,32 @@ public class SnippetEdit
 public class ModifierEdit
 {
     // Wire type is string, not FilePathWrapper -> see comment on HandlerExtractTarget.FilePath above.
+    [BatchItemField("Path of the .cs file this edit applies to. Every item needs its own filePath.", Required = true)]
     public string FilePath { get; set; } = "";
+    [BatchItemField("Name of the member to modify.", Required = true)]
     public string TargetName { get; set; } = "";
+    // TODO Modifier/Action default silently when omitted; make nullable and reject missing
+    [BatchItemField("Non-accessibility modifier to add or remove.", Required = true)]
     public NonAccessibilityModifier Modifier
     {
         get; set;
     }
+    [BatchItemField("Whether to add or remove the modifier.", Required = true)]
     public AddRemoveAction Action
     {
         get; set;
     }
+    [BatchItemField("Optional verbatim source line used to disambiguate the target.")]
     public string? ContextSnippet
     {
         get; set;
     }
+    [BatchItemField("Optional line immediately before the target, for disambiguation.")]
     public string? LineBefore
     {
         get; set;
     }
+    [BatchItemField("Optional line immediately after the target, for disambiguation.")]
     public string? LineAfter
     {
         get; set;
@@ -622,32 +635,41 @@ public class ModifierEdit
 public class AttributeEdit
 {
     // Wire type is string, not FilePathWrapper -> see comment on HandlerExtractTarget.FilePath above.
+    [BatchItemField("Path of the .cs file this edit applies to. Every item needs its own filePath.", Required = true)]
     public string FilePath { get; set; } = "";
+    [BatchItemField("Name of the type or member that carries the attribute.", Required = true)]
     public string TargetName { get; set; } = "";
+    [BatchItemField("Existing attribute to modify, by name. Alias: attribute.")]
     public string ExistingAttribute { get; set; } = "";
     /// <summary>Alias for <see cref="ExistingAttribute"/> (supply one or the other; both with different values is rejected). The attribute to add/replace/remove.</summary>
+    [BatchItemField("Alias for existingAttribute: the attribute to add, replace or remove.")]
     public string? Attribute
     {
         get; set;
     }
+    [BatchItemField("Whether to add, replace or remove the attribute.", Required = true)]
     public AttributeModifyAction Action
     {
         get; set;
     }
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for Action=replace, unused for add/remove ->
     // same rule as ModifyAttribute's own newAttribute parameter.
+    [BatchItemField("Required when action is replace.")]
     public string? NewAttribute
     {
         get; set;
     }
+    [BatchItemField("Optional verbatim source line used to disambiguate the target.")]
     public string? ContextSnippet
     {
         get; set;
     }
+    [BatchItemField("Optional line immediately before the target, for disambiguation.")]
     public string? LineBefore
     {
         get; set;
     }
+    [BatchItemField("Optional line immediately after the target, for disambiguation.")]
     public string? LineAfter
     {
         get; set;
@@ -657,21 +679,28 @@ public class AttributeEdit
 /// <summary>One edit in a batch ModifyBaseType call.</summary>
 public class BaseTypeEdit
 {
+    [BatchItemField("Path of the .cs file this edit applies to. Every item needs its own filePath.", Required = true)]
     public string FilePath { get; set; } = "";
+    [BatchItemField("Name of the type whose base list changes.", Required = true)]
     public string TypeName { get; set; } = "";
+    [BatchItemField("Base type or interface to add or remove.", Required = true)]
     public string BaseTypeName { get; set; } = "";
+    [BatchItemField("Whether to add or remove the base type.", Required = true)]
     public AddRemoveAction Action
     {
         get; set;
     }
+    [BatchItemField("Optional verbatim source line used to disambiguate the target.")]
     public string? ContextSnippet
     {
         get; set;
     }
+    [BatchItemField("Optional line immediately before the target, for disambiguation.")]
     public string? LineBefore
     {
         get; set;
     }
+    [BatchItemField("Optional line immediately after the target, for disambiguation.")]
     public string? LineAfter
     {
         get; set;

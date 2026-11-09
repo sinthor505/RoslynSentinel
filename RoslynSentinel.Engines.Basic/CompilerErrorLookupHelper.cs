@@ -27,10 +27,12 @@ public static class CompilerErrorLookupHelper
     private static readonly Regex Cs0101DuplicateNamespaceMemberRegex = new(@"The namespace '([^']+)' already contains a definition for '([^']+)'", RegexOptions.Compiled);
     private static readonly Regex Cs0111DuplicateMemberRegex = new(@"Type '([^']+)' already defines a member called '([^']+)'", RegexOptions.Compiled);
 
+    // TODO pass editedFilePaths to DescribeAsync at the remaining callers
     public static async Task<string> DescribeAsync(
         DiagnosticReport report,
         SymbolNavigationEngine symbolNavigationEngine,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<string>? editedFilePaths = null)
     {
         // Identical diagnostics (same Id AND same Message text) collapse into one line: a single
         // root cause repeated at N sites (e.g. 86 identical CS7036s from one bad MoveMember
@@ -44,7 +46,7 @@ public static class CompilerErrorLookupHelper
             if (items.Count == 1)
             {
                 var single = $"{first.Id} at {first.FilePath}:{first.StartLine}: {first.Message}" + (string.IsNullOrEmpty(first.SourceLine) ? string.Empty : "\n    > " + first.SourceLine);
-                var singleHint = await DescribeHintAsync(first, symbolNavigationEngine, cancellationToken);
+                var singleHint = await DescribeHintAsync(first, symbolNavigationEngine, cancellationToken, editedFilePaths);
                 parts.Add(singleHint == null ? single : single + "\n" + singleHint);
                 continue;
             }
@@ -53,7 +55,7 @@ public static class CompilerErrorLookupHelper
             var shown = string.Join(", ", locations.Take(MaxGroupedLocations));
             var more = locations.Count > MaxGroupedLocations ? $" (+{locations.Count - MaxGroupedLocations} more)" : string.Empty;
             var header = $"{first.Id} (x{items.Count}): {first.Message} at: {shown}{more}" + (string.IsNullOrEmpty(first.SourceLine) ? string.Empty : "\n    > " + first.SourceLine);
-            var hint = await DescribeHintAsync(first, symbolNavigationEngine, cancellationToken);
+            var hint = await DescribeHintAsync(first, symbolNavigationEngine, cancellationToken, editedFilePaths);
             parts.Add(hint == null ? header : header + "\n" + hint);
         }
 
@@ -74,7 +76,8 @@ public static class CompilerErrorLookupHelper
     private static async Task<string?> DescribeHintAsync(
         DiagnosticInfo diagnostic,
         SymbolNavigationEngine symbolNavigationEngine,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<string>? editedFilePaths)
     {
         if (diagnostic.Id == "CS0103")
         {
@@ -83,7 +86,7 @@ public static class CompilerErrorLookupHelper
 
         if (diagnostic.Id is "CS0117" or "CS1061")
         {
-            return await DescribeMissingMemberAsync(diagnostic, symbolNavigationEngine, cancellationToken);
+            return await DescribeMissingMemberAsync(diagnostic, symbolNavigationEngine, cancellationToken, editedFilePaths);
         }
 
         if (diagnostic.Id == "CS0122")
@@ -171,7 +174,8 @@ public static class CompilerErrorLookupHelper
     private static async Task<string> DescribeMissingMemberAsync(
         DiagnosticInfo diagnostic,
         SymbolNavigationEngine symbolNavigationEngine,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<string>? editedFilePaths)
     {
         var match = MissingMemberRegex.Match(diagnostic.Message);
         if (!match.Success)
@@ -212,9 +216,11 @@ public static class CompilerErrorLookupHelper
 
         if (candidates.Count == 0)
         {
-            return isExtensionCandidate
+            // TODO FindExtensionMethods is named unconditionally; name it only when active (gated-tool rule)
+            var noCandidate = isExtensionCandidate
                 ? $"  No member or extension method named '{memberName}' was found anywhere in the solution for type '{typeName}'. This is likely a typo, a member that needs to be added to '{typeName}', or an extension method whose defining namespace needs a `using` - check FindExtensionMethods if one is expected to exist."
                 : $"  No member named '{memberName}' was found anywhere in the solution. This is likely a typo, or '{memberName}' needs to be added to '{typeName}'.";
+            return noCandidate + (IsEdited(diagnostic.FilePath.ToString()) ? " If this edit renames a use of an existing member, change the member's declaration in the same call." : string.Empty);
         }
 
         var suggestions = candidates
@@ -224,6 +230,58 @@ public static class CompilerErrorLookupHelper
                 : $"    - {c.SymbolName} ({c.Signature}) - {c.FilePath}:{c.Line}");
 
         var onNamedType = candidates.Any(c => string.Equals(c.ContainingType, simpleTypeName, StringComparison.OrdinalIgnoreCase));
+        var editedOnNamedType = candidates.FirstOrDefault(c =>
+            string.Equals(c.ContainingType, simpleTypeName, StringComparison.OrdinalIgnoreCase) && IsEdited(c.FilePath.ToString()));
+        if (editedOnNamedType is not null)
+        {
+            return $"  '{memberName}' is declared in {Path.GetFileName(editedOnNamedType.FilePath.ToString())}, which this edit changes. If the edit removes or renames '{memberName}', this file still uses the old name: change the declaration and every use in one call.";
+        }
+
+        // Duplicates the path rule of ValidateAndApplyHelper.DescribeUntouchedFileErrors, because Engines cannot reuse its local functions.
+        // TODO share path matching with ValidateAndApplyHelper.DescribeUntouchedFileErrors
+        bool IsEdited(string? path)
+        {
+            if (editedFilePaths is null || string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            var target = Normalize(path);
+            return editedFilePaths.Any(e => SameFile(Normalize(e), target));
+        }
+
+        static string Normalize(string p) => p.Trim().Replace('/', '\\');
+
+        static bool SameFile(string edited, string target)
+        {
+            if (string.Equals(edited, target, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            bool editedRooted = Path.IsPathRooted(edited);
+            bool targetRooted = Path.IsPathRooted(target);
+            if (editedRooted != targetRooted)
+            {
+                var (absolute, relative) = editedRooted ? (edited, target) : (target, edited);
+                return absolute.EndsWith("\\" + relative, StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (!editedRooted)
+            {
+                return false;
+            }
+
+            try
+            {
+                return string.Equals(Path.GetFullPath(edited), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+            {
+                return false;
+            }
+        }
+
         var explanation = onNamedType
             ? $"  '{memberName}' exists on '{typeName}' but isn't accessible the way it was called (wrong overload, wrong accessibility, or a static/instance mismatch)."
             : $"  '{memberName}' was not found on '{typeName}', but a member with that name exists elsewhere - likely the wrong receiver type, or '{memberName}' needs to be added to '{typeName}' instead. Candidates found:";
