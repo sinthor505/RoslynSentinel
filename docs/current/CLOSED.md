@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## MoveMember refusal lists the transitive companion set - resolved (2026-11-10)
+
+MoveMember dependency refusal lists the transitive private/internal companion set (moved-only vs shared) with a paste-ready `memberNames` array; first reproduce the #16 "40 unresolved sites" failure to confirm which refusal fired (2026-11-10) - Small-Medium - [doc](issues/issue_movemember_open_followups.md)
+
+Evidence: 3b340c36; MoveMemberCompanionRefusalTests (4). #16 record inconclusive: message shape matches the UnresolvedCallSites refusal (CoreRefactoringTools.cs ~475/499), not this path
+
 ## IntroduceParameterObject class-method cascade to interface - resolved (2026-11-10)
 
 IntroduceParameterObject on a class method that implements an interface cascades to the interface and all implementers, and refuses when the interface is in metadata (2026-11-10) - Medium - [doc](issues/issue_structural_refactoring_open_defects.md)
