@@ -77,7 +77,7 @@ public class WorkspaceReadNavigationImpl
     // rather than a suggestion, since softer phrasing ("consider calling X") was observed not
     // changing the model's next action.
     internal static ResultError BuildFileNotFoundError(Solution solution, string normalizedPath, Func<string, bool>? isCallable = null)
-        => new("FileNotFound", FileNotFoundMessage.Build(normalizedPath, DocumentLookup.FindClosestPaths(solution, normalizedPath), solution.Projects.Count(), isCallable));
+        => new("FileNotFound", FileNotFoundMessage.Build(normalizedPath, DocumentLookup.FindClosestPaths(solution, normalizedPath), solution.Projects.Count(), isCallable, DocumentLookup.FindDeclaringTypeFiles(solution, normalizedPath)));
 
     /// <summary>
     /// Builds the MethodNotFound message for GetMethodSource. Parts, each only when it applies: the original sentence,

@@ -20,7 +20,9 @@ public static class FileNotFoundMessage
     /// <paramref name="isCallable"/> says whether a tool name can be called on this server (null = every tool can);
     /// a tool is named in the text only when it can be called. A non-rooted path skips the disk checks.
     /// </summary>
-    public static string Build(string requestedPath, IReadOnlyList<string> candidatePaths, int searchedProjectCount, Func<string, bool>? isCallable = null)
+    public static string Build(
+        string requestedPath, IReadOnlyList<string> candidatePaths, int searchedProjectCount, Func<string, bool>? isCallable = null,
+        IReadOnlyList<(string TypeName, string FilePath)>? declaringTypeFiles = null)
     {
         if (IsRooted(requestedPath))
         {
@@ -44,16 +46,35 @@ public static class FileNotFoundMessage
         }
 
         var list = string.Join("\n", candidatePaths.Select(c => $"  - {c}"));
+        var declaring = DeclaringTypeSentence(declaringTypeFiles);
         if (candidatePaths.Count > 0)
         {
-            return $"File '{requestedPath}' was not found in the loaded solution (searched {searchedProjectCount} project(s); path comparison ignores case, so casing is not the cause). " +
+            return declaring + $"File '{requestedPath}' was not found in the loaded solution (searched {searchedProjectCount} project(s); path comparison ignores case, so casing is not the cause). " +
                    "A file with the same name exists at a different path. You MUST retry with the exact path of the file you meant:\n" + list;
         }
 
-        var notFound = $"File '{requestedPath}' was not found anywhere in the loaded solution (searched {searchedProjectCount} project(s), no file-name match; path comparison ignores case, so casing is not the cause). ";
+        var notFound = declaring + $"File '{requestedPath}' was not found anywhere in the loaded solution (searched {searchedProjectCount} project(s), no file-name match; path comparison ignores case, so casing is not the cause). ";
         return Callable(isCallable, "ListSolutionItems")
             ? notFound + $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path."
             : notFound + "Retry with a path you have already seen in an earlier result; do not guess another one.";
+    }
+
+    // A type that was renamed, or a file that was moved, leaves the old file name behind: when the missing file's stem is a
+    // top-level type declared in the solution, say which file declares it, before anything else. Empty when none does.
+    private static string DeclaringTypeSentence(IReadOnlyList<(string TypeName, string FilePath)>? declaringTypeFiles)
+    {
+        if (declaringTypeFiles is null || declaringTypeFiles.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var typeName = declaringTypeFiles[0].TypeName;
+        if (declaringTypeFiles.Count == 1)
+        {
+            return $"Type '{typeName}' is declared in {declaringTypeFiles[0].FilePath}; read that file. ";
+        }
+
+        return $"Type '{typeName}' is declared in {declaringTypeFiles.Count} files: {string.Join("; ", declaringTypeFiles.Select(d => d.FilePath))}; read the one you meant. ";
     }
 
     private static string OutsideSolutionText(string requestedPath, IReadOnlyList<string> candidatePaths, Func<string, bool>? isCallable)

@@ -375,7 +375,7 @@ public class WorkspaceFileEditImpl
     /// <summary>FileNotFound for ReadFile. <paramref name="isCallable"/> says whether a tool name can be called on this
     /// server (null = every tool can); ListSolutionItems is named only when it can.</summary>
     internal static ResultError BuildFileNotFoundError(Microsoft.CodeAnalysis.Solution solution, string normalizedPath, Func<string, bool>? isCallable = null)
-        => new("FileNotFound", FileNotFoundMessage.Build(normalizedPath, DocumentLookup.FindClosestPaths(solution, normalizedPath), solution.Projects.Count(), isCallable));
+        => new("FileNotFound", FileNotFoundMessage.Build(normalizedPath, DocumentLookup.FindClosestPaths(solution, normalizedPath), solution.Projects.Count(), isCallable, DocumentLookup.FindDeclaringTypeFiles(solution, normalizedPath)));
 
     private async Task<SentinelCallToolResult<object>> ReadFileWithoutSolutionAsync(string absolutePath, int? startLine, int? endLine, CancellationToken cancellationToken)
     {
@@ -669,6 +669,16 @@ public class WorkspaceFileEditImpl
         return total;
     }
 
+    // newContent holding tool-call markup (for example a stray '</parameter>') would be written into the code. The file's
+    // current text is consulted only when newContent holds a marker, and a marker the file already has is legitimate.
+    // The marker list is shared with the NoMatch message for oldContent (ToolCallMarkup).
+    private static string? DescribeLeakedNewContentMarkup(string newContent, Func<string> currentText)
+    {
+        var current = new Lazy<string>(currentText);
+        var marker = ToolCallMarkup.FindLeaked(newContent, m => current.Value.Contains(m, StringComparison.Ordinal));
+        return marker is null ? null : $"newContent contains tool-call markup '{marker}' that would be written into the code; remove it.";
+    }
+
     private List<string> DescribeExceededSnippetSizeBounds(string oldContent, string newContent)
     {
         var exceeded = new List<string>();
@@ -849,6 +859,16 @@ public class WorkspaceFileEditImpl
                     }
 
                     var oldText = await document.GetTextAsync(cancellationToken: cancellationToken);
+                    var leakedMarkup = DescribeLeakedNewContentMarkup(newContent, () => oldText.ToString());
+                    if (leakedMarkup is not null)
+                    {
+                        return new SentinelCallToolResult<ReplaceSnippetResult>()
+                        {
+                            IsError = true,
+                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: " + leakedMarkup)
+                        };
+                    }
+
                     // ResolveEditMatch caps the tier at IgnoreLineEndings, so it never uses a
                     // whitespace-collapsing fallback and match.Length is always the real removable
                     // span. Using oldContent.Length instead of match.Length used to corrupt adjacent
@@ -1080,6 +1100,14 @@ public class WorkspaceFileEditImpl
             var resolved = new List<(int index, SnippetMatch match, string newContent)>();
             foreach (var (edit, index) in fileGroup)
             {
+                var leakedMarkup = DescribeLeakedNewContentMarkup(edit.NewContent, () => originalString);
+                if (leakedMarkup is not null)
+                {
+                    perEditErrors.Add($"batchEdits[{index}] ({filePathResolved}): {leakedMarkup}");
+                    failureCodes.Add(ToolErrorCode.InvalidArgument);
+                    continue;
+                }
+
                 try
                 {
                     var match = ResolveEditMatch(

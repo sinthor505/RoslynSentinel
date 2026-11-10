@@ -478,10 +478,6 @@ namespace RoslynSentinel.Common.SnippetMatching
         /// <summary>A closest window at or above this score is close enough that one differing line is the likely cause.</summary>
         private const double FirstDifferenceMinScore = 0.9;
 
-        // Markers of a tool-call envelope that leaked into an argument. Only reported when the file's own closest text
-        // does not contain the marker (this repo's own sources mention them).
-        private static readonly string[] ToolMarkupMarkers = ["</parameter>", "<parameter", "</invoke>"];
-
         // The snippet's lines as the matchers see them (fully blank leading and trailing lines dropped), each with its
         // 1-based line number in the snippet as received (the numbering DescribeEcho uses).
         private static List<(string Text, int Line)> ContentLines(string snippet)
@@ -618,16 +614,10 @@ namespace RoslynSentinel.Common.SnippetMatching
 
         private static string? DescribeToolMarkup(SnippetMatchResult result, string snippet, string label)
         {
-            foreach (var marker in ToolMarkupMarkers)
-            {
-                if (snippet.Contains(marker, StringComparison.Ordinal)
-                    && !result.ClosestWindows.Any(w => w.ActualLines.Any(l => l.Contains(marker, StringComparison.Ordinal))))
-                {
-                    return $"Your {label} contains tool-call markup '{marker}' that is not part of the file; remove it.";
-                }
-            }
-
-            return null;
+            // Only reported when the file's own closest text does not contain the marker (this repo's sources mention them).
+            var marker = ToolCallMarkup.FindLeaked(
+                snippet, m => result.ClosestWindows.Any(w => w.ActualLines.Any(l => l.Contains(m, StringComparison.Ordinal))));
+            return marker is null ? null : $"Your {label} contains tool-call markup '{marker}' that is not part of the file; remove it.";
         }
 
         // For a close best window, names the first snippet line that differs from the file's line at the same position,

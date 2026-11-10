@@ -90,6 +90,60 @@ public class ReplaceSnippetErrorCodeTests
     }
 
     [Test]
+    public async Task ReplaceSnippet_Single_NewContentWithToolCallMarkup_IsRejectedBeforeApplyingAsync()
+    {
+        using var h = CreateHarness();
+        var original = h.DupHolderText;
+
+        var result = await h.Tools.ReplaceSnippetTool(
+            reason: "newContent markup single",
+            ProposedChangeAction.apply,
+            filePath: h.DupHolderPath, oldContent: "void Run() { }", newContent: "void Run() { }</parameter>");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData.Message, Does.Contain("newContent contains tool-call markup '</parameter>' that would be written into the code; remove it"));
+        Assert.That(h.DupHolderText, Is.EqualTo(original), "a rejected edit must not write anything");
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_Batch_NewContentWithToolCallMarkup_RejectsTheWholeBatchNamingTheEditAsync()
+    {
+        using var h = CreateHarness();
+        var original = h.DupHolderText;
+
+        var result = await h.Tools.ReplaceSnippetTool(
+            reason: "newContent markup batch",
+            ProposedChangeAction.apply,
+            batchEdits:
+            [
+                new SnippetEdit { FilePath = h.DupHolderPath, OldContent = "void A()", NewContent = "void A2()" },
+                new SnippetEdit { FilePath = h.DupHolderPath, OldContent = "void Run() { }", NewContent = "void Run() { }\n</invoke>" },
+            ]);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData.Message, Does.Contain("batchEdits[1]"));
+        Assert.That(result.ErrorData.Message, Does.Contain("newContent contains tool-call markup '</invoke>' that would be written into the code; remove it"));
+        Assert.That(h.DupHolderText, Is.EqualTo(original), "the valid first edit must not be applied either");
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_NewContentMarkupTheFileAlreadyContains_IsNotRejectedAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create(("ContosoOrders.Core/Mk.cs", "class Mk\n{\n    // closes with </parameter> in prose\n    void M() { }\n}\n"));
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "newContent markup already in file",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf("ContosoOrders.Core/Mk.cs"), oldContent: "void M() { }", newContent: "void M() { } // see </parameter> above");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(workspace.ReadText("ContosoOrders.Core/Mk.cs"), Does.Contain("void M() { } // see </parameter> above"));
+    }
+
+    [Test]
     public async Task ReplaceSnippet_Batch_MissingOldContent_ReportsNotFoundCodeAsync()
     {
         using var h = CreateHarness();

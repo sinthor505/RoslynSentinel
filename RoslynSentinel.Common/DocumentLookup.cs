@@ -48,7 +48,8 @@ public sealed record DocumentLookupResult(
     string RequestedPath,
     Document? Document,
     IReadOnlyList<string> CandidatePaths,
-    int SearchedProjectCount) : IOperationResult
+    int SearchedProjectCount,
+    [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<(string TypeName, string FilePath)>? DeclaringTypeFiles = null) : IOperationResult
 {
     /// <summary>True when the lookup failed; mirrors <see cref="IsFound"/>.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -116,7 +117,7 @@ public sealed record DocumentLookupResult(
         }
 
         // The shared builder also probes the disk (directory / project file / file outside the solution) before falling back to the lookup wording.
-        return FileNotFoundMessage.Build(RequestedPath, CandidatePaths, SearchedProjectCount, isCallable);
+        return FileNotFoundMessage.Build(RequestedPath, CandidatePaths, SearchedProjectCount, isCallable, DeclaringTypeFiles);
     }
 
     /// <summary>
@@ -199,6 +200,7 @@ public static class DocumentLookup
 {
     private const int MaxClosestPaths = 5;
     private const int MaxAmbiguousPaths = 10;
+    private const int MaxDeclaringTypeFiles = 3;
     private static readonly char[] Separators = ['\\', '/'];
 
     /// <summary>
@@ -250,7 +252,7 @@ public static class DocumentLookup
             }
         }
 
-        return new DocumentLookupResult(DocumentLookupStatus.NotFound, requested, null, FindClosestPaths(solution, requested), projectCount);
+        return new DocumentLookupResult(DocumentLookupStatus.NotFound, requested, null, FindClosestPaths(solution, requested), projectCount, FindDeclaringTypeFiles(solution, requested));
     }
 
     /// <summary>
@@ -286,6 +288,59 @@ public static class DocumentLookup
             .Distinct(PathComparison.Comparer)
             .Take(max)
             .ToList();
+    }
+
+    /// <summary>
+    /// When the file name of <paramref name="requestedPath"/> (without its .cs extension) is the name of a top-level type
+    /// declared in the loaded solution, the (type name, file) pairs of the files declaring it, at most <paramref name="max"/>.
+    /// Used by the not-found errors: after a type is renamed or moved, an agent still asks for the file named after the
+    /// type, and the declaring file is the answer. Excludes files whose own name equals the requested one (those are
+    /// <see cref="FindClosestPaths"/> candidates). Syntax only; an unparseable document is skipped.
+    /// </summary>
+    public static IReadOnlyList<(string TypeName, string FilePath)> FindDeclaringTypeFiles(Solution solution, string requestedPath, int max = MaxDeclaringTypeFiles)
+    {
+        if (string.IsNullOrWhiteSpace(requestedPath)
+            || !string.Equals(Path.GetExtension(requestedPath), ".cs", PathComparison.Comparison))
+        {
+            return [];
+        }
+
+        var stem = Path.GetFileNameWithoutExtension(requestedPath);
+        var requestedFileName = Path.GetFileName(requestedPath);
+        if (string.IsNullOrEmpty(stem))
+        {
+            return [];
+        }
+
+        var found = new List<(string TypeName, string FilePath)>();
+        foreach (var document in solution.Projects.SelectMany(p => p.Documents))
+        {
+            if (found.Count >= max)
+            {
+                break;
+            }
+
+            var filePath = document.FilePath;
+            if (string.IsNullOrEmpty(filePath)
+                || PathComparison.Comparer.Equals(Path.GetFileName(filePath), requestedFileName)
+                || found.Any(f => PathComparison.Comparer.Equals(f.FilePath, filePath)))
+            {
+                continue;
+            }
+
+            // Error path only: parsing a document the workspace has not parsed yet is acceptable here.
+            var root = document.GetSyntaxRootAsync().GetAwaiter().GetResult();
+            var declared = root?.DescendantNodes()
+                .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.BaseTypeDeclarationSyntax>()
+                .FirstOrDefault(t => t.Parent is not Microsoft.CodeAnalysis.CSharp.Syntax.BaseTypeDeclarationSyntax
+                                     && string.Equals(t.Identifier.ValueText, stem, StringComparison.OrdinalIgnoreCase));
+            if (declared is not null)
+            {
+                found.Add((declared.Identifier.ValueText, filePath));
+            }
+        }
+
+        return found;
     }
 
     /// <summary>

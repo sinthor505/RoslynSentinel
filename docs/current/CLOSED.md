@@ -8,6 +8,11 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## File not-found after a type rename should name the declaring file - resolved (2026-11-10)
+
+After RenameSymbol renamed `OrderPricingCalculator` to `StandardOrderPricingCalculator`, qwen3.5-9b called ReadFile on `StandardOrderPricingCalculator.cs` (run `20261110-002934-654` T15) and got the generic not-found.
+Evidence: `fe1cc725` (RenameSymbol renames a same-named file with the type); this session's round-6 commit (FileNotFoundMessage leads with "Type 'X' is declared in <path>; read that file." for ReadFile, GetMethodSource, GetFileOutline and document lookup; `FileNotFoundDeclaringTypeTests`).
+
 ## Tool-call hint verbatim-placeholder check - resolved (2026-11-08)
 
 Tool-call hint verbatim-placeholder check (2026-10-25) - unmeasured whether a model pastes `<why you call this>` verbatim; parked because it needs a model eval; unpark at the next model-eval round (count verbatim placeholders in its logs) - [doc](proposals/closed/proposal_tool_hint_builder.md)
