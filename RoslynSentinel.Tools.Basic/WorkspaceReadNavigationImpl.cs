@@ -1263,7 +1263,7 @@ public class WorkspaceReadNavigationImpl
                 }
                 var justTripped = _workspaceManager.RecordSearchOutcome(0);
                 var emptyResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = new TextSearchResult(literalResults, regexResults, regexOverlapCount, regexPatternValid), TotalRecords = 0, WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = string.Join(" ", warnings) };
-                return emptyResult with { IsError = false, WarningDetails = null, Findings = justTripped ? new[] { new Finding("OrientationBreaker", string.Join(" ", warnings), FindingSeverity.Warning) } : Array.Empty<Finding>() };
+                return emptyResult with { IsError = false, WarningDetails = null, Findings = [.. (justTripped ? new[] { new Finding("OrientationBreaker", string.Join(" ", warnings), FindingSeverity.Warning) } : Array.Empty<Finding>()), .. NotFoundEvidence.ForZeroHitSearch(solutionRoot, pattern, isRegex: true)] };
             }
             else if (totalMatchCount > returnedMatchCount)
             {

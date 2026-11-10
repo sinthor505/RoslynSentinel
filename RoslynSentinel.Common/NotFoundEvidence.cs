@@ -53,10 +53,10 @@ public static class NotFoundEvidence
     /// Notes for a zero-hit search, read from <see cref="ToolCallContext.Current"/>. Empty unless the call carries an agent id
     /// and a solution root.
     /// </summary>
-    public static IReadOnlyList<Finding> ForZeroHitSearch(string term, bool isRegex)
+    public static IReadOnlyList<Finding> ForZeroHitSearch(string solutionRoot, string term, bool isRegex)
     {
         var context = ToolCallContext.Current;
-        if (context is not { AgentId: { } agentId, SolutionRoot: { } solutionRoot })
+        if (context is not { AgentId: { } agentId } || string.IsNullOrWhiteSpace(solutionRoot))
         {
             return [];
         }
@@ -426,7 +426,7 @@ public static class NotFoundEvidence
 
         try
         {
-            return Regex.IsMatch(text, term, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(250));
+            return Regex.IsMatch(text, term, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(250));
         }
         catch (Exception ex) when (ex is RegexMatchTimeoutException or ArgumentException)
         {
