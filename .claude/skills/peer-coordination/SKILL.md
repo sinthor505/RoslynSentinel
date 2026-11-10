@@ -1,6 +1,6 @@
 ---
 name: peer-coordination
-description: Protocol for coordinating with other Claude sessions on this box that share the RoslynSentinel working tree - discovering peers, asking who owns uncommitted edits, requesting a commit, holding files, restarting servers, and waiting for replies instead of stopping for the user. Use when you need a file another session has uncommitted edits in, when ExternalFileDrift latches on writes you did not make, when a peer message (WHOAREYOU, OWNS, COMMIT, HOLD, RELEASE, RESTART) arrives, or before stopping with "waiting for the other session".
+description: Protocol for coordinating with other Claude sessions on this box that share the RoslynSentinel working tree - discovering peers, asking who owns uncommitted edits, requesting a commit, holding files, restarting servers, and waiting for replies instead of stopping for the user. Use when you need a file another session has uncommitted edits in, when ExternalFileDrift lists writes you did not make or a write is refused StaleRead or FoldPending, when a peer message (WHOAREYOU, OWNS, COMMIT, HOLD, RELEASE, RESTART) arrives, or before stopping with "waiting for the other session".
 ---
 
 # Peer coordination
@@ -72,9 +72,8 @@ session, and never broadcast `COMMIT`; send it only to the owner.
    `Waiting on <peer> to commit <files>; I resume when it replies.` Do not ask the user to relay.
    The peer's reply arrives as a new message and wakes you.
 5. On `COMMITTED <hash> <files>`:
-   - If your server latched (`ExternalFileDrift(operation: List)` shows entries), `Acknowledge`
-     exactly the files the peer listed, and nothing else.
-   - Re-read the files fresh, then continue.
+   - Drift never halts writes, so there is nothing to acknowledge before continuing.
+   - Re-read the files fresh (a file you had read is refused `StaleRead` until you do), then continue.
 6. On `BLOCKED`: if an ETA is given and is short, carry on with independent work and wait again.
    Otherwise, and if the reason is your own half-done edits (see section 5), fix your side first.
 7. No reply but an idle notice arrives: send one reminder. A second silence goes to your user.
@@ -92,10 +91,13 @@ Real deadlock: both sessions are `BLOCKED` on each other, and neither can reach 
 with its own edits alone. Stop and tell your user both sides' file lists. That is the only case
 that needs the user.
 
-## 6. Drift latch caused by a peer
+## 6. Drift caused by a peer
 
-If a mutating call fails with `SessionHalted` or `ExternalFileDrift` lists writes you did not
-make:
+Drift no longer halts anything: `ExternalFileDrift` lists changed files for visibility only, and
+`Acknowledge` only clears that list (it never resumes writes). If a mutating call is refused
+`StaleRead` (a file you read or wrote changed since) or `FoldPending` (the workspace is catching up
+with disk), or `ExternalFileDrift` lists writes you did not make:
 1. `ExternalFileDrift(operation: List)`.
 2. `OWNS <listed files>` to same-tree peers.
-3. `Acknowledge` only the files a peer claimed as `mine`. Anything unclaimed goes to your user.
+3. Re-read the file you want to edit and repeat the edit (for `FoldPending`, retry once). Anything
+   unclaimed by a peer and not yours goes to your user.

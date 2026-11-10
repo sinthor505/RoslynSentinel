@@ -96,7 +96,7 @@ Live surface check: `McpServerStatus(toolListing: inactive, toolNameFilter: <too
 - The freshness diff is positional. An inserted or removed row shifts every later line; read the first differing line.
 - `--schema-profile=lean` is unrelated to `--mode claude-lean`.
 - `ClaudeLeanSchemaBudgetTests` copies the host construction from `McpToolsetControlTests.BuildHost` (private). A shared helper would remove the duplication.
-- Editing a `.cs` file outside the server (for example `git restore` in a shell) trips `SessionHalted: externalDrift` for the next tool call. Use `ExternalFileDrift(List)` then `Acknowledge` for your own files only.
+- Editing a `.cs` file outside the server (for example `git restore` in a shell) no longer halts the session (the drift latch was removed 2026-11-09). The drifted path is listed by `ExternalFileDrift(List)`, and a file the agent had read or edited is refused with `StaleRead` until it is re-read. Acknowledging only clears that list; it is not needed to resume writes. (Older runs and journals mention `SessionHalted: externalDrift`; that no longer occurs.)
 
 ## Streamlining changes (implemented 2026-10-14)
 1. Test counts derived from `ClaudeLeanModeTests.CoreTools`, with failure messages naming the list to edit.

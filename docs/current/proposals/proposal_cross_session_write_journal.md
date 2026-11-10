@@ -19,6 +19,15 @@
   overflows (`reference_file_watcher_and_drift_detection.md`). Look up lazily when building a refusal
   (`StaleRead` and the per-file drift refusal) and in `ExternalFileDrift(List/Status)` / `Git(status)`, or
   at the latest in the debounce step.
+- **Attribution hook as built (2026-11-09).** The message builder for refusals is `WriteRefusal.StaleReadError` in
+  `RoslynSentinel.Common/WriteRefusal.cs`, and it carries the marker `// TODO per-file attribution: name the writer that changed
+  each file once proposal_cross_session_write_journal.md lands`. That is the one place to call the journal lookup: it receives
+  `result.FailedFiles` (path -> "changed on disk since you last read it" / "changed in the workspace since you last read it"), so the
+  lookup is per failed file and the writer's name can be appended to each entry. `FoldPendingError` in the same file has no
+  marker (a `FoldPending` file is not attributed to a writer; it only says the workspace lags disk). The drift halt this
+  proposal's Motivation talks about is gone (step 8c of plan_stale_read_guard_followups): there is no `SessionHalted` from drift to
+  explain any more, so the journal's value is the explanation text on `StaleRead` and in `ExternalFileDrift(List/Status)` /
+  `Git(status)`. The cross-process write lock and holder record (F7, plan steps 9a-9g) are NOT built yet.
 - **Auto-adopt vs annotate: settled as annotate only.** Under F1 option (d) a sibling's change to a file the
   agent never read or edited never refuses or halts (the debounce fold already adopts the content); a change
   to a file it read or edited is refused per agent with `StaleRead` whoever wrote it. The journal supplies

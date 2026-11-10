@@ -1,6 +1,6 @@
 # Reference: RoslynSentinel architecture map (where things live, how a call flows)
 
-**Status:** CURRENT 2026-10-09. Verified against source on this date; cites symbols, not line numbers (lines drift). Sections marked "not re-verified" were carried from older docs.
+**Status:** CURRENT 2026-10-09; the "Write chokepoint" order and the stale-read and session-halt/drift paragraphs were re-verified 2026-11-09 (plan_stale_read_guard_followups steps 1-8d; the F7 write lock is not built). Verified against source on the first date; cites symbols, not line numbers (lines drift). Sections marked "not re-verified" were carried from older docs.
 
 ## Purpose
 
@@ -89,7 +89,7 @@ instead of throwing; see the CLAUDE.md rule on `ResultError`.
 One singleton; `ISolutionProvider`, `IWorkspaceManager`, `IWorkspaceReader` all resolve to it
 (`AddRoslynSentinelEnginesBasic`). It holds the in-memory `Solution`, a `FileSystemWatcher`
 (`OnFileSystemChanged`, `OnDebounceTimerElapsed`), content hashes of known files (`_knownFileHashes`) for
-drift detection, the compilation cache, the scoped operation ledger, the breakers and the session-halt latch.
+drift visibility (`_externalChanges`), the compilation cache, the scoped operation ledger, the breakers and the observed-content ledger.
 `GetCurrentSolutionAsync` and `ResolveFromWire` wait up to 30 s while `SolutionLoadStatus` is `Loading`
 (`NotLoaded`, `Loading`, `Loaded`, `Failed`); a load that exceeds its timeout (`LoadSolution(timeoutSeconds)`,
 default 30) is cancelled and surfaces `SolutionLoadTimeout`.
@@ -97,9 +97,13 @@ default 30) is cancelled and surfaces `SolutionLoadTimeout`.
 ### Write chokepoint
 
 `PersistentWorkspaceManager.ApplyProposedChangesAsync` (interface `Common/IWorkspaceMutator.cs`). Every
-`.cs` write must go through it, directly or via a caller that does. Order of refusals, verified in source:
-session-halt latch -> unrecoverable breaker -> scoped-ledger block per target -> write/delete overlap ->
-external-drift check (a confirmed hit trips the session halt). The full 11-step order (pre-image capture for
+`.cs` write must go through it, directly or via a caller that does. Order of refusals, verified in source 2026-11-09:
+dead `_sessionHalted` check (nothing sets it; cleanup pending) -> unrecoverable breaker (the only session halt) ->
+failed-reload refusal -> scoped-ledger opener and per-target block -> write/delete overlap -> optional compile validation
+-> `_solutionLock` -> `CheckConcurrentEditConflict` -> `RevalidateAfterForeignWriteAsync` -> pre-image capture ->
+stale-read check (`StaleRead`) -> `FoldPending` guard -> EOL pre-pass -> deletes -> writes -> rollback -> create-on-write
+of the writer's observed entry -> in-memory resync. The external-drift check that used to follow the overlap check is gone: drift never
+refuses a write by itself. The numbered step list (pre-image capture for
 undo, EOL pre-pass, byte-identical skip, watcher-loop suppression via `_internalChanges`, IOException
 retry, optional rollback, in-memory resync) is in `docs/current/references/reference_code_file_write_paths.md`
 (callers table re-verified 2026-10-04, EOL parts 2026-10-26), along with the sanctioned writes outside the chokepoint.
@@ -143,18 +147,29 @@ the operation blobs, which every window shares, and then Git.
 
 **Stale-read guard.** The observed-content ledger (`_observedHashes` in `PersistentWorkspaceManager`, interface
 `Common/IObservedContentLedger.cs`, hash `Common/ContentFingerprint.cs`) holds, per agent key and path, the hash of the file text
-last returned to that agent by `ReadFile`, `GetMethodSource` or Search text mode. After pre-image capture and before the EOL
-pre-pass, a call passing `StaleReadPolicy.RefuseIfObservedStale` (`WriteFile`, `DeleteFile`, `ApplyDiff` files format) is refused
-with the non-latching `StaleRead` code if a target's entry differs from disk or memory. Detail:
+last returned to that agent by `ReadFile`, `GetMethodSource`, Search text mode, `GetFileOutline` or `InspectSymbol(info)` (which
+records the DECLARING file; `ListAll` and `InspectSymbol(blastRadius)` record nothing). After pre-image capture and before the EOL
+pre-pass, a call passing a `StaleReadPolicy` other than `None` is refused with the non-latching `StaleRead` code if a target's
+entry differs from disk or memory. Opted in: the anchor and whole-file tools (`WriteFile`, `DeleteFile`, `ApplyDiff`,
+`ApplyUnifiedDiff`, `ReplaceSnippet` single and batch) pass `RefuseIfObservedStale`; every engine tool goes through
+`ValidateAndApplyHelper`, whose default is `RefuseIfObservedStaleQuiet` (no "not read first" finding); the direct callers
+(`AsyncifyTools`, `AsyncBatchEngine`, `CommentingTools`, `MsToolAugmentEngine`, `DeleteUnusedSymbol`) pass `Quiet`. Exempt:
+`UndoLastApply` (`exactRestore`) and `CreateFile`. `StaleReadPolicyRatchetTests` fails a production call site that does not name
+`staleReadPolicy:` (presence, not value). `Common/WriteRefusal.TryMap` turns the refusal into the tool's `ResultError`
+(`StaleRead`, `FoldPending`). A successful write CREATES the writer's entry after the rollback decision, so a writer is protected
+against later changes to files it wrote. Directly after the stale check, the `FoldPending` guard (every policy except
+`exactRestore`) refuses a write once when a target's in-memory text lags its disk pre-image, folding that file inline; a
+mismatch that persists after the fold proceeds with a Warning finding naming `LoadSolution(forceReload: true)`. Detail:
 `reference_file_watcher_and_drift_detection.md` section 5.
 
-**Session halt and acknowledge.** The drift latch is `_sessionHalted` in `PersistentWorkspaceManager`; the halt-stamp
-filter (pipeline item 5) shows it, and any tripped breaker, on every response. `ExternalFileDrift(operation:
-Acknowledge)` (`Tools.Basic/AdminTools.cs`) clears the latch even when only some files are named. Files not named stay
-in `_externalChanges` and re-trip the halt on the next write that touches them; clearing everything needs
-`acknowledgeScope: ConfirmAll`. `LoadSolution(forceReload)` does not drain `_externalChanges` (see the comment in
-`PersistentWorkspaceManager`). The unrecoverable halt has no reset, but `ExternalFileDrift` is allowed during it; it
-clears only drift state and the chokepoint still refuses every write.
+**Session halt and drift.** The only session halt is the unrecoverable breaker (a separate throw at the top of the chokepoint;
+no reset); the halt-stamp filter (pipeline item 5) shows it on every response. The drift latch `_sessionHalted` can no longer
+be set (dead code, a `// TODO` marks the cleanup), so drift does not halt anything: `_externalChanges` is kept only for
+`ExternalFileDrift(List/Status)` visibility, and a drifted file the writer read or edited is refused per agent with `StaleRead`.
+`ExternalFileDrift(operation: Acknowledge)` (`Tools.Basic/AdminTools.cs`) only removes entries from that visibility list
+(`ConfirmWithListedFiles` removes the named files, `ConfirmAll` all of them); it never gates a write. `LoadSolution` (any load)
+calls `ClearExternalFileChanges()`, so a reload empties the list. `ExternalFileDrift` is allowed during a breaker halt, but
+its `Status` line prints `SessionHalted=False` because it reads the dead latch, not the breaker.
 
 ### Read chokepoint (partly built)
 

@@ -119,8 +119,8 @@ A custom subagent that lists `Read` must also list `ReadFile`/`GetMethodSource`/
   when an MCP tool fit): report it and continue; no blocker doc. Deliberate bypass is legitimate only
   for a `.cs` outside the repo or a manual call you decided is right, never for a failed tool; routes
   and logging: `docs/current/references/reference_hook_bypass.md`.
-- **Never delete a tracked file with a shell command** (it halts all mutating tools: `SessionHalted`).
-  Use `DeleteFile`. If halted: `ExternalFileDrift(operation: List)` then `Acknowledge`; report it as a
+- **Never delete a tracked file with a shell command.** Use `DeleteFile` so the server's workspace and
+  ledger stay consistent (a shell delete no longer halts the session); report a shell delete as a
   successful bypass.
 
 ## Tool-experience journal

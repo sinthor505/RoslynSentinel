@@ -1,6 +1,6 @@
 # Reference: Code File Write Paths
 
-**Status:** CURRENT 2026-11-09. Step 7b (stale-read check) added for plan_read_ledger_stale_read_guard. The chokepoint step list and callers table were verified 2026-10-04; the EOL policy sections and steps 8-9 were re-verified against source on 2026-10-26 (plan_eol_policy_and_write_chokepoint.md Steps 4-8). Update when a write-to-disk call site is added anywhere in the solution.
+**Status:** CURRENT 2026-11-09. Steps 5 (drift check removed), 7b (stale-read check, now opted in by anchor, engine and direct callers) and 7c (`FoldPending`) updated for plan_stale_read_guard_followups steps 1-8d; the cross-process write lock (plan step 9) is NOT built and not described. The chokepoint step list and callers table were verified 2026-10-04; the EOL policy sections and steps 8-9 were re-verified against source on 2026-10-26 (plan_eol_policy_and_write_chokepoint.md Steps 4-8). Update when a write-to-disk call site is added anywhere in the solution.
 
 ## Purpose
 
@@ -21,22 +21,41 @@ the rule is a convention, repeated in the method's remarks.
 
 In order, the method:
 
-1. Refuses everything if the session-halt latch is set (`SessionHaltedException`).
-2. Refuses everything if the unrecoverable breaker has tripped (`IUnrecoverableBreaker.StateMessage`).
+1. Checks the session-halt latch (`_sessionHalted`, `SessionHaltedException`). Nothing sets the latch any more (the drift halt was
+   removed, see step 5), so this check is dead code awaiting a cleanup slice (`// TODO` in the method).
+2. Refuses everything if the unrecoverable breaker has tripped (`IUnrecoverableBreaker.StateMessage`); this is the only session halt left.
 3. Refuses any target covered by an open scoped operation ledger entry (`_ledger.IsBlocked`), returning a failed `ApplyChangesResult`.
 4. Refuses a path given as both a write and a delete target.
-5. Checks external drift: if a target is in `GetExternalFileChanges()`, sets `_sessionHalted` and throws `SessionHaltedException`.
-   Recovery is `ExternalFileDrift(operation: List)` then `ExternalFileDrift(operation: Acknowledge)` (`ClearSessionHalt`).
+5. (Removed 2026-11-09.) There is no external-drift check here any more: a target in `GetExternalFileChanges()` is not refused and
+   does not latch the session. Drift on a file the writer read or edited is caught per agent by step 7b, and in-memory text that lags
+   disk by step 7c. `ExternalFileDrift` lists the drift for visibility only; `Acknowledge` clears that list and never gates writes.
 6. Optionally compile-validates the whole batch (`validateChanges`, via `ValidationEngine`) before taking the lock.
 7. Takes `_solutionLock`, then captures a **pre-image** of every target (null = file did not exist), used for
    `OperationItemRecord.BeforeSource` and `UndoLastApply`. (Just before the capture, under the lock,
    `CheckConcurrentEditConflict` refuses with `ToolErrorCode.ConcurrentEditRefused` when another known agent wrote a
    target after this call started.)
-7b. Stale-read check, only when the caller passes `staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale` (default
-   `None`; `exactRestore` is exempt): for each target with an observed-content entry under the writer's agent key, refuses
+7b. Stale-read check, only when the caller passes a `staleReadPolicy` other than `None` (the chokepoint's default is `None`;
+   `exactRestore` is exempt): for each target with an observed-content entry under the writer's agent key, refuses
    the whole batch with `ToolErrorCode.StaleRead` if that hash differs from the disk pre-image or the in-memory document
-   text. Non-latching. Targets with no entry are allowed and get a `WriteChokepoint` Info finding. Opted in: `WriteFile`
-   (ReplaceFile), `DeleteFile`, `ApplyDiff` files format. Details: `reference_file_watcher_and_drift_detection.md` section 5.
+   text. Non-latching. Targets with no entry are allowed. Opted in, by policy value:
+   - `RefuseIfObservedStale` (an unobserved existing target also gets a `WriteChokepoint` Info finding "read them first"):
+     `WriteFile` (ReplaceFile), `DeleteFile`, `ApplyDiff` (files and diff formats), `ApplyUnifiedDiff`, `ReplaceSnippet`, `ReplaceSnippetBatch`.
+   - `RefuseIfObservedStaleQuiet` (same refusal, no unobserved finding): `ValidateAndApplyHelper` by default, so every engine tool
+     that writes through it (`Member`, `RenameSymbol`, `MoveMember`, ...) is opted in with no edit at the tool; and the direct callers
+     `AsyncifyTools`, `AsyncBatchEngine`, `CommentingTools`, `MsToolAugmentEngine` and `DeleteUnusedSymbol`.
+   - Exempt (`None`): `UndoLastApply` (`exactRestore`), `CreateFile`, and `RetryFailedChangesAsync` (a cache replay in `Common`).
+   `StaleReadPolicyRatchetTests` fails any production `ApplyProposedChangesAsync(` call outside `Common` that does not name
+   `staleReadPolicy:` unless allowlisted (presence only, not the value). Tools turn the refusal into a `ResultError` with
+   `WriteRefusal.TryMap` (`Common/WriteRefusal.cs`: `StaleRead`, `FoldPending`; at most 10 files named, rest in `StructuredDetail`);
+   the Asyncify, batch-engine and commenting callers carry it in summary text instead.
+   Details: `reference_file_watcher_and_drift_detection.md` section 5.
+7c. `FoldPending` guard (`CheckFoldPendingAsync`), directly after 7b, for every policy including `None` (deletes included; not
+   `exactRestore`): if a target's in-memory document text differs from the disk pre-image just captured, it is not written over.
+   Ladder: exact equal -> proceed; equal after BOM, EOL and per-line trailing-whitespace normalization -> proceed with an Info
+   finding; otherwise fold the refused files from disk inline (under the held `_solutionLock`) and refuse the whole batch once with
+   `ToolErrorCode.FoldPending` ("is changing on disk; retry in a moment"). A path that still mismatches after the fold is marked
+   in `_foldRefusedFiles`; its next write proceeds with a Warning finding that names `LoadSolution(forceReload: true)`. A target with
+   no document or no disk pre-image is unchecked. Non-latching; `StaleRead` takes precedence.
 8. EOL pre-pass (`ComputeEolPrePass`, see "EOL policy" below): for every target it computes the bytes to write (the whole file
    converted to the resolved EOL) and refuses with `ToolErrorCode.EolChangeRefused` only if the converted text is not a
    single line-ending style. Nothing is deleted or written before this pass finishes.
@@ -51,8 +70,10 @@ In order, the method:
    (per-path lock) with retry on `IOException` (`retryCount`, 500 ms apart). Failed content is cached in `_failedChangesCache`
    for `RetryFailedChanges`.
 10. If `rollbackOnPartialFailure` and some files failed after others succeeded, restores the succeeded files to their pre-images
-    (and the writer's observed-content entries to the pre-image hashes). After each successful write the writer's existing
-    observed-content entry is refreshed to the written bytes; a delete drops the path's entries for every agent.
+    (and the writer's EXISTING observed-content entries to the pre-image hashes; the restore never creates one). Inside the write
+    loop each successful write refreshes only an existing entry; after the rollback decision, a batch that is still successful
+    creates the writer's entry for every file it wrote (not for no-op writes), so engine and anchor writers are protected against a
+    later external change to a file they wrote. A delete creates no entry and drops the path's entries for every agent.
 11. Resyncs the in-memory workspace (`ApplyInMemoryDocumentUpdatesAsync`, bumps `_workspaceVersion`), invalidates the affected
     projects' compilation-cache entries (or all of them on a full reload), and returns `ApplyChangesResult`.
 
@@ -152,8 +173,11 @@ reporting of the shared path; `BareFileWriteRatchetTests` fails a new bare `File
 
 ## Gotchas
 
-- Drift on a target halts the whole session, not just that call. Check `git status` before treating it as real
-  (the false-positive cross-check is in the project memory index).
+- Drift no longer halts the session. A write can now be refused per call with `StaleRead` (the writer read or wrote a file that
+  changed since) or `FoldPending` (the workspace text lags disk; retry once); both are non-latching and the message names the
+  files. Only the unrecoverable breaker still halts every write.
+- A shell delete or edit of a tracked file bypasses the chokepoint and is reconciled later by the watcher; prefer `DeleteFile` and
+  the edit tools so the workspace and observed-content entries stay consistent.
 - A "successful" apply can be a no-op: identical or whitespace-only content is skipped and reported in `NoOpFiles`/the summary.
 - The whole file is rewritten to the resolved EOL and an existing UTF-8 BOM is preserved, so the on-disk bytes can differ from the string a tool passed in.
   Under `--eol crlf|lf` the first touch of a mixed file therefore produces a whole-file EOL diff; `UpdatedText` returned by a tool may still carry the

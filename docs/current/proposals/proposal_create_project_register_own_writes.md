@@ -2,6 +2,20 @@
 
 **Status:** PROPOSED 2026-10-28. TOOL-GAP from the Tests.Support.* rollout; awaiting review. Mechanism for the fix is open.
 
+**Note 2026-11-09 (premise largely moot; kept for the record, not deleted).** The harm this proposal describes, "the next edit halted
+the session", no longer exists: plan_stale_read_guard_followups step 8c removed the drift block from `ApplyProposedChangesAsync`
+(nothing sets `_sessionHalted` now; the only session halt left is the unrecoverable breaker), so a write to a path in
+`_externalChanges` is neither refused nor latched, and `ExternalFileDrift(Acknowledge)` only clears the visibility list (step 8d). The
+"Motivation" and "Verified in source" sections below describe the pre-8c chokepoint (`:1714-1725`, `:1648` are stale line numbers
+for a block that is deleted). What still holds: `CreateProject` writes outside the chokepoint, so its files still appear in
+`ExternalFileDrift(List)` unless re-baselined, and a later write to such a file is protected only by `StaleRead` (if the agent read
+it) and `FoldPending` (if the workspace has a document whose text lags disk). Also found while writing this note: option A looks
+built independently of this proposal (`PersistentWorkspaceManager.RegisterOwnWrites`, called from
+`ProjectStructureEngine.CreateProjectAsync`; `CreateProjectOwnWritesTests` in `Tests.Tools.Basic`; the proposal cites `SolutionManagementEngine`, whose
+current state was not re-checked). That was confirmed only by the call site and the test file's
+existence, not by reading the test or running the sequence; whoever picks this up should confirm and then close or rewrite the
+proposal around the remaining visibility-list noise, or drop it.
+
 ## Motivation
 
 `CreateProject` produced three files the server then treated as external edits, and the next edit halted the session.

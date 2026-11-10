@@ -74,8 +74,8 @@ Status values: `TODO` / `WIP` / `DONE (hash)` / `PARTIAL (what is left)` / `DEFE
     re-verify scoping anchors before briefing; append each dispatch to
     `.claude/journal/implementer-ledger.md`
   - per slice: `Build` plus `RunTest` filtered to the touched test classes, with code and tests in one
-    implementer dispatch when they fit the tier (`dispatch-implementer`, "Tests and test runs"); one
-    full run of each affected test project at the end of the batch, not per slice
+    implementer dispatch when they fit the tier (`dispatch-implementer`, "Tests and test runs"); no
+    full project runs (the main session runs them in a worktree after the batch)
   - commit each finished slice with `Git` scope `listed`,
     the skill's message rule and the `Co-Authored-By` trailer; never push
   - leave `// TODO` markers per CLAUDE.md; defer anything needing design or owner judgement and keep
@@ -87,8 +87,9 @@ Status values: `TODO` / `WIP` / `DONE (hash)` / `PARTIAL (what is left)` / `DEFE
 
 ### After each batch (or each Direct step that changed code)
 
-One full `RunTest` per affected test project after a batch (plain call, nothing else running; the
-orchestrator runs it as its last step, so the main session does not repeat it). Inside a batch and
+One full run per affected test project after a batch, started by the main session in the background
+with `scripts/Invoke-WorktreeTests.ps1 -RepoPath c:\tmp\rs-testtree -Ref <batch's last commit>` (separate
+worktree, so it does not block the next batch's builds); the next batch is dispatched at once. Inside a batch and
 after a Direct step, filtered runs of the touched test classes only (owner rule 2026-11-09: catching a
 failure one batch late is acceptable; bisect the batch's commits to locate it). Baseline is 0 failures. Re-run a failure alone: if it passes, record it as a flake; if
 it comes from another session's commits, say so; otherwise it is the next thing to fix.

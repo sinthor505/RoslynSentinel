@@ -79,9 +79,11 @@ otherwise reads as "zero blast radius".
   `test-writer` dispatch only when the tests would exceed the limit or need new fixture design.
 - **Per slice: `Build` plus `RunTest` filtered to the touched test classes** (`filter` with
   `FullyQualifiedName~<Class>` alternatives, plus any tests the slice inverts). No full project runs inside a slice.
-- **Per batch: one full run** of each affected test project at the end of the batch (re-run failures
-  alone; known full-run flakes are commented in their tests). A failure found late is narrowed by
-  bisecting the batch's commits.
+- **Per batch: one full run** of each affected test project, NOT by the orchestrator: when a batch
+  reports, the main session starts `scripts/Invoke-WorktreeTests.ps1 -RepoPath c:\tmp\rs-testtree -Ref <last
+  commit> -Projects ...` in the background (own worktree, own bin/obj) and dispatches the next batch
+  at once. Re-run failures alone; known full-run flakes are commented in their tests. A failure found
+  late is narrowed by bisecting the batch's commits (the script takes any `-Ref`).
 
 The agent re-measures before editing and replies `RESCOPE:` (with its numbers) if the real blast radius
 exceeds the brief's; the dispatcher then re-slices.
