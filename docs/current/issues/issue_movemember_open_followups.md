@@ -51,3 +51,16 @@ or should the `TryOpen` path be removed?
 - Amended (todo punchlist 2026-11-08): the 16 sites with no `ApplyOutcome` (preview-only, `ChangeId: null`; mostly AdvancedRefactoringTools) get a second overload `AppliedChangeSummary.From(lineChanges, findings, ...)`, so all production sites migrate.
 - Qualify-receivers pass and alias-using duplicates: stay OPEN, need design.
 - Closed: copy-all-usings (behaviour, not a defect), wrapped call sites (done), global-using duplicates (harmless), D2/Q1/Q2a test-seam nits (low value).
+
+## Decisions (todo review 2026-11-10)
+
+- Cross-project MoveMember with private helpers left behind (TOOL-GAP from #16, 3f927bdf): the existing
+  refusal `RequireNoUnmovedDependencies` (`MemberRefactoringEngine.cs` ~3185-3268) lists only direct
+  private/internal siblings. Make it list the full transitive companion set, split into "used only by the
+  moved members" and "also used by members that stay", with a paste-ready `memberNames` array (READY,
+  Small-Medium). First reproduce the #16 "40 unresolved sites" failure: it may have been the
+  `UnresolvedCallSites` refusal (`CoreRefactoringTools.cs` ~92-108, refused in MultiAgent mode) rather than
+  this path. Why: helpers of helpers surface one retry at a time today; auto-moving helpers was rejected
+  (Large, surprises weak models), a new `companions` parameter duplicates `memberNames`.
+- Check: a two-level helper chain is refused naming both levels; a retry with exactly the listed names
+  succeeds; a helper also used by a staying member is flagged as shared.

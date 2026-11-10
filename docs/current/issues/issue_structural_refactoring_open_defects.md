@@ -36,3 +36,26 @@ Found moving `SnippetMatchOutcome` out of `ContextErrorBuilder.cs` (commit d9a2f
   only when the namespaces differ; no full qualification.
 - Check: interface in A.cs, implementer in B.cs (other namespace) plus an explicit implementer; after the
   tool all three take the record, B.cs has the using, the compile gate passes, no WARNING.
+
+## Decisions (todo review 2026-11-10)
+
+- Class-targeted IntroduceParameterObject on a method that implements an interface (TODO at the warning,
+  `AdvancedStructuralEngine.cs` ~1382-1388) cascades: find the interface member via `MethodFamilyKey`,
+  edit it, then reuse the interface-target implementer loop (~1329-1368) for the class and its siblings
+  (READY, Medium). Why: the class is the common entry point (DI shape `OrderService : IOrderService`) and
+  today the result does not compile (CS0535). The warning-path characterization tests
+  (`AdvancedStructuralFormatCharacterizationTests.cs` ~283-330, ~442) change with it; the interface may sit
+  in another document.
+- When that interface is not in solution source (metadata/NuGet), refuse before any edit. Why: rewriting
+  the class would break a contract the tool cannot change.
+- Check: two classes implement `I.Process(string a, int b)`; targeting `Process` on the first class updates
+  the interface, both classes and appends the record once, 0 CS errors besides TODO-flagged call sites; a
+  metadata-interface implementer is refused with no files written.
+- `ParamToPropertyRewriter` (TODO at `AdvancedStructuralEngine.cs` ~1486) rewrites only identifiers whose
+  `GetSymbolInfo` is an `IParameterSymbol` of the rewritten method, mapped by ordinal, using each
+  declaring document's semantic model; today's name-text match stays only as the null-model fallback,
+  narrowed to skip member-access/member-binding names, `NameColon` and initializer targets (READY,
+  Small-Medium). Why: `other.name`, `Log(name: x)` and `new T { name = 1 }` become invalid C# while the
+  tool reports success.
+- Check: a body with `other.name`, `Log(name: name)`, `new Foo { name = name }` and a plain `name` use; only
+  the plain use becomes `request.Name`, 0 CS errors; plus an implementer that renamed the parameter.

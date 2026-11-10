@@ -186,6 +186,22 @@ not measured.
 - Memories: `project_mcpserverstatus_alldeclaredtools_added`, `project_startup_arg_wiring_pattern`,
   `project_server_flavors_and_build_configs`
 
+## Decisions (todo review 2026-11-10)
+
+- #9 (7162d29b) and #16 (3f927bdf) put SemanticFindReplace (5450 chars: ~3000 tool description at
+  `SemanticFindReplaceTools.cs` ~40-65, 2463 input schema) and MoveMember (3356, mostly parameter text at
+  `CoreRefactoringTools.cs` ~438-446) on the claude-lean startup surface; budgets rose to 45000 total /
+  5500 per tool (Advanced at 44948). Moderate trim (READY, Small-Medium): de-duplicate the "required"
+  lists (keep them once, in `operation`), cut the skipped-site narration to one sentence, the alias
+  paragraph to ~300 chars, trim `symbol`/`fileFilter` and the MoveMember `oldMember`, `targetClassName`,
+  `fieldMap`, `forwarderReceiver`, `callSiteFixups` text (keep the `callSiteFixups` key format); about
+  -2.5k. Then lower the budgets per the "measured total rounded up to the next 500" rule (expected 43000
+  total, 4500 per tool; Search stays 2450) and remove the TODO at `ClaudeLeanSchemaBudgetTests.cs` ~29.
+  Why: every claude-lean session pays the extra ~12k at startup and the test no longer catches growth.
+- Check: `CoreSurface_TotalSchemaSize_IsWithinBudget` and `CoreSurface_LargestToolSchema_IsWithinBudget`
+  pass at the new constants with >= 300 chars headroom; a ModelEval run on `invertBoolean` and
+  `replaceConstruction` before and after shows no regression (see Cost / risk).
+
 ## Moved from TODO.md (2026-10-17)
 
 ### Schema budget headroom is ~2 chars (2026-10-17)

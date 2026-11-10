@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## EditLines tool and anchor attributes - resolved (2026-11-10)
+
+EditLines tool and anchor attributes (2026-08-31) - never built; parked because ApplyDiff/ReplaceSnippet cover line edits today; unpark when a model-eval run shows ApplyDiff is still a bottleneck - [doc](ideas/idea_editlines_and_anchor_attributes.md)
+
+Evidence: dropped by owner 2026-11-10: superseded by the ReplaceRange TOOL-GAP entry (TODO.md, owner decision for a new mandatory-param tool)
+
 ## ProjectDoc trailer extension (trailers, validate, close) - resolved (2026-11-10)
 
 `ProjectDoc` trailer extension in one slice (2026-11-09) - list docs with their `Plan:`/`Closes:` commits, validate a trailer value, perform the closure (Status, move to `closed/`, CLOSED.md line, link fixes); then update templates/README.md rule 11; Medium - [doc](ideas/closed/idea_doc_id_commit_trailers_and_reconciliation.md)

@@ -290,3 +290,15 @@ type, move construction behind factories first.
   csproj, references from Server.Advanced and the test projects, a DI block in
   `ServiceRegistrationExtensionsAdvanced.cs`, regenerated docs. Needs a plan doc first (OPEN). Why: the
   weight is in Engines.Advanced (33 files) and its tests, so a tools-only split buys little.
+
+## Decisions (todo review 2026-11-10)
+
+- Test-move remainder in two steps. Now (READY, Medium): split the ChangeSignature/MoveMember tests out of
+  the 5 mixed files (BatteryTwentyFourTests, DeclarationModifierTests, AmbiguousNameTargetToolTests,
+  MoveTypeAndExtractTests, DryRunLineChangesTests) into Tests.Tools.Basic with `Member(addMember)` +
+  `Member(remove)` (cross-project MoveMember would refuse: shared fixtures stay behind). Later: move
+  `MoveMemberSuccessTests` and `MoveMemberToolCollateralRefusalTests` whole once MoveFile slice 1 exists
+  (`proposal_move_file_tool.md`). Why: MoveFile now waits for a fresh-chat design; the mixed files do not
+  need it.
+- Check: the 7 `// TODO` markers are gone, Tests.Tools.Advanced has no MoveMember/ChangeSignature tests,
+  the build is green and no new test failures.
