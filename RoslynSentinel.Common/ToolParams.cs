@@ -14,6 +14,9 @@ public static class ToolParams
     public const string RunTestDescription =
         "Runs `dotnet test` on the solution or one project. Returns TotalCount/PassedCount/FailedCount/SkippedCount, a FailureSummary grouping failures by shared cause, and a Results list (resultsType, default failed; capped by maxDetails; summary=true omits it). Failed tests carry their captured Output. filter goes to `dotnet test --filter`; an unresolvable filter is a distinct error from zero matches. Failed tests' unprojected rows are stored: largeResult.resultId + path successData.fullResults reach them via GetLargeResult(reason: \"<why you call this>\", resultId: \"<resultId>\"). OmittedResultCount counts rows beyond maxDetails."; // hint-ok: const [Description] text cannot call ToolCallHint; names required params
 
+    public const string RunTestSuite =
+        "fast (default) skips [Category(\"OutOfProcess\")] fixtures (git/build/test-run/process tests); full runs everything - use before committing.";
+
     public const string ProjectName =
         "Project name returned by Search(reason: \"<why you call this>\", mode: \"symbol\") in the projectName field. " +
         "Must match exactly - case-sensitive."; // hint-ok: const [Description] text cannot call ToolCallHint; names required params

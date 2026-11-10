@@ -336,6 +336,13 @@ public enum TestResultsFilter
     all, failed, skipped
 }
 
+/// <summary>RunTest suite: fast skips the [Category("OutOfProcess")] fixtures (they start git/dotnet/powershell processes); full runs everything.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum TestSuite
+{
+    fast, full
+}
+
 // ── Content hashing ───────────────────────────────────────────────────────────
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

@@ -511,6 +511,7 @@ public class WorkspaceTools
         [Description("solution (default) runs every test project one after another; project runs only the project named in scopeName; file is not supported.")] ToolScope scope = ToolScope.solution,
         [Description("Project name (for example RoslynSentinel.Tests.Basic) when scope=project; not a parameter called projectName.")] string? scopeName = null,
         [Description("Passed to `dotnet test --filter`. With scope=solution it still builds every test project (about 1.5 minutes); prefer scope=project with scopeName.")] string? filter = null,
+        [Description(ToolParams.RunTestSuite)] TestSuite suite = TestSuite.fast,
         TestResultsFilter resultsType = TestResultsFilter.failed,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
         int timeoutSeconds = 600,
@@ -519,7 +520,7 @@ public class WorkspaceTools
         [Description("true = keep failed tests' Output and the stdout/stderr tails. Default false: compact digest.")] bool includeOutput = false,
         [Description("Extra env vars for the test process (name -> value).")] Dictionary<string, string>? environment = null,
         CancellationToken cancellationToken = default)
-        => _buildTest.RunTestTool(reason, scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, includeOutput, environment, cancellationToken);
+        => _buildTest.RunTestTool(reason, scope, scopeName, filter, suite, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, includeOutput, environment, cancellationToken);
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: none of projectName/docCommentId/symbolName/line/column is
     // individually required -> the tool needs exactly one full resolution strategy: (projectName +
     // docCommentId), or symbolName (optionally with contextSnippet/lineBefore/lineAfter), or

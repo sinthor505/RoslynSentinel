@@ -322,7 +322,7 @@ public class WorkspaceBuildTestImpl
     }
 
     public async Task<SentinelCallToolResult<object>> RunTest(ToolCallReason reason, ToolScope scope = ToolScope.solution,
-        string? scopeName = null, string? filter = null, TestResultsFilter resultsType = TestResultsFilter.failed,
+        string? scopeName = null, string? filter = null, TestSuite suite = TestSuite.fast, TestResultsFilter resultsType = TestResultsFilter.failed,
         int maxDetails = 50, int timeoutSeconds = 600, bool summary = false, bool useScratchDir = false, bool includeOutput = false,
         Dictionary<string, string>? environment = null,
         CancellationToken cancellationToken = default)
@@ -335,12 +335,24 @@ public class WorkspaceBuildTestImpl
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, rateLimitError) };
             }
 
-            var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, environment: environment, cancellationToken: cancellationToken);
+            var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, environment: environment, suite: suite, cancellationToken: cancellationToken);
 
             if (!result.TryGetData(out var testRunResult))
             {
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, result.Error?.Message ?? ("Test run failed unexpectedly. " + ToolCallHint.Next("Build", "to rule out compile errors, then retry the test run.", ("level", "quickBuild")))), Findings = result.Findings };
             }
+
+            // Marker bookkeeping (completed runs only): a full solution run resets it, a fast run increments it. Never throws.
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
+            var now = DateTime.UtcNow;
+            if (testRunResult.RunCompleted)
+            {
+                FullTestMarkerStore.RecordRun(solutionRoot, suite, scope, testRunResult, now, filter);
+            }
+
+            // Only a completed fast run carries the staleness object; a full run never does.
+            var stale = suite == TestSuite.fast && testRunResult.RunCompleted ? FullTestMarkerStore.EvaluateForRoot(solutionRoot, now) : null;
+            testRunResult = testRunResult with { Suite = suite, FullSuiteStale = stale };
 
             var projected = TestRunResultProjector.Project(testRunResult, resultsType, includeOutput: includeOutput);
             if (summary)
@@ -355,8 +367,19 @@ public class WorkspaceBuildTestImpl
             }
 
             var failedRows = testRunResult.Results.Where(r => r.Outcome == TestOutcome.Failed).ToList();
-            var toolResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = WithoutTailsWhenClean(projected), TotalRecords = testRunResult.FailedCount, WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = SummarizeTestRun(testRunResult), ListSummary = SummarizeListResult.Build(failedRows, TestClassOf) };
-            var finalResult = toolResult with { Findings = result.Findings, StatusMessage = SummarizeTestRun(testRunResult) };
+            var statusMessage = SummarizeTestRun(testRunResult);
+            if (TestSuiteFilter.ZeroMatchHint(suite, filter, testRunResult.TotalCount) is { } zeroMatchHint)
+            {
+                statusMessage += " " + zeroMatchHint;
+            }
+
+            if (stale is not null)
+            {
+                statusMessage += " " + FullTestMarkerStore.Describe(stale, now);
+            }
+
+            var toolResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = WithoutTailsWhenClean(projected), TotalRecords = testRunResult.FailedCount, WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = statusMessage, ListSummary = SummarizeListResult.Build(failedRows, TestClassOf) };
+            var finalResult = toolResult with { Findings = result.Findings, StatusMessage = statusMessage };
 
             // The unprojected rows (full messages, stack traces, Output) are stored by the marshaller under
             // successData.fullResults, not inline; the response's largeResult.resultId + that path reach them via

@@ -61,7 +61,7 @@ entries by text later, as lines shift.
 
 ## 6. After each batch
 
-Full `RunTest` and flake handling per the reference. A real new failure becomes the first item of
+Full `RunTest` (`suite: "full"`) and flake handling per the reference. A real new failure becomes the first item of
 the next batch.
 
 ## 7. Failures and stalls

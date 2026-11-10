@@ -79,10 +79,12 @@ otherwise reads as "zero blast radius".
   `test-writer` dispatch only when the tests would exceed the limit or need new fixture design.
 - **Per slice: `Build` plus `RunTest` filtered to the touched test classes** (`filter` with
   `FullyQualifiedName~<Class>` alternatives, plus any tests the slice inverts). No full project runs inside a slice.
+  `RunTest` defaults to `suite: "fast"`, which skips `[Category("OutOfProcess")]` fixtures (Git, Build,
+  RunTest, process launch); when the touched classes are OutOfProcess fixtures, put `suite: "full"` in the brief.
 - **Per batch: one full run** of each affected test project, NOT by the orchestrator: when a batch
   reports, the main session starts `scripts/Invoke-WorktreeTests.ps1 -RepoPath c:\tmp\rs-testtree -Ref <last
   commit> -Projects ...` in the background (own worktree, own bin/obj) and dispatches the next batch
-  at once. Re-run failures alone; known full-run flakes are commented in their tests. A failure found
+  at once (the script calls `dotnet test` directly, so it covers every category). Re-run failures alone; known full-run flakes are commented in their tests. A failure found
   late is narrowed by bisecting the batch's commits (the script takes any `-Ref`).
 
 The agent re-measures before editing and replies `RESCOPE:` (with its numbers) if the real blast radius

@@ -35,6 +35,7 @@ public class ServerHttp
         SchemaOptions.Configure(args);
         EolPolicyOptions.Configure(args);
         AgentOperatingModeOptions.Configure(args);
+        FullSuiteStalenessOptions.Configure(args);
 
         if (ServerStartupHelpers.HandleListTools(
                 args,

@@ -13,6 +13,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Basic;
 
 [TestFixture]
+[Category("OutOfProcess")] // starts git/dotnet/powershell processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class ResidualMentionScannerTests
 {
     private string _root = string.Empty;

@@ -9,6 +9,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
 [Category("BuildIsolation")] // sentinel:auto-category
+[Category("OutOfProcess")] // starts git/dotnet/powershell processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class BuildIsolationTests
 {
     private const string Solution = @"C:\work\RoslynSentinel\RoslynSentinel.slnx";

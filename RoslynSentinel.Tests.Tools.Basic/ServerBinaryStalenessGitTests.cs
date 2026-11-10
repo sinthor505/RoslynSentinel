@@ -6,6 +6,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// </summary>
 // Flaky on full/parallel runs: a different test of this fixture sometimes fails with 'git failed to run: ...' (git spawn); passes when the fixture is run alone.
 [TestFixture]
+[Category("OutOfProcess")] // starts git/dotnet/powershell processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class ServerBinaryStalenessGitTests
 {
     private static readonly TimeSpan GitTimeout = TimeSpan.FromSeconds(60);

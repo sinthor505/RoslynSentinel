@@ -7,6 +7,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
 [Category("BuildEngine")]
+[Category("OutOfProcess")] // starts git/dotnet/powershell processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class BuildScopeFullBuildTests
 {
     private static void WriteProject(string root, string name, string source)

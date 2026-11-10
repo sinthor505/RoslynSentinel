@@ -10,6 +10,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 [NonParallelizable]
 [Category("AdminTools")]
 [Category("KillOnCloseJob")]
+[Category("OutOfProcess")] // starts git/dotnet/powershell processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class KillOnCloseJobTests
 {
     private static Process StartSleepingChild()

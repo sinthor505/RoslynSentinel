@@ -17,6 +17,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 [Parallelizable(ParallelScope.All)]
 [FixtureLifeCycle(LifeCycle.InstancePerTestCase)]
 [Category("GitTools")] // sentinel:auto-category
+[Category("OutOfProcess")] // starts git/dotnet/powershell processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class GitToolsSmokeTests
 {
     // Generous relative to GitProcessTimeout's 30s -> this isn't testing the timeout boundary

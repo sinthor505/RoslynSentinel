@@ -13,6 +13,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 [TestFixture]
 [Category("AdminTools")] // sentinel:auto-category
 [Category("TestInstanceLauncher")] // sentinel:auto-category
+[Category("OutOfProcess")] // starts git/dotnet/powershell processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class TestInstanceLauncherTests
 {
     private string _dir = null!;

@@ -68,7 +68,7 @@ is the step heading. Owner rulings include the mode and the presence answer.
 
 ## 6. Close
 
-- One full `RunTest` per the reference.
+- One full `RunTest` (`suite: "full"`) per the reference.
 - **All steps done:** Status `IMPLEMENTED <date>. <hashes>`; move the plan to `plans/closed/` and fix
   relative links; update the source proposal's Status line; close the plan's TODO.md entry with
   `scripts/Close-TodoItem.ps1`; the final commit carries `Closes: <id>`.

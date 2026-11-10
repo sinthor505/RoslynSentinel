@@ -11,6 +11,7 @@ namespace RoslynSentinel.Tests.SubAgent;
 /// removal PlanStepRunner uses refuses a dirty tree, which is exactly why the force option exists.
 /// </summary>
 [TestFixture]
+[Category("OutOfProcess")] // starts git/dotnet/powershell processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class WorktreeTeardownTests
 {
     private string _root = null!;

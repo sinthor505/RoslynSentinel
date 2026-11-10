@@ -9,6 +9,9 @@ public static class TestProjectDetector
     private static readonly ConcurrentDictionary<string, (DateTime LastWriteUtc, bool IsTest)> Cache =
         new(StringComparer.OrdinalIgnoreCase);
 
+    private static readonly ConcurrentDictionary<string, (DateTime LastWriteUtc, bool UsesNUnit)> NUnitCache =
+    new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>"Is this a test project" -> checked via the project file referencing
     /// Microsoft.NET.Test.Sdk (the SDK package that actually makes `dotnet test` runnable), not via
     /// referencing nunit.framework: a project can pull in NUnit's assertion library transitively
@@ -42,5 +45,33 @@ public static class TestProjectDetector
         var isTest = text.Contains("Microsoft.NET.Test.Sdk", StringComparison.OrdinalIgnoreCase);
         Cache[path] = (lastWriteUtc, isTest);
         return isTest;
+    }
+
+    /// <summary>True when the project file at <paramref name="projectPath"/> references the NUnit test adapter (NUnit3TestAdapter),
+    /// the adapter that understands the `TestCategory` filter property the fast RunTest suite uses. Another adapter (xunit)
+    /// rejects an unknown filter property, so the fast suite leaves such projects' filter alone. Cached like <see cref="IsTestProject"/>.</summary>
+    public static bool UsesNUnitAdapter(string projectPath)
+    {
+        if (string.IsNullOrEmpty(projectPath) || !File.Exists(projectPath))
+            return false;
+
+        var lastWriteUtc = File.GetLastWriteTimeUtc(projectPath);
+        if (NUnitCache.TryGetValue(projectPath, out var cached) && cached.LastWriteUtc == lastWriteUtc)
+            return cached.UsesNUnit;
+
+        try
+        {
+            var usesNUnit = File.ReadAllText(projectPath).Contains("NUnit3TestAdapter", StringComparison.OrdinalIgnoreCase);
+            NUnitCache[projectPath] = (lastWriteUtc, usesNUnit);
+            return usesNUnit;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 }

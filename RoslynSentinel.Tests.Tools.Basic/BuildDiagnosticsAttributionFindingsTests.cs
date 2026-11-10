@@ -12,6 +12,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 
 [TestFixture]
 
+[Category("OutOfProcess")] // starts git/dotnet/powershell processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class BuildDiagnosticsAttributionFindingsTests
 {
     private const string BrokenSource = "namespace T;\r\npublic class C { Missing m; }\r\n";

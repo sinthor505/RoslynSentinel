@@ -42,6 +42,11 @@
 .PARAMETER Force
     Stop a locking process without prompting. Without this flag, the script asks first.
 
+.PARAMETER Fast
+    Test mode skips [Category("OutOfProcess")] fixtures (Git, Build, RunTest, process launch),
+    like RunTest's default suite "fast". Cannot be combined with -UpdateBaseline: baselines
+    always come from the full suite.
+
 .EXAMPLE
     .\build.ps1 -Flavor Advanced -Config Debug
     Build + test the Advanced flavor's Debug config; report only new warnings/failures.
@@ -65,10 +70,17 @@ param(
 
     [switch]$UpdateBaseline,
 
-    [switch]$Force
+    [switch]$Force,
+
+    [switch]$Fast
 )
 
 $ErrorActionPreference = 'Stop'
+if ($Fast -and $UpdateBaseline) {
+    Write-Host "-Fast cannot be combined with -UpdateBaseline: baselines come from the full suite." -ForegroundColor Red
+    exit 1
+}
+$fastFilter = 'TestCategory!=OutOfProcess'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 $docsDir = Join-Path $repoRoot 'docs'
 # Baselines are keyed by Flavor only, not Config - Debug/Release compile the same source, so a
@@ -222,18 +234,19 @@ function Invoke-TestMode {
         # already built the solution, so skip the redundant rebuild here.
         $skipBuild = $Mode -in @('Build', 'Both')
         $parallelScript = Join-Path $repoRoot 'scripts\Test-Parallel.ps1'
-        if ($skipBuild) {
-            $rawOutput = & $parallelScript -Configuration $Config -SkipBuild 2>&1
-        } else {
-            $rawOutput = & $parallelScript -Configuration $Config 2>&1
-        }
+        $parallelArgs = @{ Configuration = $Config }
+        if ($skipBuild) { $parallelArgs.SkipBuild = $true }
+        if ($Fast) { $parallelArgs.Filter = $fastFilter }
+        $rawOutput = & $parallelScript @parallelArgs 2>&1
         $exitCode = $LASTEXITCODE
     } else {
         $testProjectMap = @{
             'Advanced' = 'RoslynSentinel.Tests.Battery.Advanced\RoslynSentinel.Tests.Battery.Advanced.csproj'
         }
         $testProject = Join-Path $repoRoot $testProjectMap[$Flavor]
-        $rawOutput = & dotnet test $testProject -c $Config --nologo -v normal 2>&1
+        $filterArgs = @()
+        if ($Fast) { $filterArgs = @('--filter', $fastFilter) }
+        $rawOutput = & dotnet test $testProject -c $Config --nologo -v normal @filterArgs 2>&1
         $exitCode = $LASTEXITCODE
     }
     $ErrorActionPreference = $previousEap

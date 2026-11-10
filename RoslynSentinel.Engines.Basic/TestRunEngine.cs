@@ -55,7 +55,11 @@ public record TestRunResult(
     string? Detail = null,
     bool RunCompleted = true,
     List<ProjectTestSummary>? ProjectSummaries = null,
-    int OmittedResultCount = 0
+    int OmittedResultCount = 0,
+    // The suite the run used (fast skips the OutOfProcess fixtures); set by the RunTest tool, null for an engine-level run.
+    TestSuite? Suite = null,
+    // Set by the RunTest tool on a completed fast run when the full suite is stale; never on a full run.
+    FullSuiteStale? FullSuiteStale = null
 ) : IOperationResult
 {
     // The RunTest tool itself sets the MCP isError only when !RunCompleted (WorkspaceBuildTestImpl.cs ~311).
@@ -104,6 +108,7 @@ public class TestRunEngine
         bool summary = false,
         bool useScratchDir = false,
         IReadOnlyDictionary<string, string>? environment = null,
+        TestSuite suite = TestSuite.fast,
         CancellationToken cancellationToken = default)
     {
         var start = DateTime.UtcNow;
@@ -214,7 +219,7 @@ public class TestRunEngine
         {
             foreach (var (name, path) in targets)
             {
-                var result = await RunOneProjectAsync(name, path, filter, timeoutSeconds, artifactsSolutionDirectory, environment, cancellationToken);
+                var result = await RunOneProjectAsync(name, path, filter, suite, timeoutSeconds, artifactsSolutionDirectory, environment, cancellationToken);
                 projectResults.Add((result, name));
             }
         }
@@ -284,6 +289,7 @@ public class TestRunEngine
         {
             overallDetail = !string.IsNullOrEmpty(filter)
                 ? $"0 tests matched filter '{filter}' across {targets.Count} project(s)."
+                    + (TestSuiteFilter.ZeroMatchHint(suite, filter, totalCount) is { } zeroMatchHint ? " " + zeroMatchHint : "")
                 : "No test projects found under the resolved scope.";
         }
 
@@ -383,6 +389,7 @@ public class TestRunEngine
         string projectName,
         string projectPath,
         string? filter,
+        TestSuite suite,
         int timeoutSeconds,
         string artifactsSolutionDirectory,
         IReadOnlyDictionary<string, string>? environment,
@@ -423,10 +430,13 @@ public class TestRunEngine
                 }
             }
             BuildIsolation.ApplyArtifactsPath(process.StartInfo, artifactsSolutionDirectory);
-            if (!string.IsNullOrEmpty(filter))
+            // The fast suite adds the OutOfProcess exclusion only for NUnit projects: another adapter (xunit) rejects the TestCategory property.
+            // `filter` stays the caller's text, which the zero-match messages below quote.
+            var effectiveFilter = TestProjectDetector.UsesNUnitAdapter(projectPath) ? TestSuiteFilter.Compose(filter, suite) : filter;
+            if (!string.IsNullOrEmpty(effectiveFilter))
             {
                 process.StartInfo.ArgumentList.Add("--filter");
-                process.StartInfo.ArgumentList.Add(filter);
+                process.StartInfo.ArgumentList.Add(effectiveFilter);
             }
 
             var stdout = new StringBuilder();

@@ -32,7 +32,9 @@
     project except Support libraries, ModelEval (needs a live LLM), PlanStepRunner and SubAgent.
 
 .PARAMETER Filter
-    Passed to `dotnet test --filter` for every project.
+    Passed to `dotnet test --filter` for every project. A run with neither -Filter nor -Projects
+    that completes for every project resets the main tree's .roslynsentinel/full-test-marker.json
+    (the RunTest full-suite staleness marker).
 
 .PARAMETER Parallel
     Run the projects concurrently. Faster, but CPU contention makes the build-timeout tests
@@ -248,6 +250,27 @@ foreach ($p in $selected) {
 }
 
 $summary | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $resultsDir 'summary.json') -Encoding utf8
+
+# An unfiltered default-selection run that completed for every project counts as a full suite run:
+# reset the main tree's RunTest staleness marker (same shape as FullTestMarker in
+# RoslynSentinel.Engines.Basic/FullTestMarkerStore.cs), so batch runs here silence the
+# fullSuiteStale warning just like RunTest(suite: "full") does.
+$allCompleted = -not ($summary.projects | Where-Object { $_.note })
+if (-not $Filter -and -not $Projects -and $allCompleted) {
+    $markerDir = Join-Path $mainRoot '.roslynsentinel'
+    New-Item -ItemType Directory -Path $markerDir -Force | Out-Null
+    $marker = [ordered]@{
+        lastFullRunUtc = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+        totalCount     = [int](($summary.projects | ForEach-Object { $_.total } | Measure-Object -Sum).Sum)
+        failedCount    = [int](($summary.projects | ForEach-Object { $_.failed } | Measure-Object -Sum).Sum)
+        fastRunsSince  = 0
+    }
+    $markerPath = Join-Path $markerDir 'full-test-marker.json'
+    $tmp = "$markerPath.$PID.tmp"
+    $marker | ConvertTo-Json | Set-Content -Path $tmp -Encoding utf8
+    Move-Item -Path $tmp -Destination $markerPath -Force
+    Write-Host "Full-suite marker updated: $markerPath"
+}
 
 Write-Host ''
 Write-Host ("{0,-40} {1,7} {2,7} {3,7} {4,7}" -f 'Project', 'Total', 'Passed', 'Failed', 'Skipped')

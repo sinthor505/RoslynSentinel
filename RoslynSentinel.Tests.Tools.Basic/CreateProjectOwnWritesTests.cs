@@ -10,6 +10,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 [TestFixture]
 [Category("SolutionManagementEngine")] // sentinel:auto-category
 [NonParallelizable]
+[Category("OutOfProcess")] // starts git/dotnet/powershell processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class CreateProjectOwnWritesTests
 {
     // No positive signal says "no more watcher events are coming", so the settle window is the bound. It is several

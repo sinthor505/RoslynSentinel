@@ -7,6 +7,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
 [Category("BuildEngine")]
+[Category("OutOfProcess")] // starts git/dotnet/powershell processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class BuildCascadeFixtureTests
 {
     // Characterises MSBuild's behaviour: a project whose ProjectReference failed to compile is not

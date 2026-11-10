@@ -8,6 +8,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 [Category("BuildEngine")] // sentinel:auto-category
 [Category("DiagnosticEngine")] // sentinel:auto-category
+[Category("OutOfProcess")] // starts git/dotnet/powershell processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class BuildEngineTests
 {
     [Test]

@@ -14,6 +14,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 [Parallelizable(ParallelScope.All)]
 [Category("TestRunResult")] // sentinel:auto-category
 [Category("WorkspaceTools")] // sentinel:auto-category
+[Category("OutOfProcess")] // starts git/dotnet/powershell processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class RunTestTests
 {
     private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager) =>

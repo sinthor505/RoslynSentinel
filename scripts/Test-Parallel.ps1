@@ -9,7 +9,9 @@ failed.
 param(
     [string]$Configuration = "Debug",
     [string]$ResultsDirectory = (Join-Path $PSScriptRoot "..\TestResults\parallel-run"),
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    # Passed to `dotnet test --filter` for every project (build.ps1 -Fast sets TestCategory!=OutOfProcess).
+    [string]$Filter
 )
 
 $ErrorActionPreference = "Stop"
@@ -43,10 +45,12 @@ $jobs = foreach ($proj in $projects) {
     $trxName = "$name.trx"
     $logPath = Join-Path $ResultsDirectory "$name.log"
     Start-Job -Name $name -ScriptBlock {
-        param($projPath, $config, $resultsDir, $trxName, $logPath)
-        & dotnet test $projPath -c $config --no-build --logger "trx;LogFileName=$trxName" --results-directory $resultsDir *> $logPath
+        param($projPath, $config, $resultsDir, $trxName, $logPath, $filter)
+        $filterArgs = @()
+        if ($filter) { $filterArgs = @('--filter', $filter) }
+        & dotnet test $projPath -c $config --no-build --logger "trx;LogFileName=$trxName" --results-directory $resultsDir @filterArgs *> $logPath
         return $LASTEXITCODE
-    } -ArgumentList $proj.FullName, $Configuration, $ResultsDirectory, $trxName, $logPath
+    } -ArgumentList $proj.FullName, $Configuration, $ResultsDirectory, $trxName, $logPath, $Filter
 }
 
 $jobs | Wait-Job | Out-Null

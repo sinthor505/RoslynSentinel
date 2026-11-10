@@ -3,6 +3,8 @@ using System.ComponentModel;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tools.Basic;
 
 [McpServerToolType]
@@ -192,6 +194,17 @@ public class GitTools
                 if (foreignEdits.Count > 0)
                 {
                     return new SentinelCallToolResult<object> { IsError = false, SuccessData = result, Findings = foreignEdits };
+                }
+            }
+
+            if (operation == GitOperation.commit)
+            {
+                // A commit result warns when the full test suite is stale (marker read only, never incremented here).
+                // The marker belongs to the loaded solution, and commit always targets that solution's repo.
+                var staleSuite = FullTestMarkerStore.StaleFindings(_workspaceManager.GetSolutionRoot());
+                if (staleSuite.Count > 0)
+                {
+                    return new SentinelCallToolResult<object> { IsError = false, SuccessData = result, Findings = staleSuite };
                 }
             }
 
