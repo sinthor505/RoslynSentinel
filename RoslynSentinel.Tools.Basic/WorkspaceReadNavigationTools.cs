@@ -256,7 +256,7 @@ public class WorkspaceReadNavigationTools
         }
 
         Check("fileGlob", !string.IsNullOrWhiteSpace(fileGlob), mode == SearchMode.text, "mode text only");
-        Check("maxResults", maxResults != 200, mode == SearchMode.text, "mode text only");
+        // maxResults is a cap, so ignoring it outside text mode is harmless; an error only costs a weak model a turn.
         Check("contextLines", contextLines != 0, mode == SearchMode.text, "mode text only");
         Check("symbolKind", symbolKind != SymbolKindFilter.any, mode == SearchMode.symbol, "mode symbol only");
         Check("containingType", !string.IsNullOrWhiteSpace(containingType), mode == SearchMode.symbol, "mode symbol only");

@@ -443,20 +443,21 @@ public class SearchModeTests
     }
 
     [Test]
-    public async Task Search_ReferencesMode_WithMaxResults_IsInvalidArgumentError()
+    // Deliberate exception to the 101ec745 rule (a mode-irrelevant param is an InvalidArgument):
+    // maxResults is only a cap, so ignoring it is harmless, and the rejection cost qwen3.5-9b a turn
+    // 4 times in the 2026-11-10 10-chain batch.
+    public async Task Search_ReferencesMode_WithMaxResults_IsIgnoredNotRejected()
     {
         using var h = await CreateHarnessAsync();
 
         var result = await h.Tools.SearchSolutionTool(
-            reason: "search references maxResults rejection regression",
+            reason: "search references maxResults is ignored outside text mode",
             SearchMode.references,
             query: "Target",
             maxResults: 5);
 
-        Assert.That(result.IsError, Is.True, "A text-only maxResults of 5 passed to mode references must be rejected.");
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-        Assert.That(result.ErrorData?.Message, Does.Contain("ignores"));
-        Assert.That(result.ErrorData?.Message, Does.Contain("maxResults"));
+        Assert.That(result.ErrorData?.ErrorCode, Is.Not.EqualTo(ToolErrorCode.InvalidArgument),
+            "A text-only maxResults passed to mode references must be ignored, not rejected.");
     }
 
     [Test]

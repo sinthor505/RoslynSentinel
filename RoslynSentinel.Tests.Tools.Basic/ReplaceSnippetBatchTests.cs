@@ -183,6 +183,27 @@ public class ReplaceSnippetBatchTests
     }
 
     [Test]
+    public async Task ReplaceSnippet_TopLevelFilePathWithBatchEdits_DefaultsItemFilePathAsync()
+    {
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
+
+        var targetFile = workspace.PathOf(StatusRelativePath);
+        var anchor = FirstLine(workspace.ReadText(StatusRelativePath));
+
+        // A top-level filePath beside batchEdits is tolerated when nothing else singular is set;
+        // the batch item with no filePath of its own is applied to that top-level file.
+        var result = await tools.ReplaceSnippetTool(
+            reason: "test top-level filePath default",
+            ProposedChangeAction.apply,
+            filePath: targetFile,
+            batchEdits: [new SnippetEdit { OldContent = anchor, NewContent = anchor + " // default-file" }]);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(workspace.ReadText(StatusRelativePath), Does.Contain("// default-file"));
+    }
+
+    [Test]
     public async Task ReplaceSnippet_EmptyEditsArray_RejectsAsInvalidArgumentAsync()
     {
         using var workspace = CreateWorkspace();

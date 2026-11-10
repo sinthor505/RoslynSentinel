@@ -757,8 +757,11 @@ public class WorkspaceFileEditImpl
             bool hasSingularEdit = filePath is not null || !string.IsNullOrEmpty(oldContent) || newContent != null
                 || withinMember is not null || matchLine is not null;
             bool hasBatchEdit = batchEdits != null;
+            // Tolerated: a top-level filePath beside batchEdits with nothing else singular set; models repeat it, so it becomes the default file for items with a blank filePath.
+            bool hasTopLevelFilePathOnly = hasBatchEdit && filePath is not null && string.IsNullOrEmpty(oldContent) && string.IsNullOrEmpty(newContent)
+                && withinMember is null && matchLine is null && lineBefore is null && lineAfter is null;
 
-            if (hasSingularEdit && hasBatchEdit)
+            if (hasSingularEdit && hasBatchEdit && !hasTopLevelFilePathOnly)
             {
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
@@ -777,6 +780,17 @@ public class WorkspaceFileEditImpl
                         IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'batchEdits' was supplied but is empty.")
                     };
+                }
+
+                if (filePath is not null)
+                {
+                    foreach (var edit in batchEdits!)
+                    {
+                        if (string.IsNullOrWhiteSpace(edit.FilePath))
+                        {
+                            edit.FilePath = filePath;
+                        }
+                    }
                 }
 
                 return await ReplaceSnippetBatch(batchEdits, action, validateOnApply, returnDiff, cancellationToken);
