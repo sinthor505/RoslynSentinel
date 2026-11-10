@@ -11,7 +11,6 @@ using RoslynSentinel.Tools.Basic;
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
-// TODO move the ChangeSignature/MoveMember tests of this file to Tests.Tools.Basic (needs the file split)
 [TestFixture]
 // Runs exclusively because Setup/TearDown wipe every top-level *.cs in the shared working directory (DeleteLeakedRelativeFiles), which would delete files other parallel fixtures in this assembly (AssemblyInfo.cs sets ParallelScope.Fixtures) are using.
 [NonParallelizable]
@@ -119,19 +118,6 @@ public class BatteryTwentyFourTests
         // ...and so must the unrelated formatting change the fabricated string could never show.
         Assert.That(summary.Diff, Does.Contain("public int OrderId"));
         Assert.That(summary.Diff, Is.Not.EqualTo("using System.Linq;"));
-    }
-
-    [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_StaticToExistingClass_NoEolOrCollateralRefusal()
-    {
-        const string original = "public class Src\r\n{\r\n    public static int Foo(int x) { return x + 1; }\r\n}\r\n\r\npublic class Target\r\n{\r\n}\r\n";
-        SetMultiFile(("Refactor.cs", original));
-        var result = await _coreTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Src", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
-        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
-        var text = await ReadCommittedRefactorText();
-        Assert.That(text, Does.Contain("public static int Foo(int x) => global::Target.Foo(x);"), "The forwarder is written.");
-        Assert.That(text, Does.Not.Match("(?<!\r)\n"), "The forwarder must keep the file's CRLF line endings.");
     }
 
     private (string Dir, string SourcePath) SetPathAwareSolution(string dirName, params (string Name, string Content)[] files)

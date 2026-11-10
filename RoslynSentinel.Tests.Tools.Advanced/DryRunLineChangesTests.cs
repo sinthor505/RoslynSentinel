@@ -8,7 +8,6 @@ namespace RoslynSentinel.Tests.Tools.Advanced;
 // Dry-run LineChanges coverage. A dry run builds its AppliedChangeSummary through AppliedChangeSummary.From, so LineChanges
 // must be filled with real counts and the workspace must stay untouched. autoStage is hardcoded true on these tools now,
 // so dryRun is the only preview-only path. In-memory (InMemoryWorkspace), like its siblings.
-// TODO move the ChangeSignature/MoveMember tests of this file to Tests.Tools.Basic (needs the file split)
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
 public sealed class DryRunLineChangesTests
@@ -66,20 +65,5 @@ public sealed class DryRunLineChangesTests
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         AssertPlausibleDryRunLineChanges(result.SuccessData!);
         Assert.That(workspace.ReadText("Order.cs"), Is.EqualTo(before), "A dry run must not write the file.");
-    }
-
-    // Family: MoveMember, same keepDelegator dry-run shape as MoveMemberSuccessTests.MoveMember_KeepDelegator_StaticToExistingClass_DryRun_WritesNothing.
-    [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_DryRun_FillsLineChangesAndWritesNothing()
-    {
-        var original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
-        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
-        var before = workspace.ReadText("Refactor.cs");
-        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
-        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Src", ["Foo"], "Target", dryRun: true, oldMember: MoveMemberOldMember.keepDelegator);
-        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
-        AssertPlausibleDryRunLineChanges(result.SuccessData!);
-        Assert.That(workspace.ReadText("Refactor.cs"), Is.EqualTo(before), "A dry run must not write the file.");
     }
 }
