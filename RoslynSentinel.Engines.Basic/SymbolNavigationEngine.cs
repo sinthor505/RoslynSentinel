@@ -2922,6 +2922,12 @@ public class SymbolNavigationEngine
             if (narrowed.Count == 0 && (memberCandidates.Count > 0 || allNameCandidates.Count == 0))
             {
                 var (message, candidates) = await SyntaxTargetResolver.BuildContainerMissDetailAsync(solution, root, sourceText, memberName, containerName, document.FilePath ?? string.Empty, ToolCallHint.Call("ReadFile", ("filePath", "{file}"), ("memberName", "{member}"), ("containerName", "{container}")), methodsOnly: false, cancellationToken: cancellationToken);
+                if (memberCandidates.Count == 0)
+                {
+                    // The member is in no type of the file: add what the file does declare, similar names and the next call.
+                    message += " " + await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: false, cancellationToken);
+                }
+
                 throw new ToolNotFoundException(message, "member", memberName, candidates: candidates);
             }
 
@@ -2942,7 +2948,8 @@ public class SymbolNavigationEngine
                     $"(methods, properties, fields, constructors, events, indexers) and enum members; use {ToolCallHint.Call("ReadFile")} or {ToolCallHint.Call("GetFileOutline")} for a whole type.");
             }
 
-            throw new ToolNotFoundException($"Member '{memberName}' not found");
+            throw new ToolNotFoundException(
+                await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken), "member", memberName);
         }
 
         // TODO overload ambiguity here still gets the generic contextSnippet hint: this method is shared by Member(view) and the ReadFile memberName read, so use SyntaxTargetResolver.BuildOverloadHintForCandidates once the calling tool is passed in
