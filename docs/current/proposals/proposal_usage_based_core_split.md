@@ -1,6 +1,6 @@
 # Split the solution on measured tool usage, freeze Advanced and Experimental outside the main solution
 
-**Status:** PARTIAL: slice 2 for MoveMember, ChangeSignature and MoveAllTypesToFiles is IN PROGRESS 2026-11-10 (promoted into a new Tools.Basic class; engines were already in Engines.Basic: BasicRefactoringEngine and MemberRefactoringEngine). MoveType still pending (needs StructuralRefactoringEngine.MoveTypeToOuterScopeAsync moved into Engines.Basic). Other slices not started; slices 3-4 need rewording (see below).
+**Status:** PARTIAL: slice 2 for MoveMember, ChangeSignature and MoveAllTypesToFiles: tools promoted 2026-11-10 into Tools.Basic/CoreRefactoringTools (3f927bdf; Basic claude-lean budget raised to 45000 as a result), 3 of the MoveMember test classes moved (65dc8021), the rest of the test move is open in TODO.md (no MoveFile tool; engines were already in Engines.Basic: BasicRefactoringEngine and MemberRefactoringEngine). MoveType still pending (needs StructuralRefactoringEngine.MoveTypeToOuterScopeAsync moved into Engines.Basic). Other slices not started; slices 3-4 need rewording (see below).
 
 **Refreshed 2026-11-10.** Originally PROPOSED 2026-10-19. Updated in place for these changes since then:
 `RoslynSentinel.Server.Basic` no longer exists (folded into `Server.Advanced`, which is now the only server
