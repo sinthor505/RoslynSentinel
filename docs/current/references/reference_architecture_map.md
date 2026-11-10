@@ -1,6 +1,6 @@
 # Reference: RoslynSentinel architecture map (where things live, how a call flows)
 
-**Status:** CURRENT 2026-10-09; the "Write chokepoint" order and the stale-read and session-halt/drift paragraphs were re-verified 2026-11-09 (plan_stale_read_guard_followups steps 1-8d; the F7 write lock is not built). Verified against source on the first date; cites symbols, not line numbers (lines drift). Sections marked "not re-verified" were carried from older docs.
+**Status:** CURRENT 2026-10-09; the "Write chokepoint" order and the stale-read and session-halt/drift paragraphs were re-verified 2026-11-09 (plan_stale_read_guard_followups steps 1-9h, including the F7 cross-process write lock, fold-on-read and the lock-order rules in "Write chokepoint"). Verified against source on the first date; cites symbols, not line numbers (lines drift). Sections marked "not re-verified" were carried from older docs.
 
 ## Purpose
 
@@ -100,10 +100,33 @@ default 30) is cancelled and surfaces `SolutionLoadTimeout`.
 `.cs` write must go through it, directly or via a caller that does. Order of refusals, verified in source 2026-11-09:
 dead `_sessionHalted` check (nothing sets it; cleanup pending) -> unrecoverable breaker (the only session halt) ->
 failed-reload refusal -> scoped-ledger opener and per-target block -> write/delete overlap -> optional compile validation
--> `_solutionLock` -> `CheckConcurrentEditConflict` -> `RevalidateAfterForeignWriteAsync` -> pre-image capture ->
+-> `_solutionLock` -> `CheckConcurrentEditConflict` -> `RevalidateAfterForeignWriteAsync` -> **cross-process write lock**
+(`CrossProcessWriteLock`, `WriteLockBusy` on timeout) -> pre-image capture ->
 stale-read check (`StaleRead`) -> `FoldPending` guard -> EOL pre-pass -> deletes -> writes -> rollback -> create-on-write
-of the writer's observed entry -> in-memory resync. The external-drift check that used to follow the overlap check is gone: drift never
-refuses a write by itself. The numbered step list (pre-image capture for
+of the writer's observed entry -> in-memory resync -> (`finally`) release the write lock, then `_solutionLock`. The external-drift check
+that used to follow the overlap check is gone: drift never refuses a write by itself.
+
+**Lock-order and re-entrancy rules (read before changing the chokepoint, the debounce handler or a read-path fold).** There are two
+locks: the in-process `_solutionLock` (a `SemaphoreSlim`) and the OS write lock, a `FileShare.None` `FileStream` on
+`<solution root>/.roslynsentinel/write.lock` (`Common/CrossProcessWriteLock.cs`, section 7 of `reference_file_watcher_and_drift_detection.md`).
+- **(a) `_solutionLock` first, then the OS lock; never the reverse.** Every acquirer takes them in that order (the chokepoint, the debounce
+  fold, `SyncFileFromDiskIfStaleAsync`, `FlushPendingFoldsAsync`) and releases the OS lock before `_solutionLock`. Taking `_solutionLock` while
+  holding the OS lock deadlocks against a call that holds `_solutionLock` and waits for the OS lock: the waiter can only escape by
+  timing out and refusing `WriteLockBusy`, and the lock holder never makes progress.
+- **(b) The OS lock is NOT re-entrant, and it is taken only at entry points.** The `FileShare.None` open fails for a second acquire from the
+  SAME process exactly as for another process, so a nested acquire waits out its timeout against itself and then refuses `WriteLockBusy`.
+  The entry points are the chokepoint, the debounce fold, `SyncFileFromDiskIfStaleAsync` and `FlushPendingFoldsAsync`.
+  `ApplyInMemoryDocumentUpdatesAsync` NEVER takes it: its callers (the chokepoint resync, the inline `FoldPending` fold, the debounce fold and the
+  two read-path folds) already run under `_solutionLock` and own the decision. A new helper that is called from a region already holding the
+  OS lock must not acquire it either.
+- **(c) Never held across compile validation or a full reload.** `ValidationEngine.ValidateChangesAsync` runs before `_solutionLock`, and
+  `RevalidateAfterForeignWriteAsync` runs before the OS lock is taken. The debounce handler releases the lock right after the fold and takes
+  none for a full MSBuild reload, and the chokepoint's background reload starts after release. A hold across either would block other
+  processes' writers for seconds.
+- Consequence to remember: the OS-lock wait (10 s chokepoint, 2 s debounce, 1 s fold-on-read) happens while `_solutionLock` is held, so a
+  foreign holder stalls this process's other `_solutionLock` users. A null lock root (no on-disk solution and no `SetTestSolutionRoot`)
+  takes no OS lock, which keeps `SetTestSolution` tests off the filesystem. Source comments restating (a)-(c) sit at the chokepoint
+  acquire, the debounce fold, both read-path folds and in the `CrossProcessWriteLock` class summary; keep them in step with this list. The numbered step list (pre-image capture for
 undo, EOL pre-pass, byte-identical skip, watcher-loop suppression via `_internalChanges`, IOException
 retry, optional rollback, in-memory resync) is in `docs/current/references/reference_code_file_write_paths.md`
 (callers table re-verified 2026-10-04, EOL parts 2026-10-26), along with the sanctioned writes outside the chokepoint.
@@ -137,13 +160,16 @@ reports `operatingMode`, `operatingModeSource` and `callerAgentId`. In `MultiAge
 `MoveMember` refuses unresolved call sites before writing. In `SingleAgent` a different known agent is refused while one is open.
 
 The edit attribution ledger (`Common/EditAttributionLedger.cs`, in memory, per server, last 8 writes per file; not the scoped
-operation ledger) records who wrote each file. Inside the lock, after the refusals above, the chokepoint refuses with
+operation ledger) records who wrote each file. Inside `_solutionLock` (before the OS write lock), after the refusals above, the chokepoint refuses with
 `ConcurrentEditRefused` when a different known agent wrote a target after this call started (`CheckConcurrentEditConflict`), or
 wrote anywhere since the call started and re-running the compile gate now finds new errors (`RevalidateAfterForeignWriteAsync`,
 only for a call whose gate passed, `ToolCallContext.GatePassed`). `UndoLastApply` refuses over another agent's later write, using
 `OperationItemRecord.AppliedByAgentId`. `Common/EditAttributionFindings.cs` adds last-writer `Findings` to `Build`,
 `GetDiagnostics`, compile-gate failures and `Git(status)`. `Common/NotFoundEvidence.cs` adds them to not-found errors by searching
-the operation blobs, which every window shares, and then Git.
+the operation blobs, which every window shares, and then Git. It also adds the zero-hit `Search` hint (`ForZeroHitSearch` /
+`FindAcrossFiles`: a foreign write that removed the term in the last 60 minutes, or put it on disk under 15 s ago); text mode calls it
+inside `SearchSolutionText`, the other modes through `AddZeroHitEvidence` in `DispatchSearch` (`reference_file_watcher_and_drift_detection.md`
+section 9, including the modes it does not reach).
 
 **Stale-read guard.** The observed-content ledger (`_observedHashes` in `PersistentWorkspaceManager`, interface
 `Common/IObservedContentLedger.cs`, hash `Common/ContentFingerprint.cs`) holds, per agent key and path, the hash of the file text
@@ -156,11 +182,14 @@ entry differs from disk or memory. Opted in: the anchor and whole-file tools (`W
 (`AsyncifyTools`, `AsyncBatchEngine`, `CommentingTools`, `MsToolAugmentEngine`, `DeleteUnusedSymbol`) pass `Quiet`. Exempt:
 `UndoLastApply` (`exactRestore`) and `CreateFile`. `StaleReadPolicyRatchetTests` fails a production call site that does not name
 `staleReadPolicy:` (presence, not value). `Common/WriteRefusal.TryMap` turns the refusal into the tool's `ResultError`
-(`StaleRead`, `FoldPending`). A successful write CREATES the writer's entry after the rollback decision, so a writer is protected
+(`StaleRead`, `FoldPending`, `WriteLockBusy`). A successful write CREATES the writer's entry after the rollback decision, so a writer is protected
 against later changes to files it wrote. Directly after the stale check, the `FoldPending` guard (every policy except
 `exactRestore`) refuses a write once when a target's in-memory text lags its disk pre-image, folding that file inline; a
 mismatch that persists after the fold proceeds with a Warning finding naming `LoadSolution(forceReload: true)`. Detail:
-`reference_file_watcher_and_drift_detection.md` section 5.
+`reference_file_watcher_and_drift_detection.md` section 5. Read side: `ReadFile` and `GetMethodSource` call
+`FlushPendingFoldsAsync` then `SyncFileFromDiskIfStaleAsync` before reading, and Search text mode calls the flush, so a read does not record
+text older than disk (fail-open when the OS lock is busy); `GetFileOutline`, `InspectSymbol`, `ListAll` and the other Search modes do not
+(section 8 of the same doc).
 
 **Session halt and drift.** The only session halt is the unrecoverable breaker (a separate throw at the top of the chokepoint;
 no reset); the halt-stamp filter (pipeline item 5) shows it on every response. The drift latch `_sessionHalted` can no longer

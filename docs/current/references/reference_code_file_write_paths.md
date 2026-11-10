@@ -1,6 +1,6 @@
 # Reference: Code File Write Paths
 
-**Status:** CURRENT 2026-11-09. Steps 5 (drift check removed), 7b (stale-read check, now opted in by anchor, engine and direct callers) and 7c (`FoldPending`) updated for plan_stale_read_guard_followups steps 1-8d; the cross-process write lock (plan step 9) is NOT built and not described. The chokepoint step list and callers table were verified 2026-10-04; the EOL policy sections and steps 8-9 were re-verified against source on 2026-10-26 (plan_eol_policy_and_write_chokepoint.md Steps 4-8). Update when a write-to-disk call site is added anywhere in the solution.
+**Status:** CURRENT 2026-11-09. Steps 5 (drift check removed), 7 and 7a (cross-process write lock, plan step 9), 7b (stale-read check, now opted in by anchor, engine and direct callers) and 7c (`FoldPending`) updated for plan_stale_read_guard_followups steps 1-9h; "Writers outside the chokepoint" below lists what the lock does not cover. The chokepoint step list and callers table were verified 2026-10-04; the EOL policy sections and steps 8-9 were re-verified against source on 2026-10-26 (plan_eol_policy_and_write_chokepoint.md Steps 4-8). Update when a write-to-disk call site is added anywhere in the solution.
 
 ## Purpose
 
@@ -29,11 +29,24 @@ In order, the method:
 5. (Removed 2026-11-09.) There is no external-drift check here any more: a target in `GetExternalFileChanges()` is not refused and
    does not latch the session. Drift on a file the writer read or edited is caught per agent by step 7b, and in-memory text that lags
    disk by step 7c. `ExternalFileDrift` lists the drift for visibility only; `Acknowledge` clears that list and never gates writes.
-6. Optionally compile-validates the whole batch (`validateChanges`, via `ValidationEngine`) before taking the lock.
-7. Takes `_solutionLock`, then captures a **pre-image** of every target (null = file did not exist), used for
-   `OperationItemRecord.BeforeSource` and `UndoLastApply`. (Just before the capture, under the lock,
-   `CheckConcurrentEditConflict` refuses with `ToolErrorCode.ConcurrentEditRefused` when another known agent wrote a
-   target after this call started.)
+6. Optionally compile-validates the whole batch (`validateChanges`, via `ValidationEngine`) before taking either lock.
+7. Takes `_solutionLock`, then (under it, in this order) `CheckConcurrentEditConflict` (refuses with
+   `ToolErrorCode.ConcurrentEditRefused` when another known agent wrote a target after this call started) and
+   `RevalidateAfterForeignWriteAsync` (a second compile gate when another agent wrote elsewhere), then the cross-process write
+   lock (7a), then captures a **pre-image** of every target (null = file did not exist), used for
+   `OperationItemRecord.BeforeSource` and `UndoLastApply`.
+7a. Cross-process write lock (`CrossProcessWriteLock`, `Common/CrossProcessWriteLock.cs`): an OS-held `FileShare.None` lock on
+   `<solution root>/.roslynsentinel/write.lock`, taken after the checks above and before pre-image capture, so the stale-read and
+   `FoldPending` checks and the writes see a disk no other RoslynSentinel process can change. Wait 10 s
+   (`CrossProcessWriteLockOptions.ChokepointWait`); if still busy the whole batch is refused with the non-latching
+   `ToolErrorCode.WriteLockBusy` (every target in `FailedFiles`, summary naming the holder from the sidecar
+   `write.lock.holder.json`, nothing written; `WriteRefusal.TryMap` maps it). Released in the method's `finally`, after the
+   in-memory resync (step 11) and before `_solutionLock.Release()`, on success, refusal and exception alike. Root =
+   `GetSolutionRoot()` or the `SetTestSolutionRoot` test seam; a null root (a `SetTestSolution` manager with no on-disk solution)
+   takes no OS lock. Never held across compile validation (step 6 and `RevalidateAfterForeignWriteAsync`) or a full reload (the
+   background reload for `needsFullReload` starts after release). Rules for changing this method (lock order, no re-entrancy):
+   `reference_architecture_map.md`, "Write chokepoint". Detail and the other two acquisition points (debounce fold, fold-on-read):
+   `reference_file_watcher_and_drift_detection.md` section 7.
 7b. Stale-read check, only when the caller passes a `staleReadPolicy` other than `None` (the chokepoint's default is `None`;
    `exactRestore` is exempt): for each target with an observed-content entry under the writer's agent key, refuses
    the whole batch with `ToolErrorCode.StaleRead` if that hash differs from the disk pre-image or the in-memory document
@@ -74,11 +87,14 @@ In order, the method:
     loop each successful write refreshes only an existing entry; after the rollback decision, a batch that is still successful
     creates the writer's entry for every file it wrote (not for no-op writes), so engine and anchor writers are protected against a
     later external change to a file they wrote. A delete creates no entry and drops the path's entries for every agent.
-11. Resyncs the in-memory workspace (`ApplyInMemoryDocumentUpdatesAsync`, bumps `_workspaceVersion`), invalidates the affected
-    projects' compilation-cache entries (or all of them on a full reload), and returns `ApplyChangesResult`.
+11. Resyncs the in-memory workspace (`ApplyInMemoryDocumentUpdatesAsync`, bumps `_workspaceVersion`; this call never takes the OS
+    lock, it runs under the one step 7a holds), invalidates the affected projects' compilation-cache entries (or all of them on a
+    full reload), and returns `ApplyChangesResult`. The `finally` then releases the OS write lock (7a) and `_solutionLock`, in that
+    order, and starts the background full reload if one is needed.
 
-`FileIoHelper.WriteAllTextAsync` is the low-level primitive; in production code only the chokepoint and `EolFileWriter` call it
-(`BareFileWriteRatchetTests` enforces the wider rule, see below).
+`FileIoHelper.WriteAllTextAsync` is the low-level primitive. Production callers (checked 2026-11-09): the chokepoint (write and
+rollback restore), `EolFileWriter`, and `ToolTelemetryFlusher` (telemetry JSON, not workspace source).
+`BareFileWriteRatchetTests` enforces the wider rule, see below.
 
 ### EOL policy
 
@@ -157,6 +173,22 @@ file is a tracked document. When no solution is loaded the chokepoint cannot run
 files `dotnet new` creates (`EolFileWriter.NormalizeNewFileAsync`). These two are the only workspace-source writes outside the chokepoint;
 both apply the resolved EOL but get no drift tracking, pre-image capture or undo.
 
+### Writers outside the chokepoint and the cross-process write lock
+
+The OS write lock (step 7a) is taken only inside the chokepoint (and by the debounce fold and fold-on-read, which read, not write
+source). A writer that never reaches the chokepoint has no solution root and keeps in-process exclusion only (`FilePathLock` inside
+`FileIoHelper.WriteAllTextAsync`). Excluded, as of 2026-11-09:
+
+| Writer | Why it is outside | `// TODO` marker |
+| --- | --- | --- |
+| `EolFileWriter` (`Common/EolFileWriter.cs`: `WriteAllTextResolvedAsync`, `NormalizeNewFileAsync`; callers `SolutionManagementEngine.CreateProjectAsync` and the `DocumentationTools` `.md`/`.json`/`.yaml` writes) | no solution root, never reaches the chokepoint | on the class (`EolFileWriter.cs`, above `public static class EolFileWriter`) |
+| `MsToolAugmentEngine.FormatDocumentSafeAsync` no-solution-loaded fallback | the chokepoint needs `CurrentSolution`; it calls `EolFileWriter` | at the write call in `MsToolAugmentEngine.cs` |
+| `FileIoHelper.WriteAllTextAsync` callers outside the chokepoint (today `EolFileWriter` and `ToolTelemetryFlusher`; the latter is non-workspace telemetry JSON) | the helper itself takes only the per-path in-process lock | NONE: `FileIoHelper.cs` carries no marker. The plan (Step 9b) called for one; it was not written. The two callers are covered by the `EolFileWriter` marker and by the fact that `ToolTelemetryFlusher` writes no source |
+
+Also not covered: the operation blob write (`OperationBlobWriter`) happens after the chokepoint returns and releases the lock (accepted;
+`proposal_cross_session_write_journal.md` closes it), and `Git` tool operations and shell or editor writes never take the lock.
+A new writer of workspace source should go through the chokepoint, not add to this table.
+
 ### History
 
 Three bypasses were found and fixed on 2026-08-22 (a raw write in `SortAndDeduplicateUsingsAsync`, a write-then-resync in
@@ -176,6 +208,9 @@ reporting of the shared path; `BareFileWriteRatchetTests` fails a new bare `File
 - Drift no longer halts the session. A write can now be refused per call with `StaleRead` (the writer read or wrote a file that
   changed since) or `FoldPending` (the workspace text lags disk; retry once); both are non-latching and the message names the
   files. Only the unrecoverable breaker still halts every write.
+- `WriteLockBusy` is a third non-latching refusal: another RoslynSentinel process holds `.roslynsentinel/write.lock`; nothing was
+  written; retry in a moment. The wait (10 s) happens inside `_solutionLock`, so it also stalls this process's other write and read-fold
+  operations. A write loop that throws still releases the lock through the `finally`, but no test proves that path (a `// TODO` marks it).
 - A shell delete or edit of a tracked file bypasses the chokepoint and is reconciled later by the watcher; prefer `DeleteFile` and
   the edit tools so the workspace and observed-content entries stay consistent.
 - A "successful" apply can be a no-op: identical or whitespace-only content is skipped and reported in `NoOpFiles`/the summary.

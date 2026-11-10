@@ -534,11 +534,14 @@ Restate the lock-order and re-entrancy rules (Execution rules) in every brief.
   the new text immediately; with nothing pending, no fold runs.
 
 #### Step 9g - docs for F7 (Markdown, main session)
+- Done: see the docs commit after 16884f73 (watcher, write paths, architecture map with lock rules (a)-(c), write-journal proposal).
 - Files: `reference_file_watcher_and_drift_detection.md` (write path, debounce fold, lock), `reference_code_file_write_paths.md` (the lock step and the excluded writers), `reference_architecture_map.md` (chokepoint order, lock order), `proposal_cross_session_write_journal.md` (the lock and holder sidecar are now the attribution hook for `WriteLockBusy`; link this plan).
 - Done when: docs match the source; the lock-order and re-entrancy rules appear in the architecture map where the next change to the chokepoint will read them.
 - Also document Step 9h (zero-hit Search hint) in the watcher reference.
 
 #### Step 9h - zero-hit Search hint from recent operation blobs (owner decision 2026-11-09)
+- Done: 9h-1 fdff9ae2; 9h-2a 20b5410c, 38e50c3c; 9h-2b 6bb80057; comment slice d1d2a36b; sidecar allowlist 41335f17; CS8602 16884f73.
+  Found by the 9g docs pass (open): the hint never fires for `references`/`callers`/`implementations` (`FindReferences` leaves `TotalRecords` null; tests call `AddZeroHitEvidence` with a hand-built result); text mode always passes `isRegex: true`, so a literal query with metacharacters gets no note.
 Runs after 9f; independent of the lock. Two slices.
 - **9h-1, cross-file blob evidence in `Common`.** Files: `RoslynSentinel.Common/NotFoundEvidence.cs` (+ a test
   file). Extract from `SearchBlobs` (`NotFoundEvidence.cs:79`) a variant with no `filePath` filter that walks

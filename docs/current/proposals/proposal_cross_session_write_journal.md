@@ -27,7 +27,7 @@
   marker (a `FoldPending` file is not attributed to a writer; it only says the workspace lags disk). The drift halt this
   proposal's Motivation talks about is gone (step 8c of plan_stale_read_guard_followups): there is no `SessionHalted` from drift to
   explain any more, so the journal's value is the explanation text on `StaleRead` and in `ExternalFileDrift(List/Status)` /
-  `Git(status)`. The cross-process write lock and holder record (F7, plan steps 9a-9g) are NOT built yet.
+  `Git(status)`. The cross-process write lock and holder sidecar (F7, plan steps 9a-9f) ARE built; see the next bullet and "Lock and holder sidecar as built".
 - **Auto-adopt vs annotate: settled as annotate only.** Under F1 option (d) a sibling's change to a file the
   agent never read or edited never refuses or halts (the debounce fold already adopts the content); a change
   to a file it read or edited is refused per agent with `StaleRead` whoever wrote it. The journal supplies
@@ -39,7 +39,26 @@
   reason, since) for the busy message, bounded wait then a non-latching `WriteLockBusy` error, held from
   pre-image capture through the journal append, file writes and blob write. Per working tree (files are per
   tree); the journal can stay under the git common dir. `.roslynsentinel/` is gitignored as a whole since
-  2026-11-09. Specified in plan_stale_read_guard_followups.md F7.
+  2026-11-09. Specified in plan_stale_read_guard_followups.md F7. AS BUILT the lock does NOT cover the blob write
+  (it is released when the chokepoint returns) and there is no journal append yet; see the next bullet.
+- **Lock and holder sidecar as built (2026-11-09) - the attribution hook for `WriteLockBusy`.**
+  [plan_stale_read_guard_followups.md](../plans/plan_stale_read_guard_followups.md) Step 9 (9a-9f) built
+  `RoslynSentinel.Common/CrossProcessWriteLock.cs`: an OS-held `FileShare.None` lock on
+  `<solution root>/.roslynsentinel/write.lock`, taken inside `_solutionLock` after `CheckConcurrentEditConflict` and
+  `RevalidateAfterForeignWriteAsync` and before pre-image capture, released in the chokepoint's `finally` after the in-memory
+  resync. The holder is written to a SIDECAR `write.lock.holder.json` (`WriteLockHolder(SessionId, AgentId, ToolName, Reason,
+  SinceUtc)`; a waiter cannot read the exclusive holder's lock file) and deleted on release; a waiter that times out (10 s at the
+  chokepoint) reads it best-effort and `WriteRefusal.TryMap` returns `WriteLockBusy` naming agent, tool and since-time, or "holder
+  unknown" when the sidecar is missing. What this gives the journal: (1) the busy message is the first cross-session
+  attribution the server emits, and it is LIVE state (who holds the lock now), not history; (2) the sidecar is the one place a
+  journal reader can learn "a sibling is writing right now" without scanning entries; (3) the lock is the natural append point:
+  an entry appended inside it before the files are written is always visible to the sibling that acquires next. What it does
+  NOT give: it is not a record of who changed a file (the sidecar is deleted on release, one holder at a time), the blob write
+  happens after release so a sibling can read a file before its blob exists, and the lock serializes only RoslynSentinel
+  processes (editors, `git` and shell writes take none; `EolFileWriter` and the no-solution format fallback are excluded with
+  `// TODO` markers). Reference: `reference_file_watcher_and_drift_detection.md` section 7.
+  The journal must not take a second OS lock for its append: the lock is not re-entrant (rule b in `reference_architecture_map.md`,
+  "Write chokepoint"), so the append belongs inside the existing chokepoint hold, not in its own acquire.
 - **Writes are not atomic today.** `FileIoHelper.WriteAllTextAsync` is `File.WriteAllTextAsync` under the
   in-process `FilePathLock` (truncate, then write), so another process can read a partial file. F7 has the
   debounce fold take the write lock briefly before reading disk. Temp-file-plus-replace would also fix it,
@@ -225,7 +244,9 @@ Worth their own TODO entries:
 ## Related
 
 - `docs/current/references/reference_code_file_write_paths.md` (write paths, blob writer "outside the chokepoint").
-- `docs/current/references/reference_architecture_map.md` (chokepoint, request pipeline).
+- `docs/current/references/reference_architecture_map.md` (chokepoint, request pipeline, lock-order and re-entrancy rules).
+- [plan_stale_read_guard_followups.md](../plans/plan_stale_read_guard_followups.md) (Step 9: the cross-process write lock and holder sidecar, fold-on-read, zero-hit Search hint).
+- `docs/current/references/reference_file_watcher_and_drift_detection.md` sections 7-9 (lock, fold-on-read, zero-hit hint as built).
 - [idea_external_drift_hard_blocker.md](../ideas/closed/idea_external_drift_hard_blocker.md) (existing drift idea; not re-read for this proposal).
 - Memories: `project_per_session_mcp_server_isolation`, `project_externaldrift_false_positive_cross_check_gitstatus`,
   `project_concurrent_sessions`, `project_operation_blob_json_gotchas`,
