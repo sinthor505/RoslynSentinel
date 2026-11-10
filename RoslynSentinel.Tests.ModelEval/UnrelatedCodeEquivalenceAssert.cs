@@ -53,9 +53,23 @@ internal static class UnrelatedCodeEquivalenceAssert
     private static MemberDeclarationSyntax? FindMember(string source, string memberName)
     {
         var root = CSharpSyntaxTree.ParseText(source).GetRoot();
-        return root.DescendantNodes()
+
+        // Skip bodiless method declarations (interface members, abstract or partial signatures):
+        // run 20261110-004337-782 put IOrderPricingCalculator in the calculator file, and the first
+        // 'DescribeOrder' found was the interface's signature, not the class method.
+        var member = root.DescendantNodes()
             .OfType<MemberDeclarationSyntax>()
-            .FirstOrDefault(m => GetMemberName(m) == memberName);
+            .Where(m => GetMemberName(m) == memberName)
+            .FirstOrDefault(m => m is not MethodDeclarationSyntax method
+                || method.Body is not null || method.ExpressionBody is not null);
+
+        // '=> expr;' and '{ return expr; }' are the same body; the prompts allow reformatting.
+        return member is MethodDeclarationSyntax { ExpressionBody: { } arrow } arrowMethod
+            ? arrowMethod
+                .WithExpressionBody(null)
+                .WithSemicolonToken(default)
+                .WithBody(SyntaxFactory.Block(SyntaxFactory.ReturnStatement(arrow.Expression)))
+            : member;
     }
 
     private static string? GetMemberName(MemberDeclarationSyntax member) => member switch

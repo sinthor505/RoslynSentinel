@@ -95,6 +95,20 @@ the script can select tests by axis and `results.csv` can group by axis.
   already assert step by step, but the first failing assertion stops the test.
 - **AmbiguityResolution** grades the resolution: the right symbol was changed, or the model asked or stated
   its assumption. It does not grade downstream steps.
+- **Structural steps graded on symbols, not text (agreed 2026-11-10).** Today the 10-chain grades behaviour
+  well: `DotnetTestRunner` compares a before and after run of `ContosoOrders.Tests`, and
+  `FunctionalFixVerifier` compiles the fixture and calls `CalculateDiscountedTotal` by reflection (1.1x
+  scaling, standard result, negative rate throws). The structural steps, however, are regexes over the
+  source text, and they run first:
+  - helper accessibility, interface members, the field's declared type, the class name and the constants;
+  - two 2026-11-10 failures were regex defects, not model defects: a block body was required where the
+    model wrote `=>` (`b20c0723`), and a name in a comment counted as unrenamed (`05a81b04`).
+
+  Replace them with checks on the compiled fixture's symbols (Roslyn `Compilation` or reflection). For
+  example: the helper's `DeclaredAccessibility == Internal`; the class implements `IOrderPricingCalculator`;
+  the interface has exactly the expected members; `_calculator`'s type is the interface; `LocalZone` is a
+  `const int` with value 1. This is immune to formatting and comments, and it pairs with per-step scoring
+  (`Assert.Multiple` or a step-score record) so one failed step no longer hides the rest.
 - **Grading must match the prompt's own terms.** For example, the old step-3 regex matched any
   `internal decimal X(` and its message said "SomeMethod".
 
