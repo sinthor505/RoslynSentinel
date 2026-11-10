@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## IntroduceParameterObject updates interface implementers - resolved (2026-11-10)
+
+IntroduceParameterObject updates interface implementers (2026-11-09) - return `Changes` for the interface and every implementer (positional parameter map, explicit/partial included, a using added when namespaces differ, expression-bodied methods handled); callers stay manual; Medium - [doc](issues/issue_structural_refactoring_open_defects.md)
+
+Evidence: 57e1d0cb; AdvancedStructuralFormatCharacterizationTests, IntroduceInlineTests, Bug55_78BatchRegressionTests BUG_57 (the three issue-doc defects were already fixed earlier and are now pinned by exact tests)
+
 ## Full build waits on process exit, not pipe EOF - resolved (2026-11-10)
 
 `BuildEngine.RunFullBuildAsync` waits on process exit, not pipe EOF (2026-11-09) - await exit, give the reads a 3-5 s drain grace, then cancel them and keep partial text; the timeout message reports whether the root exited; the test engine factory sets `MSBUILDDISABLENODEREUSE=1`; same for the `RunTest` spawn if it has the pattern; Medium - [doc](issues/closed/issue_full_build_waits_for_pipe_eof_held_by_msbuild_node.md)
