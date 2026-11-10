@@ -85,14 +85,8 @@ public static class ServerBinaryStaleness
                 return null;
             }
 
-            var run = GitProcess.TryRun(directory, GitTimeout, "rev-parse", "HEAD");
-            if (run is not { ExitCode: 0 })
-            {
-                return null;
-            }
-
-            var sha = run.Value.StdOut.Trim();
-            return sha.Length == 40 && sha.All(char.IsAsciiHexDigit) ? sha : null;
+            var sha = GitReaders.Default.GetHeadSha(directory, shortForm: false, GitTimeout)?.Trim();
+            return sha is { Length: 40 } && sha.All(char.IsAsciiHexDigit) ? sha : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
@@ -231,22 +225,25 @@ public static class ServerBinaryStaleness
         var notStale = new ServerBinaryStalenessReport(false, [], solutionDirectory, []);
         try
         {
-            // Hex only: also keeps a sha-looking argument from ever being read as a git option.
+            // Hex only: also keeps a sha-looking argument from ever being read as a git option (the CLI fallback passes it to git).
             if (buildSha.Length is < 7 or > 40 || !buildSha.All(char.IsAsciiHexDigit) || !Directory.Exists(solutionDirectory))
             {
                 return notStale;
             }
 
-            // core.quotepath=false keeps non-ASCII paths unquoted; a trailing "--" ends the revision list.
-            var run = GitProcess.TryRun(
-                solutionDirectory, GitTimeout, "-c", "core.quotepath=false", "log", buildSha + "..HEAD", "--name-only", "--format=%h%x09%s", "--");
-            if (run is not { ExitCode: 0 })
+            // The reader lists each commit's paths WITHOUT rename detection, so a rename lists both its old and new path. The
+            // old call (git log --name-only with git's default rename detection) listed only the new path. Staleness is "any path
+            // under a server-source prefix", so the results differ only for a rename OUT of server source (old path under a
+            // prefix, new path outside): it used to look not stale and is now stale, which is right (a source file left the tree).
+            // A rename within or into server source is stale either way.
+            var commits = GitReaders.Default.GetCommitsSince(solutionDirectory, buildSha, GitTimeout);
+            if (commits is null)
             {
                 return notStale;
             }
 
-            var commits = ParseGitLog(run.Value.StdOut, SourcePathPrefixes);
-            return new ServerBinaryStalenessReport(commits.Count > 0, [], solutionDirectory, commits);
+            var stale = FilterServerSourceCommits(commits, SourcePathPrefixes);
+            return new ServerBinaryStalenessReport(stale.Count > 0, [], solutionDirectory, stale);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
@@ -267,14 +264,9 @@ public static class ServerBinaryStaleness
             }
 
             // No pathspecs: git matches a pathspec by whole leading components, so "RoslynSentinel.Tools." would match nothing.
-            // The prefix filter in ParseUncommittedStatus does the narrowing.
-            var run = GitProcess.TryRun(solutionDirectory, GitTimeout, "-c", "core.quotepath=false", "status", "--porcelain");
-            if (run is not { ExitCode: 0 })
-            {
-                return null;
-            }
-
-            return ParseUncommittedStatus(run.Value.StdOut, SourcePathPrefixes);
+            // The prefix filter in DescribeUncommittedChanges does the narrowing.
+            var changes = GitReaders.Default.GetStatus(solutionDirectory, pathspecs: null, GitTimeout);
+            return changes is null ? null : DescribeUncommittedChanges(changes, SourcePathPrefixes);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.ComponentModel.Win32Exception)
         {
@@ -286,6 +278,7 @@ public static class ServerBinaryStaleness
     /// Pure parser for <c>git status --porcelain</c> output: counts entries whose repo-relative path starts with one of
     /// <paramref name="pathPrefixes"/> and describes the first one; null when none match.
     /// </summary>
+    // TODO production no longer calls this (DescribeUncommittedServerSource reads typed rows via GitReaders.Default and DescribeUncommittedChanges); kept only for its text-parser tests in ServerBinaryStalenessTests. Delete it with them.
     internal static string? ParseUncommittedStatus(string porcelainOutput, IReadOnlyList<string> pathPrefixes)
     {
         var count = 0;
@@ -321,8 +314,21 @@ public static class ServerBinaryStaleness
             return null;
         }
 
-        return $"{count} uncommitted file(s) under server source (first: {first}); a restart builds committed code only, so the respawn may fall back to an older build if HEAD does not compile - commit them first.";
+        return FormatUncommitted(count, first);
     }
+
+    /// <summary>
+    /// Typed form of <see cref="ParseUncommittedStatus"/>: counts the changes whose repo-relative path (the new path of a
+    /// rename) starts with one of <paramref name="pathPrefixes"/> and describes the first one; null when none match.
+    /// </summary>
+    internal static string? DescribeUncommittedChanges(IReadOnlyList<WorkingTreeChange> changes, IReadOnlyList<string> pathPrefixes)
+    {
+        var matching = changes.Where(change => pathPrefixes.Any(prefix => change.Path.StartsWith(prefix, StringComparison.Ordinal))).ToList();
+        return matching.Count == 0 ? null : FormatUncommitted(matching.Count, matching[0].Path);
+    }
+
+    private static string FormatUncommitted(int count, string? first) =>
+    $"{count} uncommitted file(s) under server source (first: {first}); a restart builds committed code only, so the respawn may fall back to an older build if HEAD does not compile - commit them first.";
 
     /// <summary>
     /// Pure parser for <c>git log --name-only --format=%h%x09%s</c> output: a header line is <c>hash&lt;TAB&gt;subject</c>
@@ -330,6 +336,7 @@ public static class ServerBinaryStaleness
     /// path line never contains one) and a blank line. Returns, in log order, the commits with at least one path that
     /// starts with one of <paramref name="pathPrefixes"/> (ordinal, '/' separators).
     /// </summary>
+    // TODO production no longer calls this (EvaluateGit reads typed commits via GitReaders.Default and FilterServerSourceCommits); kept only for its text-parser tests in ServerBinaryStalenessTests. Delete it with them.
     internal static IReadOnlyList<StaleCommit> ParseGitLog(string output, IReadOnlyList<string> pathPrefixes)
     {
         var commits = new List<StaleCommit>();
@@ -370,6 +377,15 @@ public static class ServerBinaryStaleness
 
         return commits;
     }
+
+    /// <summary>
+    /// Typed form of <see cref="ParseGitLog"/>: the commits (kept in the given order) with at least one changed path that
+    /// starts with one of <paramref name="pathPrefixes"/> (ordinal, '/' separators), as <see cref="StaleCommit"/>.
+    /// </summary>
+    internal static IReadOnlyList<StaleCommit> FilterServerSourceCommits(IReadOnlyList<ChangedCommit> commits, IReadOnlyList<string> pathPrefixes) =>
+        [.. commits
+            .Where(commit => commit.Paths.Any(path => pathPrefixes.Any(prefix => path.StartsWith(prefix, StringComparison.Ordinal))))
+            .Select(commit => new StaleCommit(commit.ShortHash, commit.Subject))];
 
     /// <summary>Checks now (uncached) whether this process runs older code than the repo holds. Never throws.</summary>
     public static ServerBinaryStalenessReport CheckNow() => CheckNow(ServerBuildInfo.BuildSha, LoadedSolutionDirectory);

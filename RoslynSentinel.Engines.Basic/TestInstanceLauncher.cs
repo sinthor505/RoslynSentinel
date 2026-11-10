@@ -673,22 +673,18 @@ public sealed class TestInstanceLauncher
         return new TestInstanceHowToCall(note, list, call);
     }
 
-    private static (string? Sha, bool? Dirty) ReadGitStamp(string solutionDirectory)
+    internal static (string? Sha, bool? Dirty) ReadGitStamp(string solutionDirectory)
     {
-        string? sha = null;
-        if (GitProcess.TryRun(solutionDirectory, TimeSpan.FromSeconds(10), "rev-parse", "--short", "HEAD") is { ExitCode: 0 } head
-            && head.StdOut.Trim() is { Length: > 0 } text)
-        {
-            sha = text;
-        }
+        // The seam answers from libgit2 and falls back to the git CLI (same timeouts as before) when native libgit2 is unusable.
+        var reader = GitReaders.Default;
+        var sha = reader.GetHeadSha(solutionDirectory, shortForm: true, TimeSpan.FromSeconds(10)) is { Length: > 0 } head ? head : null;
 
-        bool? dirty = null;
-        var status = GitProcess.TryRun(solutionDirectory, TimeSpan.FromSeconds(20),
-            "status", "--porcelain", "--", "RoslynSentinel.Common", "RoslynSentinel.Engines.*", "RoslynSentinel.Tools.*", "RoslynSentinel.Server.*");
-        if (status is { ExitCode: 0 } result)
-        {
-            dirty = !string.IsNullOrWhiteSpace(result.StdOut);
-        }
+        // Dirty is "any change under these pathspecs"; null when git could not answer.
+        var changes = reader.GetStatus(
+            solutionDirectory,
+            ["RoslynSentinel.Common", "RoslynSentinel.Engines.*", "RoslynSentinel.Tools.*", "RoslynSentinel.Server.*"],
+            TimeSpan.FromSeconds(20));
+        bool? dirty = changes is null ? null : changes.Count > 0;
 
         return (sha, dirty);
     }

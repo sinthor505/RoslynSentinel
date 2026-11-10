@@ -147,4 +147,60 @@ public class ServerBinaryStalenessGitTests
         Assert.That(report.IsStale, Is.True);
         Assert.That(report.StaleCommits, Has.Count.EqualTo(1));
     }
+
+    [Test]
+    public void EvaluateGit_InTheNormalEnvironment_IsServedByLibgit2NotTheCliFallback()
+    {
+        var sha = Commit("RoslynSentinel.Common/a.cs", "first");
+        Commit("RoslynSentinel.Tools.Basic/t.cs", "tools change");
+        var libgit2Before = GitReaders.Default.Libgit2Count;
+        var fallbacksBefore = GitReaders.Default.CliFallbackCount;
+
+        var report = ServerBinaryStaleness.EvaluateGit(sha, _repo);
+
+        // Counters are process-wide and other tests may add to them in parallel, so assert on direction, not exact deltas;
+        // a silent fallback leaves FirstFallbackReason set and raises CliFallbackCount.
+        Assert.That(report.IsStale, Is.True);
+        Assert.That(GitReaders.Default.FirstFallbackReason, Is.Null, "libgit2 fell back to the CLI: native library missing or broken?");
+        Assert.That(GitReaders.Default.CliFallbackCount, Is.EqualTo(fallbacksBefore));
+        Assert.That(GitReaders.Default.Libgit2Count, Is.GreaterThan(libgit2Before));
+    }
+
+    [Test]
+    public void RenameOutOfServerSource_IsStale_BecauseTheOldPathIsListedToo()
+    {
+        // The commit reader does no rename detection, so the old path (under server source) is listed beside the new one (docs).
+        // git log's default rename detection used to list only the new path and call this not stale.
+        var sha = Commit("RoslynSentinel.Common/moved.cs", "first");
+        Commit("docs/other.md", "docs only");
+        RunGit(_repo, "mv", "RoslynSentinel.Common/moved.cs", "docs/moved.cs");
+        RunGit(_repo, "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "move source file into docs");
+
+        var report = ServerBinaryStaleness.EvaluateGit(sha, _repo);
+
+        Assert.That(report.IsStale, Is.True);
+        Assert.That(report.StaleCommits!.Single().Subject, Is.EqualTo("move source file into docs"));
+    }
+
+    [Test]
+    public void DescribeUncommittedServerSource_CleanOrDocsOnly_IsNull_ServerSourceChange_IsDescribed()
+    {
+        Commit("RoslynSentinel.Common/a.cs", "first");
+        Commit("docs/notes.md", "docs");
+        var libgit2Before = GitReaders.Default.Libgit2Count;
+
+        Assert.That(ServerBinaryStaleness.DescribeUncommittedServerSource(_repo), Is.Null, "clean");
+
+        File.AppendAllText(Path.Combine(_repo, "docs", "notes.md"), "edited\n");
+        Assert.That(ServerBinaryStaleness.DescribeUncommittedServerSource(_repo), Is.Null, "a docs-only change is not server source");
+
+        File.AppendAllText(Path.Combine(_repo, "RoslynSentinel.Common", "a.cs"), "edited\n");
+        Directory.CreateDirectory(Path.Combine(_repo, "RoslynSentinel.Tools.Basic"));
+        File.WriteAllText(Path.Combine(_repo, "RoslynSentinel.Tools.Basic", "new.cs"), "x\n");
+        var message = ServerBinaryStaleness.DescribeUncommittedServerSource(_repo);
+
+        Assert.That(message, Does.StartWith("2 uncommitted file(s) under server source (first: RoslynSentinel.Common/a.cs)"));
+        Assert.That(GitReaders.Default.FirstFallbackReason, Is.Null, "libgit2 fell back to the CLI: native library missing or broken?");
+        Assert.That(GitReaders.Default.Libgit2Count, Is.GreaterThan(libgit2Before));
+    }
 }
