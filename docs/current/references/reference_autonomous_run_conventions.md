@@ -73,7 +73,10 @@ Status values: `TODO` / `WIP` / `DONE (hash)` / `PARTIAL (what is left)` / `DEFE
   - run every child in the foreground (`run_in_background: false`); load `dispatch-implementer`;
     re-verify scoping anchors before briefing; append each dispatch to
     `.claude/journal/implementer-ledger.md`
-  - build and run relevant tests per slice; commit each finished slice with `Git` scope `listed`,
+  - per slice: `Build` plus `RunTest` filtered to the touched test classes, with code and tests in one
+    implementer dispatch when they fit the tier (`dispatch-implementer`, "Tests and test runs"); one
+    full run of each affected test project at the end of the batch, not per slice
+  - commit each finished slice with `Git` scope `listed`,
     the skill's message rule and the `Co-Authored-By` trailer; never push
   - leave `// TODO` markers per CLAUDE.md; defer anything needing design or owner judgement and keep
     going; do not edit the tracker
@@ -84,8 +87,10 @@ Status values: `TODO` / `WIP` / `DONE (hash)` / `PARTIAL (what is left)` / `DEFE
 
 ### After each batch (or each Direct step that changed code)
 
-One full `RunTest` after a batch (plain call, nothing else running; relevant tests suffice after a
-Direct step). Baseline is 0 failures. Re-run a failure alone: if it passes, record it as a flake; if
+One full `RunTest` per affected test project after a batch (plain call, nothing else running; the
+orchestrator runs it as its last step, so the main session does not repeat it). Inside a batch and
+after a Direct step, filtered runs of the touched test classes only (owner rule 2026-11-09: catching a
+failure one batch late is acceptable; bisect the batch's commits to locate it). Baseline is 0 failures. Re-run a failure alone: if it passes, record it as a flake; if
 it comes from another session's commits, say so; otherwise it is the next thing to fix.
 
 ### Failures and stalls

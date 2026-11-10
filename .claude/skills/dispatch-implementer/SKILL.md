@@ -72,6 +72,17 @@ otherwise reads as "zero blast radius".
   fit a tier. See `docs/current/proposals/proposal_parallel_change_deprecated_wrappers.md`.
 - Over the lane's limits: split again, or use the other lane, or go to `implementer-senior`.
 
+## Tests and test runs (owner rule, 2026-11-09)
+
+- **Code and its tests in one dispatch** when the test file fits in the tier's `Files:` limit: list the
+  test file, name the tests to add/invert in `Symbols:`, and make them the `Acceptance:`. A separate
+  `test-writer` dispatch only when the tests would exceed the limit or need new fixture design.
+- **Per slice: `Build` plus `RunTest` filtered to the touched test classes** (`filter` with
+  `FullyQualifiedName~<Class>` alternatives, plus any tests the slice inverts). No full project runs inside a slice.
+- **Per batch: one full run** of each affected test project at the end of the batch (re-run failures
+  alone; known full-run flakes are commented in their tests). A failure found late is narrowed by
+  bisecting the batch's commits.
+
 The agent re-measures before editing and replies `RESCOPE:` (with its numbers) if the real blast radius
 exceeds the brief's; the dispatcher then re-slices.
 
