@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Peer COMMITTED announcement (sender side) - resolved (2026-11-10)
+
+Peer coordination: `COMMITTED <hash> <files>` message (2026-11-09) - NOT DESIGNED; after a commit, a session tells peers which files it wrote; the receiver runs `ExternalFileDrift(operation: Acknowledge)` for exactly those files, so its drift list does not fill with other sessions' committed writes (seen 2026-11-09: a peer's server latched on our committed writes and it acknowledged only some of them by hand). Add the line to the standing authorizations in CLAUDE.md "Peer sessions" and to `.claude/skills/peer-coordination/SKILL.md`; the halt itself goes away with plan_stale_read_guard_followups Step 8c - [doc](plans/closed/plan_stale_read_guard_followups.md)
+
+Evidence: skill only per owner ruling 2026-11-10: .claude/skills/peer-coordination/SKILL.md section 7; no CLAUDE.md change
+
 ## GenerateConstructor skips const and static fields - resolved (2026-11-10)
 
 `GenerateConstructor` excludes `const` and `static` fields (2026-11-09) - the `GenerateConstructorAsync` filter checks only private/readonly, so a `private const` would be assigned (CS0131, read in source: test first); Small - [doc](plans/closed/plan_pinned_tool_defect_fixes.md)

@@ -101,3 +101,17 @@ with disk), or `ExternalFileDrift` lists writes you did not make:
 2. `OWNS <listed files>` to same-tree peers.
 3. Re-read the file you want to edit and repeat the edit (for `FoldPending`, retry once). Anything
    unclaimed by a peer and not yours goes to your user.
+
+## 7. Announce your own commits (sender side of COMMITTED)
+
+After you commit files on a tree shared with same-tree peers, tell them which files you wrote so
+their drift list does not fill with your committed writes. This is not a request: it needs no reply.
+- Send only to same-tree peers (discovery in section 3) that are not `offline`, once per commit,
+  with `notify_when_idle: true`; never broadcast to the others. Skip it for a commit that touched
+  only files no peer has read or edited.
+- First line `PEER COMMITTED from <your session name>: <hash> <n> file(s)`, then the repo-relative
+  files you wrote, one per line, and nothing else. Do not list files you did not change.
+- Receiver: for exactly the listed files, `ExternalFileDrift(operation: Acknowledge)` clears them
+  from the drift list (visibility only; writes were never halted). Acknowledge nothing that is not
+  listed, and re-read a listed file before you edit it.
+- A `COMMITTED` you send in reply to `COMMIT` (section 2) already covers this; do not send both.
