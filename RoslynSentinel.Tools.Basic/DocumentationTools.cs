@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text;
 using RoslynSentinel.Common;
+using RoslynSentinel.Engines.Basic;
 
 using Microsoft.Extensions.Logging;
 
@@ -375,13 +376,13 @@ public class DocumentationTools
     // Legacy bare-object implementation behind the ProjectDoc tool; ProjectDocTool wraps it in SentinelCallToolResult.
     public object ProjectDocCore(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("read, write, append (completed_work only), or list.")]
+        [Description("read, write, append (completed_work only), list, trailers (docs with Plan:/Closes: commits, unknown IDs), validate (name = doc ID), close (name = doc ID, content = Status text: sets Status, moves to closed/, CLOSED.md entry, fixes links).")]
         DocAction action,
-        [Description("Doc category: plan->plans/, handoff->handoffs/, completed_work->completed/ (append-only), documentation->documentation/, state->migration-state.yaml (name ignored).")]
+        [Description("Doc category: plan->plans/, handoff->handoffs/, completed_work->completed/ (append-only), documentation->documentation/, state->migration-state.yaml (name ignored). Ignored for trailers/validate/close.")]
         DocType docType,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: name is required for every action except when
         // docType=state (which uses a fixed filename) or action=list.
-        [Description("File name or nested relative path, as shown by action=list. Required except for docType=state.")]
+        [Description("File name or nested relative path, as shown by action=list; doc ID for validate/close. Required except for docType=state.")]
         string? name = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: content is required when action=write or action=append,
         // not used otherwise.
@@ -407,6 +408,39 @@ public class DocumentationTools
                 return action == DocAction.read || action == DocAction.list
                     ? new DocReadResult { Found = false, Filename = name ?? "", Error = error }
                     : new DocWriteResult { IsError = true, Filename = name ?? "", Error = error };
+            }
+
+            // trailers / validate / close: reconcile docs with Plan:/Closes: commit trailers (DocTrailerEngine).
+            if (action is DocAction.trailers or DocAction.validate or DocAction.close)
+            {
+                if (IsTestingMode)
+                {
+                    return new DocWriteResult { IsError = true, Filename = name ?? "", Error = $"action={action} is not available in testing mode." };
+                }
+
+                var repoRoot = _workspaceManager.GetSolutionRoot()!;
+                var timeout = TimeSpan.FromSeconds(20);
+                if (action == DocAction.trailers)
+                {
+                    return DocTrailerEngine.ScanTrailers(repoRoot, timeout);
+                }
+
+                if (name is null)
+                {
+                    return new DocWriteResult { IsError = true, Filename = "", Error = "name is required (doc ID, the file name without extension)." };
+                }
+
+                if (action == DocAction.validate)
+                {
+                    return DocTrailerEngine.ValidateId(repoRoot, name, timeout);
+                }
+
+                if (content is null)
+                {
+                    return new DocWriteResult { IsError = true, Filename = name, Error = "content is required for action=close (the new Status text)." };
+                }
+
+                return DocTrailerEngine.CloseDoc(repoRoot, name, content, timeout);
             }
 
             // ── list ───────────────────────────────────────────────────────────────
@@ -519,16 +553,16 @@ public class DocumentationTools
 
     [McpServerTool(Name = "ProjectDoc")]
     [Produces(DataTag.Documentation)]
-    [Description("Reads, writes, appends, or lists project doc files under docs/.")]
+    [Description("Reads, writes, appends, lists project doc files under docs/; trailers/validate/close reconcile docs with Plan:/Closes: commit trailers.")]
     public SentinelCallToolResult<object> ProjectDocTool(
     [Description(ToolParams.Reason)] ToolCallReason reason,
-    [Description("read, write, append (completed_work only), or list.")]
+    [Description("read, write, append (completed_work only), list, trailers (docs with Plan:/Closes: commits, unknown IDs), validate (name = doc ID), close (name = doc ID, content = Status text: sets Status, moves to closed/, CLOSED.md entry, fixes links).")]
         DocAction action,
-    [Description("Doc category: plan->plans/, handoff->handoffs/, completed_work->completed/ (append-only), documentation->documentation/, state->migration-state.yaml (name ignored).")]
+    [Description("Doc category: plan->plans/, handoff->handoffs/, completed_work->completed/ (append-only), documentation->documentation/, state->migration-state.yaml (name ignored). Ignored for trailers/validate/close.")]
         DocType docType,
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: name is required for every action except when
     // docType=state (which uses a fixed filename) or action=list.
-    [Description("File name or nested relative path, as shown by action=list. Required except for docType=state.")]
+    [Description("File name or nested relative path, as shown by action=list; doc ID for validate/close. Required except for docType=state.")]
         string? name = null,
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: content is required when action=write or action=append,
     // not used otherwise.
@@ -565,6 +599,18 @@ public class DocumentationTools
                 return ToError(l.Code, l.Message);
             case DocListResult l:
                 return ToSuccess(l);
+            case DocTrailerScanResult t when t.Error is not null:
+                return ToError(ToolErrorCode.InvalidArgument, t.Error);
+            case DocTrailerScanResult t:
+                return ToSuccess(t);
+            case DocTrailerIdResult t when t.Error is not null:
+                return ToError(ToolErrorCode.InvalidArgument, t.Error);
+            case DocTrailerIdResult t:
+                return ToSuccess(t);
+            case DocCloseResult c when c.Error is not null:
+                return ToError(ToolErrorCode.InvalidArgument, c.Error);
+            case DocCloseResult c:
+                return ToSuccess(c);
             default:
                 return ToError(ToolErrorCode.Exception, "ProjectDoc returned an unrecognized result.");
         }

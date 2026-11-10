@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tools.Basic;
 
@@ -357,5 +358,57 @@ public class DocumentationToolsTests
         var listed = list.SuccessData as DocListResult;
         Assert.That(listed, Is.Not.Null);
         Assert.That(listed!.Files, Has.Some.EndsWith("wrapper-list.md"));
+    }
+
+    [Test]
+    public void Validate_UnknownId_ReturnsExistsFalse()
+    {
+        var result = (DocTrailerIdResult)_tools.ProjectDocCore("test", DocAction.validate, DocType.plan,
+            name: "plan_does_not_exist");
+
+        Assert.That(result.Exists, Is.False);
+    }
+
+    [Test]
+    public void Validate_WithoutName_IsError()
+    {
+        var result = _tools.ProjectDocCore("test", DocAction.validate, DocType.plan);
+
+        Assert.That(result, Is.InstanceOf<DocWriteResult>());
+        Assert.That(((DocWriteResult)result).IsError, Is.True);
+    }
+
+    [Test]
+    public void Close_MovesDocAndWritesClosedMdEntry()
+    {
+        WriteDoc(Path.Combine("current", "plans", "plan_x.md"), "# Plan X\n\n**Status:** OPEN\n");
+        WriteDoc(Path.Combine("current", "CLOSED.md"), "# CLOSED\n\n## Older - resolved (2026-01-01)\n");
+
+        var result = _tools.ProjectDocCore("test", DocAction.close, DocType.plan,
+            name: "plan_x", content: "IMPLEMENTED 2026-11-10 (abc1234)");
+
+        Assert.That(result, Is.InstanceOf<DocCloseResult>());
+        var close = (DocCloseResult)result;
+        Assert.That(close.Error, Is.Null);
+
+        var closedPath = Path.Combine(_solutionRoot, "docs", "current", "plans", "closed", "plan_x.md");
+        Assert.That(File.Exists(closedPath), Is.True);
+        Assert.That(File.Exists(Path.Combine(_solutionRoot, "docs", "current", "plans", "plan_x.md")), Is.False);
+        Assert.That(File.ReadAllText(closedPath), Does.Contain("IMPLEMENTED 2026-11-10 (abc1234)"));
+
+        var closedMd = File.ReadAllText(Path.Combine(_solutionRoot, "docs", "current", "CLOSED.md"));
+        Assert.That(closedMd.IndexOf("## ", StringComparison.Ordinal),
+            Is.LessThan(closedMd.IndexOf("## Older", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public void Trailers_InTestingMode_IsRefused()
+    {
+        var tools = BuildTools(OperatingMode.Testing);
+
+        var result = tools.ProjectDocCore("test", DocAction.trailers, DocType.plan);
+
+        Assert.That(result, Is.InstanceOf<DocWriteResult>());
+        Assert.That(((DocWriteResult)result).IsError, Is.True);
     }
 }

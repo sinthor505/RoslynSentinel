@@ -296,7 +296,7 @@ public enum IntroduceAsType
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum DocAction
 {
-    read, write, append, list
+    read, write, append, list, trailers, validate, close
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
