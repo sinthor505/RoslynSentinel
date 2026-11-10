@@ -240,11 +240,7 @@ public class MsToolAugmentEngine
         FilePathWrapper filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (doc == null)
-        {
-            return new SwitchConversionAnalysis(false, 0, [], $"File not found: {filePath}");
-        }
+        var doc = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await doc.GetSyntaxRootAsync(cancellationToken);
         var text = await doc.GetTextAsync(cancellationToken);
@@ -316,7 +312,7 @@ public class MsToolAugmentEngine
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault()!;
+        var doc = DocumentLookup.RequireDocument(solution, filePath);
         var root = (await doc.GetSyntaxRootAsync(cancellationToken))!;
         var text = await doc.GetTextAsync(cancellationToken);
 
@@ -966,18 +962,7 @@ public class MsToolAugmentEngine
                 UpdatedContent: "");
         }
 
-        var doc = currentSolution.GetDocumentIdsWithFilePath(filePath)
-            .Select(currentSolution.GetDocument)
-            .FirstOrDefault();
-
-        if (doc == null)
-        {
-            return new AddUsingsPreview(
-                SolutionRequired: false,
-                UsingsToAdd: [],
-                Warning: $"File '{filePath}' is not part of the loaded solution.",
-                UpdatedContent: "");
-        }
+        var doc = DocumentLookup.RequireDocument(currentSolution, filePath);
 
         var root = await doc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var model = await doc.GetSemanticModelAsync(cancellationToken);

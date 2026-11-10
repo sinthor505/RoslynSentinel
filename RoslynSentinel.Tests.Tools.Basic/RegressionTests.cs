@@ -1216,17 +1216,13 @@ public class RegressionTests
 
     [Test]
     [Category("AddUsingsPreview")] // sentinel:auto-category
-    public async Task PreviewAddMissingUsings_FileNotInSolution_ReturnsWarning()
+    public async Task PreviewAddMissingUsings_FileNotInSolution_ThrowsNotFound()
     {
         SetSource("public class Foo { }");
 
         var engine = CreateAugmentEngine();
-        var result = await engine.PreviewAddMissingUsingsAsync("NonExistentFile.cs");
-
-        Assert.That(result.SolutionRequired, Is.False,
-            "Solution IS loaded - SolutionRequired should be false");
-        Assert.That(result.Warning, Is.Not.Null.And.Not.Empty,
-            "A warning should be returned when the file is not in the solution");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await engine.PreviewAddMissingUsingsAsync("NonExistentFile.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // ── ExtractConstantSafe ───────────────────────────────────────────────────

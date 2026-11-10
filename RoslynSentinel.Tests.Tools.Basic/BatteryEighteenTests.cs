@@ -69,11 +69,11 @@ public class BatteryEighteenTests
     }
 
     [Test]
-    public async Task AnalyzeSwitchForPatternConversion_NonExistentFile_ReturnsError()
+    public async Task AnalyzeSwitchForPatternConversion_NonExistentFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _msEngine.AnalyzeSwitchForPatternConversionAsync("NonExistent.cs", "switch (x)");
-        Assert.That(result.IsSafeToConvert, Is.False); Assert.That(result.TotalCases, Is.Zero); Assert.That(result.BlockingReason, Does.Contain("File not found")); // TODO throw-migration: assert the typed exception once MsToolAugmentEngine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _msEngine.AnalyzeSwitchForPatternConversionAsync("NonExistent.cs", "switch (x)"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- ConvertSwitchToPatternSafe ---
@@ -87,11 +87,11 @@ public class BatteryEighteenTests
     }
 
     [Test]
-    public async Task ConvertSwitchToPatternSafe_NonExistentFile_ReturnsError()
+    public async Task ConvertSwitchToPatternSafe_NonExistentFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _msEngine.ConvertSwitchToPatternSafeAsync("NonExistent.cs", "switch (x)");
-        Assert.That(result.IsError, Is.True); Assert.That(result.Error, Does.Contain("File not found")); // TODO throw-migration: assert the typed exception once MsToolAugmentEngine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _msEngine.ConvertSwitchToPatternSafeAsync("NonExistent.cs", "switch (x)"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- ConvertStringFormatToInterpolatedSmart ---
@@ -198,11 +198,11 @@ public class BatteryEighteenTests
     }
 
     [Test]
-    public async Task PreviewAddMissingUsings_NonExistentFile_ReturnsError()
+    public async Task PreviewAddMissingUsings_NonExistentFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _msEngine.PreviewAddMissingUsingsAsync("NonExistent.cs");
-        Assert.That(result.SolutionRequired, Is.False); Assert.That(result.UsingsToAdd, Is.Empty); Assert.That(result.Warning, Does.Contain("not part of the loaded solution")); // TODO throw-migration: assert the typed exception once MsToolAugmentEngine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _msEngine.PreviewAddMissingUsingsAsync("NonExistent.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- ExtractConstantSafe ---

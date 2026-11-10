@@ -1,6 +1,7 @@
 #pragma warning disable CS8618
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
@@ -320,18 +321,14 @@ public class SwitchConversionAdvancedTests
     // ── AnalyzeSwitchForPatternConversion ───────────────────────────────────────
 
     [Test]
-    [Description("File not in workspace -> Analyze returns IsSafeToConvert=false with file-not-found message")]
-    public async Task AnalyzeSwitchForPattern_FileNotInWorkspace_ReturnsFileNotFoundError()
+    [Description("File not in workspace -> Analyze throws ToolNotFoundException with ErrorCode NotFound")]
+    public async Task AnalyzeSwitchForPattern_FileNotInWorkspace_ThrowsNotFound()
     {
         SetSource("public class C { public void M() { } }"); // loaded as "Test.cs"
 
-        var result = await _engine.AnalyzeSwitchForPatternConversionAsync(
-            "NotInWorkspace.cs", "switch (x)");
-
-        Assert.That(result.IsSafeToConvert, Is.False,
-            "File absent from workspace must not claim safe-to-convert");
-        Assert.That(result.BlockingReason, Does.Contain("NotInWorkspace"),
-            "BlockingReason must reference the missing file name");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AnalyzeSwitchForPatternConversionAsync(
+            "NotInWorkspace.cs", "switch (x)"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -417,18 +414,14 @@ public class SwitchConversionAdvancedTests
     }
 
     [Test]
-    [Description("File not in workspace -> Convert fails cleanly because Analyze fails first")]
-    public async Task ConvertSwitchToPattern_FileNotInWorkspace_FailsWithError()
+    [Description("File not in workspace -> Convert throws ToolNotFoundException with ErrorCode NotFound because Analyze throws first")]
+    public async Task ConvertSwitchToPattern_FileNotInWorkspace_ThrowsNotFound()
     {
         SetSource("public class C { public void M() { } }");
 
-        var result = await _engine.ConvertSwitchToPatternSafeAsync(
-            "NotInWorkspace.cs", "switch (x)");
-
-        Assert.That(!result.IsError, Is.False,
-            "File absent from workspace must cause conversion to fail");
-        Assert.That(result.Error, Does.Contain("File not found"),
-            "ErrorDetails message must explain the file is not in the workspace");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ConvertSwitchToPatternSafeAsync(
+            "NotInWorkspace.cs", "switch (x)"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
