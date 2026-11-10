@@ -1393,7 +1393,29 @@ public class StructuralRefactoringEngine
         var targetSemanticModel = targetDocument.Id == document.Id ? semanticModel : await targetDocument.GetSemanticModelAsync(cancellationToken);
         // The record takes its property names and types from the declaration that owns the signature (the interface member in
         // a cascade), because the record lives beside it and those types must resolve there.
-        // TODO a generic interface member (I<T>.Run(T x)) yields a record whose property types mention the interface's type parameter, which the record does not declare
+        // A generic interface member (I<T>.Run(T x)) would yield a record whose property types mention the interface's type
+        // parameter, which the record does not declare. Refuse before anything is built or edited.
+        var targetSymbol = targetSemanticModel?.GetDeclaredSymbol(target, cancellationToken);
+        if (targetSymbol is not null)
+        {
+            static bool UsesTypeParameter(ITypeSymbol type) => type switch
+            {
+                ITypeParameterSymbol => true,
+                IArrayTypeSymbol array => UsesTypeParameter(array.ElementType),
+                IPointerTypeSymbol pointer => UsesTypeParameter(pointer.PointedAtType),
+                INamedTypeSymbol named => named.TypeArguments.Any(UsesTypeParameter),
+                _ => false,
+            };
+            foreach (var i in groupedIndices)
+            {
+                var parameter = targetSymbol.Parameters[i];
+                if (UsesTypeParameter(parameter.Type))
+                {
+                    throw new ToolTargetIneligibleException($"Cannot group parameter '{parameter.Name}' (type '{parameter.Type.ToDisplayString()}'): its type uses a type parameter of '{targetSymbol.ContainingType.ToDisplayString()}', which the generated record would not declare. Nothing was changed. Next: pass parameterNames that exclude it, or make the type concrete first.");
+                }
+            }
+        }
+
         var targetParams = target.ParameterList.Parameters;
         var recordName = newTypeName ?? (methodName + "Parameters");
         // Build record properties: capitalize first letter

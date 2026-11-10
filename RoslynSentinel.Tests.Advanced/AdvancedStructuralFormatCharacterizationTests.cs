@@ -329,6 +329,32 @@ public class AdvancedStructuralFormatCharacterizationTests
         Assert.That(result.UpdatedText, Is.EqualTo(WithStrayCrlf(Src(false, WarnExpected()), anchor)));
     }
 
+    // ---- generic interface member: a grouped parameter typed with the interface's type parameter is refused ----
+
+    [TestCase("T", "int")]
+    [TestCase("System.Collections.Generic.List<T>", "System.Collections.Generic.List<int>")]
+    [TestCase("T[]", "int[]")]
+    public async Task IntroduceParameterObject_GenericInterfaceMemberWithTypeParameterArgument_IsRefused_NothingWritten(string interfaceParamType, string classParamType)
+    {
+        SetSource($"public interface I<T> {{ void Run({interfaceParamType} x, int y); }}\npublic class W : I<int> {{ public void Run({classParamType} x, int y) {{ }} }}\n");
+
+        var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolTargetIneligibleException>(() => _engine.IntroduceParameterObjectAsync("Test.cs", "Run"));
+
+        Assert.That(ex!.Message, Does.Contain("'x'"));
+        Assert.That(ex.Message, Does.Contain(interfaceParamType));
+    }
+
+    [Test]
+    public async Task IntroduceParameterObject_GenericInterfaceMemberWithoutTypeParameterArgument_Succeeds()
+    {
+        SetSource("public interface I<T> { void Run(int a, string b, T c); }\npublic class W : I<int> { public void Run(int a, string b, int c) { } }\n");
+
+        var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run", parameterNames: new[] { "a", "b" });
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("record RunParameters(int A, string B)"));
+    }
+
     // ---- overloads: two methods named Run in one class (D1: never take the first match silently) ----
 
     private static string[] OverloadInput() =>
