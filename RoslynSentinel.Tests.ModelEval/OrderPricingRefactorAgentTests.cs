@@ -354,11 +354,11 @@ public class OrderPricingRefactorAgentTests
         // Step 2 (rename): old name gone everywhere, new name present in both the declaration and
         // the call site -> a same-file-only rename (missing OrderCheckout.cs) is the specific
         // failure mode this fixture is built to catch.
-        Assert.That(calculatorText, Does.Not.Match(@"\bCalcDisc\b"),
+        Assert.That(FunctionalFixVerifier.CodeOnly(calculatorText), Does.Not.Match(@"\bCalcDisc\b"),
             $"CalcDisc should be fully renamed to CalculateDiscountedTotal in OrderPricingCalculator.cs. Transcript: {result.TranscriptPath}");
         Assert.That(calculatorText, Does.Match(@"\bCalculateDiscountedTotal\b"),
             $"CalculateDiscountedTotal should be defined in OrderPricingCalculator.cs. Transcript: {result.TranscriptPath}");
-        Assert.That(checkoutText, Does.Not.Match(@"\bCalcDisc\b"),
+        Assert.That(FunctionalFixVerifier.CodeOnly(checkoutText), Does.Not.Match(@"\bCalcDisc\b"),
             $"OrderCheckout.cs's call site should be updated to the new name, not left calling CalcDisc. Transcript: {result.TranscriptPath}");
         Assert.That(checkoutText, Does.Match(@"\bCalculateDiscountedTotal\b"),
             $"OrderCheckout.cs should call CalculateDiscountedTotal after the rename. Transcript: {result.TranscriptPath}");

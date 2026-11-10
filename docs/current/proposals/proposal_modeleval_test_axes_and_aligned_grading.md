@@ -33,6 +33,17 @@ Evidence from `Model_AppliesTenChainedRefactors`
 - **Compared with a stronger model.** Haiku did the same 10-chain fixture (`c:\tmp\haiku10\`, 2026-11-09)
   in 18 calls with 0 failures. The prompt is solvable, so the difficulty it measures is real. What is
   missing is a statement of which difficulty each test means to measure.
+- **Later runs (2026-11-10) separate the axes.** After the tool fixes (`01b64868`, `705ebc7f`) and the
+  run-the-tests acceptance line (`17664a25`), run `20261110-002934-654` passed (22 turns, 3 failed calls).
+  The next two failures were not tool failures:
+  - `20261110-002243-875`: a grading defect. The step 10 check required a block body; fixed in `b20c0723`.
+  - `20261110-003603-242`: two causes.
+    - Grading: a rewritten doc comment that mentions `CalcDisc` failed the rename check.
+    - State tracking: the model listed step 10 in its own plan, never did it, built, ran the tests
+      (4/4 pass, since step 10 has no behavioural effect) and reported "All 10 refactors complete". The
+      self-check list did not catch it.
+
+  This is a `MultiStepState` failure that a tool cannot fix. A per-step score would show 9/10.
 - **A realistic counter-example already exists.** The repo's own Haiku implementer briefs
   (`.claude/skills/dispatch-implementer/SKILL.md`, "Brief template") name each file, symbol, call site,
   acceptance check and out-of-scope item. Haiku completes nearly all of them

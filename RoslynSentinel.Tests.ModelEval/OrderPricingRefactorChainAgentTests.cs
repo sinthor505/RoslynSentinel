@@ -340,7 +340,7 @@ public class OrderPricingRefactorChainAgentTests
         await AssertThreeBaseStepsApplied(result);
 
         var calculatorText = File.ReadAllText(CalculatorPath);
-        Assert.That(calculatorText, Does.Not.Match(@"\bstandardDiscount\b"),
+        Assert.That(FunctionalFixVerifier.CodeOnly(calculatorText), Does.Not.Match(@"\bstandardDiscount\b"),
             $"Step 4: the single-use 'standardDiscount' local should be inlined into its return statement, not left in place. Transcript: {result.TranscriptPath}");
 
         await AssertFunctionalBehaviorPreserved(result);
@@ -456,7 +456,7 @@ public class OrderPricingRefactorChainAgentTests
         await AssertThreeBaseStepsApplied(result);
 
         var calculatorText = File.ReadAllText(CalculatorPath);
-        Assert.That(calculatorText, Does.Not.Match(@"\bstandardDiscount\b"),
+        Assert.That(FunctionalFixVerifier.CodeOnly(calculatorText), Does.Not.Match(@"\bstandardDiscount\b"),
             $"Step 4: the single-use 'standardDiscount' local should be inlined into its return statement, not left in place. Transcript: {result.TranscriptPath}");
 
         // Step 5: CalculateDiscountedTotal's own parameter must be renamed. Anchored to the method
@@ -601,7 +601,7 @@ public class OrderPricingRefactorChainAgentTests
         await AssertThreeBaseStepsApplied(result);
 
         var calculatorText = File.ReadAllText(CalculatorPath);
-        Assert.That(calculatorText, Does.Not.Match(@"\bstandardDiscount\b"),
+        Assert.That(FunctionalFixVerifier.CodeOnly(calculatorText), Does.Not.Match(@"\bstandardDiscount\b"),
             $"Step 4: the single-use 'standardDiscount' local should be inlined into its return statement, not left in place. Transcript: {result.TranscriptPath}");
 
         var calculateDiscountedTotalMatch = System.Text.RegularExpressions.Regex.Match(
@@ -799,7 +799,7 @@ public class OrderPricingRefactorChainAgentTests
         var calculatorText = File.ReadAllText(CalculatorPath);
         var checkoutText = File.ReadAllText(CheckoutPath);
 
-        Assert.That(calculatorText, Does.Not.Match(@"\bstandardDiscount\b"),
+        Assert.That(FunctionalFixVerifier.CodeOnly(calculatorText), Does.Not.Match(@"\bstandardDiscount\b"),
             $"Step 4: the single-use 'standardDiscount' local should be inlined. Transcript: {result.TranscriptPath}");
 
         var calculateDiscountedTotalMatch = System.Text.RegularExpressions.Regex.Match(
@@ -1006,7 +1006,7 @@ public class OrderPricingRefactorChainAgentTests
         var calculatorText = File.ReadAllText(CalculatorPath);
         var checkoutText = File.ReadAllText(CheckoutPath);
 
-        Assert.That(calculatorText, Does.Not.Match(@"\bstandardDiscount\b"),
+        Assert.That(FunctionalFixVerifier.CodeOnly(calculatorText), Does.Not.Match(@"\bstandardDiscount\b"),
             $"Step 4: the single-use 'standardDiscount' local should be inlined. Transcript: {result.TranscriptPath}");
 
         var calculateDiscountedTotalMatch = System.Text.RegularExpressions.Regex.Match(
@@ -1221,7 +1221,7 @@ public class OrderPricingRefactorChainAgentTests
         var calculatorText = File.ReadAllText(CalculatorPath);
         var checkoutText = File.ReadAllText(CheckoutPath);
 
-        Assert.That(calculatorText, Does.Not.Match(@"\bstandardDiscount\b"),
+        Assert.That(FunctionalFixVerifier.CodeOnly(calculatorText), Does.Not.Match(@"\bstandardDiscount\b"),
             $"Step 4: the single-use 'standardDiscount' local should be inlined. Transcript: {result.TranscriptPath}");
 
         var calculateDiscountedTotalMatch = System.Text.RegularExpressions.Regex.Match(
@@ -1444,7 +1444,7 @@ public class OrderPricingRefactorChainAgentTests
         var calculatorText = File.ReadAllText(CalculatorPath);
         var checkoutText = File.ReadAllText(CheckoutPath);
 
-        Assert.That(calculatorText, Does.Not.Match(@"\bstandardDiscount\b"),
+        Assert.That(FunctionalFixVerifier.CodeOnly(calculatorText), Does.Not.Match(@"\bstandardDiscount\b"),
             $"Step 4: the single-use 'standardDiscount' local should be inlined. Transcript: {result.TranscriptPath}");
 
         var calculateDiscountedTotalMatch = System.Text.RegularExpressions.Regex.Match(
@@ -1583,11 +1583,11 @@ public class OrderPricingRefactorChainAgentTests
         var calculatorText = File.ReadAllText(CalculatorPath);
         var checkoutText = File.ReadAllText(CheckoutPath);
 
-        Assert.That(calculatorText, Does.Not.Match(@"\bCalcDisc\b"),
+        Assert.That(FunctionalFixVerifier.CodeOnly(calculatorText), Does.Not.Match(@"\bCalcDisc\b"),
             $"CalcDisc should be fully renamed to CalculateDiscountedTotal in OrderPricingCalculator.cs. Transcript: {result.TranscriptPath}");
         Assert.That(calculatorText, Does.Match(@"\bCalculateDiscountedTotal\b"),
             $"CalculateDiscountedTotal should be defined in OrderPricingCalculator.cs. Transcript: {result.TranscriptPath}");
-        Assert.That(checkoutText, Does.Not.Match(@"\bCalcDisc\b"),
+        Assert.That(FunctionalFixVerifier.CodeOnly(checkoutText), Does.Not.Match(@"\bCalcDisc\b"),
             $"OrderCheckout.cs's call site should be updated to the new name, not left calling CalcDisc. Transcript: {result.TranscriptPath}");
         Assert.That(checkoutText, Does.Match(@"\bCalculateDiscountedTotal\b"),
             $"OrderCheckout.cs should call CalculateDiscountedTotal after the rename. Transcript: {result.TranscriptPath}");

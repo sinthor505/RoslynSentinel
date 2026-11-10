@@ -286,6 +286,11 @@ internal static class FunctionalFixVerifier
         return false;
     }
 
+    /// <summary>Returns <paramref name="source"/> with // line comments and /* */ block comments (including /// doc comments) removed, so name checks grade code, not prose. String literals are not parsed; the fixtures contain no "//" inside strings.</summary>
+    public static string CodeOnly(string source) =>
+        System.Text.RegularExpressions.Regex.Replace(
+            source, @"/\*.*?\*/|//[^\r\n]*", string.Empty, System.Text.RegularExpressions.RegexOptions.Singleline);
+
     private static async Task<string> RunDotnetBuildAsync(string csprojPath, CancellationToken cancellationToken)
     {
         var psi = new ProcessStartInfo("dotnet", $"build \"{csprojPath}\" -c Debug --nologo")
