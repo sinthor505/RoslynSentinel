@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Test-GuidanceHygiene LINK-FORM check - resolved (2026-11-10)
+
+`Test-GuidanceHygiene.ps1` flags reference-style (`[x]: path`) and angle-bracket (`](<path>)`) markdown links; that is the unpark trigger for the parked TODO at `DocTrailerEngine.RewriteLinks` (close does not rewrite those forms); skip inline code and fenced blocks (this entry quotes both forms); scan `docs/current` (excluding closed/ and Worktree/), CLAUDE.md and the memory folder - Small
+
+Evidence: 17551ce3; repo 0 findings, fixture with both forms reports exactly 2
+
 ## EditLines tool and anchor attributes - resolved (2026-11-10)
 
 EditLines tool and anchor attributes (2026-08-31) - never built; parked because ApplyDiff/ReplaceSnippet cover line edits today; unpark when a model-eval run shows ApplyDiff is still a bottleneck - [doc](ideas/idea_editlines_and_anchor_attributes.md)
