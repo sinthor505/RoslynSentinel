@@ -330,13 +330,20 @@ public static class DocumentLookup
 
             // Error path only: parsing a document the workspace has not parsed yet is acceptable here.
             var root = document.GetSyntaxRootAsync().GetAwaiter().GetResult();
-            var declared = root?.DescendantNodes()
-                .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.BaseTypeDeclarationSyntax>()
-                .FirstOrDefault(t => t.Parent is not Microsoft.CodeAnalysis.CSharp.Syntax.BaseTypeDeclarationSyntax
-                                     && string.Equals(t.Identifier.ValueText, stem, StringComparison.OrdinalIgnoreCase));
-            if (declared is not null)
+            // Collects every matching top-level type of the file (a list-all lookup, not a first-match pick: the file is
+            // listed once per distinct spelling of the name, so partial declarations do not repeat it).
+            var declaredNames = root is null
+                ? []
+                : root.DescendantNodes()
+                    .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.BaseTypeDeclarationSyntax>()
+                    .Where(t => t.Parent is not Microsoft.CodeAnalysis.CSharp.Syntax.BaseTypeDeclarationSyntax
+                                && string.Equals(t.Identifier.ValueText, stem, StringComparison.OrdinalIgnoreCase))
+                    .Select(t => t.Identifier.ValueText)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList();
+            foreach (var declaredName in declaredNames)
             {
-                found.Add((declared.Identifier.ValueText, filePath));
+                found.Add((declaredName, filePath));
             }
         }
 

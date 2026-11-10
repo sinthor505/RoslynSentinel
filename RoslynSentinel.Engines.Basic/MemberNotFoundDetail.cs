@@ -181,10 +181,12 @@ public static class MemberNotFoundDetail
             }
 
             var otherRoot = await other.GetSyntaxRootAsync(cancellationToken);
-            var hit = otherRoot is null ? null : Collect(otherRoot).FirstOrDefault(e => string.Equals(e.Name, memberName, StringComparison.Ordinal));
-            if (hit is not null)
+            // A list-all lookup: every declaring file gets an entry. Overloads inside one file share the entry, described by
+            // the file's first declaration of the name.
+            var hits = otherRoot is null ? [] : Collect(otherRoot).Where(e => string.Equals(e.Name, memberName, StringComparison.Ordinal)).ToList();
+            if (hits.Count > 0)
             {
-                found.Add((other.FilePath!, hit.Kind, hit.Container));
+                found.Add((other.FilePath!, hits[0].Kind, hits[0].Container));
             }
         }
 
