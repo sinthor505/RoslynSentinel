@@ -386,4 +386,74 @@ public class FoldPendingGuardTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    // Pre-seeds the private fold ledger (reflection) so the next Mismatch on the file takes the persisting-mismatch path: Warning, no refusal.
+    private static void SeedFoldRefused(PersistentWorkspaceManager manager, string file)
+    {
+        var field = typeof(PersistentWorkspaceManager).GetField("_foldRefusedFiles", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            ?? throw new InvalidOperationException("PersistentWorkspaceManager._foldRefusedFiles not found; update SeedFoldRefused.");
+        var refused = (System.Collections.Concurrent.ConcurrentDictionary<string, byte>)field.GetValue(manager)!;
+        refused[file] = 0;
+    }
+
+    [Test]
+    public async Task ProposedEqualsDiskPreImage_FoldsInlineAndProceedsWithoutRefusal()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Variant(3));
+            using var manager = NewManager((file, Original));
+            AsAgent("agentA");
+
+            var result = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [file] = Variant(3)
+                }, retryCount: 0, validateChanges: false);
+
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(result.RefusalCode, Is.Null, "A no-op write must not be refused with FoldPending.");
+            Assert.That(await InMemoryText(manager, file), Is.EqualTo(Variant(3)),
+                "The no-op target must be folded from disk inline.");
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Variant(3)));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task PersistingMismatchAfterFold_ProceedsWithWarningFindingFromWorkspaceStaleTextRecovery()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var file = Path.Combine(dir, "A.cs");
+            File.WriteAllText(file, Variant(3));
+            using var manager = NewManager((file, Original));
+            SeedFoldRefused(manager, file);
+            AsAgent("agentA");
+
+            var result = await manager.ApplyProposedChangesAsync(
+                new()
+                {
+                    [file] = Variant(2)
+                }, retryCount: 0, validateChanges: false);
+
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(result.RefusalCode, Is.Null, "A persisting mismatch must proceed, not be refused.");
+            Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(Variant(2)));
+            Assert.That(result.Findings, Is.Not.Null);
+            Assert.That(result.Findings!.Any(f => f.Source == "WriteChokepoint"
+                && f.Severity == FindingSeverity.Warning && f.Message.Contains(WorkspaceStaleText.Recovery)), Is.True,
+                "A mismatch that persists after a fold must carry a Warning finding quoting the recovery text.");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

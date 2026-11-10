@@ -2098,7 +2098,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             var foldFindings = new List<Finding>();
             if (!exactRestore)
             {
-                var foldRefusal = await CheckFoldPendingAsync(changes.Keys.Concat(deletePaths), preImages, validationReport, foldFindings, cancellationToken);
+                var foldRefusal = await CheckFoldPendingAsync(changes.Keys.Concat(deletePaths), preImages, changes, validationReport, foldFindings, cancellationToken);
                 if (foldRefusal is not null)
                 {
                     return foldRefusal;
@@ -2666,9 +2666,11 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // Fold-pending guard (non-latching). Runs only under the held _solutionLock. A target whose in-memory text differs from its
     // disk pre-image (beyond the BOM/EOL/trailing-whitespace trivia FoldComparison converges) is folded once from disk and
     // refused with FoldPending; a path already refused since its last fold proceeds with a Warning finding instead.
-    private async Task<ApplyChangesResult?> CheckFoldPendingAsync(IEnumerable<FilePathWrapper> targets, Dictionary<string, string?> preImages, DiagnosticReport? validationReport, List<Finding> foldFindings, CancellationToken cancellationToken)
+    // No-op rule: a target whose proposed content equals its disk pre-image (ordinal) is folded inline and never refused.
+    private async Task<ApplyChangesResult?> CheckFoldPendingAsync(IEnumerable<FilePathWrapper> targets, Dictionary<string, string?> preImages, Dictionary<FilePathWrapper, string> proposed, DiagnosticReport? validationReport, List<Finding> foldFindings, CancellationToken cancellationToken)
     {
         var refuse = new List<FilePathWrapper>();
+        var foldInline = new List<FilePathWrapper>();
         foreach (var target in targets.Distinct())
         {
             var documentId = CurrentSolution.GetDocumentIdsWithFilePath(target).FirstOrDefault();
@@ -2685,7 +2687,11 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     foldFindings.Add(new Finding("WriteChokepoint", $"{fileName}: the in-memory text and the disk text differ only by a BOM, line endings or trailing whitespace; treated as converged.", FindingSeverity.Info));
                     break;
                 case FoldComparisonOutcome.Mismatch:
-                    if (_foldRefusedFiles.ContainsKey((string)target))
+                    if (proposed.TryGetValue(target, out var proposedText) && string.Equals(proposedText, diskText, StringComparison.Ordinal))
+                    {
+                        foldInline.Add(target);
+                    }
+                    else if (_foldRefusedFiles.ContainsKey((string)target))
                     {
                         foldFindings.Add(new Finding("WriteChokepoint", $"{fileName} still differs from disk after a fold; the write proceeded against the in-memory text. {WorkspaceStaleText.Recovery}", FindingSeverity.Warning));
                     }
@@ -2697,14 +2703,18 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             }
         }
 
-        if (refuse.Count == 0)
+        if (refuse.Count == 0 && foldInline.Count == 0)
         {
             return null;
         }
 
-        // Fold the refused files from disk now (the lock is already held) so the retry sees the fresh text.
-        await ApplyInMemoryDocumentUpdatesAsync(refuse.Select(p => (string)p).ToList(), CancellationToken.None);
+        // Fold the no-op and refused files from disk now (the lock is already held) so the retry sees the fresh text.
+        await ApplyInMemoryDocumentUpdatesAsync(refuse.Concat(foldInline).Select(p => (string)p).ToList(), CancellationToken.None);
         Interlocked.Increment(ref _workspaceVersion);
+        if (refuse.Count == 0)
+        {
+            return null;
+        }
 
         // Re-compare after the fold. Marking must follow the fold, because NoteFileFolded clears the marker.
         var refused = new Dictionary<FilePathWrapper, string>();
