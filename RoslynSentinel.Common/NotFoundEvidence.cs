@@ -53,7 +53,7 @@ public static class NotFoundEvidence
     /// Notes for a zero-hit search, read from <see cref="ToolCallContext.Current"/>. Empty unless the call carries an agent id
     /// and a solution root.
     /// </summary>
-    public static IReadOnlyList<Finding> ForZeroHitSearch(string solutionRoot, string term, bool isRegex)
+    public static IReadOnlyList<Finding> ForZeroHitSearch(string? solutionRoot, string term, bool isRegex)
     {
         var context = ToolCallContext.Current;
         if (context is not { AgentId: { } agentId } || string.IsNullOrWhiteSpace(solutionRoot))
