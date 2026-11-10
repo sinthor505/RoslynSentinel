@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## D1 leftovers on gated tools - resolved (2026-11-10)
+
+D1 leftovers on gated tools (2026-11-09; active write tools done in 2c319c1e and aa26d049) - ConvertStaticToExtension class pick, BuildAutoProperty, a `VariableLifetimeReport` warning field, BuildRecoveryHintAsync, the Asyncify uplift batch (carry symbol plus line); verify each site first and record any with no real ambiguity; Medium - [doc](findings/finding_snippet_notfound_wording_confusion_audit.md)
+
+Evidence: 6352fbc7 (ConvertStaticToExtension, BuildAutoProperty verdict no-change, TraceVariableLifetime warning, recovery hint), 5b9b1348 (Asyncify uplift batch); outcome recorded in findings/finding_snippet_notfound_wording_confusion_audit.md
+
 ## IntroduceParameterObject updates interface implementers - resolved (2026-11-10)
 
 IntroduceParameterObject updates interface implementers (2026-11-09) - return `Changes` for the interface and every implementer (positional parameter map, explicit/partial included, a using added when namespaces differ, expression-bodied methods handled); callers stay manual; Medium - [doc](issues/issue_structural_refactoring_open_defects.md)

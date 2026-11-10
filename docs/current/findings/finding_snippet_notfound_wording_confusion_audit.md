@@ -316,3 +316,11 @@ the finding doc's raw audit findings for the full site inventory.
   forcing a change. Check: one test per changed site with two same-named candidates (Ambiguous on writes,
   a warning on reads).
 
+
+## D1 leftovers outcome (2026-11-10, TODO item #14)
+
+- ConvertStaticToExtension: the method pick was already RequireSingle'd; the real bug was the class pick (outermost class containing the name). Fixed by annotating the converted method and making its own parent static (6352fbc7). Open: an extension method must live in a top-level non-generic static class; a TODO sits above `classNode` in `LogicOptimizationEngine.ConvertStaticToExtensionAsync`.
+- BuildAutoProperty: no real ambiguity (takes the already-selected property node; the enclosing type comes from the node's ancestors; same-type field names are unique). No change.
+- TraceVariableLifetime: `VariableLifetimeReport.Warning` added; 2+ same-named variables near the line trace the first and warn, retry by `lineNumber` (6352fbc7).
+- BuildRecoveryHintAsync: the suggested rerun glob resolves the top project through `ProjectLookup`; two projects sharing a name drop the glob (6352fbc7).
+- Asyncify uplift batch: `TryTransformCallerAsync`, `RewriteCallerAsyncBodyAsync`, `RewriteObsoleteCallsInAsyncMethodAsync` use `RequireSingle` with per-item skips (5b9b1348); `SemanticBridgeCallRewriteAsync` verified unambiguous. Symbol plus line was not carried (the line goes stale after the first edit); same-named callers in different classes cannot be uplifted individually yet (TODO at `AsyncBatchEngine.cs` ~:1363).
