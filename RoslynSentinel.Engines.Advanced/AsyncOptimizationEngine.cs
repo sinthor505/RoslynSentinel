@@ -327,6 +327,7 @@ public class AsyncOptimizationEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodMatches = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>();
+        // TODO GenerateAsyncOverloadAsync still refuses same-named methods in different classes; thread callerContainingType via ResolveMethodByNameAsync if a caller needs it
         var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
         var classNode = methodNode?.Parent as ClassDeclarationSyntax;
 
@@ -411,6 +412,7 @@ public class AsyncOptimizationEngine
     /// <param name="filePath">Absolute path to the source file containing the method.</param>
     /// <param name="methodName">Exact case-sensitive name of the synchronous method to bridge.</param>
     /// <param name="cancellationToken">Optional cancellation token for the Roslyn operations.</param>
+    /// <param name="callerContainingType">Optional containing-type display text (as in <c>ObsoleteCallerFinding.CallerType</c>) that picks the method among same-named methods in different classes; null, "&lt;unknown&gt;" or no match keeps the ambiguity refusal.</param>
     /// <returns>Full updated source for the file. Does NOT write to disk; pass to
     ///          <c>apply_proposed_changes</c> or stage via <c>autoStage=true</c> to persist.</returns>
     /// <exception cref="InvalidOperationException">
@@ -422,7 +424,8 @@ public class AsyncOptimizationEngine
         FilePathWrapper filePath,
         string methodName,
         IProgress<EngineProgress>? progress = default,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? callerContainingType = null)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
@@ -437,7 +440,7 @@ public class AsyncOptimizationEngine
                                 .OfType<MethodDeclarationSyntax>()
                                 .Where(m => m.Identifier.Text == methodName)
                                 .ToList();
-        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
+        var methodNode = await ResolveMethodByNameAsync(document, methodMatches, methodName, callerContainingType, cancellationToken);
         var classNode = methodNode?.Parent as ClassDeclarationSyntax;
 
         if (classNode == null || methodNode == null)
@@ -674,12 +677,16 @@ public class AsyncOptimizationEngine
     /// event handler delegate signatures are fixed and cannot gain a <c>CancellationToken</c>
     /// parameter. The async method is called without an explicit CT; its default-parameter value
     /// covers the common case.
+    /// <paramref name="callerContainingType"/> (optional, last) is the containing-type display text from
+    /// <c>ObsoleteCallerFinding.CallerType</c>; it picks the handler among same-named methods in different
+    /// classes, and null, "&lt;unknown&gt;" or no match keeps the ambiguity refusal.
     /// </summary>
     public async Task<DocumentEditResult> ConvertEventHandlerCallerToAsyncVoidAsync(
         FilePathWrapper filePath,
         string methodName,
         IProgress<EngineProgress>? progress = default,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? callerContainingType = null)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
@@ -692,7 +699,7 @@ public class AsyncOptimizationEngine
             .OfType<MethodDeclarationSyntax>()
             .Where(m => m.Identifier.Text == methodName)
             .ToList();
-        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName)
+        var methodNode = await ResolveMethodByNameAsync(document, methodMatches, methodName, callerContainingType, cancellationToken)
             ?? throw new ToolNotFoundException(
                 $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.", "method", methodName);
 
@@ -831,6 +838,7 @@ public class AsyncOptimizationEngine
     /// the on-disk content in the workspace -> use this for first-time bridge flows where the new
     /// overload exists only in memory.  When null the current workspace document is used.
     /// </param>
+    /// <param name="callerContainingType">Optional containing-type display text (as in <c>ObsoleteCallerFinding.CallerType</c>) that picks the method among same-named methods in different classes; null, "&lt;unknown&gt;" or no match keeps the ambiguity refusal.</param>
     /// <returns>
     /// <see cref="EditOutcome.Modified"/> with updated text when bridge calls were rewritten;
     /// <see cref="EditOutcome.NoCandidatesFound"/> when no Asyncify-bridge sync calls were found in the body;
@@ -841,7 +849,8 @@ public class AsyncOptimizationEngine
         string asyncMethodName,
         string? sourceText = null,
         IProgress<EngineProgress>? progress = default,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? callerContainingType = null)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
@@ -865,7 +874,7 @@ public class AsyncOptimizationEngine
             .OfType<MethodDeclarationSyntax>()
             .Where(m => m.Identifier.Text == asyncMethodName)
             .ToList();
-        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", asyncMethodName);
+        var methodNode = await ResolveMethodByNameAsync(document, methodMatches, asyncMethodName, callerContainingType, cancellationToken);
 
         if (methodNode == null)
         {
@@ -1664,6 +1673,39 @@ public class AsyncOptimizationEngine
         var second = parms[1].Type?.ToString() ?? "";
         return ((first == "object" || first == "object?") &&
                second.EndsWith("EventArgs")) || second.EndsWith("EventArgs?");
+    }
+
+    /// <summary>
+    /// Resolves one method among same-named <paramref name="matches"/>. When <paramref name="callerContainingType"/>
+    /// is given (the display text <c>ObsoleteCallerFinding.CallerType</c> carries, i.e. the containing type's
+    /// <c>ToDisplayString()</c> with the default format) the candidates are narrowed to the methods whose containing type
+    /// displays identically, so same-named callers in different classes resolve; a null or "&lt;unknown&gt;" value, or no
+    /// match, keeps all candidates. The narrowed list still goes through <see cref="NameTargetLookup.RequireSingle"/>,
+    /// so same-class overloads stay ambiguous.
+    /// </summary>
+    private static async Task<MethodDeclarationSyntax?> ResolveMethodByNameAsync(
+        Document document,
+        List<MethodDeclarationSyntax> matches,
+        string methodName,
+        string? callerContainingType,
+        CancellationToken cancellationToken)
+    {
+        if (matches.Count > 1 && !string.IsNullOrEmpty(callerContainingType) && callerContainingType != "<unknown>")
+        {
+            var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
+            if (semanticModel != null)
+            {
+                var sameType = matches
+                    .Where(m => semanticModel.GetDeclaredSymbol(m, cancellationToken)?.ContainingType?.ToDisplayString() == callerContainingType)
+                    .ToList();
+                if (sameType.Count > 0)
+                {
+                    matches = sameType;
+                }
+            }
+        }
+
+        return RoslynSentinel.Common.NameTargetLookup.RequireSingle(matches, "Method", methodName);
     }
 
     // ── MigrationCandidate attribute name constants ─────────────────────────
