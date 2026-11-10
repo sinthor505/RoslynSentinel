@@ -110,4 +110,52 @@ public sealed class MoveMemberCompanionRefusalTests
         Assert.That(result.ErrorData?.Message, Does.Contain("[\"Helper(int)\"]"));
         Assert.That(result.ErrorData?.Message, Does.Not.Contain("Helper(string)"));
     }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task ParameterNamedLikeStayingPrivateField_IsNotAnUnmovedDependency()
+    {
+        var original = Lines(
+            "public static class Source",
+            "{",
+            "    private static int count = 1;",
+            "    public static int Run() => count;",
+            "    public static int Total(int count) { return count + 1; }",
+            "}",
+            "",
+            "public static class Target",
+            "{",
+            "}");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Total"], "Target");
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var text = workspace.ReadText("Refactor.cs");
+        Assert.That(TargetPart(text), Does.Contain("int Total(int count)"));
+        Assert.That(SourcePart(text), Does.Not.Contain("int Total"));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task LocalNamedLikeStayingPrivateField_IsNotAnUnmovedDependency()
+    {
+        var original = Lines(
+            "public static class Source",
+            "{",
+            "    private static int count = 1;",
+            "    public static int Run() => count;",
+            "    public static int Total() { var count = 3; return count + 1; }",
+            "}",
+            "",
+            "public static class Target",
+            "{",
+            "}");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
+        var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Total"], "Target");
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var text = workspace.ReadText("Refactor.cs");
+        Assert.That(TargetPart(text), Does.Contain("int Total()"));
+        Assert.That(SourcePart(text), Does.Not.Contain("int Total"));
+    }
 }

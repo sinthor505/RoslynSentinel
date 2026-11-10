@@ -3217,9 +3217,8 @@ public class MemberRefactoringEngine
                 var symbolInfo = semanticModel.GetSymbolInfo(identifier);
                 var resolved = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
                 // A name shared with a moved overload stays in siblingsByName when another overload stays behind, so the symbol itself decides.
-                // TODO a parameter or local named like a private sibling also has ContainingType == classSymbol, so it may be
-                // reported as an unmoved dependency (unverified; the transitive pass from 3b340c36 filters to members only).
-                if (resolved == null || !SymbolEqualityComparer.Default.Equals(resolved.ContainingType, classSymbol) || movedSymbols.Contains(resolved.OriginalDefinition))
+                // Only real members count: a parameter, local or local function that shares a sibling's name also has ContainingType == classSymbol.
+                if (resolved == null || !SymbolEqualityComparer.Default.Equals(resolved.ContainingSymbol, classSymbol) || movedSymbols.Contains(resolved.OriginalDefinition))
                 {
                     continue;
                 }
