@@ -142,7 +142,7 @@ public class DocumentationTools
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         if (solutionRoot is null)
         {
-            error = $"No solution path configured. Call {ToolCallHint.Call("LoadSolution")} first.";
+            error = $"ProjectDoc resolves docs/ paths relative to the loaded solution, but no solution is loaded. Call {ToolCallHint.Call("LoadSolution")} first.";
             return null;
         }
 
@@ -407,13 +407,12 @@ public class DocumentationTools
         _ = cancellationToken;
         try
         {
-            // TODO rate-limit refusal has no fitting ToolErrorCode (owner decision: reuse vs new RateLimited code)
             var rateLimitError = _workspaceManager.CheckRateLimit("project_doc", 30);
             if (rateLimitError is not null)
             {
                 return action == DocAction.read || action == DocAction.list
-                    ? new DocReadResult { Found = false, Filename = name ?? "", Error = rateLimitError }
-                    : new DocWriteResult { IsError = true, Filename = name ?? "", Error = rateLimitError };
+                    ? new DocReadResult { Found = false, Filename = name ?? "", ErrorCode = ToolErrorCode.RateLimited, Error = rateLimitError }
+                    : new DocWriteResult { IsError = true, Filename = name ?? "", ErrorCode = ToolErrorCode.RateLimited, Error = rateLimitError };
             }
 
             var docsRoot = TryGetDocsRoot(out var error);

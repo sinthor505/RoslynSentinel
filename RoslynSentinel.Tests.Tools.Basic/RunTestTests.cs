@@ -426,7 +426,7 @@ public class RunTestTests
         var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution);
 
         Assert.That(!result.IsError, Is.False);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("TestRunFailed"));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.RateLimited));
     }
 
     // Diffs the shared temp dir before/after, so a sibling test's in-flight .trx would read as a

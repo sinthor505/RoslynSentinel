@@ -150,6 +150,43 @@ public sealed class AmbiguousNameTargetToolTests
 
     [Test]
     [Category("IntelligenceTools")]
+    public async Task GetCallGraph_TreeMethodNotFound_IsNotFoundError()
+    {
+        var original = "public class Worker\n{\n    public int Run(int a) => a + 1;\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateIntelligenceTools(workspace.Manager);
+        var result = await tools.GetCallGraphTool(reason: "test message", workspace.PathOf("Refactor.cs"), "NoSuchMethod99", "tree");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    [Category("IntelligenceTools")]
+    public async Task PreviewMoveFileToNamespaceFolder_FileNotInSolution_IsError()
+    {
+        var original = "public class Worker\n{\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateIntelligenceTools(workspace.Manager);
+        var result = await tools.PreviewMoveFileToNamespaceFolderTool(reason: "test message", workspace.PathOf("Missing.cs"));
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.Not.EqualTo(ToolErrorCode.Exception));
+    }
+
+    [Test]
+    [Category("IntelligenceTools")]
+    public async Task PreviewMoveFileToNamespaceFolder_FileAlreadyInNamespaceFolder_IsSuccess()
+    {
+        // The fixture project is "InMemoryProject" with its files at the project root, so this namespace maps to the root folder.
+        var original = "namespace InMemoryProject;\n\npublic class Worker\n{\n}\n".ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateIntelligenceTools(workspace.Manager);
+        var result = await tools.PreviewMoveFileToNamespaceFolderTool(reason: "test message", workspace.PathOf("Refactor.cs"));
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(result.SuccessData, Does.Contain("already in the correct folder"));
+    }
+
+    [Test]
+    [Category("IntelligenceTools")]
     public async Task GetCallGraph_TreeSingleMethodWithoutSnippet_StillReturnsItsTree()
     {
         var original = "public class Worker\n{\n    public int Run(int a) => AddOne(a);\n    private int AddOne(int x) => x + 1;\n}\n".ReplaceLineEndings("\r\n");

@@ -175,9 +175,13 @@ public class IntelligenceTools
             if (direction == "tree")
             {
                 var result = await _antiPatternEngine.GenerateCallTreeAsync(resolvedFilePath, methodName, maxDepth, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                if (RefactoringToolHelpers.GuardEngineResult(result, "GetCallGraph", $"method '{methodName}' in '{resolvedFilePath}'", ToolCallHint.Call("GetFileOutline"), NoOpHandling.Error($"No call tree could be built for '{methodName}' in '{resolvedFilePath}'.")) is { } outcomeGuard)
+                {
+                    return outcomeGuard;
+                }
+
                 return new SentinelCallToolResult<object>
                 {
-                    // TODO isError false on failure
                     IsError = false,
                     SuccessData = result
                 };
@@ -210,9 +214,18 @@ public class IntelligenceTools
         try
         {
             var result = await _solutionStructureEngine.PreviewMoveFileToNamespaceFolderAsync(resolvedFilePath, cancellationToken);
+            // NoCandidatesFound means the file is already in its namespace folder: an idempotent no-op, not an error.
+            if (result.IsError && result.Outcome != EditOutcome.NoCandidatesFound)
+            {
+                return new SentinelCallToolResult<string>
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(result.Code ?? ToolErrorCode.Exception, result.Message ?? "PreviewMoveFileToNamespaceFolder failed.")
+                };
+            }
+
             return new SentinelCallToolResult<string>
             {
-                // TODO isError false on failure
                 IsError = false,
                 SuccessData = result.ToJsonSummary()
             };

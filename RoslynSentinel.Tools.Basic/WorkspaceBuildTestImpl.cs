@@ -268,7 +268,7 @@ public class WorkspaceBuildTestImpl
             var rateLimitError = _workspaceManager.CheckRateLimit("Build", 10);
             if (rateLimitError is not null)
             {
-                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, rateLimitError) };
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.RateLimited, rateLimitError) };
             }
 
             var isFullBuild = level is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway;
@@ -332,7 +332,7 @@ public class WorkspaceBuildTestImpl
             var rateLimitError = _workspaceManager.CheckRateLimit("RunTest", 10);
             if (rateLimitError is not null)
             {
-                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, rateLimitError) };
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.RateLimited, rateLimitError) };
             }
 
             var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, environment: environment, suite: suite, cancellationToken: cancellationToken);

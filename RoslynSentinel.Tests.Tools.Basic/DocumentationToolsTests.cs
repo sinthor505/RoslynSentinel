@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tests.Battery.Basic;
 using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tools.Basic;
 
@@ -431,5 +432,48 @@ public class DocumentationToolsTests
 
         Assert.That(result, Is.InstanceOf<DocWriteResult>());
         Assert.That(((DocWriteResult)result).IsError, Is.True);
+    }
+
+    // ProjectDoc with no solution loaded: the fake's GetSolutionRoot() is null while SolutionPath is unset.
+    [Test]
+    public void ProjectDoc_NoSolutionLoaded_IsSolutionNotLoadedNamingLoadSolution()
+    {
+        var tools = new DocumentationTools(
+            new FakeWorkspaceManager(WorkspaceAccess.ReadOnly),
+            new SentinelHostOptions { OperatingMode = OperatingMode.Production },
+            NullLogger<DocumentationTools>.Instance);
+
+        var result = tools.ProjectDocTool("test", DocAction.read, DocType.plan, name: "any.md");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded));
+        Assert.That(result.ErrorData.Message, Does.Contain("relative to the loaded solution"));
+        Assert.That(result.ErrorData.Message, Does.Contain("LoadSolution"));
+    }
+
+    // ProjectDoc refusal from a real rate limiter: the fake's CheckRateLimit never refuses.
+    [Test]
+    public void ProjectDoc_RateLimited_IsRateLimited()
+    {
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var tools = new DocumentationTools(
+            workspaceManager,
+            new SentinelHostOptions { OperatingMode = OperatingMode.Production },
+            NullLogger<DocumentationTools>.Instance);
+
+        string? rateLimitError = null;
+        for (var i = 0; i < 40 && rateLimitError is null; i++)
+        {
+            rateLimitError = workspaceManager.CheckRateLimit("project_doc", 30);
+        }
+
+        Assert.That(rateLimitError, Is.Not.Null, "expected CheckRateLimit to start rejecting within 40 calls at a limit of 30.");
+
+        var result = tools.ProjectDocTool("test", DocAction.read, DocType.plan, name: "any.md");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.RateLimited));
     }
 }

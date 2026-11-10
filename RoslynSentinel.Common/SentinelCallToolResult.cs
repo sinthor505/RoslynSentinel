@@ -211,6 +211,14 @@ public static class ToolErrorCode
     /// The operation exceeded its time limit. Distinct from <see cref="SolutionLoadTimeout"/>, which is specific to the solution load.
     /// </summary>
     public const string TimedOut = "TimedOut";
+
+    /// <summary>
+    /// The tool was called too many times within the last 60 seconds, which usually means a retry loop. Nothing was
+    /// done. Do not repeat the same call: work out what is failing and fix the cause, or use a batch tool for
+    /// legitimate high-volume work. Distinct from <see cref="TimedOut"/> and <see cref="WriteLockBusy"/>, which are
+    /// transient and safe to retry.
+    /// </summary>
+    public const string RateLimited = "RateLimited";
 }
 
 // ── Envelope ──────────────────────────────────────────────────────────────────
