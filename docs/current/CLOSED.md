@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Asyncify uplift and bridge batches carry the caller containing type - resolved (2026-11-10)
+
+Asyncify uplift carries the caller's containing type (`ObsoleteCallerFinding.CallerType`) through the bridge/event-handler engines so same-named callers in different classes are uplifted instead of skipped (TODO at `AsyncBatchEngine.cs` ~1363; `RunUpliftBatch_TwoSameNamedCallers_SkippedAsAmbiguous` flips); match `CallerType` against the containing type's symbol display string, falling back to today's ambiguity skip; also fix the same file+name dedupe in `RunBridgeBatchAsync` (~489) (decided 2026-11-10) (2026-11-10) - Medium-Large
+
+Evidence: 7171b1ba, e0ef356b; AsyncBatchEngineFlagOutcomeTests 17/17 (same-named callers in two classes now uplifted/bridged, same-class overloads still skipped); follow-up TODOs AsyncOptimizationEngine.cs ~330, AsyncBatchEngine.cs ~570
+
 ## ConvertStaticToExtension refuses nested, generic or non-class hosts - resolved (2026-11-10)
 
 ConvertStaticToExtension refuses a nested, generic or non-class declaring type with an actionable `ToolTargetIneligibleException` instead of emitting CS1109/CS1106 (every nested host, even one already `static`; a struct/record host today silently skips the `static` fix); flip `RefactoringTests.cs` ~148 (pins the nested case) to assert refusal (2026-11-10) - Small
