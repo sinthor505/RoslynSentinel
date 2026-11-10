@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## ConvertStaticToExtension refuses nested, generic or non-class hosts - resolved (2026-11-10)
+
+ConvertStaticToExtension refuses a nested, generic or non-class declaring type with an actionable `ToolTargetIneligibleException` instead of emitting CS1109/CS1106 (every nested host, even one already `static`; a struct/record host today silently skips the `static` fix); flip `RefactoringTests.cs` ~148 (pins the nested case) to assert refusal (2026-11-10) - Small
+
+Evidence: ee427aca; ConvertStaticToExtension tests 12/12 (pinning nested test flipped)
+
 ## MoveMember refusal lists the transitive companion set - resolved (2026-11-10)
 
 MoveMember dependency refusal lists the transitive private/internal companion set (moved-only vs shared) with a paste-ready `memberNames` array; first reproduce the #16 "40 unresolved sites" failure to confirm which refusal fired (2026-11-10) - Small-Medium - [doc](issues/issue_movemember_open_followups.md)
