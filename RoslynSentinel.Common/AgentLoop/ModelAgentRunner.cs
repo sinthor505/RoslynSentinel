@@ -283,6 +283,7 @@ public sealed class ModelAgentRunner
                 }
 
                 var signature = BuildFailureSignature(toolCall.Name, toolCall.ArgumentsJson, resultJson);
+                // TODO two identical failing calls alternated per turn (A,B,A,B: 10-chain run 301, 2026-11-10, T8-T19) never trip this consecutive-only breaker; Breaker_DoesNotTrip_WhenFailuresAreNotConsecutive pins that as "exploring" - decide whether repeats of the same signature since the last success should count.
                 if (signature == lastFailureSignature)
                 {
                     consecutiveFailures++;
