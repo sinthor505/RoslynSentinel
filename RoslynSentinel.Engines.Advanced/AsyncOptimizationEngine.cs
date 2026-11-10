@@ -3704,13 +3704,15 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// </summary>
     /// <param name="pattern">Pattern string to match (e.g. "AsyncBridgeCandidate"). Null removes all patterns.</param>
     /// <param name="methodName">When provided, restricts removal to a single method of this name.</param>
+    /// <param name="callerContainingType">Optional containing-type display text (as in ObsoleteCallerFinding.CallerType); with methodName it restricts removal to the same-named method declared in that type; null, "&lt;unknown&gt;" or no match keeps today's behaviour (every same-named method in the file).</param>
     public async Task<RemoveMigrationCandidatesEngineResult> RemoveMigrationCandidatesAsync(
         string? projectName = null,
         string? filePath = null,
         string? pattern = null,
         string? methodName = null,
         bool dryRun = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? callerContainingType = null)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
@@ -3747,6 +3749,20 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 continue;
             }
 
+            // With a caller containing type, only the same-named method declared in that type is touched.
+            HashSet<MethodDeclarationSyntax>? allowedOwners = null;
+            if (methodName != null && !string.IsNullOrEmpty(callerContainingType))
+            {
+                var named = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                    .Where(m => m.Identifier.Text == methodName)
+                    .ToList();
+                var narrowed = NarrowByContainingType(named, callerContainingType);
+                if (narrowed.Count < named.Count)
+                {
+                    allowedOwners = new HashSet<MethodDeclarationSyntax>(narrowed);
+                }
+            }
+
             // Collect removal info before rewriting (node identity is stable at this point).
             foreach (var attrList in root.DescendantNodes().OfType<AttributeListSyntax>())
             {
@@ -3768,6 +3784,13 @@ internal sealed class MigrationCandidateAttribute : Attribute
                         continue;
                     }
 
+                    var ownerNode = attrList.Parent as MethodDeclarationSyntax
+                        ?? attrList.Parent?.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+                    if (allowedOwners != null && (ownerNode == null || !allowedOwners.Contains(ownerNode)))
+                    {
+                        continue;
+                    }
+
                     var removedPattern = (attr.ArgumentList?.Arguments
                         .FirstOrDefault(arg => arg.NameEquals == null)?.Expression
                         as LiteralExpressionSyntax)?.Token.ValueText ?? "";
@@ -3776,7 +3799,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 }
             }
 
-            var rewriter = new MigrationCandidateRemover(pattern, methodName);
+            var rewriter = new MigrationCandidateRemover(pattern, methodName, allowedOwners);
             var newRoot = rewriter.Visit(root)!;
 
             if (newRoot != root && !dryRun)
@@ -3809,7 +3832,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         return (firstArg?.Expression as LiteralExpressionSyntax)?.Token.ValueText == pattern;
     }
 
-    private sealed class MigrationCandidateRemover(string? pattern, string? methodName = null) : CSharpSyntaxRewriter
+    private sealed class MigrationCandidateRemover(string? pattern, string? methodName = null, HashSet<MethodDeclarationSyntax>? allowedOwners = null) : CSharpSyntaxRewriter
     {
         public override SyntaxNode? VisitAttributeList(AttributeListSyntax node)
         {
@@ -3818,6 +3841,11 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 var ownerMethod = node.Parent as MethodDeclarationSyntax
                     ?? node.Parent?.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
                 if (ownerMethod?.Identifier.Text != methodName)
+                {
+                    return node;
+                }
+
+                if (allowedOwners != null && (ownerMethod == null || !allowedOwners.Contains(ownerMethod)))
                 {
                     return node;
                 }

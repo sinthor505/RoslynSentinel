@@ -567,7 +567,6 @@ public class AsyncBatchEngine
             {
                 // The async overload already exists -> try adding CT to it instead of failing
                 var asyncMethodName = candidate.MethodName + "Async";
-                // TODO RemoveMigrationCandidatesAsync below still resolves the method by name only (it strips the flag from same-named methods in other classes too); thread candidateType into it
                 _logger.LogInformation(
                     "Async overload '{AsyncMethod}' already exists - attempting CT add fallback",
                     asyncMethodName);
@@ -693,7 +692,8 @@ public class AsyncBatchEngine
                                     filePath: candidate.FilePath,
                                     pattern: "AsyncBridgeCandidate",
                                     methodName: candidate.MethodName,
-                                    cancellationToken: cancellationToken);
+                                    cancellationToken: cancellationToken,
+                                    callerContainingType: candidateType);
                                 if (stripResult.Changes.Count > 0)
                                 {
                                     var stripApply = await _workspaceManager.ApplyProposedChangesAsync(stripResult.Changes, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);

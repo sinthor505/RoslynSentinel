@@ -516,6 +516,78 @@ public class Svc { public int GetCount() => 0; }", "Svc.cs");
 
         Assert.That(actual, Is.EqualTo(expected).NoClip);
     }
+
+    [Test, CancelAfter(5000)]
+    public async Task RemoveMigrationCandidates_WithContainingType_StripsOnlyThatClassesFlag()
+    {
+        const string source = @"
+public class FirstService
+{
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 70, FlaggedDate = ""2026-06-01"")]
+    public int GetTrips(int companyId) { return companyId; }
+}
+public class SecondService
+{
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 70, FlaggedDate = ""2026-06-01"")]
+    public int GetTrips(int companyId) { return companyId; }
+}
+internal sealed class MigrationCandidateAttribute : System.Attribute
+{
+    public MigrationCandidateAttribute(string pattern) { }
+    public int Score { get; set; }
+    public string FlaggedDate { get; set; }
+}";
+        SetSource(source, "Svc.cs");
+
+        var result = await _engine.RemoveMigrationCandidatesAsync(
+            filePath: PathOf("Svc.cs"),
+            pattern: "AsyncBridgeCandidate",
+            methodName: "GetTrips",
+            callerContainingType: "FirstService");
+
+        Assert.That(result.TotalRemoved, Is.EqualTo(1),
+            "Only the same-named method in FirstService should be stripped.");
+        var src = result.Changes[PathOf("Svc.cs")];
+        var split = src.IndexOf("class SecondService", System.StringComparison.Ordinal);
+        Assert.That(split, Is.GreaterThan(0), "SecondService should be present in the rewritten source.");
+        var firstPart = src[..split];
+        var secondPart = src[split..];
+        Assert.That(firstPart, Does.Not.Contain("MigrationCandidate("),
+            "FirstService.GetTrips should have lost its flag.");
+        Assert.That(secondPart, Does.Contain("[MigrationCandidate("),
+            "SecondService.GetTrips should keep its flag.");
+    }
+
+    [Test, CancelAfter(5000)]
+    public async Task RemoveMigrationCandidates_WithoutContainingType_StripsBothSameNamedFlags()
+    {
+        const string source = @"
+public class FirstService
+{
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 70, FlaggedDate = ""2026-06-01"")]
+    public int GetTrips(int companyId) { return companyId; }
+}
+public class SecondService
+{
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 70, FlaggedDate = ""2026-06-01"")]
+    public int GetTrips(int companyId) { return companyId; }
+}
+internal sealed class MigrationCandidateAttribute : System.Attribute
+{
+    public MigrationCandidateAttribute(string pattern) { }
+    public int Score { get; set; }
+    public string FlaggedDate { get; set; }
+}";
+        SetSource(source, "Svc.cs");
+
+        var result = await _engine.RemoveMigrationCandidatesAsync(
+            filePath: PathOf("Svc.cs"),
+            pattern: "AsyncBridgeCandidate",
+            methodName: "GetTrips");
+
+        Assert.That(result.TotalRemoved, Is.EqualTo(2),
+            "Without callerContainingType every same-named method in the file should be stripped.");
+    }
 }
 
 /// <summary>
