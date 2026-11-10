@@ -201,6 +201,11 @@ not measured.
 - Check: `CoreSurface_TotalSchemaSize_IsWithinBudget` and `CoreSurface_LargestToolSchema_IsWithinBudget`
   pass at the new constants with >= 300 chars headroom; a ModelEval run on `invertBoolean` and
   `replaceConstruction` before and after shows no regression (see Cost / risk).
+- Amended (implement run 2026-11-10): Git (4261, untrimmed) would be the largest tool after the trim, so a
+  4500 per-tool budget fails the 300 headroom check. Trim first, then set both budgets from the measured live
+  sizes (measured + at least 300, rounded up to the next 500). The ModelEval before/after waits until the end
+  of the run (owner is running evals). A GitRead/GitWrite split was raised: smaller per tool, but the
+  claude-lean total grows ~300-600 chars unless GitWrite is gated off a surface; OPEN idea in TODO.md.
 
 ## Moved from TODO.md (2026-10-17)
 

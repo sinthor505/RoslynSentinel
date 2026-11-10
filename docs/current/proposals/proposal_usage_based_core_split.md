@@ -302,3 +302,7 @@ type, move construction behind factories first.
   need it.
 - Check: the 7 `// TODO` markers are gone, Tests.Tools.Advanced has no MoveMember/ChangeSignature tests,
   the build is green and no new test failures.
+- Amended (implement run 2026-11-10): `MoveTypeAndExtractTests` holds no ChangeSignature/MoveMember tests,
+  only 3 `MoveAllTypesToFiles*` tests; that tool is already in `Tools.Basic/CoreRefactoringTools.cs`, so they
+  move to Tests.Tools.Basic too. The `BatteryTwentyFourTests` MoveMember test uses fixture state and is
+  rewritten onto `InMemoryWorkspace` rather than moved verbatim.

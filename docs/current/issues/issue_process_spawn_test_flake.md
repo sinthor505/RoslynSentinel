@@ -96,6 +96,11 @@ Decided 2026-11-10 (owner's decisions are final):
    inconsistent existing comments rather than stacking another.
 4. **Build / RunTest fix: not now.** Only if the new instrumentation confirms starvation, apply the same
    dedicated-thread change to `ChildProcessCapture`.
+5. **Helper location (decided 2026-11-10, implement run).** `Tests.Support.Basic`, on plain `Process` with
+   the isolated config set per process through `psi.Environment` (not the process-wide env var used at
+   `GitToolsSmokeTests.cs` ~1431, which races under parallel fixtures). `Tests.SubAgent` gets a project
+   reference to `Tests.Support.Basic` so `WorktreeTeardownTests` uses it too. Slice 2 splits into 2a (helper
+   plus the classes calling `GitProcess`) and 2b (the plain-`Process` classes); slice 3 runs after slice 2.
 
 **Acceptance:** 5 consecutive full `scripts/Invoke-WorktreeTests.ps1` runs with zero "did not reach EOF" or
 "git failed to run" failures. The baseline rate was 3 of 7 runs; if the true rate were unchanged, 5 clean

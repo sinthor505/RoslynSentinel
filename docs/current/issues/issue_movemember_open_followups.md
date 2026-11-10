@@ -64,3 +64,6 @@ or should the `TryOpen` path be removed?
   (Large, surprises weak models), a new `companions` parameter duplicates `memberNames`.
 - Check: a two-level helper chain is refused naming both levels; a retry with exactly the listed names
   succeeds; a helper also used by a staying member is flagged as shared.
+- Amended (implement run 2026-11-10): array entries are the bare name when unique and the signature form
+  (`Save(int)`, which already round-trips) when overloaded; shared companions are listed separately, not in
+  the array.
