@@ -831,6 +831,19 @@ public class LogicSimplificationEngine
         {
             throw new ToolTargetIneligibleException($"Method '{methodName}' has no parameters, so it cannot become an extension method. The method must be static and have at least one parameter to become the 'this' parameter.");
         }
+        if (methodNode.Parent is not ClassDeclarationSyntax hostClass)
+        {
+            var hostKind = methodNode.Parent switch { StructDeclarationSyntax => "a struct", RecordDeclarationSyntax => "a record", InterfaceDeclarationSyntax => "an interface", _ => "not a class" };
+            throw new ToolTargetIneligibleException($"Method '{methodName}' cannot become an extension method: its declaring type '{(methodNode.Parent as TypeDeclarationSyntax)?.Identifier.Text}' is {hostKind}. An extension method must live in a top-level, non-generic static class (or a class that can be made static).");
+        }
+        if (hostClass.TypeParameterList != null)
+        {
+            throw new ToolTargetIneligibleException($"Method '{methodName}' cannot become an extension method: its declaring type '{hostClass.Identifier.Text}' is generic. An extension method must live in a top-level, non-generic static class (or a class that can be made static).");
+        }
+        if (hostClass.Parent is TypeDeclarationSyntax)
+        {
+            throw new ToolTargetIneligibleException($"Method '{methodName}' cannot become an extension method: its declaring type '{hostClass.Identifier.Text}' is nested. An extension method must live in a top-level, non-generic static class (or a class that can be made static).");
+        }
         if (methodNode != null && methodNode.ParameterList.Parameters.Any())
         {
             var firstParam = methodNode.ParameterList.Parameters[0];
@@ -843,7 +856,6 @@ public class LogicSimplificationEngine
                 // Also ensure the declaring class is marked as static. The class is the converted method's own parent, found
                 // by annotation: matching "any class that contains a method with this name" would pick an enclosing class
                 // when the method sits in a nested class.
-                // TODO an extension method must live in a top-level non-generic static class (CS1109/CS1106); a nested or generic declaring class is not rejected here
                 var classNode = updatedRoot.GetAnnotatedNodes(methodMarker).Single().Parent as ClassDeclarationSyntax;
                 if (classNode != null && !classNode.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
                 {

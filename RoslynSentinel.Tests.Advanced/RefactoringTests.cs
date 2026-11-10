@@ -145,15 +145,47 @@ public class RefactoringTests
 
     [Test]
     [Category("LogicSimplificationEngine")]
-    public async Task ConvertStaticToExtension_MethodInNestedClass_MakesTheDeclaringClassStatic_NotTheOuterClass()
+    public async Task ConvertStaticToExtension_MethodInNestedClass_IsRefused()
     {
-        // Outer and Inner both "contain" a method named M; only Inner declares it.
+        // Outer and Inner both "contain" a method named M; only Inner declares it. A nested host cannot be an extension container.
         var source = "public class Outer { public int X; public class Inner { public static void M(string s) { } } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "Ext.cs"));
-        var result = await Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("Ext.cs", "M");
-        Assert.That(result.UpdatedText, Does.Contain("public static class Inner"));
-        Assert.That(result.UpdatedText, Does.Contain("public class Outer"));
-        Assert.That(result.UpdatedText, Does.Not.Contain("static class Outer"));
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("Ext.cs", "M"));
+        Assert.That(ex!.Message, Does.Contain("nested"));
+        Assert.That(ex.Message, Does.Contain("top-level"));
+    }
+
+    [Test]
+    [Category("LogicSimplificationEngine")]
+    public async Task ConvertStaticToExtension_MethodInGenericClass_IsRefused()
+    {
+        var source = "public class Box<T> { public static void M(string s) { } }";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Ext.cs"));
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("Ext.cs", "M"));
+        Assert.That(ex!.Message, Does.Contain("generic"));
+        Assert.That(ex.Message, Does.Contain("top-level"));
+    }
+
+    [Test]
+    [Category("LogicSimplificationEngine")]
+    public async Task ConvertStaticToExtension_MethodInStruct_IsRefused()
+    {
+        var source = "public struct S { public static void M(string s) { } }";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Ext.cs"));
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("Ext.cs", "M"));
+        Assert.That(ex!.Message, Does.Contain("struct"));
+        Assert.That(ex.Message, Does.Contain("top-level"));
+    }
+
+    [Test]
+    [Category("LogicSimplificationEngine")]
+    public async Task ConvertStaticToExtension_MethodInAlreadyStaticNestedClass_IsRefused()
+    {
+        var source = "public class Outer { public static class Inner { public static void M(string s) { } } }";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Ext.cs"));
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("Ext.cs", "M"));
+        Assert.That(ex!.Message, Does.Contain("nested"));
+        Assert.That(ex.Message, Does.Contain("top-level"));
     }
 
     [Test]
