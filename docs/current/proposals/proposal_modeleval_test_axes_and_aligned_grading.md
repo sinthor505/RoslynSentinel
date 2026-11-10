@@ -44,6 +44,7 @@ Evidence from `Model_AppliesTenChainedRefactors`
       self-check list did not catch it.
 
   This is a `MultiStepState` failure that a tool cannot fix. A per-step score would show 9/10.
+  - `20261110-015632-555`: same shape. Step 7 has three parts: the interface file, the class implementing it, and `OrderCheckout._calculator` declared as the interface. The model did the first two, re-read `OrderCheckout.cs` during its final check, and reported success with the field still the concrete type. Steps 1-6 and 8-10 were done, the build passed and the tests passed 4/4. The per-step score would be 9.7/10.
 - **A realistic counter-example already exists.** The repo's own Haiku implementer briefs
   (`.claude/skills/dispatch-implementer/SKILL.md`, "Brief template") name each file, symbol, call site,
   acceptance check and out-of-scope item. Haiku completes nearly all of them

@@ -20,6 +20,12 @@ Evidence from the 2026-11-09 10-chain runs (`ModelTestingResults/113/Model_Appli
   version is 11 - my edits went through". It then built `oldContent` from its own rejected `newContent`,
   which caused 4 snippet-not-found failures (T12, T14, T20, T24). Those failures pushed ReplaceSnippet past
   the 5-per-tool error budget, which is the only reason the run failed.
+- **Runs on 2026-11-10, after the rejection prose was reworded:** the model still misread outcomes.
+  - Run `20261110-000712-639` T5 read a rejected T2 edit as "The RenameSymbol tool reverted my earlier edit".
+  - Run `20261110-014700-105` T24 read a clean build after a rejected class rename (T21) as "The build
+    succeeded, which means the class rename via ReplaceSnippet worked", and needed two more turns to find
+    the class still had its old name.
+  - Both are the rejected-vs-applied inference the field removes.
 - `workspaceVersion` is an absolute counter
   (`SentinelCallToolResult.cs:386-396`: "Lets a caller compare a version fetched by a read tool against
   one returned by a later write"). A weak model reads a number as confirmation.

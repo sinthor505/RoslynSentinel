@@ -1398,8 +1398,9 @@ public class OrderPricingRefactorChainAgentTests
 
         Re-read the current, actual contents of `CalculateDiscountedTotal` (formerly `CalcDisc`),
         `SummarizeShipping`, `OrderCheckout.cs`, and `IOrderPricingCalculator.cs` - do not rely on
-        your memory of the edit you intended to make. For each item below, check the real code and
-        answer yourself honestly before writing your summary:
+        your memory of the edit you intended to make. For each item below, quote the exact line(s)
+        from a ReadFile result taken after your last edit that prove it, then answer yes or no. If
+        the quoted line does not show it, the item is not done: fix it before writing your summary.
 
         1. Does the standard-customer branch call your new extracted method? Does the
            preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result)?
@@ -1427,7 +1428,8 @@ public class OrderPricingRefactorChainAgentTests
         If re-reading the code reveals any of the above isn't true, fix it now before reporting —
         do not report success based on what you intended to do.
 
-        Report what you changed and the verification result.
+        Report what you changed and the verification result, including each item's number, its
+        quoted evidence line(s) and your yes/no answer.
         """;
 
     [Test]
