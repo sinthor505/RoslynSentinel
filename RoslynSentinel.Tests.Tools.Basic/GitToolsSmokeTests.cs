@@ -80,28 +80,7 @@ public class GitToolsSmokeTests
         Directory.Delete(directory, recursive: true);
     }
 
-    private static void RunGit(string workingDirectory, params string[] args)
-    {
-        using var process = new System.Diagnostics.Process();
-        process.StartInfo = new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = workingDirectory,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var arg in args)
-        {
-            process.StartInfo.ArgumentList.Add(arg);
-        }
-
-        process.Start();
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed with exit code {process.ExitCode} in '{workingDirectory}'.");
-        }
-    }
+    private static void RunGit(string workingDirectory, params string[] args) => GitTestRepo.RunGit(workingDirectory, args);
 
     // Captures git command output (stdout only), returns empty string on non-zero exit.
     private string RunGitCapture(params string[] args)
@@ -114,39 +93,7 @@ public class GitToolsSmokeTests
     // stdin is redirected and closed immediately (and stderr drained): with stdin inherited from the
     // testhost, a git child spawned with only stdout redirected stalled forever. The bounded wait
     // turns any future stall into a fast, named failure instead of a hung test run.
-    private (int ExitCode, string Stdout, string Stderr) RunGitRaw(params string[] args)
-    {
-        using var process = new System.Diagnostics.Process();
-        process.StartInfo = new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = _repoDir,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = System.Text.Encoding.UTF8,
-            StandardErrorEncoding = System.Text.Encoding.UTF8,
-        };
-        foreach (var arg in args)
-        {
-            process.StartInfo.ArgumentList.Add(arg);
-        }
-
-        process.Start();
-        process.StandardInput.Close();
-        var outputTask = process.StandardOutput.ReadToEndAsync();
-        var errorTask = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(20_000))
-        {
-            process.Kill(entireProcessTree: true);
-            throw new TimeoutException($"git {string.Join(' ', args)} did not exit within 20s in '{_repoDir}'.");
-        }
-
-        process.WaitForExit();
-        return (process.ExitCode, outputTask.GetAwaiter().GetResult(), errorTask.GetAwaiter().GetResult());
-    }
+    private (int ExitCode, string Stdout, string Stderr) RunGitRaw(params string[] args) => GitTestRepo.RunGitRaw(_repoDir, TimeSpan.FromSeconds(20), args);
 
     // Returns the list of file paths currently staged in the index.
     private List<string> StagedPaths()
