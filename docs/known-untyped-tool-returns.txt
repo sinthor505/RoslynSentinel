@@ -11,7 +11,6 @@ AdvancedRefactoringTools.InlineSymbolTool | SentinelCallToolResult<object>
 AdvancedRefactoringTools.IntroduceParameterObjectTool | SentinelCallToolResult<object>
 AdvancedRefactoringTools.IntroduceSymbolTool | SentinelCallToolResult<object>
 AdvancedRefactoringTools.InvertAssignmentsTool | SentinelCallToolResult<object>
-AdvancedRefactoringTools.MoveAllTypesToFilesTool | SentinelCallToolResult<object>
 AdvancedRefactoringTools.SyncInterfaceTool | SentinelCallToolResult<object>
 AsyncifyTools.GetAsyncifyMutationBreakerStatusTool | SentinelCallToolResult<object>
 AsyncifyTools.ResetAsyncifyMutationBreakerTool | SentinelCallToolResult<object>
@@ -20,6 +19,7 @@ CodeTransformTools.ApplyClassCodeTransform | SentinelCallToolResult<object>
 CodeTransformTools.ApplyFileCodeTransform | SentinelCallToolResult<object>
 CodeTransformTools.ApplyMethodCodeTransform | SentinelCallToolResult<object>
 CodeTransformTools.Generate | SentinelCallToolResult<object>
+CoreRefactoringTools.MoveAllTypesToFilesTool | SentinelCallToolResult<object>
 DocumentationTools.ProjectDocTool | SentinelCallToolResult<object>
 GenerationTools.GenerateClassesFromJsonTool | SentinelCallToolResult<object>
 GenerationTools.GenerateDefaultConfigJsonTool | SentinelCallToolResult<object>
