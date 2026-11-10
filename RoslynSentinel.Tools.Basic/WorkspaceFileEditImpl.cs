@@ -48,6 +48,10 @@ public class WorkspaceFileEditImpl
 
     private readonly RejectedEditMemory _rejectedEdits = SharedRejectedEdits;
 
+    // 10-chain run 301 (host 113, 2026-11-10) sent the same two rejected edits for 12 turns while its reasoning said to use
+    // RenameSymbol; the identical message gave no sign that it was repeating itself.
+    private const string RepeatedRejectionNote = "You already sent this exact edit and it was rejected the same way; sending it again cannot succeed. Do what the next step below says instead.";
+
     private const string RejectedOriginNote = "This oldContent comes from your rejected edit's newContent. That edit was not applied, so the file still has the old text: read it again before editing.";
 
     /// <summary>
@@ -128,6 +132,16 @@ public class WorkspaceFileEditImpl
         {
             lock (_gate)
                 _byFile.Remove(Key(path));
+        }
+
+        /// <summary>True when <paramref name="newContent"/> equals (ignoring line endings) a remembered rejected newContent for the file.</summary>
+        public bool IsRepeat(string path, string? newContent)
+        {
+            if (string.IsNullOrWhiteSpace(newContent))
+                return false;
+            var normalized = NormalizeEol(newContent);
+            lock (_gate)
+                return _byFile.TryGetValue(Key(path), out var entries) && entries.Any(e => NormalizeEol(e) == normalized);
         }
 
         /// <summary>
@@ -930,8 +944,11 @@ public class WorkspaceFileEditImpl
                     if (WriteRefusal.TryMap("ReplaceSnippet", result, out var refusal))
                         return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
                     string? untouchedNote = null;
+                    var repeatNote = "";
                     if (result.IsError && result.ValidationResult != null)
                     {
+                        if (_rejectedEdits.IsRepeat((string)targetPath, newContent))
+                            repeatNote = RepeatedRejectionNote + " ";
                         _rejectedEdits.Remember((string)targetPath, newContent);
                         // The edit-impact report, when it can attribute the errors to unedited files, replaces the generic
                         // untouched-file sentence (it already covers it); null keeps that sentence.
@@ -944,6 +961,7 @@ public class WorkspaceFileEditImpl
                             IsError = true,
                             ErrorData = new ResultError(ToolErrorCode.Exception,
                                 "ReplaceSnippet: the edit matched the target file, but the resulting code introduces new compiler errors - change not applied. " +
+                                repeatNote +
                                 (untouchedNote is null ? "" : untouchedNote + " ") +
                                 "Fix the issue(s) below and retry:\n" +
                                 "[COMPILER ERROR]\n" +
@@ -1215,8 +1233,11 @@ public class WorkspaceFileEditImpl
             if (WriteRefusal.TryMap("ReplaceSnippet", result, out var refusal))
                 return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
             string? untouchedNote = null;
+            var repeatNote = "";
             if (result.IsError && result.ValidationResult != null)
             {
+                if (newContentsByFile.All(kv => kv.Value.All(c => _rejectedEdits.IsRepeat(kv.Key, c))))
+                    repeatNote = RepeatedRejectionNote + " ";
                 foreach (var (rejectedPath, rejectedNewContents) in newContentsByFile)
                     foreach (var rejectedNewContent in rejectedNewContents)
                         _rejectedEdits.Remember(rejectedPath, rejectedNewContent);
@@ -1231,6 +1252,7 @@ public class WorkspaceFileEditImpl
                     IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception,
                         "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors, so nothing was changed; every file is exactly as you last read it. " +
+                        repeatNote +
                         (untouchedNote is null ? "" : untouchedNote + " ") +
                         "Fix the issue(s) below and retry:\n" +
                         "[COMPILER ERROR]\n" +

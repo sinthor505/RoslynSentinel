@@ -67,6 +67,32 @@ public class ReplaceSnippetCrossFileRejectionTests
         Assert.That(workspace.ReadText(PricingRelativePath), Is.EqualTo(originalPricing), "a rejected edit must not write file A");
     }
 
+    // 10-chain run 301 (2026-11-10) re-sent the same rejected edit for 12 turns; the second identical rejection says so.
+    [Test]
+    public async Task ReplaceSnippet_SameRejectedEditTwice_SecondRejectionSaysItIsARepeat()
+    {
+        using var workspace = CreateWorkspace();
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+
+        Task<SentinelCallToolResult<ReplaceSnippetResult>> Send() => tools.ReplaceSnippetTool(
+            reason: "rename the discount method on its declaration only",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(PricingRelativePath),
+            oldContent: "CalcDisc(decimal a)",
+            newContent: "CalculateDiscountedTotal(decimal a)");
+
+        var first = await Send();
+        var second = await Send();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first.IsError && second.IsError, Is.True);
+            Assert.That(first.ErrorData?.Message, Does.Not.Contain("You already sent this exact edit"));
+            Assert.That(second.ErrorData?.Message, Does.Contain("You already sent this exact edit and it was rejected the same way"));
+            Assert.That(second.ErrorData?.Message, Does.Contain("RenameSymbol("));
+        });
+    }
+
     [Test]
     public async Task ReplaceSnippet_CallerFirstEdit_RejectionIsNotBlamedOnAnUntouchedFile()
     {
