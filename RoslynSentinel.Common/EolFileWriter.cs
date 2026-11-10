@@ -5,6 +5,7 @@ namespace RoslynSentinel.Common;
 /// <summary>
 /// Writes a workspace file that cannot go through PersistentWorkspaceManager.ApplyProposedChangesAsync (no solution loaded, or a file a CLI tool just created) with the EOL the resolver picks, so the Step 6 bare-write ratchet has no workspace-file exception. Returns null on success or a refusal message.
 /// </summary>
+// TODO EolFileWriter has no solution root and never reaches the chokepoint, so it does not take the cross-process write lock (plan_stale_read_guard_followups Step 9b); in-process exclusion only.
 public static class EolFileWriter
 {
     /// <summary>Writes content to a file with the EOL the resolver picks for it, preserving a UTF-8 BOM already on disk. Returns null on success or a refusal message.</summary>

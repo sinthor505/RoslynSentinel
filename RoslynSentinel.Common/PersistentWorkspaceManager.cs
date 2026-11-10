@@ -1783,6 +1783,26 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         _compilationCache.Clear();
     }
 
+    private string? _testSolutionRoot;
+
+    /// <summary>
+    /// Test seam: the solution root for the cross-process write lock (see WriteLockRoot). Tests point it at a temp
+    /// directory, never the repo root. Production leaves it unset and uses GetSolutionRoot().
+    /// </summary>
+    internal void SetTestSolutionRoot(string root)
+    {
+        _testSolutionRoot = root;
+    }
+
+    /// <summary>
+    /// Root for the cross-process write lock file. Null (no test root and no on-disk solution) means no OS lock is
+    /// taken, which keeps the in-memory SetTestSolution tests off the filesystem.
+    /// </summary>
+    private string? WriteLockRoot() => _testSolutionRoot ?? GetSolutionRoot();
+
+    /// <summary>Wait budgets for the write lock; tests shorten ChokepointWait.</summary>
+    internal CrossProcessWriteLockOptions WriteLockOptions { get; set; } = new();
+
     public HealthComponents GetHealthComponents()
     {
         var roslynVersion = typeof(Solution).Assembly.GetName().Version?.ToString() ?? "Unknown";
@@ -1987,6 +2007,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         var noOp = new List<string>();
         var failed = new Dictionary<FilePathWrapper, string>();
         bool needsFullReload = false;
+        WriteLockLease? writeLease = null;
 
         // Clear retry cache for this specific batch
         foreach (var key in changes.Keys.Concat(deletePaths))
@@ -2013,6 +2034,31 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             if (revalidation is not null)
             {
                 return revalidation;
+            }
+
+            // Cross-process write lock (OS level, FileShare.None) so a second server process writing the same
+            // solution is refused here instead of racing us. Rules: (a) _solutionLock is always taken first, then
+            // this lock, never the reverse; (b) the FileStream lock is NOT re-entrant, so it is taken only at this
+            // entry point - ApplyInMemoryDocumentUpdatesAsync must never take it; (c) it is never held across compile
+            // validation (above, before _solutionLock) or a full MSBuild reload (the background reload in finally runs
+            // after release). Accepted gap: the blob write happens after this method returns, so it is not covered.
+            var lockRoot = WriteLockRoot();
+            if (lockRoot is not null)
+            {
+                var lockCtx = ToolCallContext.Current;
+                var lockHolder = new WriteLockHolder(lockCtx?.SessionId, lockCtx?.AgentId, lockCtx?.ToolName ?? operationLabel, lockCtx?.Reason, DateTime.UtcNow);
+                var lockAcquired = await CrossProcessWriteLock.AcquireAsync(lockRoot, lockHolder, WriteLockOptions.ChokepointWait, cancellationToken);
+                if (!lockAcquired.Acquired)
+                {
+                    var busy = lockAcquired.BusyMessage();
+                    return new ApplyChangesResult(
+                        IsError: true,
+                        SucceededFiles: [],
+                        FailedFiles: changes.Keys.Concat(deletePaths).Distinct().ToDictionary(t => t, _ => busy),
+                        Summary: $"{ToolErrorCode.WriteLockBusy}: {busy}",
+                        RefusalCode: ToolErrorCode.WriteLockBusy);
+                }
+                writeLease = lockAcquired.Lease;
             }
 
             // ── Pre-image capture ─────────────────────────────────────────────
@@ -2403,6 +2449,10 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         }
         finally
         {
+            if (writeLease is not null)
+            {
+                await writeLease.DisposeAsync();
+            }
             _solutionLock.Release();
 
             if (needsFullReload && _workspace != null && !string.IsNullOrEmpty(SolutionPath))
