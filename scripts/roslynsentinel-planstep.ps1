@@ -165,7 +165,7 @@ param(
 
     [int]$WallClockCapMinutes = 30,
 
-    [string]$IncludeTools = 'SentinelWorkspaceTools,SentinelSymbolTools,SentinelRefactoringTools,SentinelDocumentationTools,SentinelCommentingTools,SentinelAdvancedRefactoringTools',
+    [string]$IncludeTools = 'SentinelWorkspaceTools,WorkspaceReadNavigationTools,SentinelSymbolTools,SentinelRefactoringTools,SentinelDocumentationTools,SentinelCommentingTools,SentinelAdvancedRefactoringTools',
 
     [double]$Temperature,
 
@@ -200,7 +200,7 @@ if (-not (Test-Path $PlanDir)) {
     throw "Plan directory not found: $PlanDir. Pass -PlanDir explicitly if plan-eval-defect-remediation-v2-steps-runner lives somewhere other than the default docs\current\evals\closed location in this repo."
 }
 
-$runnerProject = Join-Path $repoRoot 'RoslynSentinel.Tools.PlanStepRunner\RoslynSentinel.Tools.PlanStepRunner.csproj'
+$runnerProject = Join-Path $repoRoot 'RoslynSentinel.Utilities.PlanStepRunner\RoslynSentinel.Utilities.PlanStepRunner.csproj'
 
 $testRunsRoot = Join-Path (Split-Path $ImplRepo -Parent) 'RoslynSentinel-TestRuns\PlanStepRunner'
 
