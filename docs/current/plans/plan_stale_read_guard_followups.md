@@ -1,6 +1,6 @@
 # Plan: extend the stale-read guard (F3 anchor and engine tools, F4 outline/InspectSymbol), replace the drift latch with per-file protection (F1), add a cross-process write lock and fold-on-read (F7); F5 blocked
 
-**Status:** IN PROGRESS 2026-11-09. Steps 1-6 done (20440d38, a10b26ee, e95c2b15, 458f2fa3, d5fe3d6b, 96996473, f45f07c8, 4a73f333, 088220fb, a170f724, 46f61b62, 333a0740, 233a04ab, fe1afbee, b57208a7); Step 7 merged into 8e. Batched run with the owner present; F5 stays blocked on staged writes. Builds on [plan_read_ledger_stale_read_guard.md](closed/plan_read_ledger_stale_read_guard.md) (IMPLEMENTED 2026-11-09, 7b703f18..5d9ee8d2). Per-file attribution of refusals is deferred to [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md) ("Revision 2026-11-09"); this plan leaves it a lock, a holder record and a message-builder hook.
+**Status:** IN PROGRESS 2026-11-09. Steps 1-6 and 8a-8d done (20440d38, a10b26ee, e95c2b15, 458f2fa3, d5fe3d6b, 96996473, f45f07c8, 4a73f333, 088220fb, a170f724, 46f61b62, 333a0740, 233a04ab, fe1afbee, b57208a7, 5a635e5e, d914fa1b, 374c2636, 3e4ed6fa, 1c9cb4db); Step 7 merged into 8e. Batched run with the owner present; F5 stays blocked on staged writes. Builds on [plan_read_ledger_stale_read_guard.md](closed/plan_read_ledger_stale_read_guard.md) (IMPLEMENTED 2026-11-09, 7b703f18..5d9ee8d2). Per-file attribution of refusals is deferred to [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md) ("Revision 2026-11-09"); this plan leaves it a lock, a holder record and a message-builder hook.
 
 ## Problem
 
@@ -369,6 +369,7 @@ The sites surface a refusal as text, not a typed code (measured below), so Step 
 Order inside the group: 8a, 8b (both additive), then 8c (the behavior flip), then 8d and 8e (text). The guard (8b) lands BEFORE the halt is removed (8c) so there is never a state where neither protection exists.
 
 #### Step 8a - writes create the writer's observed entry
+- Done: 5a635e5e
 - Files (2 production + tests): `RoslynSentinel.Common/PersistentWorkspaceManager.cs`, `RoslynSentinel.Tests/Fakes/FakeWorkspaceManager.cs`.
 - Symbols: `RefreshObservedForWriter` (`PersistentWorkspaceManager.cs:540-545`, update-only today); its two callers `:2221` (after a successful write) and `:2284` (rollback restore); fake `RefreshObservedForWriter` (`FakeWorkspaceManager.cs:34-36`).
 - **Review 2026-11-09 (decided):** the success refresh `:2221` runs inside the write loop, before rollback, so the
@@ -385,6 +386,7 @@ Order inside the group: 8a, 8b (both additive), then 8c (the behavior flip), the
 - Test-writer step (T8a): rows O, P. Invert `StaleReadLedgerRefreshTests.AgentWithNoEntry_StaysUnobservedAcrossWrites` (`:128`) to assert the agent now HAS an entry after its own write and a later external change makes its next write `StaleRead`; add the rollback case (no entry created when a batch rolls back).
 
 #### Step 8b - `FoldPending` guard (non-latching, every policy except exactRestore)
+- Done: 8b-1 d914fa1b, 8b-2 374c2636 (20 tests in `FoldPendingGuardTests.cs`; gap: the persisting-mismatch Warning path is untested). Fixtures adjusted: 2 in `StaleReadGuardTests`, `StaleReadWriteToolsTests`, `BatteryTwentyTests`, `WorkspaceRefreshTests` (Tests), `BulkComment_File_NeverObservedThenChangedOnDisk_SeedsNormally` (Tests.Advanced: one FoldPending, then a normal seed on retry).
 - **Review 2026-11-09, split; supersedes the self-heal and lookup text below.** `preImages` (PWM ~`:2020-2037`) is reusable;
   the in-memory lookup (~`:2063-2072`) is inside the policy-gated, observed-only stale block and hashes, so it is not:
   add a separate loop over all targets (also under policy `None`) or extract a helper returning raw text.
@@ -409,6 +411,7 @@ Order inside the group: 8a, 8b (both additive), then 8c (the behavior flip), the
 - Test-writer step (T8b): row S (mismatch refused, exactRestore exempt, new file unchecked, no-document and no-disk unchecked, self-heal enqueue observed, no `_sessionHalted`).
 
 #### Step 8c - remove the drift halt from the chokepoint
+- Done: 3e4ed6fa (`DeleteFile_DriftedFile` split into two deterministic tests; dead-latch `// TODO` left)
 - Files (1 production + tests): `RoslynSentinel.Common/PersistentWorkspaceManager.cs`.
 - Symbols: the block at `:1958-1964` (`drift` set, `driftedTargets`, `_sessionHalted = true`, `throw new SessionHaltedException(DriftMessages.DriftHaltMessage)`).
 - Change (~2 edits): delete the throw and the latch set, leaving a comment that drift on a read or edited file is caught per agent by `StaleRead` and that `_externalChanges` is kept for `ExternalFileDrift` visibility; keep `_externalChanges`, `GetExternalFileChanges`, `ClearSessionHalt`, `IsSessionHalted`, `SessionHaltedException` and the breaker throw `:1888` untouched.
@@ -422,6 +425,7 @@ Order inside the group: 8a, 8b (both additive), then 8c (the behavior flip), the
   Re-measure and, if it depends on the drift halt, invert the `DeleteFile_DriftedFile` test in `CreateFileDeleteFileTests.cs` (~`:385-432`). Add: drift on a never-touched file is written without refusal; drift on a read file refuses with `StaleRead`; re-read then retry succeeds; `ExternalFileDrift(List)` still lists the file.
 
 #### Step 8d - tool descriptions and runtime messages
+- Done: 1c9cb4db (`AcknowledgeDriftResult` still calls the now no-op `ClearSessionHalt()`; left for the dead-latch cleanup)
 - Files (3): `RoslynSentinel.Common/DriftMessages.cs`, `RoslynSentinel.Tools.Basic/AdminTools.cs`, `RoslynSentinel.Tools.Basic/WorkspaceTools.cs` (only if the `Acknowledge` hit is outside the block comment `:184-:455`; verify).
 - Symbols: `DriftHaltReason` / `DriftHaltRecovery` / `DriftHaltMessage` (`DriftMessages.cs:6-20`; still used by nothing after 8c except possibly the breaker text: verify), `BuildHint` (`:65`); `ExternalFileDrift` tool description (`AdminTools.cs:41`), operation description (`:44`), `:46`.
 - Change (~6 edits): rewrite the text so it no longer says drift halts the session or that `Acknowledge` is required to resume writes; say that drift is listed for visibility, that a read or edited file that drifted is refused with `StaleRead` until re-read, and what `Acknowledge` does now (Open decision 2; recommended: only clears the visibility list). State the workflow positively (CLAUDE.md rule: never name a gated-off tool).
