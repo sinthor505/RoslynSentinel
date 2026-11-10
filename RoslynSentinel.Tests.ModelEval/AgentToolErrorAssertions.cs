@@ -14,23 +14,36 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// </summary>
 public static class AgentToolErrorAssertions
 {
-    public sealed record ToolErrorSummary(int TotalErrors, IReadOnlyList<(string ToolName, int Count)> ByTool)
+    /// <param name="ByTool">Failed calls per tool, excluding guardrail redirects.</param>
+    /// <param name="GuardrailRedirects">Failed calls that were a compile-gate redirect to the right tool.</param>
+    public sealed record ToolErrorSummary(int TotalErrors, IReadOnlyList<(string ToolName, int Count)> ByTool, int GuardrailRedirects = 0)
     {
         public int MaxPerTool => ByTool.Count == 0 ? 0 : ByTool.Max(t => t.Count);
 
         public override string ToString() =>
-            ByTool.Count == 0 ? "none" : string.Join(", ", ByTool.Select(t => $"{t.ToolName}={t.Count}"));
+            (ByTool.Count == 0 ? "none" : string.Join(", ", ByTool.Select(t => $"{t.ToolName}={t.Count}")))
+            + (GuardrailRedirects > 0 ? $"; guardrail redirects (not in per-tool counts)={GuardrailRedirects}" : "");
     }
+
+    // A compile-gate rejection whose next step names the right tool (EditImpactAnalyzer.NextStepFor, e.g.
+    // "This edit renames X to Y and 1 file(s) still use X: use RenameSymbol(...)") is the guardrail working:
+    // the model was redirected, not thrashing. Run 108 of the 2026-11-10 batch did all ten steps and failed
+    // only because such redirects counted per tool. They still count toward the total.
+    private static readonly System.Text.RegularExpressions.Regex GuardrailRedirect = new(
+        @"This edit (renames|changes the signature of|makes|removes) .+? and \d+ file\(s\) still use",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
 
     public static ToolErrorSummary Summarize(AgentRunResult result)
     {
         var errorTools = result.Transcript.Turns.SelectMany(t => t.ToolCalls).Where(tc => tc.IsError).ToList();
+        var redirects = errorTools.Count(tc => tc.ResultJson is { } r && GuardrailRedirect.IsMatch(r));
         var byTool = errorTools
+            .Where(tc => !(tc.ResultJson is { } r && GuardrailRedirect.IsMatch(r)))
             .GroupBy(tc => tc.ToolName)
             .Select(g => (ToolName: g.Key, Count: g.Count()))
             .OrderByDescending(t => t.Count)
             .ToList();
-        return new ToolErrorSummary(errorTools.Count, byTool);
+        return new ToolErrorSummary(errorTools.Count, byTool, redirects);
     }
 
     /// <summary>
