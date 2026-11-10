@@ -44,9 +44,19 @@ public class ConvertedToolHintTests
     {
         var message = DriftMessages.DriftHaltMessage;
 
+        Assert.That(message, Does.Contain("ReadFile(reason:"));
         Assert.That(message, Does.Contain("ExternalFileDrift(reason:"));
         Assert.That(message, Does.Contain("operation: List"));
-        Assert.That(message, Does.Contain("operation: Acknowledge"));
+        Assert.That(message, Does.Not.Contain("operation: Acknowledge"));
+        Assert.That(message, Does.Not.Contain("To resume writing"));
+    }
+
+    [Test]
+    public void DriftHaltMessages_DoNotTellCallerToAcknowledgeToResumeWrites()
+    {
+        Assert.That(DriftMessages.DriftHaltMessage, Does.Not.Contain("To resume writing"));
+        Assert.That(DriftMessages.DriftHaltRecovery, Does.Not.Contain("To resume writing"));
+        Assert.That(DriftMessages.DriftHaltRecovery, Does.Contain("Acknowledge only removes files from that list"));
     }
 
     [Test]

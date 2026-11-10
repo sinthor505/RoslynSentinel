@@ -74,7 +74,7 @@ public class AdminToolsTests
     }
 
     [Test]
-    public void Acknowledge_Partial_ClearsLatchAndNamesRemainingFiles()
+    public void Acknowledge_Partial_ClearsNamedFilesAndNamesRemainingFiles()
     {
         var health = new StubHealth("A.cs", "B.cs", "C.cs");
 
@@ -84,7 +84,9 @@ public class AdminToolsTests
         Assert.That(health.Tracked, Is.EqualTo(new[] { "B.cs", "C.cs" }));
         Assert.That(result, Does.Contain("B.cs"));
         Assert.That(result, Does.Contain("C.cs"));
-        Assert.That(result, Does.Contain("halt the session again"));
+        Assert.That(result, Does.StartWith("Cleared 1: A.cs from the drift list."));
+        Assert.That(result, Does.Contain("2 file(s) remain listed"));
+        Assert.That(result, Does.Not.Contain("halt the session"));
     }
 
     [Test]
@@ -103,7 +105,7 @@ public class AdminToolsTests
     }
 
     [Test]
-    public void Acknowledge_ConfirmAll_ClearsEverythingAndLatch()
+    public void Acknowledge_ConfirmAll_ClearsEverythingFromVisibilityList()
     {
         var health = new StubHealth("A.cs", "B.cs", "C.cs");
 
@@ -111,8 +113,21 @@ public class AdminToolsTests
 
         Assert.That(health.ClearSessionHaltCalls, Is.EqualTo(1));
         Assert.That(health.Tracked, Is.Empty);
-        Assert.That(result, Does.StartWith("Cleared 3"));
-        Assert.That(result, Does.Contain("Session-halt latch cleared"));
+        Assert.That(result, Is.EqualTo("Cleared 3 tracked external file change(s): A.cs, B.cs, C.cs from the drift list."));
+    }
+
+    [Test]
+    public void ExternalFileDriftTool_Description_SaysDriftDoesNotHaltAndAcknowledgeOnlyEditsVisibilityList()
+    {
+        var method = typeof(AdminTools).GetMethod(nameof(AdminTools.ExternalFileDriftTool))!;
+        var description = System.Reflection.CustomAttributeExtensions
+            .GetCustomAttribute<System.ComponentModel.DescriptionAttribute>(method)!.Description;
+
+        Assert.That(description, Does.Contain("StaleRead"));
+        Assert.That(description, Does.Contain("Acknowledge = remove files from the visibility list"));
+        Assert.That(description, Does.Contain("does not change whether a write is allowed"));
+        Assert.That(description, Does.Not.Contain("halts the session"));
+        Assert.That(description, Does.Not.Contain("clear the halt"));
     }
 
     [Test]

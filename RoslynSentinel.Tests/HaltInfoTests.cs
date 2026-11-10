@@ -164,8 +164,13 @@ public class HaltInfoTests
     public void DriftHaltMessage_NamesRecoveryCallsAndReadOnlyTools()
     {
         Assert.That(DriftMessages.DriftHaltMessage, Does.Contain("ExternalFileDrift"));
-        Assert.That(DriftMessages.DriftHaltMessage, Does.Contain("ConfirmAll"));
+        Assert.That(DriftMessages.DriftHaltMessage, Does.Contain("ReadFile"));
+        Assert.That(DriftMessages.DriftHaltMessage, Does.Contain("StaleRead"));
+        Assert.That(DriftMessages.DriftHaltMessage, Does.Contain("does not halt writes"));
         Assert.That(DriftMessages.DriftHaltMessage, Does.Contain("Read-only"));
+        Assert.That(DriftMessages.DriftHaltMessage, Does.Contain("GetFileOutline"));
+        Assert.That(DriftMessages.DriftHaltMessage, Does.Contain("Search"));
+        Assert.That(DriftMessages.DriftHaltMessage, Does.Contain("GetMethodSource"));
         Assert.That(DriftMessages.DriftHaltMessage,
             Is.EqualTo(DriftMessages.DriftHaltReason + " " + DriftMessages.DriftHaltRecovery));
     }

@@ -5,16 +5,14 @@ public static class DriftMessages
 {
     /// <summary>Why the session is halted by external file drift, and what still works (first part of <see cref="DriftHaltMessage"/>).</summary>
     public const string DriftHaltReason =
-        "Session halted: a write was refused because a file changed on disk outside this server " +
-        "(external file drift). Read-only tools (ReadFile, GetFileOutline, Search, GetMethodSource, " +
-        "Git status/log/diff) still work.";
+        "A file changed on disk outside this server (external file drift). Drift is listed for visibility and does not halt writes; " +
+        "a file you read or edited that drifted is refused with StaleRead until you re-read it. " +
+        "Read-only tools (ReadFile, GetFileOutline, Search, GetMethodSource, Git status/log/diff) keep working.";
 
     /// <summary>How to clear the external-drift halt (second part of <see cref="DriftHaltMessage"/>).</summary>
     public static string DriftHaltRecovery =>
-        $"To resume writing: call {ToolCallHint.Call("ExternalFileDrift", ("operation", "List"))} to see the files, review them, then " +
-        $"{ToolCallHint.Call("ExternalFileDrift", ("operation", "Acknowledge"), ("files", "<the files you reviewed>"))}. To clear every tracked " +
-        "change at once pass acknowledgeScope: ConfirmAll instead of files. Files you do not acknowledge stay " +
-        "flagged and halt the session again if a write touches them.";
+        $"To continue: re-read the changed file with {ToolCallHint.Call("ReadFile", ("filePath", "<the file>"))}, then repeat your edit against the fresh content. " +
+        $"{ToolCallHint.Call("ExternalFileDrift", ("operation", "List"))} shows the files drift detection has listed; Acknowledge only removes files from that list and never resumes writes.";
 
     /// <summary>The full external-drift halt message: <see cref="DriftHaltReason"/> then <see cref="DriftHaltRecovery"/>.</summary>
     public static string DriftHaltMessage => DriftHaltReason + " " + DriftHaltRecovery;

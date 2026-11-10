@@ -156,6 +156,23 @@ public class StaleReadCommentingTests
         File.WriteAllText(path, external);
         AsAgent("agentA");
 
+        // The agent never read the file, so no StaleRead applies. The write chokepoint still sees memory differ from
+        // disk and refuses the first call once with FoldPending, folding the file in memory as it does. The internal
+        // fold is not reachable from this project (Common has no InternalsVisibleTo for Tests.Advanced), so the test
+        // asserts the refusal, then retries and checks the unobserved target seeds normally.
+        var first = await _commentingTools.BulkCommentTool(
+            reason: "test message", scope: ToolScope.file, filePath: path, dryRun: false);
+
+        Assert.That(first.IsError, Is.False, first.ErrorData?.ToString());
+        Assert.That(first.SuccessData, Is.Not.Null);
+        var firstReasons = first.SuccessData!.SkippedByReason.Keys.ToList();
+        Assert.That(firstReasons, Has.Some.Contain("seed_write_refused"),
+            "The first call must be refused once while memory differs from disk. Reasons: " + string.Join(" | ", firstReasons));
+        Assert.That(firstReasons, Has.Some.Contain("FoldPending"),
+            "The first refusal must carry the FoldPending code. Reasons: " + string.Join(" | ", firstReasons));
+        Assert.That(File.ReadAllText(path), Is.EqualTo(external),
+            "A FoldPending refusal must leave the externally written disk text untouched.");
+
         var result = await _commentingTools.BulkCommentTool(
             reason: "test message", scope: ToolScope.file, filePath: path, dryRun: false);
 
@@ -163,7 +180,7 @@ public class StaleReadCommentingTests
         Assert.That(result.SuccessData, Is.Not.Null);
         var reasons = result.SuccessData!.SkippedByReason.Keys.ToList();
         Assert.That(reasons, Has.None.Contains("seed_write_refused"),
-            "An unobserved target must be seeded normally under the quiet policy. Reasons: " + string.Join(" | ", reasons));
-        Assert.That(File.ReadAllText(path), Is.Not.EqualTo(external), "The unobserved file must be modified.");
+            "An unobserved target must be seeded normally on the retry under the quiet policy. Reasons: " + string.Join(" | ", reasons));
+        Assert.That(File.ReadAllText(path), Is.Not.EqualTo(external), "The unobserved file must be modified on the retry.");
     }
 }

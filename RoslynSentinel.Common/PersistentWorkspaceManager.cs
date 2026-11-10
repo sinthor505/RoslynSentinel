@@ -3211,6 +3211,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
         if (symbol is null)
         {
+            // TODO the 'no longer resolves' message should rule out a missing parameter list before suggesting a rename
             return new SymbolResolution
             {
                 Handle = handle,

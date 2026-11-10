@@ -229,13 +229,10 @@ public sealed class ToolFeatureDisabledException : ToolException
 }
 
 /// <summary>
-/// A confirmed external content-drift hit tripped the session-wide halt latch (see
-/// docs/current/ideas/closed/idea_external_drift_hard_blocker.md). Once thrown, every subsequent mutating
-/// call on this <see cref="PersistentWorkspaceManager"/> instance throws this same exception.
-/// The external-drift latch is recoverable via <c>ExternalFileDrift(operation: Acknowledge)</c>,
-/// which clears it and allows subsequent mutations. The unrecoverable halt (see
-/// <see cref="IUnrecoverableBreaker"/>) has no reset. Maps to
-/// <see cref="ToolErrorCode.SessionHalted"/>.
+/// The session is halted. Only the unrecoverable breaker (see <see cref="IUnrecoverableBreaker"/>) trips this,
+/// and it has no reset. External file drift no longer halts the session: per-file StaleRead and FoldPending
+/// protection replaced that latch, and the drift-latch path in PersistentWorkspaceManager is dead (see the TODO there).
+/// Maps to <see cref="ToolErrorCode.SessionHalted"/>.
 /// </summary>
 public sealed class SessionHaltedException : ToolException
 {

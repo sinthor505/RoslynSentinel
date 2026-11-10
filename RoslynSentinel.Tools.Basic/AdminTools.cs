@@ -38,12 +38,12 @@ public class AdminTools
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "ExternalFileDrift")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Inspect and clear external file drift: a tracked file changed on disk outside this server. A write touching such a file is refused and halts the session; read-only tools keep working. operation Status = halted or not, plus the tracked count. List = tracked file paths; review these first. Acknowledge = clear the halt: pass files (from List) with acknowledgeScope ConfirmWithListedFiles (default), or acknowledgeScope ConfirmAll with no files. Files you did not name stay flagged. LedgerList/LedgerFix/LedgerRelease resolve an open MoveMember ledger that refuses unrelated writes.")]
+    [Description("Inspect and clear external file drift: a tracked file changed on disk outside this server. Drift is listed for visibility and does not halt writes; a file you read or edited that drifted is refused with StaleRead until you re-read it with ReadFile. operation Status = whether the session is halted (true only after an unrecoverable breaker trip) plus the tracked count. List = tracked file paths. Acknowledge = remove files from the visibility list: pass files (from List) with acknowledgeScope ConfirmWithListedFiles (default), or acknowledgeScope ConfirmAll with no files; it does not change whether a write is allowed. Files you did not name stay listed. LedgerList/LedgerFix/LedgerRelease resolve an open MoveMember ledger that refuses unrelated writes.")]
     public SentinelCallToolResult<string> ExternalFileDriftTool(
     [Description(ToolParams.Reason)] ToolCallReason reason,
-    [Description("Status, List, Acknowledge, LedgerList, LedgerFix or LedgerRelease. After a 'Session halted' refusal, call List first.")] ExternalFileDriftOperation operation,
+    [Description("Status, List, Acknowledge, LedgerList, LedgerFix or LedgerRelease. List shows the files drift detection has listed.")] ExternalFileDriftOperation operation,
     [Description("Only for Acknowledge with ConfirmWithListedFiles: names or relative paths (CSV or JSON array) from List.")] string? files = null,
-    [Description("Only for Acknowledge. ConfirmWithListedFiles (default): clear only the named files; refused when files is empty. ConfirmAll: clear every tracked change; pass no files.")] ExternalFileDriftAcknowledgeScope acknowledgeScope = ExternalFileDriftAcknowledgeScope.ConfirmWithListedFiles,
+    [Description("Only for Acknowledge. ConfirmWithListedFiles (default): remove only the named files from the visibility list; refused when files is empty. ConfirmAll: remove every listed file; pass no files.")] ExternalFileDriftAcknowledgeScope acknowledgeScope = ExternalFileDriftAcknowledgeScope.ConfirmWithListedFiles,
     [Description("Only for LedgerFix: entry ids (CSV or JSON array) from LedgerList.")] string? entryIds = null,
     CancellationToken cancellationToken = default)
     {
@@ -128,7 +128,7 @@ public class AdminTools
             {
                 cleared += $": {DriftMessages.SummarizeFiles(all)}";
             }
-            cleared += ". Session-halt latch cleared.";
+            cleared += " from the drift list.";
             return Ok(cleared);
         }
 
@@ -167,10 +167,10 @@ public class AdminTools
         health.ClearSessionHalt();
         var remaining = health.GetExternalFileChanges();
 
-        var message = $"Cleared {matched.Count}: {DriftMessages.SummarizeFiles(matched)}. Session-halt latch cleared.";
+        var message = $"Cleared {matched.Count}: {DriftMessages.SummarizeFiles(matched)} from the drift list.";
         if (remaining.Count > 0)
         {
-            message += $" {remaining.Count} file(s) remain flagged: {DriftMessages.SummarizeFiles(remaining)}. A write that touches one of them will halt the session again; acknowledge them too once reviewed.";
+            message += $" {remaining.Count} file(s) remain listed: {DriftMessages.SummarizeFiles(remaining)}.";
         }
 
         return Ok(message);
