@@ -67,6 +67,7 @@ public class ServerStatusTools
             || ((className == nameof(ServerStatusTools) || _activeToolSurface.ActiveToolClasses.Contains(className))
                 && _activeToolSurface.IsToolAllowed(toolName));
 
+        // TODO the split *Tools classes are deleted, so the one-entry-per-name grouping below no longer has a duplicate to collapse; simplify
         // The same tool name can be declared by more than one class (a facade and the split class
         // behind it); report one entry per name, preferring the class that is actually active.
         var declaredTools = McpToolSchemaPatcher.DiscoverAllDeclaredTools(declaredToolAssemblies)

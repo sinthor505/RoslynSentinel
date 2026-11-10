@@ -70,6 +70,7 @@ public sealed class ToolsetService
     /// an unsupported class is reported unavailable rather than added in a state that would fail when called.
     /// </param>
     /// <param name="assemblySource">Assemblies to scan for tool methods; defaults to the loaded RoslynSentinel.Tools.* assemblies.</param>
+    // TODO the split *Tools classes are deleted, so the "several declaring classes resolve to the supported one" rule in supportedClassNames has nothing left to resolve; simplify
     public ToolsetService(
         IOptions<McpServerOptions> serverOptions,
         IServiceProvider services,

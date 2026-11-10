@@ -6,7 +6,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>
-/// Plain DI-constructed implementation backing WorkspaceBuildTestTools. Method bodies moved
+/// Plain DI-constructed implementation backing the build/test tools on WorkspaceTools. Method bodies moved
 /// verbatim from WorkspaceTools (Decision 7 step 2).
 /// </summary>
 public class WorkspaceBuildTestImpl

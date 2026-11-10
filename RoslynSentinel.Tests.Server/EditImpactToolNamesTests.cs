@@ -40,7 +40,7 @@ public class EditImpactToolNamesTests
                 "Checkout.cs", 9, 1, 9, 5, SourceLine: "return _c.CalcDisc(1);"),
         };
         var none = new HashSet<string>();
-        var declaringClasses = new HashSet<string> { "RefactoringSignatureTools", "WorkspaceFileEditTools" };
+        var declaringClasses = new HashSet<string> { "RefactoringSignatureTools", "WorkspaceTools" };
 
         var open = new ActiveToolSurface("test", none, none, none, declaringClasses);
         var hidden = new ActiveToolSurface("test", none, none, none, declaringClasses, null, new HashSet<string> { "ReplaceSnippet" });

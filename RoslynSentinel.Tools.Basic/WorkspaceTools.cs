@@ -7,8 +7,10 @@ using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
 /// <summary>
-/// MCP surface for workspace tools. GetMethodSourceTool, GetFileOutlineTool, ListAllTool, SearchSolutionTool,
-/// GetOperationDetailTool and GetLargeResultTool here are attribute-less delegators to <see cref="WorkspaceReadNavigationTools"/>
+/// MCP surface for the workspace tools. The tool methods here carry the [McpServerTool] attributes and call the
+/// <c>Workspace*Impl</c> classes directly (project management, build/test, file edit, health/misc).
+/// GetMethodSourceTool, GetFileOutlineTool, ListAllTool, SearchSolutionTool, GetOperationDetailTool and
+/// GetLargeResultTool are the exception: attribute-less delegators to <see cref="WorkspaceReadNavigationTools"/>
 /// (field <c>_readNavTools</c>), which carries their [McpServerTool] attributes and delegates to
 /// <see cref="WorkspaceReadNavigationImpl"/>. They exist so existing callers keep compiling and no tool name is
 /// registered twice. See docs/current/plans/closed/plan_split_workspace_refactoring_tools_for_di.md.
@@ -31,13 +33,13 @@ public class WorkspaceTools
     // Which tools this server can serve, for the edit-impact next step; null (unit tests, hosts without a surface) = every tool callable.
     private readonly ActiveToolSurface? _activeToolSurface;
 
-    private readonly WorkspaceProjectManagementTools _projectManagement;
+    private readonly WorkspaceProjectManagementImpl _projectManagement;
 
-    private readonly WorkspaceBuildTestTools _buildTest;
+    private readonly WorkspaceBuildTestImpl _buildTest;
 
-    private readonly WorkspaceFileEditTools _fileEdit;
+    private readonly WorkspaceFileEditImpl _fileEdit;
 
-    private readonly WorkspaceHealthMiscTools _healthMisc;
+    private readonly WorkspaceHealthMiscImpl _healthMisc;
 
     private readonly WorkspaceReadNavigationTools _readNavTools;
 
@@ -56,15 +58,14 @@ public class WorkspaceTools
         _readNav = readNav;
         _writeAdvice = writeAdvice;
 
-        // Decision 7 step 2 (plan_split_workspace_refactoring_tools_for_di.md): WorkspaceTools
-        // is now a legacy facade preserving its original constructor/tool signatures, delegating
-        // internally to the newly-split *Tools classes.
-        _projectManagement = new WorkspaceProjectManagementTools(new WorkspaceProjectManagementImpl(workspaceManager, structuralRefinementEngine, logger,
+        // The Impl classes carry the tool bodies; the tool methods below call them directly. Built here
+        // (not taken as ctor params) so the many `new WorkspaceTools(...)` call sites need no update.
+        _projectManagement = new WorkspaceProjectManagementImpl(workspaceManager, structuralRefinementEngine, logger,
             // Built internally (not a WorkspaceTools ctor param) so the many `new WorkspaceTools(...)` test call sites need no update.
-            new SolutionStructureEngine(workspaceManager, config)));
-        _buildTest = new WorkspaceBuildTestTools(new WorkspaceBuildTestImpl(workspaceManager, diagnosticEngine, buildEngine, testRunEngine, logger));
-        _fileEdit = new WorkspaceFileEditTools(new WorkspaceFileEditImpl(workspaceManager, readNav, logger, validationEngine, symbolNavigationEngine, writeAdvice, activeToolSurface));
-        _healthMisc = new WorkspaceHealthMiscTools(new WorkspaceHealthMiscImpl(workspaceManager, config, buildEngine, logger));
+            new SolutionStructureEngine(workspaceManager, config));
+        _buildTest = new WorkspaceBuildTestImpl(workspaceManager, diagnosticEngine, buildEngine, testRunEngine, logger);
+        _fileEdit = new WorkspaceFileEditImpl(workspaceManager, readNav, logger, validationEngine, symbolNavigationEngine, writeAdvice, activeToolSurface);
+        _healthMisc = new WorkspaceHealthMiscImpl(workspaceManager, config, buildEngine, logger);
 
         // Search's mode:symbol/references dispatch targets. Built internally (not taken as ctor
         // params) so the many existing `new WorkspaceTools(...)` call sites across the test suite
@@ -87,7 +88,7 @@ public class WorkspaceTools
         [Description("Test-only: delay before acting.")]
         int delaySeconds = 0,
         CancellationToken cancellationToken = default)
-        => _healthMisc.McpServerFeaturesControlTool(reason, action, names, enabled, delaySeconds, cancellationToken);
+        => _healthMisc.Features(reason, action, names, enabled, delaySeconds, cancellationToken);
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "ListSolutionItems")]
     [Produces(DataTag.FileList)]
@@ -101,7 +102,7 @@ public class WorkspaceTools
         [Description("kind=files/dependencies: limit to this project (omit for all projects).")]
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         CancellationToken cancellationToken = default)
-        => _projectManagement.ListSolutionItemsTool(reason, kind, projectName, cancellationToken);
+        => _projectManagement.ListSolutionItems(reason, kind, projectName, cancellationToken);
 
     /// <summary>
     /// Hard cap on how many files ListWorkspaceSolutionsTool will walk before giving up -> protects
@@ -118,7 +119,7 @@ public class WorkspaceTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("A real project/repo directory, not a drive root.")] string workspacePath,
         CancellationToken cancellationToken = default)
-        => _projectManagement.ListWorkspaceSolutionsTool(reason, workspacePath, cancellationToken);
+        => _projectManagement.ListWorkspaceSolutions(reason, workspacePath, cancellationToken);
     // current directory, --base-repo-dir (if set), or the server's install directory.
     [McpServerTool(Name = "LoadSolution")]
     [Produces(DataTag.ResultOnly)]
@@ -130,7 +131,7 @@ public class WorkspaceTools
         [Description("true = discard in-memory state and reload from disk even if this solution is already loaded. Default false: no-op when already loaded.")] bool forceReload = false,
         [Description("Seconds to wait (1-3600, default 30) for a load in progress or one this call starts; a load this call starts is cancelled on expiry and the error names timeoutSeconds.")] int timeoutSeconds = 30,
         CancellationToken cancellationToken = default)
-        => _projectManagement.LoadSolutionTool(reason, solutionPath, baseRepoDir, forceReload, timeoutSeconds, cancellationToken);
+        => _projectManagement.LoadSolution(reason, solutionPath, baseRepoDir, forceReload, timeoutSeconds, cancellationToken);
 
     // ListExternalDiskChanges/AcknowledgeExternalFileChanges moved to AdminTools.cs,
     // gated behind the "Admin" mode -> see docs/current/ideas/closed/idea_external_drift_hard_blocker.md.
@@ -140,9 +141,6 @@ public class WorkspaceTools
     // alongside ApplyDiffTool) -> see docs/current/design_applyunifieddiff_replace_snippet_v1.md.
     // ReplaceSnippetTool (below, on this default surface) replaces it for small, exact-text batchEdits.
 
-    // ReplaceSnippetTool/ReplaceSnippetBatch/CreateFileTool moved to WorkspaceFileEditTools/
-    // WorkspaceFileEditImpl (Decision 7 step 2 facade split). This class keeps its original
-    // constructor/tool signatures, delegating internally.
     [McpServerTool(Name = "ReplaceSnippet")]
     [SupportsBatching]
     [Produces(DataTag.ChangeId)]
@@ -168,7 +166,7 @@ public class WorkspaceTools
         [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default)
-        => _fileEdit.ReplaceSnippetTool(reason, action, filePath, oldContent, newContent, lineBefore, lineAfter, withinMember, matchLine, batchEdits, validateOnApply, returnDiff, cancellationToken);
+        => _fileEdit.ReplaceSnippet(reason, action, filePath, oldContent, newContent, lineBefore, lineAfter, withinMember, matchLine, batchEdits, validateOnApply, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "CreateFile")]
     [Produces(DataTag.ChangeId)]
@@ -181,282 +179,7 @@ public class WorkspaceTools
         [Description("Alternative to content. Required for .cs files: name of the seeded top-level type.")] string? typeName = null,
         [Description("Full file body, written in one call (any file type; for .cs it is validated and rejected if it adds compiler errors). Use instead of typeKind/typeName/namespaceName, not with them.")] string? content = null,
         CancellationToken cancellationToken = default)
-        => _fileEdit.CreateFileTool(reason, filePath, namespaceName, typeKind, typeName, content, cancellationToken);
-
-    // The confirmationCode paramater was causing hallucinations and invalid tool calls. Reverted back to the original ApplyDiffTool tool but keeping this here (block-commented, since it depends
-    // on ProposedChangeAction.confirmationCode, which is also commented out in ToolEnums.cs) in case we want to reintroduce ApplyDiffTool with a confirmationCode in the future.
-    /*
-    //[McpServerTool(Name = "ApplyDiffWithConfirmationCode")]
-    [Produces(DataTag.ChangeId)]
-    [Description("Applies or validates a change set. changesetFormat=files -> changes dict filePath->newContent (filePath not used). changesetFormat=diff -> filePath and unifiedDiff are BOTH REQUIRED (filePath names the single file the diff applies to; omitting it is a common mistake and fails immediately). For changesetFormat=diff, hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApplyTool/GetOperationDetailTool) - pass returnDiff=true to get a unified-diff-style preview of what changed instead. IMPORTANT: for changesetFormat=files with action=apply, any file whose content would shrink by more than 50% is rejected with errorCode=ConfirmationRequired - this is a strong signal you submitted only a changed fragment as if it were the whole file, rather than a genuine whole-file rewrite. If the rewrite is really intended, call ApplyDiffTool again with action=confirmationCode and confirmationCode set to the code from the rejection - do not resend changes/filePath/unifiedDiff on that call, the original changeset is already cached server-side.")]
-    public async Task<SentinelCallToolResult<object>> ApplyDiffWithConfirmationCodeTool([ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat, [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action, [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePathWrapper, string>? changes = null, [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null, [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null, [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [ToolOption(ToolOptionTag.ConfirmationCode)][Description("Required when action=confirmationCode. The code returned by a prior apply call that was rejected for exceeding the whole-file-rewrite size threshold. Replays that exact cached changeset - do not also pass changes/filePath/unifiedDiff.")] string? confirmationCode = null, // RequestContext<CallToolRequestParams> requestParams = null,
-    CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            if (action == ProposedChangeAction.confirmationCode)
-            {
-                if (string.IsNullOrEmpty(confirmationCode))
-                {
-                    return new SentinelCallToolResult<object>()
-                    {
-                        IsSuccess = false,
-                        ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, "confirmationCode is required when action=confirmationCode.")
-                    };
-                }
-
-                var pending = _workspaceManager.TakePendingChangeset(confirmationCode);
-                if (pending == null)
-                {
-                    return new SentinelCallToolResult<object>()
-                    {
-                        IsSuccess = false,
-                        ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, $"confirmationCode '{confirmationCode}' is unrecognized or has expired (codes are single-use and expire after 10 minutes). Resubmit the original ApplyDiffTool(changesetFormat: files, action: apply, ...) call to get a fresh code.")
-                    };
-                }
-
-                var confirmedResult = await _workspaceManager.ApplyProposedChangesAsync(pending.Value.Changes, pending.Value.RetryCount, validateChanges: pending.Value.ValidateOnApply);
-                if (!confirmedResult.IsSuccess && confirmedResult.ValidationResult != null)
-                    return new SentinelCallToolResult<object>()
-                    {
-                        IsSuccess = false,
-                        ErrorData =  new ResultError(ToolErrorCode.Exception, $"ApplyDiffTool pre-apply validate failed: {confirmedResult.ValidationResult.Diagnostics.ToJson()}")
-                    };
-                await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", confirmedResult);
-                var strippedConfirmedResult = confirmedResult with { PreImages = null };
-                object confirmedResponseData = returnDiff
-                    ? new
-                    {
-                        result = strippedConfirmedResult,
-                        diff = RefactoringStructuralTools.BuildDiffFromPreImages(pending.Value.Changes, confirmedResult.PreImages)
-                    }
-                    : strippedConfirmedResult;
-                return new SentinelCallToolResult<object>()
-                {
-                    IsSuccess = true,
-                    Data = confirmedResponseData
-                };
-            }
-
-            FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
-            if (changesetFormat == ChangesetFormat.files)
-            {
-                if (changes == null)
-                {
-                    return new SentinelCallToolResult<object>()
-                    {
-                        IsSuccess = false,
-                        ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, "changes is required when changesetFormat=files.")
-                    };
-                }
-
-                if (action == ProposedChangeAction.apply)
-                {
-                    string? oversizedFile = null;
-                    double oversizedPercent = 0;
-                    foreach (var (changedPath, newContent) in changes)
-                    {
-                        // TODO reads existing text from disk, not the workspace document
-                        var oldContent = await FileIoHelper.ReadAllTextIfExistsAsync(changedPath, cancellationToken);
-                        var percentRemoved = PercentLinesRemoved(oldContent, newContent);
-                        if (percentRemoved > LargeShrinkRejectionThreshold)
-                        {
-                            oversizedFile = changedPath;
-                            oversizedPercent = percentRemoved;
-                            break;
-                        }
-                    }
-
-                    if (oversizedFile != null)
-                    {
-                        var code = _workspaceManager.CachePendingChangeset(changes, retryCount, validateOnApply);
-                        return new SentinelCallToolResult<object>()
-                        {
-                            IsSuccess = false,
-                            ErrorData =  new ResultError(ToolErrorCode.ConfirmationRequired,
-                                $"File '{oversizedFile}' would shrink by {oversizedPercent:P0}, exceeding the {LargeShrinkRejectionThreshold:P0} threshold for a files-format apply. " +
-                                "This usually means only a changed fragment was submitted instead of the complete file content - use changesetFormat=diff for a partial edit instead. " +
-                                $"If a whole-file rewrite to this size is genuinely intended, call ApplyDiffTool again with action=confirmationCode and confirmationCode=\"{code}\" to apply the exact changeset just submitted (no need to resend changes). This code expires in 10 minutes.")
-                        };
-                    }
-
-                    var result = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount, validateChanges: validateOnApply);
-                    if (!result.IsSuccess && result.ValidationResult != null)
-                        return new SentinelCallToolResult<object>()
-                        {
-                            IsSuccess = false,
-                            ErrorData =  new ResultError(ToolErrorCode.Exception,
-                                "ApplyDiffTool: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n[COMPILER ERROR]\n" +
-                                await EditImpactGate.PrependAsync(_workspaceManager, changes, result.ValidationResult, _activeToolSurface, await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken))
-                        };
-                    await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result);
-                    // PreImages (full pre-edit file content) is dropped from the default response -
-                    // it's already captured in the undo blob written above (GetOperationDetailTool/
-                    // UndoLastApplyTool can retrieve it) and was the single largest contributor to
-                    // ApplyDiffTool responses exceeding the calling harness's token limit on large files.
-                    var strippedResult = result with { PreImages = null };
-                    object responseData = returnDiff
-                        ? new
-                        {
-                            result = strippedResult,
-                            diff = RefactoringStructuralTools.BuildDiffFromPreImages(changes, result.PreImages)
-                        }
-                        : strippedResult;
-                    return new SentinelCallToolResult<object>()
-                    {
-                        IsSuccess = true,
-                        Data = responseData
-                    };
-                }
-
-                if (action == ProposedChangeAction.validate)
-                {
-                    try
-                    {
-                        var validationResult = await _validationEngine.ValidateChangesAsync(changes);
-                        return validationResult.IsSuccess ? new SentinelCallToolResult<object>()
-                        {
-                            IsSuccess = true,
-                            Data = validationResult
-                        }
-
-                        : new SentinelCallToolResult<object>()
-                        {
-                            IsSuccess = false,
-                            ErrorData =  new ResultError(ToolErrorCode.Exception, $"ApplyDiffTool validate failed: {validationResult.Diagnostics}")
-                        };
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "ApplyDiffTool validate unexpected exception");
-                        return new SentinelCallToolResult<object>()
-                        {
-                            IsSuccess = false,
-                            Data =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiffTool validate")
-                        };
-                    }
-                }
-            }
-            else if (changesetFormat == ChangesetFormat.diff)
-            {
-                if (!filePathResolved.Validated && string.IsNullOrEmpty(unifiedDiff))
-                {
-                    return new SentinelCallToolResult<object>()
-                    {
-                        IsSuccess = false,
-                        ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiffTool: both 'filePath' and 'unifiedDiff' are required when changesetFormat=diff.")
-                    };
-                }
-
-                if (!filePathResolved.Validated)
-                {
-                    return new SentinelCallToolResult<object>()
-                    {
-                        IsSuccess = false,
-                        ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiffTool: 'filePath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.")
-                    };
-                }
-
-                if (string.IsNullOrEmpty(unifiedDiff))
-                {
-                    return new SentinelCallToolResult<object>()
-                    {
-                        IsSuccess = false,
-                        ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiffTool: 'unifiedDiff' is required when changesetFormat=diff.")
-                    };
-                }
-
-                if (action == ProposedChangeAction.apply)
-                {
-                    try
-                    {
-                        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-                        var document = RoslynSentinel.Common.DocumentLookup.FindDocumentOrNull(solution, filePathResolved);
-                        if (document == null)
-                        {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsSuccess = false,
-                                ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
-                            };
-                        }
-
-                        var oldText = await document.GetTextAsync();
-                        var newContent = _diffEngine.ApplyDiffTool(oldText, unifiedDiff).Text.ToString();
-                        var targetPath = document.FilePathWrapper ?? filePath;
-                        var diffChanges = new Dictionary<FilePathWrapper, string>
-                        {
-                            [targetPath] = newContent
-                        };
-                        var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges, validateChanges: validateOnApply);
-                        if (!result.IsSuccess && result.ValidationResult != null)
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsSuccess = false,
-                                ErrorData =  new ResultError(ToolErrorCode.Exception,
-                                    "ApplyDiffTool: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n[COMPILER ERROR]\n" +
-                                    await EditImpactGate.PrependAsync(_workspaceManager, diffChanges, result.ValidationResult, _activeToolSurface, await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken))
-                            };
-                        await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result);
-                        var strippedDiffResult = result with { PreImages = null };
-                        object diffResponseData = returnDiff
-                            ? new
-                            {
-                                result = strippedDiffResult,
-                                diff = RefactoringStructuralTools.BuildDiffFromPreImages(diffChanges, result.PreImages)
-                            }
-                            : strippedDiffResult;
-                        return new SentinelCallToolResult<object>()
-                        {
-                            IsSuccess = true,
-                            Data = diffResponseData
-                        };
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "ApplyDiffTool diff apply unexpected exception for '{FilePathWrapper}'", filePathResolved);
-                        return new SentinelCallToolResult<object>()
-                        {
-                            IsSuccess = false,
-                            Data =  ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyDiffTool diff apply for '{filePathResolved}'")
-                        };
-                    }
-                }
-
-                if (action == ProposedChangeAction.validate)
-                {
-                    var validationResult = await _validationEngine.ValidateDiffAsync(filePathResolved.Absolute, unifiedDiff);
-                    return validationResult.IsSuccess ? new SentinelCallToolResult<object>()
-                    {
-                        IsSuccess = true,
-                        Data = validationResult
-                    }
-
-                    : new SentinelCallToolResult<object>()
-                    {
-                        IsSuccess = false,
-                        ErrorData =  new ResultError(ToolErrorCode.Exception, $"ApplyDiffTool diff validate failed: {validationResult.Diagnostics.ToInfo()}")
-                    };
-                }
-            }
-
-            return new SentinelCallToolResult<object>()
-            {
-                IsSuccess = false,
-                ErrorData =  new ResultError(ToolErrorCode.Exception, $"Unhandled changesetFormat '{changesetFormat}' / action '{action}'.")
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ApplyDiffTool ({ChangesetFormat}/{Action}) failed", changesetFormat, action);
-            return new SentinelCallToolResult<object>()
-            {
-                IsSuccess = false,
-                Data =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiffTool")
-            };
-        }
-    }
-    */
+        => _fileEdit.CreateFile(reason, filePath, namespaceName, typeKind, typeName, content, cancellationToken);
 
     [McpServerTool(Name = "RetryFailedChanges")]
     [Produces(DataTag.ResultOnly)]
@@ -466,7 +189,7 @@ public class WorkspaceTools
         [Consumes(DataTag.SourceFilepath, required: false)] List<string>? specificFiles = null,
         [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
         CancellationToken cancellationToken = default)
-        => _fileEdit.RetryFailedChangesTool(reason, specificFiles, retryCount, cancellationToken);
+        => _fileEdit.RetryFailedChanges(reason, specificFiles, retryCount, cancellationToken);
 
     // WriteBlobForApplyAsync moved to OperationBlobHelper.WriteBlobForApplyAsync (Decision 7 step 1).
     [McpServerTool(Name = "GetDiagnostics")]
@@ -487,21 +210,21 @@ public class WorkspaceTools
         [Description("quickBuild/fullBuild/fullBuildThrowaway also run a build check.")]
         BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
         CancellationToken cancellationToken = default)
-        => _buildTest.GetDiagnosticsTool(reason, scope, scopeName, summarize, maxDetails, topN, verify, cancellationToken);
+        => _buildTest.GetDiagnostics(reason, scope, scopeName, summarize, maxDetails, topN, verify, cancellationToken);
     [McpServerTool(Name = "Build")]
     [Produces(DataTag.Report)]
     [Description(ToolParams.BuildDescription)]
     public Task<SentinelCallToolResult<object>> BuildTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description(ToolParams.BuildLevel)] BuildVerifyLevel level = BuildVerifyLevel.fullBuildThrowaway,
-        ToolScope scope = ToolScope.solution,
+        [Description("solution (default), project (scopeName = project name) or file (scopeName = file path; full builds build its project).")] ToolScope scope = ToolScope.solution,
         string? scopeName = null,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 20,
         [Description(ToolParams.UseScratchDir)] bool useScratchDir = false,
         [Description("true = also return the build's stdout/stderr tail. Default false.")] bool includeOutput = false,
         [Description("true = also return warnings, capped by maxDetails. Default false: count only.")] bool includeWarnings = false,
         CancellationToken cancellationToken = default)
-        => _buildTest.BuildTool(reason, level, scope, scopeName, maxDetails, useScratchDir, includeOutput, includeWarnings, cancellationToken);
+        => _buildTest.Build(reason, level, scope, scopeName, maxDetails, useScratchDir, includeOutput, includeWarnings, cancellationToken);
 
     [McpServerTool(Name = "RunTest")]
     [Produces(DataTag.Report)]
@@ -520,7 +243,7 @@ public class WorkspaceTools
         [Description("true = keep failed tests' Output and the stdout/stderr tails. Default false: compact digest.")] bool includeOutput = false,
         [Description("Extra env vars for the test process (name -> value).")] Dictionary<string, string>? environment = null,
         CancellationToken cancellationToken = default)
-        => _buildTest.RunTestTool(reason, scope, scopeName, filter, suite, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, includeOutput, environment, cancellationToken);
+        => _buildTest.RunTest(reason, scope, scopeName, filter, suite, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, includeOutput, environment, cancellationToken);
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: none of projectName/docCommentId/symbolName/line/column is
     // individually required -> the tool needs exactly one full resolution strategy: (projectName +
     // docCommentId), or symbolName (optionally with contextSnippet/lineBefore/lineAfter), or
@@ -544,7 +267,7 @@ public class WorkspaceTools
         [Description("Fallback: 1-based declaration column; needs line.")]
         [Consumes(DataTag.Offset, required: false)] int column = 0,
         CancellationToken cancellationToken = default)
-        => _projectManagement.DeleteUnusedSymbolTool(reason, filePath, projectName, docCommentId, symbolName, contextSnippet, lineBefore, lineAfter, line, column, cancellationToken);
+        => _projectManagement.DeleteUnusedSymbol(reason, filePath, projectName, docCommentId, symbolName, contextSnippet, lineBefore, lineAfter, line, column, cancellationToken);
 
     [McpServerTool(Name = "CreateProject")]
     [Produces(DataTag.ResultOnly)]
@@ -554,7 +277,7 @@ public class WorkspaceTools
         [ExternalInputRequired(DataTag.ProjectName, required: true)] string projectName,
         [ExternalInputRequired(DataTag.ProjectType)] string projectType = "console",
         CancellationToken cancellationToken = default)
-        => _projectManagement.CreateProjectTool(reason, projectName, projectType, cancellationToken);
+        => _projectManagement.CreateProject(reason, projectName, projectType, cancellationToken);
 
     [McpServerTool(Name = "SplitProjectByFolder")]
     [Produces(DataTag.ResultOnly)]
@@ -565,7 +288,7 @@ public class WorkspaceTools
         [ExternalInputRequired(DataTag.ClassName, required: true)] string folderName,
         [ExternalInputRequired(DataTag.ProjectName, required: true)] string targetProjectName,
         CancellationToken cancellationToken = default)
-        => _projectManagement.SplitProjectByFolderTool(reason, sourceProjectName, folderName, targetProjectName, cancellationToken);
+        => _projectManagement.SplitProjectByFolder(reason, sourceProjectName, folderName, targetProjectName, cancellationToken);
 
     // ── Phase 1 -> Low-level fallback tools ──────────────────────────────────
     // Non-tool delegator: the GetMethodSource [McpServerTool] lives on WorkspaceReadNavigationTools.
@@ -586,7 +309,7 @@ public class WorkspaceTools
         [Consumes(DataTag.SymbolName, required: false)][Description("Only with memberName: the type that holds the member, to disambiguate same-named members.")] string? containerName = null,
         [Description("None (default) = unchanged; Summary = adds a lineEndings field: counts per style, dominant style, final-newline flag and the line numbers that differ; All = like Summary, and the returned source is rendered with <CRLF>, <LF>, <CR> or <EOF> at the end of every line. In All mode the source is NOT verbatim - never paste it into ReplaceSnippet.")] LineEndingDisplay showLineEndings = LineEndingDisplay.None,
         CancellationToken cancellationToken = default)
-        => _fileEdit.ReadFileTool(reason, filePath, startLine, endLine, memberName, containerName, showLineEndings, cancellationToken);
+        => _fileEdit.ReadFile(reason, filePath, startLine, endLine, memberName, containerName, showLineEndings, cancellationToken);
 
     // Non-tool delegator: the GetFileOutline [McpServerTool] lives on WorkspaceReadNavigationTools.
     public Task<SentinelCallToolResult<FileOutlineResult, ResultError>> GetFileOutlineTool(
@@ -625,7 +348,7 @@ public class WorkspaceTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.OperationId, required: true)] string changeId,
         CancellationToken cancellationToken = default)
-        => _fileEdit.UndoLastApplyTool(reason, changeId, cancellationToken);
+        => _fileEdit.UndoLastApply(reason, changeId, cancellationToken);
 
     // ── 8. GetWorkspaceHealthTool ─────────────────────────────────────────────────
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
@@ -636,7 +359,7 @@ public class WorkspaceTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
         CancellationToken cancellationToken = default)
-        => _healthMisc.GetWorkspaceHealthTool(reason, verify, cancellationToken);
+        => _healthMisc.GetWorkspaceHealth(reason, verify, cancellationToken);
 
     [McpServerTool(Name = "ListProjectFrameworkTargets")]
     [Produces(DataTag.Report)]
@@ -644,7 +367,7 @@ public class WorkspaceTools
     public Task<SentinelCallToolResult<List<ProjectFrameworkSummary>, ResultError>> ListProjectFrameworkTargetsTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         CancellationToken cancellationToken = default)
-        => _projectManagement.ListProjectFrameworkTargetsTool(reason, cancellationToken);
+        => _projectManagement.ListProjectFrameworkTargets(reason, cancellationToken);
 
     // ── get_large_result ────────────────────────────────────────────────────────
 

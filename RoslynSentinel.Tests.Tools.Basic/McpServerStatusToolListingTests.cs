@@ -89,6 +89,7 @@ public class McpServerStatusToolListingTests
     [Test]
     public void AllListing_HasOneEntryPerToolName_PreferringTheActiveClass()
     {
+        // TODO the split *Tools classes are gone, so no tool name has two declaring classes any more; with the dedup logic in ServerStatusTools this test only guards an invariant nothing can violate
         var status = Call(["WorkspaceTools"], McpServerStatusToolListing.all);
 
         Assert.That(status.AllDeclaredTools.Select(t => t.Name), Is.Unique,
@@ -173,7 +174,6 @@ public class McpServerStatusToolListingTests
         var modes = new Dictionary<string, IReadOnlyList<string>>
         {
             ["WorkspaceTools"] = ["Workspace", "Claude", "claude-lean"],
-            ["WorkspaceProjectManagementTools"] = ["Workspace", "Claude"],
             ["GitTools"] = ["Workspace", "Claude", "claude-lean"],
             ["DocumentationTools"] = ["Workspace", "Claude"],
         };

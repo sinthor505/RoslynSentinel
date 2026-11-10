@@ -221,6 +221,7 @@ public static class McpToolSchemaPatcher
     /// The same tool name can be declared by more than one class (a facade and the split class behind it),
     /// so a name may appear more than once.
     /// </summary>
+    // TODO the split *Tools classes are deleted, so no tool name has two declaring classes; revisit this remark and the callers that group by name
     public static IReadOnlyList<(string ToolName, Type ToolType, MethodInfo Method)> DiscoverToolMethods(IEnumerable<Assembly> assemblies)
     {
         var discovered = new List<(string ToolName, Type ToolType, MethodInfo Method)>();

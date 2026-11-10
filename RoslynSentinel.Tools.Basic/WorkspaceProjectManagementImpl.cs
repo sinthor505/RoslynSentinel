@@ -19,7 +19,7 @@ namespace RoslynSentinel.Tools.Basic;
 public record SolutionFileInfo(string Path, string Format);
 
 /// <summary>
-/// Plain DI-constructed implementation backing WorkspaceProjectManagementTools. Method bodies are
+/// Plain DI-constructed implementation backing the project-management tools on WorkspaceTools. Method bodies are
 /// moved verbatim from WorkspaceTools (Decision 7 step 2) - not yet MCP-agnostic in return
 /// type, per Decision 1-Amendment's explicit scope (mechanical shim only for this pass).
 /// </summary>

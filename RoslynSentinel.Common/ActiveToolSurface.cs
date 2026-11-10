@@ -59,6 +59,7 @@ public record ActiveToolSurface
             return false;
         }
 
+        // TODO the split *Tools classes are deleted, so a tool name now has one declaring class; simplify to a single-class lookup if no other duplicate exists
         // A tool name can be declared by more than one class (a facade and the split class behind it); one
         // active declaring class is enough, as in McpServerStatus.
         return DeclaringClassesByTool().TryGetValue(toolName, out var classes) && classes.Any(ActiveToolClasses.Contains);

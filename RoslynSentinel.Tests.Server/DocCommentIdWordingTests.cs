@@ -37,17 +37,6 @@ public class DocCommentIdWordingTests
     }
 
     [Test]
-    public void DeleteUnusedSymbolSplit_DocCommentIdSaysDoNotConstruct_AndFilePathIsRequired()
-    {
-        var schema = BuildSchema(typeof(WorkspaceProjectManagementTools), nameof(WorkspaceProjectManagementTools.DeleteUnusedSymbolTool));
-
-        Assert.That(ParameterDescription(schema, "docCommentId"), Does.Contain("do not construct"));
-        var filePathDescription = ParameterDescription(schema, "filePath");
-        Assert.That(filePathDescription, Is.Not.Empty);
-        Assert.That(filePathDescription, Does.Contain("required"));
-    }
-
-    [Test]
     public void NamedArgumentsTool_TargetSymbolSaysDoNotConstruct()
     {
         var schema = BuildSchema(typeof(NamedArgumentsTools), nameof(NamedArgumentsTools.NamedArgumentsTool));

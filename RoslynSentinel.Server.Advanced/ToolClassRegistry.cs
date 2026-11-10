@@ -75,9 +75,8 @@ public static class ToolClassRegistry
     /// <summary>
     /// Tool classes whose dependencies claude-lean registers WITHOUT registering their tools (the per-tool
     /// allow-list filters every non-Core tool out at startup), so <c>McpToolsetControlTool</c> can build any on-demand
-    /// tool later and have its class constructed. These are the facade classes of the "Claude" mode; a tool name
-    /// also declared by a split class behind a facade resolves to the facade. Only claude-lean uses this.
-    /// DeclarationTools and ParameterEditTools (the merged DeclarationTool and ParameterEditTool tools) are the entries that are not facades
+    /// tool later and have its class constructed. These are the tool classes of the "Claude" mode. Only claude-lean uses this.
+    /// DeclarationTools and ParameterEditTools (the merged DeclarationTool and ParameterEditTool tools) are the entries that are not part
     /// of the "Claude" mode: they exist only in claude-lean, so their Impl dependencies are covered by the Structural/Signature entries above.
     /// </summary>
     public static readonly IReadOnlySet<string> ClaudeLeanOnDemandToolClasses = new HashSet<string>(
@@ -92,8 +91,8 @@ public static class ToolClassRegistry
     /// <summary>
     /// The one mode-name -> tool-class-name map, registered by <c>AddRoslynSentinelToolsAdvanced</c>
     /// (which delegates the Basic tool classes to <c>AddRoslynSentinelToolsBasic</c>). It is the union of
-    /// the former separate Basic and Advanced maps: the Basic-only sub-modes (WorkspaceFileIO,
-    /// WorkspaceReadNav, ...) are kept, "Workspace" includes SymbolRelationshipTools, and "Refactor"
+    /// the former separate Basic and Advanced maps: the Basic-only sub-modes (WorkspaceReadNav, ...)
+    /// are kept, "Workspace" includes SymbolRelationshipTools, and "Refactor"
     /// includes the Advanced-only AdvancedRefactoringTools. A class name whose tool class a given
     /// registration method does not register is inert there (each registration block is guarded by
     /// <c>activeToolClasses.Contains(...)</c>).
@@ -126,20 +125,9 @@ public static class ToolClassRegistry
             // experiment-only (proposal_edit_snippets_batch_only_ab_test); opt-in, never part of all/Claude
             ["EditSnippetsExperiment"] = ["EditSnippetsTools"],
 
-            // Fine-grained sub-modes added by Decision 7 step 4 (docs/current/plans/
-            // plan_split_workspace_refactoring_tools_for_di.md, Decision 4 + Addendum A/B):
-            // independently opt-in-able, none require "Workspace"/"Refactor". "Workspace" itself
-            // already only ever mapped to the facade classes above (never the split classes
-            // directly), so Addendum B's narrowing requires no change here -> the one genuinely
-            // new umbrella is "WorkspaceFileContent" below.
-            ["WorkspaceFileIO"] = ["WorkspaceFileEditTools"],
-            ["WorkspaceBuildTest"] = ["WorkspaceBuildTestTools"],
-            ["WorkspaceProjectManagement"] = ["WorkspaceProjectManagementTools"],
+            // Fine-grained sub-modes (docs/current/plans/closed/plan_split_workspace_refactoring_tools_for_di.md):
+            // independently opt-in-able, none require "Workspace"/"Refactor".
             ["WorkspaceReadNav"] = ["WorkspaceReadNavigationTools"],
-            ["WorkspaceHealthMisc"] = ["WorkspaceHealthMiscTools"],
-            // New umbrella (Addendum B): file read/navigate/edit as its own coherent concern,
-            // independent of solution/workspace lifecycle ("Workspace" above).
-            ["WorkspaceFileContent"] = ["WorkspaceFileEditTools", "WorkspaceReadNavigationTools"],
             ["RefactorSignature"] = ["RefactoringSignatureTools"],
             ["RefactoringStructural"] = ["RefactoringStructuralTools", "TypedMemberTools"],
             ["RefactorExtractionDocs"] = ["RefactoringExtractionDocsTools"],

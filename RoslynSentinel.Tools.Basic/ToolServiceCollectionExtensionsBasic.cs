@@ -24,7 +24,7 @@ public static class ToolServiceCollectionExtensionsBasic
     /// </summary>
     public static IServiceCollection AddRoslynSentinelToolImplsBasic(this IServiceCollection services)
     {
-        // The *Tools/*Impl split classes take a plain (non-generic) ILogger, not ILogger<T>; nothing else
+        // The *Impl classes take a plain (non-generic) ILogger, not ILogger<T>; nothing else
         // (including AddLogging) registers it, so without this every one of them throws at first resolution.
         services.TryAddSingleton(sp => sp.GetRequiredService<ILoggerFactory>().CreateLogger("RoslynSentinel"));
 
@@ -74,10 +74,6 @@ services.TryAddSingleton<EditSnippetsTools>();
         services.TryAddSingleton<ToolsetControlTools>();
         services.TryAddSingleton<TypedMemberTools>();
         services.TryAddSingleton<WholeFileWriteTools>();
-        services.TryAddSingleton<WorkspaceBuildTestTools>();
-        services.TryAddSingleton<WorkspaceFileEditTools>();
-        services.TryAddSingleton<WorkspaceHealthMiscTools>();
-        services.TryAddSingleton<WorkspaceProjectManagementTools>();
         services.TryAddSingleton<WorkspaceReadNavigationTools>();
         services.TryAddSingleton<WorkspaceTools>();
 

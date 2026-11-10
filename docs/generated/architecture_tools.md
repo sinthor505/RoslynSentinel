@@ -102,29 +102,12 @@
 | WholeFileWriteTools | ApplyUnifiedDiff | Claude, claude-lean (on demand), WholeFileWrite | - | Applies or validates a unified diff against a single file; mismatched hunk lines are re-anchored nearby. |
 | WholeFileWriteTools | DeleteFile | Claude, claude-lean, WholeFileWrite | - | Deletes a file from disk; fails if it doesn't exist. |
 | WholeFileWriteTools | WriteFile | Claude, claude-lean, WholeFileWrite | - | Writes a whole file to disk, creating or overwriting it. |
-| WorkspaceBuildTestTools | Build | WorkspaceBuildTest | - | Compiles the solution. level=quickBuild: in-memory Roslyn diagnostics (fast). |
-| WorkspaceBuildTestTools | GetDiagnostics | WorkspaceBuildTest | - | Gets compiler diagnostics for a file, project, or the whole solution. |
-| WorkspaceBuildTestTools | RunTest | WorkspaceBuildTest | - | Runs `dotnet test` on the solution or one project. |
-| WorkspaceFileEditTools | CreateFile | WorkspaceFileContent, WorkspaceFileIO | - | Creates a new file; fails if it already exists (never overwrites). |
-| WorkspaceFileEditTools | ReadFile | WorkspaceFileContent, WorkspaceFileIO | Allowed | Returns the raw text of a file in the loaded solution, verbatim (no reformatting). |
-| WorkspaceFileEditTools | ReplaceSnippet | WorkspaceFileContent, WorkspaceFileIO | - | Replaces one exact text block with another in a file, for small localized edits. |
-| WorkspaceFileEditTools | RetryFailedChanges | WorkspaceFileContent, WorkspaceFileIO | - | Retries failed file writes using server-cached content - no need to re-send file contents. specificFiles limits to a... |
-| WorkspaceFileEditTools | UndoLastApply | WorkspaceFileContent, WorkspaceFileIO | - | Reverts files from a previously applied batch to their pre-apply state using the forensic blob written at apply time. |
-| WorkspaceHealthMiscTools | Features | WorkspaceHealthMisc | - | Queries or updates feature flags. |
-| WorkspaceHealthMiscTools | GetWorkspaceHealth | WorkspaceHealthMisc | Allowed | Targeted workspace health check - reads actual workspace/solution state directly rather than environment probes. |
-| WorkspaceProjectManagementTools | CreateProject | WorkspaceProjectManagement | - | Creates a new project and adds it to the current solution. projectType defaults to console. |
-| WorkspaceProjectManagementTools | DeleteUnusedSymbol | WorkspaceProjectManagement | - | Deletes a symbol only if it has zero usages in the entire codebase. |
-| WorkspaceProjectManagementTools | ListProjectFrameworkTargets | WorkspaceProjectManagement | - | Returns each project's TargetFramework value. |
-| WorkspaceProjectManagementTools | ListSolutionItems | WorkspaceProjectManagement | Allowed | Lists projects, files, dependencies, or solution-folder items in the loaded solution. |
-| WorkspaceProjectManagementTools | ListWorkspaceSolutions | WorkspaceProjectManagement | - | Lists all *.sln and *.slnx files under a directory. |
-| WorkspaceProjectManagementTools | LoadSolution | WorkspaceProjectManagement | - | Loads a .NET solution into memory; required before any tool that needs a loaded solution. |
-| WorkspaceProjectManagementTools | SplitProjectByFolder | WorkspaceProjectManagement | - | Moves all files under a specific folder from a source project to a new target project, preserving folder structure. |
-| WorkspaceReadNavigationTools | GetFileOutline | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | Allowed | Returns a structural outline of a file's types and members with 1-based line ranges (no bodies). |
-| WorkspaceReadNavigationTools | GetLargeResult | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | - | Pages a stored large result (the largeResult pointer). offset counts units of its sequence (list records interleaved,... |
-| WorkspaceReadNavigationTools | GetMethodSource | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | - | Returns a method's or constructor's full source text and attributes. |
-| WorkspaceReadNavigationTools | GetOperationDetail | Claude, claude-lean (on demand), Workspace, WorkspaceFileContent, WorkspaceReadNav | Allowed | Returns a filtered, paged slice of an operation result blob by changeId. |
-| WorkspaceReadNavigationTools | ListAll | Claude, Workspace, WorkspaceFileContent, WorkspaceReadNav | Allowed | Lists every declared symbol in the loaded solution with file, kind, name, container, and line range. |
-| WorkspaceReadNavigationTools | Search | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | - | Search; mode picks the target. text: regex/literal scan of .cs files (restrict with fileGlob). symbol: declaration... |
+| WorkspaceReadNavigationTools | GetFileOutline | Claude, claude-lean, Workspace, WorkspaceReadNav | Allowed | Returns a structural outline of a file's types and members with 1-based line ranges (no bodies). |
+| WorkspaceReadNavigationTools | GetLargeResult | Claude, claude-lean, Workspace, WorkspaceReadNav | - | Pages a stored large result (the largeResult pointer). offset counts units of its sequence (list records interleaved,... |
+| WorkspaceReadNavigationTools | GetMethodSource | Claude, claude-lean, Workspace, WorkspaceReadNav | - | Returns a method's or constructor's full source text and attributes. |
+| WorkspaceReadNavigationTools | GetOperationDetail | Claude, claude-lean (on demand), Workspace, WorkspaceReadNav | Allowed | Returns a filtered, paged slice of an operation result blob by changeId. |
+| WorkspaceReadNavigationTools | ListAll | Claude, Workspace, WorkspaceReadNav | Allowed | Lists every declared symbol in the loaded solution with file, kind, name, container, and line range. |
+| WorkspaceReadNavigationTools | Search | Claude, claude-lean, Workspace, WorkspaceReadNav | - | Search; mode picks the target. text: regex/literal scan of .cs files (restrict with fileGlob). symbol: declaration... |
 | WorkspaceTools | Build | Claude, claude-lean, Workspace | - | Compiles the solution. level=quickBuild: in-memory Roslyn diagnostics (fast). |
 | WorkspaceTools | CreateFile | Claude, claude-lean, Workspace | - | Creates a new file; fails if it already exists (never overwrites). |
 | WorkspaceTools | CreateProject | Claude, claude-lean (on demand), Workspace | - | Creates a new project and adds it to the loaded solution. |

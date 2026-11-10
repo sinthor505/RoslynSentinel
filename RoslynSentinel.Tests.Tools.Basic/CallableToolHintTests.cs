@@ -51,7 +51,7 @@ public class CallableToolHintTests
     [Test]
     public void IsCallable_UsesTheMcpServerStatusRule_ClassActiveAndNameAllowed()
     {
-        var classes = new[] { "WorkspaceTools", "WorkspaceReadNavigationTools", "WorkspaceFileEditTools", "WorkspaceProjectManagementTools" };
+        var classes = new[] { "WorkspaceTools", "WorkspaceReadNavigationTools" };
         var allowList = new HashSet<string> { "ReadFile", "GetLargeResult" };
 
         var restricted = Surface(allowList, classes);
@@ -147,7 +147,7 @@ public class CallableToolHintTests
         Assert.That(unchanged.Message, Does.Contain("You MUST call ListSolutionItems("));
 
         var viaSurface = WorkspaceFileEditImpl.BuildFileNotFoundError(solution, "C:\\x\\Missing.cs",
-            Surface(null, "WorkspaceTools", "WorkspaceProjectManagementTools").IsCallable);
+            Surface(null, "WorkspaceTools").IsCallable);
         Assert.That(viaSurface.Message, Is.EqualTo(unchanged.Message), "a real surface where ListSolutionItems is callable keeps the sentence");
     }
 

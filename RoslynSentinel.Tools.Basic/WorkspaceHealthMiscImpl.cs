@@ -8,7 +8,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>
-/// Plain DI-constructed implementation backing WorkspaceHealthMiscTools. Method bodies moved
+/// Plain DI-constructed implementation backing the health/misc tools on WorkspaceTools. Method bodies moved
 /// verbatim from WorkspaceTools (Decision 7 step 2).
 /// </summary>
 public class WorkspaceHealthMiscImpl

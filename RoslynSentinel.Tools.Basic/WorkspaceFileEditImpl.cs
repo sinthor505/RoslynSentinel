@@ -10,7 +10,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>
-/// Plain DI-constructed implementation backing WorkspaceFileEditTools. Method bodies moved
+/// Plain DI-constructed implementation backing the file-edit tools on WorkspaceTools. Method bodies moved
 /// verbatim from WorkspaceTools (Decision 7 step 2).
 ///
 /// CORRECTION vs. the plan doc's Decision 1 (flagged per Decision 7 step 1.5's audit mandate):

@@ -262,16 +262,6 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton<WorkspaceTools>();
             mcpBuilder.WithSentinelTools<WorkspaceTools>();
         }
-        // Fine-grained Workspace sub-modes (Decision 7 step 4, Decision 4 + Addendum B) -
-        // independently opt-in-able direct registrations of the split classes, none requiring
-        // "WorkspaceTools"/"Workspace" itself. WorkspaceReadNavigationImpl/Tools use
-        // TryAddSingleton since the block above may already have registered them.
-        if (activeToolClasses.Contains("WorkspaceFileEditTools"))
-        {
-            services.TryAddSingleton<WorkspaceReadNavigationTools>();
-            services.AddSingleton<WorkspaceFileEditTools>();
-            mcpBuilder.WithSentinelTools<WorkspaceFileEditTools>();
-        }
         // Experiment-only (proposal_edit_snippets_batch_only_ab_test). Reached only via the opt-in
         // EditSnippetsExperiment mode; WorkspaceFileEditImpl comes from AddRoslynSentinelToolImplsBasic.
         if (activeToolClasses.Contains("EditSnippetsTools"))
@@ -279,25 +269,12 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton<EditSnippetsTools>();
             mcpBuilder.WithSentinelTools<EditSnippetsTools>();
         }
-        if (activeToolClasses.Contains("WorkspaceBuildTestTools"))
-        {
-            services.AddSingleton<WorkspaceBuildTestTools>();
-            mcpBuilder.WithSentinelTools<WorkspaceBuildTestTools>();
-        }
-        if (activeToolClasses.Contains("WorkspaceProjectManagementTools"))
-        {
-            services.AddSingleton<WorkspaceProjectManagementTools>();
-            mcpBuilder.WithSentinelTools<WorkspaceProjectManagementTools>();
-        }
+        // The read/navigation tools (WorkspaceReadNav mode) are opt-in on their own, without "WorkspaceTools";
+        // TryAddSingleton since the WorkspaceTools block above may already have registered the class.
         if (activeToolClasses.Contains("WorkspaceReadNavigationTools"))
         {
             services.TryAddSingleton<WorkspaceReadNavigationTools>();
             mcpBuilder.WithSentinelTools<WorkspaceReadNavigationTools>();
-        }
-        if (activeToolClasses.Contains("WorkspaceHealthMiscTools"))
-        {
-            services.AddSingleton<WorkspaceHealthMiscTools>();
-            mcpBuilder.WithSentinelTools<WorkspaceHealthMiscTools>();
         }
         if (activeToolClasses.Contains("DocumentationTools"))
         {

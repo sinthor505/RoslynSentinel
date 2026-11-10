@@ -87,11 +87,11 @@ public class ReplaceSnippetSchemaTests
     }
 
     [Test]
-    public void SplitClassReplaceSnippet_FilePathDescriptionMentionsBatchEdits_AndToolDescriptionNamesMember()
+    public void ReplaceSnippet_FilePathDescriptionMentionsBatchEdits_AndToolDescriptionNamesMember()
     {
         var services = new ServiceCollection().BuildServiceProvider();
-        var method = typeof(WorkspaceFileEditTools).GetMethod(nameof(WorkspaceFileEditTools.ReplaceSnippetTool))!;
-        var tool = McpToolSchemaPatcher.CreateSentinelTool(method, typeof(WorkspaceFileEditTools), services);
+        var method = typeof(WorkspaceTools).GetMethod(nameof(WorkspaceTools.ReplaceSnippetTool))!;
+        var tool = McpToolSchemaPatcher.CreateSentinelTool(method, typeof(WorkspaceTools), services);
         var schema = (JsonObject)JsonNode.Parse(tool.ProtocolTool.InputSchema.GetRawText())!;
 
         var filePathDescription = schema["properties"]!["filePath"]!["description"]!.GetValue<string>();

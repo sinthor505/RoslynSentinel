@@ -176,6 +176,7 @@ public static class ServerStartupHelpers
 
         foreach (var mode in activeModes)
         {
+            // TODO An unknown mode name is silently ignored; warn at startup so a typo or a removed mode (e.g. WorkspaceFileContent, still listed in ModelEval ActiveModes) is visible.
             if (modeToToolClasses.TryGetValue(mode, out var classes))
             {
                 foreach (var className in classes)

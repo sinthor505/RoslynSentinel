@@ -15,10 +15,7 @@ public class UnrecoverableBreakerPolicyTests
         // reflection discovery finds all annotated methods regardless of test execution order.
         _ = typeof(AdminTools).Assembly;
         _ = typeof(GitTools).Assembly;
-        _ = typeof(WorkspaceFileEditTools).Assembly;
         _ = typeof(WorkspaceReadNavigationTools).Assembly;
-        _ = typeof(WorkspaceProjectManagementTools).Assembly;
-        _ = typeof(WorkspaceHealthMiscTools).Assembly;
         _ = typeof(WorkspaceTools).Assembly;
         _ = typeof(ScanTools).Assembly;   // Tools.Advanced
         _ = typeof(GenerationTools).Assembly; // Tools.Experimental (if present)
