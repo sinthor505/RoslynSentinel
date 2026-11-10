@@ -11,6 +11,7 @@ using RoslynSentinel.Tools.Basic;
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
+// TODO move the ChangeSignature/MoveMember tests of this file to Tests.Tools.Basic (needs the file split)
 [TestFixture]
 // Runs exclusively because Setup/TearDown wipe every top-level *.cs in the shared working directory (DeleteLeakedRelativeFiles), which would delete files other parallel fixtures in this assembly (AssemblyInfo.cs sets ParallelScope.Fixtures) are using.
 [NonParallelizable]

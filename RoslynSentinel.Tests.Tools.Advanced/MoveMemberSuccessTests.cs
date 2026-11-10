@@ -8,6 +8,7 @@ namespace RoslynSentinel.Tests.Tools.Advanced;
 
 // In-memory (InMemoryWorkspace) success tests for MoveMemberTool, split out of BatteryTwentyFourTests so they cannot
 // leak files into the bin dir. Sources are written with CRLF; text read back is normalized to LF before comparing.
+// TODO move this whole file (542 lines, MoveMemberTool only) to Tests.Tools.Basic: needs a MoveFile tool or cross-project MoveType (MoveType is a no-op for a sole type)
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
 public sealed class MoveMemberSuccessTests

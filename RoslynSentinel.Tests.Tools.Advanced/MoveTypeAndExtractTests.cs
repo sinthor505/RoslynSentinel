@@ -8,6 +8,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
 // In-memory (FakeWorkspaceManager) tests split out of BatteryTwentyFourTests so they cannot leak files into the bin dir.
+// TODO move the ChangeSignature/MoveMember/MoveAllTypesToFiles tests of this file to Tests.Tools.Basic (needs the file split)
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
 public sealed class MoveTypeAndExtractTests

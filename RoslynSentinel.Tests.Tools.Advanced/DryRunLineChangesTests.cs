@@ -8,6 +8,7 @@ namespace RoslynSentinel.Tests.Tools.Advanced;
 // Dry-run LineChanges coverage. A dry run builds its AppliedChangeSummary through AppliedChangeSummary.From, so LineChanges
 // must be filled with real counts and the workspace must stay untouched. autoStage is hardcoded true on these tools now,
 // so dryRun is the only preview-only path. In-memory (InMemoryWorkspace), like its siblings.
+// TODO move the ChangeSignature/MoveMember tests of this file to Tests.Tools.Basic (needs the file split)
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
 public sealed class DryRunLineChangesTests

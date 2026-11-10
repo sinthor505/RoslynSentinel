@@ -1,13 +1,11 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Common;
-using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
-using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Basic;
 
 #pragma warning disable CS8618
-namespace RoslynSentinel.Tests.Tools.Advanced;
+namespace RoslynSentinel.Tests.Tools.Basic;
 
 /// <summary>
 /// Tool-level proof that MoveMemberTool refuses a real (non-dry-run) move that leaves call sites unresolved when the

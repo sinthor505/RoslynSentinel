@@ -11,6 +11,7 @@ namespace RoslynSentinel.Tests.Tools.Advanced;
 
 // In-memory (FakeWorkspaceManager) tests split out of BatteryTwentyFourTests so they cannot leak files into the bin dir.
 // Covers declaration-level edits: member remove/replace, signature, accessibility, modifiers and enum members.
+// TODO move the ChangeSignature/MoveMember tests of this file to Tests.Tools.Basic (needs the file split)
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
 public sealed class DeclarationModifierTests

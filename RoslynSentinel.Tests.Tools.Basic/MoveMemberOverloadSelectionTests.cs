@@ -1,7 +1,7 @@
 using RoslynSentinel.Tests.Fakes;
-using RoslynSentinel.Tools.Advanced;
+using RoslynSentinel.Tools.Basic;
 
-namespace RoslynSentinel.Tests.Tools.Advanced;
+namespace RoslynSentinel.Tests.Tools.Basic;
 
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
@@ -53,7 +53,7 @@ public sealed class MoveMemberOverloadSelectionTests
     {
         var original = SaveFixture();
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Save"], "Target");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
@@ -67,7 +67,7 @@ public sealed class MoveMemberOverloadSelectionTests
     public async Task MoveMember_AmbiguousError_PrintedExampleSignatureRoundTrips()
     {
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", SaveFixture()));
-        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
         var refusal = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Save"], "Target");
         Assert.That(refusal.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
         var message = refusal.ErrorData?.Message ?? string.Empty;
@@ -85,14 +85,14 @@ public sealed class MoveMemberOverloadSelectionTests
     public async Task MoveMember_EveryPrintedSignature_RoundTripsAndMovesExactlyOneOverload()
     {
         using var probe = InMemoryWorkspace.Create(("Refactor.cs", SaveFixture()));
-        var probeTools = BatteryToolFactory.CreateCoreRefactoringTools(probe.Manager);
+        var probeTools = Battery.Basic.TestTools.CoreRefactoringTools(probe.Manager);
         var refusal = await probeTools.MoveMemberTool(reason: "test message", probe.PathOf("Refactor.cs"), "Source", ["Save"], "Target");
         var signatures = PrintedSignatures(refusal.ErrorData?.Message ?? string.Empty);
         Assert.That(signatures, Has.Count.EqualTo(6));
         foreach (var signature in signatures)
         {
             using var workspace = InMemoryWorkspace.Create(("Refactor.cs", SaveFixture()));
-            var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
+            var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
             var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", [signature], "Target");
             Assert.That(result.IsError, Is.False, $"{signature}: {result.ErrorData?.Message}");
             var text = workspace.ReadText("Refactor.cs");
@@ -106,7 +106,7 @@ public sealed class MoveMemberOverloadSelectionTests
     public async Task MoveMember_SignatureSelectsOneOverload_MovesOnlyThatOverload()
     {
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", SaveFixture()));
-        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Save(int)"], "Target");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         var text = workspace.ReadText("Refactor.cs");
@@ -121,7 +121,7 @@ public sealed class MoveMemberOverloadSelectionTests
     public async Task MoveMember_AllSignaturesListed_MovesWholeGroup()
     {
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", SaveFixture()));
-        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Save(int)", "Save(string)"], "Target");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         var text = workspace.ReadText("Refactor.cs");
@@ -137,7 +137,7 @@ public sealed class MoveMemberOverloadSelectionTests
     {
         var original = "public static class Source\r\n{\r\n    public static int Only() => 1;\r\n    public static int Other() => 2;\r\n}\r\n\r\npublic static class Target\r\n{\r\n}\r\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Only"], "Target");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         var text = workspace.ReadText("Refactor.cs");
@@ -152,7 +152,7 @@ public sealed class MoveMemberOverloadSelectionTests
     {
         var original = "public static class Source\r\n{\r\n    public static int Count = 1;\r\n    public static int Prop => 2;\r\n    public static class Nested\r\n    {\r\n    }\r\n}\r\n\r\npublic static class Target\r\n{\r\n}\r\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Count", "Prop", "Nested"], "Target");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         var text = workspace.ReadText("Refactor.cs");
@@ -170,7 +170,7 @@ public sealed class MoveMemberOverloadSelectionTests
     {
         var original = SaveFixture();
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Save(long)"], "Target");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
@@ -185,7 +185,7 @@ public sealed class MoveMemberOverloadSelectionTests
     {
         var original = SaveFixture();
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Save(int)", "Save(long)"], "Target");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
@@ -199,7 +199,7 @@ public sealed class MoveMemberOverloadSelectionTests
     {
         var original = "using System.Collections.Generic;\r\n\r\npublic static class Source\r\n{\r\n    public static int Save(int a) => a;\r\n    public static int Lookup(Dictionary<string, int> map) => map.Count;\r\n}\r\n\r\npublic static class Target\r\n{\r\n}\r\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Save( int )", "Lookup(Dictionary< string , int >)"], "Target");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         var text = workspace.ReadText("Refactor.cs");
@@ -215,7 +215,7 @@ public sealed class MoveMemberOverloadSelectionTests
     {
         var original = "public static class Source\r\n{\r\n    public static int Save(int a) => a;\r\n}\r\n\r\npublic static class Target\r\n{\r\n}\r\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Save(System.Int32)"], "Target");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
@@ -228,14 +228,14 @@ public sealed class MoveMemberOverloadSelectionTests
     {
         var original = "#nullable enable\r\npublic static class Source\r\n{\r\n    public static int Save(string? s) => s?.Length ?? 0;\r\n}\r\n\r\npublic static class Target\r\n{\r\n}\r\n";
         using var nonNullWorkspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateCoreRefactoringTools(nonNullWorkspace.Manager);
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(nonNullWorkspace.Manager);
         var nonNull = await tools.MoveMemberTool(reason: "test message", nonNullWorkspace.PathOf("Refactor.cs"), "Source", ["Save(string)"], "Target");
         Assert.That(nonNull.IsError, Is.True);
         Assert.That(nonNull.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         Assert.That(nonNullWorkspace.ReadText("Refactor.cs"), Is.EqualTo(original), "A refused call must not write.");
 
         using var nullableWorkspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var nullableTools = BatteryToolFactory.CreateCoreRefactoringTools(nullableWorkspace.Manager);
+        var nullableTools = Battery.Basic.TestTools.CoreRefactoringTools(nullableWorkspace.Manager);
         var nullable = await nullableTools.MoveMemberTool(reason: "test message", nullableWorkspace.PathOf("Refactor.cs"), "Source", ["Save(string?)"], "Target");
         Assert.That(nullable.IsError, Is.False, $"error: {nullable.ErrorData?.Message}");
         Assert.That(TargetPart(nullableWorkspace.ReadText("Refactor.cs")), Does.Contain("Save(string? s)"));
@@ -247,7 +247,7 @@ public sealed class MoveMemberOverloadSelectionTests
     {
         var original = SaveFixture();
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Save", "Save(int)"], "Target");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));

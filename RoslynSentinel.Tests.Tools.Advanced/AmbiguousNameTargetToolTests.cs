@@ -8,6 +8,7 @@ namespace RoslynSentinel.Tests.Tools.Advanced;
 // In-memory (InMemoryWorkspace) refusal tests proving that name-keyed tools refuse an ambiguous name with a
 // structured Ambiguous error and leave the file untouched. Each source holds exactly two candidates for the name.
 // Substitutions for tools not reachable from this project's BatteryToolFactory are noted on the test.
+// TODO move the ChangeSignature/MoveMember tests of this file to Tests.Tools.Basic (needs the file split)
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
 [Category("AmbiguousNameTarget")]

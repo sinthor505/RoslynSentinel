@@ -15,6 +15,7 @@ namespace RoslynSentinel.Tests.Tools.Advanced;
 /// namespace line), a change the move did not make. The guard must refuse it with CollateralChangeRefused and write
 /// nothing. Control: the plain engine passes the same call, so the refusal is the normalizer's doing.
 /// </summary>
+// TODO move this whole file (446 lines, MoveMemberTool only) to Tests.Tools.Basic: needs a MoveFile tool or cross-project MoveType (MoveType is a no-op for a sole type)
 [TestFixture]
 // Runs exclusively: the leak guard wipes top-level *.cs in the shared working directory, which would delete files parallel fixtures in this assembly are using (AssemblyInfo.cs sets ParallelScope.Fixtures).
 [NonParallelizable]
