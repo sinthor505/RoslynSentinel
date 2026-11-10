@@ -331,8 +331,10 @@ public static class NotFoundEvidence
             return null;
         }
 
-        var head = GitProcess.TryRun(dir, GitTimeout, "show", $"HEAD:./{Path.GetFileName(fullPath)}");
-        if (head is not { ExitCode: 0 } || !Holds(head.Value.StdOut, term))
+        // The file's blob in HEAD, path relative to its own directory, via libgit2 with a CLI fallback (cat-file blob, which like
+        // the old `git show HEAD:./file` prints the raw committed content). Null when HEAD has no such file, as the old non-zero exit.
+        var head = GitReaders.Default.ReadBlobAtHead(dir, Path.GetFileName(fullPath), GitTimeout);
+        if (head is null || !Holds(head, term))
         {
             return null;
         }

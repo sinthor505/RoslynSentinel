@@ -232,14 +232,11 @@ public static class ResidualMentionScanner
     // Tracked files only: ignored build output and scratch folders are not residual mentions. Null means walk the root instead.
     private static List<string>? TryCollectTrackedNonSourceFiles(string solutionRoot)
     {
-        var run = GitProcess.TryRun(solutionRoot, TimeSpan.FromSeconds(10), "ls-files", "-z", "--cached");
-        if (run is null || run.Value.ExitCode != 0)
-        {
-            return null;
-        }
-
-        var relativePaths = run.Value.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries);
-        if (relativePaths.Length == 0)
+        // The index contents under solutionRoot, relative to it, in index order (what `git ls-files -z --cached` printed), via
+        // libgit2 with a CLI fallback. An unmerged path is reported once here (ls-files repeats it per merge stage); the list is
+        // sorted and filtered below, so neither difference is visible.
+        var relativePaths = GitReaders.Default.ListTrackedPaths(solutionRoot, TimeSpan.FromSeconds(10));
+        if (relativePaths is null || relativePaths.Count == 0)
         {
             return null;
         }

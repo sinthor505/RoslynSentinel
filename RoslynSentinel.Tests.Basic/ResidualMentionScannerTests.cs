@@ -224,6 +224,26 @@ public class ResidualMentionScannerTests
         Assert.That(mentions.Select(m => m.FilePath.Relative), Is.EqualTo(new[] { "notes.md" }));
     }
 
+    [Test]
+    public async Task ScanAsync_GitRepo_TrackedFileListIsServedByLibgit2NotTheCliFallback()
+    {
+        InitGitRepo();
+        WriteFileUnderRoot(Path.Combine("sub dir", "notes.md"), "Mentions OldName here.\n");
+        WriteFileUnderRoot("untracked.md", "OldName untracked\n");
+        RunGit(_root, "add", "sub dir/notes.md");
+        var libgit2Before = RoslynSentinel.Common.GitReaders.Default.Libgit2Count;
+        var fallbacksBefore = RoslynSentinel.Common.GitReaders.Default.CliFallbackCount;
+
+        var mentions = await ResidualMentionScanner.ScanAsync(new AdhocWorkspace().CurrentSolution, _root, "OldName", isNamespace: false);
+
+        // Counters are process-wide and other tests may add to them in parallel, so assert on direction, not exact deltas;
+        // a silent fallback leaves FirstFallbackReason set and raises CliFallbackCount.
+        Assert.That(mentions.Select(m => m.FilePath.Relative.Replace('\\', '/')), Is.EqualTo(new[] { "sub dir/notes.md" }));
+        Assert.That(RoslynSentinel.Common.GitReaders.Default.FirstFallbackReason, Is.Null, "libgit2 fell back to the CLI: native library missing or broken?");
+        Assert.That(RoslynSentinel.Common.GitReaders.Default.CliFallbackCount, Is.EqualTo(fallbacksBefore));
+        Assert.That(RoslynSentinel.Common.GitReaders.Default.Libgit2Count, Is.GreaterThan(libgit2Before));
+    }
+
     // Turns _root into a git repository. No commit is made: --cached reads the index.
     private void InitGitRepo()
     {

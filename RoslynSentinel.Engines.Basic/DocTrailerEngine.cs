@@ -919,31 +919,23 @@ public static class DocTrailerEngine
     private static List<TrailerHit>? ReadTrailerHits(string repoRoot, TimeSpan timeout, out string? error)
     {
         error = null;
-        var run = GitProcess.TryRun(repoRoot, timeout, "log", "--format=%H%x1f%B%x1e");
-        if (run is null)
+        // Every commit reachable from HEAD with its raw message (what `git log --format=%H%x1f%B%x1e` gave), via libgit2 with a
+        // CLI fallback. Message bytes are untouched (CRLF and trailing newlines survive, parity-tested). Order is date order with a
+        // parent never before its child: it can differ from git's only for same-second commits on parallel branches. The seam does
+        // not say why git could not answer (not a repository, no commits yet, git missing, timeout), so one error covers them all.
+        var messages = GitReaders.Default.GetCommitMessages(repoRoot, timeout);
+        if (messages is null)
         {
-            error = $"git could not be run to read commit trailers ({GitProcess.LastFailure ?? "unknown reason"}). Check that git is on PATH and retry.";
-            return null;
-        }
-
-        if (run.Value.ExitCode != 0)
-        {
-            error = $"git log exited with code {run.Value.ExitCode}: the repo root is probably not a git repository or has no commits yet. Run the call from a repo root with at least one commit.";
+            error = "git could not read the commit history to scan trailers: the repo root is probably not a git repository or has no commits yet, or git is unavailable or timed out. Run the call from a repo root with at least one commit, and check that git is on PATH.";
             return null;
         }
 
         var hits = new List<TrailerHit>();
         try
         {
-            foreach (var record in run.Value.StdOut.Split('\u001e'))
+            foreach (var message in messages)
             {
-                var parts = record.Split('\u001f', 2);
-                if (parts.Length < 2)
-                {
-                    continue;
-                }
-
-                var sha = parts[0].Trim();
+                var sha = message.Sha;
                 if (sha.Length < 7)
                 {
                     continue;
@@ -951,7 +943,7 @@ public static class DocTrailerEngine
 
                 var hash = sha[..Math.Min(ShortHashLength, sha.Length)];
                 var seen = new HashSet<(string, string)>();
-                foreach (var rawLine in parts[1].Split('\n'))
+                foreach (var rawLine in message.Message.Split('\n'))
                 {
                     var m = TrailerLine.Match(rawLine.TrimEnd('\r'));
                     if (!m.Success)

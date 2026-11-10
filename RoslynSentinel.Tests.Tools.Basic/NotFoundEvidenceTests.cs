@@ -306,6 +306,24 @@ public class NotFoundEvidenceTests
     }
 
     [Test]
+    public void RemovedOutsideServer_GitNote_IsServedByLibgit2NotTheCliFallback()
+    {
+        InitRepoWithHead("class Foo { void Bar() { } }");
+        File.WriteAllText(Path.Combine(_root, "Foo.cs"), "class Foo { }");
+        var libgit2Before = RoslynSentinel.Common.GitReaders.Default.Libgit2Count;
+        var fallbacksBefore = RoslynSentinel.Common.GitReaders.Default.CliFallbackCount;
+
+        var findings = Find("Bar");
+
+        // Counters are process-wide and other tests may add to them in parallel, so assert on direction, not exact deltas;
+        // a silent fallback leaves FirstFallbackReason set and raises CliFallbackCount.
+        Assert.That(findings, Has.Count.EqualTo(1));
+        Assert.That(RoslynSentinel.Common.GitReaders.Default.FirstFallbackReason, Is.Null, "libgit2 fell back to the CLI: native library missing or broken?");
+        Assert.That(RoslynSentinel.Common.GitReaders.Default.CliFallbackCount, Is.EqualTo(fallbacksBefore));
+        Assert.That(RoslynSentinel.Common.GitReaders.Default.Libgit2Count, Is.GreaterThan(libgit2Before));
+    }
+
+    [Test]
     public void TypoInRepo_NoGitNote()
     {
         InitRepoWithHead("class Foo { }");

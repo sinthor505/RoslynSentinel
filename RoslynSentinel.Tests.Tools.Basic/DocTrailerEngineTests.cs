@@ -136,6 +136,65 @@ public class DocTrailerEngineTests
     }
 
     [Test]
+    public void Scan_InTheNormalEnvironment_IsServedByLibgit2NotTheCliFallback()
+    {
+        BuildFixture();
+        var libgit2Before = RoslynSentinel.Common.GitReaders.Default.Libgit2Count;
+        var fallbacksBefore = RoslynSentinel.Common.GitReaders.Default.CliFallbackCount;
+
+        var scan = DocTrailerEngine.ScanTrailers(_repo, GitTimeout);
+
+        // Counters are process-wide and other tests may add to them in parallel, so assert on direction, not exact deltas;
+        // a silent fallback leaves FirstFallbackReason set and raises CliFallbackCount.
+        Assert.That(scan.Error, Is.Null);
+        Assert.That(scan.CommitsWithTrailers, Is.EqualTo(5));
+        Assert.That(RoslynSentinel.Common.GitReaders.Default.FirstFallbackReason, Is.Null, "libgit2 fell back to the CLI: native library missing or broken?");
+        Assert.That(RoslynSentinel.Common.GitReaders.Default.CliFallbackCount, Is.EqualTo(fallbacksBefore));
+        Assert.That(RoslynSentinel.Common.GitReaders.Default.Libgit2Count, Is.GreaterThan(libgit2Before));
+    }
+
+    [Test]
+    public void Scan_CrLfCommitMessageWithoutTrailingNewline_TrailersAreStillParsed()
+    {
+        WriteDoc("docs/current/plans/plan_a.md", "# Plan A\n\n**Status:** open\n");
+        Commit("add docs");
+        var message = Path.Combine(Path.GetTempPath(), "rs-doctrailer-msg-" + Guid.NewGuid().ToString("N") + ".txt");
+        try
+        {
+            // Raw CRLF message with no final newline, stored verbatim: the line parser must cope with the stray CR.
+            File.WriteAllBytes(message, "work on a\r\n\r\nPlan: plan_a"u8.ToArray());
+            RunGit(_repo, "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit", "--quiet", "--allow-empty", "--cleanup=verbatim", "-F", message);
+        }
+        finally
+        {
+            File.Delete(message);
+        }
+
+        var scan = DocTrailerEngine.ScanTrailers(_repo, GitTimeout);
+
+        Assert.That(scan.Error, Is.Null);
+        Assert.That(scan.Docs.Single(d => d.Id == "plan_a").PlanCommits, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void Scan_NotAGitRepository_ReturnsAnActionableError()
+    {
+        var plain = Path.Combine(Path.GetTempPath(), "rs-doctrailer-plain-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(plain, "docs"));
+        try
+        {
+            var scan = DocTrailerEngine.ScanTrailers(plain, GitTimeout);
+
+            Assert.That(scan.Error, Does.Contain("not a git repository"));
+            Assert.That(scan.Error, Does.Contain("at least one commit"));
+        }
+        finally
+        {
+            Directory.Delete(plain, recursive: true);
+        }
+    }
+
+    [Test]
     public void Scan_DocWithoutTrailers_IsOmitted()
     {
         BuildFixture();
