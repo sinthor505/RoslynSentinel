@@ -39,6 +39,7 @@ public static class FileIoHelper
     /// <summary>Writes text to a file with optional encoding specification, creating the parent directory if needed. Holds the per-path lock for the duration of the write. If encoding is null, uses UTF-8 without BOM.</summary>
     public static async Task WriteAllTextAsync(FilePathWrapper filePath, string content, Encoding? encoding, CancellationToken cancellationToken = default)
     {
+        // TODO cross-process write lock: only the ApplyProposedChangesAsync chokepoint takes CrossProcessWriteLock; callers that reach this helper directly (outside the chokepoint) get in-process FilePathLock exclusion only (plan_stale_read_guard_followups Step 9b exclusions)
         using (await FilePathLock.AcquireAsync(filePath, cancellationToken))
         {
             var directory = Path.GetDirectoryName(filePath.Absolute);
