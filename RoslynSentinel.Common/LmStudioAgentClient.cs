@@ -149,7 +149,7 @@ public sealed class LmStudioAgentClient
         var requestBody = new ResponsesRequest
         {
             Model = _model,
-            Input = messages.SelectMany(ToInputItems).ToList(),
+            Input = BuildInputItems(messages),
             Tools = tools.Count > 0 ? tools.Select(ToWireTool).ToList() : null,
             ToolChoice = tools.Count > 0 ? "auto" : null,
             MaxOutputTokens = maxTokens,
@@ -437,7 +437,23 @@ public sealed class LmStudioAgentClient
         }
     }
 
-    private static List<object> ToInputItems(AgentChatMessage message)
+    /// <summary>
+    /// How many of the most recent assistant turns get their reasoning replayed. Replaying every turn's
+    /// reasoning overflowed a 60k context after 31 turns (10-chain run 20261110-072746, request of 60437
+    /// tokens); the model restates its plan in each turn's reasoning, so the recent turns carry it.
+    /// </summary>
+    internal const int ReasoningReplayTurns = 10;
+
+    private static List<object> BuildInputItems(IReadOnlyList<AgentChatMessage> messages)
+    {
+        var assistantIndexes = messages.Select((m, i) => (m, i)).Where(x => x.m.Role == "assistant").Select(x => x.i).ToList();
+        var firstReplayed = assistantIndexes.Count > ReasoningReplayTurns
+            ? assistantIndexes[assistantIndexes.Count - ReasoningReplayTurns]
+            : 0;
+        return messages.SelectMany((m, i) => ToInputItems(m, replayReasoning: i >= firstReplayed)).ToList();
+    }
+
+    private static List<object> ToInputItems(AgentChatMessage message, bool replayReasoning)
     {
         if (message.Role == "tool")
         {
@@ -459,7 +475,7 @@ public sealed class LmStudioAgentClient
             // multi-step work. Probe on LM Studio 2026-11-10: with a reasoning input item the model
             // recalled a codeword from it; without, it invented one.
             var items = new List<object>();
-            if (!string.IsNullOrEmpty(message.ReasoningContent))
+            if (replayReasoning && !string.IsNullOrEmpty(message.ReasoningContent))
             {
                 items.Add(new ReasoningItem
                 {
@@ -487,7 +503,7 @@ public sealed class LmStudioAgentClient
 
     /// <summary>The Responses input items for <paramref name="messages"/>, serialized as sent. For tests.</summary>
     internal static string SerializeInputItems(IEnumerable<AgentChatMessage> messages) =>
-        JsonSerializer.Serialize(messages.SelectMany(ToInputItems).ToList(), JsonOptions);
+        JsonSerializer.Serialize(BuildInputItems(messages.ToList()), JsonOptions);
 
     private static ResponsesTool ToWireTool(AgentToolDefinition tool) => new()
     {

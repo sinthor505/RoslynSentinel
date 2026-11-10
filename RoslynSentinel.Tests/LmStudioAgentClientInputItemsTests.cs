@@ -63,6 +63,27 @@ public class LmStudioAgentClientInputItemsTests
         Assert.That(items.Select(Type), Is.EqualTo(new[] { "function_call" }));
     }
 
+    [Test]
+    public void OnlyTheMostRecentTurnsReplayReasoning()
+    {
+        var turns = Enumerable.Range(1, LmStudioAgentClient.ReasoningReplayTurns + 3)
+            .Select(i => new AgentChatMessage
+            {
+                Role = "assistant",
+                ReasoningContent = $"plan {i}",
+                ToolCalls = [new AgentToolCall { Id = $"call_{i}", Name = "ReadFile", ArgumentsJson = "{}" }],
+            })
+            .ToArray();
+
+        var reasoning = Serialize(turns).Where(e => Type(e) == "reasoning")
+            .Select(e => e.GetProperty("content")[0].GetProperty("text").GetString())
+            .ToList();
+
+        Assert.That(reasoning, Has.Count.EqualTo(LmStudioAgentClient.ReasoningReplayTurns));
+        Assert.That(reasoning[0], Is.EqualTo("plan 4"));
+        Assert.That(reasoning[^1], Is.EqualTo($"plan {LmStudioAgentClient.ReasoningReplayTurns + 3}"));
+    }
+
     // InputMessageItem carries no "type" property on the wire; report it as "message".
     private static string Type(JsonElement item) =>
         item.TryGetProperty("type", out var t) ? t.GetString()! : "message";
