@@ -224,4 +224,44 @@ public class ZeroHitSearchHintToolTests
         Assert.That(result, Is.SameAs(input));
         Assert.That(result.Findings, Is.Null.Or.Empty);
     }
+
+    [Test]
+    [CancelAfter(30000)]
+    public async Task AddZeroHitEvidence_ReferencesMode_NullTotalRecordsZeroReferences_ForeignBlob_AddsInfoFinding()
+    {
+        var file = FileIn("A.cs");
+        File.WriteAllText(file, Original);
+        await WriteForeignBlobAsync(ForeignBefore);
+        using var manager = NewManager(file, Original);
+        var readNav = Battery.Basic.TestTools.WorkspaceReadNavigationImpl(manager);
+
+        // The shape FindReferences returns for a zero-reference success: TotalRecords unset, empty lists, a zero ListSummary.
+        SetMe(); var summary = SummarizeListResult.Build(new List<string>(), p => p);
+        var input = new SentinelCallToolResult<object> { IsError = false, SuccessData = new ReferencesSearchResult([], [], summary), ListSummary = summary, StatusMessage = summary.ToSummaryMessage("hit") };
+        var result = readNav.AddZeroHitEvidence(SearchMode.references, "Zorblax", input);
+
+        var notes = result.Findings.Where(f => f.Source == "EditAttribution").ToList();
+        Assert.That(notes, Has.Count.EqualTo(1));
+        Assert.That(notes[0].Severity, Is.EqualTo(FindingSeverity.Info));
+        Assert.That(notes[0].Message, Does.Contain("Zorblax").And.Contain("other-agent"));
+    }
+
+    [Test]
+    [CancelAfter(30000)]
+    public async Task SearchText_LiteralQueryWithParen_ZeroHits_ForeignRemovalBlob_AddsInfoEditAttributionFinding()
+    {
+        var file = FileIn("A.cs");
+        File.WriteAllText(file, Original);
+        await WriteForeignBlobAsync("public void Foo(int x)\r\n{\r\n}\r\n");
+        using var manager = NewManager(file, Original);
+        var readNav = Battery.Basic.TestTools.WorkspaceReadNavigationImpl(manager);
+
+        // "Foo(" is not a valid regex, so the zero-hit note must match it as a literal substring.
+        SetMe(); var result = await readNav.SearchSolutionText(reason: "test zero hit search note for a literal query containing a paren", pattern: "Foo(");
+
+        Assert.That(result.TotalRecords, Is.EqualTo(0));
+        var notes = result.Findings.Where(f => f.Source == "EditAttribution").ToList();
+        Assert.That(notes, Has.Count.EqualTo(1));
+        Assert.That(notes[0].Message, Does.Contain("Foo(").And.Contain("other-agent"));
+    }
 }

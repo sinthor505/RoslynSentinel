@@ -1366,7 +1366,6 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         return WorkspaceReloadTriggerKind.SourceFileChange;
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("AsyncUsage", "AsyncFixer03:Fire-and-forget async-void methods or delegates", Justification = "Event handler")]
     // Read-path fold for one file. Lock rules: (a) _solutionLock is taken first, then the OS write lock, never the reverse;
     // (b) the OS lock is a FileShare.None FileStream and NOT re-entrant, so it is taken only at this entry point and in
     // FlushPendingFoldsAsync, never inside ApplyInMemoryDocumentUpdatesAsync and never from a region already holding it;
@@ -1561,6 +1560,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         return false;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("AsyncUsage", "AsyncFixer03:Fire-and-forget async-void methods or delegates", Justification = "Event handler")]
     private async void OnDebounceTimerElapsed(object? state)
     {
         if (_disposed)

@@ -1261,9 +1261,9 @@ public class WorkspaceReadNavigationImpl
                 {
                     warnings.Add(recoveryHint);
                 }
-                var justTripped = _workspaceManager.RecordSearchOutcome(0);
+                var justTripped = _workspaceManager.RecordSearchOutcome(0); // TODO ForZeroHitSearch takes one isRegex flag, so a query that is both a valid regex and a literal (e.g. a+b) gets only the regex match; add a literal-and-regex overload.
                 var emptyResult = new SentinelCallToolResult<object> { IsError = false, SuccessData = new TextSearchResult(literalResults, regexResults, regexOverlapCount, regexPatternValid), TotalRecords = 0, WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = string.Join(" ", warnings) };
-                return emptyResult with { IsError = false, WarningDetails = null, Findings = [.. (justTripped ? new[] { new Finding("OrientationBreaker", string.Join(" ", warnings), FindingSeverity.Warning) } : Array.Empty<Finding>()), .. NotFoundEvidence.ForZeroHitSearch(solutionRoot, pattern, isRegex: true)] };
+                return emptyResult with { IsError = false, WarningDetails = null, Findings = [.. (justTripped ? new[] { new Finding("OrientationBreaker", string.Join(" ", warnings), FindingSeverity.Warning) } : Array.Empty<Finding>()), .. NotFoundEvidence.ForZeroHitSearch(solutionRoot, pattern, isRegex: regexPatternValid)] };
             }
             else if (totalMatchCount > returnedMatchCount)
             {
@@ -1297,7 +1297,8 @@ public class WorkspaceReadNavigationImpl
     // Adds the zero-hit EditAttribution note to a non-text search that matched nothing. Text mode adds its own notes inside SearchSolutionText.
     public SentinelCallToolResult<object> AddZeroHitEvidence(SearchMode mode, string? query, SentinelCallToolResult<object> result)
     {
-        if (result.IsError || result.TotalRecords != 0 || mode == SearchMode.text || string.IsNullOrWhiteSpace(query))
+        // FindReferences leaves TotalRecords null on a zero-reference success; its ListSummary still reports TotalCount 0.
+        if (result.IsError || !(result.TotalRecords == 0 || (result.TotalRecords is null && result.ListSummary is { TotalCount: 0 })) || mode == SearchMode.text || string.IsNullOrWhiteSpace(query))
         {
             return result;
         }
