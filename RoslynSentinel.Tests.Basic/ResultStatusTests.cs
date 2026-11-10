@@ -380,6 +380,19 @@ public class ResultStatusTests
         Assert.That(rootProperties, Does.Not.Contain("Status"));
         Assert.That(rootProperties, Does.Not.Contain("Code"));
         Assert.That(rootProperties, Does.Not.Contain("Message"));
+
+        Assert.That(((VariableLifetimeReport)bad).Code, Is.EqualTo(ToolErrorCode.Exception));
+
+        var notFound = new VariableLifetimeReport { Error = "x", ErrorCode = ToolErrorCode.NotFound };
+        var invalid = new VariableLifetimeReport { Error = "x", ErrorCode = ToolErrorCode.InvalidArgument };
+        Assert.That(notFound.Code, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(notFound.Status, Is.EqualTo(ResultStatusExtensions.FromErrorCode(ToolErrorCode.NotFound)));
+        Assert.That(invalid.Code, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(invalid.Status, Is.EqualTo(ResultStatusExtensions.FromErrorCode(ToolErrorCode.InvalidArgument)));
+
+        using JsonDocument codedDoc = JsonDocument.Parse(JsonSerializer.Serialize(notFound));
+        string[] codedRootProperties = codedDoc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        Assert.That(codedRootProperties, Does.Not.Contain("ErrorCode"));
     }
 
     [Test]

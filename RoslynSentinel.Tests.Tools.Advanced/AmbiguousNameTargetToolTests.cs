@@ -209,4 +209,31 @@ public sealed class AmbiguousNameTargetToolTests
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
+
+    [Test]
+    [Category("IntelligenceTools")]
+    public async Task TraceVariableLifetime_VariableNotFound_IsNotFoundErrorNamingGetFileOutline()
+    {
+        var original = "public class Worker\r\n{\r\n    public int Run(int a)\r\n    {\r\n        int total = a + 1;\r\n        return total;\r\n    }\r\n}\r\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateIntelligenceTools(workspace.Manager);
+        var result = await tools.TraceVariableLifetimeTool(reason: "test message", workspace.PathOf("Refactor.cs"), "missing", 5);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData?.Message, Does.Contain("missing"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("GetFileOutline"));
+    }
+
+    [Test]
+    [Category("IntelligenceTools")]
+    public async Task TraceVariableLifetime_LineOutOfRange_IsInvalidArgument()
+    {
+        var original = "public class Worker\r\n{\r\n    public int Run(int a)\r\n    {\r\n        int total = a + 1;\r\n        return total;\r\n    }\r\n}\r\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateIntelligenceTools(workspace.Manager);
+        var result = await tools.TraceVariableLifetimeTool(reason: "test message", workspace.PathOf("Refactor.cs"), "total", 999);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("999"));
+    }
 }

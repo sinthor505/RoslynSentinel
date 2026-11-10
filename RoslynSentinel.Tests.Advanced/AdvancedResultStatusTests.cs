@@ -56,6 +56,13 @@ public class AdvancedResultStatusTests
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(bad.Status, Is.EqualTo(ResultStatusExtensions.FromErrorCode(ToolErrorCode.Exception)));
+
+        // A coded instance reports the status its ErrorCode maps to.
+        var codedConcrete = new TestScaffoldResult("c", "tc", "ns", "code", "boom") { ErrorCode = ToolErrorCode.NotFound };
+        IOperationResult coded = codedConcrete;
+        Assert.That(coded.IsError, Is.True);
+        Assert.That(coded.Status, Is.EqualTo(ResultStatusExtensions.FromErrorCode(ToolErrorCode.NotFound)));
 
         // The record's positional Code is the generated test source; the status code is an explicit
         // interface member, so the property keeps its meaning and its wire value.
@@ -68,6 +75,10 @@ public class AdvancedResultStatusTests
         Assert.That(rootProperties, Does.Not.Contain("Status"));
         Assert.That(rootProperties, Does.Not.Contain("Message"));
         Assert.That(doc.RootElement.GetProperty("Code").GetString(), Is.EqualTo("code"));
+
+        using JsonDocument codedDoc = JsonDocument.Parse(JsonSerializer.Serialize(codedConcrete));
+        string[] codedProperties = codedDoc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        Assert.That(codedProperties, Does.Not.Contain("ErrorCode"));
     }
 
     [Test]
@@ -80,10 +91,22 @@ public class AdvancedResultStatusTests
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(bad.Status, Is.EqualTo(ResultStatusExtensions.FromErrorCode(ToolErrorCode.Exception)));
+
+        // A coded instance reports the status its ErrorCode maps to, and Code carries the code.
+        var codedConcrete = new FluentBuilderResult("b", "c", "u", "boom") { ErrorCode = ToolErrorCode.NotFound };
+        IOperationResult coded = codedConcrete;
+        Assert.That(coded.IsError, Is.True);
+        Assert.That(coded.Status, Is.EqualTo(ResultStatusExtensions.FromErrorCode(ToolErrorCode.NotFound)));
+        Assert.That(codedConcrete.Code, Is.EqualTo(ToolErrorCode.NotFound));
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((FluentBuilderResult)bad));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
         Assert.That(rootProperties, Is.EquivalentTo(new[] { "BuilderClassName", "BuilderCode", "UsageExample", "Error" }));
+
+        using JsonDocument codedDoc = JsonDocument.Parse(JsonSerializer.Serialize(codedConcrete));
+        string[] codedProperties = codedDoc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        Assert.That(codedProperties, Is.EquivalentTo(new[] { "BuilderClassName", "BuilderCode", "UsageExample", "Error" }));
     }
 
     [Test]

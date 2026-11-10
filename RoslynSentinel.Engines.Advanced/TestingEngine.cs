@@ -20,7 +20,11 @@ public record TestScaffoldResult(
     public bool IsError => Error is not null;
 
     [System.Text.Json.Serialization.JsonIgnore]
-    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, ToolErrorCode.Exception);
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, ErrorCode ?? ToolErrorCode.Exception);
+
+    // Cause of Error when it is not an internal fault; null means Exception.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? ErrorCode { get; init; }
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => Error;
@@ -185,7 +189,8 @@ public class TestingEngine
 
         if (classNode == null)
         {
-            return new TestScaffoldResult(className, $"{className}Tests", "Global.Tests", "", $"Class '{className}' not found in {filePath}");
+            return new TestScaffoldResult(className, $"{className}Tests", "Global.Tests", "", $"Class '{className}' not found in {filePath}")
+            { ErrorCode = ToolErrorCode.NotFound };
         }
 
         var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString() ?? "Global";

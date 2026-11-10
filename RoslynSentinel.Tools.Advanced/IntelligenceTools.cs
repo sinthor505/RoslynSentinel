@@ -177,6 +177,7 @@ public class IntelligenceTools
                 var result = await _antiPatternEngine.GenerateCallTreeAsync(resolvedFilePath, methodName, maxDepth, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 return new SentinelCallToolResult<object>
                 {
+                    // TODO isError false on failure
                     IsError = false,
                     SuccessData = result
                 };
@@ -211,6 +212,7 @@ public class IntelligenceTools
             var result = await _solutionStructureEngine.PreviewMoveFileToNamespaceFolderAsync(resolvedFilePath, cancellationToken);
             return new SentinelCallToolResult<string>
             {
+                // TODO isError false on failure
                 IsError = false,
                 SuccessData = result.ToJsonSummary()
             };
@@ -236,6 +238,20 @@ public class IntelligenceTools
         try
         {
             var result = await _symbolNavigationEngine.TraceVariableLifetimeAsync(resolvedFilePath, variableName, lineNumber, cancellationToken);
+            if (result.IsError)
+            {
+                var hint = result.Code switch
+                {
+                    ToolErrorCode.NotFound => $" Call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} on the file to confirm the enclosing method's line range, then retry with a lineNumber inside it.",
+                    ToolErrorCode.InvalidArgument => $" lineNumber is 1-based; call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to find a valid line.",
+                    _ => string.Empty
+                };
+                return new SentinelCallToolResult<object>
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(result.Code!, result.Error! + hint)
+                };
+            }
             return new SentinelCallToolResult<object>
             {
                 IsError = false,

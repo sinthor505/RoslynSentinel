@@ -224,6 +224,53 @@ public class Counter
         Assert.That(result.ErrorData!.Message, Does.Contain("Class 'Missing' not found"));
     }
 
+    [Test]
+    public async Task GenerateFluentBuilder_ClassNotFound_IsNotFoundErrorNamingGetFileOutline()
+    {
+        var path = SetSource("Counter.cs", CounterWithoutTargetMethod);
+
+        var result = await _tools.Generate(CodeTransformKind.generate_fluent_builder, "outcome test", path, className: "Missing");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData!.Message, Does.Contain("Missing"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("GetFileOutline"));
+    }
+
+    [Test]
+    public async Task GenerateFluentBuilder_ClassWithoutSettableMembers_IsTargetIneligible()
+    {
+        var path = SetSource("Service.cs", "public class Service\n{\n    public void Run() { }\n}");
+
+        var result = await _tools.Generate(CodeTransformKind.generate_fluent_builder, "outcome test", path, className: "Service");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(result.ErrorData!.Message, Does.Contain("No settable public properties"));
+    }
+
+    [Test]
+    public async Task GenerateTestScaffold_ClassNotFound_IsNotFoundError()
+    {
+        var path = SetSource("Counter.cs", CounterWithoutTargetMethod);
+
+        var result = await _tools.Generate(CodeTransformKind.generate_test_scaffold, "outcome test", path, className: "Missing");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData!.Message, Does.Contain("Missing"));
+    }
+
+    [Test]
+    public async Task GenerateFluentBuilder_ClassWithSettableProperty_StaysASuccess()
+    {
+        var path = SetSource("Item.cs", "public class Item\n{\n    public int P { get; set; }\n}");
+
+        var result = await _tools.Generate(CodeTransformKind.generate_fluent_builder, "outcome test", path, className: "Item");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+    }
+
     // (d) AlreadyInTargetState is a success with an explicit message; nothing is written (the tool never
     // writes, and SuccessData carries no new file text).
     [Test]

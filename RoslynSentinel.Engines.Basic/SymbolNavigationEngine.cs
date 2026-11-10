@@ -2237,7 +2237,7 @@ public class SymbolNavigationEngine
         var text = await document.GetTextAsync(cancellationToken);
         if (lineNumber < 1 || lineNumber > text.Lines.Count)
         {
-            return new VariableLifetimeReport { Error = $"Line {lineNumber} is out of range." };
+            return new VariableLifetimeReport { Error = $"Line {lineNumber} is out of range.", ErrorCode = ToolErrorCode.InvalidArgument };
         }
 
         // Find declaration node at/near the requested line
@@ -2292,7 +2292,7 @@ public class SymbolNavigationEngine
 
         if (symbol == null)
         {
-            return new VariableLifetimeReport { Error = $"Variable '{variableName}' not found near line {lineNumber}." };
+            return new VariableLifetimeReport { Error = $"Variable '{variableName}' not found near line {lineNumber}.", ErrorCode = ToolErrorCode.NotFound };
         }
 
         // Read path: trace the first candidate but never silently; name the others and the retry (lineNumber is the selector).

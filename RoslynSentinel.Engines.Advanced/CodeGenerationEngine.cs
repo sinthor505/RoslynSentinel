@@ -33,7 +33,11 @@ public record FluentBuilderResult(
     public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
 
     [System.Text.Json.Serialization.JsonIgnore]
-    public string? Code => IsError ? ToolErrorCode.Exception : null;
+    public string? Code => IsError ? ErrorCode ?? ToolErrorCode.Exception : null;
+
+    // Cause of Error when it is not an internal fault; null means Exception.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? ErrorCode { get; init; }
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => Error;
@@ -616,7 +620,8 @@ public class CodeGenerationEngine
         if (typeNode == null)
         {
             return new FluentBuilderResult("", "", "",
-                Error: $"Class or record '{className}' not found in '{filePath}'. Check spelling and that the file contains this type.");
+                Error: $"Class or record '{className}' not found in '{filePath}'. Check spelling and that the file contains this type.")
+            { ErrorCode = ToolErrorCode.NotFound };
         }
 
         var ns = root?.DescendantNodes()
@@ -659,7 +664,8 @@ public class CodeGenerationEngine
             return new FluentBuilderResult("", "", "",
                 Error: $"No settable public properties or primary constructor parameters found on '{className}'. " +
                        $"generate_fluent_builder is designed for POCOs and records with settable properties, not " +
-                       $"DI-injected classes. Consider exposing public properties or using a record type.");
+                       $"DI-injected classes. Consider exposing public properties or using a record type.")
+            { ErrorCode = ToolErrorCode.TargetIneligible };
         }
 
         var builderClassName = className + "Builder";

@@ -782,6 +782,20 @@ public class CodeTransformTools
         return filePath.FailureReason == FilePathFailureReason.NoSolutionLoaded ? new ResultError(ToolErrorCode.SolutionNotLoaded, SolutionNotLoadedMessage.ForFilePath(kind, _workspaceManager.LoadState)) : new ResultError(ToolErrorCode.InvalidArgument, $"filePath is required for {kind}.");
     }
 
+    private static SentinelCallToolResult<object> GeneratorFailure(string code, string error)
+    {
+        var hint = code == ToolErrorCode.NotFound
+            ? $" Call {ToolCallHint.Call("GetFileOutline", ("filePath", "<the file>"))} to confirm the class name, then retry with that exact className."
+            : code == ToolErrorCode.TargetIneligible
+                ? " Add a settable property or a primary constructor parameter, or pick another class."
+                : "";
+        return new SentinelCallToolResult<object>()
+        {
+            IsError = true,
+            ErrorData = new ResultError(code, error + hint)
+        };
+    }
+
     // ── 3. apply_class_codetransform ────────────────────────────────────────────────
     [McpServerTool(Name = "ApplyClassCodeTransform")]
     [Produces(DataTag.ResultOnly)]
@@ -1200,6 +1214,10 @@ public class CodeTransformTools
                         try
                         {
                             var result = await _codeGenerationEngine.GenerateFluentBuilderAsync(resolvedFilePath, className, cancellationToken);
+                            if (result.IsError)
+                            {
+                                return GeneratorFailure(result.Code!, result.Error!);
+                            }
                             return new SentinelCallToolResult<object>()
                             {
                                 IsError = false,
@@ -1288,6 +1306,10 @@ public class CodeTransformTools
                         }
 
                         var result = await _testingEngine.GenerateTestScaffoldAsync(resolvedFilePath, className, framework, cancellationToken);
+                        if (result.IsError)
+                        {
+                            return GeneratorFailure(result.ErrorCode ?? ToolErrorCode.Exception, result.Error!);
+                        }
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,

@@ -9,7 +9,11 @@ public record VariableLifetimeReport : IOperationResult
     public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
 
     [System.Text.Json.Serialization.JsonIgnore]
-    public string? Code => IsError ? ToolErrorCode.Exception : null;
+    public string? Code => IsError ? ErrorCode ?? ToolErrorCode.Exception : null;
+
+    // Cause of Error when it is not an internal fault; null means Exception.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? ErrorCode { get; init; }
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => Error;
