@@ -119,16 +119,17 @@ public class OrderPricingRefactorChainAgentTests
         var editArm = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_MODELEVAL_EDIT_ARM");
         var editSnippetsArm = string.Equals(editArm, "EditSnippets", StringComparison.OrdinalIgnoreCase);
         TestContext.Out.WriteLine(editSnippetsArm ? "Edit arm: EditSnippets" : "Edit arm: ReplaceSnippet (default)");
+        // A 2026-11-10 run spent turns calling McpServerStatus/Features believing they restart the server; neither has a role in a refactor task.
         if (editSnippetsArm)
         {
             mcpBuilder.AddRoslynSentinelToolsAdvanced(
                 services,
                 new HashSet<string>(ActiveModes, StringComparer.OrdinalIgnoreCase) { "EditSnippetsExperiment" },
-                hideTools: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "ReplaceSnippet" });
+                hideTools: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "ReplaceSnippet", "Features", "McpServerStatus" });
         }
         else
         {
-            mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ActiveModes);
+            mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ActiveModes, hideTools: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Features", "McpServerStatus" });
         }
 
         if (BlockWriteFile)
@@ -201,6 +202,17 @@ public class OrderPricingRefactorChainAgentTests
             OrderPricingRefactorReproducer.CheckoutCallerFileContent,
             reloadSolution: false,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
+        // These fail at baseline by design and must pass at the end; the grader already requires zero failures and an unchanged test count.
+        if (TestContext.CurrentContext.Test.MethodName == nameof(Model_AppliesTenChainedRefactors))
+        {
+            await _fixture.AddFileToSolution(
+                workspaceManager,
+                Path.Combine("ContosoOrders.Tests", "ModelEvalGenerated", "RefactorAcceptanceTests.cs"),
+                RefactorAcceptanceTestsFileContent,
+                reloadSolution: false,
+                cancellationToken: TestContext.CurrentContext.CancellationToken);
+        }
+
         await _fixture.AddFileToSolution(
             workspaceManager,
             Path.Combine("ContosoOrders.Tests", "ModelEvalGenerated", "OrderCheckoutTests.cs"),
@@ -1288,6 +1300,73 @@ public class OrderPricingRefactorChainAgentTests
             $"Step 6: negative rate should still throw ArgumentOutOfRangeException. Transcript: {result.TranscriptPath}");
     }
 
+    private const string RefactorAcceptanceTestsFileContent = """
+using System;
+using System.Linq;
+using System.Reflection;
+using ContosoOrders.Core.FixtureHelpers;
+using Xunit;
+
+namespace ContosoOrders.Tests.ModelEvalGenerated
+{
+    // Acceptance tests for steps 3, 7 and 9 of the refactor plan. They fail until those steps are done.
+    public class RefactorAcceptanceTests
+    {
+        private const string Ns = "ContosoOrders.Core.FixtureHelpers.";
+        private static readonly Assembly Core = typeof(OrderCheckout).Assembly;
+
+        private static Type Calculator()
+        {
+            var type = Core.GetType(Ns + "StandardOrderPricingCalculator") ?? Core.GetType(Ns + "OrderPricingCalculator");
+            if (type == null)
+            {
+                throw new InvalidOperationException("No calculator class found in ContosoOrders.Core.FixtureHelpers.");
+            }
+
+            return type;
+        }
+
+        private static Type Interface() => Core.GetType(Ns + "IOrderPricingCalculator");
+
+        private static string Describe(MethodInfo m) =>
+            (m.IsPublic ? "public" : m.IsAssembly ? "internal" : m.IsPrivate ? "private" : m.IsFamily ? "protected" : "other") + " " + m.Name;
+
+        [Fact]
+        public void Step3_ExtractedHelperIsInternal()
+        {
+            var helpers = Calculator()
+                .GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
+                .Where(m => !m.Name.StartsWith("<") && m.Name != "CalculateDiscountedTotal" && m.ReturnType == typeof(decimal)
+                    && m.GetParameters().Select(p => p.ParameterType).SequenceEqual(new[] { typeof(decimal), typeof(decimal) }))
+                .ToList();
+            Assert.True(helpers.Count > 0, "Step 1: the calculator has no extracted helper of shape decimal Helper(decimal, decimal) returning amount * rate.");
+            Assert.True(helpers.All(m => m.IsAssembly), "Step 3: the extracted helper must be internal; found: " + string.Join(", ", helpers.Select(Describe)) + ".");
+        }
+
+        [Fact]
+        public void Step7_CheckoutFieldIsTheInterfaceAndCalculatorImplementsIt()
+        {
+            var iface = Interface();
+            Assert.True(iface != null && iface.IsInterface, "Step 7: interface IOrderPricingCalculator does not exist in ContosoOrders.Core.FixtureHelpers.");
+            Assert.True(iface.IsAssignableFrom(Calculator()), "Step 7: " + Calculator().Name + " does not implement IOrderPricingCalculator.");
+            var field = typeof(OrderCheckout).GetField("_calculator", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.True(field != null, "Step 7: OrderCheckout has no _calculator field.");
+            Assert.True(field.FieldType == iface, "Step 7: OrderCheckout._calculator is declared as " + field.FieldType.Name + "; it must be declared as IOrderPricingCalculator.");
+        }
+
+        [Fact]
+        public void Step9_InterfaceDeclaresDescribeOrderButNotSummarizeShipping()
+        {
+            var iface = Interface();
+            Assert.True(iface != null && iface.IsInterface, "Step 9: interface IOrderPricingCalculator does not exist (step 7 creates it).");
+            var describe = iface.GetMethod("DescribeOrder", new[] { typeof(int), typeof(string) });
+            Assert.True(describe != null && describe.ReturnType == typeof(string), "Step 9: IOrderPricingCalculator must declare string DescribeOrder(int, string).");
+            Assert.True(iface.GetMethod("SummarizeShipping") == null, "Step 9: IOrderPricingCalculator must not declare SummarizeShipping.");
+        }
+    }
+}
+""";
+
     // ============================================================================================
     // Rung 7 (10 steps): rung 6's 9 steps + replace SummarizeShipping's magic zone numbers with
     // named const int fields.
@@ -1392,14 +1471,15 @@ public class OrderPricingRefactorChainAgentTests
           build to just the `ContosoOrders.Core` project rather than the whole solution.
         - Then run the tests in the `ContosoOrders.Tests` project with an MCP tool and confirm every
           test passes. A failing test means a behavior changed: fix the code, not the test.
+        - `ContosoOrders.Tests/ModelEvalGenerated/RefactorAcceptanceTests.cs` checks steps 3, 7 and 9 and
+          fails until they are done. Do not edit that file.
 
         ## Before you report done
 
         Re-read the current, actual contents of `CalculateDiscountedTotal` (formerly `CalcDisc`),
         `SummarizeShipping`, `OrderCheckout.cs`, and `IOrderPricingCalculator.cs` - do not rely on
-        your memory of the edit you intended to make. For each item below, quote the exact line(s)
-        from a ReadFile result taken after your last edit that prove it, then answer yes or no. If
-        the quoted line does not show it, the item is not done: fix it before writing your summary.
+        your memory of the edit you intended to make. For each item below, check the real code and
+        answer yourself honestly before writing your summary:
 
         1. Does the standard-customer branch call your new extracted method? Does the
            preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result)?
@@ -1427,8 +1507,7 @@ public class OrderPricingRefactorChainAgentTests
         If re-reading the code reveals any of the above isn't true, fix it now before reporting —
         do not report success based on what you intended to do.
 
-        Report what you changed and the verification result, including each item's number, its
-        quoted evidence line(s) and your yes/no answer.
+        Report what you changed and the verification result.
         """;
 
     [Test]
