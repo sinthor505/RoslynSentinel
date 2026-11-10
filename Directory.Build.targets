@@ -1,0 +1,15 @@
+<Project>
+  <!-- LibGit2Sharp.NativeBinaries ships libgit2 for 12 RIDs (about 22 MB) as NuGet runtimeTargets, and the SDK
+       copies all of them into EVERY output (server bin, each test project bin, PlanStepRunner, publish). The
+       server only runs on Windows x64, so drop every native runtime asset that is not win-x64. Runs after
+       ResolvePackageAssets so the removal reaches copy-local, publish and the generated *.deps.json alike.
+       No RuntimeIdentifier is set on any project: that would change the output paths the launch scripts use.
+       Consequence: libgit2 loads on win-x64 only; on linux/osx the git reader seam falls back to the CLI. -->
+  <Target Name="TrimLibGit2NativeRuntimes" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <_LibGit2NonWinX64Native Include="@(RuntimeTargetsCopyLocalItems)"
+                               Condition="'%(RuntimeTargetsCopyLocalItems.NuGetPackageId)' == 'LibGit2Sharp.NativeBinaries' And '%(RuntimeTargetsCopyLocalItems.RuntimeIdentifier)' != 'win-x64'" />
+      <RuntimeTargetsCopyLocalItems Remove="@(_LibGit2NonWinX64Native)" />
+    </ItemGroup>
+  </Target>
+</Project>
