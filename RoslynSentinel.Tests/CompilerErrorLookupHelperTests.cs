@@ -286,6 +286,100 @@ public class CompilerErrorLookupHelperTests
         Assert.That(description, Does.Not.Contain("found:"));
     }
 
+    private const string InterfaceI = "namespace TestProj;\r\n\r\npublic interface IOrderPricingCalculator\r\n{\r\n}\r\n";
+
+    private static string FileName(DiagnosticInfo d) => Path.GetFileName(d.FilePath.ToString());
+
+    /// <summary>
+    /// Eval run 20261110-004337-782 T2/T3: CreateFile made IOrderPricingCalculator.cs, then a whole-file edit of
+    /// OrderPricingCalculator.cs declared the interface too. The compiler pointed at the unedited file; the hint names both.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_Cs0101DiagnosticInUneditedFile_NamesTheEditedFileAndTheUneditedOneAsync()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("IOrderPricingCalculator.cs", InterfaceI),
+            ("OrderPricingCalculator.cs", InterfaceI + "\r\npublic class OrderPricingCalculator : IOrderPricingCalculator\r\n{\r\n}\r\n"));
+        var cs0101 = report.Diagnostics.First(d => d.Id == "CS0101");
+        var diagnosticFile = FileName(cs0101);
+        var editedFile = diagnosticFile == "OrderPricingCalculator.cs" ? "IOrderPricingCalculator.cs" : "OrderPricingCalculator.cs";
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(
+            new DiagnosticReport(true, [cs0101]), _symbolNavigationEngine, editedFilePaths: [editedFile]);
+
+        Assert.That(description, Does.Contain(
+            $"'IOrderPricingCalculator' is now declared twice: in {editedFile} (changed by this edit) and in {diagnosticFile}. Keep one declaration: remove it from this edit if {diagnosticFile} already has it."));
+    }
+
+    [Test]
+    public async Task DescribeAsync_Cs0101DiagnosticInEditedFile_NamesItAsEditedAndTheCommittedOtherFileAsync()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("IOrderPricingCalculator.cs", InterfaceI),
+            ("Duplicate.cs", InterfaceI));
+        var cs0101 = report.Diagnostics.First(d => d.Id == "CS0101");
+        var diagnosticFile = FileName(cs0101);
+        var otherFile = diagnosticFile == "Duplicate.cs" ? "IOrderPricingCalculator.cs" : "Duplicate.cs";
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(
+            new DiagnosticReport(true, [cs0101]), _symbolNavigationEngine, editedFilePaths: [diagnosticFile]);
+
+        Assert.That(description, Does.Contain(
+            $"'IOrderPricingCalculator' is now declared twice: in {diagnosticFile} (changed by this edit) and in {otherFile}. Keep one declaration: remove it from this edit if {otherFile} already has it."));
+    }
+
+    [Test]
+    public async Task DescribeAsync_Cs0101WithoutEditedPaths_NamesBothFilesAsync()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("IOrderPricingCalculator.cs", InterfaceI),
+            ("Duplicate.cs", InterfaceI));
+        var cs0101 = report.Diagnostics.First(d => d.Id == "CS0101");
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(new DiagnosticReport(true, [cs0101]), _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("IOrderPricingCalculator.cs").And.Contain("Duplicate.cs").And.Contain("is now declared twice"));
+        Assert.That(description, Does.Contain("Keep one declaration"));
+    }
+
+    [Test]
+    public async Task DescribeAsync_Cs0101OtherLocationNotResolvable_GivesTheShortFormAsync()
+    {
+        var ghost = new DiagnosticInfo("CS0101", "Error",
+            "The namespace 'TestProj' already contains a definition for 'Ghost'", "C:\\repo\\Ghost.cs", 3, 14, 3, 19);
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(new DiagnosticReport(true, [ghost]), _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("'Ghost' is declared more than once in this namespace; keep one declaration."));
+        Assert.That(description, Does.Not.Contain("is now declared twice"));
+    }
+
+    [Test]
+    public async Task DescribeAsync_Cs0102MemberDeclaredTwiceInOneFile_GivesTheShortFormForTheTypeAsync()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Calc.cs", "namespace TestProj;\r\n\r\npublic class Calc\r\n{\r\n    public int Total;\r\n    public int Total;\r\n}\r\n"));
+        var cs0102 = report.Diagnostics.First(d => d.Id == "CS0102");
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(new DiagnosticReport(true, [cs0102]), _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("'Total' is declared more than once in 'Calc'; keep one declaration."));
+    }
+
+    [Test]
+    public async Task DescribeAsync_Cs0102MemberDeclaredInTwoPartialFiles_NamesBothFilesAsync()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("CalcA.cs", "namespace TestProj;\r\n\r\npublic partial class Calc\r\n{\r\n    public int Total;\r\n}\r\n"),
+            ("CalcB.cs", "namespace TestProj;\r\n\r\npublic partial class Calc\r\n{\r\n    public int Total;\r\n}\r\n"));
+        var cs0102 = report.Diagnostics.First(d => d.Id == "CS0102");
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(new DiagnosticReport(true, [cs0102]), _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("'Total' in 'Calc' is now declared twice"));
+        Assert.That(description, Does.Contain("CalcA.cs").And.Contain("CalcB.cs"));
+    }
+
     /// <summary>
     /// Regression coverage for identical-diagnostic grouping. See
     /// docs/current/blockers/closed/blocking_error_movemember_analysisengine_antipatternengine_friction.md

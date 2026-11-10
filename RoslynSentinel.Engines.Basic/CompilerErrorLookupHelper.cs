@@ -26,6 +26,7 @@ public static class CompilerErrorLookupHelper
     private static readonly Regex Cs0122InaccessibleRegex = new(@"'([^']+)' is inaccessible due to its protection level", RegexOptions.Compiled);
     private static readonly Regex Cs0101DuplicateNamespaceMemberRegex = new(@"The namespace '([^']+)' already contains a definition for '([^']+)'", RegexOptions.Compiled);
     private static readonly Regex Cs0111DuplicateMemberRegex = new(@"Type '([^']+)' already defines a member called '([^']+)'", RegexOptions.Compiled);
+    private static readonly Regex Cs0102DuplicateTypeMemberRegex = new(@"The type '([^']+)' already contains a definition for '([^']+)'", RegexOptions.Compiled);
     private static readonly Regex Cs0266ConvertRegex = new(@"Cannot implicitly convert type '([^']+)' to '([^']+)'", RegexOptions.Compiled);
     private static readonly Regex AccessModifierRegex = new(@"\b(public|private|protected|internal)\b", RegexOptions.Compiled);
     private static readonly Regex Cs0737NotPublicRegex = new(@"'([^']+)' cannot implement an interface member because it is not public", RegexOptions.Compiled);
@@ -97,7 +98,12 @@ public static class CompilerErrorLookupHelper
             return await DescribeCs0122Async(diagnostic, symbolNavigationEngine, cancellationToken);
         }
 
-        if (diagnostic.Id is "CS0101" or "CS0111")
+        if (diagnostic.Id is "CS0101" or "CS0102")
+        {
+            return await DescribeDuplicateDeclarationAsync(diagnostic, symbolNavigationEngine, cancellationToken, editedFilePaths);
+        }
+
+        if (diagnostic.Id == "CS0111")
         {
             return await DescribeDuplicateDefinitionAsync(diagnostic, symbolNavigationEngine, cancellationToken);
         }
@@ -332,56 +338,58 @@ public static class CompilerErrorLookupHelper
             return $"  '{memberName}' is declared in {Path.GetFileName(editedOnNamedType.FilePath.ToString())}, which this edit changes. If the edit removes or renames '{memberName}', this file still uses the old name: change the declaration and every use in one call.";
         }
 
-        // Duplicates the path rule of ValidateAndApplyHelper.DescribeUntouchedFileErrors, because Engines cannot reuse its local functions.
-        // TODO share path matching with ValidateAndApplyHelper.DescribeUntouchedFileErrors
-        bool IsEdited(string? path)
-        {
-            if (editedFilePaths is null || string.IsNullOrWhiteSpace(path))
-            {
-                return false;
-            }
-
-            var target = Normalize(path);
-            return editedFilePaths.Any(e => SameFile(Normalize(e), target));
-        }
-
-        static string Normalize(string p) => p.Trim().Replace('/', '\\');
-
-        static bool SameFile(string edited, string target)
-        {
-            if (string.Equals(edited, target, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            bool editedRooted = Path.IsPathRooted(edited);
-            bool targetRooted = Path.IsPathRooted(target);
-            if (editedRooted != targetRooted)
-            {
-                var (absolute, relative) = editedRooted ? (edited, target) : (target, edited);
-                return absolute.EndsWith("\\" + relative, StringComparison.OrdinalIgnoreCase);
-            }
-
-            if (!editedRooted)
-            {
-                return false;
-            }
-
-            try
-            {
-                return string.Equals(Path.GetFullPath(edited), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase);
-            }
-            catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
-            {
-                return false;
-            }
-        }
+        bool IsEdited(string? path) => IsEditedPath(editedFilePaths, path);
 
         var explanation = onNamedType
             ? $"  '{memberName}' exists on '{typeName}' but isn't accessible the way it was called (wrong overload, wrong accessibility, or a static/instance mismatch)."
             : $"  '{memberName}' was not found on '{typeName}', but a member with that name exists elsewhere - likely the wrong receiver type, or '{memberName}' needs to be added to '{typeName}' instead. Candidates found:";
 
         return explanation + "\n" + string.Join("\n", suggestions);
+    }
+
+    // Duplicates the path rule of ValidateAndApplyHelper.DescribeUntouchedFileErrors, because Engines cannot reuse its local functions.
+    // TODO share path matching with ValidateAndApplyHelper.DescribeUntouchedFileErrors
+    private static bool IsEditedPath(IReadOnlyCollection<string>? editedFilePaths, string? path)
+    {
+        if (editedFilePaths is null || string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        var target = NormalizePath(path);
+        return editedFilePaths.Any(e => SamePath(NormalizePath(e), target));
+    }
+
+    private static string NormalizePath(string p) => p.Trim().Replace('/', '\\');
+
+    private static bool SamePath(string edited, string target)
+    {
+        if (string.Equals(edited, target, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        bool editedRooted = Path.IsPathRooted(edited);
+        bool targetRooted = Path.IsPathRooted(target);
+        if (editedRooted != targetRooted)
+        {
+            var (absolute, relative) = editedRooted ? (edited, target) : (target, edited);
+            return absolute.EndsWith("\\" + relative, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (!editedRooted)
+        {
+            return false;
+        }
+
+        try
+        {
+            return string.Equals(Path.GetFullPath(edited), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
     }
 
     private static async Task<string> DescribeCs0122Async(
@@ -433,6 +441,93 @@ public static class CompilerErrorLookupHelper
         var calledFrom = callerType != null ? $" from {callerType}" : string.Empty;
         return $"  '{qualifiedName}' is currently {accessibility}. It must be changed to a level accessible{calledFrom} ({diagnostic.FilePath}:{diagnostic.StartLine}).\n"
             + $"  Note: accessibility is set per-member, not inherited from the containing type's accessibility - raising {simpleTypeName}'s own accessibility does not change {symbol.SymbolName}'s.\n" + $"  Fix: change {symbol.SymbolName}'s accessibility first with the ChangeAccessibility tool (in a lean tool list, the Declaration tool), then re-apply this edit; do not hand-edit the modifier with ApplyDiff."; // hint-ok: static advice text, tool name without arguments
+    }
+
+    /// <summary>
+    /// CS0101 ("namespace already contains a definition for X") and CS0102 ("type already contains a definition for X"): the
+    /// same name declared twice. The compiler reports only one of the two declarations (in the eval run 20261110-004337-782 it
+    /// was the untouched IOrderPricingCalculator.cs, while the duplicate came from the whole-file edit of another file), so the
+    /// hint names both files: the diagnostic's own file, and the other one, taken from the files this edit changes when the
+    /// diagnostic is in an unedited file, else from the committed declarations of the name. No tool is named.
+    /// </summary>
+    private static async Task<string> DescribeDuplicateDeclarationAsync(
+        DiagnosticInfo diagnostic,
+        SymbolNavigationEngine symbolNavigationEngine,
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<string>? editedFilePaths)
+    {
+        string? containerName = null;
+        string? name = null;
+        var cs0102 = Cs0102DuplicateTypeMemberRegex.Match(diagnostic.Message);
+        if (cs0102.Success)
+        {
+            containerName = cs0102.Groups[1].Value.Split('.').Last();
+            name = cs0102.Groups[2].Value;
+        }
+        else if (Cs0101DuplicateNamespaceMemberRegex.Match(diagnostic.Message) is { Success: true } cs0101)
+        {
+            name = cs0101.Groups[2].Value;
+        }
+
+        if (name == null)
+        {
+            return "  This is a duplicate-definition error, but the duplicated name could not be extracted from the diagnostic text.";
+        }
+
+        var diagnosticFile = diagnostic.FilePath.ToString();
+        var diagnosticEdited = IsEditedPath(editedFilePaths, diagnosticFile);
+        var shortForm = containerName is null
+            ? $"  '{name}' is declared more than once in this namespace; keep one declaration."
+            : $"  '{name}' is declared more than once in '{containerName}'; keep one declaration.";
+
+        // The other declaration: an edited file when the diagnostic points into an unedited one (the clash is new, so this edit
+        // introduced it); otherwise the committed declarations of the name outside the diagnostic's file.
+        List<string> others;
+        string otherNote;
+        if (!diagnosticEdited && editedFilePaths is { Count: > 0 })
+        {
+            others = editedFilePaths.Where(e => !SamePath(NormalizePath(e), NormalizePath(diagnosticFile))).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            otherNote = " (changed by this edit)";
+        }
+        else
+        {
+            List<SymbolLocation> candidates;
+            try
+            {
+                candidates = await symbolNavigationEngine.LocateSymbolAsync(name, exactMatch: true, containingType: containerName, cancellationToken: cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                candidates = [];
+            }
+
+            others = candidates.Select(c => c.FilePath?.ToString())
+                .OfType<string>()
+                .Where(p => !string.IsNullOrEmpty(p) && !SamePath(NormalizePath(p), NormalizePath(diagnosticFile)))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            otherNote = string.Empty;
+        }
+
+        if (others.Count == 0 || string.IsNullOrWhiteSpace(diagnosticFile))
+        {
+            return shortForm;
+        }
+
+        // File names; the full path when the names collide.
+        string Show(string path) => Path.GetFileName(NormalizePath(path)) is { Length: > 0 } fileName && !others.Concat([diagnosticFile]).Any(o => o != path && Path.GetFileName(NormalizePath(o)) == fileName) ? fileName : path;
+        var diagnosticShown = Show(diagnosticFile);
+        var othersShown = string.Join(" or ", others.Select(Show));
+        var what = containerName is null ? $"'{name}'" : $"'{name}' in '{containerName}'";
+        if (!diagnosticEdited && otherNote.Length > 0)
+        {
+            // The edit's file first, then the unedited file the compiler pointed at.
+            return $"  {what} is now declared twice: in {othersShown}{otherNote} and in {diagnosticShown}. Keep one declaration: remove it from this edit if {diagnosticShown} already has it.";
+        }
+
+        var editedClause = diagnosticEdited ? " (changed by this edit)" : string.Empty;
+        return $"  {what} is now declared twice: in {diagnosticShown}{editedClause} and in {othersShown}. Keep one declaration"
+            + (diagnosticEdited ? $": remove it from this edit if {othersShown} already has it." : ".");
     }
 
     /// <summary>
