@@ -213,7 +213,7 @@ public static class ValidateAndApplyHelper
                 ? mappedRefusal
                 : applyResult.RefusalCode != null
                     ? new ResultError(applyResult.RefusalCode, applyResult.Summary)
-                    : new ResultError(ToolErrorCode.Exception, $"{operationName} apply failed", Detail: applyResult.Summary);
+                    : new ResultError(applyResult.Code!, $"{operationName} apply failed", Detail: applyResult.Summary);
             // ConcurrentEditRefused's Summary already names the writer, so the lookup is skipped for it.
             var refusedPaths = applyResult.RefusalCode == ToolErrorCode.ConcurrentEditRefused
                 ? Array.Empty<string>()

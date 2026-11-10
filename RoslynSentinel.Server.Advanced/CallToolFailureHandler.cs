@@ -46,7 +46,7 @@ public static class CallToolFailureHandler
     /// Builds the failure <see cref="CallToolResult"/> for <paramref name="ex"/>: protocol <c>IsError</c> true
     /// and one text block holding the serialized failure envelope, serialized with the options the SDK uses
     /// for a tool's own return value so the two shapes match. A non-<see cref="ToolException"/> is logged
-    /// first because it is an unexpected escape (an SDK binding failure or a genuine bug).
+    /// first because it is an unexpected escape (an SDK binding failure or a genuine bug). A JsonException maps to InvalidArgument instead.
     /// </summary>
     public static CallToolResult ToFailureResult(Exception ex, string? toolName)
     {
@@ -57,7 +57,14 @@ public static class CallToolFailureHandler
 
         // The ISolutionProvider argument is documented as unused by the translator; there is no
         // provider to hand it here (and none is needed).
-        var error = ToolErrorMapper.ToResultError(ex, null!, string.IsNullOrWhiteSpace(toolName) ? "Tool call" : toolName);
+        var name = string.IsNullOrWhiteSpace(toolName) ? "Tool call" : toolName;
+        // Argument-binding failures (SDK converter, e.g. ToolCallReason) are caller mistakes, so they are
+        // InvalidArgument here, not in the shared ToolErrorMapper.ToCodeAndMessage (tool-internal catch blocks
+        // use that, and an internal JSON parse failure is a real fault). A JsonException thrown inside a tool
+        // body also lands here; accepted as rare.
+        var error = ex is JsonException
+            ? new ResultError(ToolErrorCode.InvalidArgument, $"{name}: invalid arguments - {ex.Message} Fix the argument and call again.")
+            : ToolErrorMapper.ToResultError(ex, null!, name);
         var envelope = new SentinelCallToolResult<object>
         {
             IsError = true,

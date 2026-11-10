@@ -18,7 +18,10 @@ public class DocReadResult : IOperationResult
     public ResultStatus Status => !Found && Error is null ? ResultStatus.NotFound : ResultStatusExtensions.FromFlag(IsError, Code);
 
     [System.Text.Json.Serialization.JsonIgnore]
-    public string? Code => !IsError ? null : (!Found && Error is null ? ToolErrorCode.NotFound : ToolErrorCode.Exception);
+    public string? Code => !IsError ? null : (ErrorCode ?? (!Found && Error is null ? ToolErrorCode.NotFound : ToolErrorCode.Exception));
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? ErrorCode { get; set; }
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => Error ?? (Found ? null : "Document not found");
@@ -68,7 +71,10 @@ public class DocWriteResult : IOperationResult
     public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
 
     [System.Text.Json.Serialization.JsonIgnore]
-    public string? Code => IsError ? ToolErrorCode.Exception : null;
+    public string? Code => IsError ? ErrorCode ?? ToolErrorCode.Exception : null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? ErrorCode { get; set; }
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => Error;
@@ -83,7 +89,10 @@ public class DocListResult : IOperationResult
     public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
 
     [System.Text.Json.Serialization.JsonIgnore]
-    public string? Code => IsError ? ToolErrorCode.Exception : null;
+    public string? Code => IsError ? ErrorCode ?? ToolErrorCode.Exception : null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? ErrorCode { get; set; }
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => Error;
@@ -227,6 +236,7 @@ public class DocumentationTools
             {
                 Found = false,
                 Filename = filename,
+                ErrorCode = ToolErrorCode.NotFound,
                 Error = ignoreDocType
                     ? $"'{filename}' was not found under the testing doc root. Names containing a directory separator are treated as explicit relative paths, so no basename fallback was attempted. Call {ToolCallHint.Call("ProjectDoc", ("action", "list"))} to see the exact available paths."
                     : $"'{filename}' was not found under docType='{docType}', nor at that path relative to the docs root. Names containing a directory separator are treated as explicit relative paths, so no basename fallback was attempted - a same-named file in a different directory is not a valid substitute. Call {ToolCallHint.Call("ProjectDoc", ("action", "list"))} to see the exact available paths."
@@ -254,6 +264,7 @@ public class DocumentationTools
             {
                 Found = false,
                 Filename = filename,
+                ErrorCode = ToolErrorCode.Ambiguous,
                 Error = $"'{filename}' is ambiguous. Did you mean: {string.Join(", ", matches)}"
             };
         }
@@ -282,6 +293,7 @@ public class DocumentationTools
                 {
                     Found = false,
                     Filename = filename,
+                    ErrorCode = ToolErrorCode.Ambiguous,
                     Error = $"'{filename}' is ambiguous. Did you mean: {string.Join(", ", rootMatches)}"
                 };
             }
@@ -293,7 +305,7 @@ public class DocumentationTools
                 ? $"No file matching '{stem}' (with or without extension) was found anywhere under the testing doc root. Call {ToolCallHint.Call("ProjectDoc", ("action", "list"))} to see all available files."
                 : $"No file matching '{stem}' (with or without extension) was found under docType='{docType}', or anywhere else under docs/. Call {ToolCallHint.Call("ProjectDoc", ("action", "list"))} to see all available files."
             : guardError;
-        return new DocReadResult { Found = false, Filename = filename, Error = notFoundError };
+        return new DocReadResult { Found = false, Filename = filename, ErrorCode = ok ? ToolErrorCode.NotFound : ToolErrorCode.InvalidArgument, Error = notFoundError };
     }
 
     /// <summary>
@@ -340,7 +352,7 @@ public class DocumentationTools
         var (ok, fullPath, guardError) = DocPathGuard.ResolveSafe(subdir, filename);
         if (!ok)
         {
-            return new DocWriteResult { IsError = true, Filename = filename, Error = guardError };
+            return new DocWriteResult { IsError = true, Filename = filename, ErrorCode = ToolErrorCode.InvalidArgument, Error = guardError };
         }
 
         int bytes = Encoding.UTF8.GetByteCount(content);
@@ -350,6 +362,7 @@ public class DocumentationTools
             {
                 IsError = true,
                 Filename = filename,
+                ErrorCode = ToolErrorCode.InvalidArgument,
                 Error = $"Content exceeds {MaxDocBytes} bytes. Documentation files should be concise."
             };
         }
@@ -362,7 +375,7 @@ public class DocumentationTools
         string? refusal = EolFileWriter.WriteAllTextResolvedAsync(fullPath, text, existing).GetAwaiter().GetResult();
         if (refusal is not null)
         {
-            return new DocWriteResult { IsError = true, Filename = filename, Error = refusal };
+            return new DocWriteResult { IsError = true, Filename = filename, ErrorCode = ToolErrorCode.EolChangeRefused, Error = refusal };
         }
 
         return new DocWriteResult
@@ -394,6 +407,7 @@ public class DocumentationTools
         _ = cancellationToken;
         try
         {
+            // TODO rate-limit refusal has no fitting ToolErrorCode (owner decision: reuse vs new RateLimited code)
             var rateLimitError = _workspaceManager.CheckRateLimit("project_doc", 30);
             if (rateLimitError is not null)
             {
@@ -406,8 +420,8 @@ public class DocumentationTools
             if (docsRoot is null)
             {
                 return action == DocAction.read || action == DocAction.list
-                    ? new DocReadResult { Found = false, Filename = name ?? "", Error = error }
-                    : new DocWriteResult { IsError = true, Filename = name ?? "", Error = error };
+                    ? new DocReadResult { Found = false, Filename = name ?? "", ErrorCode = ToolErrorCode.SolutionNotLoaded, Error = error }
+                    : new DocWriteResult { IsError = true, Filename = name ?? "", ErrorCode = ToolErrorCode.SolutionNotLoaded, Error = error };
             }
 
             // trailers / validate / close: reconcile docs with Plan:/Closes: commit trailers (DocTrailerEngine).
@@ -415,7 +429,7 @@ public class DocumentationTools
             {
                 if (IsTestingMode)
                 {
-                    return new DocWriteResult { IsError = true, Filename = name ?? "", Error = $"action={action} is not available in testing mode." };
+                    return new DocWriteResult { IsError = true, Filename = name ?? "", ErrorCode = ToolErrorCode.InvalidArgument, Error = $"action={action} is not available in testing mode." };
                 }
 
                 var repoRoot = _workspaceManager.GetSolutionRoot()!;
@@ -427,7 +441,7 @@ public class DocumentationTools
 
                 if (name is null)
                 {
-                    return new DocWriteResult { IsError = true, Filename = "", Error = "name is required (doc ID, the file name without extension)." };
+                    return new DocWriteResult { IsError = true, Filename = "", ErrorCode = ToolErrorCode.InvalidArgument, Error = "name is required (doc ID, the file name without extension)." };
                 }
 
                 if (action == DocAction.validate)
@@ -437,7 +451,7 @@ public class DocumentationTools
 
                 if (content is null)
                 {
-                    return new DocWriteResult { IsError = true, Filename = name, Error = "content is required for action=close (the new Status text)." };
+                    return new DocWriteResult { IsError = true, Filename = name, ErrorCode = ToolErrorCode.InvalidArgument, Error = "content is required for action=close (the new Status text)." };
                 }
 
                 return DocTrailerEngine.CloseDoc(repoRoot, name, content, timeout);
@@ -475,13 +489,13 @@ public class DocumentationTools
                 {
                     if (content is null)
                     {
-                        return new DocWriteResult { IsError = true, Filename = "migration-state.yaml", Error = "content is required for action=write." };
+                        return new DocWriteResult { IsError = true, Filename = "migration-state.yaml", ErrorCode = ToolErrorCode.InvalidArgument, Error = "content is required for action=write." };
                     }
 
                     int bytes = System.Text.Encoding.UTF8.GetByteCount(content);
                     if (bytes > MaxDocBytes)
                     {
-                        return new DocWriteResult { IsError = true, Filename = "migration-state.yaml", Error = $"Content exceeds {MaxDocBytes} bytes." };
+                        return new DocWriteResult { IsError = true, Filename = "migration-state.yaml", ErrorCode = ToolErrorCode.InvalidArgument, Error = $"Content exceeds {MaxDocBytes} bytes." };
                     }
 
                     var stateDir = Path.Combine(docsRoot);
@@ -492,19 +506,19 @@ public class DocumentationTools
                     string? stateRefusal = EolFileWriter.WriteAllTextResolvedAsync(statePath, content, stateExisting, cancellationToken).GetAwaiter().GetResult();
                     if (stateRefusal is not null)
                     {
-                        return new DocWriteResult { IsError = true, Filename = "migration-state.yaml", Error = stateRefusal };
+                        return new DocWriteResult { IsError = true, Filename = "migration-state.yaml", ErrorCode = ToolErrorCode.EolChangeRefused, Error = stateRefusal };
                     }
                     return new DocWriteResult { IsError = false, Filename = "migration-state.yaml", FullPath = statePath, BytesWritten = bytes };
                 }
-                return new DocWriteResult { IsError = true, Filename = "migration-state.yaml", Error = $"action='{action}' is not valid for docType=state. Valid: read, write." };
+                return new DocWriteResult { IsError = true, Filename = "migration-state.yaml", ErrorCode = ToolErrorCode.InvalidArgument, Error = $"action='{action}' is not valid for docType=state. Valid: read, write." };
             }
 
             // ── file-based doc types ───────────────────────────────────────────────
             if (name is null)
             {
                 return action == DocAction.read
-                    ? (object)new DocReadResult { Found = false, Filename = "", Error = "name is required for file-based operations." }
-                    : new DocWriteResult { IsError = true, Filename = "", Error = "name is required for file-based operations." };
+                    ? (object)new DocReadResult { Found = false, Filename = "", ErrorCode = ToolErrorCode.InvalidArgument, Error = "name is required for file-based operations." }
+                    : new DocWriteResult { IsError = true, Filename = "", ErrorCode = ToolErrorCode.InvalidArgument, Error = "name is required for file-based operations." };
             }
 
             var docTypeSubdirRoot = GetDocTypeSubdirRoot(docsRoot);
@@ -520,18 +534,18 @@ public class DocumentationTools
             if (subdir is null)
             {
                 return action == DocAction.read
-                    ? (object)new DocReadResult { Found = false, Filename = name, Error = $"Unhandled docType '{docType}'." }
-                    : new DocWriteResult { IsError = true, Filename = name, Error = $"Unhandled docType '{docType}'." };
+                    ? (object)new DocReadResult { Found = false, Filename = name, ErrorCode = ToolErrorCode.InvalidArgument, Error = $"Unhandled docType '{docType}'." }
+                    : new DocWriteResult { IsError = true, Filename = name, ErrorCode = ToolErrorCode.InvalidArgument, Error = $"Unhandled docType '{docType}'." };
             }
 
             if (action == DocAction.write && content is null)
             {
-                return new DocWriteResult { IsError = true, Filename = name, Error = "content is required for action=write." };
+                return new DocWriteResult { IsError = true, Filename = name, ErrorCode = ToolErrorCode.InvalidArgument, Error = "content is required for action=write." };
             }
 
             if (action == DocAction.append && content is null)
             {
-                return new DocWriteResult { IsError = true, Filename = name, Error = "content is required for action=append." };
+                return new DocWriteResult { IsError = true, Filename = name, ErrorCode = ToolErrorCode.InvalidArgument, Error = "content is required for action=append." };
             }
 
             return action switch
@@ -540,8 +554,8 @@ public class DocumentationTools
                 DocAction.write => WriteFile(subdir, name, content!),
                 DocAction.append => docType == DocType.completed_work
                     ? WriteFile(subdir, name, content!, append: true)
-                    : (object)new DocWriteResult { IsError = true, Filename = name, Error = "action=append is only valid for docType=completed_work." },
-                _ => (object)new DocWriteResult { IsError = true, Filename = name, Error = $"Unhandled action '{action}'." }
+                    : (object)new DocWriteResult { IsError = true, Filename = name, ErrorCode = ToolErrorCode.InvalidArgument, Error = "action=append is only valid for docType=completed_work." },
+                _ => (object)new DocWriteResult { IsError = true, Filename = name, ErrorCode = ToolErrorCode.InvalidArgument, Error = $"Unhandled action '{action}'." }
             };
         }
         catch (Exception ex)
@@ -583,7 +597,6 @@ public class DocumentationTools
     {
         switch (core)
         {
-            // TODO a missing file-based read reports ErrorCode Exception, not NotFound: DocReadResult.Code is NotFound only when Error is null, and ReadFile always sets Error. Fix needs a DocReadResult/ReadFile change.
             case DocReadResult r when r.IsError:
                 var readMessage = r.Error is null && !r.Found
                     ? $"Document not found: '{name ?? r.Filename}' (docType {docType}). Use {ToolCallHint.Call("ProjectDoc", ("action", "list"))} to see available files."

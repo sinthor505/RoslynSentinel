@@ -234,6 +234,44 @@ public class ResultStatusTests
     }
 
     [Test]
+    public void ApplyChangesResult_ValidationRejected_CodeIsValidationFailed_AndStatusMatchesCodeMap()
+    {
+        var validation = new DiagnosticReport(true, [new DiagnosticInfo("CS0103", "Error", "m", "C.cs", 1, 1, 1, 2)]);
+        var result = new ApplyChangesResult(true, [], [], "compile gate rejected", ValidationResult: validation);
+
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.ValidationFailed));
+        Assert.That(result.Status, Is.EqualTo(ResultStatusExtensions.FromErrorCode(ToolErrorCode.ValidationFailed)));
+        Assert.That(result.Status.IsErrorStatus(), Is.True);
+    }
+
+    [Test]
+    public void ApplyChangesResult_ErrorWithoutRefusalOrValidation_CodeIsException()
+    {
+        var result = new ApplyChangesResult(true, [], [], "write failed");
+
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(result.Status.IsErrorStatus(), Is.True);
+    }
+
+    [Test]
+    public void ApplyChangesResult_RefusedWorkspaceStale_CodeIsWorkspaceStale_AndStatusIsError()
+    {
+        var result = new ApplyChangesResult(true, [], [], "refused: workspace stale", RefusalCode: ToolErrorCode.WorkspaceStale);
+
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.WorkspaceStale));
+        Assert.That(result.Status.IsErrorStatus(), Is.True);
+    }
+
+    [Test]
+    public void ApplyChangesResult_NotError_CodeIsNull()
+    {
+        var result = new ApplyChangesResult(false, [], [], "wrote 1 file");
+
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
+    }
+
+    [Test]
     public void DiagnosticReport_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
         IOperationResult ok = new DiagnosticReport(false, []);
@@ -253,12 +291,13 @@ public class ResultStatusTests
     public void MsAugmentResult_StatusAgreesWithIsError_AndExplicitErrorCodeWins()
     {
         IOperationResult ok = MsAugmentResult.Ok("text");
-        IOperationResult plain = MsAugmentResult.Fail("boom");
+        IOperationResult plain = MsAugmentResult.Fail("boom", ToolErrorCode.Exception);
         IOperationResult coded = MsAugmentResult.Fail("nope", ToolErrorCode.TargetIneligible);
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
         Assert.That(plain.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(((MsAugmentResult)plain).ErrorCode, Is.EqualTo(ToolErrorCode.Exception));
         Assert.That(coded.Status, Is.EqualTo(ResultStatus.NotApplicable));
     }
 

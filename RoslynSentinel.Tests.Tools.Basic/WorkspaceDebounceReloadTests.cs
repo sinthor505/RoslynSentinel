@@ -189,6 +189,8 @@ public class WorkspaceDebounceReloadTests
 
         var second = await manager.ApplyProposedChangesAsync(new Dictionary<FilePathWrapper, string> { [new FilePathWrapper(path)] = original + "\n// fold failure test\n// second\n" });
         Assert.That(second.Summary, Does.StartWith("Refused - the workspace is stale"), second.Summary);
+        Assert.That(second.RefusalCode, Is.EqualTo(ToolErrorCode.WorkspaceStale));
+        Assert.That(second.Code, Is.EqualTo(ToolErrorCode.WorkspaceStale));
         Assert.That(foldCalls, Is.EqualTo(1));
     }
 
@@ -294,4 +296,26 @@ public class WorkspaceDebounceReloadTests
         .SelectMany(p => p.Documents)
         .Select(d => d.FilePath)
         .First(f => f is not null && f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && File.Exists(f) && f.StartsWith(fixture.SolutionDirectory, StringComparison.OrdinalIgnoreCase))!;
+
+    [Test]
+    [NonParallelizable]
+    public async Task ApplyProposedChanges_PathInBothChangesAndDeletePaths_RefusedAsInvalidArgumentAndNothingWritten()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var manager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await manager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var path = FindFixtureCsFile(manager, fixture);
+        var original = await File.ReadAllTextAsync(path);
+        var target = new FilePathWrapper(path);
+
+        var result = await manager.ApplyProposedChangesAsync(
+            new Dictionary<FilePathWrapper, string> { [target] = original + "\n// overlap test\n" },
+            deletePaths: [target]);
+
+        Assert.That(result.IsError, Is.True, result.Summary);
+        Assert.That(result.RefusalCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.Summary, Does.StartWith("Refused - 1 path(s) appear in both changes and deletePaths"), result.Summary);
+        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo(original));
+    }
 }

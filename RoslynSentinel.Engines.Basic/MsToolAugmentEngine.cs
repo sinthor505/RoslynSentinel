@@ -23,7 +23,12 @@ public record MsAugmentResult(bool IsError, string? Error, string? UpdatedConten
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => Error;
 
-    public static MsAugmentResult Fail(string error, string? errorCode = null) => new(true, error, null, errorCode);
+    /// <summary>
+    /// Builds a failed result. The error code is required so every failure is classified:
+    /// bad argument -> InvalidArgument, missing target -> NotFound, several matches -> Ambiguous,
+    /// target cannot take the change -> TargetIneligible, internal fault -> Exception.
+    /// </summary>
+    public static MsAugmentResult Fail(string error, string errorCode) => new(true, error, null, errorCode);
     public static MsAugmentResult Ok(string content) => new(false, null, content);
 }
 
@@ -105,7 +110,7 @@ public class MsToolAugmentEngine
         var root = await doc.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return MsAugmentResult.Fail("Could not parse syntax tree.");
+            return MsAugmentResult.Fail("Could not parse syntax tree.", ToolErrorCode.Exception);
         }
 
         var fieldMatches = root.DescendantNodes().OfType<FieldDeclarationSyntax>()
@@ -134,7 +139,7 @@ public class MsToolAugmentEngine
         // Validate: property name must differ from backing field name
         if (backingName == propertyName)
         {
-            return MsAugmentResult.Fail($"Computed names collide ('{backingName}'). Provide an overridePropertyName.");
+            return MsAugmentResult.Fail($"Computed names collide ('{backingName}'). Provide an overridePropertyName.", ToolErrorCode.InvalidArgument);
         }
 
         bool isReadOnly = field.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword));
@@ -308,7 +313,7 @@ public class MsToolAugmentEngine
         var analysis = await AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
         if (!analysis.IsSafeToConvert)
         {
-            return MsAugmentResult.Fail(analysis.BlockingReason ?? "Switch cannot be safely converted.");
+            return MsAugmentResult.Fail(analysis.BlockingReason ?? "Switch cannot be safely converted.", ToolErrorCode.TargetIneligible);
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -338,7 +343,7 @@ public class MsToolAugmentEngine
                 }
                 else if (targetVariable != lhs)
                 {
-                    return MsAugmentResult.Fail($"Cases assign to different variables ('{targetVariable}' vs '{lhs}'). Cannot build a single switch expression.");
+                    return MsAugmentResult.Fail($"Cases assign to different variables ('{targetVariable}' vs '{lhs}'). Cannot build a single switch expression.", ToolErrorCode.TargetIneligible);
                 }
             }
             else if (stmts.Count == 1 && stmts[0] is ReturnStatementSyntax)
@@ -354,7 +359,7 @@ public class MsToolAugmentEngine
             {
                 return MsAugmentResult.Fail(
                     $"Case '{section.Labels.First()}' has a complex body that cannot be expressed as a switch arm. " +
-                    "Refactor to a single expression, return, or throw first.");
+                    "Refactor to a single expression, return, or throw first.", ToolErrorCode.TargetIneligible);
             }
         }
 
@@ -418,7 +423,7 @@ public class MsToolAugmentEngine
         }
         else
         {
-            return MsAugmentResult.Fail("Could not determine replacement form (return/assignment). Manual conversion required.");
+            return MsAugmentResult.Fail("Could not determine replacement form (return/assignment). Manual conversion required.", ToolErrorCode.TargetIneligible);
         }
 
         return MsAugmentResult.Ok(await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(doc, root, sw, replacement, await _workspaceManager.ResolveEolAsync(doc, cancellationToken), cancellationToken));
@@ -446,7 +451,7 @@ public class MsToolAugmentEngine
         var model = await doc.GetSemanticModelAsync(cancellationToken);
         if (root == null || model == null)
         {
-            return MsAugmentResult.Fail("Could not load document.");
+            return MsAugmentResult.Fail("Could not load document.", ToolErrorCode.Exception);
         }
 
         // Find the string.Format invocation
@@ -468,13 +473,13 @@ public class MsToolAugmentEngine
 
         if (invocation == null)
         {
-            return MsAugmentResult.Fail(SnippetNodeKindError.Describe(text, root, snippetMatch, "string.Format() call", "directly contains the string.Format() call"));
+            return MsAugmentResult.Fail(SnippetNodeKindError.Describe(text, root, snippetMatch, "string.Format() call", "directly contains the string.Format() call"), ToolErrorCode.InvalidArgument);
         }
 
         var args = invocation.ArgumentList.Arguments;
         if (args.Count < 1)
         {
-            return MsAugmentResult.Fail("string.Format() has no arguments.");
+            return MsAugmentResult.Fail("string.Format() has no arguments.", ToolErrorCode.TargetIneligible);
         }
 
         // ── Resolve the format string ──
@@ -499,7 +504,7 @@ public class MsToolAugmentEngine
         {
             return MsAugmentResult.Fail(
                 "Could not resolve format string to a compile-time constant. " +
-                "Only string literals and constant fields/properties are supported.");
+                "Only string literals and constant fields/properties are supported.", ToolErrorCode.TargetIneligible);
         }
 
         // ── Build the interpolated string ──
@@ -772,7 +777,7 @@ public class MsToolAugmentEngine
                     staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet, cancellationToken: cancellationToken);
                 if (result.IsError)
                 {
-                    return MsAugmentResult.Fail($"Could not write file '{filePath}': {result.Summary}", result.RefusalCode);
+                    return MsAugmentResult.Fail($"Could not write file '{filePath}': {result.Summary}", result.Code!);
                 }
             }
             else
@@ -785,10 +790,10 @@ public class MsToolAugmentEngine
                     var writeRefusal = await EolFileWriter.WriteAllTextResolvedAsync(filePath, formatted, source, cancellationToken);
                     if (writeRefusal != null)
                     {
-                        return MsAugmentResult.Fail($"Could not write file '{filePath}': {writeRefusal}");
+                        return MsAugmentResult.Fail($"Could not write file '{filePath}': {writeRefusal}", ToolErrorCode.EolChangeRefused);
                     }
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException) { return MsAugmentResult.Fail($"Could not write file '{filePath}': {ex.Message}"); }
+                catch (Exception ex) when (ex is not OperationCanceledException) { return MsAugmentResult.Fail($"Could not write file '{filePath}': {ex.Message}", ToolErrorCode.Exception); }
             }
         }
 
@@ -1118,7 +1123,7 @@ public class MsToolAugmentEngine
         if (literal == null)
         {
             return MsAugmentResult.Fail(
-                SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "literal expression", "directly contains the literal to extract"));
+                SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "literal expression", "directly contains the literal to extract"), ToolErrorCode.InvalidArgument);
         }
 
         if (!literal.IsKind(SyntaxKind.StringLiteralExpression) &&
@@ -1129,14 +1134,14 @@ public class MsToolAugmentEngine
         {
             return MsAugmentResult.Fail(
                 $"Unsupported literal kind: {literal.Kind()}. " +
-                "Only string, numeric, char, and bool literals can be extracted to constants.");
+                "Only string, numeric, char, and bool literals can be extracted to constants.", ToolErrorCode.TargetIneligible);
         }
 
         // Find the containing type -> needed to place the constant declaration
         var containingType = literal.AncestorsAndSelf().OfType<TypeDeclarationSyntax>().FirstOrDefault();
         if (containingType == null)
         {
-            return MsAugmentResult.Fail("No containing type found - cannot place the constant declaration.");
+            return MsAugmentResult.Fail("No containing type found - cannot place the constant declaration.", ToolErrorCode.TargetIneligible);
         }
 
         // Determine the C# type keyword for the constant
@@ -1168,7 +1173,7 @@ public class MsToolAugmentEngine
 
         if (newContainingType == null)
         {
-            return MsAugmentResult.Fail("Could not locate containing type after literal replacement.");
+            return MsAugmentResult.Fail("Could not locate containing type after literal replacement.", ToolErrorCode.Exception);
         }
 
         // Build: private const <type> <name> = <value>;
@@ -1253,14 +1258,14 @@ public class MsToolAugmentEngine
 
         if (typeDecl == null)
         {
-            return MsAugmentResult.Fail($"Type '{typeName}' not found in {filePath}.");
+            return MsAugmentResult.Fail($"Type '{typeName}' not found in {filePath}.", ToolErrorCode.NotFound);
         }
 
         if (typeDecl.Members.OfType<MethodDeclarationSyntax>()
             .Any(m => m.Identifier.Text == "ToString" && !m.ParameterList.Parameters.Any()))
         {
             return MsAugmentResult.Fail(
-                $"'{typeName}' already has a ToString() override. Remove it first.");
+                $"'{typeName}' already has a ToString() override. Remove it first.", ToolErrorCode.TargetIneligible);
         }
 
         // Collect members to include in the ToString output
@@ -1290,7 +1295,7 @@ public class MsToolAugmentEngine
         if (SelectedMembers.Count == 0)
         {
             return MsAugmentResult.Fail(
-                $"No public properties or fields found on '{typeName}'. Specify members explicitly.");
+                $"No public properties or fields found on '{typeName}'. Specify members explicitly.", ToolErrorCode.TargetIneligible);
         }
 
         // Build the interpolated string: $"TypeName {{ Prop1 = {Prop1}, Prop2 = {Prop2} }}"
@@ -1440,7 +1445,7 @@ public class MsToolAugmentEngine
     {
         if (!SyntaxFacts.IsValidIdentifier(newMethodName))
         {
-            return MsAugmentResult.Fail($"'{newMethodName}' is not a valid C# identifier.");
+            return MsAugmentResult.Fail($"'{newMethodName}' is not a valid C# identifier.", ToolErrorCode.InvalidArgument);
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -1451,7 +1456,7 @@ public class MsToolAugmentEngine
         var sourceText = await doc.GetTextAsync(cancellationToken);
         if (root == null || model == null)
         {
-            return MsAugmentResult.Fail("Could not load semantic model.");
+            return MsAugmentResult.Fail("Could not load semantic model.", ToolErrorCode.Exception);
         }
 
         BlockSyntax? block;
@@ -1466,14 +1471,14 @@ public class MsToolAugmentEngine
 
             if (candidates.Count == 0)
             {
-                return MsAugmentResult.Fail($"No method named '{contextSnippet}' found in {filePath}.");
+                return MsAugmentResult.Fail($"No method named '{contextSnippet}' found in {filePath}.", ToolErrorCode.NotFound);
             }
 
             if (candidates.Count > 1)
             {
                 return MsAugmentResult.Fail(
                     $"'{contextSnippet}' is overloaded ({candidates.Count} declarations). " +
-                    "Use contextSnippet + lineBefore/lineAfter to identify the correct overload.");
+                    "Use contextSnippet + lineBefore/lineAfter to identify the correct overload.", ToolErrorCode.Ambiguous);
             }
 
             var sourceMethod = candidates[0];
@@ -1481,7 +1486,7 @@ public class MsToolAugmentEngine
             {
                 return MsAugmentResult.Fail(
                     $"'{contextSnippet}' has an expression body (=> ...) which is not supported " +
-                    "with extractEntireBody. Use the contextSnippet path instead.");
+                    "with extractEntireBody. Use the contextSnippet path instead.", ToolErrorCode.TargetIneligible);
             }
 
             block = sourceMethod.Body;
@@ -1489,7 +1494,7 @@ public class MsToolAugmentEngine
 
             if (stmtsInSelection.Count == 0)
             {
-                return MsAugmentResult.Fail($"'{contextSnippet}' has an empty body; nothing to extract.");
+                return MsAugmentResult.Fail($"'{contextSnippet}' has an empty body; nothing to extract.", ToolErrorCode.TargetIneligible);
             }
         }
         else
@@ -1504,7 +1509,7 @@ public class MsToolAugmentEngine
             if (block == null)
             {
                 return MsAugmentResult.Fail(
-                    "Selection must be inside a method body (no enclosing block found).");
+                    "Selection must be inside a method body (no enclosing block found).", ToolErrorCode.InvalidArgument);
             }
 
             // Find statements that overlap the Selection
@@ -1523,7 +1528,7 @@ public class MsToolAugmentEngine
                 else
                 {
                     return MsAugmentResult.Fail(
-                        SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "statement", "directly contains the statement(s) to extract") + " Try a broader snippet.");
+                        SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "statement", "directly contains the statement(s) to extract") + " Try a broader snippet.", ToolErrorCode.InvalidArgument);
                 }
             }
 
@@ -1570,7 +1575,7 @@ public class MsToolAugmentEngine
                         "loop (and anything around it), widen contextSnippet to cover that whole span " +
                         "verbatim - e.g. from the first line before the loop through the loop's closing " +
                         "brace. If you really do mean just this one statement, use lineBefore/lineAfter " +
-                        "naming its immediate neighbors to confirm the narrower selection.");
+                        "naming its immediate neighbors to confirm the narrower selection.", ToolErrorCode.InvalidArgument);
                 }
             }
 
@@ -1623,7 +1628,7 @@ public class MsToolAugmentEngine
                             "together with the loop (and anything else around it), widen contextSnippet " +
                             "to cover that whole span verbatim. If you really do mean just this one " +
                             "statement, use lineBefore/lineAfter naming its immediate neighbors to " +
-                            "confirm the narrower selection.");
+                            "confirm the narrower selection.", ToolErrorCode.InvalidArgument);
                     }
                 }
             }
@@ -1730,7 +1735,7 @@ public class MsToolAugmentEngine
         if (containingType == null)
         {
             return MsAugmentResult.Fail(
-                "No containing type found - cannot place extracted method.");
+                "No containing type found - cannot place extracted method.", ToolErrorCode.TargetIneligible);
         }
 
         // Build the extracted method source text
@@ -1766,7 +1771,7 @@ public class MsToolAugmentEngine
         var newMethodDecl = SyntaxFactory.ParseMemberDeclaration(sb.ToString());
         if (newMethodDecl == null)
         {
-            return MsAugmentResult.Fail("Failed to parse the generated method declaration.");
+            return MsAugmentResult.Fail("Failed to parse the generated method declaration.", ToolErrorCode.Exception);
         }
 
         // Build the call-site replacement statement
@@ -1804,7 +1809,7 @@ public class MsToolAugmentEngine
         int firstIdx = stmtList.IndexOf(firstStmt);
         if (firstIdx < 0)
         {
-            return MsAugmentResult.Fail("Could not locate first statement in block (internal error).");
+            return MsAugmentResult.Fail("Could not locate first statement in block (internal error).", ToolErrorCode.Exception);
         }
 
         var newStmts = new List<StatementSyntax>();
@@ -1822,7 +1827,7 @@ public class MsToolAugmentEngine
             .FirstOrDefault(t => t.Identifier.Text == containingType.Identifier.Text);
         if (newContainingType == null)
         {
-            return MsAugmentResult.Fail("Could not re-locate containing type after transformation.");
+            return MsAugmentResult.Fail("Could not re-locate containing type after transformation.", ToolErrorCode.Exception);
         }
 
         var methodWithTrivia = newMethodDecl

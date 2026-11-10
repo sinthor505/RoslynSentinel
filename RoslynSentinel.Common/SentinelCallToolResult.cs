@@ -194,6 +194,15 @@ public static class ToolErrorCode
     public const string WriteLockBusy = "WriteLockBusy";
 
     /// <summary>
+    /// The write was refused because the last solution reload failed, so the loaded workspace may be out of sync with
+    /// disk. Nothing was written; the session is NOT halted. Fix the cause (for example a broken .csproj or .sln; edits
+    /// to .csproj, .sln, .slnx, .props and .targets files stay allowed), then call LoadSolution with forceReload true,
+    /// and retry. Distinct from <see cref="FoldPending"/> (an in-memory fold pending, retry in a moment) and
+    /// <see cref="StaleRead"/> (the caller's own observed content is stale).
+    /// </summary>
+    public const string WorkspaceStale = "WorkspaceStale";
+
+    /// <summary>
     /// The operation was cancelled before it finished.
     /// </summary>
     public const string Cancelled = "Cancelled";

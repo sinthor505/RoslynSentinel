@@ -118,6 +118,7 @@ public class DocumentationToolsTests
             name: "01-baseline");
 
         Assert.That(result.Found, Is.False);
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Ambiguous));
         Assert.That(result.Error, Does.Contain("ambiguous"));
         Assert.That(result.Error, Does.Contain("a/01-baseline.md"));
         Assert.That(result.Error, Does.Contain("b/01-baseline.md"));
@@ -132,6 +133,7 @@ public class DocumentationToolsTests
             name: "does-not-exist.md");
 
         Assert.That(result.Found, Is.False);
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.NotFound));
         Assert.That(result.Error, Does.Contain("docType='plan'"));
         Assert.That(result.Error, Does.Contain("docs/"));
     }
@@ -326,8 +328,8 @@ public class DocumentationToolsTests
         Assert.That(result.IsError, Is.True);
         Assert.That(result.SuccessData, Is.Null);
         Assert.That(result.ErrorData, Is.Not.Null);
-        // DocReadResult.Code maps a not-found read that carries an Error text (as the file-based search always does) to Exception.
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Exception));
+        // DocReadResult.Code carries the NotFound code that ReadFile sets when the file is missing.
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         Assert.That(result.ErrorData.Message, Does.Contain("docType='plan'"));
     }
 
@@ -376,6 +378,25 @@ public class DocumentationToolsTests
 
         Assert.That(result, Is.InstanceOf<DocWriteResult>());
         Assert.That(((DocWriteResult)result).IsError, Is.True);
+        Assert.That(((DocWriteResult)result).Code, Is.EqualTo(ToolErrorCode.InvalidArgument));
+    }
+
+    [Test]
+    public void Read_WithoutName_IsInvalidArgument()
+    {
+        var result = (DocReadResult)_tools.ProjectDocCore("test", DocAction.read, DocType.plan);
+
+        Assert.That(result.Found, Is.False);
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.InvalidArgument));
+    }
+
+    [Test]
+    public void Write_WithoutContent_IsInvalidArgument()
+    {
+        var result = (DocWriteResult)_tools.ProjectDocCore("test", DocAction.write, DocType.documentation, name: "no-content.md");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
     [Test]

@@ -2174,7 +2174,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     IsError: true,
                     SucceededFiles: [],
                     FailedFiles: staleBlocked.ToDictionary(f => f, _ => "Workspace is stale after a failed reload."),
-                    Summary: $"Refused - the workspace is stale. {WorkspaceStaleText.Reason(reloadFailure)} {WorkspaceStaleText.Recovery}");
+                    Summary: $"Refused - the workspace is stale. {WorkspaceStaleText.Reason(reloadFailure)} {WorkspaceStaleText.Recovery}",
+                    RefusalCode: ToolErrorCode.WorkspaceStale);
             }
         }
 
@@ -2215,7 +2216,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 SucceededFiles: [],
                 FailedFiles: overlap.ToDictionary(f => f, _ => "Path given as both a write and a delete target."),
                 Summary: $"Refused - {overlap.Count} path(s) appear in both changes and deletePaths: " +
-                         $"{string.Join(", ", overlap.Select(f => Path.GetFileName(f)))}.");
+                         $"{string.Join(", ", overlap.Select(f => Path.GetFileName(f)))}.",
+                RefusalCode: ToolErrorCode.InvalidArgument);
         }
 
         // External drift no longer halts the session (replaced by per-file protection): drift on a file the agent

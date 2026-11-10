@@ -40,9 +40,9 @@ public record ApplyChangesResult(
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
 
-    /// <summary>Failure code: <see cref="RefusalCode"/> when the write chokepoint refused, else Exception. Null on success.</summary>
+    /// <summary>Failure code: <see cref="RefusalCode"/> when the write chokepoint refused, <see cref="ToolErrorCode.ValidationFailed"/> when the compile gate rejected the change (ValidationResult set), else Exception. Null on success.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public string? Code => IsError ? RefusalCode ?? ToolErrorCode.Exception : null;
+    public string? Code => IsError ? RefusalCode ?? (ValidationResult is not null ? ToolErrorCode.ValidationFailed : ToolErrorCode.Exception) : null;
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => IsError ? Summary : null;

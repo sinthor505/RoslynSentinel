@@ -100,6 +100,21 @@ public class CallToolFailureFilterTests
     }
 
     [Test]
+    public async Task JsonException_BecomesInvalidArgumentCode_WithoutTheTypeName()
+    {
+        var result = await RunAsync(new System.Text.Json.JsonException("'reason' must be a descriptive string"));
+
+        Assert.That(result.IsError, Is.True);
+        var errorData = ErrorDataOf(result);
+        Assert.That(errorData["errorCode"]!.GetValue<string>(), Is.EqualTo(ToolErrorCode.InvalidArgument));
+        var message = errorData["message"]!.GetValue<string>();
+        Assert.That(message, Does.Contain("FailureProbe").And.Contain("invalid arguments")
+            .And.Contain("'reason' must be a descriptive string").And.Contain("Fix the argument"));
+        Assert.That(message, Does.Not.Contain("JsonException"));
+        Assert.That(message, Does.Not.Contain("unexpectedly"));
+    }
+
+    [Test]
     public async Task SolutionNotLoadedException_KeepsCode_AndTheCallLoadSolutionSentence()
     {
         var result = await RunAsync(new SolutionNotLoadedException());
