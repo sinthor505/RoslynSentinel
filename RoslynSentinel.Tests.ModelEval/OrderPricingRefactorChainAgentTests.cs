@@ -1499,7 +1499,9 @@ public class OrderPricingRefactorChainAgentTests
             $"Step 10: expected 'private const int RegionalZone = 2;'. Transcript: {result.TranscriptPath}");
 
         var summarizeShippingMatch = System.Text.RegularExpressions.Regex.Match(
-            calculatorText, @"string\s+SummarizeShipping\s*\([^)]*\)\s*\{");
+            // Block body '{' or expression body '=> zone switch {': the prompt allows reformatting,
+            // and run 20261110-002243-875 failed here only because the model used '=>'.
+            calculatorText, @"string\s+SummarizeShipping\s*\([^)]*\)\s*(?:=>[^{;]*)?\{");
         Assert.That(summarizeShippingMatch.Success, Is.True,
             $"Could not find SummarizeShipping's declaration. Transcript: {result.TranscriptPath}");
         var shippingBodyStart = summarizeShippingMatch.Index + summarizeShippingMatch.Length;
