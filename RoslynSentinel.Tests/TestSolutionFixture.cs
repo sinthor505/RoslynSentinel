@@ -32,6 +32,7 @@ public sealed class TestSolutionFixture : IDisposable
         Directory.CreateDirectory(SolutionDirectory);
 
         CopySourceFiles(sampleRoot, SolutionDirectory);
+        // TODO ModelEval fixtures are not git repos, yet Git is exposed: host 112 run 20261110-081138-580's verify phase looped on GitRootNotFound (6 identical calls) to a turn cap. Offer an opt-in git init + baseline commit for ModelEval (a verify phase could then diff), or hide Git there.
 
         SolutionPath = Path.Combine(SolutionDirectory, "ContosoOrders.sln");
         if (!File.Exists(SolutionPath))
