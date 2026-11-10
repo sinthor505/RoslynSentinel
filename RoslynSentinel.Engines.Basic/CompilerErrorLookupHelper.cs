@@ -332,10 +332,10 @@ public static class CompilerErrorLookupHelper
 
         var onNamedType = candidates.Any(c => string.Equals(c.ContainingType, simpleTypeName, StringComparison.OrdinalIgnoreCase));
         var editedOnNamedType = candidates.FirstOrDefault(c =>
-            string.Equals(c.ContainingType, simpleTypeName, StringComparison.OrdinalIgnoreCase) && IsEdited(c.FilePath.ToString()));
+            string.Equals(c.ContainingType, simpleTypeName, StringComparison.OrdinalIgnoreCase) && IsEdited(c.FilePath?.ToString()));
         if (editedOnNamedType is not null)
         {
-            return $"  '{memberName}' is declared in {Path.GetFileName(editedOnNamedType.FilePath.ToString())}, which this edit changes. If the edit removes or renames '{memberName}', this file still uses the old name: change the declaration and every use in one call.";
+            return $"  '{memberName}' is declared in {Path.GetFileName(editedOnNamedType.FilePath?.ToString())}, which this edit changes. If the edit removes or renames '{memberName}', this file still uses the old name: change the declaration and every use in one call.";
         }
 
         bool IsEdited(string? path) => IsEditedPath(editedFilePaths, path);

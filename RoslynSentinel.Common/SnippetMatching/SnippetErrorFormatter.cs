@@ -125,8 +125,31 @@ namespace RoslynSentinel.Common.SnippetMatching
             }
 
             var sb = new StringBuilder();
+
+            // Transcription diagnoses come first: they name the likely cause outright, so a weak model does not spend
+            // turns guessing at line endings or encoding.
+            var escapedQuotes = DescribeEscapedQuotes(result, snippet, label);
+            if (escapedQuotes is not null)
+            {
+                sb.Append(escapedQuotes).Append('\n');
+            }
+
+            var markup = DescribeToolMarkup(result, snippet, label);
+            if (markup is not null)
+            {
+                sb.Append(markup).Append('\n');
+            }
+
             sb.Append($"{label} was not found: it matches nothing at any whitespace tolerance probed.");
             sb.Append('\n').Append(DescribeProbe(result));
+
+            // An escaped-quote diagnosis already names the differing lines; a first-difference line would only repeat it.
+            var firstDifference = escapedQuotes is null ? DescribeFirstDifference(result, snippet, label) : null;
+            if (firstDifference is not null)
+            {
+                sb.Append('\n').Append(firstDifference);
+            }
+
             sb.Append('\n').Append(DescribeEcho(snippet, label));
 
             if (result.ClosestWindows.Count == 0)
@@ -448,6 +471,206 @@ namespace RoslynSentinel.Common.SnippetMatching
                     return new ToolNotFoundException(
                         $"Invalid argument: {name} (\"{value}\") is not a usable selector value for this lookup. Remove it or correct it.", snippet: SnippetFailureDetail.From(result));
             }
+        }
+
+        // ---- NoMatch transcription diagnoses ----
+
+        /// <summary>A closest window at or above this score is close enough that one differing line is the likely cause.</summary>
+        private const double FirstDifferenceMinScore = 0.9;
+
+        // Markers of a tool-call envelope that leaked into an argument. Only reported when the file's own closest text
+        // does not contain the marker (this repo's own sources mention them).
+        private static readonly string[] ToolMarkupMarkers = ["</parameter>", "<parameter", "</invoke>"];
+
+        // The snippet's lines as the matchers see them (fully blank leading and trailing lines dropped), each with its
+        // 1-based line number in the snippet as received (the numbering DescribeEcho uses).
+        private static List<(string Text, int Line)> ContentLines(string snippet)
+        {
+            var parts = SplitForEcho(snippet);
+            var first = 0;
+            var last = parts.Count - 1;
+            while (first <= last && string.IsNullOrWhiteSpace(parts[first].Text))
+            {
+                first++;
+            }
+
+            while (last >= first && string.IsNullOrWhiteSpace(parts[last].Text))
+            {
+                last--;
+            }
+
+            var lines = new List<(string, int)>();
+            for (var i = first; i <= last; i++)
+            {
+                lines.Add((parts[i].Text, i + 1));
+            }
+
+            return lines;
+        }
+
+        // Same equality the closest-window scoring uses (SnippetCandidateFinder.Normalize): trimmed, whitespace collapsed,
+        // upper-cased under case-insensitive matching.
+        private static string NormalizeForCompare(string line, SnippetCaseMode caseMode)
+        {
+            var collapsed = System.Text.RegularExpressions.Regex.Replace(line.Trim(), @"\s+", " ");
+            return caseMode == SnippetCaseMode.CaseInsensitive ? collapsed.ToUpperInvariant() : collapsed;
+        }
+
+        private static bool SameLines(IReadOnlyList<string> yours, IReadOnlyList<string> file, SnippetCaseMode caseMode)
+        {
+            if (yours.Count != file.Count)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < yours.Count; i++)
+            {
+                if (NormalizeForCompare(yours[i], caseMode) != NormalizeForCompare(file[i], caseMode))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // Replaces a backslash-quote pair with the quote and, when asked, a doubled backslash with one backslash.
+        private static string Unescape(string line, bool includeBackslashes, ref bool sawQuote, ref bool sawBackslash)
+        {
+            var sb = new StringBuilder(line.Length);
+            for (var i = 0; i < line.Length; i++)
+            {
+                if (line[i] == '\\' && i + 1 < line.Length && (line[i + 1] == '"' || (includeBackslashes && line[i + 1] == '\\')))
+                {
+                    if (line[i + 1] == '"')
+                    {
+                        sawQuote = true;
+                    }
+                    else
+                    {
+                        sawBackslash = true;
+                    }
+
+                    sb.Append(line[i + 1]);
+                    i++;
+                }
+                else
+                {
+                    sb.Append(line[i]);
+                }
+            }
+
+            return sb.ToString();
+        }
+
+        // When removing backslash escapes (quotes first, then quotes and doubled backslashes) makes the snippet equal one
+        // of the closest windows, the model sent the text JSON- or source-escaped. Null when that is not the cause.
+        private static string? DescribeEscapedQuotes(SnippetMatchResult result, string snippet, string label)
+        {
+            var content = ContentLines(snippet);
+            if (content.Count == 0 || result.ClosestWindows.Count == 0)
+            {
+                return null;
+            }
+
+            foreach (var includeBackslashes in new[] { false, true })
+            {
+                var sawQuote = false;
+                var sawBackslash = false;
+                var unescaped = new List<string>(content.Count);
+                var changedCount = 0;
+                var firstChangedLine = 0;
+                foreach (var (text, line) in content)
+                {
+                    var plain = Unescape(text, includeBackslashes, ref sawQuote, ref sawBackslash);
+                    if (!string.Equals(plain, text, StringComparison.Ordinal))
+                    {
+                        changedCount++;
+                        if (firstChangedLine == 0)
+                        {
+                            firstChangedLine = line;
+                        }
+                    }
+
+                    unescaped.Add(plain);
+                }
+
+                if (changedCount == 0 || !result.ClosestWindows.Any(w => SameLines(unescaped, w.ActualLines, result.RequestedCaseMode)))
+                {
+                    continue;
+                }
+
+                var newContentNote = label == "oldContent"
+                    ? " - and write newContent the same way, or the escapes will be written into the code"
+                    : string.Empty;
+                var what = (sawQuote, sawBackslash) switch
+                {
+                    (true, true) => "backslash-escaped quotes (\\\") and doubled backslashes (\\\\) where the file has plain quotes (\") and single backslashes (\\)",
+                    (true, false) => "backslash-escaped quotes (\\\") where the file has plain quotes (\")",
+                    _ => "doubled backslashes (\\\\) where the file has single backslashes (\\)",
+                };
+                return $"Your {label} contains {what}: {changedCount} line(s), first at line {firstChangedLine}. " +
+                       $"Send the text exactly as the file shows it, with plain quotes{newContentNote}.";
+            }
+
+            return null;
+        }
+
+        private static string? DescribeToolMarkup(SnippetMatchResult result, string snippet, string label)
+        {
+            foreach (var marker in ToolMarkupMarkers)
+            {
+                if (snippet.Contains(marker, StringComparison.Ordinal)
+                    && !result.ClosestWindows.Any(w => w.ActualLines.Any(l => l.Contains(marker, StringComparison.Ordinal))))
+                {
+                    return $"Your {label} contains tool-call markup '{marker}' that is not part of the file; remove it.";
+                }
+            }
+
+            return null;
+        }
+
+        // For a close best window, names the first snippet line that differs from the file's line at the same position,
+        // so a one-character transcription slip in a long snippet is visible even though the echo shows only a few lines.
+        private static string? DescribeFirstDifference(SnippetMatchResult result, string snippet, string label)
+        {
+            if (result.ClosestWindows.Count == 0 || result.ClosestWindows[0].Score < FirstDifferenceMinScore)
+            {
+                return null;
+            }
+
+            var best = result.ClosestWindows[0];
+            var content = ContentLines(snippet);
+            for (var i = 0; i < content.Count; i++)
+            {
+                var (yours, line) = content[i];
+                if (i >= best.ActualLines.Count)
+                {
+                    return $"First difference at line {line} of your {label}: yours [{Quote(yours, MaxEchoLineChars)}] / the file ends before this line.";
+                }
+
+                var file = best.ActualLines[i];
+                if (NormalizeForCompare(yours, result.RequestedCaseMode) == NormalizeForCompare(file, result.RequestedCaseMode))
+                {
+                    continue;
+                }
+
+                // Long lines: start both excerpts just before the first differing character so it stays in view.
+                var prefix = 0;
+                var shorter = Math.Min(yours.Length, file.Length);
+                while (prefix < shorter && yours[prefix] == file[prefix])
+                {
+                    prefix++;
+                }
+
+                var from = prefix > MaxEchoLineChars / 2 ? prefix - 20 : 0;
+                var lead = from > 0 ? "..." : string.Empty;
+                var yoursShown = lead + Quote(yours.Substring(Math.Min(from, yours.Length)), MaxEchoLineChars);
+                var fileShown = lead + Quote(file.Substring(Math.Min(from, file.Length)), MaxEchoLineChars);
+                return $"First difference at line {line} of your {label} (file line {best.StartLine + i}): yours [{yoursShown}] / file [{fileShown}]";
+            }
+
+            return null;
         }
 
         // ---- shared rendering ----

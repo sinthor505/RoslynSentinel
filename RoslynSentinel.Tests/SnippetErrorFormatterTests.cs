@@ -576,12 +576,136 @@ public class SnippetErrorFormatterTests
         Assert.That(ex, Is.InstanceOf<ToolNotFoundException>());
         Assert.That(ex.Message, Does.Contain("Window 1 (starts at line 6, score "));
         Assert.That(ex.Message, Does.Contain("    var result = Compute(31);"), "the file's own differing line, verbatim");
-        Assert.That(ex.Message, Does.Not.Contain("Compute(13)"), "the echo stops before the differing snippet line");
+        Assert.That(ex.Message, Does.Contain("First difference at line 13 of your oldContent (file line 18): yours [    var result = Compute(13);] / file [    var result = Compute(31);]"),
+            "a close window names the first differing line even though the echo stops before it");
+        Assert.That(ex.Message.Substring(ex.Message.IndexOf("oldContent as received", StringComparison.Ordinal)), Does.Not.Contain("Compute(13)"),
+            "the echo stops before the differing snippet line");
         Assert.That(Fences(ex.Message)[0], Is.EqualTo(fileBlock));
         Assert.That(Regex.Matches(ex.Message, @"^  \d+: \[", RegexOptions.Multiline), Has.Count.EqualTo(SnippetErrorFormatter.MaxEchoLines));
         Assert.That(ex.Message, Does.Contain("... 17 more line(s) not shown"));
         Assert.That(ex.Message, Does.Contain($"...(+{longLine.Length - 100} chars)"), "an echo line over 100 characters is cut and says by how much");
         Assert.That(ex.Message.Length, Is.LessThanOrEqualTo(SnippetErrorFormatter.MaxMessageChars));
+    }
+
+    // ---- NoMatch transcription diagnoses ----
+
+    private static string EscapeQuotes(string line) => line.Replace("\"", "\\\"");
+
+    private static readonly string[] LabelFile =
+    {
+        "int Label(int id)",
+        "{",
+        "    var label = id switch",
+        "    {",
+        "        1 => \"local\",",
+        "        _ => \"other\",",
+        "    };",
+        "    return $\"Order {id}: {label}\";",
+        "}",
+    };
+
+    [Test]
+    public void NoMatch_EscapedQuotes_NamesTheCauseFirst_WithLineCountAndFirstLine()
+    {
+        var source = Lines(LabelFile);
+        var snippet = Lines(LabelFile.Select(EscapeQuotes).ToArray());
+        var result = Resolve(source, snippet);
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+
+        var ex = Build(source, snippet, result);
+
+        Assert.That(ex, Is.InstanceOf<ToolNotFoundException>());
+        Assert.That(ex.Message, Does.StartWith("Your oldContent contains backslash-escaped quotes (\\\") where the file has plain quotes (\"): 3 line(s), first at line 5. "));
+        Assert.That(ex.Message, Does.Contain("write newContent the same way, or the escapes will be written into the code."));
+        Assert.That(ex.Message, Does.Contain("oldContent was not found"), "the usual message still follows the diagnosis");
+        Assert.That(ex.Message, Does.Not.Contain("First difference at line"), "the diagnosis already names the lines");
+    }
+
+    [Test]
+    public void NoMatch_EscapedQuotesAndDoubledBackslashes_NamesBoth()
+    {
+        const string source = "void M()\n    var p = \"C:\\\\temp\";\n    return p;";
+        const string snippet = "void M()\n    var p = \\\"C:\\\\\\\\temp\\\";\n    return p;";
+        var result = Resolve(source, snippet);
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+
+        var ex = Build(source, snippet, result);
+
+        Assert.That(ex.Message, Does.StartWith("Your oldContent contains backslash-escaped quotes (\\\") and doubled backslashes (\\\\) where the file has plain quotes (\") and single backslashes (\\): 1 line(s), first at line 2. "));
+    }
+
+    [Test]
+    public void NoMatch_ASingleCharacterSlipInALongSnippet_NamesTheFirstDifferingLine()
+    {
+        var fileLines = Enumerable.Range(0, 3).Select(i => $"    Setup{i}();")
+            .Concat(Enumerable.Range(0, 12).Select(i => i == 6 ? "    var result = Compute(31);" : $"    Step{i}();"))
+            .ToArray();
+        var snippetLines = Enumerable.Range(0, 12).Select(i => i == 6 ? "    var result = Compute(13);" : $"    Step{i}();").ToArray();
+        var source = Lines(fileLines);
+        var snippet = Lines(snippetLines);
+        var result = Resolve(source, snippet);
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+        Assert.That(result.ClosestWindows[0].Score, Is.GreaterThanOrEqualTo(0.9));
+
+        var ex = Build(source, snippet, result);
+
+        Assert.That(ex.Message, Does.Contain("First difference at line 7 of your oldContent (file line 10): yours [    var result = Compute(13);] / file [    var result = Compute(31);]"));
+        Assert.That(ex.Message, Does.Not.Contain("backslash-escaped"));
+        Assert.That(ex.Message, Does.Not.Contain("tool-call markup"));
+    }
+
+    [Test]
+    public void NoMatch_FirstDifferenceDeepInALongLine_ExcerptStartsJustBeforeIt()
+    {
+        var prefix = "    var s = \"" + new string('x', 120);
+        var source = "void M()\n" + prefix + "A" + new string('y', 20) + "\";";
+        var snippet = "void M()\n" + prefix + "B" + new string('y', 20) + "\";";
+        var result = Resolve(source, snippet);
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+
+        var ex = Build(source, snippet, result);
+
+        Assert.That(ex.Message, Does.Contain("First difference at line 2 of your oldContent (file line 2): yours [..." + new string('x', 20) + "B"));
+        Assert.That(ex.Message, Does.Contain("/ file [..." + new string('x', 20) + "A"));
+    }
+
+    [Test]
+    public void NoMatch_ToolCallMarkupInTheSnippet_IsNamedFirst()
+    {
+        const string snippet = "var a = 1;\nvar b = 2;</parameter>]";
+        var result = Resolve(QwenSource, snippet);
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+
+        var ex = Build(QwenSource, snippet, result);
+
+        Assert.That(ex.Message, Does.StartWith("Your oldContent contains tool-call markup '</parameter>' that is not part of the file; remove it.\n"));
+    }
+
+    [Test]
+    public void NoMatch_MarkupThatTheFileItselfContains_IsNotBlamed()
+    {
+        var source = Lines("class C", "{", "    // closes with </parameter> here", "    int x;", "}");
+        const string snippet = "    // closes with </parameter> hear\n    int x;";
+        var result = Resolve(source, snippet);
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+
+        var ex = Build(source, snippet, result);
+
+        Assert.That(ex.Message, Does.Not.Contain("tool-call markup"));
+        Assert.That(ex.Message, Does.StartWith("oldContent was not found"));
+    }
+
+    [Test]
+    public void NoMatch_NothingClose_GetsNoTranscriptionDiagnosis()
+    {
+        var result = Resolve(QwenSource, "qqqq zzzz\nwwww jjjj");
+
+        var ex = Build(QwenSource, "qqqq zzzz\nwwww jjjj", result);
+
+        Assert.That(ex.Message, Does.StartWith("oldContent was not found"));
+        Assert.That(ex.Message, Does.Not.Contain("First difference"));
+        Assert.That(ex.Message, Does.Not.Contain("backslash-escaped"));
+        Assert.That(ex.Message, Does.Not.Contain("tool-call markup"));
     }
 
     [Test]

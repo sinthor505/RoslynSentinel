@@ -80,7 +80,7 @@
 | RefactoringSignatureTools | ChangeAccessibility | Claude, Refactor, RefactorSignature | - | Sets the accessibility of a type or member to the given level, replacing whatever is present. |
 | RefactoringSignatureTools | ConstructorParameter | Claude, Refactor, RefactorSignature | - | Add, remove, or view DI constructor parameters on a class. |
 | RefactoringSignatureTools | MethodSignature | Claude, Refactor, RefactorSignature | - | Add, remove, or view a method's parameters (any method; ConstructorParameter handles DI constructor parameters with a... |
-| RefactoringSignatureTools | RenameSymbol | Claude, claude-lean, Refactor, RefactorSignature | - | Renames a symbol and all its references. |
+| RefactoringSignatureTools | RenameSymbol | Claude, claude-lean, Refactor, RefactorSignature | - | Renames a symbol and all its references; also renames the file when it is named after the renamed top-level type... |
 | RefactoringStructuralTools | Member | Claude, claude-lean, Refactor, RefactoringStructural | - | Add, remove, replace, or view a raw source member, or add a brand-new top-level type. |
 | RefactoringStructuralTools | ModifyAttribute | Claude, Refactor, RefactoringStructural | - | Adds, replaces, or removes an [Attribute] on a type or member. |
 | RefactoringStructuralTools | ModifyBaseType | Claude, Refactor, RefactoringStructural | - | Adds or removes a base type or interface from a type declaration. |
