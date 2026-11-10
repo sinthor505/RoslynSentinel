@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using NUnit.Framework;
 
 using RoslynSentinel.Common;
+using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;
 
 namespace RoslynSentinel.Tests.Tools.Basic;
 
@@ -14,30 +15,6 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 public class NotFoundEvidenceTests
 {
     private string _root = "";
-
-    private static void RunGit(string workingDirectory, params string[] args)
-    {
-        // Same shape as GitStatusAttributionFindingsTests.RunGit: redirected stdout/stderr pipes hung on git init in this harness.
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = workingDirectory,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var arg in args)
-        {
-            process.StartInfo.ArgumentList.Add(arg);
-        }
-
-        process.Start();
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed with exit code {process.ExitCode} in '{workingDirectory}'.");
-        }
-    }
 
     [SetUp]
     public void SetUp()

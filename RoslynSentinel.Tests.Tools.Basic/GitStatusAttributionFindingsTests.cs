@@ -11,6 +11,7 @@ using NUnit.Framework;
 using RoslynSentinel.Common;
 using RoslynSentinel.Tests;
 using RoslynSentinel.Tools.Basic;
+using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;
 
 namespace RoslynSentinel.Tests.Tools.Basic;
 
@@ -21,30 +22,6 @@ public class GitStatusAttributionFindingsTests
     private string _repoDir = "";
     private PersistentWorkspaceManager _manager = null!;
     private GitTools _gitTools = null!;
-
-    private static void RunGit(string workingDirectory, params string[] args)
-    {
-        // Same shape as GitToolsSmokeTests.RunGit: redirected stdout/stderr pipes hung on git init in this harness.
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = workingDirectory,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var arg in args)
-        {
-            process.StartInfo.ArgumentList.Add(arg);
-        }
-
-        process.Start();
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed with exit code {process.ExitCode} in '{workingDirectory}'.");
-        }
-    }
 
     [SetUp]
     public void SetUp()
