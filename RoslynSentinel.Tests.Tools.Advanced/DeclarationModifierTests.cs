@@ -41,7 +41,7 @@ public sealed class DeclarationModifierTests
     public async Task ChangeSignature_ReversesConstructorParameters()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Order.cs"), "Order", new[] { new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0) });
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("Order(string customerName, int orderId)"));
@@ -53,7 +53,7 @@ public sealed class DeclarationModifierTests
     public async Task ChangeSignature_KeepAsDeprecatedWrapper_DryRun_ReportsWrapperAndLeavesFileUnchanged()
     {
         using var workspace = InMemoryWorkspace.Create(("Calc.cs", "public class Calc\r\n{\r\n    public int Add(int a, string b) => a + b.Length;\r\n}"));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var before = workspace.ReadText("Calc.cs");
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Calc.cs"), "Add", new[] { new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0) }, dryRun: true, oldSignature: ChangeSignatureOldSignature.keepAsDeprecatedWrapper);
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
@@ -71,7 +71,7 @@ public sealed class DeclarationModifierTests
         var parameters = new[] { new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0) };
 
         using var dryWorkspace = InMemoryWorkspace.Create(("Saver.cs", saverSource), ("Caller.cs", callerSource));
-        var dryTools = BatteryToolFactory.CreateAdvancedRefactoringTools(dryWorkspace.Manager);
+        var dryTools = BatteryToolFactory.CreateCoreRefactoringTools(dryWorkspace.Manager);
         var dryResult = await dryTools.ChangeSignatureTool(reason: "test message", dryWorkspace.PathOf("Saver.cs"), "Save", parameters, dryRun: true);
 
         Assert.That(dryResult.IsError, Is.False, $"error: {dryResult.ErrorData?.Message}");
@@ -81,7 +81,7 @@ public sealed class DeclarationModifierTests
         Assert.That(dryWorkspace.ReadText("Caller.cs"), Is.EqualTo(callerSource));
 
         using var applyWorkspace = InMemoryWorkspace.Create(("Saver.cs", saverSource), ("Caller.cs", callerSource));
-        var applyTools = BatteryToolFactory.CreateAdvancedRefactoringTools(applyWorkspace.Manager);
+        var applyTools = BatteryToolFactory.CreateCoreRefactoringTools(applyWorkspace.Manager);
         var applyResult = await applyTools.ChangeSignatureTool(reason: "test message", applyWorkspace.PathOf("Saver.cs"), "Save", parameters, dryRun: false);
 
         Assert.That(applyResult.IsError, Is.False, $"error: {applyResult.ErrorData?.Message}");
@@ -94,7 +94,7 @@ public sealed class DeclarationModifierTests
     private static async Task<string?> ChangeSignatureDescriptionAsync(string fileName, string source, string methodName, params ChangeSignatureParameterInput[] parameters)
     {
         using var workspace = InMemoryWorkspace.Create((fileName, source));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf(fileName), methodName, parameters);
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         return result.SuccessData?.Description;
@@ -166,7 +166,7 @@ public sealed class DeclarationModifierTests
     {
         const string source = "public class Calc\r\n{\r\n    public int Add(int a, int b) => a + b;\r\n}";
         using var workspace = InMemoryWorkspace.Create(("Calc.cs", source));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Calc.cs"), "Add", new[] { new ChangeSignatureParameterInput(originalIndex: 0) }, dryRun: dryRun);
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
@@ -180,7 +180,7 @@ public sealed class DeclarationModifierTests
     public async Task ChangeSignature_EmptyParameterList_IsTargetIneligibleAndWritesNothing()
     {
         using var workspace = InMemoryWorkspace.Create(("Calc.cs", TwoParameterCalc));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Calc.cs"), "Add", Array.Empty<ChangeSignatureParameterInput>());
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
@@ -195,7 +195,7 @@ public sealed class DeclarationModifierTests
     {
         const string source = "public class Calc\r\n{\r\n    public void Reset() { }\r\n}";
         using var workspace = InMemoryWorkspace.Create(("Calc.cs", source));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Calc.cs"), "Reset", new[] { new ChangeSignatureParameterInput(name: "x", type: "int", defaultValue: "0") });
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));

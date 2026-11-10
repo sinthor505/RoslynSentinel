@@ -107,8 +107,8 @@ public sealed class WriteToolAdviceHelper
             ["Member"] = "RefactoringStructuralTools",
             // RenameSymbol and ExtractMethod are declared in their own classes, not RefactoringStructuralTools.
             ["RenameSymbol"] = "RefactoringSignatureTools",
-            // ChangeSignature is declared in AdvancedRefactoringTools, not RefactoringStructuralTools.
-            ["ChangeSignature"] = "AdvancedRefactoringTools",
+            // ChangeSignature is declared in CoreRefactoringTools, not RefactoringStructuralTools.
+            ["ChangeSignature"] = "CoreRefactoringTools",
             ["ExtractMethod"] = "RefactoringExtractionDocsTools",
         };
 

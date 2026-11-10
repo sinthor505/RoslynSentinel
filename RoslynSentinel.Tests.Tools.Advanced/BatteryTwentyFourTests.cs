@@ -39,6 +39,7 @@ public class BatteryTwentyFourTests
     private RefactoringExtractionDocsTools _refactoringExtractionDocsTools;
     private MsToolAugmentEngine _msToolAugmentEngine;
     private AdvancedRefactoringTools _advTools;
+    private CoreRefactoringTools _coreTools;
     private GenerationTools _generationTools;
     private static readonly string RefactorSource = Sources.AnimalHierarchy;
     private static readonly string SimpleSource = Sources.Order;
@@ -71,6 +72,7 @@ public class BatteryTwentyFourTests
         _refactoringSignatureTools = BatteryToolFactory.CreateRefactoringSignatureTools(_workspaceManager);
         _refactoringExtractionDocsTools = BatteryToolFactory.CreateRefactoringExtractionDocsTools(_workspaceManager);
         _advTools = BatteryToolFactory.CreateAdvancedRefactoringTools(_workspaceManager);
+        _coreTools = BatteryToolFactory.CreateCoreRefactoringTools(_workspaceManager);
     }
 
     [TearDown]
@@ -124,7 +126,7 @@ public class BatteryTwentyFourTests
     {
         const string original = "public class Src\r\n{\r\n    public static int Foo(int x) { return x + 1; }\r\n}\r\n\r\npublic class Target\r\n{\r\n}\r\n";
         SetMultiFile(("Refactor.cs", original));
-        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Src", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+        var result = await _coreTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Src", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var text = await ReadCommittedRefactorText();
         Assert.That(text, Does.Contain("public static int Foo(int x) => global::Target.Foo(x);"), "The forwarder is written.");
@@ -532,8 +534,8 @@ public class BatteryTwentyFourTests
     [Test]
     public void IsRefusalThatMustNotBeMasked_SelectsCollateralAndEolRefusalsOnly()
     {
-        Assert.That(AdvancedRefactoringTools.IsRefusalThatMustNotBeMasked(RoslynSentinel.Common.ToolErrorCode.CollateralChangeRefused), Is.True);
-        Assert.That(AdvancedRefactoringTools.IsRefusalThatMustNotBeMasked(RoslynSentinel.Common.ToolErrorCode.EolChangeRefused), Is.True);
-        Assert.That(AdvancedRefactoringTools.IsRefusalThatMustNotBeMasked(RoslynSentinel.Common.ToolErrorCode.UnresolvedCallSites), Is.False);
+        Assert.That(CoreRefactoringTools.IsRefusalThatMustNotBeMasked(RoslynSentinel.Common.ToolErrorCode.CollateralChangeRefused), Is.True);
+        Assert.That(CoreRefactoringTools.IsRefusalThatMustNotBeMasked(RoslynSentinel.Common.ToolErrorCode.EolChangeRefused), Is.True);
+        Assert.That(CoreRefactoringTools.IsRefusalThatMustNotBeMasked(RoslynSentinel.Common.ToolErrorCode.UnresolvedCallSites), Is.False);
     }
 }

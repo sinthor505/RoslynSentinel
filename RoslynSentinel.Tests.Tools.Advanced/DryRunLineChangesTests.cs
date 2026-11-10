@@ -75,7 +75,7 @@ public sealed class DryRunLineChangesTests
         var original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
         var before = workspace.ReadText("Refactor.cs");
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Src", ["Foo"], "Target", dryRun: true, oldMember: MoveMemberOldMember.keepDelegator);
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         AssertPlausibleDryRunLineChanges(result.SuccessData!);

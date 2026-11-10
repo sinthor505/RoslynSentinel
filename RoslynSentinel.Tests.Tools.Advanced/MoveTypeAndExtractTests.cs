@@ -74,7 +74,7 @@ public sealed class MoveTypeAndExtractTests
     public async Task MoveAllTypesToFiles_FileScope_EachTypeGetsOwnFile()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var result = await tools.MoveAllTypesToFilesTool(reason: "test message", ToolScope.file, workspace.PathOf("Order.cs"));
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Status.cs"), Does.Contain("enum Status"));
@@ -88,7 +88,7 @@ public sealed class MoveTypeAndExtractTests
     public async Task MoveAllTypesToFilesInProject_ProjectScope_MovesStatusToOwnFile()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var result = await tools.MoveAllTypesToFilesTool(reason: "test message", ToolScope.project, "InMemoryProject");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Status.cs"), Does.Contain("enum Status"));
@@ -100,7 +100,7 @@ public sealed class MoveTypeAndExtractTests
     public async Task MoveAllTypesToFilesInSolution_SolutionScope_MovesStatusToOwnFile()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var result = await tools.MoveAllTypesToFilesTool(reason: "test message", ToolScope.solution);
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Status.cs"), Does.Contain("enum Status"));

@@ -111,4 +111,11 @@ public static class TestTools
         IWorkspaceManager workspaceManager, ILogger logger) =>
         ActivatorUtilities.CreateInstance<TestCategoryTaggingImpl>(
             TestEngines.CreateProvider(workspaceManager), engine, applyEngine, workspaceManager, logger);
+
+    /// <summary>
+    /// CoreRefactoringTools has a convenience (wm) constructor beside the all-engines one, so the manager is passed explicitly
+    /// (the shape the call sites that used AdvancedRefactoringTools(wm) had); the engines resolve from the fresh container.
+    /// </summary>
+    public static CoreRefactoringTools CoreRefactoringTools(IWorkspaceManager workspaceManager) =>
+        ActivatorUtilities.CreateInstance<CoreRefactoringTools>(TestEngines.CreateProvider(workspaceManager), workspaceManager);
 }

@@ -16,6 +16,11 @@ internal static class BatteryToolFactory
         return Battery.Advanced.TestToolsAdvanced.AdvancedRefactoringTools(workspaceManager);
     }
 
+    internal static CoreRefactoringTools CreateCoreRefactoringTools(IWorkspaceManager workspaceManager)
+    {
+        return Battery.Basic.TestTools.CoreRefactoringTools(workspaceManager);
+    }
+
     internal static GenerationTools CreateGenerationTools(IWorkspaceManager workspaceManager)
     {
         return Battery.Advanced.TestToolsAdvanced.GenerationTools(workspaceManager);

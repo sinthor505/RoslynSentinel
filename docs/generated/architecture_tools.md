@@ -4,7 +4,6 @@
 
 | Class | Tool name | Modes | Breaker | Summary |
 |-------|-----------|-------|---------|---------|
-| AdvancedRefactoringTools | ChangeSignature | Claude, claude-lean, Refactor | - | Reorders, adds, or removes method parameters and updates all call sites solution-wide. |
 | AdvancedRefactoringTools | ConvertAnonymousToNamed | Claude, claude-lean (on demand), Refactor | - | Converts the first anonymous object creation in a file into a named class declaration. |
 | AdvancedRefactoringTools | ExtractMembers | Claude, claude-lean (on demand), Refactor | - | Extracts class members into a new interface or partial class (newType=superclass is not implemented). |
 | AdvancedRefactoringTools | Inline | Claude, claude-lean (on demand), Refactor | - | Inlines a symbol by replacing all usages with its definition. |
@@ -12,8 +11,6 @@
 | AdvancedRefactoringTools | Introduce | Claude, claude-lean (on demand), Refactor | - | Introduces a named local variable, field, parameter, or constant from an expression. |
 | AdvancedRefactoringTools | IntroduceParameterObject | Claude, claude-lean (on demand), Refactor | - | Encapsulates method parameters into a new C# 12 record type; call sites need manual follow-up (flagged with TODO). |
 | AdvancedRefactoringTools | InvertAssignments | Claude, claude-lean (on demand), Refactor | - | Swaps left and right sides of all assignment statements within a range. |
-| AdvancedRefactoringTools | MoveAllTypesToFiles | Claude, claude-lean (on demand), Refactor | - | Moves secondary types out of a file into their own files. |
-| AdvancedRefactoringTools | MoveMember | Claude, claude-lean, Refactor | - | Moves methods/properties/fields from one class to another as a single atomic change, rewriting call sites. |
 | AdvancedRefactoringTools | MoveType | Claude, claude-lean (on demand), Refactor | - | Moves a type to its own file, or a nested type out to its containing namespace. |
 | AdvancedRefactoringTools | SyncInterface | Claude, claude-lean (on demand), Refactor | - | Generates stub implementations, syncs missing members into an interface, or verifies implementation coverage. |
 | AdvancedRefactoringTools | WrapRange | Claude, claude-lean (on demand), Refactor | - | Wraps a line range or snippet in a try/catch, using, or #region block. |
@@ -65,6 +62,9 @@
 |-------|-----------|-------|---------|---------|
 | AdminTools | ExternalFileDrift | Admin, Claude, claude-lean | Allowed | Inspect and clear external file drift: a tracked file changed on disk outside this server. |
 | AdminTools | McpServerControl | Admin, Claude, claude-lean | - | Operator control. |
+| CoreRefactoringTools | ChangeSignature | Claude, claude-lean, Refactor | - | Reorders, adds, or removes method parameters and updates all call sites solution-wide. |
+| CoreRefactoringTools | MoveAllTypesToFiles | Claude, claude-lean (on demand), Refactor | - | Moves secondary types out of a file into their own files. |
+| CoreRefactoringTools | MoveMember | Claude, claude-lean, Refactor | - | Moves methods/properties/fields from one class to another as a single atomic change, rewriting call sites. |
 | DeclarationTools | Declaration | claude-lean (on demand) | - | Changes a declaration's modifier, accessibility, attribute or base type. |
 | DocumentationTools | ProjectDoc | Claude, claude-lean (on demand), Workspace | - | Reads, writes, appends, lists project doc files under docs/; trailers/validate/close reconcile docs with... |
 | EditSnippetsTools | EditSnippets | EditSnippetsExperiment | - | Replaces exact text blocks in one or more files as one atomic change. |

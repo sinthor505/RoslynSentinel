@@ -1,6 +1,7 @@
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tools.Advanced;
+using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
@@ -18,7 +19,7 @@ public sealed class AmbiguousNameTargetToolTests
     {
         var original = "namespace A\n{\n    public class Target\n    {\n    }\n}\n\nnamespace B\n{\n    public class Target\n    {\n    }\n\n    public class Source\n    {\n        public int Get() => 1;\n    }\n}\n".ReplaceLineEndings("\r\n");
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Get"], "Target");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
@@ -92,7 +93,7 @@ public sealed class AmbiguousNameTargetToolTests
         // Substitute for AddGuardClauses: AddGuardClauses lives in Tools.Experimental, which this factory cannot reach.
         var original = "public class Worker\n{\n    public int Run(int a) => a;\n    public int Run(string s) => s.Length;\n}\n".ReplaceLineEndings("\r\n");
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Run", [new ChangeSignatureParameterInput(originalIndex: 0)]);
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
@@ -122,7 +123,7 @@ public sealed class AmbiguousNameTargetToolTests
         // refusal shape, with the two single-statement candidates in different classes.
         var original = "public class First\n{\n    public int Calc(int a) { return a; }\n}\n\npublic class Second\n{\n    public int Calc(string s) { return s.Length; }\n}\n".ReplaceLineEndings("\r\n");
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Calc", [new ChangeSignatureParameterInput(originalIndex: 0)]);
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
@@ -136,7 +137,7 @@ public sealed class AmbiguousNameTargetToolTests
     {
         var original = "public class Worker\n{\n    public int Run(int a, int b) => a - b;\n    public int Run(string s, string t) => s.Length - t.Length;\n}\n".ReplaceLineEndings("\r\n");
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Run", [new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0)], contextSnippet: "public int Run(string s, string t)");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         var updated = workspace.ReadText("Refactor.cs");
@@ -150,7 +151,7 @@ public sealed class AmbiguousNameTargetToolTests
     {
         var original = "public class Box\n{\n    public Box(int a, int b) { }\n    public Box(string s, string t) { }\n    public Box(double d, double e) { }\n    public Box(long x, long y) { }\n}\n".ReplaceLineEndings("\r\n");
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Box", [new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0)], contextSnippet: "public Box(double d, double e)");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         var updated = workspace.ReadText("Refactor.cs");
@@ -164,7 +165,7 @@ public sealed class AmbiguousNameTargetToolTests
     {
         var original = "public class Worker\n{\n    public int Run(int a, int b) => a - b;\n    public int Run(string s, string t) => s.Length - t.Length;\n}\n".ReplaceLineEndings("\r\n");
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Run", [new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0)]);
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
@@ -180,7 +181,7 @@ public sealed class AmbiguousNameTargetToolTests
     {
         var original = "public class Worker\n{\n    public int Run(int a, int b) => a - b;\n    public int Run(string s, string t) => s.Length - t.Length;\n}\n".ReplaceLineEndings("\r\n");
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
-        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Run", [new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0)], contextSnippet: "public int Run(double d, double e)");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));

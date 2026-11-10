@@ -28,7 +28,8 @@ public class ClaudeLeanSchemaBudgetTests
     // Raised on 2026-11-10 (todo punchlist #9): measured Advanced 44948 / Basic 39703 chars, largest tool SemanticFindReplace 5450, after SemanticFindReplace, InspectSymbol, MoveMember, UsingDirective and GetDiagnostics joined the claude-lean startup surface (~12k chars; SemanticFindReplace alone ~5.4k).
     // TODO trim the SemanticFindReplace and MoveMember input schemas now that they are on the startup surface
     private const int AdvancedTotalBudget = 45000;
-    private const int BasicTotalBudget = 40000;
+    // Basic raised 40000 -> 45000 on 2026-11-10 (core split slice 1): ChangeSignature (~1.9k) and MoveMember (3356) moved from Tools.Advanced to Tools.Basic (CoreRefactoringTools), so the Basic flavor now serves them and measures 44948 chars, the same as Advanced.
+    private const int BasicTotalBudget = 45000;
     private const int AdvancedMaxToolBudget = 5500;
     private const int BasicMaxToolBudget = 5500;
     // Search per-tool budget.

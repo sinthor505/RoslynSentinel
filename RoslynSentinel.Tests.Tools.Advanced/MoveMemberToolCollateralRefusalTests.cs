@@ -98,24 +98,16 @@ public class MoveMemberToolCollateralRefusalTests
         _workspaceManager.SetTestSolution(solution);
     }
 
-    private AdvancedRefactoringTools CreateTools(MemberRefactoringEngine memberEngine, SymbolNavigationEngine symbolNav, ValidationEngine validation)
+    private CoreRefactoringTools CreateTools(MemberRefactoringEngine memberEngine, SymbolNavigationEngine symbolNav, ValidationEngine validation)
     {
         var config = Battery.Basic.TestEngines.SentinelConfiguration();
-        return new AdvancedRefactoringTools(
+        return new CoreRefactoringTools(
             Battery.Basic.TestEngines.BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
-            Battery.Advanced.TestEnginesAdvanced.AdvancedRefactoringEngine(_workspaceManager),
-            Battery.Advanced.TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager),
             memberEngine,
-            Battery.Basic.TestEngines.SemanticRefactoringEngine(_workspaceManager),
-            Battery.Advanced.TestEnginesAdvanced.MappingEngine(_workspaceManager),
-            Battery.Advanced.TestEnginesAdvanced.SyntaxModernizationEngine(_workspaceManager, config),
-            Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager),
-            Battery.Advanced.TestEnginesAdvanced.CodeGenerationEngine(_workspaceManager),
             symbolNav,
             _workspaceManager,
             validation,
-            config,
-            NullLogger<AdvancedRefactoringTools>.Instance);
+            NullLogger<CoreRefactoringTools>.Instance);
     }
 
     private async Task<string> ReadCommittedRefactorText()
@@ -373,7 +365,7 @@ public class MoveMemberToolCollateralRefusalTests
         Assert.That(ledger.GetOpenEntries().Single().FilePath, Is.EqualTo(FileName), "The pre-existing ledger must stay the open one");
     }
 
-    private AdvancedRefactoringTools CreateLedgerSeamTools()
+    private CoreRefactoringTools CreateLedgerSeamTools()
     {
         var symbolNav = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var validation = Battery.Basic.TestEngines.ValidationEngine(_workspaceManager, Battery.Basic.TestEngines.DiffEngine(), NullLogger<ValidationEngine>.Instance);

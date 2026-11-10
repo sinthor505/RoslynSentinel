@@ -61,13 +61,13 @@ public static class ToolClassRegistry
     /// Tool classes that declare at least one <see cref="ClaudeLeanToolNames"/> tool, including SubAgentTools (its SubAgent tool is on demand via the modelEval toolset),
     /// DeclarationTools, ParameterEditTools and SemanticFindReplaceTools, whose DeclarationTool and ParameterEditTool are on-demand only (the declarations toolset adds them) while SemanticFindReplaceTool is a core tool: the allow-list keeps
     /// them out of the startup surface and the <c>declarations</c> toolset adds them. Listed here so the class exists in claude-lean and McpServerStatusTool can name its mode.
-    /// AdvancedRefactoringTools contributes ChangeSignature and MoveMember to the core set; its other tools stay on demand (the allow-list filters them out).
+    /// CoreRefactoringTools contributes ChangeSignature and MoveMember to the core set (MoveAllTypesToFiles stays on demand); AdvancedRefactoringTools' tools all stay on demand (the allow-list filters them out).
     /// </summary>
     private static readonly string[] ClaudeLeanToolClasses =
     [
         "WorkspaceTools", "WorkspaceReadNavigationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
         "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
-        "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools", "ToolsetControlTools", "DeclarationTools", "ParameterEditTools",
+        "CoreRefactoringTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools", "ToolsetControlTools", "DeclarationTools", "ParameterEditTools",
         "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools", "QualifyCrefsTools",
         "SubAgentTools",
     ];
@@ -83,7 +83,7 @@ public static class ToolClassRegistry
         [
             "WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "GitRemoteTools", "TypedMemberTools",
             "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
-            "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools", "DeclarationTools", "ParameterEditTools",
+            "CoreRefactoringTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools", "DeclarationTools", "ParameterEditTools",
             "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools", "QualifyCrefsTools", "SubAgentTools",
         ],
         StringComparer.Ordinal);
@@ -103,7 +103,7 @@ public static class ToolClassRegistry
             ["Workspace"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "GitRemoteTools"],
             ["Admin"] = ["AdminTools"],
             ["WholeFileWrite"] = ["WholeFileWriteTools"],
-            ["Refactor"] = ["RefactoringExtractionDocsTools", "RefactoringStructuralTools", "TypedMemberTools", "RefactoringSignatureTools", "AdvancedRefactoringTools"],
+            ["Refactor"] = ["RefactoringExtractionDocsTools", "RefactoringStructuralTools", "TypedMemberTools", "RefactoringSignatureTools", "CoreRefactoringTools", "AdvancedRefactoringTools"],
             ["Intelligence"] = ["IntelligenceTools", "ScanTools"],
             ["Modernize"] = ["ModernizationTools"],
             ["Quality"] = ["QualityTools"],
@@ -118,7 +118,7 @@ public static class ToolClassRegistry
             ["NamedArguments"] = ["NamedArgumentsTools"],
             ["TestCategories"] = ["TestCategoryTaggingTools"],
             ["QualifyCrefs"] = ["QualifyCrefsTools"],
-            ["Claude"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "GitRemoteTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "TypedMemberTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
+            ["Claude"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "GitRemoteTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "TypedMemberTools", "RefactoringSignatureTools", "CoreRefactoringTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
             ["SemanticFindReplace"] = ["SemanticFindReplaceTools"],
             [ClaudeLeanMode] = ClaudeLeanToolClasses,
             [ExperimentalMode] = ["CodeTransformTools"],

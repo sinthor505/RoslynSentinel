@@ -56,6 +56,7 @@ public static class ToolServiceCollectionExtensionsBasic
     public static IServiceCollection AddRoslynSentinelToolClassesBasic(this IServiceCollection services)
     {
         services.TryAddSingleton<AdminTools>();
+        services.TryAddSingleton<CoreRefactoringTools>();
         services.TryAddSingleton<DeclarationTools>();
 services.TryAddSingleton<EditSnippetsTools>();
         services.TryAddSingleton<DocumentationTools>();

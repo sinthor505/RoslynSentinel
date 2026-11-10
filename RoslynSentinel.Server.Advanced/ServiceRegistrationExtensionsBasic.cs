@@ -355,6 +355,13 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton<RefactoringExtractionDocsTools>();
             mcpBuilder.WithSentinelTools<RefactoringExtractionDocsTools>();
         }
+        if (activeToolClasses.Contains("CoreRefactoringTools"))
+        {
+            // ChangeSignature, MoveMember and MoveAllTypesToFiles. claude-lean makes the first two core and the third on demand
+            // (ToolClassRegistry.ClaudeLeanToolNames); the claude-lean widening above registers the class's dependencies.
+            services.AddSingleton<CoreRefactoringTools>();
+            mcpBuilder.WithSentinelTools<CoreRefactoringTools>();
+        }
     }
 
     /// <summary>
