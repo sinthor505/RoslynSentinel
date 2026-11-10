@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## McpToolsetControl response no longer claims enabled tools are callable by name (#1) - resolved (2026-11-10)
+
+`McpToolsetControl` response stops claiming enabled tools "can still be called by name" (2026-11-09) - `ToolsetControlTools.cs` ~79: say a client that does not refresh needs `/mcp` reconnect or a startup surface with the tool; Small - [doc](blockers/closed/blocking_error_toolset_enable_not_visible_in_client_tool_list.md)
+
+Evidence: McpToolsetControlTests.Enable_StatusMessage_TellsNonRefreshingClientsToReconnect (this commit, batch B item #1)
+
 ## TypedMember optional isConst - resolved (2026-11-10)
 
 `TypedMember` gets an optional `isConst` (2026-11-10, decided 2026-11-09) - field only, with a comment saying why it is optional; refuse it combined with `isStatic`/`isReadonly` or without an `initializer` as InvalidArgument with a next step (qwen3.5-9b got a silent `private static int` in run `20261110-020405-782` T20); check: field + isConst + initializer "1" gives `private const int LocalZone = 1;`; Small - no doc

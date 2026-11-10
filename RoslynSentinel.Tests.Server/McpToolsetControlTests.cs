@@ -492,6 +492,17 @@ public class McpToolsetControlTests
     }
 
     [Test]
+    public async Task Enable_StatusMessage_TellsNonRefreshingClientsToReconnect()
+    {
+        await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean");
+
+        var result = await live.ToggleAsync("projectAdmin", enabled: true);
+
+        Assert.That(LiveServer.Text(result), Does.Contain("/mcp"));
+        Assert.That(LiveServer.Text(result), Does.Not.Contain("called by name"));
+    }
+
+    [Test]
     public async Task DisabledTool_IsNotCallable()
     {
         await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean");

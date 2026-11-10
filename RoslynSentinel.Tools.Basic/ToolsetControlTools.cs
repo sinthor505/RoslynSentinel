@@ -76,7 +76,7 @@ public class ToolsetControlTools
 
         if (change.Changed)
         {
-            summary += " If your client has not refreshed its tool list yet, the tools can still be called by name.";
+            summary += " A client that does not refresh its tool list after this call needs a /mcp reconnect, or a startup surface that already includes the tool.";
         }
 
         return new SentinelCallToolResult<object>
