@@ -601,4 +601,191 @@ public class AsyncBatchEngineFlagOutcomeTests
         Assert.That(File.ReadAllText(Path.Combine(_tempDir, "TripService.cs")), Does.Contain("NeedsManualReview"),
             "The flag write succeeded, so the file on disk must carry the NeedsManualReview flag.");
     }
+
+    // RunUpliftBatchAsync on a source with two same-named candidates: the one caller is skipped with a reason that names
+    // both candidates, nothing is uplifted, and the file on disk is untouched (never an edit of the first candidate).
+    private async Task AssertUpliftSkippedAsAmbiguousAsync(string source, string reasonMustName)
+    {
+        var lf = source.Replace("\r\n", "\n");
+        SetSource(workspaceText: lf, diskText: lf);
+
+        var result = await _batchEngine.RunUpliftBatchAsync("LoadTrips", maxCallers: 5);
+
+        Assert.That(result.Uplifted, Is.Empty, "An ambiguous caller must not be uplifted.");
+        Assert.That(result.Skipped, Has.Count.EqualTo(1));
+        var reason = result.Skipped[0].Reason;
+        Assert.That(reason, Does.Contain("matches 2 declarations"), reason);
+        Assert.That(reason, Does.Contain(reasonMustName), reason);
+        Assert.That(reason, Does.Not.Contain("contextSnippet"), "The batch has no contextSnippet parameter to suggest.");
+        Assert.That(File.ReadAllText(Path.Combine(_tempDir, "TripService.cs")), Is.EqualTo(lf), "The file must stay untouched.");
+    }
+
+    // TryTransformCallerAsync caller pick: class A and class B both declare Run() and both call the bridge. The batch
+    // knows the caller only by name, so it must report Run as ambiguous instead of uplifting the first one.
+    [Test, CancelAfter(60000)]
+    public async Task RunUpliftBatch_TwoSameNamedCallers_SkippedAsAmbiguous()
+    {
+        await AssertUpliftSkippedAsAmbiguousAsync("""
+            using System.Threading;
+            using System.Threading.Tasks;
+
+            public class TripService
+            {
+                [System.Obsolete("Asyncify-bridge: call LoadTripsAsync instead.")]
+                public int LoadTrips(int companyId)
+                {
+                    return companyId;
+                }
+
+                public Task<int> LoadTripsAsync(int companyId, CancellationToken cancellationToken)
+                {
+                    return Task.FromResult(companyId);
+                }
+            }
+
+            public class FirstCaller
+            {
+                public int Run(TripService service)
+                {
+                    return service.LoadTrips(1);
+                }
+            }
+
+            public class SecondCaller
+            {
+                public int Run(TripService service)
+                {
+                    return service.LoadTrips(2);
+                }
+            }
+            """, reasonMustName: "Caller method 'Run'");
+    }
+
+    // TryTransformCallerAsync async-overload pick: the caller's class already has RunAsync and another class declares
+    // a RunAsync too, so the overload to rewrite is ambiguous (and must not be the first RunAsync in the file).
+    [Test, CancelAfter(60000)]
+    public async Task RunUpliftBatch_AsyncOverloadInTwoClasses_SkippedAsAmbiguous()
+    {
+        await AssertUpliftSkippedAsAmbiguousAsync("""
+            using System.Threading;
+            using System.Threading.Tasks;
+
+            public class TripService
+            {
+                [System.Obsolete("Asyncify-bridge: call LoadTripsAsync instead.")]
+                public int LoadTrips(int companyId)
+                {
+                    return companyId;
+                }
+
+                public Task<int> LoadTripsAsync(int companyId, CancellationToken cancellationToken)
+                {
+                    return Task.FromResult(companyId);
+                }
+            }
+
+            public class OtherService
+            {
+                public Task<int> RunAsync(CancellationToken cancellationToken)
+                {
+                    return Task.FromResult(0);
+                }
+            }
+
+            public class Caller
+            {
+                public int Run(TripService service)
+                {
+                    return service.LoadTrips(1);
+                }
+
+                public Task<int> RunAsync(CancellationToken cancellationToken)
+                {
+                    return Task.FromResult(1);
+                }
+            }
+            """, reasonMustName: "Async overload 'RunAsync'");
+    }
+
+    // RewriteCallerAsyncBodyAsync pick: the caller's class has no RunAsync, so the bridge adds one, but another class
+    // (listed first) already declares RunAsync. The body rewrite must report both, not rewrite the other class's method.
+    [Test, CancelAfter(60000)]
+    public async Task RunUpliftBatch_BridgeAddedAsyncCollidesWithOtherClass_SkippedAsAmbiguous()
+    {
+        await AssertUpliftSkippedAsAmbiguousAsync("""
+            using System.Threading;
+            using System.Threading.Tasks;
+
+            public class TripService
+            {
+                [System.Obsolete("Asyncify-bridge: call LoadTripsAsync instead.")]
+                public int LoadTrips(int companyId)
+                {
+                    return companyId;
+                }
+
+                public Task<int> LoadTripsAsync(int companyId, CancellationToken cancellationToken)
+                {
+                    return Task.FromResult(companyId);
+                }
+            }
+
+            public class OtherService
+            {
+                public Task<int> RunAsync(CancellationToken cancellationToken)
+                {
+                    return Task.FromResult(0);
+                }
+            }
+
+            public class Caller
+            {
+                public int Run(TripService service)
+                {
+                    return service.LoadTrips(1);
+                }
+            }
+            """, reasonMustName: "Method 'RunAsync'");
+    }
+
+    // RewriteObsoleteCallsInAsyncMethodAsync via RunBridgeBatchAsync: the bridge adds GetTripsAsync to TripService while
+    // OtherService (listed first) already declares one. The batch must skip the candidate with both named, not rewrite
+    // the first GetTripsAsync in the file or write anything.
+    [Test, CancelAfter(60000)]
+    public async Task RunBridgeBatch_NewAsyncCollidesWithOtherClass_SkippedAsAmbiguous()
+    {
+        var source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+
+            public class OtherService
+            {
+                public Task<int> GetTripsAsync(CancellationToken cancellationToken)
+                {
+                    return Task.FromResult(0);
+                }
+            }
+
+            public class TripService
+            {
+                [MigrationCandidate("AsyncBridgeCandidate", Score = 70, Reason = "calls-CommonSearch:70", FlaggedDate = "2026-06-01")]
+                public int GetTrips(int companyId)
+                {
+                    return companyId;
+                }
+            }
+
+            """ + "\n" + AttrStub;
+        var lf = source.Replace("\r\n", "\n");
+        SetSource(workspaceText: lf, diskText: lf);
+
+        var result = await _batchEngine.RunBridgeBatchAsync(maxBridges: 1);
+
+        Assert.That(result.Applied, Is.Empty, "An ambiguous async name must not be bridged.");
+        Assert.That(result.Skipped, Has.Count.EqualTo(1));
+        var reason = result.Skipped[0].Reason;
+        Assert.That(reason, Does.Contain("matches 2 declarations"), reason);
+        Assert.That(reason, Does.Contain("Method 'GetTripsAsync'"), reason);
+        Assert.That(File.ReadAllText(Path.Combine(_tempDir, "TripService.cs")), Is.EqualTo(lf), "The file must stay untouched.");
+    }
 }

@@ -746,6 +746,40 @@ public class AsyncOptimizationNormalizeCharacterizationTests
     }
 
     [Test]
+    public async Task RewriteObsoleteCallsInAsyncMethod_TwoSameNamedMethods_ThrowsAmbiguous()
+    {
+        SetSource(string.Join("\n",
+            "using System;",
+            "using System.Threading;",
+            "using System.Threading.Tasks;",
+            "",
+            "public class A",
+            "{",
+            "    [Obsolete(\"Asyncify-bridge: call LoadAsync instead.\", false)]",
+            "    public int Load(int x) => x;",
+            "",
+            "    public Task<int> LoadAsync(int x, CancellationToken cancellationToken = default) => Task.FromResult(x);",
+            "",
+            "    public async Task<int> RunAsync(CancellationToken cancellationToken)",
+            "    {",
+            "        return Load(1);",
+            "    }",
+            "}",
+            "",
+            "public class B",
+            "{",
+            "    public async Task<int> RunAsync(CancellationToken cancellationToken)",
+            "    {",
+            "        return 2;",
+            "    }",
+            "}"));
+
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () => await _engine.RewriteObsoleteCallsInAsyncMethodAsync("Test.cs", "RunAsync"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(ex.Message, Does.Contain("Method 'RunAsync' matches 2 declarations"));
+    }
+
+    [Test]
     public async Task ConvertToAsyncEnumerable_MissingFile_ThrowsNotFound()
     {
         SetSource("public class C { }");

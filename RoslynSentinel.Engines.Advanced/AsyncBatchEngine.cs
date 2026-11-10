@@ -811,6 +811,16 @@ public class AsyncBatchEngine
                         sourceToValidate = bodyRewrite.UpdatedText;
                     }
                 }
+                catch (ToolAmbiguousMatchException ambiguousAsync)
+                {
+                    // Another class in the file already declares the same XAsync the bridge just added; nothing is written yet.
+                    _logger.LogWarning(
+                        "Bridge skipped for '{Method}': {Message}", candidate.MethodName, ambiguousAsync.Message);
+                    skipped.Add(new BridgeSkippedInfo(
+                        candidate.FilePath, candidate.MethodName,
+                        AmbiguousCallerReason(ambiguousAsync), new List<DiagnosticInfo>()));
+                    continue;
+                }
                 catch (Exception rewriteEx) when (rewriteEx is not OperationCanceledException)
                 {
                     _logger.LogWarning(rewriteEx,
@@ -1253,6 +1263,17 @@ public class AsyncBatchEngine
         return new UpliftBatchResult(uplifted, skipped, remaining, stopReason);
     }
 
+    /// <summary>
+    /// Per-item skip reason for a same-named method the batch cannot tell apart: the lookup's candidate list (file:line each)
+    /// without its tool-parameter hint, which does not apply to a batch that matches callers by name.
+    /// </summary>
+    private static string AmbiguousCallerReason(ToolAmbiguousMatchException ex)
+    {
+        var next = ex.Message.LastIndexOf(" Next:", StringComparison.Ordinal);
+        var candidates = next >= 0 ? ex.Message[..next] : ex.Message;
+        return candidates + " The batch matches callers by name and did not pick one; uplift each by hand or rename one of them, then re-run.";
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // Body rewriter helpers
     // ──────────────────────────────────────────────────────────────────────────
@@ -1279,10 +1300,13 @@ public class AsyncBatchEngine
         var root = await preImage.GetSyntaxRootAsync(cancellationToken)
             ?? throw new InvalidOperationException("Could not get a syntax root for the bridged caller source.");
 
-        // Locate the callerAsync method to scope the rewrite.
-        var callerAsyncMethod = root.DescendantNodes()
+        // Locate the callerAsync method to scope the rewrite. The bridge adds one XAsync to the caller's class, so a
+        // second XAsync elsewhere in the file (another class) is Ambiguous (ToolAmbiguousMatchException), never a first pick.
+        var callerAsyncMatches = root.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == callerAsyncMethodName);
+            .Where(m => m.Identifier.Text == callerAsyncMethodName)
+            .ToList();
+        var callerAsyncMethod = NameTargetLookup.RequireSingle(callerAsyncMatches, "Method", callerAsyncMethodName);
 
         if (callerAsyncMethod == null)
         {
@@ -1334,7 +1358,20 @@ public class AsyncBatchEngine
         var preCheckTree = CSharpSyntaxTree.ParseText(preCheckSource, cancellationToken: cancellationToken);
         var preCheckRoot = preCheckTree.GetRoot(cancellationToken: cancellationToken);
         var preCheckMethods = preCheckRoot.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
-        var callerMethodNode = preCheckMethods.FirstOrDefault(m => m.Identifier.Text == callerMethodName);
+        // The batch carries only the caller's name (FindObsoleteCallers pairs are deduplicated to file + name), so two
+        // same-named methods (overloads, or the same name in two classes) are reported per item, never first-picked.
+        // TODO carry the finding's CallerType through the batch so same-named callers in different classes can be uplifted individually; ConvertToAsyncBridgeAsync and ConvertEventHandlerCallerToAsyncVoidAsync resolve by name file-wide and would need a container input first
+        MethodDeclarationSyntax? callerMethodNode;
+        try
+        {
+            callerMethodNode = NameTargetLookup.RequireSingle(
+                preCheckMethods.Where(m => m.Identifier.Text == callerMethodName).ToList(), "Caller method", callerMethodName);
+        }
+        catch (ToolAmbiguousMatchException ambiguousCaller)
+        {
+            return (null, null, new UpliftSkippedInfo(
+                callerFilePath, callerMethodName, AmbiguousCallerReason(ambiguousCaller), new List<DiagnosticInfo>()));
+        }
 
         // Non-method contexts (constructor, accessor, lambda) cannot be automatically uplifted.
         if (callerMethodNode == null && (callerMethodName.Contains('(') || callerMethodName.StartsWith('<')))
@@ -1349,7 +1386,12 @@ public class AsyncBatchEngine
         }
 
         bool callerIsAsync = callerMethodNode?.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)) == true;
-        bool asyncOverloadExists = preCheckMethods.Any(m => m.Identifier.Text == callerMethodName + "Async");
+        // Class-scoped like ConvertToAsyncBridgeAsync's OverloadExists check: an XAsync in another class is not this caller's overload.
+        var asyncOverloadName = callerMethodName + "Async";
+        var asyncOverloadMatches = preCheckMethods.Where(m => m.Identifier.Text == asyncOverloadName).ToList();
+        bool asyncOverloadExists = callerMethodNode != null
+            ? asyncOverloadMatches.Any(m => m.Parent == callerMethodNode.Parent)
+            : asyncOverloadMatches.Count > 0;
 
         // ── Step A: bridge ──────────────────────────────────────────────────────
         string bridgedCallerSource;
@@ -1378,7 +1420,17 @@ public class AsyncBatchEngine
                 "TryTransformCaller: '{Method}' has existing async overload - rewriting body directly (semantic)",
                 callerMethodName);
             bridgedCallerSource = preCheckSource;
-            var asyncOverloadNode = preCheckMethods.FirstOrDefault(m => m.Identifier.Text == callerMethodName + "Async");
+            MethodDeclarationSyntax? asyncOverloadNode;
+            try
+            {
+                asyncOverloadNode = NameTargetLookup.RequireSingle(asyncOverloadMatches, "Async overload", asyncOverloadName);
+            }
+            catch (ToolAmbiguousMatchException ambiguousOverload)
+            {
+                return (null, null, new UpliftSkippedInfo(
+                    callerFilePath, callerMethodName, AmbiguousCallerReason(ambiguousOverload), new List<DiagnosticInfo>()));
+            }
+
             var asyncCtParam = asyncOverloadNode?.ParameterList.Parameters
                 .FirstOrDefault(p => (p.Type?.ToString() ?? "").Contains("CancellationToken"));
             semanticCtExpression = asyncCtParam?.Identifier.Text ?? "CancellationToken.None";
@@ -1490,6 +1542,14 @@ public class AsyncBatchEngine
                     callerDocument, bridgedCallerSource, rewriteTarget, bridgedMethodName,
                     await _workspaceManager.ResolveEolAsync(callerDocument, cancellationToken), cancellationToken);
             }
+            catch (ToolAmbiguousMatchException ambiguousTarget)
+            {
+                // Another class in the file already declares the same XAsync the bridge just added.
+                _logger.LogWarning(
+                    "Body rewrite skipped for {Method}: {Message}", rewriteTarget, ambiguousTarget.Message);
+                return (null, null, new UpliftSkippedInfo(
+                    callerFilePath, callerMethodName, AmbiguousCallerReason(ambiguousTarget), new List<DiagnosticInfo>()));
+            }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogWarning(
@@ -1567,6 +1627,9 @@ public class AsyncBatchEngine
             return null;
         }
 
+        // Name pick without an ambiguity check, on purpose: the only caller (TryTransformCallerAsync) resolved this name to
+        // exactly one method with NameTargetLookup.RequireSingle on the same workspace text just before calling, and reports
+        // a same-named second method as a per-item skip. Resolve with RequireSingle here too before adding another caller.
         var targetMethod = root.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == targetMethodName);
@@ -1607,6 +1670,7 @@ public class AsyncBatchEngine
             bridgeCallNodes.Keys,
             (original, _) => original.WithAdditionalAnnotations(new SyntaxAnnotation(BridgeCallAnnotation)));
 
+        // Same name, same tree as targetMethod above: the annotations only add nodes' markers, never methods.
         var annotatedMethod = annotatedRoot.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == targetMethodName)!;

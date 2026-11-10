@@ -161,11 +161,8 @@ public class FirstMatchRatchetTests
         ["RoslynSentinel.Engines.Advanced/AdvancedStructuralEngine.cs::InlineMethodAsync"] = 1,
         ["RoslynSentinel.Engines.Advanced/AdvancedStructuralEngine.cs::InlineParameterAsync"] = 1,
         ["RoslynSentinel.Engines.Advanced/AntiPatternEngine.cs::FindMissingGenericConstraintsAsync"] = 1,
-        ["RoslynSentinel.Engines.Advanced/AsyncBatchEngine.cs::RewriteCallerAsyncBodyAsync"] = 1,
-        ["RoslynSentinel.Engines.Advanced/AsyncBatchEngine.cs::SemanticBridgeCallRewriteAsync"] = 2,
-        ["RoslynSentinel.Engines.Advanced/AsyncBatchEngine.cs::TryTransformCallerAsync"] = 2,
+        ["RoslynSentinel.Engines.Advanced/AsyncBatchEngine.cs::SemanticBridgeCallRewriteAsync"] = 2, // both picks find the one target name that TryTransformCallerAsync already resolved with NameTargetLookup.RequireSingle (and reports a same-named second method as a per-item skip) on the same workspace text just before the only call; the second pick re-finds the same node in the annotated copy of the tree
         ["RoslynSentinel.Engines.Advanced/AsyncOptimizationEngine.cs::FlagCandidatesInProjectAsync"] = 3,
-        ["RoslynSentinel.Engines.Advanced/AsyncOptimizationEngine.cs::RewriteObsoleteCallsInAsyncMethodAsync"] = 1,
         ["RoslynSentinel.Engines.Advanced/CodeGenerationEngine.cs::BuildAutoProperty"] = 2, // both picks find the backing field by name inside the one TypeDeclaration of the already-selected property (propNode.Ancestors().First()); two same-named fields in one type is CS0102, so the match is unique
         ["RoslynSentinel.Engines.Advanced/MappingEngine.cs::GenerateMappingAsync"] = 1,
         ["RoslynSentinel.Engines.Advanced/ResourceSafetyEngine.cs::DetectMemoryLeaksAsync"] = 1,

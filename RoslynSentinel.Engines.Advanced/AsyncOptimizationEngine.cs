@@ -860,9 +860,12 @@ public class AsyncOptimizationEngine
             throw new ToolInvalidArgumentException("Syntax root is unavailable for the document.");
         }
 
-        var methodNode = root.DescendantNodes()
+        // Two same-named methods (overloads, or the same name in two classes) are Ambiguous, never a silent first pick.
+        var methodMatches = root.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == asyncMethodName);
+            .Where(m => m.Identifier.Text == asyncMethodName)
+            .ToList();
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", asyncMethodName);
 
         if (methodNode == null)
         {
