@@ -1,6 +1,6 @@
 # Full build waits for pipe EOF that a reused MSBuild node holds open - OPEN
 
-**Status:** OPEN 2026-11-09. Cause traced in source; fix decided in the todo review 2026-11-09 (READY), not built.
+**Status:** RESOLVED 2026-11-10 (ef4301b6): ChildProcessCapture waits on exit with a 4 s drain grace; tests set MSBUILDDISABLENODEREUSE=1.
 
 ## Summary
 `FullBuild_SolutionScope_FailsBecauseOfBadProject` (`BuildScopeFullBuildTests.cs` ~103) times out after

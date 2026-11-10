@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Full build waits on process exit, not pipe EOF - resolved (2026-11-10)
+
+`BuildEngine.RunFullBuildAsync` waits on process exit, not pipe EOF (2026-11-09) - await exit, give the reads a 3-5 s drain grace, then cancel them and keep partial text; the timeout message reports whether the root exited; the test engine factory sets `MSBUILDDISABLENODEREUSE=1`; same for the `RunTest` spawn if it has the pattern; Medium - [doc](issues/closed/issue_full_build_waits_for_pipe_eof_held_by_msbuild_node.md)
+
+Evidence: ef4301b6 (ChildProcessCapture helper; ChildProcessCaptureTests, BuildScopeFullBuildTests, RunTestTests)
+
+## Failed batch errors stay readable - resolved (2026-11-10)
+
+Failed batch errors stay readable (2026-11-09) - `ReplaceSnippetBatch` gives full detail for the first 3 failures and one line per remaining index under a total cap, and `GetLargeResult` pages a whole-stored `errorData.message` by lines; Small-Medium - [doc](issues/closed/issue_batch_edit_error_unreadable_when_offloaded.md)
+
+Evidence: 30a07449 (BatchFailureMessage helper; BatchFailureMessageTests, ReplaceSnippetBatchTests 15-edit test, GetLargeResultTests errorData.message paging)
+
 ## Live-check of the stale-workspace stamp - resolved (2026-11-10)
 
 Live-check the stale-workspace stamp once with `LaunchTestInstance` and a broken `.csproj` (2026-11-09) - record the outcome in the proposal; Small - [doc](proposals/proposal_workspace_reload_failure_visibility.md)

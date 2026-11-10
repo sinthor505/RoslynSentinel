@@ -1,6 +1,6 @@
 # A failed ReplaceSnippet batch returns an error nobody can read - OPEN
 
-**Status:** OPEN 2026-11-09. Cause traced in source; fix decided in the todo review 2026-11-09 (READY), not built.
+**Status:** RESOLVED 2026-11-10 (30a07449): shared BatchFailureMessage helper on ReplaceSnippet and Modify* batches; GetLargeResult pages a whole-stored errorData.message.
 
 ## Summary
 A 15-item `ReplaceSnippet` `batchEdits` exact-match failure returned `isError` with the body offloaded to a
