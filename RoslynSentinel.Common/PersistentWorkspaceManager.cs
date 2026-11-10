@@ -153,7 +153,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     private DateTime _lastLoadedAt = DateTime.MinValue;
     // Unlike _lastLoadedAt (also bumped by in-memory updates and reloads, and set before a failed
     // load is detected), this is set only when LoadSolutionAsync finishes successfully -> it backs
-    // LoadState, i.e. "has this process ever had a solution".
+    // LoadState, i.e. "has this process ever had a solution". It also backs GetWorkspaceStatus staleness (measured from
+    // this time) and is set by a successful reload swap (SwapInFreshWorkspaceLocked).
     private DateTime? _lastSuccessfulLoadUtc;
     // Counts LoadSolutionAsync calls that are queued for or holding _solutionLock and backs
     // LoadState.LoadInProgress and SolutionLoadStatus. Mutated only under _loadStatusSync (never
@@ -174,6 +175,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // Paths already refused once with FoldPending since their last fold; a second mismatch for a path in here proceeds with a
     // Finding instead of refusing again. Cleared per path in NoteFileFolded and wholesale in ClearReloadFailure.
     private readonly ConcurrentDictionary<string, byte> _foldRefusedFiles = new(StringComparer.OrdinalIgnoreCase);
+    // Per-file UTC time of the last in-memory fold; GetWorkspaceStatus judges a folded file against max(last successful load, this).
+    private readonly ConcurrentDictionary<string, DateTime> _foldedAtUtc = new(StringComparer.OrdinalIgnoreCase);
     private readonly Timer _debounceTimer;
     // Bounded automatic retry of a failed debounce reload; every attempt holds _solutionLock for a full MSBuild load, so keep it bounded.
     private int _debounceRetryCount;
@@ -224,6 +227,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // file and the record is still the one RecordUnfoldedFile wrote (a later reload failure of another kind is left alone).
     private void NoteFileFolded(string filePath)
     {
+        _foldedAtUtc[filePath] = DateTime.UtcNow;
         _foldRefusedFiles.TryRemove(filePath, out _);
         if (_unfoldedFiles.TryRemove(filePath, out _)
             && _unfoldedFiles.IsEmpty
@@ -813,7 +817,23 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     /// Covers waiting for the workspace lock and the load itself. When it expires (and the caller's own token
     /// did not) the load is cancelled and <see cref="SolutionLoadTimeoutException"/> is thrown.
     /// </param>
-    public async Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, TimeSpan timeout, CancellationToken cancellationToken = default)
+    public Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, TimeSpan timeout, CancellationToken cancellationToken = default)
+        => LoadSolutionAsync(solutionPath, baseRepoDir, timeout, WorkspaceReloadTriggerKind.ExplicitLoad, cancellationToken);
+
+    /// <param name="baseRepoDir">
+    /// Optional per-call base directory used to resolve a relative <paramref name="solutionPath"/>.
+    /// Takes precedence over the server-wide <see cref="BaseRepoDirectory"/>.
+    /// </param>
+    /// <param name="timeout">
+    /// Covers waiting for the workspace lock and the load itself. When it expires (and the caller's own token
+    /// did not) the load is cancelled and <see cref="SolutionLoadTimeoutException"/> is thrown.
+    /// </param>
+    /// <param name="trigger">
+    /// The <see cref="WorkspaceReloadTriggerKind"/> a failure is recorded under: ExplicitLoad for tool calls,
+    /// StartupLoad for the startup auto-load.
+    /// </param>
+    // The trigger overload is on the concrete manager only (not IWorkspaceMutator) because only the startup caller needs it.
+    public async Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, TimeSpan timeout, WorkspaceReloadTriggerKind trigger, CancellationToken cancellationToken = default)
     {
         solutionPath = ResolveSolutionPath(solutionPath, baseRepoDir);
 
@@ -884,8 +904,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         _logger.LogError(ex, "Failed to open solution '{SolutionPath}'. Some projects might not load correctly.", solutionPath);
                     }
                     _workspaceLoadErrors.Add($"Failed to open solution: {ex.Message}");
-                    // TODO StartupLoad vs ExplicitLoad cannot be told apart here; the startup auto-load path would need to pass its trigger in.
-                    RecordReloadFailure(WorkspaceReloadTriggerKind.ExplicitLoad, Path.GetFileName(solutionPath), ex, oldWorkspaceKept: hadUsableSolution);
+                    RecordReloadFailure(trigger, Path.GetFileName(solutionPath), ex, oldWorkspaceKept: hadUsableSolution);
                     failureRecorded = true;
                     if (hadUsableSolution)
                     {
@@ -908,7 +927,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     // no documents). An explicit load still swaps it in, like any partial load, but reports the failure so
                     // the workspace is flagged stale; the next fully clean load clears it. The debounce reload keeps the old
                     // workspace instead (OpenFreshWorkspaceAsync), because there nobody asked to replace a good solution.
-                    RecordReloadFailure(WorkspaceReloadTriggerKind.ExplicitLoad, Path.GetFileName(solutionPath), new ProjectLoadFailedException(projectFailures.Describe()), oldWorkspaceKept: false);
+                    RecordReloadFailure(trigger, Path.GetFileName(solutionPath), new ProjectLoadFailedException(projectFailures.Describe()), oldWorkspaceKept: false);
                     failureRecorded = true;
                 }
 
@@ -981,7 +1000,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             // Our own timeout fired (not the caller's token): report it as a timeout with an actionable message.
             failure = SolutionNotLoadedMessage.LoadCancelledAfterTimeout(timeout);
             var timeoutException = new SolutionLoadTimeoutException(failure);
-            RecordReloadFailure(WorkspaceReloadTriggerKind.ExplicitLoad, Path.GetFileName(solutionPath), timeoutException, oldWorkspaceKept: CurrentSolution is { ProjectIds.Count: > 0 });
+            RecordReloadFailure(trigger, Path.GetFileName(solutionPath), timeoutException, oldWorkspaceKept: CurrentSolution is { ProjectIds.Count: > 0 });
             throw timeoutException;
         }
         catch (Exception ex)
@@ -989,7 +1008,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             failure = WorkspaceReloadCause.Sanitize(ex.Message);
             if (!failureRecorded)
             {
-                RecordReloadFailure(WorkspaceReloadTriggerKind.ExplicitLoad, Path.GetFileName(solutionPath), ex, oldWorkspaceKept: CurrentSolution is { ProjectIds.Count: > 0 });
+                RecordReloadFailure(trigger, Path.GetFileName(solutionPath), ex, oldWorkspaceKept: CurrentSolution is { ProjectIds.Count: > 0 });
             }
             throw;
         }
@@ -2044,10 +2063,11 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     public WorkspaceStatus GetWorkspaceStatus()
     {
         // Compute staleness: count workspace documents whose on-disk file is newer than
-        // the last time the workspace was loaded.
+        // the last successful load (not _lastLoadedAt, which in-memory folds bump). A file we folded after that load
+        // is judged against its own fold time.
         var sampleStaleFiles = new List<string>();
         int staleCount = 0;
-        if (CurrentSolution != null && _lastLoadedAt != DateTime.MinValue)
+        if (CurrentSolution != null && _lastSuccessfulLoadUtc is { } loadedUtc)
         {
             foreach (var doc in CurrentSolution.Projects.SelectMany(p => p.Documents))
             {
@@ -2057,7 +2077,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     continue;
                 }
 
-                if (File.GetLastWriteTimeUtc(path) > _lastLoadedAt)
+                var baseline = _foldedAtUtc.TryGetValue(path, out var foldedAt) && foldedAt > loadedUtc ? foldedAt : loadedUtc;
+                if (File.GetLastWriteTimeUtc(path) > baseline)
                 {
                     staleCount++;
                     if (sampleStaleFiles.Count < 5)
@@ -3272,6 +3293,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
         if (clearReloadFailure)
         {
+            // A successful reload swap is a successful full load; LoadSolutionAsync passes clearReloadFailure: false
+            // and sets the field itself on full success.
+            _lastSuccessfulLoadUtc = DateTime.UtcNow;
             ClearReloadFailure();
         }
 

@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Startup auto-load records StartupLoad; staleness from last successful load - resolved (2026-11-10)
+
+Startup auto-load records trigger `StartupLoad`, and `GetWorkspaceStatus` staleness uses `_lastSuccessfulLoadUtc` (2026-11-09) - Small-Medium - [doc](proposals/proposal_workspace_reload_failure_visibility.md)
+
+Evidence: commit titled "#5 ..." (git log); WorkspaceReloadFailureStatusTests (StartupLoad trigger, fold of A does not hide stale B, reload clears stale count)
+
 ## --toolsets startup flag pre-enables toolsets before the first tools/list (#12) - resolved (2026-11-10)
 
 `--toolsets=<set,...>` startup flag pre-enables toolsets before the first `tools/list` (2026-11-09) - so a launch config starts with the toolsets it needs (Claude Code never refreshes its list after an enable); Medium - [doc](blockers/closed/blocking_error_toolset_enable_not_visible_in_client_tool_list.md)

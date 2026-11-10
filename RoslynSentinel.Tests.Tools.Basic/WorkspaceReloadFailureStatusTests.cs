@@ -66,6 +66,18 @@ public class WorkspaceReloadFailureStatusTests
     }
 
     [Test]
+    public async Task LoadSolutionAsync_StartupTriggerMissingPath_RecordsStartupLoadFailure()
+    {
+        var thrown = await Assert.CatchAsync(async () => await _manager.LoadSolutionAsync(MissingSolutionPath(), null, SolutionLoadWait.DefaultTimeout, WorkspaceReloadTriggerKind.StartupLoad));
+
+        Assert.That(thrown, Is.Not.Null, "a missing solution must surface as a load failure");
+        var failure = _manager.ReloadFailure;
+        Assert.That(failure, Is.Not.Null, "the failed startup load must be recorded");
+        Assert.That(failure!.Trigger, Is.EqualTo(WorkspaceReloadTriggerKind.StartupLoad));
+        Assert.That(failure.TriggerFile, Is.EqualTo(MissingSolutionFileName));
+    }
+
+    [Test]
     public async Task LoadSolutionAsync_GoodLoadAfterFailedLoad_ClearsReloadFailure()
     {
         await Assert.CatchAsync(async () => await _manager.LoadSolutionAsync(MissingSolutionPath()));
@@ -153,5 +165,52 @@ public class WorkspaceReloadFailureStatusTests
         Assert.That(_manager.CurrentSolution, Is.Not.SameAs(before), "a successful reload swaps in a new solution instance");
         Assert.That(_manager.CurrentSolution!.Projects.Count(), Is.EqualTo(projectCountBefore));
         Assert.That(_manager.WorkspaceVersion, Is.GreaterThan(versionBeforeRetry));
+    }
+
+    [Test]
+    public async Task GetWorkspaceStatus_FoldOfFileA_DoesNotHideStaleFileB()
+    {
+        await _manager.LoadSolutionAsync(_fixture.SolutionPath);
+        var paths = _manager.CurrentSolution!.Projects.SelectMany(p => p.Documents)
+            .Select(d => d.FilePath)
+            .Where(p => p != null && p.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && File.Exists(p))
+            .Distinct()
+            .Take(2)
+            .ToList();
+        Assert.That(paths.Count, Is.EqualTo(2));
+        var fileA = paths[0]!;
+        var fileB = paths[1]!;
+
+        await Task.Delay(150);
+        var now = DateTime.UtcNow;
+        File.SetLastWriteTimeUtc(fileA, now);
+        File.SetLastWriteTimeUtc(fileB, now);
+        await Task.Delay(150);
+
+        await _manager.ApplyInMemoryDocumentUpdatesAsync(new List<string> { fileA }, CancellationToken.None);
+
+        var status = _manager.GetWorkspaceStatus();
+        Assert.That(status.StaleDocumentCount, Is.EqualTo(1));
+        Assert.That(status.SampleStaleFiles, Does.Contain(fileB));
+        Assert.That(status.SampleStaleFiles, Does.Not.Contain(fileA));
+        Assert.That(status.RequiresReload, Is.True);
+    }
+
+    [Test]
+    public async Task GetWorkspaceStatus_AfterSuccessfulReload_ClearsStaleCount()
+    {
+        await _manager.LoadSolutionAsync(_fixture.SolutionPath);
+        var fileB = _manager.CurrentSolution!.Projects.SelectMany(p => p.Documents)
+            .Select(d => d.FilePath)
+            .First(p => p != null && p.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && File.Exists(p))!;
+
+        await Task.Delay(150);
+        File.SetLastWriteTimeUtc(fileB, DateTime.UtcNow);
+        Assert.That(_manager.GetWorkspaceStatus().StaleDocumentCount, Is.GreaterThanOrEqualTo(1));
+        await Task.Delay(150);
+
+        await _manager.LoadSolutionAsync(_fixture.SolutionPath);
+
+        Assert.That(_manager.GetWorkspaceStatus().StaleDocumentCount, Is.EqualTo(0));
     }
 }

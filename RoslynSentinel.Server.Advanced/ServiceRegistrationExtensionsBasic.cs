@@ -377,7 +377,8 @@ public static class RoslynSentinelServiceExtensionsBasic
         if (!string.IsNullOrEmpty(solutionPath))
         {
             logger?.LogInformation("Auto-loading solution: {Path}", solutionPath);
-            _ = workspaceManager.LoadSolutionAsync(solutionPath)
+            // Startup auto-load records StartupLoad (not ExplicitLoad) when it fails.
+            _ = workspaceManager.LoadSolutionAsync(solutionPath, null, SolutionLoadWait.DefaultTimeout, WorkspaceReloadTriggerKind.StartupLoad)
                 .ContinueWith(
                     t => logger?.LogError(t.Exception!.GetBaseException(), "Auto-load solution failed: {Path}", solutionPath),
                     TaskContinuationOptions.OnlyOnFaulted);

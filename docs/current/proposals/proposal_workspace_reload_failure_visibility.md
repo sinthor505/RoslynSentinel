@@ -238,6 +238,12 @@ symptom this proposal wants to stop depending on. Needed:
   rather than `_lastLoadedAt`, which folds and swaps bump (~3118, ~3258). Why: the owner wants both the
   label and the masking fixed. Check: a failing startup load shows `reloadFailure.trigger` StartupLoad,
   and a fold of file A no longer hides a stale file B in `GetWorkspaceHealth`.
+  **Done 2026-11-10 (#5):** a new `LoadSolutionAsync(path, baseRepoDir, timeout, trigger, ct)` overload on the concrete
+  `PersistentWorkspaceManager` only (not `IWorkspaceMutator`; only the startup caller needs it) records the trigger; the startup
+  caller (`ServiceRegistrationExtensionsBasic.WarmupAndAutoLoadBasic`) passes `StartupLoad`. `GetWorkspaceStatus` measures staleness
+  from `_lastSuccessfulLoadUtc`, with a per-file fold time (`_foldedAtUtc`) as the baseline for a file this process folded, so our own
+  writes do not read as stale; a successful reload swap also sets `_lastSuccessfulLoadUtc`. The `WorkspaceHealthMiscImpl.cs` anchor in
+  the decision was wrong: it only reports the manager's status. Tests: `WorkspaceReloadFailureStatusTests`.
 - (ii) After a `PostWriteSync` fold failure (~2640), queue one bounded `ReloadWorkspaceFromDiskAsync`, as
   the debounce-retry path does (READY, Small-Medium); the latch stays if it fails. Why: the watcher
   suppresses the echo of our own write (~1277-1305), so today only a manual `LoadSolution(forceReload:
