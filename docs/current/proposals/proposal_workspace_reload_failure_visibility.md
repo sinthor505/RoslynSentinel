@@ -228,3 +228,20 @@ symptom this proposal wants to stop depending on. Needed:
 - #32 (per-project reload removal, routing `.csproj` to the full reload, `RecordStructuralFileHashes`), in flight.
 - Memory: `reference_central_mcp_request_filter_pipeline.md` (where result transforms live),
   `project_externaldrift_false_positive_cross_check_gitstatus.md`, `project_concurrent_sessions.md`.
+
+## Decisions (todo review 2026-11-09)
+
+- (i) The startup auto-load records trigger `StartupLoad` (READY, Small-Medium): add an optional trigger
+  parameter to `LoadSolutionAsync`, which the startup call (`ServiceRegistrationExtensionsBasic.cs` ~403)
+  passes, and remove the in-code TODO (`PersistentWorkspaceManager.cs` ~887). Also base the
+  `GetWorkspaceStatus` staleness check (`WorkspaceHealthMiscImpl.cs` ~134) on `_lastSuccessfulLoadUtc`
+  rather than `_lastLoadedAt`, which folds and swaps bump (~3118, ~3258). Why: the owner wants both the
+  label and the masking fixed. Check: a failing startup load shows `reloadFailure.trigger` StartupLoad,
+  and a fold of file A no longer hides a stale file B in `GetWorkspaceHealth`.
+- (ii) After a `PostWriteSync` fold failure (~2640), queue one bounded `ReloadWorkspaceFromDiskAsync`, as
+  the debounce-retry path does (READY, Small-Medium); the latch stays if it fails. Why: the watcher
+  suppresses the echo of our own write (~1277-1305), so today only a manual `LoadSolution(forceReload:
+  true)` clears it. Check: with an injected fold failure, the next write succeeds without `LoadSolution`.
+- (iii) Live-check the stale-workspace stamp once (READY, Small): use `LaunchTestInstance` with a broken
+  `.csproj`, confirm a tool result carries the stamp, and record the outcome here.
+  `WorkspaceStaleStampFilterTests` covers it in process, through the `RecordReloadFailure` seam.

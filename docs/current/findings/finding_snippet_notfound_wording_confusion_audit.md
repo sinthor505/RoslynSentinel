@@ -294,3 +294,25 @@ in `SymbolNavigationEngine.cs`/`ImpactAnalyzer.cs`/`BasicRefactoringEngine.cs`/`
 distinct sites). Explicitly lower priority per the plan; deferred as its own follow-up sweep — see
 the finding doc's raw audit findings for the full site inventory.
 
+## Decisions (todo review 2026-11-09)
+
+- D1 is done for every active write tool, so these leave the TODO.md line:
+  - Member `addMember` anchors (2c319c1e, W15: an unmatched anchor is NotFound, an overloaded anchor is
+    Ambiguous; `ResolveInsertAnchorIndex` ~2086-2129);
+  - SummaryComment (same commit, explicit `preferredTarget`);
+  - MoveMember (aa26d049, W16: a bare overloaded name is Ambiguous, and `Save(int)` selects one overload).
+- Build the leftovers anyway (owner choice, READY, Medium):
+  - ConvertStaticToExtension class pick (`LogicOptimizationEngine.cs` ~818: a nested class may make the
+    outer class static);
+  - BuildAutoProperty type re-find (`CodeGenerationEngine.cs` ~1101);
+  - a warning field on `VariableLifetimeReport` for TraceVariableLifetime;
+  - BuildRecoveryHintAsync;
+  - the Asyncify uplift batch (AsyncBatchEngine `RewriteCallerAsyncBodyAsync` /
+    `SemanticBridgeCallRewriteAsync` / `TryTransformCallerAsync`,
+    `AsyncOptimizationEngine.RewriteObsoleteCallsInAsyncMethodAsync`: carry symbol plus line instead of a
+    name).
+
+  The implementer verifies each site first and records a site with no real ambiguity as such rather than
+  forcing a change. Check: one test per changed site with two same-named candidates (Ambiguous on writes,
+  a warning on reads).
+

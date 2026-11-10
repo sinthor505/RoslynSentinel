@@ -51,3 +51,16 @@ and leaked exceptions hurt weak models most. See the finding for evidence per de
 ## Deferred
 - #12 stray CRLF on a blank line moves out of an extracted selection. Not an `ExtractMethodSafe` bug: `EolUtilities.MatchMiddle` (`RoslynSentinel.Common/EolUtilities.cs` ~214/~226) matches whitespace-only lines by text, so the old blank line's CRLF binds to the first generated blank line. Fix would be global to every `FormatAnnotatedSpansAsync` caller (skip empty-text lines in the LCS match); decide whether that is worth the blast radius or reword the pin (`MsToolAugmentEngineFormatCharacterizationTests.cs`, mixed-EOL test) as an accepted limitation.
 - #9 limit: a nested or private type used by an anonymous initializer may not resolve in the new top-level file; the compile gate refuses the write. Only the first anonymous object in the file is converted.
+
+## Decisions (todo review 2026-11-09)
+
+- #20 GenerateConstructor auto-properties: PARKED (the tool is gated, 0 journal calls). Rule for when it is
+  built: fall back to auto-properties only when no field qualifies. A property qualifies if it is
+  instance, non-abstract, has no accessor bodies and no initializer, and is get+set, init or get-only.
+  Static, expression-bodied, full, inherited and `required` properties are excluded. Parameter = camelCase
+  name; assignment `this.Prop = prop`. Flips BUG_56 and the two no-fields tests. Unpark when the tool is
+  used.
+- GenerateConstructor excludes `const` and `static` fields (READY, Small). Why: the filter in
+  `CodeGenerationEngine.GenerateConstructorAsync` (~193-281) checks only private/readonly, so a
+  `private const` would be assigned in the constructor (CS0131); this was read in source, so the test
+  goes first. Check: a class with `private const int X = 1;` gets no `x` parameter.

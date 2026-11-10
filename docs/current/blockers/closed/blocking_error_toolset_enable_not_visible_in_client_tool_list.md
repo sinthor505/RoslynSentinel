@@ -112,3 +112,25 @@ Workaround needing a user configuration decision (not a blocker for the tool sur
 server with a mode or `includeTools` that has `SemanticFindReplace` (and the rest of `moveExtract`) active
 from session start, so the client lists it in the initial `tools/list`. Per CLAUDE.md "Gated tools", a mode
 or flag change is the user's call.
+
+## Decisions (todo review 2026-11-09)
+
+- The stale list is a client-side cache: Claude Code builds its deferred-tool index at connect and does
+  not refresh it on `tools/list_changed` (Claude Code issues 66084, 60626, 50515, 13646, cited in
+  `blockers/blocking_error_gitremote_not_callable_after_toolset_enable.md`). Not fixable in the server;
+  the TODO.md line is closed. Returning schemas from `McpToolsetControl` was rejected: the harness refuses
+  a tool missing from its list ("No such tool available"), and only a generic `InvokeTool(name, json)`
+  proxy could work around that (Large, bypasses the filter pipeline).
+- Widen the claude-lean startup surface (READY, Small-Medium): move SemanticFindReplace, InspectSymbol,
+  MoveMember, UsingDirective and GetDiagnostics from `ToolsetCatalog.ToolsBySet` into
+  `ClaudeLeanToolNames` (`ToolClassRegistry.cs` ~49) and add `SemanticFindReplaceTools` to the claude
+  mode. Why: the most-called gated tools (332/59/43/32/24 of 59,595 journal calls), and ToolSearch
+  deferral keeps extra startup tools cheap. Raise `ClaudeLeanSchemaBudgetTests`, update the
+  `ClaudeLeanModeTests` on-demand asserts (~252-292) and `McpToolsetControlTests` (~211, ~583),
+  regenerate docs. Check: a fresh lean session finds the five tools through ToolSearch with no enable.
+- Add a `--toolsets=<set,...>` startup flag that pre-enables toolsets before the first `tools/list`
+  (READY, Medium). Why: a launch config can start with any other toolset it needs. Check: a lean host
+  started with `--toolsets=declarations` lists `TypedMember` in its initial `tools/list`.
+- Correct the `McpToolsetControl` response text (`ToolsetControlTools.cs` ~79), which claims enabled tools
+  "can still be called by name" (READY, Small). Say instead that a client which does not refresh needs a
+  `/mcp` reconnect or a startup surface that already has the tool.

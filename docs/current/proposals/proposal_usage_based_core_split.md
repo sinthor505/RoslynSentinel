@@ -213,3 +213,20 @@ type, move construction behind factories first.
 - Memory: engine reorg leftovers (open bug 2, cross-project MoveType); server flavours and build configs
 - Ideas: `docs/current/ideas/idea_tool_attribution.md`, `docs/current/ideas/closed/idea_server_telemetry.md`.
   Both overlap with the slice 1 usage report.
+
+## Decisions (todo review 2026-11-09)
+
+- This proposal is stale: Server.Basic is gone (its "run the Basic binary" step no longer exists), the
+  usage counts are old (now 59,595 calls over 191 journal files), and ChangeSignature is already in the
+  claude-lean core. First refresh it in place.
+- Promote MoveMember, ChangeSignature and MoveAllTypesToFiles into a Tools.Basic class (READY, Medium).
+  Why: their engines are already in Engines.Basic, so only the 1679-line `AdvancedRefactoringTools` class
+  is split and their tests move. MoveType comes later (it needs
+  `StructuralRefactoringEngine.MoveTypeToOuterScopeAsync` moved into Engines.Basic). Check: Advanced
+  builds and tests pass, and the three tools resolve from Tools.Basic (`scripts/build.ps1 -Flavor Solution`).
+- Split Advanced by cluster in vertical slices (tools + engines + tests), Asyncify first
+  (`Tests.Asyncify` already exists), then Analysis (Intelligence, Scan, Quality, Modernization tools).
+  Keep the namespaces (66 files import `RoslynSentinel.Tools.Advanced`). Cost per new project: a
+  csproj, references from Server.Advanced and the test projects, a DI block in
+  `ServiceRegistrationExtensionsAdvanced.cs`, regenerated docs. Needs a plan doc first (OPEN). Why: the
+  weight is in Engines.Advanced (33 files) and its tests, so a tools-only split buys little.

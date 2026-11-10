@@ -132,3 +132,14 @@ ChangeSignature, RenameSymbol conflicts) do not use it.
 ## Decisions (todo review 2026-11-08)
 
 - Scoped ledger part (c), writes outside `ApplyProposedChangesAsync`: closed. Why: every solution C# write (WriteFile, DeleteFile, CreateFile, ReplaceSnippet, ApplyDiff, ApplyUnifiedDiff, UndoLastApply, FormatDocumentSafe) routes through it; the bypasses (MsToolAugmentEngine ~782 without a solution, DocumentationTools ~361/~458, ProjectStructureEngine ~1839) write files the ledger does not track. Part (a) stays open.
+
+## Decisions (todo review 2026-11-09)
+
+- Part (a), ChangeSignature as a ledger opener: the partial-apply premise is superseded. Since ce901063
+  (W19) and 8f144404, `oldSignature: auto` keeps an `[Obsolete("Use <newSig>")]` forwarding wrapper when
+  some callers cannot migrate (`ChangeSignatureWrapper.BuildWrapperText` ~132-153), so no broken interim
+  state needs a ledger. The remaining all-or-nothing refusal (`BasicRefactoringEngine.cs` ~652-678, via
+  `wrapperRefusal` ~337-352) covers virtual, override, abstract and interface members, partial or extern
+  constructors, a new parameter without a default, and signature collisions. Narrowed to those members
+  and PARKED: no wrapper is possible there, and no usage needs it yet. Unpark when a real session hits that
+  refusal.

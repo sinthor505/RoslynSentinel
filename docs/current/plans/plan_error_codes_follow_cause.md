@@ -234,3 +234,14 @@ Done via Haiku 5.5 implementer (A1, A2, A3, cap fix) and test-writer. Defects 2-
 ## Decisions (todo review 2026-11-08)
 
 - Step 4 leftovers: fix the 4 tool-layer codes (DeleteFile ~133 and RetryFailedChanges ~376 to NotFound, InlineClass ~319 to NotFound, SyncTypeAndFilename ~1447 to TargetIneligible) and also split the 4 conflated engine "not found or" messages (READY). Why: the owner wants Step 4 finished rather than recorded as known. Check: one test per code; no "not found or" text left.
+
+## Decisions (todo review 2026-11-09)
+
+- BatteryEighteen throw-migration markers (`BatteryEighteenTests.cs` :76, :94, :205): throw NotFound via
+  `DocumentLookup.RequireDocument` in `MsToolAugmentEngine.AnalyzeSwitchForPatternConversionAsync` (~239),
+  `ConvertSwitchToPatternSafeAsync` (~309) and `PreviewAddMissingUsingsAsync` (~945) (READY, Small).
+  Why: the `MsAugmentResult` contract is not in play. Only one of the three returns it, and that one has
+  no production caller. The same engine already throws through `RequireDocument` in 4 methods, and every
+  consumer is a gated tool. The snippet-failure "not safe" report in Analyze stays a result. Check the
+  Experimental `CodeTransformTools` ~243 caller handles the throw. Check: the three tests assert
+  `ToolNotFoundException` with ErrorCode NotFound.

@@ -22,3 +22,17 @@ Found in the C5b-2a review (all pre-existing; the formatter routing itself is do
 ### `MoveType(destination: ownFile)` has no target-folder parameter (2026-10-14) - not started
 
 Found moving `SnippetMatchOutcome` out of `ContextErrorBuilder.cs` (commit d9a2ff90). `MoveType` can only create the new file beside the source file, so a type cannot be moved into a subfolder such as `SnippetMatching/`. It also adds an unused `using Microsoft.CodeAnalysis.Text;` to the new file and drops the type-level doc summary. Suggested change: add an optional `targetFolder` (or `targetPath`) parameter, copy the source file's usings only where the moved type needs them, and carry the type's doc comment across. Workaround used: accept the source folder and fix the using and summary with one `ReplaceSnippet`.
+
+## Decisions (todo review 2026-11-09)
+
+- IntroduceParameterObject on an interface method updates the interface and every implementer (READY,
+  Medium); call sites stay manual. Why: the tool already hands `ValidateAndApplyAsync` a multi-file
+  dictionary (`AdvancedRefactoringTools.cs` ~746-794), and ChangeSignature already finds implementers with
+  `SymbolFinder.FindImplementationsAsync` (`BasicRefactoringEngine.cs` ~258-270), so the engine
+  (`AdvancedStructuralEngine.IntroduceParameterObjectAsync` ~1129-1359) can return `Changes` for every
+  declaration. Map parameters by position (implementers may rename them), include explicit and partial
+  implementers, and also handle expression-bodied methods (today only `Body != null` is rewritten, ~1250).
+- Implementers in another namespace reference the record through an added `using <interface namespace>`,
+  only when the namespaces differ; no full qualification.
+- Check: interface in A.cs, implementer in B.cs (other namespace) plus an explicit implementer; after the
+  tool all three take the record, B.cs has the using, the compile gate passes, no WARNING.

@@ -27,6 +27,19 @@ human or an agent to read the code and the log.
 - **Not chosen: Git-tool enforcement** (reject unknown IDs, warn on untrailed commits). Revisit after
   the convention has been in use.
 
+## Decisions (todo review 2026-11-09)
+
+- Build the `ProjectDoc` extension in one slice: listing, validation and closure (READY, Medium).
+  - Listing: docs with the commits whose `Plan:`/`Closes:` trailers name them.
+  - Validation: whether a trailer value names an existing doc.
+  - Closure: set Status, move to `closed/`, append the CLOSED.md line, and fix relative links per
+    templates/README.md rule 8.
+  - Why: the owner wants closure automated rather than relying on the report-only `TRAILER` check.
+  - Mind the schema budget: `ProjectDoc` is outside the claude-lean core.
+  - Afterwards, update templates/README.md rule 11 ("not built").
+  - Check: on a fixture repo, a doc with a `Closes:` commit is listed as a closure candidate, an unknown
+    ID is flagged, and the closure moves the doc and writes the CLOSED.md entry.
+
 ## Related
 - `scripts/Test-GuidanceHygiene.ps1`, `.claude/skills/tidy-guidance/SKILL.md`
 - `docs/current/templates/README.md` (closure convention to add)
