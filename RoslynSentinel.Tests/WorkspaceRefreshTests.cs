@@ -38,6 +38,8 @@ public class WorkspaceRefreshTests
             _manager.SetTestSolution(solution);
 
             const string updatedContent = "public class Foo { public int X { get; set; } }";
+            await File.WriteAllTextAsync(tempFile, updatedContent);
+
             var result = await _manager.ApplyProposedChangesAsync(
                 new Dictionary<FilePathWrapper, string> { [tempFile] = updatedContent });
 
