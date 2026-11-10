@@ -108,6 +108,22 @@ Parity tests on `GitTestRepo` fixtures run each probe through both backends and 
 `status`, `log`, `show`, `diff`, `ls-files`/`ls-tree`, `check-ignore`, and `tag`/`branch`/`stash`/
 `worktree` list. Typed results replace the text parsers listed above where parity tests pass.
 
+### Step 3b - backend warmup and status (APPROVED 2026-11-10, after stage 2)
+
+- A singleton holds a captured, never-faulting `Task<GitBackendStatus>` started at host start and
+  not awaited: try/catch around `GlobalSettings.Version` (forces the native load without a repo),
+  returning `Libgit2` + version or `CliFallback` + exception type/message. A failure logs once to
+  stderr from the task.
+- After `LoadSolution`, a second captured task awaits the first, then runs `GetHeadSha` on the
+  solution repo inside `using` (catches repo-specific rejections such as unsupported extensions).
+  `LoadSolution` does not await it.
+- No bounded wait on the git call path: LibGit2Sharp loads natives in a static type initializer,
+  so a racing call blocks on the same initializer, and a failed load is cached as
+  `TypeInitializationException`, which the fallback already catches.
+- `McpServerStatus` is the only waiter: `WaitAsync` with about 2 s, reporting `"warming"` on
+  timeout; a `gitBackend` block shows active backend, libgit2 version and first fallback reason
+  (from `FallbackGitReader`'s counters).
+
 ### Step 4 - stage 3: index writes (PROPOSED, not approved)
 
 `stage`, `unstage` and hunk staging. No LibGit2Sharp equivalent of `git apply` (hunk staging) was
