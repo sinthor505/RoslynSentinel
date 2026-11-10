@@ -345,11 +345,17 @@ public class McpToolsetControlTests
         /// </summary>
         public const string LegacyProtocol = "2025-11-25";
 
-        public static async Task<LiveServer> StartAsync(bool advanced, string mode, string? includeTools = null, string? protocolVersion = LegacyProtocol)
+        public static async Task<LiveServer> StartAsync(bool advanced, string mode, string? includeTools = null, string? protocolVersion = LegacyProtocol, string[]? startupArgs = null)
         {
             var clientToServer = new Pipe();
             var serverToClient = new Pipe();
             var host = BuildHost(advanced, mode, includeTools, clientToServer, serverToClient);
+            if (startupArgs is not null)
+            {
+                var warnings = ServerStartupHelpers.ApplyStartupToolsets(host.Services, startupArgs);
+                Assert.That(warnings, Is.Empty, string.Join("; ", warnings));
+            }
+
             _ = host.RunAsync();
 
             var transport = new StreamClientTransport(
@@ -500,6 +506,61 @@ public class McpToolsetControlTests
 
         Assert.That(LiveServer.Text(result), Does.Contain("/mcp"));
         Assert.That(LiveServer.Text(result), Does.Not.Contain("called by name"));
+    }
+
+    [Test]
+    public async Task StartupToolsets_Declarations_ListsTheSetInTheFirstToolsList()
+    {
+        await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean", startupArgs: new[] { "--toolsets=declarations" });
+
+        var names = await live.ToolNamesAsync();
+
+        Assert.That(names, Does.Contain("TypedMember"));
+        Assert.That(names, Does.Contain("Declaration"));
+        Assert.That(names, Does.Contain("ModifyEnum"));
+        Assert.That(names, Does.Contain("Search"));
+    }
+
+    [Test]
+    public async Task StartupToolsets_NoFlag_LeavesTheLeanSurfaceUnchanged()
+    {
+        await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean");
+
+        var names = await live.ToolNamesAsync();
+
+        Assert.That(names, Does.Not.Contain("TypedMember"));
+    }
+
+    [Test]
+    public void ParseToolsets_ParsesNamesCaseInsensitively_AcceptsHyphenAliases_AndCollectsUnknown()
+    {
+        var (sets, unknown) = ServerStartupHelpers.ParseToolsets(new[] { "--toolsets=Declarations, move-extract ,nope,projectAdmin,7" });
+
+        Assert.That(sets, Is.EqualTo(new[] { ToolSetName.declarations, ToolSetName.moveExtract, ToolSetName.projectAdmin }));
+        Assert.That(unknown, Is.EqualTo(new[] { "nope", "7" }));
+    }
+
+    [Test]
+    public void ApplyStartupToolsets_UnknownName_WarnsAndStillAppliesTheValidOnes()
+    {
+        using var host = BuildHost(advanced: true, "claude-lean", null);
+
+        var warnings = ServerStartupHelpers.ApplyStartupToolsets(host.Services, new[] { "--toolsets=nope,git" });
+
+        Assert.That(warnings, Has.Count.EqualTo(1));
+        Assert.That(warnings[0], Does.Contain("nope").And.Contain("Valid values"));
+        Assert.That(host.Services.GetRequiredService<ToolsetService>().EnabledToolSets, Is.EqualTo(new[] { ToolSetName.git }));
+    }
+
+    [Test]
+    public void ApplyStartupToolsets_OutsideClaudeLean_WarnsThatToolsetsNeedClaudeLean()
+    {
+        using var host = BuildHost(advanced: true, "Workspace", null);
+
+        var warnings = ServerStartupHelpers.ApplyStartupToolsets(host.Services, new[] { "--toolsets=declarations" });
+
+        Assert.That(warnings, Has.Count.EqualTo(1));
+        Assert.That(warnings[0], Does.Contain("claude-lean"));
     }
 
     [Test]

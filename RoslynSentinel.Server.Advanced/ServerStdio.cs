@@ -131,6 +131,15 @@ namespace RoslynSentinel.Server.Advanced
                 using var host = builder.Build();
                 var logger = host.Services.GetRequiredService<ILogger<ServerStdio>>();
 
+                // --toolsets: switch the requested on-demand toolsets on before the host starts, so the client's first tools/list already has them.
+                foreach (var warning in ServerStartupHelpers.ApplyStartupToolsets(host.Services, args))
+                {
+                    if (logger.IsEnabled(LogLevel.Warning))
+                    {
+                        logger.LogWarning("{ToolsetsWarning}", warning);
+                    }
+                }
+
                 ServerStartupHelpers.SmokeResolveToolTypes(
                     host.Services,
                     ActiveToolTypes,

@@ -113,6 +113,82 @@ public static class ServerStartupHelpers
     public static HashSet<string> ParseHideTools(string[] args) => ParseNameList(GetArgValue(args, "--hide-tools"));
 
     /// <summary>
+    /// Reads the comma-separated <c>--toolsets</c> list: on-demand toolset names to switch on at startup.
+    /// Matching ignores case, hyphens and underscores, so <c>move-extract</c> and <c>project_admin</c> also work.
+    /// Returns the recognised sets (in the order given, without duplicates) and the names that did not match.
+    /// </summary>
+    public static (IReadOnlyList<ToolSetName> Sets, IReadOnlyList<string> Unknown) ParseToolsets(string[] args)
+    {
+        var sets = new List<ToolSetName>();
+        var unknown = new List<string>();
+        foreach (var name in ParseNameList(GetArgValue(args, "--toolsets")))
+        {
+            var normalized = name.Replace("-", string.Empty).Replace("_", string.Empty);
+            if (Enum.TryParse<ToolSetName>(normalized, ignoreCase: true, out var set) && Enum.IsDefined(set))
+            {
+                if (!sets.Contains(set))
+                {
+                    sets.Add(set);
+                }
+            }
+            else
+            {
+                unknown.Add(name);
+            }
+        }
+
+        return (sets, unknown);
+    }
+
+    /// <summary>
+    /// Switches on the <c>--toolsets</c> sets at startup. Call it after the host is built and BEFORE the host
+    /// starts, so the first tools/list already contains the tools. Returns one warning per problem (empty = clean).
+    /// Never throws: a bad toolset list must not stop the server, which can still run with a smaller surface.
+    /// </summary>
+    public static IReadOnlyList<string> ApplyStartupToolsets(IServiceProvider services, string[] args)
+    {
+        var (sets, unknown) = ParseToolsets(args);
+        if (sets.Count == 0 && unknown.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var warnings = new List<string>();
+        var toolsetService = services.GetService<ToolsetService>();
+        if (toolsetService is null)
+        {
+            var requested = string.Join(",", sets.Select(s => s.ToString()).Concat(unknown));
+            warnings.Add($"--toolsets={requested} ignored: toolsets exist only in --mode claude-lean.");
+            return warnings;
+        }
+
+        foreach (var name in unknown)
+        {
+            // A warning, not a startup failure, matching --hide-tools (unknown names are ignored): a server that
+            // starts with a smaller surface than asked is still usable, and the warning is logged at startup.
+            warnings.Add($"Unknown toolset '{name}' in --toolsets ignored. Valid values: {string.Join(", ", Enum.GetNames<ToolSetName>())}.");
+        }
+
+        foreach (var set in sets)
+        {
+            try
+            {
+                var change = toolsetService.SetEnabled(set, enabled: true);
+                if (change.UnavailableTools.Count > 0)
+                {
+                    warnings.Add($"--toolsets={set}: not available on this server: {string.Join(", ", change.UnavailableTools)}.");
+                }
+            }
+            catch (InvalidOperationException ex)
+            {
+                warnings.Add($"--toolsets={set} not applied: {ex.Message}");
+            }
+        }
+
+        return warnings;
+    }
+
+    /// <summary>
     /// Every tool-class name the registry knows about (the single mode map), used to resolve a
     /// user-typed --include-tools/--exclude-tools name to the exact registered spelling.
     /// </summary>

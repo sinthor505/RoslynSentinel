@@ -94,6 +94,15 @@ public class ServerHttp
         var logger = app.Services.GetRequiredService<ILoggerFactory>()
                         .CreateLogger("RoslynSentinel.HttpHost.Advanced");
 
+        // --toolsets: switch the requested on-demand toolsets on before the host starts, so the client's first tools/list already has them.
+        foreach (var warning in ServerStartupHelpers.ApplyStartupToolsets(app.Services, args))
+        {
+            if (logger.IsEnabled(LogLevel.Warning))
+            {
+                logger.LogWarning("{ToolsetsWarning}", warning);
+            }
+        }
+
         app.Services.WarmupAndAutoLoadBasic(solutionPath, logger, baseRepoDirectory);
         ConsoleMode.WriteStartupDump(app.Services, modeArg);
 

@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## --toolsets startup flag pre-enables toolsets before the first tools/list (#12) - resolved (2026-11-10)
+
+`--toolsets=<set,...>` startup flag pre-enables toolsets before the first `tools/list` (2026-11-09) - so a launch config starts with the toolsets it needs (Claude Code never refreshes its list after an enable); Medium - [doc](blockers/closed/blocking_error_toolset_enable_not_visible_in_client_tool_list.md)
+
+Evidence: this commit (batch B item #12); McpToolsetControlTests.StartupToolsets_Declarations_ListsTheSetInTheFirstToolsList and four sibling tests (156 surface-fixture tests pass). ServerStartupHelpers.ParseToolsets/ApplyStartupToolsets, wired in ServerStdio and ServerHttp. Unknown name = logged startup warning (matches --hide-tools). Real-client check with ~/.mcp.json left to the live window.
+
 ## Claude-lean startup surface widened by five tools (#9) - resolved (2026-11-10)
 
 Widen the claude-lean startup surface (2026-11-09) - move SemanticFindReplace, InspectSymbol, MoveMember, UsingDirective and GetDiagnostics from `ToolsetCatalog` into `ClaudeLeanToolNames` and add `SemanticFindReplaceTools` to the claude mode, raising the budget tests and fixing the pinned on-demand asserts; Small-Medium - [doc](blockers/closed/blocking_error_toolset_enable_not_visible_in_client_tool_list.md)
