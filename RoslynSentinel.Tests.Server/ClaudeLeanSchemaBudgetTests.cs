@@ -25,13 +25,13 @@ public class ClaudeLeanSchemaBudgetTests
     // Advanced and Basic both 19 tools, 27752 chars total on 2026-10-18, now about 28117 after the RunTest environment parameter (TODO #39); largest tool Git at 4157 chars. Raised to 29000 on 2026-10-24: measured 28868 after the optional GetMethodSource containerName parameter (~330 chars; plan_unknown_parameter_rejection_reduction.md Step 4) on top of other additions since 2026-10-18. Raised to 29500 on 2026-10-25: measured 29229 after the optional Search contextLines parameter (~361 chars, commit 36e51f0c). Each constant is the
     // measurement rounded up to the next 500. Raise a constant only when the growth is intended. Lowered on 2026-11-05 (W8 Search schema trim): total 27996 chars, Search 3815 -> 2329 chars (inputSchema 3215 -> 1729); total budget now 28500 (28000 left 4 chars headroom), Search budget 2450 (5% headroom). Raised to 29000 on 2026-11-05: measured 28877 after the McpServerStatus operatingMode, operatingModeSource and callerAgentId result fields plus a description clause (plan_edit_attribution_ledger.md Step 6) and a ReadFile showLineEndings parameter added by another session. Raised to 29500 on 2026-11-06: measured 29291 chars after CreateFile gained the optional content parameter and a longer description (plan_claude_lean_core_write_tools step 1). Raised to 32000 (Advanced) and 30500 (Basic) on 2026-11-06: measured 31964 and 30075 chars after WriteFile (~782 chars) and ChangeSignature (~1868 chars) were promoted into the claude-lean core (plan_claude_lean_core_write_tools step 4). Advanced raised to 32500 on 2026-11-08: measured 32298 chars after the required parameters (reason, resultId, paths) were added to the Build, RunTest, ProjectName, DocCommentId and Git hunkIds descriptions (proposal_tool_hint_builder.md decision 2026-11-08).
     // 2026-11-08: +~440 for batch-item field descriptions/required (finding_batch_edit_item_schema_hides_required_fields)
-    // Raised on 2026-11-10 (todo punchlist #9): measured Advanced 44948 / Basic 39703 chars, largest tool SemanticFindReplace 5450, after SemanticFindReplace, InspectSymbol, MoveMember, UsingDirective and GetDiagnostics joined the claude-lean startup surface (~12k chars; SemanticFindReplace alone ~5.4k).
-    // TODO trim the SemanticFindReplace and MoveMember input schemas now that they are on the startup surface
-    private const int AdvancedTotalBudget = 45000;
+    // Raised on 2026-11-10 (todo punchlist #9): measured 44948 chars (Advanced; Basic was 39703 until the core split moved ChangeSignature and MoveMember into it, then also 44948), largest tool SemanticFindReplace 5450, after SemanticFindReplace, InspectSymbol, MoveMember, UsingDirective and GetDiagnostics joined the claude-lean startup surface (~12k chars; SemanticFindReplace alone ~5.4k).
+    // Trimmed 2026-11-10 (proposal_reduce_tool_schema_token_cost.md): SemanticFindReplace 5450 -> 3864, MoveMember 3356 -> 3112; both flavors now measure 43118 total, largest tool Git 4261. Budgets are measured + at least 300 rounded up to the next 500: total 43500, per tool 5000 (Git sets it).
+    private const int AdvancedTotalBudget = 43500;
     // Basic raised 40000 -> 45000 on 2026-11-10 (core split slice 1): ChangeSignature (~1.9k) and MoveMember (3356) moved from Tools.Advanced to Tools.Basic (CoreRefactoringTools), so the Basic flavor now serves them and measures 44948 chars, the same as Advanced.
-    private const int BasicTotalBudget = 45000;
-    private const int AdvancedMaxToolBudget = 5500;
-    private const int BasicMaxToolBudget = 5500;
+    private const int BasicTotalBudget = 43500;
+    private const int AdvancedMaxToolBudget = 5000;
+    private const int BasicMaxToolBudget = 5000;
     // Search per-tool budget.
     private const int AdvancedSearchToolBudget = 2450;
     private const int BasicSearchToolBudget = 2450;

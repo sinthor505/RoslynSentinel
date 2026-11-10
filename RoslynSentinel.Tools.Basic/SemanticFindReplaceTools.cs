@@ -36,37 +36,23 @@ public class SemanticFindReplaceTools
 
     [McpServerTool(Name = "SemanticFindReplace")]
     [Produces(DataTag.ChangeId)]
-    [Description("Semantic (compiler-aware, not text) find-replace with three operations. " +
-        "operation: invertBoolean renames a bool property or field and inverts its polarity at every site (true<->false, Read gets !, NegatedRead loses !); " +
-        "required: symbol (docCommentId of the bool member), newName, mode. " +
-        "operation: replaceConstruction rewrites object-creation expressions of a type into calls to a static factory method, " +
-        "e.g. new Engine(wm, log) -> TestEngines.Engine(wm, log), including target-typed new(...), keeping the argument text unchanged; " +
-        "required: symbol (docCommentId of the constructed type T:Ns.Type, or of one constructor M:Ns.Type.#ctor(...) to match only that overload), factory (docCommentId of a static, non-generic method whose return type is the type or a subtype), mode; " +
-        "optional: projectFilter. " +
-        "replaceConstruction rewrites every site whose arguments the factory accepts (checked by overload resolution at the site) and SKIPS, never blocks on, the others: " +
-        "object-initializer sites are rewritten when every member matches an unbound factory parameter of the same name (case-insensitive), else skipped, as are collection initializers, argument shape mismatches and sites inside the factory's own containing type. " +
-        "Skipped sites carry file, line and unsupportedReason, at most 3 listed per reason; skippedSitesNotListed counts the rest. The result carries rewritten and skipped counts. " +
-        "If the factory's return type is not assignable to the constructed type the whole operation is refused. " +
-        "operation: removeNullForgiving deletes the postfix ! from every expression bound to a property/field whose type is non-nullable (symbol = its docCommentId), across the solution or narrowed by projectFilter/fileFilter; preview first. " +
-        "required: symbol, mode; optional: projectFilter, fileFilter; newName and factory are rejected. " +
-        "mode: preview lists the sites (before/after text) without writing anything; apply performs the changes and returns a changeId for UndoLastApply. " +
-        "Mode is mandatory - use preview first to review. " +
-        "invertBoolean alias retarget: a computed inverse alias (a bool property with getter `!X` and setter/init `X = !value`, e.g. SentinelCallToolResult.IsSuccess over IsError) " +
-        "cannot be renamed in place; instead pass newName = the existing sibling member (X, or the public property that wraps X). " +
-        "Every reference to the alias is then rewritten to the sibling with inverted logic (r.IsSuccess -> !r.IsError, IsSuccess = true -> IsError = false) " +
-        "while the alias declaration itself is left untouched, so you can delete it afterwards. " +
-        "If any invertBoolean reference is unsupported (e.g. compound assignment |=, ++, ref argument, property pattern, == true), " +
-        "the entire operation is refused and the message lists each file:line so you can fix those by hand. " +
-        "Returns sites and changeId on success, or a structured error naming the parameter and a correct value.")]
+    [Description("Semantic (compiler-aware, not text) find-replace. " +
+        "invertBoolean renames a bool property or field and inverts its polarity at every site (true<->false, Read gets !, NegatedRead loses !). " +
+        "replaceConstruction rewrites object-creation expressions of a type, including target-typed new(...), into calls to a static factory method with the argument text unchanged, e.g. new Engine(wm, log) -> TestEngines.Engine(wm, log). " +
+        "removeNullForgiving deletes the postfix ! from every expression bound to a non-nullable property or field (symbol), across the solution or narrowed by projectFilter/fileFilter. " +
+        "mode: preview lists the sites (before/after text) and writes nothing - use it first; apply performs the changes and returns a changeId for UndoLastApply. " +
+        "replaceConstruction rewrites every site the factory accepts (overload resolution) and skips the rest (initializer or argument mismatches, sites inside the factory's own type); skipped sites carry file, line and unsupportedReason, at most 3 per reason, and skippedSitesNotListed counts the rest. A factory whose return type is not assignable to the constructed type refuses the whole operation. " +
+        "invertBoolean alias retarget: a computed inverse alias (getter !X, setter X = !value, e.g. IsSuccess over IsError) cannot be renamed in place; pass newName = its sibling X and every reference is rewritten to X with inverted logic, the alias declaration stays for you to delete. " +
+        "An unsupported invertBoolean reference (compound assignment, ++, ref argument, property pattern, == true) refuses the whole operation and lists each file:line.")]
     public async Task<SentinelCallToolResult<object>> SemanticFindReplaceTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("The operation to perform: invertBoolean, replaceConstruction or removeNullForgiving.")] SemanticReplaceOperation operation,
-        [Description("A docCommentId. invertBoolean: the bool property or field to rename and invert. replaceConstruction: the constructed type (T:Ns.Type) or one constructor (M:Ns.Type.#ctor(System.Int32)); a constructor id restricts matching to that overload. removeNullForgiving: the property (P:Ns.Type.Name) or field (F:Ns.Type.name) whose declared type is non-nullable. From Search(mode: symbol), pass exactly as returned, do not construct.")] string symbol,
+        [Description("invertBoolean (required: symbol, newName, mode), replaceConstruction (required: symbol, factory, mode; optional: projectFilter) or removeNullForgiving (required: symbol, mode; optional: projectFilter, fileFilter; newName and factory are rejected).")] SemanticReplaceOperation operation,
+        [Description("A docCommentId, passed exactly as returned by Search(mode: symbol), never constructed. invertBoolean: the bool property or field. replaceConstruction: the constructed type (T:Ns.Type), or one constructor (M:Ns.Type.#ctor(System.Int32)) to match only that overload. removeNullForgiving: the non-nullable property (P:Ns.Type.Name) or field (F:Ns.Type.name).")] string symbol,
         [Description("preview: list the sites (before/after text) without writing. apply: perform the changes.")] SemanticReplaceMode mode,
-        [Description("invertBoolean only, and required there: the new name for the symbol. Must be a valid C# identifier and not collide with other members, except for an alias retarget where it must be the existing sibling member the computed inverse alias negates. Ignored by replaceConstruction. Rejected by removeNullForgiving.")] string? newName = null,
-        [Description("replaceConstruction only, and required there: docCommentId of the static, non-generic factory method that replaces each construction, e.g. M:Ns.Factories.Create(System.Int32). Its return type must be the constructed type or a subtype. Ignored by invertBoolean. Rejected by removeNullForgiving. From Search(mode: symbol), pass exactly as returned, do not construct.")] string? factory = null,
-        [Description("Optional: project name or names separated by commas; only sites in those projects are changed. Used by replaceConstruction and removeNullForgiving; ignored by invertBoolean. Omit to cover every project.")] string? projectFilter = null,
-        [Description("removeNullForgiving only, optional: glob on the solution-relative path ('*' within a folder, '**' across folders, '?' one character), e.g. 'RoslynSentinel.Tests.Basic/BasicRefactoringTests.cs'; a glob without '/' matches the bare file name. Omit to cover every file. Ignored by invertBoolean and replaceConstruction.")] string? fileFilter = null,
+        [Description("invertBoolean only (required there): the new name, a valid C# identifier; for an alias retarget, the existing sibling member the alias negates. Ignored by replaceConstruction. Rejected by removeNullForgiving.")] string? newName = null,
+        [Description("replaceConstruction only (required there): docCommentId of the static, non-generic factory method (e.g. M:Ns.Factories.Create(System.Int32)) whose return type is the constructed type or a subtype; pass exactly as returned by Search(mode: symbol). Ignored by invertBoolean. Rejected by removeNullForgiving.")] string? factory = null,
+        [Description("Optional, for replaceConstruction and removeNullForgiving: project name(s), comma separated. Omit to cover every project.")] string? projectFilter = null,
+        [Description("removeNullForgiving only, optional: glob on the solution-relative path ('*' within a folder, '**' across folders), e.g. 'Proj/File.cs'; without '/' it matches the bare file name. Omit to cover every file.")] string? fileFilter = null,
         CancellationToken cancellationToken = default)
     {
         // Validate required parameters
