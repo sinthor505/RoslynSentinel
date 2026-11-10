@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Claude-lean schema trim and lower budgets - resolved (2026-11-10)
+
+Claude-lean schema trim (2026-11-10) - trim and budgets done (468fb932: SemanticFindReplace 5450->3864, MoveMember 3356->3112, total 43118, budgets 43500 / 5000; saved 1830, not the estimated 2.5k); left: ModelEval before/after on `invertBoolean` and `replaceConstruction` - [doc](proposals/proposal_reduce_tool_schema_token_cost.md)
+
+Evidence: 468fb932 (total 43118, budgets 43500 / 5000; ClaudeLeanSchemaBudgetTests 6/6); ba35e361 regenerated architecture_tools.md; owner accepted 43500 and skipped the ModelEval before/after (2026-11-10)
+
 ## Asyncify uplift and bridge batches carry the caller containing type - resolved (2026-11-10)
 
 Asyncify uplift carries the caller's containing type (`ObsoleteCallerFinding.CallerType`) through the bridge/event-handler engines so same-named callers in different classes are uplifted instead of skipped (TODO at `AsyncBatchEngine.cs` ~1363; `RunUpliftBatch_TwoSameNamedCallers_SkippedAsAmbiguous` flips); match `CallerType` against the containing type's symbol display string, falling back to today's ambiguity skip; also fix the same file+name dedupe in `RunBridgeBatchAsync` (~489) (decided 2026-11-10) (2026-11-10) - Medium-Large

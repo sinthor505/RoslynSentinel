@@ -7,6 +7,8 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // CreateProject registers the files it writes (csproj, solution, template .cs, EOL pass) as its own writes, so the
 // drift guard does not read them as external edits. Uses a real disk-backed temp solution (TestSolutionFixture) and a
 // real watcher, never the RoslynSentinel repo solution. Spawns dotnet new / dotnet sln, hence NonParallelizable.
+// KNOWN FLAKE on full/parallel runs (spawns dotnet new / dotnet sln): disregard a failure here when the change did not touch process spawning; re-run the class alone first.
+// Suspected cause: child-process pipe reads starved under load. Reference fix to copy if confirmed: GitProcess.TryRun dedicated reader threads (docs/current/issues/issue_process_spawn_test_flake.md).
 [TestFixture]
 [Category("SolutionManagementEngine")] // sentinel:auto-category
 [NonParallelizable]

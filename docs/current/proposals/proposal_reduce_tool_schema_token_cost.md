@@ -206,6 +206,8 @@ not measured.
   sizes (measured + at least 300, rounded up to the next 500). The ModelEval before/after waits until the end
   of the run (owner is running evals). A GitRead/GitWrite split was raised: smaller per tool, but the
   claude-lean total grows ~300-600 chars unless GitWrite is gated off a surface; OPEN idea in TODO.md.
+- Done 2026-11-10 (468fb932): the trim saved 1830 chars (SemanticFindReplace 5450 -> 3864, MoveMember 3356 ->
+  3112), total 43118, budgets 43500 / 5000. Owner accepted 43500 and skipped the ModelEval before/after.
 
 ## Moved from TODO.md (2026-10-17)
 
