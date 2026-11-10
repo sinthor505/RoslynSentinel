@@ -120,6 +120,20 @@ if (-not (Test-Path $RepoPath)) {
     }
 }
 
+# Some agent definitions under .claude/agents are git-ignored (local config), yet Tests.Server reads
+# them (AgentFile_* tests). Mirror the main tree's copies so a worktree run matches a main-tree run.
+$agentsSrc = Join-Path $mainRoot '.claude\agents'
+if (Test-Path $agentsSrc) {
+    $agentsDst = Join-Path $RepoPath '.claude\agents'
+    New-Item -ItemType Directory -Path $agentsDst -Force | Out-Null
+    # Only the untracked ones: overwriting a tracked file would test the main tree's version and
+    # leave the worktree dirty (the next -Ref move refuses a dirty worktree).
+    $tracked = @(& git -C $RepoPath ls-files .claude/agents | ForEach-Object { Split-Path $_ -Leaf })
+    Get-ChildItem -Path $agentsSrc -Filter '*.md' |
+        Where-Object { $tracked -notcontains $_.Name } |
+        ForEach-Object { Copy-Item -Path $_.FullName -Destination $agentsDst -Force }
+}
+
 $head = (& git -C $RepoPath rev-parse HEAD)
 $subject = (& git -C $RepoPath log -1 --format=%s HEAD)
 Write-Host "Testing $head  $subject"
