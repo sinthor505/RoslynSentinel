@@ -3200,6 +3200,7 @@ public class MemberRefactoringEngine
         }
 
         var missingDependencies = new SortedSet<string>(StringComparer.Ordinal);
+        var missingSymbols = new List<ISymbol>();
         string? incompatibleFieldName = null;
         ITypeSymbol? incompatibleSourceType = null;
         ITypeSymbol? incompatibleTargetType = null;
@@ -3251,6 +3252,7 @@ public class MemberRefactoringEngine
                 }
 
                 missingDependencies.Add(identifier.Identifier.Text);
+                missingSymbols.Add(resolved.OriginalDefinition);
             }
         }
 
@@ -3261,10 +3263,123 @@ public class MemberRefactoringEngine
 
         if (missingDependencies.Count > 0)
         {
-            throw new ToolInvalidArgumentException($"Cannot move the requested member(s) out of '{className}': their bodies reference private/internal " + $"member(s) [{string.Join(", ", missingDependencies)}] of '{className}' that are not included in this move " + $"and would no longer be reachable from '{targetClassName}'. Add the missing name(s) to memberNames so they " + "move together, or leave the referencing member(s) behind.");
+            // Every companion reached from the moved members, including those reached only through other companions.
+            var companions = CollectTransitiveCompanions(classSymbol, semanticModel, movedSymbols, missingSymbols, targetClassSymbol, fieldMap);
+            var movedOnly = companions.Where(c => !c.Shared).Select(c => CompanionDisplayName(c.Symbol, classSymbol)).OrderBy(n => n, StringComparer.Ordinal).ToList();
+            var shared = companions.Where(c => c.Shared).Select(c => CompanionDisplayName(c.Symbol, classSymbol)).OrderBy(n => n, StringComparer.Ordinal).ToList();
+            var allNames = movedOnly.Concat(shared).OrderBy(n => n, StringComparer.Ordinal);
+            var message = $"Cannot move the requested member(s) out of '{className}': their bodies reference private/internal " + $"member(s) [{string.Join(", ", allNames)}] of '{className}' that are not included in this move " + $"and would no longer be reachable from '{targetClassName}'. ";
+            if (movedOnly.Count > 0)
+            {
+                var quoted = movedOnly.Select(n => "\"" + n + "\"");
+                message += $"Companions used only by the moved members (directly or through each other) - add them to memberNames: [{string.Join(",", quoted)}]. ";
+            }
+
+            if (shared.Count > 0)
+            {
+                message += $"Companions also used by members that stay in '{className}' - moving them would break those members; widen their accessibility, or move the staying users too: [{string.Join(", ", shared)}]. ";
+            }
+
+            message += "Or leave the referencing member(s) behind.";
+            throw new ToolInvalidArgumentException(message);
         }
 
         return alreadySatisfiedFields;
+    }
+
+    /// <summary>
+    /// Yields the original definition of every symbol that a declaration's syntax names. Each declaration is resolved
+    /// against the semantic model of the tree that declares it, because a partial class may split it across files.
+    /// </summary>
+    private static IEnumerable<ISymbol> SymbolsReferencedBy(ISymbol declaration, SemanticModel semanticModel)
+    {
+        foreach (var syntaxReference in declaration.DeclaringSyntaxReferences)
+        {
+            var syntax = syntaxReference.GetSyntax();
+            var model = syntaxReference.SyntaxTree == semanticModel.SyntaxTree ? semanticModel : semanticModel.Compilation.GetSemanticModel(syntaxReference.SyntaxTree);
+            foreach (var identifier in syntax.DescendantNodes().OfType<SimpleNameSyntax>())
+            {
+                var symbolInfo = model.GetSymbolInfo(identifier);
+                var resolved = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+                if (resolved != null)
+                {
+                    yield return resolved.OriginalDefinition;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Expands the direct missing dependencies to the transitive closure of private/internal siblings of the source class
+    /// that they reach through each other. A companion is Shared when a member that stays in the source class also
+    /// references it; otherwise it is used only by the moved members and their companions. Fields that fieldMap maps or
+    /// that the target already declares are skipped, as the direct scan skips them.
+    /// </summary>
+    private static List<(ISymbol Symbol, bool Shared)> CollectTransitiveCompanions(INamedTypeSymbol classSymbol, SemanticModel semanticModel, HashSet<ISymbol> movedSymbols, IEnumerable<ISymbol> directSymbols, INamedTypeSymbol? targetClassSymbol, IReadOnlyDictionary<string, string>? fieldMap)
+    {
+        var companions = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        var pending = new Queue<ISymbol>();
+        foreach (var direct in directSymbols)
+        {
+            if (companions.Add(direct))
+            {
+                pending.Enqueue(direct);
+            }
+        }
+
+        while (pending.Count > 0)
+        {
+            foreach (var resolved in SymbolsReferencedBy(pending.Dequeue(), semanticModel))
+            {
+                if (!SymbolEqualityComparer.Default.Equals(resolved.ContainingSymbol, classSymbol)
+                    || movedSymbols.Contains(resolved)
+                    || resolved.DeclaredAccessibility is not (Accessibility.Private or Accessibility.Internal or Accessibility.NotApplicable))
+                {
+                    continue;
+                }
+
+                if (resolved is IFieldSymbol field && (fieldMap?.ContainsKey(field.Name) == true || targetClassSymbol?.GetMembers(field.Name).OfType<IFieldSymbol>().Any() == true))
+                {
+                    continue;
+                }
+
+                if (companions.Add(resolved))
+                {
+                    pending.Enqueue(resolved);
+                }
+            }
+        }
+
+        var referencedByStaying = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        foreach (var member in classSymbol.GetMembers())
+        {
+            if (movedSymbols.Contains(member) || companions.Contains(member))
+            {
+                continue;
+            }
+
+            foreach (var referenced in SymbolsReferencedBy(member, semanticModel))
+            {
+                referencedByStaying.Add(referenced);
+            }
+        }
+
+        return companions.Select(companion => (Symbol: companion, Shared: referencedByStaying.Contains(companion))).ToList();
+    }
+
+    /// <summary>
+    /// The name a caller would pass for a companion: the bare name when it is unique among the source class's members,
+    /// otherwise the printed method signature that MemberSelection matches overloads by.
+    /// </summary>
+    private static string CompanionDisplayName(ISymbol companion, INamedTypeSymbol classSymbol)
+    {
+        if (companion is IMethodSymbol && classSymbol.GetMembers(companion.Name).Length > 1
+            && companion.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is MethodDeclarationSyntax declaration)
+        {
+            return MemberSelection.SignatureOf(declaration);
+        }
+
+        return companion.Name;
     }
 
     /// <summary>

@@ -286,7 +286,7 @@ public class MoveMemberOverloadCallSiteIsolationTests
 
         var refusal = await Assert.ThrowsAsync<ToolInvalidArgumentException>(() => MoveAsync(workspace, engine, "Source", ["Save(int)"], "Target"));
 
-        Assert.That(refusal!.Message, Does.Contain("reference private/internal member(s) [Save]"));
+        Assert.That(refusal!.Message, Does.Contain("reference private/internal member(s) [Save(string)]"));
         Assert.That(workspace.ReadText("Source.cs"), Is.EqualTo(sourceText), "A refused move must not write.");
         Assert.That(workspace.ReadText("Target.cs"), Is.EqualTo(StaticTarget()), "A refused move must not write.");
     }
