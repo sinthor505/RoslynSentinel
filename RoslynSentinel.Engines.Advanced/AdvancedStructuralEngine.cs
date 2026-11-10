@@ -1371,12 +1371,14 @@ public class StructuralRefactoringEngine
                 if (external.Count > 0)
                 {
                     // Refused before anything is edited: rewriting the implementation would break a contract the tool cannot change.
+                    // hint-ok: prose next step naming a different target; there are no arguments to build a call from
                     throw new ToolTargetIneligibleException($"'{methodName}' implements {Describe(external)}, which has no editable declaration in the solution (metadata or a package reference), so its signature cannot be changed and rewriting the method would break that contract. Nothing was changed. Next: call IntroduceParameterObject on a method that is not tied to an external interface member.");
                 }
 
                 if (editable.Count > 1)
                 {
                     // TODO introduce a parameter object across several interfaces implemented by one method (each interface and its other implementers would need the same record)
+                    // hint-ok: prose next step naming a different target; there are no arguments to build a call from
                     throw new ToolTargetIneligibleException($"'{methodName}' implements members of more than one interface ({Describe(editable.Select(e => e.Member))}); the parameter object would have to change all of them at once, which is not supported. Nothing was changed. Next: call IntroduceParameterObject on one interface method (it updates that interface and its implementers) after decoupling the others, or change the signatures by hand.");
                 }
 
