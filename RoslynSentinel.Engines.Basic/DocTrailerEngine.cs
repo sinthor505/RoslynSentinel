@@ -308,7 +308,7 @@ public static class DocTrailerEngine
                 Message = $"No doc with ID '{id}' exists. Searched: every *.md file under docs/ (recursive, Worktree folders skipped; {docs.Count} docs scanned), "
                     + "comparing the file name without its extension to the ID exactly (case-sensitive; no prefix or fuzzy match)."
                     + extensionHint
-                    + " Next: call ProjectDoc with action=trailers to list the docs and trailer IDs in use, then correct the ID.",
+                    + " " + ToolCallHint.Next("ProjectDoc", "to list the docs and trailer IDs in use, then correct the ID.", ("action", "trailers")),
             };
         }
 
@@ -402,7 +402,7 @@ public static class DocTrailerEngine
 
         if (matches.Count == 0)
         {
-            return CloseFail(id, $"No doc with ID '{id}' exists under docs/ (file name without extension, case-sensitive). Nothing was changed. Call ProjectDoc with action=trailers to list the docs, then retry with the exact ID.", warnings);
+            return CloseFail(id, $"No doc with ID '{id}' exists under docs/ (file name without extension, case-sensitive). Nothing was changed. " + ToolCallHint.Next("ProjectDoc", "to list the docs, then retry with the exact ID.", ("action", "trailers")), warnings);
         }
 
         if (matches.Count > 1)
@@ -608,13 +608,13 @@ public static class DocTrailerEngine
             File.Move(oldFull, newFull);
             done.Add($"moved {from} to {to}");
             step = $"updating Status and links in {to}";
-            WriteText(newFull, doc.HasBom, docText);
+            WriteText(newFull, docText);
             done.Add($"updated Status and links in {to}");
             foreach (var path in pending.Keys.OrderBy(k => SamePath(k, todoPath) ? 2 : SamePath(k, closedPath) ? 1 : 0).ThenBy(k => k, StringComparer.Ordinal))
             {
                 var rel = RelOf(root, path);
                 step = $"writing {rel}";
-                WriteText(path, pending[path].HasBom, pending[path].Text);
+                WriteText(path, pending[path].Text);
                 done.Add($"wrote {rel}");
             }
         }
@@ -780,11 +780,19 @@ public static class DocTrailerEngine
         return file;
     }
 
-    /// <summary>Writes UTF-8, with a BOM only when the file originally had one. Throws IO exceptions; the caller reports them.</summary>
-    private static void WriteText(string fullPath, bool hasBom, string text)
+    /// <summary>
+    /// Writes UTF-8 through <see cref="EolFileWriter"/>, which keeps a BOM already on disk and the file's own line ending (the pre-image is the
+    /// text on disk before this write). Throws IO exceptions; the caller reports them.
+    /// </summary>
+    private static void WriteText(string fullPath, string text)
     {
-        var body = new UTF8Encoding(false).GetBytes(text);
-        File.WriteAllBytes(fullPath, hasBom ? Encoding.UTF8.GetPreamble().Concat(body).ToArray() : body);
+        var preImage = File.Exists(fullPath) ? File.ReadAllText(fullPath) : null;
+        // The engine API is synchronous and runs without a SynchronizationContext, so blocking on the async writer cannot deadlock.
+        var refusal = EolFileWriter.WriteAllTextResolvedAsync(fullPath, text, preImage).GetAwaiter().GetResult();
+        if (refusal is not null)
+        {
+            throw new IOException(refusal);
+        }
     }
 
     private static DocCloseResult CloseFail(string id, string error, List<string> warnings, string? from = null, string? to = null) => new()
@@ -798,7 +806,7 @@ public static class DocTrailerEngine
 
     private static string InvalidIdMessage() =>
         "A doc ID is a file name without extension: letters, digits, '_', '.' and '-' only, no path separators or spaces (for example 'plan_foo'). "
-        + "Call ProjectDoc with action=trailers to list the docs and trailer IDs in use.";
+        + ToolCallHint.Next("ProjectDoc", "to list the docs and trailer IDs in use.", ("action", "trailers"));
 
     private static void AddCommit(Dictionary<string, List<string>> map, string id, string hash)
     {
