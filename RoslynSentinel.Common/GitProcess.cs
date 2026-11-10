@@ -6,7 +6,8 @@ namespace RoslynSentinel.Common;
 /// <summary>
 /// Runs one non-interactive <c>git</c> command with a hard timeout, for diagnostics that must never hang or
 /// throw (server binary staleness). Unlike <c>GitWorktreeManager.RunGit</c> it drains stdout and stderr
-/// concurrently, so a large stderr cannot deadlock the child, and it kills the process tree on timeout.
+/// concurrently on dedicated LongRunning threads (not the thread pool), so a large stderr cannot deadlock the
+/// child and a saturated pool cannot delay EOF observation; it kills the process tree on timeout.
 /// </summary>
 internal static class GitProcess
 {
@@ -55,8 +56,11 @@ internal static class GitProcess
 
             // Close stdin so the child never inherits the host's live stdio (the MCP JSON-RPC pipe).
             process.StandardInput.Close();
-            var stdOutTask = process.StandardOutput.ReadToEndAsync();
-            var stdErrTask = process.StandardError.ReadToEndAsync();
+            // Reads run on dedicated LongRunning threads, not the thread pool, so a saturated pool (parallel
+            // test fixtures) cannot delay EOF observation. The pool numbers recorded in LastFailure exist to
+            // confirm or reject starvation on the next failure.
+            var stdOutTask = ReadAllOnDedicatedThread(process.StandardOutput);
+            var stdErrTask = ReadAllOnDedicatedThread(process.StandardError);
 
             if (!process.WaitForExit(timeout))
             {
@@ -65,10 +69,12 @@ internal static class GitProcess
                 return null;
             }
 
+            var exitedAt = Stopwatch.GetTimestamp();
             // The process has exited; the pipes reach EOF promptly unless a grandchild still holds them.
-            if (!Task.WaitAll([stdOutTask, stdErrTask], TimeSpan.FromSeconds(2)))
+            var grace = timeout < TimeSpan.FromSeconds(10) ? timeout : TimeSpan.FromSeconds(10);
+            if (!Task.WaitAll([stdOutTask, stdErrTask], grace))
             {
-                LastFailure = "stdout/stderr did not reach EOF within 2s after the process exited (a grandchild may hold the pipe)";
+                LastFailure = $"stdout/stderr did not reach EOF within {grace.TotalSeconds:0}s after the process exited (elapsed since exit {Stopwatch.GetElapsedTime(exitedAt).TotalMilliseconds:0} ms, ThreadPool.ThreadCount={ThreadPool.ThreadCount}, PendingWorkItemCount={ThreadPool.PendingWorkItemCount}; a grandchild may hold the pipe or the reads were starved)";
                 return null;
             }
 
@@ -79,6 +85,25 @@ internal static class GitProcess
             LastFailure = $"{ex.GetType().Name}: {ex.Message}";
             return null;
         }
+    }
+
+    /// <summary>
+    /// Drains <paramref name="reader"/> to EOF on a dedicated LongRunning thread. Returns empty text when the stream
+    /// is closed or breaks mid-read, so a failed grace wait never leaves an unobserved faulted task behind.
+    /// </summary>
+    private static Task<string> ReadAllOnDedicatedThread(StreamReader reader)
+    {
+        return Task.Factory.StartNew(() =>
+        {
+            try
+            {
+                return reader.ReadToEnd();
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
+            {
+                return string.Empty;
+            }
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
     private static void TryKill(Process process)
