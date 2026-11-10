@@ -39,6 +39,20 @@ public interface IWorkspaceMutator : IEolResolver
     Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Read-path fold for one file: when its in-memory text differs from disk, folds the disk text in under _solutionLock and the
+    /// cross-process write lock (FoldOnReadWait, fails open when busy). Never throws on IO errors. Lock rules: (a) _solutionLock first,
+    /// then the OS write lock, never the reverse; (b) the OS lock is not re-entrant, so it is taken only at this entry point, never inside
+    /// ApplyInMemoryDocumentUpdatesAsync and never from a region already holding it; (c) never held across compile validation or a full MSBuild reload.
+    /// </summary>
+    Task SyncFileFromDiskIfStaleAsync(FilePathWrapper path, CancellationToken ct);
+
+    /// <summary>
+    /// Folds every queued external change into the in-memory workspace, with the same lock rules (a)-(c) as SyncFileFromDiskIfStaleAsync.
+    /// Anything needing a full reload, a watcher overflow, a busy lock or a missing solution stays queued for the debounce handler. Never throws on IO errors.
+    /// </summary>
+    Task FlushPendingFoldsAsync(CancellationToken ct);
+
+    /// <summary>
     /// Caches a changeset that <c>ApplyDiff</c>'s whole-file-rewrite size guard rejected, under a
     /// fresh confirmation code, so a caller that intended the large rewrite can replay just the
     /// code via <see cref="TakePendingChangeset"/> instead of resending file content.

@@ -434,6 +434,12 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // Test-only seam: flags a path as externally drifted so tests can exercise the drift latch, which runs before the stale-read guard in ApplyProposedChangesAsync.
     internal void AddExternalChangeForTest(string path) => _externalChanges.Add(path);
 
+    // Test-only seam: queues a pending external change WITHOUT arming the debounce timer, so tests can drive FlushPendingFoldsAsync directly.
+    internal void AddPendingChangeForTest(string path) => _pendingChanges.TryAdd(path, DateTime.UtcNow);
+
+    // Test-only seam: whether a path is still queued in _pendingChanges.
+    internal bool IsPendingChangeForTest(string path) => _pendingChanges.ContainsKey(path);
+
     /// <summary>
     /// Clears the drift list, indicating the AI has acknowledged and synced with disk.
     /// </summary>
@@ -1360,6 +1366,200 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("AsyncUsage", "AsyncFixer03:Fire-and-forget async-void methods or delegates", Justification = "Event handler")]
+    // Read-path fold for one file. Lock rules: (a) _solutionLock is taken first, then the OS write lock, never the reverse;
+    // (b) the OS lock is a FileShare.None FileStream and NOT re-entrant, so it is taken only at this entry point and in
+    // FlushPendingFoldsAsync, never inside ApplyInMemoryDocumentUpdatesAsync and never from a region already holding it;
+    // (c) it is never held across compile validation or a full MSBuild reload. Never throws on IO errors.
+    public async Task SyncFileFromDiskIfStaleAsync(FilePathWrapper path, CancellationToken ct)
+    {
+        if (CurrentSolution is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _solutionLock.WaitAsync(ct);
+            try
+            {
+                var solution = CurrentSolution;
+                if (solution is null)
+                {
+                    return;
+                }
+
+                var documentId = solution.GetDocumentIdsWithFilePath(path).FirstOrDefault();
+                if (documentId is null)
+                {
+                    return;
+                }
+
+                var diskText = await FileIoHelper.ReadAllTextIfExistsAsync(path, ct);
+                if (diskText is null)
+                {
+                    return;
+                }
+
+                var memoryText = (await solution.GetDocument(documentId)!.GetTextAsync(ct)).ToString();
+                if (string.Equals(memoryText, diskText, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                WriteLockLease? lease = null;
+                var lockRoot = WriteLockRoot();
+                if (lockRoot is not null)
+                {
+                    var ctx = ToolCallContext.Current;
+                    var holder = new WriteLockHolder(ctx?.SessionId, ctx?.AgentId, ctx?.ToolName ?? "FoldOnRead", ctx?.Reason, DateTime.UtcNow);
+                    var acquired = await CrossProcessWriteLock.AcquireAsync(lockRoot, holder, WriteLockOptions.FoldOnReadWait, ct);
+                    if (!acquired.Acquired)
+                    {
+                        return;
+                    }
+
+                    lease = acquired.Lease;
+                }
+
+                try
+                {
+                    var needsReload = await ApplyInMemoryDocumentUpdatesAsync(new List<string> { (string)path }, CancellationToken.None);
+                    if (needsReload)
+                    {
+                        // The debounce path owns reloads; the path stays queued.
+                        return;
+                    }
+
+                    Interlocked.Increment(ref _workspaceVersion);
+                }
+                finally
+                {
+                    if (lease is not null)
+                    {
+                        await lease.DisposeAsync();
+                    }
+                }
+
+                _pendingChanges.TryRemove((string)path, out _);
+            }
+            finally
+            {
+                _solutionLock.Release();
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Read path: a vanished or unreadable file must not fail the read; nothing is folded.
+        }
+    }
+
+    // Folds every queued external change in one pass, with the same lock rules (a)-(c) as SyncFileFromDiskIfStaleAsync.
+    // A full reload, a watcher overflow, a busy lock or a missing solution leaves everything queued for the debounce handler.
+    // Never throws on IO errors.
+    public async Task FlushPendingFoldsAsync(CancellationToken ct)
+    {
+        if (_pendingChanges.IsEmpty)
+        {
+            return;
+        }
+
+        try
+        {
+            await _solutionLock.WaitAsync(ct);
+            try
+            {
+                var snapshot = _pendingChanges.Keys.ToList();
+                if (CurrentSolution is null || _watcherOverflowed || RequiresFullReload(snapshot))
+                {
+                    return;
+                }
+
+                WriteLockLease? lease = null;
+                var lockRoot = WriteLockRoot();
+                if (lockRoot is not null)
+                {
+                    var ctx = ToolCallContext.Current;
+                    var holder = new WriteLockHolder(ctx?.SessionId, ctx?.AgentId, ctx?.ToolName ?? "FoldOnRead", ctx?.Reason, DateTime.UtcNow);
+                    var acquired = await CrossProcessWriteLock.AcquireAsync(lockRoot, holder, WriteLockOptions.FoldOnReadWait, ct);
+                    if (!acquired.Acquired)
+                    {
+                        return;
+                    }
+
+                    lease = acquired.Lease;
+                }
+
+                try
+                {
+                    foreach (var changed in snapshot)
+                    {
+                        _pendingChanges.TryRemove(changed, out _);
+                    }
+
+                    bool needsReload;
+                    try
+                    {
+                        needsReload = await ApplyInMemoryDocumentUpdatesAsync(snapshot, CancellationToken.None);
+                    }
+                    catch
+                    {
+                        // Put the paths back so the debounce handler still folds them.
+                        foreach (var changed in snapshot)
+                        {
+                            _pendingChanges.TryAdd(changed, DateTime.UtcNow);
+                        }
+
+                        throw;
+                    }
+
+                    if (needsReload)
+                    {
+                        foreach (var changed in snapshot)
+                        {
+                            _pendingChanges.TryAdd(changed, DateTime.UtcNow);
+                        }
+
+                        return;
+                    }
+
+                    Interlocked.Increment(ref _workspaceVersion);
+                }
+                finally
+                {
+                    if (lease is not null)
+                    {
+                        await lease.DisposeAsync();
+                    }
+                }
+            }
+            finally
+            {
+                _solutionLock.Release();
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Read path: nothing is folded; the changes stay queued for the debounce handler.
+        }
+    }
+
+    // True when a change set needs a full solution reload: a .sln/.slnx, a .csproj, or a build config file (.props/.targets)
+    // that can change any project's evaluation. A changed .csproj cannot be reopened per project (OpenProjectAsync throws
+    // "already part of the workspace"), and the full reload also refreshes the structural file hashes.
+    private static bool RequiresFullReload(IEnumerable<string> changes)
+    {
+        foreach (var path in changes)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext is (".sln" or ".slnx") || ext == ".csproj" || WorkspaceStaleText.IsBuildConfigFile(path))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private async void OnDebounceTimerElapsed(object? state)
     {
         if (_disposed)
@@ -1392,30 +1592,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 _logger.LogInformation("Processing {Count} file system changes and reloading solution if necessary...", changes.Count);
             }
 
-            bool solutionNeedsReload = overflowed;
-
-            if (!solutionNeedsReload)
-            {
-                foreach (var path in changes)
-                {
-                    var ext = Path.GetExtension(path).ToLowerInvariant();
-                    if (ext is ".sln" or ".slnx")
-                    {
-                        solutionNeedsReload = true;
-                        break;
-                    }
-
-                    // A changed .csproj always takes the full-solution reload: OpenProjectAsync throws
-                    // "already part of the workspace" on a project that is already open, so a per-project
-                    // reload cannot re-open it. The full reload also refreshes the structural file hashes.
-                    // A .props/.targets file (Directory.Build.props and friends) can change any project's evaluation, so it takes the same route.
-                    if (ext == ".csproj" || WorkspaceStaleText.IsBuildConfigFile(path))
-                    {
-                        solutionNeedsReload = true;
-                        break;
-                    }
-                }
-            }
+            bool solutionNeedsReload = overflowed || RequiresFullReload(changes);
 
             if (solutionNeedsReload)
             {

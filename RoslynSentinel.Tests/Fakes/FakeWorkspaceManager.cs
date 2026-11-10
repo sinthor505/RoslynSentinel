@@ -123,6 +123,12 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     public async Task<IReadOnlyList<Document>> GetDocumentsAsync(DocumentScope scope, ReadSource source, CancellationToken cancellationToken)
         => DocumentLookup.GetDocuments(await GetSolutionAsync(source, cancellationToken), scope);
 
+    // No-op: the fake has no disk-backed document state to fold.
+    public Task SyncFileFromDiskIfStaleAsync(FilePathWrapper path, CancellationToken ct) => Task.CompletedTask;
+
+    // No-op: the fake has no pending external changes to fold.
+    public Task FlushPendingFoldsAsync(CancellationToken ct) => Task.CompletedTask;
+
     // --- Everything below: not needed by DiagnosticEngine, so left unimplemented on purpose ---
 
     public string? BaseRepoDirectory
