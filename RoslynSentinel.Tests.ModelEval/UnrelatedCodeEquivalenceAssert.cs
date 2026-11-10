@@ -52,6 +52,14 @@ internal static class UnrelatedCodeEquivalenceAssert
 
     private static MemberDeclarationSyntax? FindMember(string source, string memberName)
     {
+        // A bare member snippet ("public string M() { ... }") parses as a top-level local function, not a
+        // member, so it was never found (PlanThenExecute runs 20261110-081930-579 and -083003-174 threw
+        // "not found in the expected source"). Retry it inside a wrapper class.
+        return FindMemberIn(source, memberName) ?? FindMemberIn("class __Snippet {\n" + source + "\n}", memberName);
+    }
+
+    private static MemberDeclarationSyntax? FindMemberIn(string source, string memberName)
+    {
         var root = CSharpSyntaxTree.ParseText(source).GetRoot();
 
         // Skip bodiless method declarations (interface members, abstract or partial signatures):
