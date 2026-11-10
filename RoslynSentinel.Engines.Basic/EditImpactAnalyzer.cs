@@ -355,7 +355,10 @@ public static class EditImpactAnalyzer
 
             default:
                 {
-                    var lead = $"This edit removes {name} and {files} file(s) still use it: ";
+                    // Lead with "keep it": a model that removed an unrelated member by accident read "change
+                    // every affected use" as "delete the tests that use it" (run 20261110-075436-856).
+                    var lead = $"This edit removes {name} and {files} file(s) still use it. If you did not mean to remove {name}, " +
+                        $"keep it in newContent. If removing it is intended, update those uses (never delete or disable a test to make it compile): ";
                     return lead + batch;
                 }
         }
