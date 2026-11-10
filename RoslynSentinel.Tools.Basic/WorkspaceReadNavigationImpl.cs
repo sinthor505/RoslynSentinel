@@ -1605,7 +1605,22 @@ public class WorkspaceReadNavigationImpl
             .Where(p => ResultPager.SelectNode(root, p) is JsonArray or JsonValue)
             .Distinct(StringComparer.Ordinal)
             .ToList();
-        return recorded.Count > 0 ? recorded : ResultPager.PageablePaths(root, 8);
+        if (recorded.Count > 0)
+        {
+            return recorded;
+        }
+
+        var pageable = ResultPager.PageablePaths(root, 8);
+        if (pageable.Any())
+        {
+            return pageable;
+        }
+
+        return ResultPager.SelectNode(root, "errorData.message") is JsonValue message
+            && message.TryGetValue(out string? messageText)
+            && ResultPager.SplitLines(messageText).Count > 1
+                ? ["errorData.message"]
+                : pageable;
     }
 
     // GetLargeResult for a stored Envelope file that carries a Sequence (proposal_sequence_pager.md slice 6, Decided 10): offset

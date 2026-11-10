@@ -1192,7 +1192,7 @@ public class WorkspaceFileEditImpl
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
                 IsError = true,
-                ErrorData = new ResultError(errorCode, "ReplaceSnippet batch rejected - nothing was changed; every file is exactly as you last read it:\n" + string.Join("\n", perEditErrors))
+                ErrorData = new ResultError(errorCode, BatchFailureMessage.Compose("ReplaceSnippet batch rejected - nothing was changed; every file is exactly as you last read it:", perEditErrors))
             };
         }
 

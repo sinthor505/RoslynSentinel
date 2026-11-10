@@ -293,4 +293,39 @@ public class ReplaceSnippetBatchTests
                 "size advice is noise for a non-size rejection");
         });
     }
+
+    [Test]
+    public async Task ReplaceSnippet_FifteenNonMatchingBatchEdits_MessageIsBoundedAndNamesEveryIndexAsync()
+    {
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
+
+        var targetFile = workspace.PathOf(StatusRelativePath);
+        var originalContent = workspace.ReadText(StatusRelativePath);
+
+        var edits = new List<SnippetEdit>();
+        for (int i = 0; i < 15; i++)
+        {
+            // Each oldContent is about 600 chars of distinct, deeply indented lines that never occur in the file,
+            // so every batch item fails with its own large error and the combined message is what must stay bounded.
+            var oldContent = string.Concat(Enumerable.Repeat(
+                $"placeholder block {i} that never occurs in the file\n" + new string(' ', 60) + $"continuation line for item {i}\n", 6));
+            edits.Add(new SnippetEdit { FilePath = targetFile, OldContent = oldContent.TrimEnd('\n'), NewContent = "// unused" });
+        }
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "test bounded batch rejection message",
+            ProposedChangeAction.apply,
+            batchEdits: [.. edits]);
+
+        Assert.That(result.IsError, Is.True);
+        var message = result.ErrorData!.Message;
+        Assert.That(message.Length, Is.LessThan(12800), "the combined rejection must stay bounded");
+        for (int i = 0; i < 15; i++)
+        {
+            Assert.That(message, Does.Contain($"batchEdits[{i}]"));
+        }
+
+        Assert.That(workspace.ReadText(StatusRelativePath), Is.EqualTo(originalContent), "a rejected batch must not write anything");
+    }
 }

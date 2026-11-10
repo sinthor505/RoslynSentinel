@@ -232,6 +232,37 @@ public class GetLargeResultTests
         Assert.That(result.WarningDetails ?? string.Empty, Does.Not.Contain("Page shrunk"));
     }
 
+    [Test, CancelAfter(10000)]
+    public async Task GetLargeResult_Envelope_OnlyLargeErrorDataMessage_PagesTheMessageByLinesAsync()
+    {
+        // A failed call whose only large content is a multi-line errorData.message (about 30 KB, 600 lines). ResultPager never
+        // lists errorData.message as pageable, so the reader must fall back to it instead of answering "stored whole".
+        var lines = Enumerable.Range(0, 600).Select(i => $"batchEdits[{i}] (File.cs): failure text describing the rejected edit in detail");
+        var message = string.Join("\n", lines);
+        var resultId = Guid.NewGuid().ToString("N");
+        WriteLargeResultFile(new { isError = true, errorData = new { errorCode = "InvalidArgument", message } }, ResultWrapperType.Envelope, resultId);
+
+        var first = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: resultId);
+
+        Assert.That(first.IsError, Is.False, first.ErrorData?.Message);
+        var unit = (string)first.SuccessData!.GetType().GetProperty("Unit")!.GetValue(first.SuccessData)!;
+        Assert.That(unit, Is.EqualTo("lines"));
+        var total = (int)first.SuccessData!.GetType().GetProperty("Total")!.GetValue(first.SuccessData)!;
+        Assert.That(total, Is.EqualTo(600), "Total must be the line count of errorData.message.");
+        var returned = (int)first.SuccessData!.GetType().GetProperty("Returned")!.GetValue(first.SuccessData)!;
+        Assert.That(returned, Is.GreaterThan(0));
+        Assert.That(first.HasMoreData, Is.True);
+        Assert.That(first.NextOffset, Is.EqualTo(returned));
+
+        var second = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: resultId, offset: first.NextOffset!.Value);
+
+        Assert.That(second.IsError, Is.False, second.ErrorData?.Message);
+        var secondOffset = (int)second.SuccessData!.GetType().GetProperty("Offset")!.GetValue(second.SuccessData)!;
+        Assert.That(secondOffset, Is.EqualTo(first.NextOffset));
+        var secondReturned = (int)second.SuccessData!.GetType().GetProperty("Returned")!.GetValue(second.SuccessData)!;
+        Assert.That(secondReturned, Is.GreaterThan(0));
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // T21 - A stored file written before the result marshaller (Raw, or a typed list wrapper whose Type name was deleted)
     //       cannot be paged: the caller gets one structured, actionable error, never the JsonException text.

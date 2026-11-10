@@ -133,6 +133,26 @@ public class RefactoringStructuralImpl
     private static string BatchErrorCode(IReadOnlyCollection<string> engineCodes, int totalErrorCount)
         => engineCodes.Count == totalErrorCount && engineCodes.Distinct().Count() == 1 ? engineCodes.First() : ToolErrorCode.InvalidArgument;
 
+    /// <summary>
+    /// Records one engine rejection: each failed edit of a <see cref="ToolBatchEditException"/> becomes its own message and
+    /// its own code (so BatchErrorCode's count check still holds); any other exception becomes one message and one code.
+    /// </summary>
+    private static void AddEngineFailures(List<string> perEditErrors, List<string> engineErrorCodes, ToolException ex)
+    {
+        if (ex is ToolBatchEditException batch && batch.Failures.Count > 0)
+        {
+            foreach (var failure in batch.Failures)
+            {
+                perEditErrors.Add(failure.Message);
+                engineErrorCodes.Add(failure.ErrorCode);
+            }
+            return;
+        }
+
+        perEditErrors.Add(ex.Message);
+        engineErrorCodes.Add(ex.ErrorCode);
+    }
+
     private async Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyModifierBatch(List<ModifierEdit> edits, bool dryRun, bool returnDiff, CancellationToken cancellationToken)
     {
         if (edits.Count > MaxModifierFamilyEditsPerBatch)
@@ -246,8 +266,7 @@ public class RefactoringStructuralImpl
             }
             catch (ToolException ex)
             {
-                perEditErrors.Add(ex.Message);
-                engineErrorCodes.Add(ex.ErrorCode);
+                AddEngineFailures(perEditErrors, engineErrorCodes, ex);
                 continue;
             }
             finalContents[filePathResolved] = updated.UpdatedText;
@@ -259,7 +278,7 @@ public class RefactoringStructuralImpl
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = true,
-                ErrorData = new ResultError(BatchErrorCode(engineErrorCodes, perEditErrors.Count), "ModifyModifier batch rejected - nothing was changed; every file is exactly as you last read it:\n" + string.Join("\n", perEditErrors))
+                ErrorData = new ResultError(BatchErrorCode(engineErrorCodes, perEditErrors.Count), BatchFailureMessage.Compose("ModifyModifier batch rejected - nothing was changed; every file is exactly as you last read it:", perEditErrors))
             };
         }
 
@@ -377,8 +396,7 @@ public class RefactoringStructuralImpl
             }
             catch (ToolException ex)
             {
-                perEditErrors.Add(ex.Message);
-                engineErrorCodes.Add(ex.ErrorCode);
+                AddEngineFailures(perEditErrors, engineErrorCodes, ex);
                 continue;
             }
             // Never trust the number of batchEdits submitted: only the engine knows which ones changed text.
@@ -407,7 +425,7 @@ public class RefactoringStructuralImpl
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = true,
-                ErrorData = new ResultError(BatchErrorCode(engineErrorCodes, perEditErrors.Count), "ModifyAttribute batch rejected - nothing was changed; every file is exactly as you last read it:\n" + string.Join("\n", perEditErrors))
+                ErrorData = new ResultError(BatchErrorCode(engineErrorCodes, perEditErrors.Count), BatchFailureMessage.Compose("ModifyAttribute batch rejected - nothing was changed; every file is exactly as you last read it:", perEditErrors))
             };
         }
 
@@ -505,8 +523,7 @@ public class RefactoringStructuralImpl
             }
             catch (ToolException ex)
             {
-                perEditErrors.Add(ex.Message);
-                engineErrorCodes.Add(ex.ErrorCode);
+                AddEngineFailures(perEditErrors, engineErrorCodes, ex);
                 continue;
             }
             finalContents[filePathResolved] = updated.UpdatedText;
@@ -518,7 +535,7 @@ public class RefactoringStructuralImpl
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = true,
-                ErrorData = new ResultError(BatchErrorCode(engineErrorCodes, perEditErrors.Count), "ModifyBaseType batch rejected - nothing was changed; every file is exactly as you last read it:\n" + string.Join("\n", perEditErrors))
+                ErrorData = new ResultError(BatchErrorCode(engineErrorCodes, perEditErrors.Count), BatchFailureMessage.Compose("ModifyBaseType batch rejected - nothing was changed; every file is exactly as you last read it:", perEditErrors))
             };
         }
 
