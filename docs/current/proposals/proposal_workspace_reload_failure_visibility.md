@@ -1,6 +1,6 @@
 # Make a failed workspace load/reload a sticky, observable STALE state instead of a log line
 
-**Status:** slices 1-4 built (slices 1-3 2026-10-21; helper `SwapInFreshWorkspaceLocked`/`OpenFreshWorkspaceAsync` and the bounded debounce retry 2026-11-05: one automatic retry after `DebounceRetryDelayMs`, failure recorded only if the retry also fails, the 2C fold fallback now re-queues the fresh-workspace reload); remaining items are in docs/current/TODO.md. The text below is the original proposal; line numbers and "nothing built" statements are historical. Line numbers cite the working tree of 2026-10-21, which was being edited by the #32 fix at the time, so they may shift.
+**Status:** slices 1-4 built (slices 1-3 2026-10-21; helper `SwapInFreshWorkspaceLocked`/`OpenFreshWorkspaceAsync` and the bounded debounce retry 2026-11-05: one automatic retry after `DebounceRetryDelayMs`, failure recorded only if the retry also fails, the 2C fold fallback now re-queues the fresh-workspace reload); the three todo-review follow-ups (StartupLoad trigger and staleness baseline, fold-failure reload, live check) landed 2026-11-10, see "Decisions"; remaining items are in docs/current/TODO.md. The text below is the original proposal; line numbers and "nothing built" statements are historical. Line numbers cite the working tree of 2026-10-21, which was being edited by the #32 fix at the time, so they may shift.
 
 ## Motivation
 
@@ -255,3 +255,12 @@ symptom this proposal wants to stop depending on. Needed:
 - (iii) Live-check the stale-workspace stamp once (READY, Small): use `LaunchTestInstance` with a broken
   `.csproj`, confirm a tool result carries the stamp, and record the outcome here.
   `WorkspaceStaleStampFilterTests` covers it in process, through the `RecordReloadFailure` seam.
+  **Done 2026-11-10 (#7), outcome: the stamp works live.** `LaunchTestInstance` always targets the session's loaded solution, so the
+  broken `.csproj` was never placed in the shared tree: the test instance (built from `dcf6c604`) was driven over HTTP, `LoadSolution`
+  pointed it at a throwaway solution copy (a new classlib in `c:\tmp\rs-stale-live`), and the copy's `.csproj` was broken there.
+  After the debounce reload failed, a `McpServerStatus` result carried top-level `workspaceStale: true`, `workspaceStaleReason`
+  ("A workspace reload (ProjectFileChange of 'LiveLib.csproj') failed: ProjectLoadFailedException: ... multiple root elements ...",
+  file name only, no absolute path), `workspaceStaleRecovery` (names `LoadSolution(... forceReload: true)` and says `.csproj`/`.sln`/
+  `.slnx` edits stay allowed) and `reloadFailure` (trigger ProjectFileChange, attempts 1, oldWorkspaceKept true). Repairing the file
+  cleared the stamp on its own after the next debounce reload (no `LoadSolution` needed). Method for a repeat: launch, call
+  `LoadSolution` on a `c:\tmp` copy via the instance's JSON-RPC endpoint, edit that copy.

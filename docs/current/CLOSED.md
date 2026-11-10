@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Live-check of the stale-workspace stamp - resolved (2026-11-10)
+
+Live-check the stale-workspace stamp once with `LaunchTestInstance` and a broken `.csproj` (2026-11-09) - record the outcome in the proposal; Small - [doc](proposals/proposal_workspace_reload_failure_visibility.md)
+
+Evidence: commit titled "#7 ..." (git log); outcome recorded in proposal_workspace_reload_failure_visibility.md Decisions (iii): stamp, reason, recovery and reloadFailure seen on a live McpServerStatus result, self-clears after the file is repaired
+
 ## Post-write fold failure queues one bounded reload - resolved (2026-11-10)
 
 A post-write fold failure queues one bounded `ReloadWorkspaceFromDiskAsync` (2026-11-09) - like the debounce-retry path; the latch stays if it fails; Small-Medium - [doc](proposals/proposal_workspace_reload_failure_visibility.md)
