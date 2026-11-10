@@ -250,6 +250,9 @@ public class WorkspaceReadNavigationImpl
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
+            // fold queued/differing disk text first so the read and its recorded hash match disk (plan_stale_read_guard_followups 9e/9f-2)
+            await _workspaceManager.FlushPendingFoldsAsync(cancellationToken);
+            await _workspaceManager.SyncFileFromDiskIfStaleAsync(filePathResolved, cancellationToken);
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var normalizedPath = Path.GetFullPath(filePathResolved);
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
@@ -997,6 +1000,8 @@ public class WorkspaceReadNavigationImpl
         try
         {
             contextLines = Math.Clamp(contextLines, 0, 10);
+            // fold queued/differing disk text first so the read and its recorded hash match disk (plan_stale_read_guard_followups 9e/9f-2)
+            await _workspaceManager.FlushPendingFoldsAsync(cancellationToken);
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             IReadOnlyList<string>? ContextOf(IReadOnlyList<string> source, int hit, bool before) => contextLines <= 0 ? null : (before ? source.Skip(Math.Max(0, hit - contextLines)).Take(Math.Min(contextLines, hit)) : source.Skip(hit + 1).Take(contextLines)).Select(ctxLine => ctxLine.Trim()).Select(ctxText => ctxText.Length > 120 ? ctxText[..120] + "…" : ctxText).ToList();
 

@@ -481,6 +481,9 @@ public class WorkspaceFileEditImpl
             }
             try
             {
+                // fold queued/differing disk text first so the read and its recorded hash match disk (plan_stale_read_guard_followups 9e/9f-2)
+                await _workspaceManager.FlushPendingFoldsAsync(cancellationToken);
+                await _workspaceManager.SyncFileFromDiskIfStaleAsync(filePathResolved, cancellationToken);
                 // GetMemberSourceAsync throws on failure and returns Modified with a non-null source.
                 var (_, _, _, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, null, null, null, true, cancellationToken);
                 // Extra whole-file fetch the member read costs (the member slice alone cannot be recorded).
@@ -502,6 +505,9 @@ public class WorkspaceFileEditImpl
         }
         try
         {
+            // fold queued/differing disk text first so the read and its recorded hash match disk (plan_stale_read_guard_followups 9e/9f-2)
+            await _workspaceManager.FlushPendingFoldsAsync(cancellationToken);
+            await _workspaceManager.SyncFileFromDiskIfStaleAsync(filePathResolved, cancellationToken);
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var normalizedPath = Path.GetFullPath(filePathResolved);
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
