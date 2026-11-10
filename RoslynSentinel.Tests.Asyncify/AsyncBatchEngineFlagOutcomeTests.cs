@@ -623,9 +623,10 @@ public class AsyncBatchEngineFlagOutcomeTests
     // TryTransformCallerAsync caller pick: class A and class B both declare Run() and both call the bridge. The batch
     // knows the caller only by name, so it must report Run as ambiguous instead of uplifting the first one.
     [Test, CancelAfter(60000)]
-    public async Task RunUpliftBatch_TwoSameNamedCallers_SkippedAsAmbiguous()
+    public async Task RunUpliftBatch_TwoSameNamedCallersInDifferentClasses_BothUplifted()
     {
-        await AssertUpliftSkippedAsAmbiguousAsync("""
+        var source = """
+            using System;
             using System.Threading;
             using System.Threading.Tasks;
 
@@ -658,15 +659,31 @@ public class AsyncBatchEngineFlagOutcomeTests
                     return service.LoadTrips(2);
                 }
             }
-            """, reasonMustName: "Caller method 'Run'");
+            """;
+        var lf = source.Replace("\r\n", "\n");
+        SetSource(workspaceText: lf, diskText: lf);
+
+        var result = await _batchEngine.RunUpliftBatchAsync("LoadTrips", maxCallers: 5);
+
+        Assert.That(result.Skipped, Is.Empty, string.Join("; ", result.Skipped.Select(s => s.Reason)));
+        Assert.That(result.Uplifted, Has.Count.EqualTo(2));
+        Assert.That(result.Uplifted.Select(u => u.CallerType), Is.EquivalentTo(new[] { "FirstCaller", "SecondCaller" }));
+        Assert.That(result.Uplifted.Select(u => u.CallerAsyncMethod), Is.All.EqualTo("RunAsync"));
+
+        var onDisk = File.ReadAllText(Path.Combine(_tempDir, "TripService.cs")).Replace("\r\n", "\n");
+        Assert.That(System.Text.RegularExpressions.Regex.Matches(onDisk, @"async Task<int> RunAsync\(").Count, Is.EqualTo(2),
+            "Each caller class must gain its own RunAsync overload.");
+        Assert.That(onDisk, Does.Contain("await service.LoadTripsAsync(1, cancellationToken)"));
+        Assert.That(onDisk, Does.Contain("await service.LoadTripsAsync(2, cancellationToken)"));
     }
 
     // TryTransformCallerAsync async-overload pick: the caller's class already has RunAsync and another class declares
     // a RunAsync too, so the overload to rewrite is ambiguous (and must not be the first RunAsync in the file).
     [Test, CancelAfter(60000)]
-    public async Task RunUpliftBatch_AsyncOverloadInTwoClasses_SkippedAsAmbiguous()
+    public async Task RunUpliftBatch_AsyncOverloadInTwoClasses_ResolvesCallersOwnOverload()
     {
-        await AssertUpliftSkippedAsAmbiguousAsync("""
+        var source = """
+            using System;
             using System.Threading;
             using System.Threading.Tasks;
 
@@ -704,15 +721,27 @@ public class AsyncBatchEngineFlagOutcomeTests
                     return Task.FromResult(1);
                 }
             }
-            """, reasonMustName: "Async overload 'RunAsync'");
+            """;
+        var lf = source.Replace("\r\n", "\n");
+        SetSource(workspaceText: lf, diskText: lf);
+
+        var result = await _batchEngine.RunUpliftBatchAsync("LoadTrips", maxCallers: 5);
+
+        Assert.That(result.Uplifted, Is.Empty);
+        Assert.That(result.Skipped, Has.Count.EqualTo(1));
+        Assert.That(result.Skipped[0].Reason, Does.Contain("already uplifted"), result.Skipped[0].Reason);
+        Assert.That(result.Skipped[0].Reason, Does.Not.Contain("matches 2 declarations"), result.Skipped[0].Reason);
+        Assert.That(result.Skipped[0].CallerType, Is.EqualTo("Caller"));
+        Assert.That(File.ReadAllText(Path.Combine(_tempDir, "TripService.cs")), Is.EqualTo(lf), "The file must stay untouched.");
     }
 
     // RewriteCallerAsyncBodyAsync pick: the caller's class has no RunAsync, so the bridge adds one, but another class
     // (listed first) already declares RunAsync. The body rewrite must report both, not rewrite the other class's method.
     [Test, CancelAfter(60000)]
-    public async Task RunUpliftBatch_BridgeAddedAsyncCollidesWithOtherClass_SkippedAsAmbiguous()
+    public async Task RunUpliftBatch_BridgeAddedAsyncCollidesWithOtherClass_RewritesTheCallersOwn()
     {
-        await AssertUpliftSkippedAsAmbiguousAsync("""
+        var source = """
+            using System;
             using System.Threading;
             using System.Threading.Tasks;
 
@@ -745,16 +774,76 @@ public class AsyncBatchEngineFlagOutcomeTests
                     return service.LoadTrips(1);
                 }
             }
-            """, reasonMustName: "Method 'RunAsync'");
+            """;
+        var lf = source.Replace("\r\n", "\n");
+        SetSource(workspaceText: lf, diskText: lf);
+
+        var result = await _batchEngine.RunUpliftBatchAsync("LoadTrips", maxCallers: 5);
+
+        Assert.That(result.Skipped, Is.Empty, string.Join("; ", result.Skipped.Select(s => s.Reason)));
+        Assert.That(result.Uplifted, Has.Count.EqualTo(1));
+        Assert.That(result.Uplifted[0].CallerType, Is.EqualTo("Caller"));
+
+        var onDisk = File.ReadAllText(Path.Combine(_tempDir, "TripService.cs")).Replace("\r\n", "\n");
+        Assert.That(onDisk, Does.Contain("""
+            public class OtherService
+            {
+                public Task<int> RunAsync(CancellationToken cancellationToken)
+                {
+                    return Task.FromResult(0);
+                }
+            }
+            """.Replace("\r\n", "\n")), "The other class's RunAsync must be untouched.");
+        Assert.That(onDisk, Does.Contain("await service.LoadTripsAsync(1, cancellationToken)"));
+    }
+
+    // Same-class overloads are still ambiguous: two Run overloads in one class both call the bridge, the containing type
+    // cannot tell them apart, so the one caller is skipped with both candidates named and nothing is written.
+    [Test, CancelAfter(60000)]
+    public async Task RunUpliftBatch_SameClassOverloads_SkippedAsAmbiguous()
+    {
+        await AssertUpliftSkippedAsAmbiguousAsync("""
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+
+            public class TripService
+            {
+                [System.Obsolete("Asyncify-bridge: call LoadTripsAsync instead.")]
+                public int LoadTrips(int companyId)
+                {
+                    return companyId;
+                }
+
+                public Task<int> LoadTripsAsync(int companyId, CancellationToken cancellationToken)
+                {
+                    return Task.FromResult(companyId);
+                }
+            }
+
+            public class Caller
+            {
+                public int Run(TripService service)
+                {
+                    return service.LoadTrips(1);
+                }
+
+                public int Run(TripService service, int companyId)
+                {
+                    return service.LoadTrips(companyId);
+                }
+            }
+            """, reasonMustName: "Caller method 'Run'");
     }
 
     // RewriteObsoleteCallsInAsyncMethodAsync via RunBridgeBatchAsync: the bridge adds GetTripsAsync to TripService while
     // OtherService (listed first) already declares one. The batch must skip the candidate with both named, not rewrite
     // the first GetTripsAsync in the file or write anything.
     [Test, CancelAfter(60000)]
-    public async Task RunBridgeBatch_NewAsyncCollidesWithOtherClass_SkippedAsAmbiguous()
+    public async Task RunBridgeBatch_NewAsyncCollidesWithOtherClass_BridgesTheCandidatesOwn()
     {
         var source = """
+            using System;
             using System.Threading;
             using System.Threading.Tasks;
 
@@ -781,11 +870,60 @@ public class AsyncBatchEngineFlagOutcomeTests
 
         var result = await _batchEngine.RunBridgeBatchAsync(maxBridges: 1);
 
-        Assert.That(result.Applied, Is.Empty, "An ambiguous async name must not be bridged.");
-        Assert.That(result.Skipped, Has.Count.EqualTo(1));
-        var reason = result.Skipped[0].Reason;
-        Assert.That(reason, Does.Contain("matches 2 declarations"), reason);
-        Assert.That(reason, Does.Contain("Method 'GetTripsAsync'"), reason);
-        Assert.That(File.ReadAllText(Path.Combine(_tempDir, "TripService.cs")), Is.EqualTo(lf), "The file must stay untouched.");
+        Assert.That(result.Skipped, Is.Empty, string.Join("; ", result.Skipped.Select(s => s.Reason)));
+        Assert.That(result.Applied, Has.Count.EqualTo(1));
+        var onDisk = File.ReadAllText(Path.Combine(_tempDir, "TripService.cs")).Replace("\r\n", "\n");
+        Assert.That(onDisk, Does.Contain("""
+            public class OtherService
+            {
+                public Task<int> GetTripsAsync(CancellationToken cancellationToken)
+                {
+                    return Task.FromResult(0);
+                }
+            }
+            """.Replace("\r\n", "\n")), "The other class's GetTripsAsync must be untouched.");
+        Assert.That(System.Text.RegularExpressions.Regex.Matches(onDisk, @"Task<int> GetTripsAsync\(").Count, Is.EqualTo(2),
+            "TripService must gain its own GetTripsAsync.");
+    }
+
+    // RunBridgeBatchAsync dedupes candidates on file + name + containing type: two classes in one file each flag a
+    // GetTrips, and both are bridged (the old file + name key dropped the second one).
+    [Test, CancelAfter(60000)]
+    public async Task RunBridgeBatch_TwoSameNamedCandidatesInDifferentClasses_BothBridged()
+    {
+        var source = """
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+
+            public class FirstService
+            {
+                [MigrationCandidate("AsyncBridgeCandidate", Score = 70, Reason = "calls-CommonSearch:70", FlaggedDate = "2026-06-01")]
+                public int GetTrips(int companyId)
+                {
+                    return companyId;
+                }
+            }
+
+            public class SecondService
+            {
+                [MigrationCandidate("AsyncBridgeCandidate", Score = 70, Reason = "calls-CommonSearch:70", FlaggedDate = "2026-06-01")]
+                public int GetTrips(int companyId)
+                {
+                    return companyId + 1;
+                }
+            }
+
+            """ + "\n" + AttrStub;
+        var lf = source.Replace("\r\n", "\n");
+        SetSource(workspaceText: lf, diskText: lf);
+
+        var result = await _batchEngine.RunBridgeBatchAsync(maxBridges: 5);
+
+        Assert.That(result.Skipped, Is.Empty, string.Join("; ", result.Skipped.Select(s => s.Reason)));
+        Assert.That(result.Applied, Has.Count.EqualTo(2));
+        var onDisk = File.ReadAllText(Path.Combine(_tempDir, "TripService.cs")).Replace("\r\n", "\n");
+        Assert.That(System.Text.RegularExpressions.Regex.Matches(onDisk, @"async Task<int> GetTripsAsync\(").Count, Is.EqualTo(2),
+            "Each class must gain its own GetTripsAsync overload.");
     }
 }

@@ -641,12 +641,14 @@ public class AsyncOptimizationEngine
             (_, rewritten) => rewritten.WithoutAnnotations(Formatter.Annotation));
         bridgedDocument = bridgedDocument.WithSyntaxRoot(bridgedRoot);
 
-        // Step 2: insert the async overload immediately after the bridge wrapper. Same lookup as above; the overload
-        // name does not exist yet, so the single method with that name is still the bridge wrapper.
-        var bridgeInNewClass = RoslynSentinel.Common.NameTargetLookup.RequireSingle(bridgedRoot.DescendantNodes()
+        // Step 2: insert the async overload immediately after the bridge wrapper. Same lookup as above (including the
+        // callerContainingType narrowing); the overload name does not exist yet, so the single method with that name in
+        // the caller's type is still the bridge wrapper.
+        var bridgeInNewClass = RoslynSentinel.Common.NameTargetLookup.RequireSingle(NarrowByContainingType(
+                                                                                       bridgedRoot.DescendantNodes()
                                                                                        .OfType<MethodDeclarationSyntax>()
                                                                                        .Where(m => m.Identifier.Text == methodName)
-                                                                                       .ToList(), "Method", methodName)
+                                                                                       .ToList(), callerContainingType), "Method", methodName)
             ?? throw new ToolNotFoundException($"Method '{methodName}' not found in the bridged document.", "method", methodName);
         var bridgedClass = bridgeInNewClass.Parent as ClassDeclarationSyntax
             ?? throw new ToolNotFoundException($"Method '{methodName}' is not a direct member of a class.", "method", methodName);
@@ -1690,22 +1692,51 @@ public class AsyncOptimizationEngine
         string? callerContainingType,
         CancellationToken cancellationToken)
     {
+        SemanticModel? semanticModel = null;
         if (matches.Count > 1 && !string.IsNullOrEmpty(callerContainingType) && callerContainingType != "<unknown>")
         {
-            var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
-            if (semanticModel != null)
-            {
-                var sameType = matches
-                    .Where(m => semanticModel.GetDeclaredSymbol(m, cancellationToken)?.ContainingType?.ToDisplayString() == callerContainingType)
-                    .ToList();
-                if (sameType.Count > 0)
-                {
-                    matches = sameType;
-                }
-            }
+            semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        return RoslynSentinel.Common.NameTargetLookup.RequireSingle(matches, "Method", methodName);
+        return RoslynSentinel.Common.NameTargetLookup.RequireSingle(
+            NarrowByContainingType(matches, callerContainingType, semanticModel), "Method", methodName);
+    }
+
+    /// <summary>
+    /// The display text of the type that declares <paramref name="method"/> (<c>ToDisplayString()</c>, the same text
+    /// <c>ObsoleteCallerFinding.CallerType</c> carries), or null when it cannot be bound. Pass the tree's
+    /// <paramref name="semanticModel"/> when binding several methods of one tree.
+    /// </summary>
+    internal static string? ContainingTypeDisplay(MethodDeclarationSyntax method, SemanticModel? semanticModel = null)
+    {
+        var tree = method.SyntaxTree;
+        var model = semanticModel ?? CSharpCompilation.Create("ContainingTypeLookup", new[] { tree }).GetSemanticModel(tree);
+        return model.GetDeclaredSymbol(method)?.ContainingType?.ToDisplayString();
+    }
+
+    /// <summary>
+    /// Narrows same-named <paramref name="matches"/> (all from one syntax tree) to those declared in the type whose
+    /// <c>ToDisplayString()</c> equals <paramref name="callerContainingType"/>. Returns <paramref name="matches"/> unchanged
+    /// for fewer than two candidates, a null/empty/"&lt;unknown&gt;" type, or when no candidate matches, so the caller's
+    /// ambiguity handling still applies. Without a <paramref name="semanticModel"/> it binds a bare compilation of the
+    /// tree: a source-declared type displays the same without references.
+    /// </summary>
+    internal static List<MethodDeclarationSyntax> NarrowByContainingType(
+        List<MethodDeclarationSyntax> matches,
+        string? callerContainingType,
+        SemanticModel? semanticModel = null)
+    {
+        if (matches.Count < 2 || string.IsNullOrEmpty(callerContainingType) || callerContainingType == "<unknown>")
+        {
+            return matches;
+        }
+
+        var tree = matches[0].SyntaxTree;
+        var model = semanticModel ?? CSharpCompilation.Create("ContainingTypeLookup", new[] { tree }).GetSemanticModel(tree);
+        var sameType = matches
+            .Where(m => model.GetDeclaredSymbol(m)?.ContainingType?.ToDisplayString() == callerContainingType)
+            .ToList();
+        return sameType.Count > 0 ? sameType : matches;
     }
 
     // ── MigrationCandidate attribute name constants ─────────────────────────
@@ -3510,13 +3541,15 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// <param name="filePath">File path (used only for error messages; not read from disk).</param>
     /// <param name="methodName">Method to process.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <param name="callerContainingType">Optional containing-type display text (as in <c>ObsoleteCallerFinding.CallerType</c>) that picks the method among same-named methods in different classes; null, "&lt;unknown&gt;" or no match keeps the ambiguity refusal.</param>
     public Task<(string UpdatedSource, PropagateCtFileResult Result)>
         PropagateCancellationTokenInSourceAsync(
             string source,
             FilePathWrapper filePath,
             string methodName,
             IProgress<EngineProgress>? progress = default,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            string? callerContainingType = null)
     {
         var fileResult = new PropagateCtFileResult { FilePath = filePath };
         var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
@@ -3527,7 +3560,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var methodMatches = root.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
             .Where(m => m.Identifier.Text == methodName).ToList();
-        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(
+            NarrowByContainingType(methodMatches, callerContainingType), "Method", methodName);
 
         if (methodNode == null)
         {

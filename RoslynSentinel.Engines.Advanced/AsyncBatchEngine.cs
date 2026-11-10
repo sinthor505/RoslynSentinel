@@ -34,6 +34,15 @@ public record UpliftCallerInfo(
     {
         get; init;
     }
+
+    /// <summary>
+    /// Display text of the type that declares the caller (<c>ObsoleteCallerFinding.CallerType</c>); tells apart
+    /// same-named callers in different classes. Null when the finder could not bind the containing type.
+    /// </summary>
+    public string? CallerType
+    {
+        get; init;
+    }
 }
 
 /// <summary>
@@ -43,13 +52,15 @@ public record UpliftCallerInfo(
 /// <param name="CallerMethod">Name of the caller method that was not uplifted.</param>
 /// <param name="Reason">Human-readable reason for skipping.</param>
 /// <param name="Diagnostics">Roslyn compiler diagnostics that caused the skip (may be empty).</param>
+/// <param name="CallerType">Display text of the type that declares the caller; null when the finder could not bind it.</param>
 public record UpliftSkippedInfo(
     FilePathWrapper FilePath,
     string CallerMethod,
     string Reason,
     List<DiagnosticInfo> Diagnostics,
     bool NeedsManualReview = false,
-    string? AttemptedSource = null
+    string? AttemptedSource = null,
+    string? CallerType = null
 );
 
 /// <summary>
@@ -483,10 +494,17 @@ public class AsyncBatchEngine
             pattern: "AsyncBridgeCandidate",
             cancellationToken: cancellationToken);
 
-        var eligible = candidates
+        var scored = candidates
             .Where(c => c.Score >= scoreThreshold)
             .OrderByDescending(c => c.Score)  // highest score (highest impact) first
-            .DistinctBy(c => (c.FilePath, c.MethodName))
+            .ToList();
+
+        // Bound once, before any bridge edit shifts the files: the declaring type keeps same-named candidates in
+        // different classes apart (dedupe and engine calls below); same-class overloads still collapse to one entry
+        // and are reported ambiguous by the engine.
+        var containingTypes = await ResolveCandidateContainingTypesAsync(scored, cancellationToken);
+        var eligible = scored
+            .DistinctBy(c => (c.FilePath, c.MethodName, containingTypes[c]))
             .ToList();
 
         _logger.LogDebug(
@@ -519,6 +537,7 @@ public class AsyncBatchEngine
             }
 
             var candidate = eligible[i];
+            var candidateType = containingTypes[candidate];
 
             _logger.LogInformation(
                 "RunBridgeBatch [{Index}/{Budget}]: bridging {Method} in {File}",
@@ -540,13 +559,15 @@ public class AsyncBatchEngine
                     candidate.FilePath,
                     candidate.MethodName,
                     progress,
-                    cancellationToken);
+                    cancellationToken,
+                    candidateType);
                 newSource = result.UpdatedText;
             }
             catch (Exception ex) when (ex is AsyncBridgePreconditionException { Kind: AsyncBridgePreconditionKind.OverloadExists })
             {
                 // The async overload already exists -> try adding CT to it instead of failing
                 var asyncMethodName = candidate.MethodName + "Async";
+                // TODO AddCancellationTokenToMethodAsync, RemoveMigrationCandidatesAsync and FlagMigrationCandidateAsync below still resolve the method by name only; thread candidateType into them so a same-named candidate in another class does not fail this fallback as ambiguous
                 _logger.LogInformation(
                     "Async overload '{AsyncMethod}' already exists - attempting CT add fallback",
                     asyncMethodName);
@@ -605,7 +626,8 @@ public class AsyncBatchEngine
                             candidate.FilePath, asyncMethodName,
                             sourceText: null,  // read from workspace (already on disk)
                             progress: progress,
-                            cancellationToken: cancellationToken);
+                            cancellationToken: cancellationToken,
+                            callerContainingType: candidateType);
 
                         if (bodyRewrite.Outcome == EditOutcome.Modified)
                         {
@@ -785,7 +807,7 @@ public class AsyncBatchEngine
                         // We must parse the updated source in-memory since it hasn't been written yet.
                         var (propagatedSource, _) = await _asyncOptimizationEngine
                             .PropagateCancellationTokenInSourceAsync(
-                                newSource, candidate.FilePath, asyncMethodNameForProp, progress, cancellationToken);
+                                newSource, candidate.FilePath, asyncMethodNameForProp, progress, cancellationToken, candidateType);
                         sourceToValidate = propagatedSource;
                     }
                     catch (Exception propEx) when (propEx is not OperationCanceledException)
@@ -805,7 +827,8 @@ public class AsyncBatchEngine
                         candidate.FilePath, asyncMethodNameForProp,
                         sourceText: sourceToValidate,
                         progress: progress,
-                        cancellationToken: cancellationToken);
+                        cancellationToken: cancellationToken,
+                        callerContainingType: candidateType);
                     if (bodyRewrite.Outcome == EditOutcome.Modified)
                     {
                         sourceToValidate = bodyRewrite.UpdatedText;
@@ -940,6 +963,46 @@ public class AsyncBatchEngine
         int remaining = eligible.Count - applied.Count;
 
         return new BridgeBatchResult(applied, skipped, remaining, stopReason);
+    }
+
+    /// <summary>
+    /// Binds the declaring type of each flagged candidate (display text, the same as <c>ObsoleteCallerFinding.CallerType</c>)
+    /// so the bridge batch can tell same-named candidates in different classes apart. A candidate is located by file, name
+    /// and line in the current workspace text; one that cannot be located maps to null (name-only behavior, same-named
+    /// candidates stay ambiguous). Keyed by reference: the findings are records, and two flags on one method are equal.
+    /// </summary>
+    private async Task<Dictionary<MigrationCandidateFinding, string?>> ResolveCandidateContainingTypesAsync(
+        IReadOnlyList<MigrationCandidateFinding> candidates,
+        CancellationToken cancellationToken)
+    {
+        var types = new Dictionary<MigrationCandidateFinding, string?>(ReferenceEqualityComparer.Instance);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        foreach (var fileGroup in candidates.GroupBy(c => c.FilePath))
+        {
+            var document = solution.GetDocumentIdsWithFilePath(fileGroup.Key)
+                                   .Select(solution.GetDocument)
+                                   .FirstOrDefault();
+            var root = document == null ? null : await document.GetSyntaxRootAsync(cancellationToken);
+            SemanticModel? model = null;
+            foreach (var candidate in fileGroup)
+            {
+                // The line decides among same-named methods, so this is a position match, not a name-keyed first pick.
+                var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                    .Where(m => m.Identifier.Text == candidate.MethodName)
+                    .FirstOrDefault(m => m.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == candidate.Line);
+                if (method == null)
+                {
+                    types[candidate] = null;
+                    continue;
+                }
+
+                // One bare compilation per file: a source-declared type displays the same without references.
+                model ??= CSharpCompilation.Create("ContainingTypeLookup", new[] { method.SyntaxTree }).GetSemanticModel(method.SyntaxTree);
+                types[candidate] = AsyncOptimizationEngine.ContainingTypeDisplay(method, model);
+            }
+        }
+
+        return types;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1084,9 +1147,10 @@ public class AsyncBatchEngine
             return new UpliftBatchResult(uplifted, skipped, 0, "no_callers");
         }
 
-        // 2. Deduplicate to unique (filePath, callerMethod) pairs and take up to maxCallers.
+        // 2. Deduplicate to unique (filePath, callerMethod, callerType) triples and take up to maxCallers. The type keeps
+        //    same-named callers in different classes apart; "<unknown>" (the finder could not bind it) becomes null.
         var callerPairs = callerFindings
-            .Select(c => (c.FilePath, c.CallerMethod))
+            .Select(c => (c.FilePath, c.CallerMethod, CallerType: c.CallerType == "<unknown>" ? null : c.CallerType))
             .Distinct()
             .Take(maxCallers)
             .ToList();
@@ -1097,9 +1161,9 @@ public class AsyncBatchEngine
 
         if (dryRun)
         {
-            foreach (var (fp, cm) in callerPairs)
+            foreach (var (fp, cm, ct) in callerPairs)
             {
-                uplifted.Add(new UpliftCallerInfo(fp, cm, cm + "Async"));
+                uplifted.Add(new UpliftCallerInfo(fp, cm, cm + "Async") { CallerType = ct });
             }
             int dryRemaining = Math.Max(0, totalFound - callerPairs.Count);
             return new UpliftBatchResult(uplifted, skipped, dryRemaining, "dry_run");
@@ -1138,10 +1202,10 @@ public class AsyncBatchEngine
             bool hasInitialDoc = initialSol?.GetDocumentIdsWithFilePath(callerFilePath).Any() == true;
             if (!hasInitialDoc && !File.Exists(callerFilePath))
             {
-                foreach (var (_, cm) in callersInFile)
+                foreach (var (_, cm, ct) in callersInFile)
                 {
                     skipped.Add(new UpliftSkippedInfo(callerFilePath, cm,
-                        "Caller file not found on disk.", new List<DiagnosticInfo>()));
+                        "Caller file not found on disk.", new List<DiagnosticInfo>(), CallerType: ct));
                 }
 
                 callerIndex += callersInFile.Count;
@@ -1152,7 +1216,7 @@ public class AsyncBatchEngine
                 "RunUpliftBatch: file '{File}' - {Count} caller(s)",
                 callerFilePath, callersInFile.Count);
 
-            foreach (var (_, callerMethodName) in callersInFile)
+            foreach (var (_, callerMethodName, callerType) in callersInFile)
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
@@ -1185,16 +1249,16 @@ public class AsyncBatchEngine
 
                 var (transformed, asyncName, skip) = await TryTransformCallerAsync(
                     callerFilePath, callerMethodName, bridgedMethodName,
-                    currentSource, propagateCancellationTokens, progress, cancellationToken);
+                    currentSource, propagateCancellationTokens, progress, cancellationToken, callerType);
 
-                if (skip != null) { skipped.Add(skip); continue; }
+                if (skip != null) { skipped.Add(skip with { CallerType = callerType }); continue; }
 
                 // Idempotency.
                 if (transformed == currentSource)
                 {
                     _ledger.Record(callerFilePath, callerMethodName, "UpliftIdempotentSkip");
                     skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
-                        "already uplifted - no change produced", new List<DiagnosticInfo>()));
+                        "already uplifted - no change produced", new List<DiagnosticInfo>(), CallerType: callerType));
                     continue;
                 }
 
@@ -1219,7 +1283,8 @@ public class AsyncBatchEngine
                     skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
                         $"Validation produced {validation.Diagnostics.Count} compiler error(s){DiagSummary(validation.Diagnostics)}; {upliftFlagOutcome}",
                         validation.Diagnostics,
-                        AttemptedSource: transformed));
+                        AttemptedSource: transformed,
+                        CallerType: callerType));
                     continue;
                 }
 
@@ -1238,13 +1303,14 @@ public class AsyncBatchEngine
                         string.IsNullOrEmpty(upliftApply.RefusalCode)
                             ? "skipped; the uplifted caller could not be written"
                             : $"skipped; the uplifted caller could not be written ({upliftApply.RefusalCode})",
-                        new List<DiagnosticInfo>()));
+                        new List<DiagnosticInfo>(), CallerType: callerType));
                     continue;
                 }
 
                 uplifted.Add(new UpliftCallerInfo(callerFilePath, callerMethodName, asyncName!)
                 {
-                    BeforeSource = beforeSource
+                    BeforeSource = beforeSource,
+                    CallerType = callerType
                 });
                 _ledger.Record(callerFilePath, callerMethodName, "Uplift");
                 progress?.Report(new EngineProgress(
@@ -1271,7 +1337,7 @@ public class AsyncBatchEngine
     {
         var next = ex.Message.LastIndexOf(" Next:", StringComparison.Ordinal);
         var candidates = next >= 0 ? ex.Message[..next] : ex.Message;
-        return candidates + " The batch matches callers by name and did not pick one; uplift each by hand or rename one of them, then re-run.";
+        return candidates + " The batch matches callers by name (and containing type when known) and did not pick one; uplift each by hand or rename one of them, then re-run.";
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1294,19 +1360,22 @@ public class AsyncBatchEngine
         string callerAsyncMethodName,
         string bridgedMethodName,
         string eol,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? callerContainingType = null)
     {
         var preImage = baseDocument.WithText(SourceText.From(source));
         var root = await preImage.GetSyntaxRootAsync(cancellationToken)
             ?? throw new InvalidOperationException("Could not get a syntax root for the bridged caller source.");
 
         // Locate the callerAsync method to scope the rewrite. The bridge adds one XAsync to the caller's class, so a
-        // second XAsync elsewhere in the file (another class) is Ambiguous (ToolAmbiguousMatchException), never a first pick.
+        // second XAsync elsewhere in the file (another class) is told apart by callerContainingType; one that still matches
+        // twice (or has no type to go by) is Ambiguous (ToolAmbiguousMatchException), never a first pick.
         var callerAsyncMatches = root.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
             .Where(m => m.Identifier.Text == callerAsyncMethodName)
             .ToList();
-        var callerAsyncMethod = NameTargetLookup.RequireSingle(callerAsyncMatches, "Method", callerAsyncMethodName);
+        var callerAsyncMethod = NameTargetLookup.RequireSingle(
+            AsyncOptimizationEngine.NarrowByContainingType(callerAsyncMatches, callerContainingType), "Method", callerAsyncMethodName);
 
         if (callerAsyncMethod == null)
         {
@@ -1352,20 +1421,23 @@ public class AsyncBatchEngine
             string preCheckSource,
             bool propagateCancellationTokens,
             IProgress<EngineProgress>? progress,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            string? callerContainingType = null)
     {
         // Pre-check: analyse the current in-memory source to determine the caller's async state.
         var preCheckTree = CSharpSyntaxTree.ParseText(preCheckSource, cancellationToken: cancellationToken);
         var preCheckRoot = preCheckTree.GetRoot(cancellationToken: cancellationToken);
         var preCheckMethods = preCheckRoot.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
-        // The batch carries only the caller's name (FindObsoleteCallers pairs are deduplicated to file + name), so two
-        // same-named methods (overloads, or the same name in two classes) are reported per item, never first-picked.
-        // TODO carry the finding's CallerType through the batch so same-named callers in different classes can be uplifted individually; ConvertToAsyncBridgeAsync and ConvertEventHandlerCallerToAsyncVoidAsync resolve by name file-wide and would need a container input first
+        // The batch carries the caller's name and, when the finder could bind it, its containing type (FindObsoleteCallers
+        // pairs are deduplicated to file + name + type). The type tells same-named callers in different classes apart; two
+        // methods that still match (same-class overloads), no match, or an unknown type are reported per item, never first-picked.
         MethodDeclarationSyntax? callerMethodNode;
         try
         {
             callerMethodNode = NameTargetLookup.RequireSingle(
-                preCheckMethods.Where(m => m.Identifier.Text == callerMethodName).ToList(), "Caller method", callerMethodName);
+                AsyncOptimizationEngine.NarrowByContainingType(
+                    preCheckMethods.Where(m => m.Identifier.Text == callerMethodName).ToList(), callerContainingType),
+                "Caller method", callerMethodName);
         }
         catch (ToolAmbiguousMatchException ambiguousCaller)
         {
@@ -1388,7 +1460,8 @@ public class AsyncBatchEngine
         bool callerIsAsync = callerMethodNode?.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)) == true;
         // Class-scoped like ConvertToAsyncBridgeAsync's OverloadExists check: an XAsync in another class is not this caller's overload.
         var asyncOverloadName = callerMethodName + "Async";
-        var asyncOverloadMatches = preCheckMethods.Where(m => m.Identifier.Text == asyncOverloadName).ToList();
+        var asyncOverloadMatches = AsyncOptimizationEngine.NarrowByContainingType(
+            preCheckMethods.Where(m => m.Identifier.Text == asyncOverloadName).ToList(), callerContainingType);
         bool asyncOverloadExists = callerMethodNode != null
             ? asyncOverloadMatches.Any(m => m.Parent == callerMethodNode.Parent)
             : asyncOverloadMatches.Count > 0;
@@ -1444,7 +1517,7 @@ public class AsyncBatchEngine
             try
             {
                 var result = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
-                    callerFilePath, callerMethodName, progress, cancellationToken);
+                    callerFilePath, callerMethodName, progress, cancellationToken, callerContainingType);
                 bridgedCallerSource = result.UpdatedText
                     ?? throw new InvalidOperationException("ConvertToAsyncBridgeAsync returned null source.");
             }
@@ -1456,7 +1529,8 @@ public class AsyncBatchEngine
                 try
                 {
                     var inPlace = await _asyncOptimizationEngine.ConvertEventHandlerCallerToAsyncVoidAsync(
-                        callerFilePath, callerMethodName, cancellationToken: cancellationToken);
+                        callerFilePath, callerMethodName, cancellationToken: cancellationToken,
+                        callerContainingType: callerContainingType);
                     bridgedCallerSource = inPlace.UpdatedText
                         ?? throw new InvalidOperationException("In-place async void conversion returned null source.");
                     isEventHandlerInPlace = true;
@@ -1503,7 +1577,8 @@ public class AsyncBatchEngine
             try
             {
                 var semanticResult = await SemanticBridgeCallRewriteAsync(
-                    callerFilePath, rewriteTarget, bridgedMethodName, semanticCtExpression, progress, cancellationToken);
+                    callerFilePath, rewriteTarget, bridgedMethodName, semanticCtExpression, progress, cancellationToken,
+                    callerContainingType);
                 if (semanticResult == null)
                 {
                     return (null, null, new UpliftSkippedInfo(
@@ -1512,6 +1587,13 @@ public class AsyncBatchEngine
                 }
 
                 rewrittenSource = semanticResult;
+            }
+            catch (ToolAmbiguousMatchException ambiguousTarget)
+            {
+                _logger.LogWarning(
+                    "Semantic body rewrite skipped for {Method}: {Message}", rewriteTarget, ambiguousTarget.Message);
+                return (null, null, new UpliftSkippedInfo(
+                    callerFilePath, callerMethodName, AmbiguousCallerReason(ambiguousTarget), new List<DiagnosticInfo>()));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -1540,7 +1622,8 @@ public class AsyncBatchEngine
 
                 rewrittenSource = await RewriteCallerAsyncBodyAsync(
                     callerDocument, bridgedCallerSource, rewriteTarget, bridgedMethodName,
-                    await _workspaceManager.ResolveEolAsync(callerDocument, cancellationToken), cancellationToken);
+                    await _workspaceManager.ResolveEolAsync(callerDocument, cancellationToken), cancellationToken,
+                    callerContainingType);
             }
             catch (ToolAmbiguousMatchException ambiguousTarget)
             {
@@ -1571,7 +1654,7 @@ public class AsyncBatchEngine
                 var callerAsyncName = callerAsyncNameOverride ?? (callerMethodName + "Async");
                 var (propagated, _) = await _asyncOptimizationEngine
                     .PropagateCancellationTokenInSourceAsync(
-                        rewrittenSource, callerFilePath, callerAsyncName, progress, cancellationToken);
+                        rewrittenSource, callerFilePath, callerAsyncName, progress, cancellationToken, callerContainingType);
                 sourceResult = propagated;
             }
             catch (Exception propEx) when (propEx is not OperationCanceledException)
@@ -1609,7 +1692,8 @@ public class AsyncBatchEngine
         string bridgedMethodName,
         string? cancellationTokenExpression,
         IProgress<EngineProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? callerContainingType = null)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
@@ -1627,12 +1711,16 @@ public class AsyncBatchEngine
             return null;
         }
 
-        // Name pick without an ambiguity check, on purpose: the only caller (TryTransformCallerAsync) resolved this name to
-        // exactly one method with NameTargetLookup.RequireSingle on the same workspace text just before calling, and reports
-        // a same-named second method as a per-item skip. Resolve with RequireSingle here too before adding another caller.
-        var targetMethod = root.DescendantNodes()
+        // Same narrowing as TryTransformCallerAsync used on this workspace text just before the call: callerContainingType
+        // tells same-named methods in different classes apart, and a name that still matches twice throws
+        // ToolAmbiguousMatchException (reported per item by the caller) instead of picking the first.
+        var targetMatches = root.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == targetMethodName);
+            .Where(m => m.Identifier.Text == targetMethodName)
+            .ToList();
+        var targetMethod = NameTargetLookup.RequireSingle(
+            AsyncOptimizationEngine.NarrowByContainingType(targetMatches, callerContainingType, semanticModel),
+            "Method", targetMethodName);
         if (targetMethod == null)
         {
             return null;
@@ -1670,10 +1758,8 @@ public class AsyncBatchEngine
             bridgeCallNodes.Keys,
             (original, _) => original.WithAdditionalAnnotations(new SyntaxAnnotation(BridgeCallAnnotation)));
 
-        // Same name, same tree as targetMethod above: the annotations only add nodes' markers, never methods.
-        var annotatedMethod = annotatedRoot.DescendantNodes()
-            .OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == targetMethodName)!;
+        // The annotations only add markers, never text, so targetMethod's span finds the same method in the annotated tree.
+        var annotatedMethod = (MethodDeclarationSyntax)annotatedRoot.FindNode(targetMethod.Span);
 
         var rewrittenMethod = annotatedMethod.ReplaceNodes(
             annotatedMethod.DescendantNodes()
