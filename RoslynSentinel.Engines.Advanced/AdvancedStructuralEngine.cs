@@ -1484,6 +1484,7 @@ public class StructuralRefactoringEngine
         };
     }
 
+    // TODO ParamToPropertyRewriter rewrites any identifier matching a grouped parameter name, including member accesses like x.name
     private class ParamToPropertyRewriter : CSharpSyntaxRewriter
     {
         private readonly Dictionary<string, string> _map;
