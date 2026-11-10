@@ -1,6 +1,6 @@
 # Plan: extend the stale-read guard (F3 anchor and engine tools, F4 outline/InspectSymbol), replace the drift latch with per-file protection (F1), add a cross-process write lock and fold-on-read (F7); F5 blocked
 
-**Status:** IN PROGRESS 2026-11-09. Steps 1-8 and 9a-9f done (9a-9f: 1408011d, ab0454b3, 5f88c0b4, a06b6c10, de1adad3, 668306c6, 3d775fe3; 7+8e docs 88cfda60); left: 9h, 9g. Earlier hashes: Steps 1-6 and 8a-8d done (20440d38, a10b26ee, e95c2b15, 458f2fa3, d5fe3d6b, 96996473, f45f07c8, 4a73f333, 088220fb, a170f724, 46f61b62, 333a0740, 233a04ab, fe1afbee, b57208a7, 5a635e5e, d914fa1b, 374c2636, 3e4ed6fa, 1c9cb4db); Step 7 merged into 8e. Batched run with the owner present; F5 stays blocked on staged writes. Builds on [plan_read_ledger_stale_read_guard.md](closed/plan_read_ledger_stale_read_guard.md) (IMPLEMENTED 2026-11-09, 7b703f18..5d9ee8d2). Per-file attribution of refusals is deferred to [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md) ("Revision 2026-11-09"); this plan leaves it a lock, a holder record and a message-builder hook.
+**Status:** IMPLEMENTED 2026-11-09. All steps done (F3, F4, F1, F7, 9h); code 20440d38..f97b1b62, docs 88cfda60 and d4ff09c5; final worktree run at f97b1b62 green except two peer ratchet hits outside this plan. F5 stays blocked on staged writes (TODO.md). Earlier progress line: IN PROGRESS 2026-11-09. Steps 1-8 and 9a-9f done (9a-9f: 1408011d, ab0454b3, 5f88c0b4, a06b6c10, de1adad3, 668306c6, 3d775fe3; 7+8e docs 88cfda60); left: 9h, 9g. Earlier hashes: Steps 1-6 and 8a-8d done (20440d38, a10b26ee, e95c2b15, 458f2fa3, d5fe3d6b, 96996473, f45f07c8, 4a73f333, 088220fb, a170f724, 46f61b62, 333a0740, 233a04ab, fe1afbee, b57208a7, 5a635e5e, d914fa1b, 374c2636, 3e4ed6fa, 1c9cb4db); Step 7 merged into 8e. Batched run with the owner present; F5 stays blocked on staged writes. Builds on [plan_read_ledger_stale_read_guard.md](plan_read_ledger_stale_read_guard.md) (IMPLEMENTED 2026-11-09, 7b703f18..5d9ee8d2). Per-file attribution of refusals is deferred to [proposal_cross_session_write_journal.md](../../proposals/proposal_cross_session_write_journal.md) ("Revision 2026-11-09"); this plan leaves it a lock, a holder record and a message-builder hook.
 
 ## Problem
 
@@ -58,7 +58,7 @@ Owner decisions of 2026-11-09 (first set and the second set the same day). Every
 **F4 - recording widens.** `GetFileOutline` records its file's whole-text hash. `InspectSymbol` records the declaring
 file of the returned symbol (whole-file hash). `ListAll` does NOT record. `InspectSymbol` in `blastRadius` mode records nothing (accepted recommendation, was open decision 2).
 
-**F5 - blocked** on staged writes ([proposal_staged_writes.md](../proposals/proposal_staged_writes.md), not built). See Out of scope.
+**F5 - blocked** on staged writes ([proposal_staged_writes.md](../../proposals/proposal_staged_writes.md), not built). See Out of scope.
 
 **Accepted recommendations (owner, 2026-11-09):**
 1. Second enum value `StaleReadPolicy.RefuseIfObservedStaleQuiet` for quiet mode (not a bool, not stripping the finding after the fact). Measured cost: 3 production declarations already carry the parameter and 2 equality tests gate on it
@@ -541,7 +541,7 @@ Restate the lock-order and re-entrancy rules (Execution rules) in every brief.
 
 #### Step 9h - zero-hit Search hint from recent operation blobs (owner decision 2026-11-09)
 - Done: 9h-1 fdff9ae2; 9h-2a 20b5410c, 38e50c3c; 9h-2b 6bb80057; comment slice d1d2a36b; sidecar allowlist 41335f17; CS8602 16884f73.
-  Found by the 9g docs pass (open): the hint never fires for `references`/`callers`/`implementations` (`FindReferences` leaves `TotalRecords` null; tests call `AddZeroHitEvidence` with a hand-built result); text mode always passes `isRegex: true`, so a literal query with metacharacters gets no note.
+  Found by the 9g docs pass, fixed in f97b1b62 (Asyncify fixtures cf228222): the hint never fires for `references`/`callers`/`implementations` (`FindReferences` leaves `TotalRecords` null; tests call `AddZeroHitEvidence` with a hand-built result); text mode always passes `isRegex: true`, so a literal query with metacharacters gets no note.
 Runs after 9f; independent of the lock. Two slices.
 - **9h-1, cross-file blob evidence in `Common`.** Files: `RoslynSentinel.Common/NotFoundEvidence.cs` (+ a test
   file). Extract from `SearchBlobs` (`NotFoundEvidence.cs:79`) a variant with no `filePath` filter that walks
@@ -622,7 +622,7 @@ ratchet (presence of the argument) and one behavioral test per family, not per s
 
 ## Out of scope
 
-- **F5** (per-snapshot hashes when staged writes make `Committed` and `IncludeStaged` diverge): BLOCKED on [proposal_staged_writes.md](../proposals/proposal_staged_writes.md), which is not built. A `docs/current/TODO.md` line
+- **F5** (per-snapshot hashes when staged writes make `Committed` and `IncludeStaged` diverge): BLOCKED on [proposal_staged_writes.md](../../proposals/proposal_staged_writes.md), which is not built. A `docs/current/TODO.md` line
   will be added by the owner to track it; this plan does not edit `TODO.md`. Until staged writes land, `RecordObserved` and the check use the committed snapshot only.
 - `ListAll` recording (decided no); `blastRadius` recording (decided no).
 - `PersistentWorkspaceManager.RetryFailedChangesAsync` (`:2941`) replays cached content of a failed write with the default policy; left on `None` (cache replay, not a fresh agent edit). Add a `// TODO` when touching it.

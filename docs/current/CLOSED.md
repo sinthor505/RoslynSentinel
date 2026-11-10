@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## SessionHalted drift latch after another session's edits - resolved (2026-11-09)
+
+SessionHalted after another session's real edits stays latched (2026-11-07; owner rule given 2026-11-09: fixed by plan_stale_read_guard_followups F1 option (d)) - Not a spurious flag: 27 of the 30 listed files are exactly the files of the marshaller session's four commits (d9fd0ec6, c6215b34, 7f00ecb9, af7e210f), written 35-50 min before the halt; a clean tree proved nothing because that session had committed them. The latch is sticky: OnFileSystemChanged adds the path to _externalChanges (PersistentWorkspaceManager.cs ~1214), ~500 ms later ApplyInMemoryDocumentUpdatesAsync folds the disk text into memory and re-baselines the hash but does not remove the path, and ApplyProposedChangesAsync (~1857-1862) halts on path membership alone. Acknowledge with ConfirmWithListedFiles clears only the named files (AdminTools.cs ~168-175, by design), so 29 stayed flagged until LoadSolutionAsync (ClearExternalFileChanges, ~834) ran on restart. Candidate fix: before latching in ApplyProposedChangesAsync, drop a target whose CurrentSolution text equals the disk text (DocumentTextMatchesDisk / IsTrackedDocumentUnchangedOnDisk ~511). Why deferred: the halt also guards an agent that read the file before the other session wrote it (line-based edits would clobber), so unlatching after a fold trades safety for fewer halts; needs the owner's rule for concurrent sessions. Test idea: write a file externally, wait for the version bump, apply to it (halts today); with stale text via SetTestSolution it must still halt. Not checked: server logs of the halting instance d87a019a-fefadd08 were deleted by the 03:20 sweep; two flagged files outside the commits (WorkspaceReadNavigationImpl.cs, SearchSolutionTextIncludeTestsTests.cs) are unexplained; Tests.Server.csproj probably edited by a non-server tool.
+
+Evidence: 3e4ed6fa (drift halt removed; per-agent StaleRead + FoldPending), plan_stale_read_guard_followups Step 8c
+
+## Stale-read guard follow-ups (F3, F4, F1, F7, 9h) - resolved (2026-11-09)
+
+Stale-read guard follow-ups (2026-11-09) - plan drafted, owner decisions recorded: F1 option (d) (drift refuses only files the agent read or edited, via per-agent StaleRead; session halt kept for watcher overflow), F3 anchor + engine tools opt in, F4 GetFileOutline/InspectSymbol record, F7 cross-process write lock + debounce lock + fold-on-read; run with /implement-plan in a fresh chat - [doc](plans/closed/plan_stale_read_guard_followups.md)
+
+Evidence: 20440d38..f97b1b62; plans/closed/plan_stale_read_guard_followups.md
+
 ## File not-found after a type rename should name the declaring file - resolved (2026-11-10)
 
 After RenameSymbol renamed `OrderPricingCalculator` to `StandardOrderPricingCalculator`, qwen3.5-9b called ReadFile on `StandardOrderPricingCalculator.cs` (run `20261110-002934-654` T15) and got the generic not-found.

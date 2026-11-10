@@ -42,7 +42,7 @@
   2026-11-09. Specified in plan_stale_read_guard_followups.md F7. AS BUILT the lock does NOT cover the blob write
   (it is released when the chokepoint returns) and there is no journal append yet; see the next bullet.
 - **Lock and holder sidecar as built (2026-11-09) - the attribution hook for `WriteLockBusy`.**
-  [plan_stale_read_guard_followups.md](../plans/plan_stale_read_guard_followups.md) Step 9 (9a-9f) built
+  [plan_stale_read_guard_followups.md](../plans/closed/plan_stale_read_guard_followups.md) Step 9 (9a-9f) built
   `RoslynSentinel.Common/CrossProcessWriteLock.cs`: an OS-held `FileShare.None` lock on
   `<solution root>/.roslynsentinel/write.lock`, taken inside `_solutionLock` after `CheckConcurrentEditConflict` and
   `RevalidateAfterForeignWriteAsync` and before pre-image capture, released in the chokepoint's `finally` after the in-memory
@@ -245,7 +245,7 @@ Worth their own TODO entries:
 
 - `docs/current/references/reference_code_file_write_paths.md` (write paths, blob writer "outside the chokepoint").
 - `docs/current/references/reference_architecture_map.md` (chokepoint, request pipeline, lock-order and re-entrancy rules).
-- [plan_stale_read_guard_followups.md](../plans/plan_stale_read_guard_followups.md) (Step 9: the cross-process write lock and holder sidecar, fold-on-read, zero-hit Search hint).
+- [plan_stale_read_guard_followups.md](../plans/closed/plan_stale_read_guard_followups.md) (Step 9: the cross-process write lock and holder sidecar, fold-on-read, zero-hit Search hint).
 - `docs/current/references/reference_file_watcher_and_drift_detection.md` sections 7-9 (lock, fold-on-read, zero-hit hint as built).
 - [idea_external_drift_hard_blocker.md](../ideas/closed/idea_external_drift_hard_blocker.md) (existing drift idea; not re-read for this proposal).
 - Memories: `project_per_session_mcp_server_isolation`, `project_externaldrift_false_positive_cross_check_gitstatus`,

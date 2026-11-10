@@ -4,7 +4,7 @@
 
 ## What happened
 
-While reviewing Step 9h of [plan_stale_read_guard_followups.md](../plans/plan_stale_read_guard_followups.md)
+While reviewing Step 9h of [plan_stale_read_guard_followups.md](../plans/closed/plan_stale_read_guard_followups.md)
 (the "Added, not loaded yet" zero-hit `Search` hint), the question came up whether the hint could read
 the post-write text from the operation blob instead of the disk. It cannot: the blobs written by the
 write chokepoint hold only the text from before the write.
@@ -96,7 +96,7 @@ be pulled into it.
 
 ## Related
 
-- [plan_stale_read_guard_followups.md](../plans/plan_stale_read_guard_followups.md) - Step 9h, where
+- [plan_stale_read_guard_followups.md](../plans/closed/plan_stale_read_guard_followups.md) - Step 9h, where
   this was decided against as the data source.
 - [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md) -
   would consume the stored after text.
