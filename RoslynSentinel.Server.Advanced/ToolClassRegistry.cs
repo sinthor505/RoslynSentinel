@@ -42,7 +42,7 @@ public static class ToolClassRegistry
     /// <summary>
     /// The MCP tool names the <see cref="ClaudeLeanMode"/> mode exposes: the proposal's Core set minus
     /// FindReferencesTool and LocateSymbolTool (reachable via Search mode: references and mode: symbol, which saves
-    /// their schema tokens) plus McpToolsetControlTool, which switches the on-demand toolsets (<see cref="ToolsetCatalog"/>) at runtime.
+    /// their schema tokens) plus McpToolsetControlTool, which switches the on-demand toolsets (<see cref="ToolsetCatalog"/>) at runtime. SemanticFindReplace, InspectSymbol, MoveMember, UsingDirective and GetDiagnostics are core tools too.
     /// McpServerStatusTool is declared by ServerStatusTools, which is registered outside the class
     /// registry, and passes through the same allow-list.
     /// </summary>
@@ -52,16 +52,16 @@ public static class ToolClassRegistry
             "Search",
             "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
             "RenameSymbol", "ChangeSignature", "CreateFile", "DeleteFile", "WriteFile",
-            "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift",
+            "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift", "SemanticFindReplace", "InspectSymbol", "MoveMember", "UsingDirective", "GetDiagnostics",
             ToolsetCatalog.ControlToolName,
         ],
         StringComparer.Ordinal);
 
     /// <summary>
     /// Tool classes that declare at least one <see cref="ClaudeLeanToolNames"/> tool, including SubAgentTools (its SubAgent tool is on demand via the modelEval toolset),
-    /// DeclarationTools, ParameterEditTools and SemanticFindReplaceTools, whose single tools (DeclarationTool, ParameterEditTool, SemanticFindReplaceTool) are on-demand only: the allow-list keeps
+    /// DeclarationTools, ParameterEditTools and SemanticFindReplaceTools, whose DeclarationTool and ParameterEditTool are on-demand only (the declarations toolset adds them) while SemanticFindReplaceTool is a core tool: the allow-list keeps
     /// them out of the startup surface and the <c>declarations</c> toolset adds them. Listed here so the class exists in claude-lean and McpServerStatusTool can name its mode.
-    /// AdvancedRefactoringTools contributes only ChangeSignature to the core set; its other tools stay on demand (the allow-list filters them out).
+    /// AdvancedRefactoringTools contributes ChangeSignature and MoveMember to the core set; its other tools stay on demand (the allow-list filters them out).
     /// </summary>
     private static readonly string[] ClaudeLeanToolClasses =
     [

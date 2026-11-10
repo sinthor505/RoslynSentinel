@@ -22,12 +22,12 @@ public class ToolsetControlTools
     [McpServerTool(Name = ToolsetCatalog.ControlToolName)]
     [Produces(DataTag.ResultOnly)]
     [Description("Switches an on-demand toolset on or off (tools/list_changed refreshes your tool list). " +
-        "declarations = Declaration, ParameterEdit, ModifyEnum, SyncTypeAndFilename, UsingDirective, TypedMember. " +
-        "moveExtract = MoveMember, MoveType, MoveAllTypesToFiles, Extract*, Inline*, Introduce*, WrapRange, InvertAssignments, ConvertAnonymousToNamed, SyncInterface, SummaryComment, DeleteUnusedSymbol, PreviewRenameImpact, ApplyDiff, ApplyUnifiedDiff, SemanticFindReplace, NamedArguments, QualifyCrefs. " +
-        "projectAdmin = CreateProject, SplitProjectByFolder, ListSolutionItems, ListWorkspaceSolutions, ListProjectFrameworkTargets, Features, ProjectDoc, GetWorkspaceHealth, GetOperationDetail, RetryFailedChanges, GetTypeInfo, QuerySymbolRelationships, GetBestInsertionPoint, GetDiagnostics, InspectSymbol. " +
+        "declarations = Declaration, ParameterEdit, ModifyEnum, SyncTypeAndFilename, TypedMember. " +
+        "moveExtract = MoveType, MoveAllTypesToFiles, Extract*, Inline*, Introduce*, WrapRange, InvertAssignments, ConvertAnonymousToNamed, SyncInterface, SummaryComment, DeleteUnusedSymbol, PreviewRenameImpact, ApplyDiff, ApplyUnifiedDiff, NamedArguments, QualifyCrefs. " +
+        "projectAdmin = CreateProject, SplitProjectByFolder, ListSolutionItems, ListWorkspaceSolutions, ListProjectFrameworkTargets, Features, ProjectDoc, GetWorkspaceHealth, GetOperationDetail, RetryFailedChanges, GetTypeInfo, QuerySymbolRelationships, GetBestInsertionPoint. " +
         "testCategories = TagTestCategories (dry run by default). " +
         "modelEval = SubAgent (Advanced only). " +
-        "git = GitRemote (branch, checkout, push, fetch, pull, tag, stash, worktree).")]
+        "git = GitRemote (branch, checkout, push, fetch, pull, tag, stash, worktree). Already on the startup surface, no enable needed: SemanticFindReplace, InspectSymbol, MoveMember, UsingDirective, GetDiagnostics.")]
     public SentinelCallToolResult<object> McpToolsetControlTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("The toolset to switch.")] ToolSetName toolSet,

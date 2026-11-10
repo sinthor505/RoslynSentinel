@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Claude-lean startup surface widened by five tools (#9) - resolved (2026-11-10)
+
+Widen the claude-lean startup surface (2026-11-09) - move SemanticFindReplace, InspectSymbol, MoveMember, UsingDirective and GetDiagnostics from `ToolsetCatalog` into `ClaudeLeanToolNames` and add `SemanticFindReplaceTools` to the claude mode, raising the budget tests and fixing the pinned on-demand asserts; Small-Medium - [doc](blockers/closed/blocking_error_toolset_enable_not_visible_in_client_tool_list.md)
+
+Evidence: this commit (batch B item #9); ClaudeLeanModeTests (CoreTools oracle, 21), McpToolsetControlTests, ClaudeLeanSchemaBudgetTests (88 pass). Lean schema grew 33000 -> 45000 chars (Advanced), 31100 -> 40000 (Basic); trimming SemanticFindReplace (5450) and MoveMember (3356) schemas is a // TODO in ClaudeLeanSchemaBudgetTests.cs. Fresh-client ToolSearch check left to the live window.
+
 ## McpToolsetControl response no longer claims enabled tools are callable by name (#1) - resolved (2026-11-10)
 
 `McpToolsetControl` response stops claiming enabled tools "can still be called by name" (2026-11-09) - `ToolsetControlTools.cs` ~79: say a client that does not refresh needs `/mcp` reconnect or a startup surface with the tool; Small - [doc](blockers/closed/blocking_error_toolset_enable_not_visible_in_client_tool_list.md)

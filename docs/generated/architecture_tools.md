@@ -13,7 +13,7 @@
 | AdvancedRefactoringTools | IntroduceParameterObject | Claude, claude-lean (on demand), Refactor | - | Encapsulates method parameters into a new C# 12 record type; call sites need manual follow-up (flagged with TODO). |
 | AdvancedRefactoringTools | InvertAssignments | Claude, claude-lean (on demand), Refactor | - | Swaps left and right sides of all assignment statements within a range. |
 | AdvancedRefactoringTools | MoveAllTypesToFiles | Claude, claude-lean (on demand), Refactor | - | Moves secondary types out of a file into their own files. |
-| AdvancedRefactoringTools | MoveMember | Claude, claude-lean (on demand), Refactor | - | Moves methods/properties/fields from one class to another as a single atomic change, rewriting call sites. |
+| AdvancedRefactoringTools | MoveMember | Claude, claude-lean, Refactor | - | Moves methods/properties/fields from one class to another as a single atomic change, rewriting call sites. |
 | AdvancedRefactoringTools | MoveType | Claude, claude-lean (on demand), Refactor | - | Moves a type to its own file, or a nested type out to its containing namespace. |
 | AdvancedRefactoringTools | SyncInterface | Claude, claude-lean (on demand), Refactor | - | Generates stub implementations, syncs missing members into an interface, or verifies implementation coverage. |
 | AdvancedRefactoringTools | WrapRange | Claude, claude-lean (on demand), Refactor | - | Wraps a line range or snippet in a try/catch, using, or #region block. |
@@ -76,7 +76,7 @@
 | RefactoringExtractionDocsTools | ExtractLocalVariable | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Extracts an inline expression into a named local variable declaration. exactExpressionText must be the WHOLE... |
 | RefactoringExtractionDocsTools | ExtractMethod | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Extracts selected statements into a new method with the return type inferred from the selection. |
 | RefactoringExtractionDocsTools | SummaryComment | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Add, remove, or view a /// <summary> XML doc comment on a type or member. |
-| RefactoringExtractionDocsTools | UsingDirective | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Add, remove, or view using directives in a file. |
+| RefactoringExtractionDocsTools | UsingDirective | Claude, claude-lean, Refactor, RefactorExtractionDocs | - | Add, remove, or view using directives in a file. |
 | RefactoringSignatureTools | ChangeAccessibility | Claude, Refactor, RefactorSignature | - | Sets the accessibility of a type or member to the given level, replacing whatever is present. |
 | RefactoringSignatureTools | ConstructorParameter | Claude, Refactor, RefactorSignature | - | Add, remove, or view DI constructor parameters on a class. |
 | RefactoringSignatureTools | MethodSignature | Claude, Refactor, RefactorSignature | - | Add, remove, or view a method's parameters (any method; ConstructorParameter handles DI constructor parameters with a... |
@@ -87,9 +87,9 @@
 | RefactoringStructuralTools | ModifyEnum | Claude, claude-lean (on demand), Refactor, RefactoringStructural | - | Replaces an enum's complete member list in one operation. |
 | RefactoringStructuralTools | ModifyModifier | Claude, Refactor, RefactoringStructural | - | Adds or removes a non-accessibility modifier keyword (use ChangeAccessibility for private/public/etc.,... |
 | RefactoringStructuralTools | SyncTypeAndFilename | Claude, claude-lean (on demand), Refactor, RefactoringStructural | - | Synchronizes the filename to match a type declared in the file. |
-| SemanticFindReplaceTools | SemanticFindReplace | claude-lean (on demand), SemanticFindReplace | - | Semantic (compiler-aware, not text) find-replace with three operations. operation: invertBoolean renames a bool... |
+| SemanticFindReplaceTools | SemanticFindReplace | claude-lean, SemanticFindReplace | - | Semantic (compiler-aware, not text) find-replace with three operations. operation: invertBoolean renames a bool... |
 | SymbolNavigationTools | GetTypeInfo | Claude, claude-lean (on demand), SymbolNavigation, Workspace | - | Returns type information for a type you already know the name of - hierarchy, members, or both. |
-| SymbolNavigationTools | InspectSymbol | Claude, claude-lean (on demand), SymbolNavigation, Workspace | - | Inspects a symbol in depth. |
+| SymbolNavigationTools | InspectSymbol | Claude, claude-lean, SymbolNavigation, Workspace | - | Inspects a symbol in depth. |
 | SymbolNavigationTools | LocateSymbol | Claude, SymbolNavigation, Workspace | - | Locates declaration sites for a symbol by name. |
 | SymbolRelationshipTools | FindReferences | Claude, SymbolRelationship, Workspace | - | Finds call sites and/or implementations for a symbol (single-level, flat lookup). |
 | SymbolRelationshipTools | GetBestInsertionPoint | Claude, claude-lean (on demand), SymbolRelationship, Workspace | - | Returns the best 1-based line number for inserting a new member in a type, following standard C# ordering (fields ->... |
@@ -113,7 +113,7 @@
 | WorkspaceTools | CreateProject | Claude, claude-lean (on demand), Workspace | - | Creates a new project and adds it to the loaded solution. |
 | WorkspaceTools | DeleteUnusedSymbol | Claude, claude-lean (on demand), Workspace | - | Deletes a symbol only if it has zero usages anywhere in the codebase. |
 | WorkspaceTools | Features | Claude, claude-lean (on demand), Workspace | - | Queries or updates feature flags. |
-| WorkspaceTools | GetDiagnostics | Claude, claude-lean (on demand), Workspace | - | Gets compiler diagnostics for a file, project, or the whole solution. |
+| WorkspaceTools | GetDiagnostics | Claude, claude-lean, Workspace | - | Gets compiler diagnostics for a file, project, or the whole solution. |
 | WorkspaceTools | GetWorkspaceHealth | Claude, claude-lean (on demand), Workspace | Allowed | Reports live workspace/solution health: loaded state, project/document counts, and staleness. |
 | WorkspaceTools | ListProjectFrameworkTargets | Claude, claude-lean (on demand), Workspace | - | Returns each project's TargetFramework value. |
 | WorkspaceTools | ListSolutionItems | Claude, claude-lean (on demand), Workspace | Allowed | Lists projects, files, dependencies, or solution-folder items in the loaded solution. |

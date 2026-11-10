@@ -37,7 +37,7 @@ public class ClaudeLeanModeTests
         "Search",
         "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
         "RenameSymbol", "ChangeSignature", "CreateFile", "DeleteFile", "WriteFile",
-        "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift",
+        "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift", "SemanticFindReplace", "InspectSymbol", "MoveMember", "UsingDirective", "GetDiagnostics",
         "McpToolsetControl",
     ];
 
@@ -267,7 +267,7 @@ public class ClaudeLeanModeTests
     }
 
     [Test]
-    public void SemanticFindReplace_IsInModeMap_SoAllIncludesIt_AndStaysOnDemandInClaudeLean()
+    public void SemanticFindReplace_IsInModeMap_SoAllIncludesIt_AndIsOnTheClaudeLeanStartupSurface()
     {
         // Regression: the class once lived only in the claude-lean lists, so --mode=all (which excludes claude-lean) never listed the tool.
         Assert.That(ToolClassRegistry.ModeToToolClasses["SemanticFindReplace"], Is.EqualTo(new[] { "SemanticFindReplaceTools" }));
@@ -278,9 +278,9 @@ public class ClaudeLeanModeTests
         var classes = ServerStartupHelpers.ResolveActiveToolClasses(activeModes, ToolClassRegistry.ModeToToolClasses, [], []);
         Assert.That(classes, Does.Contain("SemanticFindReplaceTools"));
 
-        // Off by default in claude-lean: the tool is not allow-listed; the moveExtract toolset switches it on.
-        Assert.That(ToolClassRegistry.ClaudeLeanToolNames, Does.Not.Contain("SemanticFindReplace"));
-        Assert.That(ToolsetCatalog.FindSet("SemanticFindReplace"), Is.EqualTo(ToolSetName.moveExtract));
+        // Core in claude-lean: the tool is allow-listed at startup and is in no toolset.
+        Assert.That(ToolClassRegistry.ClaudeLeanToolNames, Does.Contain("SemanticFindReplace"));
+        Assert.That(ToolsetCatalog.FindSet("SemanticFindReplace"), Is.Null);
     }
 
     [Test]

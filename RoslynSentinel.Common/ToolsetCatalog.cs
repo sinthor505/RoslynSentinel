@@ -29,6 +29,7 @@ public static class ToolsetCatalog
     /// <summary>Name of the dynamic toolset tool; it is a member of the claude-lean Core set, never of a toolset.</summary>
     public const string ControlToolName = "McpToolsetControl";
 
+    // Those five tools are on the claude-lean startup surface (ToolClassRegistry.ClaudeLeanToolNames), so they are in no set; a name must not be in both.
     private static readonly IReadOnlyDictionary<ToolSetName, string[]> ToolsBySet =
         new Dictionary<ToolSetName, string[]>
         {
@@ -37,14 +38,14 @@ public static class ToolsetCatalog
                 // Declaration replaces ModifyModifier, ChangeAccessibility, ModifyAttribute and ModifyBaseType in claude-lean;
                 // those four remain registered in claude and the other modes. ParameterEdit likewise replaces MethodSignature and
                 // ConstructorParameter in claude-lean only.
-                "Declaration", "ParameterEdit", "ModifyEnum", "SyncTypeAndFilename", "UsingDirective", "TypedMember",
+                "Declaration", "ParameterEdit", "ModifyEnum", "SyncTypeAndFilename", "TypedMember",
             ],
             [ToolSetName.moveExtract] =
             [
-                "MoveMember", "MoveType", "MoveAllTypesToFiles", "ExtractLocalVariable", "ExtractMembers",
+                "MoveType", "MoveAllTypesToFiles", "ExtractLocalVariable", "ExtractMembers",
                 "ExtractMethod", "Inline", "InlineClass", "Introduce", "IntroduceParameterObject", "WrapRange",
                 "InvertAssignments", "ConvertAnonymousToNamed", "SyncInterface", "SummaryComment",
-                "DeleteUnusedSymbol", "PreviewRenameImpact", "ApplyDiff", "ApplyUnifiedDiff", "SemanticFindReplace",
+                "DeleteUnusedSymbol", "PreviewRenameImpact", "ApplyDiff", "ApplyUnifiedDiff",
                 "NamedArguments", "QualifyCrefs",
             ],
             [ToolSetName.projectAdmin] =
@@ -52,7 +53,7 @@ public static class ToolsetCatalog
                 "CreateProject", "SplitProjectByFolder", "ListSolutionItems", "ListWorkspaceSolutions",
                 "ListProjectFrameworkTargets", "Features", "ProjectDoc", "GetWorkspaceHealth", "GetOperationDetail",
                 "RetryFailedChanges", "GetTypeInfo", "QuerySymbolRelationships",
-                "GetBestInsertionPoint", "GetDiagnostics", "InspectSymbol",
+                "GetBestInsertionPoint",
             ],
             [ToolSetName.testCategories] =
             [
@@ -72,9 +73,9 @@ public static class ToolsetCatalog
     private static readonly IReadOnlyDictionary<ToolSetName, string> Summaries =
         new Dictionary<ToolSetName, string>
         {
-            [ToolSetName.declarations] = "change declarations: modifiers, accessibility, attributes, base types, signatures, constructor parameters, enums, sync type and filename, UsingDirective, TypedMember (generate a typed property or field)",
-            [ToolSetName.moveExtract] = "move/extract/inline/introduce refactors, interface and doc sync, safe delete, rename preview, ApplyDiff, ApplyUnifiedDiff, SemanticFindReplace, NamedArguments, QualifyCrefs",
-            [ToolSetName.projectAdmin] = "projects and workspace: create/split projects, solution and framework listings, Features, ProjectDoc, workspace health, operation details, retry, type info, symbol relationships, GetDiagnostics, InspectSymbol",
+            [ToolSetName.declarations] = "change declarations: modifiers, accessibility, attributes, base types, signatures, constructor parameters, enums, sync type and filename, TypedMember (generate a typed property or field)",
+            [ToolSetName.moveExtract] = "move/extract/inline/introduce refactors, interface and doc sync, safe delete, rename preview, ApplyDiff, ApplyUnifiedDiff, NamedArguments, QualifyCrefs",
+            [ToolSetName.projectAdmin] = "projects and workspace: create/split projects, solution and framework listings, Features, ProjectDoc, workspace health, operation details, retry, type info, symbol relationships",
             [ToolSetName.testCategories] = "plan test-category attributes (NUnit/xUnit/MSTest) from the production types each test references (TagTestCategories, dry run by default, dryRun: false applies)",
             [ToolSetName.modelEval] = "dispatch a task to a local model in a child server (SubAgent, Advanced only)",
             [ToolSetName.git] = "git branch, checkout, push, fetch, pull, tag, stash and worktree (GitRemote)",
