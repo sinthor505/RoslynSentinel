@@ -61,6 +61,32 @@ public class EmailService
     }
 
     [Test]
+    public async Task GenerateConstructor_ClassWithConstAndStaticFields_SkipsThem()
+    {
+        SetSource(@"
+public class Zones
+{
+    private const int Max = 3;
+    private static readonly int Shared = 1;
+    private static int _counter;
+    private readonly int _z;
+}", "Zones.cs");
+
+        var result = await _codeGenerationEngine.GenerateConstructorAsync("Zones.cs", "Zones");
+
+        Assert.That(result.UpdatedText, Does.Contain("this._z"),
+            "Constructor body should assign this._z.");
+        Assert.That(result.UpdatedText, Does.Contain("int z"),
+            "Constructor parameter should be derived from _z field.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("this.Max"),
+            "Const fields cannot be assigned in an instance constructor and must be skipped.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("this.Shared"),
+            "Static fields cannot be assigned in an instance constructor and must be skipped.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("this._counter"),
+            "Static fields cannot be assigned in an instance constructor and must be skipped.");
+    }
+
+    [Test]
     public async Task GenerateConstructor_ClassAlreadyHasCtor_ReturnsUnchanged()
     {
         SetSource(@"

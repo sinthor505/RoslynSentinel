@@ -219,6 +219,8 @@ public class CodeGenerationEngine
         // Left as-is on purpose until the feature is scheduled; do not re-raise in reviews.
         var fields = classNode.Members
             .OfType<FieldDeclarationSyntax>()
+            // const and static fields cannot be assigned through an instance constructor.
+            .Where(f => !f.Modifiers.Any(m => m.IsKind(SyntaxKind.ConstKeyword) || m.IsKind(SyntaxKind.StaticKeyword)))
             .Where(f => f.Modifiers.Any(m => m.IsKind(SyntaxKind.PrivateKeyword)) ||
                         f.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword)))
             .SelectMany(f => f.Declaration.Variables.Select(v => (

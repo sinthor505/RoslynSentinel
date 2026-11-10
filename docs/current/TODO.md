@@ -31,7 +31,6 @@ Committed, not started.
 - [READY] A post-write fold failure queues one bounded `ReloadWorkspaceFromDiskAsync` (2026-11-09) - like the debounce-retry path; the latch stays if it fails; Small-Medium - [doc](proposals/proposal_workspace_reload_failure_visibility.md)
 - [READY] Live-check the stale-workspace stamp once with `LaunchTestInstance` and a broken `.csproj` (2026-11-09) - record the outcome in the proposal; Small - [doc](proposals/proposal_workspace_reload_failure_visibility.md)
 - [OPEN] `MoveMember` qualify-receivers pass and alias-using duplicates (2026-10-03) - needs design; the other follow-ups (copy-all-usings, wrapped call sites, global-using duplicates, D2/Q1/Q2a test-seam nits) were closed in the todo review 2026-11-08 - [doc](issues/issue_movemember_open_followups.md)
-- [READY] `GenerateConstructor` excludes `const` and `static` fields (2026-11-09) - the `GenerateConstructorAsync` filter checks only private/readonly, so a `private const` would be assigned (CS0131, read in source: test first); Small - [doc](plans/closed/plan_pinned_tool_defect_fixes.md)
 - [READY] Finish the throw-migration in `MsToolAugmentEngine` (2026-11-09) - the three file lookups behind `BatteryEighteenTests.cs:76,94,205` throw NotFound via `RequireDocument`, and the tests assert `ToolNotFoundException`; `MsAugmentResult` is untouched; Small - [doc](plans/plan_error_codes_follow_cause.md)
 
 

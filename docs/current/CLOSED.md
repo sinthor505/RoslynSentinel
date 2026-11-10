@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## GenerateConstructor skips const and static fields - resolved (2026-11-10)
+
+`GenerateConstructor` excludes `const` and `static` fields (2026-11-09) - the `GenerateConstructorAsync` filter checks only private/readonly, so a `private const` would be assigned (CS0131, read in source: test first); Small - [doc](plans/closed/plan_pinned_tool_defect_fixes.md)
+
+Evidence: CodeGenerationTests.GenerateConstructor_ClassWithConstAndStaticFields_SkipsThem; CodeGenerationTests 38/38
+
 ## VS Code client MCP tool list goes stale after toolset enable - resolved (2026-11-09)
 
 The VS Code client's MCP tool list goes stale after restarts (2026-11-06) - `McpToolsetControl(declarations)` reports on, but `ChangeSignature` stays absent from `ToolSearch` in the main session and in subagents, even when enabled first on a fresh server or toggled with 10 s gaps, while `SemanticFindReplace` stays listed with `moveExtract` off; so neither `tools/list_changed` nor the reconnect refreshed the list; it reproduces the earlier gap that did not reproduce on 2026-11-05; reproduced again 2026-11-07 with `modelEval`/`SubAgent` right after a restart, and a stateless HTTP test instance answers Unknown tool after an enable, so launch it with mode `SubAgent` instead; a fresh session or `/mcp` reconnect is the untested remedy; workaround: `LaunchTestInstance` over HTTP - [blocker](blockers/closed/blocking_error_toolset_enable_not_visible_in_client_tool_list.md)
