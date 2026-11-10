@@ -1,6 +1,6 @@
 # Plan: extend the stale-read guard (F3 anchor and engine tools, F4 outline/InspectSymbol), replace the drift latch with per-file protection (F1), add a cross-process write lock and fold-on-read (F7); F5 blocked
 
-**Status:** IN PROGRESS 2026-11-09. Steps 1-6 and 8a-8d done (20440d38, a10b26ee, e95c2b15, 458f2fa3, d5fe3d6b, 96996473, f45f07c8, 4a73f333, 088220fb, a170f724, 46f61b62, 333a0740, 233a04ab, fe1afbee, b57208a7, 5a635e5e, d914fa1b, 374c2636, 3e4ed6fa, 1c9cb4db); Step 7 merged into 8e. Batched run with the owner present; F5 stays blocked on staged writes. Builds on [plan_read_ledger_stale_read_guard.md](closed/plan_read_ledger_stale_read_guard.md) (IMPLEMENTED 2026-11-09, 7b703f18..5d9ee8d2). Per-file attribution of refusals is deferred to [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md) ("Revision 2026-11-09"); this plan leaves it a lock, a holder record and a message-builder hook.
+**Status:** IN PROGRESS 2026-11-09. Steps 1-8 and 9a-9f done (9a-9f: 1408011d, ab0454b3, 5f88c0b4, a06b6c10, de1adad3, 668306c6, 3d775fe3; 7+8e docs 88cfda60); left: 9h, 9g. Earlier hashes: Steps 1-6 and 8a-8d done (20440d38, a10b26ee, e95c2b15, 458f2fa3, d5fe3d6b, 96996473, f45f07c8, 4a73f333, 088220fb, a170f724, 46f61b62, 333a0740, 233a04ab, fe1afbee, b57208a7, 5a635e5e, d914fa1b, 374c2636, 3e4ed6fa, 1c9cb4db); Step 7 merged into 8e. Batched run with the owner present; F5 stays blocked on staged writes. Builds on [plan_read_ledger_stale_read_guard.md](closed/plan_read_ledger_stale_read_guard.md) (IMPLEMENTED 2026-11-09, 7b703f18..5d9ee8d2). Per-file attribution of refusals is deferred to [proposal_cross_session_write_journal.md](../proposals/proposal_cross_session_write_journal.md) ("Revision 2026-11-09"); this plan leaves it a lock, a holder record and a message-builder hook.
 
 ## Problem
 
@@ -451,6 +451,7 @@ Order inside the group: 8a, 8b (both additive), then 8c (the behavior flip), the
 Restate the lock-order and re-entrancy rules (Execution rules) in every brief.
 
 #### Step 9a - `CrossProcessWriteLock` and the `WriteLockBusy` code
+- Done: 5f88c0b4. (Step 8b-3, the no-op skip plus the persisting-mismatch test: 1408011d, ab0454b3.)
 - Files (3): `RoslynSentinel.Common/CrossProcessWriteLock.cs` (new), `RoslynSentinel.Common/SentinelCallToolResult.cs` (new `ToolErrorCode.WriteLockBusy`), `RoslynSentinel.Common/WriteRefusal.cs` (new `WriteLockBusy` case).
 - Symbols: new `CrossProcessWriteLock` with `AcquireAsync(string solutionRoot, WriteLockHolder holder, TimeSpan wait, CancellationToken ct)` returning a lease (`IAsyncDisposable`) or a busy result carrying the holder; new record `WriteLockHolder(string SessionId, string AgentId, string Tool, string Reason, DateTime SinceUtc)`.
 - Change (~10 edits): open `<solutionRoot>/.roslynsentinel/write.lock` with `FileMode.OpenOrCreate`, `FileAccess.ReadWrite`, `FileShare.None`, poll every ~50 ms until the wait elapses (there is no blocking primitive for this share mode; a sharing violation is an `IOException`), honoring `ct`. After acquire write the holder JSON to a SIDECAR `write.lock.holder.json`
@@ -464,6 +465,7 @@ Restate the lock-order and re-entrancy rules (Execution rules) in every brief.
 - Test-writer step (T9a): row W (exclusivity, timeout with holder, release on dispose, release on exception, sidecar lifecycle). Tests use a per-test temp root, never the repo root.
 
 #### Step 9b - acquire the lock at the chokepoint
+- Done: a06b6c10. Gap: release-on-exception (row X) untested; needs a fault-injection seam in the write loop.
 - Files (3): `RoslynSentinel.Common/PersistentWorkspaceManager.cs`, `RoslynSentinel.Common/EolFileWriter.cs`, `RoslynSentinel.Engines.Basic/MsToolAugmentEngine.cs` (the last two get a `// TODO` only).
 - Symbols: PWM `ApplyProposedChangesAsync`: acquire AFTER `RevalidateAfterForeignWriteAsync` and BEFORE pre-image capture (compile validation and revalidation are finished and outside the lock), under `_solutionLock` (`:1985`); release in the existing `finally` (`:2380` region) AFTER the in-memory resync (`:2316`) and BEFORE `_solutionLock.Release()`. Also: new internal test seam `SetTestSolutionRoot(string)` beside `SetTestSolution` (`:1768`).
 - Change (~8 edits): `GetSolutionRoot()` null = no OS lock (in-process `_solutionLock` only; this protects the ~675 `SetTestSolution` usages); non-null = acquire with the holder built from `ToolCallContext.Current` (agent) and the chokepoint's operation name and reason (which of session id, tool name and reason the context already carries is NOT measured; open decision 7) and a busy result returns `ApplyChangesResult` with `RefusalCode = WriteLockBusy`, nothing written, no latch.
@@ -476,6 +478,7 @@ Restate the lock-order and re-entrancy rules (Execution rules) in every brief.
 - Test-writer step (T9b): rows X (held across write and resync; released on refusal and on exception; busy returns `WriteLockBusy` naming a holder; a long compile validation does not hold the lock, shown by acquiring it from a second lease while validation is gated; null root = no lock).
 
 #### Step 9c - debounce fold takes the lock
+- Done: de1adad3
 - Files (1): `RoslynSentinel.Common/PersistentWorkspaceManager.cs`.
 - Symbols: `OnDebounceTimerElapsed` (`:1353-1535`): around the fold `ApplyInMemoryDocumentUpdatesAsync` (`:1455`), inside `_solutionLock` (`:1366`).
 - Change (~6 edits): acquire with a short bounded wait (default 2 s, a named constant) before the fold reads disk; on busy, re-enqueue the changes into `_pendingChanges`, re-arm the timer and return WITHOUT reading disk or latching; release right after the fold and BEFORE any full reload (`needsReloadAfterAll`): a full MSBuild reload reads many files for seconds and must not hold other processes' writers off (open decision 5).
@@ -486,6 +489,7 @@ Restate the lock-order and re-entrancy rules (Execution rules) in every brief.
 - Test-writer step (T9c): row Y (lock busy: no disk read, changes re-queued, no halt; lock free: fold as before; lock released before a reload).
 
 #### Step 9d - `SyncFileFromDiskIfStaleAsync` (the fold-on-read primitive)
+- Done: 668306c6 (with 9f-1: `FlushPendingFoldsAsync`, shared `RequiresFullReload`)
 - Files (3): `RoslynSentinel.Common/IWorkspaceMutator.cs` (or the interface that `ReadFile` already uses; confirm at dispatch which one declares `RecordObserved`), `RoslynSentinel.Common/PersistentWorkspaceManager.cs`, `RoslynSentinel.Tests/Fakes/FakeWorkspaceManager.cs`.
 - Symbols: new `Task SyncFileFromDiskIfStaleAsync(FilePathWrapper path, CancellationToken ct)`.
 - Change (~7 edits): PWM: under `_solutionLock`, find the document; read disk; if disk text equals the document text, return (cheap path: one file read and one string compare); if it differs, take the write lock with a short bounded wait (default 1 s; reuse 8b's comparison helper), fold that one path with `ApplyInMemoryDocumentUpdatesAsync`, and remove it from `_pendingChanges`
@@ -498,6 +502,7 @@ Restate the lock-order and re-entrancy rules (Execution rules) in every brief.
 - Test-writer step (T9d): row Z (differing file folded; equal file untouched; lock busy fails open; no throw on a deleted file).
 
 #### Step 9e - `ReadFile` and `GetMethodSource` fold first, then record
+- Done: 3d775fe3 (with 9f-2: text-mode `Search` flushes pending folds)
 - Files (2): `RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs` (`ReadFile`, around the `RecordWholeFileObservedAsync` call `:395`), `RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs` (`GetMethodSource`, record at `:336`).
 - Review 2026-11-09: `ReadFile:395` is only the `memberName` path; the line-range path records at `:451` and the whole-file path at `:493`. All three get the fold. Batched with 9f-2 (same files).
 - Change (~4 edits): call `SyncFileFromDiskIfStaleAsync` before reading the document text, then record as today. `GetFileOutline` (Step 6b) is NOT given fold-on-read (decision lists three tools); mention in the brief so it is not added by analogy.

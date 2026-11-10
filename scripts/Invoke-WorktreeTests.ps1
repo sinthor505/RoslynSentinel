@@ -132,6 +132,8 @@ $all = Get-ChildItem -Path $RepoPath -Directory -Filter 'RoslynSentinel.Tests*' 
     Where-Object { (Split-Path $_ -LeafBase) -notmatch '^RoslynSentinel\.Tests\.Support\.' }
 
 if ($Projects) {
+    # `pwsh -File` passes "A,B,C" as one string, not an array; accept both forms.
+    $Projects = $Projects | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ }
     $selected = foreach ($name in $Projects) {
         $match = $all | Where-Object { (Split-Path $_ -LeafBase) -ieq $name }
         if (-not $match) { Fail "unknown test project '$name'. Known: $((($all | ForEach-Object { Split-Path $_ -LeafBase }) -join ', '))" }
