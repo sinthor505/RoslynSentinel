@@ -1,6 +1,6 @@
-# Tests that spawn git fail intermittently on full worktree runs; GitProcess drops output on a late pipe EOF - OPEN
+# Tests that spawn git fail intermittently on full worktree runs; GitProcess drops output on a late pipe EOF - RESOLVED
 
-**Status:** DECISION 2026-11-10. Owner decided the fix (dedicated reader threads in GitProcess, shared test git helper, flake comments); not started.
+**Status:** IMPLEMENTED 2026-11-10. d0ceef51 (GitProcess dedicated reader threads + LastFailure pool counts), e3cdc6df..44a2944f (`Tests.Support.Basic/GitTestRepo.cs` replaces the 8 copies), 93160409..919cdccf and 8cfdb157 (known-flake class comments). Acceptance: 0 git-spawn failures in 5 full worktree runs. Item 4 (`ChildProcessCapture`) stays conditional on the new instrumentation recording starvation.
 
 ## Summary
 Tests that spawn `git` fail intermittently, but only on full worktree runs
