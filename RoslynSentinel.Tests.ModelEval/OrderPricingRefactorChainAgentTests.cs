@@ -61,7 +61,6 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// approach would obscure exactly which step failed in a partial-credit result.
 /// </summary>
 [TestFixture]
-[TestFixture]
 public class OrderPricingRefactorChainAgentTests
 {
     // "Refactor" and "Workspace" are the exact mode strings AddRoslynSentinelToolsBasic checks ->
