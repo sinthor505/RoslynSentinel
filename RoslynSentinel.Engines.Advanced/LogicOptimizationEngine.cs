@@ -837,11 +837,14 @@ public class LogicSimplificationEngine
             if (!firstParam.Modifiers.Any(m => m.IsKind(SyntaxKind.ThisKeyword)))
             {
                 var newParam = firstParam.WithModifiers(firstParam.Modifiers.Insert(0, SyntaxFactory.Token(SyntaxKind.ThisKeyword).WithTrailingTrivia(SyntaxFactory.Space))).WithAdditionalAnnotations(Formatter.Annotation);
-                var newMethod = methodNode.WithParameterList(methodNode.ParameterList.WithParameters(methodNode.ParameterList.Parameters.Replace(firstParam, newParam)));
+                var methodMarker = new SyntaxAnnotation();
+                var newMethod = methodNode.WithParameterList(methodNode.ParameterList.WithParameters(methodNode.ParameterList.Parameters.Replace(firstParam, newParam))).WithAdditionalAnnotations(methodMarker);
                 var updatedRoot = root!.ReplaceNode(methodNode, newMethod);
-                // Also ensure the containing class is marked as static
-                // Find the class in the updated root
-                var classNode = updatedRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.DescendantNodes().OfType<MethodDeclarationSyntax>().Any(m => m.Identifier.Text == methodName));
+                // Also ensure the declaring class is marked as static. The class is the converted method's own parent, found
+                // by annotation: matching "any class that contains a method with this name" would pick an enclosing class
+                // when the method sits in a nested class.
+                // TODO an extension method must live in a top-level non-generic static class (CS1109/CS1106); a nested or generic declaring class is not rejected here
+                var classNode = updatedRoot.GetAnnotatedNodes(methodMarker).Single().Parent as ClassDeclarationSyntax;
                 if (classNode != null && !classNode.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
                 {
                     // The new token gets an explicit space instead of an annotation: annotating the class would re-space

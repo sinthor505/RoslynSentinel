@@ -188,6 +188,19 @@ public class Looper
             "Should return an error when variable not found");
     }
 
+    [Test]
+    public async Task TraceVariableLifetime_TwoSameNamedVariablesNearTheLine_WarnsAndTracesTheFirst()
+    {
+        // Line 4 declares nothing, so the nearby-lines search finds x on line 3 (in A) and line 5 (in B).
+        const string src = "public class Dup\n{\n    public void A() { int x = 1; }\n    // between\n    public void B() { int x = 2; }\n}";
+        SetSource(src, "Dup.cs");
+        var report = await _symbolNavigationEngine.TraceVariableLifetimeAsync("Dup.cs", "x", 4);
+
+        Assert.That(report.Error, Is.Null, $"Should not error: {report.Error}");
+        Assert.That(report.DeclarationLine, Is.EqualTo(3), "the first candidate is traced");
+        Assert.That(report.Warning, Does.Contain("2 declarations").And.Contain("lines 3, 5").And.Contain("lineNumber"));
+    }
+
     // ======================================================================
     // get_type_hierarchy
     // ======================================================================

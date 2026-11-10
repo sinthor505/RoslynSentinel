@@ -38,5 +38,7 @@ public record VariableLifetimeReport : IOperationResult
     {
         get; init;
     }
+    // Set when the variable name matches 2+ declarations near lineNumber: the first was traced; the text names the others and the retry.
+    public string? Warning { get; init; }
     public List<VariableAccess> Accesses { get; init; } = new();
 }

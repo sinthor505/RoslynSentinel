@@ -144,6 +144,19 @@ public class RefactoringTests
     }
 
     [Test]
+    [Category("LogicSimplificationEngine")]
+    public async Task ConvertStaticToExtension_MethodInNestedClass_MakesTheDeclaringClassStatic_NotTheOuterClass()
+    {
+        // Outer and Inner both "contain" a method named M; only Inner declares it.
+        var source = "public class Outer { public int X; public class Inner { public static void M(string s) { } } }";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Ext.cs"));
+        var result = await Battery.Advanced.TestEnginesAdvanced.LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("Ext.cs", "M");
+        Assert.That(result.UpdatedText, Does.Contain("public static class Inner"));
+        Assert.That(result.UpdatedText, Does.Contain("public class Outer"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("static class Outer"));
+    }
+
+    [Test]
     [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task InlineField_Should_Replace_Field_With_Value()
     {

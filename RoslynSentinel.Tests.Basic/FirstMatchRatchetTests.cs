@@ -166,8 +166,7 @@ public class FirstMatchRatchetTests
         ["RoslynSentinel.Engines.Advanced/AsyncBatchEngine.cs::TryTransformCallerAsync"] = 2,
         ["RoslynSentinel.Engines.Advanced/AsyncOptimizationEngine.cs::FlagCandidatesInProjectAsync"] = 3,
         ["RoslynSentinel.Engines.Advanced/AsyncOptimizationEngine.cs::RewriteObsoleteCallsInAsyncMethodAsync"] = 1,
-        ["RoslynSentinel.Engines.Advanced/CodeGenerationEngine.cs::BuildAutoProperty"] = 2,
-        ["RoslynSentinel.Engines.Advanced/LogicOptimizationEngine.cs::ConvertStaticToExtensionAsync"] = 1,
+        ["RoslynSentinel.Engines.Advanced/CodeGenerationEngine.cs::BuildAutoProperty"] = 2, // both picks find the backing field by name inside the one TypeDeclaration of the already-selected property (propNode.Ancestors().First()); two same-named fields in one type is CS0102, so the match is unique
         ["RoslynSentinel.Engines.Advanced/MappingEngine.cs::GenerateMappingAsync"] = 1,
         ["RoslynSentinel.Engines.Advanced/ResourceSafetyEngine.cs::DetectMemoryLeaksAsync"] = 1,
         ["RoslynSentinel.Engines.Advanced/StackOverflowEngine.cs::DetectCrossFileInheritanceCyclesAsync"] = 1,
@@ -185,11 +184,9 @@ public class FirstMatchRatchetTests
         ["RoslynSentinel.Engines.Basic/SemanticReplaceEngine.cs::CollectSitesAsync"] = 1,
         ["RoslynSentinel.Engines.Basic/SemanticReplaceEngine.cs::FindArgumentFor"] = 1,
         ["RoslynSentinel.Engines.Basic/SymbolNavigationEngine.cs::BuildFindReferencesNextCallForFile"] = 1, // first identifier token named symbolName inside one already-resolved declaration, not a solution-wide lookup
-        ["RoslynSentinel.Engines.Basic/SymbolNavigationEngine.cs::TraceVariableLifetimeAsync"] = 2,
         ["RoslynSentinel.Engines.Basic/SyntaxUpgradeEngine.cs::UpgradeToPrimaryConstructorAsync"] = 1,
         ["RoslynSentinel.Engines.Basic/TestCategoryTextEditor.cs::FindInsertionLine"] = 1,
         ["RoslynSentinel.Engines.Basic/ThreadSafetyEngine.cs::MakeMethodThreadSafeAsync"] = 1,
-        ["RoslynSentinel.Tools.Basic/WorkspaceReadNavigationImpl.cs::BuildRecoveryHintAsync"] = 1,
     };
 
     private static SyntaxNode ParseSnippet(string code) => CSharpSyntaxTree.ParseText(code).GetRoot();

@@ -974,13 +974,35 @@ public class WorkspaceReadNavigationImpl
         if (chosen.DropGlob)
         {
             var topProject = TopRecoveryProjects(fromTestsOnly ? inTests[pick.Value] : visible[pick.Value])[0].Key;
-            var projectFile = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, topProject, StringComparison.OrdinalIgnoreCase))?.FilePath;
-            var relativeProjectFile = projectFile == null ? string.Empty : new FilePathWrapper(projectFile, solutionRoot).Relative.Replace('\\', '/');
-            var slash = relativeProjectFile.LastIndexOf('/');
-            var projectDir = slash > 0 ? relativeProjectFile[..slash] : topProject;
-            suggestion = fromTestsOnly
-                ? $"Rerun with fileGlob: '{projectDir}/**/*.cs', includeTests: true (or without fileGlob)."
-                : $"Rerun without fileGlob or with fileGlob: '{projectDir}/**/*.cs'.";
+            // Advisory text on a read path: when 2+ projects share the name, a project-directory glob would point at
+            // an arbitrary one of them, so the hint drops it instead of picking the first.
+            string? projectFile;
+            var topProjectIsAmbiguous = false;
+            try
+            {
+                projectFile = ProjectLookup.FindProject(solution, topProject, ignoreCase: true)?.FilePath;
+            }
+            catch (ToolAmbiguousMatchException)
+            {
+                projectFile = null;
+                topProjectIsAmbiguous = true;
+            }
+
+            if (topProjectIsAmbiguous)
+            {
+                suggestion = fromTestsOnly
+                    ? "Rerun without fileGlob, with includeTests: true."
+                    : "Rerun without fileGlob.";
+            }
+            else
+            {
+                var relativeProjectFile = projectFile == null ? string.Empty : new FilePathWrapper(projectFile, solutionRoot).Relative.Replace('\\', '/');
+                var slash = relativeProjectFile.LastIndexOf('/');
+                var projectDir = slash > 0 ? relativeProjectFile[..slash] : topProject;
+                suggestion = fromTestsOnly
+                    ? $"Rerun with fileGlob: '{projectDir}/**/*.cs', includeTests: true (or without fileGlob)."
+                    : $"Rerun without fileGlob or with fileGlob: '{projectDir}/**/*.cs'.";
+            }
         }
         else
         {

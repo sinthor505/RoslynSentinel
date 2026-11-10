@@ -162,4 +162,24 @@ public class SearchSolutionTextRecoveryHintTests
         Assert.That(result.StatusMessage, Does.Contain("Rerun without fileGlob or with fileGlob: 'AppProj/**/*.cs'."));
         Assert.That(result.StatusMessage, Does.Contain("Rerun without fileGlob"));
     }
+
+    [Test]
+    public async Task TopProjectNameSharedByTwoProjects_SuggestsNoProjectGlob()
+    {
+        const string plainCsproj = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <PackageReference Include=\"Newtonsoft.Json\" Version=\"13.0.3\" />\n  </ItemGroup>\n</Project>\n";
+        // Two projects both named AppProj, in different directories: a glob built from either directory would be a silent pick.
+        var solution = TestSolutionBuilder.CreateEmptySolution();
+        solution = AddProject(solution, _dir, "AppProj", plainCsproj, "App.cs", "public class App\n{\n    const string C = \"Recov.Beta.Three\";\n}\n");
+        solution = AddProject(solution, Path.Combine(_dir, "Dup"), "AppProj", plainCsproj, "Other.cs", "public class Other { }\n");
+        _workspaceManager.SetTestSolution(solution);
+
+        var result = await _impl.SearchSolutionText(reason: "test message", pattern: "Recov.Beta",
+            fileGlob: "LibProj/**/*.cs", includeTests: false);
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.TotalRecords, Is.EqualTo(0));
+        Assert.That(result.StatusMessage, Does.Contain("outside fileGlob 'LibProj/**/*.cs' (AppProj 1)"));
+        Assert.That(result.StatusMessage, Does.Contain("Rerun without fileGlob."));
+        Assert.That(result.StatusMessage, Does.Not.Contain("fileGlob: 'AppProj"));
+    }
 }

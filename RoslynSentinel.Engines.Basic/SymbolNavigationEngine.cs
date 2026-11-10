@@ -2245,48 +2245,62 @@ public class SymbolNavigationEngine
         ISymbol? symbol = null;
         SyntaxNode? declNode = null;
 
+        // Same-named declarations in the phase that resolves the variable; the first is traced, 2+ produce a warning.
+        List<SyntaxNode> candidates = [];
+
         // Check variable declarators
-        var declarator = root.DescendantNodes(n => n.Span.IntersectsWith(targetLineSpan))
+        var declarators = root.DescendantNodes(n => n.Span.IntersectsWith(targetLineSpan))
             .OfType<VariableDeclaratorSyntax>()
-            .FirstOrDefault(v => v.Identifier.Text == variableName);
-        if (declarator != null)
+            .Where(v => v.Identifier.Text == variableName)
+            .ToList();
+        if (declarators.Count > 0)
         {
-            symbol = semanticModel.GetDeclaredSymbol(declarator, cancellationToken);
-            declNode = declarator;
+            symbol = semanticModel.GetDeclaredSymbol(declarators[0], cancellationToken);
+            declNode = declarators[0];
+            candidates.AddRange(declarators);
         }
 
         // Check parameters
         if (symbol == null)
         {
-            var param = root.DescendantNodes(n => n.Span.IntersectsWith(targetLineSpan))
+            var parameters = root.DescendantNodes(n => n.Span.IntersectsWith(targetLineSpan))
                 .OfType<ParameterSyntax>()
-                .FirstOrDefault(p => p.Identifier.Text == variableName);
-            if (param != null)
+                .Where(p => p.Identifier.Text == variableName)
+                .ToList();
+            if (parameters.Count > 0)
             {
-                symbol = semanticModel.GetDeclaredSymbol(param, cancellationToken);
-                declNode = param;
+                symbol = semanticModel.GetDeclaredSymbol(parameters[0], cancellationToken);
+                declNode = parameters[0];
+                candidates.AddRange(parameters);
             }
         }
 
         // Widen search to nearby lines if not found on the exact line
         if (symbol == null)
         {
-            foreach (var varDecl in root.DescendantNodes().OfType<VariableDeclaratorSyntax>()
-                .Where(v => v.Identifier.Text == variableName))
+            var nearby = root.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+                .Where(v => v.Identifier.Text == variableName
+                    && Math.Abs(v.GetLocation().GetLineSpan().StartLinePosition.Line + 1 - lineNumber) <= 5)
+                .ToList();
+            if (nearby.Count > 0)
             {
-                var varLine = varDecl.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                if (Math.Abs(varLine - lineNumber) <= 5)
-                {
-                    symbol = semanticModel.GetDeclaredSymbol(varDecl, cancellationToken);
-                    declNode = varDecl;
-                    break;
-                }
+                symbol = semanticModel.GetDeclaredSymbol(nearby[0], cancellationToken);
+                declNode = nearby[0];
+                candidates.AddRange(nearby);
             }
         }
 
         if (symbol == null)
         {
             return new VariableLifetimeReport { Error = $"Variable '{variableName}' not found near line {lineNumber}." };
+        }
+
+        // Read path: trace the first candidate but never silently; name the others and the retry (lineNumber is the selector).
+        string? ambiguityWarning = null;
+        if (candidates.Count > 1)
+        {
+            var candidateLines = string.Join(", ", candidates.Select(c => c.GetLocation().GetLineSpan().StartLinePosition.Line + 1));
+            ambiguityWarning = $"'{variableName}' matches {candidates.Count} declarations near line {lineNumber} (lines {candidateLines}); traced the first. To trace another, retry with lineNumber set to its line.";
         }
 
         var declLoc = declNode?.GetLocation();
@@ -2403,6 +2417,7 @@ public class SymbolNavigationEngine
             IsDefinitelyAssigned = definitelyAssigned,
             IsAlwaysAssigned = alwaysAssigned,
             IsCapturedInClosure = capturedInClosure,
+            Warning = ambiguityWarning,
             Accesses = accesses
         };
     }
