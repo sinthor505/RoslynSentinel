@@ -310,6 +310,48 @@ public class Service
     }
 
     [Test]
+    public async Task GenerateAsyncOverload_WithContainingType_BridgesOnlyThatClass()
+    {
+        SetSource(@"
+public class FirstService { public int GetData(int id) { return id; } }
+public class SecondService { public int GetData(int id) { return id + 1; } }", "Services.cs");
+
+        var result = await _engine.GenerateAsyncOverloadAsync("Services.cs", "GetData", callerContainingType: "FirstService");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        var matches = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText, "GetDataAsync\\(");
+        Assert.That(matches.Count, Is.EqualTo(1), "Exactly one async overload should be generated.");
+        var parts = result.UpdatedText.Split("class SecondService");
+        Assert.That(parts[0], Does.Contain("GetDataAsync("), "Overload should be added to FirstService.");
+        Assert.That(parts[1], Does.Not.Contain("GetDataAsync("), "SecondService must stay untouched.");
+    }
+
+    [Test]
+    public async Task GenerateAsyncOverload_SameNamedInTwoClassesWithoutContainingType_StillAmbiguous()
+    {
+        SetSource(@"
+public class FirstService { public int GetData(int id) { return id; } }
+public class SecondService { public int GetData(int id) { return id + 1; } }", "Services.cs");
+
+        await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () =>
+            await _engine.GenerateAsyncOverloadAsync("Services.cs", "GetData"));
+    }
+
+    [Test]
+    public async Task GenerateAsyncOverload_SameClassOverloads_StayAmbiguousEvenWithContainingType()
+    {
+        SetSource(@"
+public class FirstService
+{
+    public int GetData(int id) { return id; }
+    public int GetData(string key) { return key.Length; }
+}", "Services.cs");
+
+        await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () =>
+            await _engine.GenerateAsyncOverloadAsync("Services.cs", "GetData", callerContainingType: "FirstService"));
+    }
+
+    [Test]
     public async Task OptimizeIndependentAwaits_MissingFile_ThrowsNotFound()
     {
         SetSource("public class C { }", "C.cs");

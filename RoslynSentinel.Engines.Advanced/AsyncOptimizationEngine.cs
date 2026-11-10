@@ -321,14 +321,14 @@ public class AsyncOptimizationEngine
     /// <summary>
     /// Creates an async version of a synchronous method.
     /// </summary>
-    public async Task<DocumentEditResult> GenerateAsyncOverloadAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
+    /// <param name="callerContainingType">Optional containing-type display text (as in ObsoleteCallerFinding.CallerType) that picks the method among same-named methods in different classes; null, "&lt;unknown&gt;" (escaped in XML) or no match keeps the ambiguity refusal.</param>
+    public async Task<DocumentEditResult> GenerateAsyncOverloadAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default, string? callerContainingType = null)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodMatches = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>();
-        // TODO GenerateAsyncOverloadAsync still refuses same-named methods in different classes; thread callerContainingType via ResolveMethodByNameAsync if a caller needs it
-        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
+        var methodNode = await ResolveMethodByNameAsync(document, methodMatches, methodName, callerContainingType, cancellationToken);
         var classNode = methodNode?.Parent as ClassDeclarationSyntax;
 
         if (classNode == null || methodNode == null)
