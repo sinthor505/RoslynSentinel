@@ -151,6 +151,69 @@ public sealed class UsingDocsTypedMemberTests
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("string _tag"));
     }
 
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task AddField_ConstWithInitializer_EmitsConstField()
+    {
+        using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
+        var tools = BatteryToolFactory.CreateTypedMemberTools(workspace.Manager);
+        var result = await tools.TypedMemberTool(reason: "test message", workspace.PathOf("Order.cs"), containerName: "Order", typedKind: TypedMemberKind.field, typedName: "LocalZone", typedType: "int", initializer: "1", isConst: true, accessibility: "private");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(workspace.ReadText("Order.cs"), Does.Contain("private const int LocalZone = 1;"));
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task AddField_ConstWithStatic_IsRefused()
+    {
+        using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
+        var tools = BatteryToolFactory.CreateTypedMemberTools(workspace.Manager);
+        var result = await tools.TypedMemberTool(reason: "test message", workspace.PathOf("Order.cs"), containerName: "Order", typedKind: TypedMemberKind.field, typedName: "LocalZone", typedType: "int", initializer: "1", isConst: true, isStatic: true);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.Message, Does.Contain("isStatic"));
+        Assert.That(workspace.ReadText("Order.cs"), Is.EqualTo(CrlfSimpleSource));
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task AddField_ConstWithReadonly_IsRefused()
+    {
+        using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
+        var tools = BatteryToolFactory.CreateTypedMemberTools(workspace.Manager);
+        var result = await tools.TypedMemberTool(reason: "test message", workspace.PathOf("Order.cs"), containerName: "Order", typedKind: TypedMemberKind.field, typedName: "LocalZone", typedType: "int", initializer: "1", isConst: true, isReadonly: true);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.Message, Does.Contain("isReadonly"));
+        Assert.That(workspace.ReadText("Order.cs"), Is.EqualTo(CrlfSimpleSource));
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task AddField_ConstWithoutInitializer_IsRefused()
+    {
+        using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
+        var tools = BatteryToolFactory.CreateTypedMemberTools(workspace.Manager);
+        var result = await tools.TypedMemberTool(reason: "test message", workspace.PathOf("Order.cs"), containerName: "Order", typedKind: TypedMemberKind.field, typedName: "LocalZone", typedType: "int", isConst: true);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.Message, Does.Contain("initializer"));
+        Assert.That(workspace.ReadText("Order.cs"), Is.EqualTo(CrlfSimpleSource));
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task AddProperty_WithConst_IsRefused()
+    {
+        using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
+        var tools = BatteryToolFactory.CreateTypedMemberTools(workspace.Manager);
+        var result = await tools.TypedMemberTool(reason: "test message", workspace.PathOf("Order.cs"), containerName: "Order", typedKind: TypedMemberKind.property, typedName: "LocalZone", typedType: "int", initializer: "1", isConst: true);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.Message, Does.Contain("typedKind=field"));
+        Assert.That(workspace.ReadText("Order.cs"), Is.EqualTo(CrlfSimpleSource));
+    }
+
     // --- SummaryComment preferredTarget default (W15 part B) ---
     [Test]
     [Category("RefactoringExtractionDocsTools")]

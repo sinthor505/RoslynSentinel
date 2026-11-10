@@ -32,11 +32,12 @@ public class TypedMemberTools
         [Description("The generated member's type.")]
         [ExternalInputRequired(DataTag.DataType, required: true)] string typedType,
         [Description(ToolParams.AccessibilityValues)][ExternalInputRequired(DataTag.Accessibility)] string accessibility = "public",
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: hasSetter and isInit apply to typedKind=property only; isReadonly, isStatic and initializer to typedKind=field only.
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: hasSetter and isInit apply to typedKind=property only; isReadonly, isStatic, isConst and initializer to typedKind=field only.
         [Description("property only.")][ExternalInputRequired(DataTag.HasSetter)] bool hasSetter = true,
         [Description("property only.")][ExternalInputRequired(DataTag.IsInit)] bool isInit = false,
         [Description("field only.")][ExternalInputRequired(DataTag.IsReadonly)] bool isReadonly = false,
         [Description("field only.")][ExternalInputRequired(DataTag.IsStatic)] bool isStatic = false,
+        [Description("field only: emits a const field; needs initializer, cannot be combined with isStatic or isReadonly.")][ExternalInputRequired(DataTag.IsConst)] bool isConst = false,
         [Description("field only: initializer expression.")][ExternalInputRequired(DataTag.Initializer)] string? initializer = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
@@ -46,7 +47,7 @@ public class TypedMemberTools
         CancellationToken cancellationToken = default)
     {
         return _impl.TypedMember(reason, filePath, containerName, typedKind, typedName, typedType,
-            accessibility, hasSetter, isInit, isReadonly, isStatic, initializer, contextSnippet, lineBefore, lineAfter,
+            accessibility, hasSetter, isInit, isReadonly, isStatic, isConst, initializer, contextSnippet, lineBefore, lineAfter,
             dryRun, returnDiff, cancellationToken);
     }
 }

@@ -2456,6 +2456,21 @@ public class Config { }
         Assert.That(result.UpdatedText, Does.Contain("= 3"));
     }
 
+    [Test]
+    public async Task AddField_PrivateConstWithInitializer()
+    {
+        SetSource(@"
+public class Zones { }
+", "Zones.cs");
+
+        var result = await _memberRefactoringEngine.AddFieldAsync("Zones.cs", "Zones", "LocalZone", "int",
+            accessibility: "private", initializer: "1", isConst: true);
+
+        Assert.That(result.UpdatedText, Does.Contain("private const int LocalZone = 1;"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("static"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("readonly"));
+    }
+
     // ══════════════════════════════════════════════════════════════
     // SortMembersAsync
     // ══════════════════════════════════════════════════════════════

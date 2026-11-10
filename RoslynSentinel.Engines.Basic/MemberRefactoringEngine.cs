@@ -2194,8 +2194,19 @@ public class MemberRefactoringEngine
             $"Recovery: call {ToolCallHint.Call("Member", ("operation", operation))} once per member, passing one full declaration each time; to keep them in order, make each call after the first as {ToolCallHint.Call("Member", ("operation", operation), ("insertAfterMemberName", "<previous member's name>"))}.";
     }
 
-    public async Task<DocumentEditResult> AddFieldAsync(FilePathWrapper filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddFieldAsync(FilePathWrapper filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, bool isConst = false, CancellationToken cancellationToken = default)
     {
+        if (isConst)
+        {
+            // const fields are implicitly static and need a compile-time initializer, so isStatic/isReadonly are ignored here and refused by the tool layer.
+            if (string.IsNullOrWhiteSpace(initializer))
+            {
+                throw new ArgumentException("A const field needs an initializer.");
+            }
+
+            return await AddMemberAsync(filePath, containerName, $"{accessibility} const {fieldType} {fieldName} = {initializer};", contextSnippet, lineBefore, lineAfter, cancellationToken);
+        }
+
         var parts = new System.Text.StringBuilder();
         parts.Append(accessibility);
         if (isStatic)

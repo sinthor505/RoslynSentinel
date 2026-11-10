@@ -961,6 +961,7 @@ public class RefactoringStructuralImpl
         bool isInit = false,
         bool isReadonly = false,
         bool isStatic = false,
+        bool isConst = false,
         string? initializer = null,
         string? contextSnippet = null,
         string? lineBefore = null,
@@ -972,7 +973,8 @@ public class RefactoringStructuralImpl
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
-            const string requiredParamsHint = "Required params: containerName, typedKind, typedName, typedType. Optional: accessibility, hasSetter/isInit (typedKind=property), isReadonly/isStatic/initializer (typedKind=field).";
+            // isConst is optional (default false) on purpose: most fields are not const and typedKind=property never uses it, so a required bool would burden every call; it exists because a model asking for a constant got a silent 'private static int' (run 20261110-020405-782 T20).
+            const string requiredParamsHint = "Required params: containerName, typedKind, typedName, typedType. Optional: accessibility, hasSetter/isInit (typedKind=property), isReadonly/isStatic/isConst/initializer (typedKind=field).";
             if (string.IsNullOrEmpty(containerName))
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"TypedMember: containerName is required. {requiredParamsHint}") };
             if (typedKind == null)
@@ -980,6 +982,12 @@ public class RefactoringStructuralImpl
             if (string.IsNullOrWhiteSpace(typedName) || string.IsNullOrWhiteSpace(typedType))
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"TypedMember: typedName and typedType are required. {requiredParamsHint}") };
 
+            if (isConst && typedKind != TypedMemberKind.field)
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "TypedMember: isConst applies to typedKind=field only. Drop isConst, or pass typedKind=field.") };
+            if (isConst && (isStatic || isReadonly))
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "TypedMember: a const field is implicitly static and readonly. Drop isStatic/isReadonly and keep isConst: true, or drop isConst for a 'static readonly' field.") };
+            if (isConst && string.IsNullOrWhiteSpace(initializer))
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "TypedMember: a const field needs an initializer. Pass initializer (for example \"1\"), or drop isConst.") };
             if (await _symbolNavigationEngine.IsEnumContainerAsync(filePathResolved, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken))
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"TypedMember: '{containerName}' is an enum - typedKind (property/field generation) doesn't apply. Pass newMemberSource as a bare member token ('Name' or 'Name=IntValue') via {ToolCallHint.Call("Member", ("operation", "addMember"))} instead, or use {ToolCallHint.Call("ModifyEnum", ("enumName", containerName))} directly.") };
 
@@ -994,7 +1002,7 @@ public class RefactoringStructuralImpl
             }
             else
             {
-                updated = await _memberRefactoringEngine.AddFieldAsync(filePathResolved, containerName, typedName, typedType, accessibility, isReadonly, isStatic, initializer, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                updated = await _memberRefactoringEngine.AddFieldAsync(filePathResolved, containerName, typedName, typedType, accessibility, isReadonly, isStatic, initializer, contextSnippet, lineBefore, lineAfter, isConst: isConst, cancellationToken: cancellationToken);
                 description = $"Added '{typedType} {typedName}' field to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
             }
 

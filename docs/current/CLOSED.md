@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## TypedMember optional isConst - resolved (2026-11-10)
+
+`TypedMember` gets an optional `isConst` (2026-11-10, decided 2026-11-09) - field only, with a comment saying why it is optional; refuse it combined with `isStatic`/`isReadonly` or without an `initializer` as InvalidArgument with a next step (qwen3.5-9b got a silent `private static int` in run `20261110-020405-782` T20); check: field + isConst + initializer "1" gives `private const int LocalZone = 1;`; Small - no doc
+
+Evidence: MemberRefactoringTests.AddField_PrivateConstWithInitializer; UsingDocsTypedMemberTests 21/21 (const emits `private const int LocalZone = 1;`, refusals for isStatic/isReadonly/no initializer/property); Tests.Server lean/alias 61/61
+
 ## MsToolAugmentEngine throw-migration finished - resolved (2026-11-10)
 
 Finish the throw-migration in `MsToolAugmentEngine` (2026-11-09) - the three file lookups behind `BatteryEighteenTests.cs:76,94,205` throw NotFound via `RequireDocument`, and the tests assert `ToolNotFoundException`; `MsAugmentResult` is untouched; Small - [doc](plans/plan_error_codes_follow_cause.md)

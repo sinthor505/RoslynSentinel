@@ -66,5 +66,6 @@ public enum DataTag
     ChangeseFormat,
     ProjectType,
     CancellationTokenSlot,
-    SearchPattern
+    SearchPattern,
+    IsConst
 }
