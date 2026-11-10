@@ -1141,7 +1141,7 @@ public class StructuralRefactoringEngine
     /// and a "TODO: Update call sites" comment is added. Parameters are addressed by position, so an implementer that renamed them
     /// maps onto the same record properties.
     /// </summary>
-    private static MethodDeclarationSyntax RewriteMethodForParameterObject(MethodDeclarationSyntax method, IReadOnlyList<int> groupedIndices, IReadOnlyList<int> keptIndices, IReadOnlyList<string> propertyNames, string recordName)
+    private static MethodDeclarationSyntax RewriteMethodForParameterObject(MethodDeclarationSyntax method, IReadOnlyList<int> groupedIndices, IReadOnlyList<int> keptIndices, IReadOnlyList<string> propertyNames, string recordName, SyntaxTrivia todoNewLine)
     {
         var parameters = method.ParameterList.Parameters;
         var requestParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier("request")).WithType(SyntaxFactory.ParseTypeName(recordName + " "));
@@ -1161,8 +1161,6 @@ public class StructuralRefactoringEngine
         var rewriter = new ParamToPropertyRewriter(rewriteMap);
         var newMethodNode = method.WithParameterList(newParamList);
         var todoLine = SyntaxFactory.Comment($"// TODO: Update call sites to use {recordName}");
-        var todoEol = method.DescendantTrivia().FirstOrDefault(t => t.IsKind(SyntaxKind.EndOfLineTrivia));
-        var todoNewLine = todoEol.IsKind(SyntaxKind.EndOfLineTrivia) ? todoEol : SyntaxFactory.EndOfLine(Environment.NewLine);
         if (method.Body != null)
         {
             var block = (BlockSyntax)rewriter.Visit(method.Body)!;
@@ -1221,6 +1219,7 @@ public class StructuralRefactoringEngine
             throw new ToolNotFoundException("File not found.", "file");
         }
 
+        var newLine = SyntaxFactory.EndOfLine(await _workspaceManager.ResolveEolAsync(document, cancellationToken));
         var root = RequireSyntaxRoot(await document.GetSyntaxRootAsync(cancellationToken), filePath.ToString());
 
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -1342,7 +1341,7 @@ public class StructuralRefactoringEngine
         // reflowing the whole file, in the document's own line ending.
         var editAnnotation = Formatter.Annotation;
         var targetMarker = new SyntaxAnnotation("IntroduceParameterObject.Target");
-        var annotatedNewMethodNode = RewriteMethodForParameterObject(methodNode, groupedIndices, keptIndices, propertyNames, recordName).WithAdditionalAnnotations(editAnnotation, targetMarker);
+        var annotatedNewMethodNode = RewriteMethodForParameterObject(methodNode, groupedIndices, keptIndices, propertyNames, recordName, newLine).WithAdditionalAnnotations(editAnnotation, targetMarker);
         string? warning = null;
 
         // Interface-targeted: every implementer takes the record too (call sites stay manual).
@@ -1409,7 +1408,7 @@ public class StructuralRefactoringEngine
                 {
                     if (editedRoot.FindNode(implementer.Declaration.Span) is MethodDeclarationSyntax located && !replacements.ContainsKey(located))
                     {
-                        replacements[located] = RewriteMethodForParameterObject(located, groupedIndices, keptIndices, propertyNames, recordName).WithAdditionalAnnotations(editAnnotation);
+                        replacements[located] = RewriteMethodForParameterObject(located, groupedIndices, keptIndices, propertyNames, recordName, newLine).WithAdditionalAnnotations(editAnnotation);
                     }
 
                     needsUsing |= recordNamespace is { IsGlobalNamespace: false } && NamespaceNeedsUsing(implementer.Namespace, recordNamespace);
@@ -1436,10 +1435,10 @@ public class StructuralRefactoringEngine
                 var usingName = recordNamespace!.ToDisplayString();
                 if (!unitForUsing.DescendantNodes().OfType<UsingDirectiveSyntax>().Any(u => u.Alias is null && u.StaticKeyword.IsKind(SyntaxKind.None) && u.Name?.ToString() == usingName))
                 {
-                    // Written with "\n": FormatAnnotatedSpansAsync gives every changed line the document's own line ending.
+                    // Uses the target document's resolved eol; FormatAnnotatedSpansAsync re-applies each edited document's own line ending.
                     var firstUsing = unitForUsing.Usings.Count == 0;
                     var directive = SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(usingName))
-                        .WithTrailingTrivia(firstUsing ? SyntaxFactory.TriviaList(SyntaxFactory.EndOfLine("\n"), SyntaxFactory.EndOfLine("\n")) : SyntaxFactory.TriviaList(SyntaxFactory.EndOfLine("\n")))
+                        .WithTrailingTrivia(firstUsing ? SyntaxFactory.TriviaList(newLine, newLine) : SyntaxFactory.TriviaList(newLine))
                         .WithAdditionalAnnotations(editAnnotation);
                     editedNewRoot = unitForUsing.AddUsings(directive);
                 }
