@@ -62,8 +62,9 @@ public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes,
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
 
+    // Every Error this engine sets is a refusal (interface member, unrewritable call sites), never an internal fault.
     [System.Text.Json.Serialization.JsonIgnore]
-    public string? Code => IsError ? ToolErrorCode.Exception : null;
+    public string? Code => IsError ? ToolErrorCode.TargetIneligible : null;
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => Error;

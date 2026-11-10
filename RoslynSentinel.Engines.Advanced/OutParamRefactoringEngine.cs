@@ -15,14 +15,15 @@ public record OutParamConversionResult(
     string? NewSignature,
     int CallSitesRewritten,
     List<string> CallSiteWarnings,
-    Dictionary<FilePathWrapper, string>? Changes = null
+    Dictionary<FilePathWrapper, string>? Changes = null,
+    [property: System.Text.Json.Serialization.JsonIgnore] string? ErrorCode = null
 ) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
 
     [System.Text.Json.Serialization.JsonIgnore]
-    public string? Code => IsError ? ToolErrorCode.Exception : null;
+    public string? Code => IsError ? ErrorCode ?? ToolErrorCode.Exception : null;
 }
 
 public class OutParamRefactoringEngine
@@ -43,7 +44,7 @@ public class OutParamRefactoringEngine
 
         if (document == null)
         {
-            return new OutParamConversionResult(true, $"File not found: {filePath}", null, null, 0, []);
+            return new OutParamConversionResult(true, $"File not found: {filePath}", null, null, 0, [], ErrorCode: ToolErrorCode.NotFound);
         }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -69,7 +70,7 @@ public class OutParamRefactoringEngine
 
         if (methodDecl == null)
         {
-            return new OutParamConversionResult(true, $"Method '{methodName}' not found in {filePath}.", null, null, 0, []);
+            return new OutParamConversionResult(true, $"Method '{methodName}' not found in {filePath}.", null, null, 0, [], ErrorCode: ToolErrorCode.NotFound);
         }
 
         var outParams = methodDecl.ParameterList.Parameters
@@ -80,7 +81,7 @@ public class OutParamRefactoringEngine
         {
             return new OutParamConversionResult(true,
                 $"Method '{methodName}' has fewer than 2 out parameters ({outParams.Count}). No conversion needed.",
-                null, null, 0, []);
+                null, null, 0, [], ErrorCode: ToolErrorCode.TargetIneligible);
         }
 
         if (semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken) is not IMethodSymbol methodSymbol)

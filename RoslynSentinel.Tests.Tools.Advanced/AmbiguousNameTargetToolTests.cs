@@ -171,4 +171,42 @@ public sealed class AmbiguousNameTargetToolTests
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That((result.SuccessData as CallGraphNode)?.Callees.Select(c => c.MethodName), Is.EquivalentTo(new[] { "AddOne" }));
     }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveType_UnknownDestination_IsInvalidArgument()
+    {
+        var original = "public class Dto\r\n{\r\n}\r\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.MoveTypeTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Dto", "sideways");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(workspace.ReadText("Refactor.cs"), Is.EqualTo(original), "A refused call must not write.");
+    }
+
+    [Test]
+    [Category("IntelligenceTools")]
+    public async Task GetCallGraph_UnknownDirection_IsInvalidArgument()
+    {
+        var original = "public class Worker\r\n{\r\n    public int Run(int a) => Add(a);\r\n    private int Add(int x) => x + 1;\r\n}\r\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateIntelligenceTools(workspace.Manager);
+        var result = await tools.GetCallGraphTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Run", "sideways");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(workspace.ReadText("Refactor.cs"), Is.EqualTo(original), "A refused call must not write.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task IntroduceParameterObject_FileNotInSolution_IsNotFound()
+    {
+        var original = "public class Worker\r\n{\r\n    public int Run(int a, int b) => a + b;\r\n}\r\n";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.IntroduceParameterObjectTool(reason: "test message", workspace.PathOf("Missing.cs"), "Run");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }

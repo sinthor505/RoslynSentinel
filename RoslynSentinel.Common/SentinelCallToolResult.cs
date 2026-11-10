@@ -93,7 +93,6 @@ public static class ToolErrorCode
     public const string MatchedLooserThanRequested = "MatchedLooserThanRequested";
 
     public const string DiffApplyFailed = "DiffApplyFailed";
-    // TODO still misused for expected failures: "Unknown X. Valid values" argument errors (AdvancedRefactoringTools, CodeTransformTools, IntelligenceTools, MoveAllTypesToFiles) should be InvalidArgument, ineligible targets (convert_abstract_to_interface) TargetIneligible
     public const string Exception = "Exception";
     public const string NotImplemented = "NotImplemented";
     public const string SessionHalted = "SessionHalted";

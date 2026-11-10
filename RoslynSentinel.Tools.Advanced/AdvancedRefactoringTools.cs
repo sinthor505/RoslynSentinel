@@ -106,7 +106,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<object>
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, $"ConvertAnonymousToNamed: no anonymous object found in '{resolvedFilePath}'.")
+                    ErrorData = new ResultError(ToolErrorCode.NotFound, $"ConvertAnonymousToNamed: no anonymous object found in '{resolvedFilePath}'.")
                 };
             // Not wired into MemberChangedContentResult: the generated class's text isn't caller-
             // supplied or separately exposed -> ConvertAnonymousToNamedAsync only returns the whole-file
@@ -273,7 +273,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, fileErr)
+                    ErrorData = new ResultError(ToolErrorCode.NotFound, fileErr)
                 };
             var result = await _advancedStructuralEngine.IntroduceParameterObjectAsync(resolvedFilePath, methodName, newTypeName, parameterNames, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
             // Not wired into MemberChangedContentResult: the generated record's text isn't caller-
@@ -370,7 +370,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown newType '{newType}'. Valid values: localVariable, field, parameter, constant.")
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown newType '{newType}'. Valid values: localVariable, field, parameter, constant.")
                 };
             }
 
@@ -534,7 +534,7 @@ public class AdvancedRefactoringTools
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown newType '{newType}'. Valid values: interface, partial, superclass. For newType=class, use {ToolCallHint.Call("MoveMember")} instead.")
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown newType '{newType}'. Valid values: interface, partial, superclass. For newType=class, use {ToolCallHint.Call("MoveMember")} instead.")
             };
         }
         catch (Exception ex)
@@ -645,7 +645,7 @@ public class AdvancedRefactoringTools
             return new SentinelCallToolResult<object>()
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown action '{action}'. Valid values: implement, sync, verify.")
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown action '{action}'. Valid values: implement, sync, verify.")
             };
         }
         catch (Exception ex)
@@ -776,7 +776,7 @@ public class AdvancedRefactoringTools
             return new SentinelCallToolResult<object>()
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown kind '{kind}'. Valid values: method, variable, field, parameter.")
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown kind '{kind}'. Valid values: method, variable, field, parameter.")
             };
         }
         catch (Exception ex)
@@ -1176,7 +1176,7 @@ public class AdvancedRefactoringTools
             return new SentinelCallToolResult<AppliedChangeSummary>
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown destination '{destination}'. Valid values: ownFile, outerScope.")
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown destination '{destination}'. Valid values: ownFile, outerScope.")
             };
         }
         catch (Exception ex)

@@ -856,7 +856,7 @@ public class WorkspaceProjectManagementImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, $"DeleteUnusedSymbol {reason}")
+                    ErrorData = new ResultError(apply.ValidationResult is not null ? ToolErrorCode.ValidationFailed : ToolErrorCode.Exception, $"DeleteUnusedSymbol {reason}")
                 };
             }
 

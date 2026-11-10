@@ -178,4 +178,18 @@ public sealed class ChangeSignatureDescriptionAndRefusalTests
         Assert.That(result.ErrorData?.Message, Does.Contain("declares no parameters"));
         Assert.That(workspace.ReadText("Calc.cs"), Is.EqualTo(source));
     }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
+    [Category("ChangeSignatureParameterInput")] // sentinel:auto-category
+    public async Task ChangeSignature_InterfaceMember_IsTargetIneligibleAndWritesNothing()
+    {
+        const string source = "public interface ICalc\r\n{\r\n    int Add(int a, int b);\r\n}\r\npublic class Calc : ICalc\r\n{\r\n    public int Add(int a, int b) => a + b;\r\n}";
+        using var workspace = InMemoryWorkspace.Create(("ICalc.cs", source));
+        var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
+        var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("ICalc.cs"), "Add", new[] { new ChangeSignatureParameterInput(originalIndex: 0), new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(name: "c", type: "int", defaultValue: "0") });
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(workspace.ReadText("ICalc.cs"), Is.EqualTo(source));
+    }
 }

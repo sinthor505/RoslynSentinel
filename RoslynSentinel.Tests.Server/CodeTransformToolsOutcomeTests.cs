@@ -366,4 +366,37 @@ public class Counter
         Assert.That(result.IsError, Is.False);
         Assert.That(result.SuccessData?.ToString(), Does.Contain("No ILogger.Log calls found"));
     }
+
+    [Test]
+    public async Task ApplyMethodCodeTransform_UnknownTransform_IsInvalidArgument()
+    {
+        var path = SetSource("Counter.cs", CounterWithoutTargetMethod);
+
+        var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Other", "no_such_transform");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+    }
+
+    [Test]
+    public async Task ConvertOutParamsToValueTuple_MethodNotFound_IsNotFound()
+    {
+        var path = SetSource("Counter.cs", CounterWithoutTargetMethod);
+
+        var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Missing", "convert_out_params_to_value_tuple");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task ConvertOutParamsToValueTuple_SingleOutParameter_IsTargetIneligible()
+    {
+        var path = SetSource("Parser.cs", "public class Parser\n{\n    public bool TryGet(out int value) { value = 1; return true; }\n}");
+
+        var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "TryGet", "convert_out_params_to_value_tuple");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+    }
 }

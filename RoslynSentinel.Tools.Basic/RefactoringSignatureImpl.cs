@@ -113,6 +113,7 @@ public class RefactoringSignatureImpl
             return new SentinelCallToolResult<object>
             {
                 IsError = true,
+                // TODO resolver codes other than SymbolNotResolved (e.g. an ambiguous symbol) fall through to Exception; map each EngineErrorCode to its ToolErrorCode
                 ErrorData = new ResultError(resolution.Error!.Code == EngineErrorCode.SymbolNotResolved ? ToolErrorCode.NotFound : ToolErrorCode.Exception, resolution.Error!.Message)
             };
         }
@@ -154,6 +155,7 @@ public class RefactoringSignatureImpl
         RenameSymbolResult result = await _refactoringEngine.RenameSymbolAsync(
             resolution.Handle, resolution.Symbol!, newName, cancellationToken);
 
+        // TODO dead branch: RenameSymbolAsync never sets Error (single construction with Error null); remove or give the engine real error codes
         if (result.Error is not null)
         {
             return new SentinelCallToolResult<object>
@@ -163,6 +165,7 @@ public class RefactoringSignatureImpl
             };
         }
 
+        // TODO "produced no file changes" is coded Exception; if the cause is a rename to the same name it is an idempotent no-op and should be a success, otherwise classify the cause
         if (result.PendingChanges.Count == 0)
         {
             return new SentinelCallToolResult<object>

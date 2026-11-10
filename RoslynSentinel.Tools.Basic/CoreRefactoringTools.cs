@@ -241,7 +241,7 @@ public class CoreRefactoringTools
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, result.Error)
+                    ErrorData = new ResultError(result.Code!, result.Error)
                 };
             var changes = result.Changes;
             // Read before ValidateAndApplyAsync writes: after an apply the committed declaration already has the new parameter list.
@@ -421,7 +421,7 @@ public class CoreRefactoringTools
             return new SentinelCallToolResult<object>()
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown scope '{scope}'. Valid: file, project, solution.")
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown scope '{scope}'. Valid: file, project, solution.")
             };
         }
         catch (Exception ex)

@@ -430,7 +430,7 @@ public class CodeTransformTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown transform '{transform}'. Valid values: add_braces, cleanup_implicit_spans, " + "convert_to_null_coalescing, convert_to_pattern, convert_to_switch, fix_mismatched_namespaces, " + "fix_thread_sleep, format_document_preview, format_document_safe, generate_xml_documentation_stubs, " + "optimize_task_wait, preview_add_missing_usings, add_configure_await_false, remove_configure_await_false, " + "simplify_boolean_expressions, simplify_member_access, simplify_verbosity, sort_and_deduplicate_usings, " + "upgrade_pattern_matching, upgrade_thread_safety, upgrade_to_file_scoped_namespace, " + "upgrade_to_modern_guards, use_field_backed_properties, use_index_from_end, use_time_provider.")
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown transform '{transform}'. Valid values: add_braces, cleanup_implicit_spans, " + "convert_to_null_coalescing, convert_to_pattern, convert_to_switch, fix_mismatched_namespaces, " + "fix_thread_sleep, format_document_preview, format_document_safe, generate_xml_documentation_stubs, " + "optimize_task_wait, preview_add_missing_usings, add_configure_await_false, remove_configure_await_false, " + "simplify_boolean_expressions, simplify_member_access, simplify_verbosity, sort_and_deduplicate_usings, " + "upgrade_pattern_matching, upgrade_thread_safety, upgrade_to_file_scoped_namespace, " + "upgrade_to_modern_guards, use_field_backed_properties, use_index_from_end, use_time_provider.")
                     };
             }
         }
@@ -535,7 +535,7 @@ public class CodeTransformTools
                         return new SentinelCallToolResult<object>
                         {
                             IsError = true,
-                            ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_out_params_to_value_tuple failed for '{methodName}' in '{resolvedFilePath}': {result?.Message}")
+                            ErrorData = new ResultError(result?.Code ?? ToolErrorCode.Exception, $"convert_out_params_to_value_tuple failed for '{methodName}' in '{resolvedFilePath}': {result?.Message}")
                         };
                     }
 
@@ -752,7 +752,7 @@ public class CodeTransformTools
                     return new SentinelCallToolResult<object>
                     {
                         IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown transform '{transform}'. Valid values: add_guard_clauses, convert_expression_body, " + "convert_lock_to_semaphore_slim, convert_method_to_indexer, convert_out_params_to_value_tuple, " + "convert_static_to_extension, convert_switch_to_expression, convert_to_async_enumerable, " + "extension_to_static, generate_async_overload, make_method_static, make_method_thread_safe, " + "optimize_independent_awaits, optimize_to_value_task, reduce_block_depth, " + "update_xml_docs_from_signature, use_exception_expressions.")
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown transform '{transform}'. Valid values: add_guard_clauses, convert_expression_body, " + "convert_lock_to_semaphore_slim, convert_method_to_indexer, convert_out_params_to_value_tuple, " + "convert_static_to_extension, convert_switch_to_expression, convert_to_async_enumerable, " + "extension_to_static, generate_async_overload, make_method_static, make_method_thread_safe, " + "optimize_independent_awaits, optimize_to_value_task, reduce_block_depth, " + "update_xml_docs_from_signature, use_exception_expressions.")
                     };
             }
         }
@@ -856,7 +856,7 @@ public class CodeTransformTools
                             return new SentinelCallToolResult<object>
                             {
                                 IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_abstract_to_interface: class '{className}' not eligible in '{resolvedFilePath}'. {ioe.Message}")
+                                ErrorData = new ResultError(ToolErrorCode.TargetIneligible, $"convert_abstract_to_interface: class '{className}' not eligible in '{resolvedFilePath}'. {ioe.Message}")
                             };
                         }
                         catch (Exception ex)
@@ -1030,7 +1030,7 @@ public class CodeTransformTools
                     return new SentinelCallToolResult<object>
                     {
                         IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown transform '{transform}'. Valid values: add_validation_to_poco, class_to_record, " + "convert_abstract_to_interface, convert_property_safe, convert_property_to_methods, " + "convert_to_background_service, convert_to_source_generated_logging, document_poco_fields, " + "make_class_immutable, record_to_class, replace_constructor_with_factory, sort_members, " + "upgrade_to_primary_constructor.")
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown transform '{transform}'. Valid values: add_validation_to_poco, class_to_record, " + "convert_abstract_to_interface, convert_property_safe, convert_property_to_methods, " + "convert_to_background_service, convert_to_source_generated_logging, document_poco_fields, " + "make_class_immutable, record_to_class, replace_constructor_with_factory, sort_members, " + "upgrade_to_primary_constructor.")
                     };
             }
         }

@@ -371,7 +371,9 @@ public class ResultStatusTests
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
         Assert.That(bad.IsError, Is.True);
-        Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
+        // Every ChangeSignatureResult error is a refusal, so the code is TargetIneligible and the status NotApplicable.
+        Assert.That(bad.Status, Is.EqualTo(ResultStatus.NotApplicable));
+        Assert.That(((ChangeSignatureResult)bad).Code, Is.EqualTo(ToolErrorCode.TargetIneligible));
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((ChangeSignatureResult)bad));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();

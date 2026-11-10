@@ -185,7 +185,7 @@ public class IntelligenceTools
             return new SentinelCallToolResult<object>
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown direction '{direction}'. Valid values: forward, reverse, tree.")
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown direction '{direction}'. Valid values: forward, reverse, tree.")
             };
         }
         catch (Exception ex)
