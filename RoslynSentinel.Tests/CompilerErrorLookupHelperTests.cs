@@ -243,6 +243,50 @@ public class CompilerErrorLookupHelperTests
     }
 
     /// <summary>
+    /// CS0107 (eval run 20261109-233953-684: a whole-file write produced "private static internal", and the model removed the wrong
+    /// modifier). The gate's diagnostics carry the source line, which names the modifiers found.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_Cs0107WithSourceLine_NamesTheModifiersFoundAndSaysToReplaceNotAdd()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Calc.cs", """
+            namespace TestProj;
+
+            public class Calc
+            {
+                private static internal decimal CalculateDiscountedTotal(decimal a) => a;
+            }
+            """));
+        var cs0107 = report.Diagnostics.Single(d => d.Id == "CS0107");
+        var withLine = new DiagnosticReport(true, [cs0107 with { SourceLine = "    private static internal decimal CalculateDiscountedTotal(decimal a) => a;" }]);
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(withLine, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("A declaration may have only one access modifier (found: private internal). To change accessibility, replace the old modifier with the new one rather than adding a second."));
+    }
+
+    [Test]
+    public async Task DescribeAsync_Cs0107WithoutSourceLine_KeepsTheAdviceAndOmitsTheFoundList()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Calc.cs", """
+            namespace TestProj;
+
+            public class Calc
+            {
+                private static internal decimal CalculateDiscountedTotal(decimal a) => a;
+            }
+            """));
+        Assert.That(report.Diagnostics.Select(d => d.Id), Does.Contain("CS0107"), "fixture must produce the CS0107");
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("A declaration may have only one access modifier. To change accessibility, replace the old modifier with the new one rather than adding a second."));
+        Assert.That(description, Does.Not.Contain("found:"));
+    }
+
+    /// <summary>
     /// Regression coverage for identical-diagnostic grouping. See
     /// docs/current/blockers/closed/blocking_error_movemember_analysisengine_antipatternengine_friction.md
     /// -> one bad MoveMember callSiteFixups value produced 86 identical CS7036 lines, which read as 86

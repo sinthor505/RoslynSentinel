@@ -96,9 +96,9 @@ public class WorkspaceTools
     [Description("Lists projects, files, dependencies, or solution-folder items in the loaded solution.")]
     public Task<SentinelCallToolResult<object>> ListSolutionItemsTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("files/dependencies: requires projectName. projects/solutionItems: list every project or solution-folder item (solutionItems aren't searchable via SearchSolutionText - use ProjectDoc). all: everything in one call.")]
+        [Description("files/dependencies: of projectName, or of every project when omitted. projects/solutionItems: list every project or solution-folder item (solutionItems aren't searchable via SearchSolutionText - use ProjectDoc). all: everything in one call.")]
         [ExternalInputRequired(DataTag.Scope)] SolutionItemsKind kind,
-        [Description("Required for kind=files/dependencies.")]
+        [Description("kind=files/dependencies: limit to this project (omit for all projects).")]
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         CancellationToken cancellationToken = default)
         => _projectManagement.ListSolutionItemsTool(reason, kind, projectName, cancellationToken);

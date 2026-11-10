@@ -27,6 +27,7 @@ public static class CompilerErrorLookupHelper
     private static readonly Regex Cs0101DuplicateNamespaceMemberRegex = new(@"The namespace '([^']+)' already contains a definition for '([^']+)'", RegexOptions.Compiled);
     private static readonly Regex Cs0111DuplicateMemberRegex = new(@"Type '([^']+)' already defines a member called '([^']+)'", RegexOptions.Compiled);
     private static readonly Regex Cs0266ConvertRegex = new(@"Cannot implicitly convert type '([^']+)' to '([^']+)'", RegexOptions.Compiled);
+    private static readonly Regex AccessModifierRegex = new(@"\b(public|private|protected|internal)\b", RegexOptions.Compiled);
     private static readonly Regex Cs0737NotPublicRegex = new(@"'([^']+)' cannot implement an interface member because it is not public", RegexOptions.Compiled);
 
     // TODO pass editedFilePaths to DescribeAsync at the remaining callers
@@ -111,6 +112,11 @@ public static class CompilerErrorLookupHelper
             return DescribeCs0737(diagnostic);
         }
 
+        if (diagnostic.Id == "CS0107")
+        {
+            return DescribeCs0107(diagnostic);
+        }
+
         return null;
     }
 
@@ -161,6 +167,25 @@ public static class CompilerErrorLookupHelper
         }
 
         return $"  '{sourceName}' does not implement '{targetName}'. Add ': {targetName}' to {sourceName}'s declaration in the same atomic edit as this change.";
+    }
+
+    /// <summary>
+    /// CS0107 ("More than one protection modifier"): typically a whole-file write that added the new access modifier beside the old one
+    /// ("private static internal"). The modifiers found are read from the quoted source line, up to the first '(', '=', '{', '&lt;' or ';',
+    /// and left out when the line is not available.
+    /// </summary>
+    private static string DescribeCs0107(DiagnosticInfo diagnostic)
+    {
+        var found = new List<string>();
+        if (!string.IsNullOrWhiteSpace(diagnostic.SourceLine))
+        {
+            var line = diagnostic.SourceLine;
+            var header = line[..(line.IndexOfAny(['(', '=', '{', '<', ';']) is var cut and >= 0 ? cut : line.Length)];
+            found = AccessModifierRegex.Matches(header).Select(m => m.Value).ToList();
+        }
+
+        var foundText = found.Count >= 2 ? $" (found: {string.Join(" ", found)})" : string.Empty;
+        return $"  A declaration may have only one access modifier{foundText}. To change accessibility, replace the old modifier with the new one rather than adding a second.";
     }
 
     /// <summary>CS0737: the member that would implement the interface member is not public; the message already names it.</summary>

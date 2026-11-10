@@ -1,4 +1,7 @@
+using System.Text.RegularExpressions;
+
 using Microsoft.CodeAnalysis;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
 
@@ -123,6 +126,30 @@ public class EditImpactAnalyzerTests
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.NextStepLine, Does.Contain("ONE call"));
         Assert.That(result.Text, Does.Not.Contain("RenameSymbol").And.Not.Contain("ReplaceSnippet"));
+    }
+
+    // Eval run 20261109-233953-684 T7: the next step pasted the placeholders `<projectName>` / `<docCommentId>`, the model
+    // improvised an id without the parameter list and RenameSymbol answered "no longer resolves".
+    [Test]
+    public async Task RenameSuggestion_CarriesTheRealProjectNameAndDocCommentId_AndTheIdResolvesThroughTheWirePath()
+    {
+        var renamed = Calculator.Replace("CalcDisc", "CalculateDiscountedTotal");
+
+        var (result, _) = await GateAndAnalyzeAsync(Texts((CalculatorFile, renamed)), Active("RenameSymbol", "ReplaceSnippet"));
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.NextStepLine, Does.Not.Contain("<projectName>").And.Not.Contain("<docCommentId>"), result.NextStepLine);
+        var call = Regex.Match(result.NextStepLine, "projectName: \"([^\"]+)\", docCommentId: \"([^\"]+)\"");
+        Assert.That(call.Success, Is.True, result.NextStepLine);
+        Assert.That(call.Groups[1].Value, Is.EqualTo("TestProj"));
+        Assert.That(call.Groups[2].Value, Is.EqualTo("M:TestProj.OrderPricingCalculator.CalcDisc(System.Decimal,System.Decimal,System.Boolean)"));
+
+        // The same path RenameSymbol uses: ResolveFromWireAsync over the committed (unchanged) solution.
+        using var workspaceManager = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        workspaceManager.SetTestSolution(Baseline());
+        var resolution = await workspaceManager.ResolveFromWireAsync(call.Groups[1].Value, call.Groups[2].Value, CancellationToken.None);
+        Assert.That(resolution.Resolved, Is.True, resolution.Error?.Message);
+        Assert.That(resolution.Symbol!.Name, Is.EqualTo("CalcDisc"));
     }
 
     [Test]

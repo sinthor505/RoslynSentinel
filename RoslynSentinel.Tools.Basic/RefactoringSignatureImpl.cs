@@ -79,6 +79,35 @@ public class RefactoringSignatureImpl
 
         SymbolResolution resolution = await _workspaceManager.ResolveFromWireAsync(
             projectName, docCommentId, cancellationToken);
+        string? docCommentIdNote = null;
+        if (!resolution.Resolved)
+        {
+            // A model often drops the parameter list from a method id (eval run 20261109-233953-684 T8/T10). One method of that
+            // name on the type: use it and say so. Several: list the full ids. Anything else keeps the original error.
+            // READCHOKEPOINT-CAST: read the committed solution through the reader view of the workspace manager.
+            var committed = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            var (unique, overloadIds) = await MissingParameterListResolver.FindAsync(committed, projectName, docCommentId, cancellationToken);
+            if (unique?.GetDocumentationCommentId() is { } fullId)
+            {
+                var byFullId = await _workspaceManager.ResolveFromWireAsync(projectName, fullId, cancellationToken);
+                if (byFullId.Resolved)
+                {
+                    resolution = byFullId;
+                    docCommentIdNote = $"docCommentId '{docCommentId}' had no parameter list; it was resolved to the only method of that name, whose full id is '{fullId}'. Pass the full id next time.";
+                }
+            }
+            else if (overloadIds.Count > 1)
+            {
+                return new SentinelCallToolResult<object>
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
+                        $"docCommentId '{docCommentId}' is missing its parameter list, and '{docCommentId[(docCommentId.LastIndexOf('.') + 1)..]}' has {overloadIds.Count} overloads. Pass the full docCommentId of the one to rename:\n"
+                        + string.Join("\n", overloadIds.Select(id => "  " + id)))
+                };
+            }
+        }
+
         if (!resolution.Resolved)
         {
             return new SentinelCallToolResult<object>
@@ -192,7 +221,8 @@ public class RefactoringSignatureImpl
                     }
                     : null,
                 residualMentions = residualView,
-                residualMentionsNote = residualNote
+                residualMentionsNote = residualNote,
+                docCommentIdNote
             }
         };
     }

@@ -94,7 +94,99 @@ public static class EditImpactAnalyzer
             }
         }
 
-        return Analyze(baselineTexts, candidateTexts, validation.Diagnostics, isToolActive, unchanged);
+        // The next step may be a RenameSymbol call, whose projectName and docCommentId must be the real ones (placeholders were
+        // pasted verbatim by a model, which then concluded its rejected edit had changed the file). The edit was rejected, so the
+        // OLD declaration is resolved in the unchanged baseline, which is where RenameSymbol resolves it.
+        var handles = new Dictionary<SymbolChange, SymbolHandle>();
+        if (validation.Diagnostics.Any(d => d.Severity == "Error"))
+        {
+            foreach (var change in EditImpactSymbolDiff.Diff(baselineTexts, candidateTexts).Where(c => c.Kind == SymbolChangeKind.Renamed))
+            {
+                if (await ResolveOldHandleAsync(baseline, change, cancellationToken) is { } handle)
+                {
+                    handles[change] = handle;
+                }
+            }
+        }
+
+        return Analyze(baselineTexts, candidateTexts, validation.Diagnostics, isToolActive, unchanged,
+            symbolHandleOf: change => handles.TryGetValue(change, out var handle) ? handle : null);
+    }
+
+    /// <summary>
+    /// The wire handle (declaring project name plus documentation comment id) of the declaration a diff entry removed or renamed,
+    /// looked up in the baseline. Null when it cannot be pinned down: a generic type in the path, a missing container, or
+    /// several overloads that the syntax-only signature text does not tell apart.
+    /// </summary>
+    private static async Task<SymbolHandle?> ResolveOldHandleAsync(Solution baseline, SymbolChange change, CancellationToken cancellationToken)
+    {
+        foreach (var project in baseline.Projects)
+        {
+            var compilation = await project.GetCompilationAsync(cancellationToken);
+            if (compilation is null)
+            {
+                continue;
+            }
+
+            var symbol = ResolveOldSymbol(compilation, change);
+            var id = symbol?.GetDocumentationCommentId();
+            if (symbol is null || id is null)
+            {
+                continue;
+            }
+
+            // A dependent project also sees the symbol, as metadata; only the project that declares it in source counts.
+            var tree = symbol.Locations.FirstOrDefault(l => l.IsInSource)?.SourceTree;
+            if (tree is null)
+            {
+                continue;
+            }
+
+            return new SymbolHandle(baseline.GetDocument(tree)?.Project.Name ?? project.Name, id);
+        }
+
+        return null;
+    }
+
+    private static ISymbol? ResolveOldSymbol(Compilation compilation, SymbolChange change)
+    {
+        if (change.DeclarationKind is "class" or "struct" or "record" or "record struct" or "interface" or "enum" or "delegate")
+        {
+            return DocumentationCommentId.GetFirstSymbolForDeclarationId("T:" + (change.Container.Length == 0 ? change.OldName : change.Container + "." + change.OldName), compilation);
+        }
+
+        if (change.Container.Length == 0 || DocumentationCommentId.GetFirstSymbolForDeclarationId("T:" + change.Container, compilation) is not INamedTypeSymbol owner)
+        {
+            return null;
+        }
+
+        var members = owner.GetMembers(change.OldName)
+            .Where(m => change.DeclarationKind switch
+            {
+                "method" => m is IMethodSymbol { MethodKind: MethodKind.Ordinary },
+                "property" => m is IPropertySymbol,
+                "field" or "enum member" => m is IFieldSymbol,
+                "event" => m is IEventSymbol,
+                _ => false,
+            })
+            .ToList();
+        if (members.Count == 1)
+        {
+            return members[0];
+        }
+
+        // Overloads: the diff's OldSignature is "(type,type) : ret" in source text with whitespace removed; match it against each
+        // overload rendered the same way, and use the match only when it is unique.
+        if (members.Count > 1 && change.DeclarationKind == "method" && change.OldSignature is { } wanted)
+        {
+            var matching = members.OfType<IMethodSymbol>()
+                .Where(m => Regex.Replace($"({string.Join(",", m.Parameters.Select(p => p.Type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)))}) : {m.ReturnType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)}", @"\s+", string.Empty)
+                    == Regex.Replace(wanted, @"\s+", string.Empty))
+                .ToList();
+            return matching.Count == 1 ? matching[0] : null;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -107,7 +199,8 @@ public static class EditImpactAnalyzer
         IReadOnlyDictionary<string, string?> candidateTexts,
         IReadOnlyList<DiagnosticInfo> diagnostics,
         Func<string, bool> isToolActive,
-        IReadOnlyDictionary<string, string>? unchangedTexts = null)
+        IReadOnlyDictionary<string, string>? unchangedTexts = null,
+        Func<SymbolChange, SymbolHandle?>? symbolHandleOf = null)
     {
         var editedPaths = baselineTexts.Keys.Concat(candidateTexts.Keys).ToList();
         var outside = diagnostics
@@ -180,7 +273,7 @@ public static class EditImpactAnalyzer
             .ThenByDescending(kv => kv.Value.Count)
             .ToList();
         var primary = ordered[0];
-        var nextStep = NextStepFor(primary.Key, primary.Value.Select(u => u.Diagnostic).ToList(), changes, isToolActive);
+        var nextStep = NextStepFor(primary.Key, primary.Value.Select(u => u.Diagnostic).ToList(), changes, isToolActive, symbolHandleOf);
 
         var text = new StringBuilder();
         text.Append("Next step: ").AppendLine(nextStep);
@@ -214,7 +307,7 @@ public static class EditImpactAnalyzer
         return new EditImpactResult(text.ToString().TrimEnd(), nextStep, changes, attributedDiagnostics, unattributed);
     }
 
-    private static string NextStepFor(SymbolChange change, List<DiagnosticInfo> uses, IReadOnlyList<SymbolChange> all, Func<string, bool> isToolActive)
+    private static string NextStepFor(SymbolChange change, List<DiagnosticInfo> uses, IReadOnlyList<SymbolChange> all, Func<string, bool> isToolActive, Func<SymbolChange, SymbolHandle?>? symbolHandleOf = null)
     {
         int files = uses.Select(u => Path.GetFileName(u.FilePath.ToString())).Distinct(StringComparer.OrdinalIgnoreCase).Count();
         var name = change.OldName;
@@ -232,7 +325,12 @@ public static class EditImpactAnalyzer
                         return lead + batch;
                     }
 
-                    var rename = lead + $"use {ToolCallHint.Call("RenameSymbol", ("newName", change.NewName!))} instead.";
+                    // The real project and docCommentId (null when unresolved: the placeholders stay, as before).
+                    var handle = symbolHandleOf?.Invoke(change);
+                    var renameCall = handle is { } h
+                        ? ToolCallHint.Call("RenameSymbol", ("projectName", h.ProjectName), ("docCommentId", h.DocCommentId), ("newName", change.NewName!))
+                        : ToolCallHint.Call("RenameSymbol", ("newName", change.NewName!));
+                    var rename = lead + $"use {renameCall} instead.";
 
                     // The edit also changed the accessibility: the rename keeps the old one, so name the follow-up (only when callable).
                     return change.NewAccessibility is not null && isToolActive("ChangeAccessibility")

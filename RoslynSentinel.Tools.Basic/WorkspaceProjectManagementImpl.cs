@@ -72,11 +72,10 @@ public class WorkspaceProjectManagementImpl
             {
                 if (string.IsNullOrEmpty(projectName))
                 {
-                    return new SentinelCallToolResult<object>()
-                    {
-                        IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "projectName is required when kind=files.")
-                    };
+                    // projectName omitted: every project's files, one group per project (the kind=all group shape, no dependencies).
+                    var wholeSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+                    var fileGroups = wholeSolution.Projects.Select(p => new ProjectFilesAndDependencies(p.Name, SourceFilesOf(p), null)).ToList();
+                    return new SentinelCallToolResult<object> { IsError = false, SuccessData = fileGroups, TotalRecords = fileGroups.Sum(g => g.Files!.Count) };
                 }
 
                 try
@@ -111,11 +110,15 @@ public class WorkspaceProjectManagementImpl
             {
                 if (string.IsNullOrEmpty(projectName))
                 {
-                    return new SentinelCallToolResult<object>()
+                    // projectName omitted: every project's dependencies, one group per project (the kind=all group shape, no files).
+                    var wholeSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+                    var dependencyGroups = new List<ProjectFilesAndDependencies>();
+                    foreach (var project in wholeSolution.Projects)
                     {
-                        IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "projectName is required when kind=dependencies.")
-                    };
+                        dependencyGroups.Add(new ProjectFilesAndDependencies(project.Name, null, await _solutionStructureEngine.GetProjectDependenciesAsync(project.Name, cancellationToken)));
+                    }
+
+                    return new SentinelCallToolResult<object> { IsError = false, SuccessData = dependencyGroups, TotalRecords = dependencyGroups.Count };
                 }
 
                 var result = await _solutionStructureEngine.GetProjectDependenciesAsync(projectName, cancellationToken);
@@ -163,7 +166,7 @@ public class WorkspaceProjectManagementImpl
                 }
 
                 var combined = new SolutionItemsAllResult(projectInfos, solutionItems, projectDetails);
-                var totalRecords = projectInfos.Count + solutionItems.Count + projectDetails.Sum(p => p.Files.Count);
+                var totalRecords = projectInfos.Count + solutionItems.Count + projectDetails.Sum(p => p.Files?.Count ?? 0);
                 return new SentinelCallToolResult<object> { IsError = false, SuccessData = combined, TotalRecords = totalRecords };
             }
 
@@ -182,6 +185,16 @@ public class WorkspaceProjectManagementImpl
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "List")
             };
         }
+    }
+
+    // A project's documents without the obj/bin build output, each path once.
+    private static List<string> SourceFilesOf(Project project)
+    {
+        var sep = Path.DirectorySeparatorChar;
+        return project.Documents.Select(d => d.FilePath ?? d.Name)
+            .Where(p => !p.Contains($"{sep}obj{sep}", StringComparison.OrdinalIgnoreCase) && !p.Contains($"{sep}bin{sep}", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     public SentinelCallToolResult<List<SolutionFileInfo>, ResultError> ListWorkspaceSolutions(ToolCallReason reason, string workspacePath, CancellationToken cancellationToken = default)

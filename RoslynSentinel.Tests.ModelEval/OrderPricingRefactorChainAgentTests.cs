@@ -1594,7 +1594,7 @@ public class OrderPricingRefactorChainAgentTests
 
         Assert.That(calculatorText, Does.Match(@"internal\s+(?:static\s+)?decimal\s+(?!CalculateDiscountedTotal\b)\w+\s*\("),
             $"The method extracted in step 1 should have its accessibility raised to internal (found no " +
-            $"an 'internal decimal <helper>(' other than CalculateDiscountedTotal in the calculator file). Transcript: {result.TranscriptPath}");
+            $"'internal decimal <helper>(' other than CalculateDiscountedTotal in the calculator file). Transcript: {result.TranscriptPath}");
         Assert.That(calculatorText, Does.Not.Match(@"private\s+(?:static\s+)?decimal\s+(?!CalculateDiscountedTotal\b)\w+\s*\("),
             $"The extracted discount method should no longer be private. Transcript: {result.TranscriptPath}");
 

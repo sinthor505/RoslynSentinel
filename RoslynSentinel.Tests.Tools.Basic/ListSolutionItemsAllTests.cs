@@ -2,7 +2,8 @@
 // section 3. This is the aggregation option the orientation breaker's tripped-state message
 // points agents at as a "browse everything" alternative to guessing SearchSolutionTextTool
 // patterns: it returns projects + solutionItems + every project's files and dependencies in
-// one call, without requiring projectName (unlike kind=files/dependencies, which need it).
+// one call, without requiring projectName. kind=files/dependencies without projectName return every
+// project's files or dependencies, grouped by project (the same ProjectFilesAndDependencies group).
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -55,6 +56,47 @@ public class ListSolutionItemsAllTests
             Assert.That(detail.Files, Is.Unique, $"files for project '{detail.ProjectName}' must be deduped");
             Assert.That(detail.Dependencies, Is.Not.Null);
         }
+    }
+
+    // Eval run 20261109-233953-684 T2: kind=files without projectName was refused with "projectName is required".
+    [Test]
+    public async Task ListSolutionItems_KindFilesWithoutProjectName_ReturnsEveryProjectsFilesGroupedByProjectAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var result = await workspaceTools.ListSolutionItemsTool(reason: "test message", SolutionItemsKind.files);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var groups = (List<ProjectFilesAndDependencies>)result.SuccessData!;
+        Assert.That(groups.Select(g => g.ProjectName), Is.EquivalentTo(new[] { "ContosoOrders.Core", "ContosoOrders.Tests" }));
+        foreach (var group in groups)
+        {
+            Assert.That(group.Files, Is.Not.Null.And.Not.Empty, $"files of '{group.ProjectName}'");
+            Assert.That(group.Dependencies, Is.Null, "kind=files does not ask for dependencies");
+            var single = await workspaceTools.ListSolutionItemsTool(reason: "test message", SolutionItemsKind.files, projectName: group.ProjectName);
+            Assert.That(group.Files, Is.EquivalentTo((List<string>)single.SuccessData!), "the grouped files equal the single-project list");
+        }
+
+        Assert.That(result.TotalRecords, Is.EqualTo(groups.Sum(g => g.Files!.Count)));
+    }
+
+    [Test]
+    public async Task ListSolutionItems_KindDependenciesWithoutProjectName_ReturnsEveryProjectsDependenciesGroupedByProjectAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var result = await workspaceTools.ListSolutionItemsTool(reason: "test message", SolutionItemsKind.dependencies);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var groups = (List<ProjectFilesAndDependencies>)result.SuccessData!;
+        Assert.That(groups.Select(g => g.ProjectName), Is.EquivalentTo(new[] { "ContosoOrders.Core", "ContosoOrders.Tests" }));
+        Assert.That(groups.All(g => g.Dependencies is not null && g.Files is null), Is.True);
     }
 
     [Test]

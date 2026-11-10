@@ -30,7 +30,8 @@ public sealed record RenameSymbolData(
     int FilesChanged,
     RenameSymbolUpdatedHandle? UpdatedHandle,
     ResidualMentionsView? ResidualMentions,
-    string? ResidualMentionsNote);
+    string? ResidualMentionsNote,
+    string? DocCommentIdNote = null);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on

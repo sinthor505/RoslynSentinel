@@ -22,9 +22,9 @@ public class WorkspaceProjectManagementTools
     [Description("Lists projects, files, dependencies, or solution-folder items in the loaded solution.")]
     public Task<SentinelCallToolResult<object>> ListSolutionItemsTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("files/dependencies: requires projectName. projects/solutionItems: ignore projectName, list every project or every solution-folder item respectively - solutionItems are files attached via the .sln's Solution Folders (e.g. plan/handoff docs), never part of any project's compiled Documents, so SearchSolutionText and kind=files won't find them; read their content with ProjectDoc. all: ignores projectName and returns everything in one call (every project, every solution-folder item, and every project's files and dependencies) - use this for a complete, guaranteed-non-empty view instead of guessing which project or kind to ask for.")]
+        [Description("files/dependencies: of projectName, or of every project when omitted. projects/solutionItems: ignore projectName, list every project or every solution-folder item respectively - solutionItems are files attached via the .sln's Solution Folders (e.g. plan/handoff docs), never part of any project's compiled Documents, so SearchSolutionText and kind=files won't find them; read their content with ProjectDoc. all: ignores projectName and returns everything in one call (every project, every solution-folder item, and every project's files and dependencies) - use this for a complete, guaranteed-non-empty view instead of guessing which project or kind to ask for.")]
         [ExternalInputRequired(DataTag.Scope)] SolutionItemsKind kind,
-        [Description("Required for kind=files/dependencies. Not used for projects/solutionItems/all.")]
+        [Description("kind=files/dependencies: limit to this project (omit for all projects). Not used for projects/solutionItems/all.")]
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         CancellationToken cancellationToken = default)
         => _impl.ListSolutionItems(reason, kind, projectName, cancellationToken);
