@@ -24,6 +24,8 @@ public static class NotFoundEvidence
     private static readonly TimeSpan GitTimeout = TimeSpan.FromSeconds(5);
     private static readonly Regex BlobTimestamp = new(@"_(\d{8}T\d{6}Z)(?:_(\d{7}))?_", RegexOptions.CultureInvariant | RegexOptions.RightToLeft);
 
+    private static readonly TimeSpan AddedWindow = TimeSpan.FromSeconds(15);
+
     private enum WriterKind
     {
         Self,
@@ -45,6 +47,21 @@ public static class NotFoundEvidence
         }
 
         return Find(solutionRoot, filePath, term, agentId, context.SessionId, DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// Notes for a zero-hit search, read from <see cref="ToolCallContext.Current"/>. Empty unless the call carries an agent id
+    /// and a solution root.
+    /// </summary>
+    public static IReadOnlyList<Finding> ForZeroHitSearch(string term, bool isRegex)
+    {
+        var context = ToolCallContext.Current;
+        if (context is not { AgentId: { } agentId, SolutionRoot: { } solutionRoot })
+        {
+            return [];
+        }
+
+        return FindAcrossFiles(solutionRoot, term, isRegex, agentId, context.SessionId, DateTime.UtcNow);
     }
 
     /// <summary>
@@ -72,6 +89,32 @@ public static class NotFoundEvidence
         catch (Exception ex)
         {
             Debug.WriteLine($"Not-found evidence search failed: {ex}");
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// The zero-hit evidence search across every file in the window: a note for a foreign write that removed the term from a
+    /// file, or for a foreign write that put it on disk less than 15 seconds ago. Never throws.
+    /// </summary>
+    public static IReadOnlyList<Finding> FindAcrossFiles(string solutionRoot, string term, bool isRegex, string agentId, string? sessionId, DateTime utcNow, int maxNotes = 3)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(term)
+                || (IsName(term) && term.Length < MinNameLength)
+                || (isRegex && term.Length < MinNameLength))
+            {
+                return [];
+            }
+
+            return SearchBlobsAcrossFiles(solutionRoot, term, isRegex, agentId, sessionId, utcNow, maxNotes)
+                .Select(note => new Finding(FindingSource, note, FindingSeverity.Info))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Not-found evidence search across files failed: {ex}");
             return [];
         }
     }
@@ -132,6 +175,110 @@ public static class NotFoundEvidence
         }
 
         return (null, callerWrote);
+    }
+
+    // Scans every recent blob, not only those for one file. Foreign writers only; the newest explaining blob per file wins.
+    private static List<string> SearchBlobsAcrossFiles(string solutionRoot, string term, bool isRegex, string agentId, string? sessionId, DateTime utcNow, int maxNotes)
+    {
+        var notes = new List<string>();
+        var dir = Path.Combine(solutionRoot, ".roslynsentinel", "operations");
+        if (!Directory.Exists(dir))
+        {
+            return notes;
+        }
+
+        // A file that is too large to scan, or cannot be read, holds nothing as far as this search knows.
+        static string? ReadSmallFileOrNull(string path)
+        {
+            try
+            {
+                return File.Exists(path) && new FileInfo(path).Length <= 2 * 1024 * 1024 ? File.ReadAllText(path) : null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+
+        var cutoff = utcNow - DefaultWindow;
+        var recent = Directory.EnumerateFiles(dir, "*.json")
+            .Select(path => (BlobPath: path, Written: TimestampOf(path)))
+            .Where(blob => blob.Written >= cutoff)
+            .OrderByDescending(blob => blob.Written)
+            .ThenByDescending(blob => blob.BlobPath, StringComparer.Ordinal)
+            .Take(MaxBlobsOpened);
+
+        var notedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var blob in recent)
+        {
+            if (notes.Count >= maxNotes)
+            {
+                break;
+            }
+
+            using var document = TryParse(blob.BlobPath);
+            if (document is null
+                || !document.RootElement.TryGetProperty("items", out var items)
+                || items.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var item in items.EnumerateArray())
+            {
+                var itemPath = StringOf(item, "FilePath");
+                if (string.IsNullOrEmpty(itemPath)
+                    || StringOf(item, "Outcome") is "Skipped" or "Failed" or "RolledBack")
+                {
+                    continue;
+                }
+
+                var writerSession = StringOf(item, "AppliedBySessionId");
+                var writerAgent = StringOf(item, "AppliedByAgentId");
+                if (Classify(writerSession, writerAgent, sessionId, agentId) != WriterKind.Foreign)
+                {
+                    continue;
+                }
+
+                var fullPath = Path.GetFullPath(Path.IsPathRooted(itemPath) ? itemPath : Path.Combine(solutionRoot, itemPath));
+                if (notedFiles.Contains(fullPath))
+                {
+                    continue;
+                }
+
+                var age = utcNow - blob.Written!.Value;
+                var agentType = StringOf(item, "AppliedByAgentType");
+                var otherSession = writerSession is not null && sessionId is not null && !string.Equals(writerSession, sessionId, StringComparison.Ordinal);
+                if (TermHeld(StringOf(item, "BeforeSource"), term, isRegex))
+                {
+                    notes.Add(BlobNote(term, itemPath, writerAgent, agentType, otherSession, StringOf(document.RootElement, "toolName"), StringOf(item, "AppliedByReason"), age));
+                    notedFiles.Add(fullPath);
+                }
+                else if (age < AddedWindow && TermHeld(ReadSmallFileOrNull(fullPath), term, isRegex))
+                {
+                    var who = writerAgent is null ? "an unidentified writer" : $"agent `{writerAgent}`";
+                    if (agentType is not null)
+                    {
+                        who += $" (type {agentType})";
+                    }
+
+                    if (otherSession)
+                    {
+                        who += " in another session";
+                    }
+
+                    notes.Add($"`{ShortTerm(term)}` appears in `{Path.GetFileName(fullPath)}` on disk as written by {who} {EditAttributionFindings.FormatAge(age)} ago; the server has not loaded it yet - retry");
+                    notedFiles.Add(fullPath);
+                }
+
+                if (notes.Count >= maxNotes)
+                {
+                    break;
+                }
+            }
+        }
+
+        return notes;
     }
 
     private static WriterKind Classify(string? writerSession, string? writerAgent, string? callerSession, string callerAgent)
@@ -262,6 +409,29 @@ public static class NotFoundEvidence
         return IsName(term)
             ? Regex.IsMatch(text, $@"\b{Regex.Escape(term)}\b", RegexOptions.CultureInvariant)
             : NormalizeLineEndings(text).Contains(NormalizeLineEndings(term), StringComparison.Ordinal);
+    }
+
+    // A regex term is matched as written; an invalid or slow pattern holds nothing rather than failing the search.
+    private static bool TermHeld(string? text, string term, bool isRegex)
+    {
+        if (text is null)
+        {
+            return false;
+        }
+
+        if (!isRegex)
+        {
+            return Holds(text, term);
+        }
+
+        try
+        {
+            return Regex.IsMatch(text, term, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(250));
+        }
+        catch (Exception ex) when (ex is RegexMatchTimeoutException or ArgumentException)
+        {
+            return false;
+        }
     }
 
     private static string NormalizeLineEndings(string text) => text.Replace("\r\n", "\n", StringComparison.Ordinal);

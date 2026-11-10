@@ -107,6 +107,25 @@ public class NotFoundEvidenceTests
         }
     }
 
+    private async Task WriteBlobForFileAsync(string fileName, string agentId, string sessionId, DateTime stamp, string before)
+    {
+        var context = new ToolCallContext(agentId, "implementer", "RenameSymbol", "stamped write", 0) { SessionId = sessionId };
+        context.MarkWritten(stamp);
+        ToolCallContext.Set(context);
+        try
+        {
+            await OperationBlobWriter.WriteAsync(
+                "RenameSymbol",
+                Guid.NewGuid().ToString("N")[..8],
+                [new OperationItemRecord { FilePath = Path.Combine(_root, fileName), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = before }],
+                _root);
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
     private static DateTime StartOfSecondOneMinuteAgo()
     {
         var value = DateTime.UtcNow.AddMinutes(-1);
@@ -365,5 +384,76 @@ public class NotFoundEvidenceTests
 
         ToolCallContext.Set(null);
         Assert.That(NotFoundEvidence.ForCurrentCall("NotFound"), Is.Empty);
+    }
+
+    [Test]
+    public async Task AcrossFiles_ForeignRemoval_InsideWindow_RemovedNote()
+    {
+        await WriteBlobForFileAsync("Bar.cs", "b7", "s1", DateTime.UtcNow.AddMinutes(-5), "class Bar { void Widget() { } }");
+
+        var findings = NotFoundEvidence.FindAcrossFiles(_root, "Widget", false, "main", "s1", DateTime.UtcNow);
+
+        Assert.That(findings, Has.Count.EqualTo(1));
+        Assert.That(findings[0].Message, Does.Contain("Widget"));
+        Assert.That(findings[0].Message, Does.Contain("Bar.cs"));
+        Assert.That(findings[0].Message, Does.Contain("b7"));
+        Assert.That(findings[0].Message, Does.Not.Contain("not loaded yet"));
+    }
+
+    [Test]
+    public async Task AcrossFiles_OwnWrite_NoNote()
+    {
+        await WriteBlobForFileAsync("Bar.cs", "main", "s1", DateTime.UtcNow.AddMinutes(-5), "class Bar { void Widget() { } }");
+
+        Assert.That(NotFoundEvidence.FindAcrossFiles(_root, "Widget", false, "main", "s1", DateTime.UtcNow), Is.Empty);
+    }
+
+    [Test]
+    public async Task AcrossFiles_ForeignAdd_Under15s_ReadsDiskNote()
+    {
+        await WriteBlobForFileAsync("Baz.cs", "b7", "s1", DateTime.UtcNow.AddSeconds(-3), "class Baz { }");
+        File.WriteAllText(Path.Combine(_root, "Baz.cs"), "class Baz { void Widget() { } }");
+
+        var findings = NotFoundEvidence.FindAcrossFiles(_root, "Widget", false, "main", "s1", DateTime.UtcNow);
+
+        Assert.That(findings, Has.Count.EqualTo(1));
+        Assert.That(findings[0].Message, Does.Contain("has not loaded it yet"));
+        Assert.That(findings[0].Message, Does.Contain("Baz.cs"));
+    }
+
+    [Test]
+    public async Task AcrossFiles_ForeignAdd_Older15s_NoAddedNote()
+    {
+        await WriteBlobForFileAsync("Baz.cs", "b7", "s1", DateTime.UtcNow.AddSeconds(-40), "class Baz { }");
+        File.WriteAllText(Path.Combine(_root, "Baz.cs"), "class Baz { void Widget() { } }");
+
+        Assert.That(NotFoundEvidence.FindAcrossFiles(_root, "Widget", false, "main", "s1", DateTime.UtcNow), Is.Empty);
+    }
+
+    [Test]
+    public async Task AcrossFiles_RegexTerm_Matches()
+    {
+        await WriteBlobForFileAsync("Bar.cs", "b7", "s1", DateTime.UtcNow.AddMinutes(-5), "class Bar { void Widget() { } }");
+
+        Assert.That(NotFoundEvidence.FindAcrossFiles(_root, "Wid.et", true, "main", "s1", DateTime.UtcNow), Has.Count.EqualTo(1));
+        Assert.That(NotFoundEvidence.FindAcrossFiles(_root, "(", true, "main", "s1", DateTime.UtcNow), Is.Empty);
+        Assert.That(NotFoundEvidence.FindAcrossFiles(_root, "[Wid", true, "main", "s1", DateTime.UtcNow), Is.Empty);
+    }
+
+    [Test]
+    public async Task AcrossFiles_ShortTerm_AndCorruptBlob_Ignored()
+    {
+        Assert.That(NotFoundEvidence.FindAcrossFiles(_root, "ab", false, "main", "s1", DateTime.UtcNow), Is.Empty);
+
+        // Named inside the window so the search really opens it; the JSON parse failure must be skipped, not thrown.
+        var operations = Path.Combine(_root, ".roslynsentinel", "operations");
+        Directory.CreateDirectory(operations);
+        File.WriteAllText(Path.Combine(operations, $"RenameSymbol_{DateTime.UtcNow:yyyyMMdd'T'HHmmss'Z'}_0000000_x.json"), "{{{");
+        await WriteBlobForFileAsync("Bar.cs", "b7", "s1", DateTime.UtcNow.AddMinutes(-5), "class Bar { void Widget() { } }");
+
+        var findings = NotFoundEvidence.FindAcrossFiles(_root, "Widget", false, "main", "s1", DateTime.UtcNow);
+
+        Assert.That(findings, Has.Count.EqualTo(1));
+        Assert.That(findings[0].Message, Does.Contain("Bar.cs"));
     }
 }
