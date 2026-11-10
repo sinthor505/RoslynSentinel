@@ -1391,8 +1391,8 @@ namespace ContosoOrders.Tests.ModelEvalGenerated
         ## Steps (apply all ten)
 
         1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
-           factor only that expression out into its own new private method on the same class (it
-           should take `amount` and `rate` and return their product), and have both branches call
+           factor only that expression out into its own new `private` method on the same class (step 3
+           later makes it `internal`; it should take `amount` and `rate` and return their product), and have both branches call
            your new method instead of repeating `amount * rate` inline - this includes the
            preferred-customer branch, which still applies its 1.1x scaling on top of the
            extracted call. The `* 1.1m` scaling factor is the only part of that branch that stays
@@ -1412,8 +1412,8 @@ namespace ContosoOrders.Tests.ModelEvalGenerated
            after it's declared, purely to hold the result of your extracted method before
            subtracting it. Remove that local variable and subtract the extracted method's call
            result directly in the `return` statement instead - the preferred-customer branch's
-           `discount` local should be left exactly as it is; only the standard-customer branch's
-           local is being inlined.
+           `discount` local stays as step 1 left it (your extracted call times `1.1m`); only the
+           standard-customer branch's local is being inlined.
 
         5. **Rename a parameter**: rename the `rate` parameter of `CalculateDiscountedTotal` to
            `discountRate`. Update every use of it inside `CalculateDiscountedTotal` (including in
@@ -1432,7 +1432,8 @@ namespace ContosoOrders.Tests.ModelEvalGenerated
            returning `decimal`. Make `OrderPricingCalculator` implement this interface. Then change
            `OrderCheckout`'s `_calculator` field in `OrderCheckout.cs` to be declared as
            `IOrderPricingCalculator` instead of the concrete `OrderPricingCalculator` type (the
-           field can still be *constructed* with `new OrderPricingCalculator()` - only its
+           field can still be *constructed* with `new OrderPricingCalculator()`, the class's name until
+           step 8 renames it - only its
            declared/static type changes to the interface). Use exactly this signature, including the parameter name `discountRate` from step 5.
 
         8. **Rename the class**: rename the `OrderPricingCalculator` class itself to

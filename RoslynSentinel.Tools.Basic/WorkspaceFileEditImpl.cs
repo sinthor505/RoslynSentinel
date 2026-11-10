@@ -50,7 +50,9 @@ public class WorkspaceFileEditImpl
 
     // 10-chain run 301 (host 113, 2026-11-10) sent the same two rejected edits for 12 turns while its reasoning said to use
     // RenameSymbol; the identical message gave no sign that it was repeating itself.
-    private const string RepeatedRejectionNote = "You already sent this exact edit and it was rejected the same way; sending it again cannot succeed. Do what the next step below says instead.";
+    private const string RepeatedRejectionNote = "You already sent this exact edit and it was rejected the same way; sending it again cannot succeed.";
+    private const string RepeatedRejectionFollowNextStep = " Do what the next step below says instead.";
+    private const string RepeatedRejectionChangeApproach = " Change the edit to fix the errors below, or take a different approach.";
 
     private const string RejectedOriginNote = "This oldContent comes from your rejected edit's newContent. That edit was not applied, so the file still has the old text: read it again before editing.";
 
@@ -945,11 +947,10 @@ public class WorkspaceFileEditImpl
                         return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
                     string? untouchedNote = null;
                     string? impactNote = null;
-                    var repeatNote = "";
+                    var isRepeat = false;
                     if (result.IsError && result.ValidationResult != null)
                     {
-                        if (_rejectedEdits.IsRepeat((string)targetPath, newContent))
-                            repeatNote = RepeatedRejectionNote + " ";
+                        isRepeat = _rejectedEdits.IsRepeat((string)targetPath, newContent);
                         _rejectedEdits.Remember((string)targetPath, newContent);
                         // The edit-impact report, when it can attribute the errors to unedited files, replaces the generic
                         // untouched-file sentence (it already covers it); null keeps that sentence.
@@ -957,6 +958,7 @@ public class WorkspaceFileEditImpl
                         untouchedNote = impactNote
                             ?? ValidateAndApplyHelper.DescribeUntouchedFileErrors(snippetChanges.Keys.Select(k => (string)k), result.ValidationResult.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath");
                     }
+                    var repeatNote = isRepeat ? RepeatedRejectionNote + (impactNote is null ? RepeatedRejectionChangeApproach : RepeatedRejectionFollowNextStep) + " " : "";
                     if (result.IsError && result.ValidationResult != null)
                         return new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
@@ -985,8 +987,10 @@ public class WorkspaceFileEditImpl
                 }
                 catch (Exception ex)
                 {
-                    // TODO an expected ToolException (a plain ToolNotFoundException from ResolveEditMatch) is logged here as "unexpected exception" at Error level; log ToolException at Information/Warning instead
-                    _logger.LogError(ex, "ReplaceSnippet {Action} unexpected exception for '{FilePathWrapper}'", action, filePathResolved);
+                    if (ex is ToolException toolEx)
+                        _logger.LogInformation("ReplaceSnippet {Action} refused for '{FilePathWrapper}': {Message}", action, filePathResolved, toolEx.Message);
+                    else
+                        _logger.LogError(ex, "ReplaceSnippet {Action} unexpected exception for '{FilePathWrapper}'", action, filePathResolved);
                     return new SentinelCallToolResult<ReplaceSnippetResult>()
                     {
                         IsError = true,
@@ -1236,11 +1240,10 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
             string? untouchedNote = null;
             string? impactNote = null;
-            var repeatNote = "";
+            var isRepeat = false;
             if (result.IsError && result.ValidationResult != null)
             {
-                if (newContentsByFile.All(kv => kv.Value.All(c => _rejectedEdits.IsRepeat(kv.Key, c))))
-                    repeatNote = RepeatedRejectionNote + " ";
+                isRepeat = newContentsByFile.All(kv => kv.Value.All(c => _rejectedEdits.IsRepeat(kv.Key, c)));
                 foreach (var (rejectedPath, rejectedNewContents) in newContentsByFile)
                     foreach (var rejectedNewContent in rejectedNewContents)
                         _rejectedEdits.Remember(rejectedPath, rejectedNewContent);
@@ -1250,6 +1253,7 @@ public class WorkspaceFileEditImpl
                 untouchedNote = impactNote
                     ?? ValidateAndApplyHelper.DescribeUntouchedFileErrors(finalContents.Keys.Select(k => (string)k), result.ValidationResult.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath");
             }
+            var repeatNote = isRepeat ? RepeatedRejectionNote + (impactNote is null ? RepeatedRejectionChangeApproach : RepeatedRejectionFollowNextStep) + " " : "";
             if (result.IsError && result.ValidationResult != null)
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
@@ -1282,7 +1286,10 @@ public class WorkspaceFileEditImpl
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ReplaceSnippet batch ({Action}) unexpected exception for {Count} file(s)", action, finalContents.Count);
+            if (ex is ToolException toolEx)
+                _logger.LogInformation("ReplaceSnippet batch ({Action}) refused for {Count} file(s): {Message}", action, finalContents.Count, toolEx.Message);
+            else
+                _logger.LogError(ex, "ReplaceSnippet batch ({Action}) unexpected exception for {Count} file(s)", action, finalContents.Count);
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
                 IsError = true,

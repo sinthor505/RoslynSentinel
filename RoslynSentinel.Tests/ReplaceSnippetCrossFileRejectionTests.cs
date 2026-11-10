@@ -93,6 +93,32 @@ public class ReplaceSnippetCrossFileRejectionTests
         });
     }
 
+    // A rejection whose errors all sit inside the edited file gets no edit-impact Next step, so the repeat note must not point at one.
+    [Test]
+    public async Task ReplaceSnippet_SameRejectedEditTwiceWithoutNextStep_RepeatNoteSaysChangeApproach()
+    {
+        using var workspace = CreateWorkspace();
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+
+        Task<SentinelCallToolResult<ReplaceSnippetResult>> Send() => tools.ReplaceSnippetTool(
+            reason: "change the discount body to use an undeclared name",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(PricingRelativePath),
+            oldContent: "=> a;",
+            newContent: "=> undeclaredValue;");
+
+        var first = await Send();
+        var second = await Send();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first.IsError && second.IsError, Is.True);
+            Assert.That(second.ErrorData?.Message, Does.Contain("You already sent this exact edit"));
+            Assert.That(second.ErrorData?.Message, Does.Contain("Change the edit to fix the errors below"));
+            Assert.That(second.ErrorData?.Message, Does.Not.Contain("Do what the next step below says"));
+        });
+    }
+
     [Test]
     public async Task ReplaceSnippet_CallerFirstEdit_RejectionIsNotBlamedOnAnUntouchedFile()
     {
