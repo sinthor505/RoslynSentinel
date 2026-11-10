@@ -294,7 +294,7 @@ public sealed class LmStudioAgentClient
         return new AgentChatMessage
         {
             Role = "assistant",
-            Content = string.IsNullOrEmpty(messageText) ? null : reasoningText,
+            Content = string.IsNullOrEmpty(messageText) ? null : messageText,
             ReasoningContent = string.IsNullOrEmpty(reasoningText) ? null : reasoningText,
             ToolCalls = toolCalls,
             TotalTokens = completedResponse.Usage?.TotalTokens,
@@ -451,20 +451,43 @@ public sealed class LmStudioAgentClient
             ];
         }
 
-        if (message.Role == "assistant" && message.ToolCalls.Count > 0)
+        if (message.Role == "assistant")
         {
-            return message.ToolCalls
-                .Select(tc => (object)new FunctionCallItem
+            // Replay the turn's reasoning and message text, not only its tool calls. The requests are
+            // stateless (full history every turn), so a dropped reasoning item is gone for good: the
+            // model then sees only "I called X, got Y", never the plan behind it, and loses track of
+            // multi-step work. Probe on LM Studio 2026-11-10: with a reasoning input item the model
+            // recalled a codeword from it; without, it invented one.
+            var items = new List<object>();
+            if (!string.IsNullOrEmpty(message.ReasoningContent))
+            {
+                items.Add(new ReasoningItem
                 {
-                    CallId = tc.Id,
-                    Name = tc.Name,
-                    Arguments = tc.ArgumentsJson,
-                })
-                .ToList();
+                    Id = "rs_" + Guid.NewGuid().ToString("N"),
+                    Content = [new ReasoningTextPart { Text = message.ReasoningContent }],
+                });
+            }
+
+            if (!string.IsNullOrEmpty(message.Content) || message.ToolCalls.Count == 0)
+            {
+                items.Add(new InputMessageItem { Role = message.Role, Content = message.Content ?? "" });
+            }
+
+            items.AddRange(message.ToolCalls.Select(tc => (object)new FunctionCallItem
+            {
+                CallId = tc.Id,
+                Name = tc.Name,
+                Arguments = tc.ArgumentsJson,
+            }));
+            return items;
         }
 
         return [new InputMessageItem { Role = message.Role, Content = message.Content ?? "" }];
     }
+
+    /// <summary>The Responses input items for <paramref name="messages"/>, serialized as sent. For tests.</summary>
+    internal static string SerializeInputItems(IEnumerable<AgentChatMessage> messages) =>
+        JsonSerializer.Serialize(messages.SelectMany(ToInputItems).ToList(), JsonOptions);
 
     private static ResponsesTool ToWireTool(AgentToolDefinition tool) => new()
     {
@@ -527,6 +550,20 @@ public sealed class LmStudioAgentClient
         public string CallId { get; set; } = "";
         public string Name { get; set; } = "";
         public string Arguments { get; set; } = "";
+    }
+
+    private sealed class ReasoningItem
+    {
+        public string Type { get; set; } = "reasoning";
+        public string Id { get; set; } = "";
+        public List<ReasoningTextPart> Summary { get; set; } = [];
+        public List<ReasoningTextPart> Content { get; set; } = [];
+    }
+
+    private sealed class ReasoningTextPart
+    {
+        public string Type { get; set; } = "reasoning_text";
+        public string Text { get; set; } = "";
     }
 
     private sealed class FunctionCallOutputItem
