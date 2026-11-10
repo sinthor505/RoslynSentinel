@@ -2941,13 +2941,14 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         var foldInline = new List<FilePathWrapper>();
         foreach (var target in targets.Distinct())
         {
-            var documentId = CurrentSolution.GetDocumentIdsWithFilePath(target).FirstOrDefault();
-            if (documentId is null || !preImages.TryGetValue(target, out var diskText) || diskText is null)
+            var solution = CurrentSolution;
+            var documentId = solution?.GetDocumentIdsWithFilePath(target).FirstOrDefault();
+            if (solution is null || documentId is null || !preImages.TryGetValue(target, out var diskText) || diskText is null)
             {
                 continue;
             }
 
-            var memoryText = (await CurrentSolution.GetDocument(documentId)!.GetTextAsync(cancellationToken)).ToString();
+            var memoryText = (await solution.GetDocument(documentId)!.GetTextAsync(cancellationToken)).ToString();
             var fileName = Path.GetFileName((string)target);
             switch (FoldComparison.Compare(diskText, memoryText))
             {
@@ -2990,13 +2991,14 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         foreach (var target in refuse)
         {
             refused[target] = "changing on disk; retry in a moment";
-            var documentId = CurrentSolution.GetDocumentIdsWithFilePath(target).FirstOrDefault();
-            if (documentId is null || !preImages.TryGetValue(target, out var diskText) || diskText is null)
+            var solution = CurrentSolution;
+            var documentId = solution?.GetDocumentIdsWithFilePath(target).FirstOrDefault();
+            if (solution is null || documentId is null || !preImages.TryGetValue(target, out var diskText) || diskText is null)
             {
                 continue;
             }
 
-            var memoryText = (await CurrentSolution.GetDocument(documentId)!.GetTextAsync(cancellationToken)).ToString();
+            var memoryText = (await solution.GetDocument(documentId)!.GetTextAsync(cancellationToken)).ToString();
             if (FoldComparison.Compare(diskText, memoryText) == FoldComparisonOutcome.Mismatch)
             {
                 _foldRefusedFiles[(string)target] = 0;
