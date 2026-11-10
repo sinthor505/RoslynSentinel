@@ -743,6 +743,22 @@ public class AdvancedRefactoringTools
         }
     }
 
+    // The engine message is "Introduced parameter object 'X'." followed by an optional "Updated N implementation(s) in M file(s)."
+    // and an optional "WARNING: ..." sentence; the summary keeps the tail (counts and warnings) after its own first sentence.
+    private static string IntroduceParameterObjectDescription(string methodName, string filePath, string? engineMessage)
+    {
+        var description = $"Introduced parameter object for '{methodName}' in {Path.GetFileName(filePath)}.";
+        var tailStart = engineMessage is null ? -1 : engineMessage.IndexOf("'.", StringComparison.Ordinal);
+        var tail = tailStart < 0 ? string.Empty : engineMessage![(tailStart + 2)..].Trim();
+        if (tail.Length == 0)
+        {
+            return description;
+        }
+
+        // Implementers were rewritten: their call sites are still the caller's job.
+        return tail.Contains("Updated ", StringComparison.Ordinal) ? $"{description} {tail} Call sites need manual follow-up." : $"{description} {tail}";
+    }
+
     [McpServerTool(Name = "IntroduceParameterObject")]
     [Produces(DataTag.ChangeId)]
     [Description("Encapsulates method parameters into a new C# 12 record type; call sites need manual follow-up (flagged with TODO).")]
@@ -765,10 +781,14 @@ public class AdvancedRefactoringTools
             // UpdatedText, so showing just the new record here would mean duplicating its formatting
             // logic. Revisit only if that engine method starts returning the record's text alongside
             // UpdatedText.
-            var changes = new Dictionary<FilePathWrapper, string>
-            {
-                [resolvedFilePath] = result.UpdatedText
-            };
+            // An interface-targeted method also edits every implementer (other files, plus the using they need): the engine
+            // then returns every changed file in Changes (the target included); otherwise only the target file changed.
+            var changes = result.Changes.Count > 0
+                ? new Dictionary<FilePathWrapper, string>(result.Changes)
+                : new Dictionary<FilePathWrapper, string>
+                {
+                    [resolvedFilePath] = result.UpdatedText
+                };
             var apply = await ValidateAndApplyAsync(changes, $"Introduce parameter object for '{methodName}'.", "IntroduceParameterObject", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object>
@@ -779,7 +799,7 @@ public class AdvancedRefactoringTools
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
-                SuccessData = AppliedChangeSummary.From(apply, [resolvedFilePath], $"Introduced parameter object for '{methodName}' in {Path.GetFileName(resolvedFilePath)}." + (result.Message?.Contains("WARNING") == true ? " " + result.Message : string.Empty), validated: false)
+                SuccessData = AppliedChangeSummary.From(apply, changes.Keys.ToList(), IntroduceParameterObjectDescription(methodName, resolvedFilePath, result.Message), validated: false)
             };
         }
         catch (Exception ex)

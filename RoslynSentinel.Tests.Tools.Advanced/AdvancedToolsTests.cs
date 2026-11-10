@@ -343,6 +343,7 @@ public class C {
         Assert.That(result.UpdatedText, Does.Contain("record ProcessParameters"));
         Assert.That(result.UpdatedText, Does.Contain("ProcessParameters request"));
         Assert.That(result.UpdatedText, Does.Contain("request.Input") | Does.Contain("request.Count"));
-        Assert.That(result.UpdatedText, Does.Contain("TODO: Update call sites"));
+        Assert.That(result.UpdatedText, Does.Contain("// TODO: Update call sites to use ProcessParameters"));
+        Assert.That(result.Message, Is.EqualTo("Introduced parameter object 'ProcessParameters'."));
     }
 }

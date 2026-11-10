@@ -3316,7 +3316,42 @@ public class StringExtensions
             // ── Bug 57: IntroduceParameterObjectTool -> Interface + All Implementations ────
             [Test]
             [Category("StructuralRefactoringEngine")] // sentinel:auto-category
-            public async Task BUG_57_IntroduceParameterObject_UpdatesInterfaceOnlyAndWarns()
+            public async Task BUG_57_IntroduceParameterObject_InterfaceTarget_UpdatesInterfaceAndEveryImplementer()
+            {
+                SetMultipleFiles(
+                    ("IProcessor.cs", @"
+public interface IProcessor
+{
+    void Process(string name, int age, bool active);
+}"),
+                    ("Processor1.cs", @"
+public class Processor1 : IProcessor
+{
+    public void Process(string name, int age, bool active) { }
+}"),
+                    ("Processor2.cs", @"
+public class Processor2 : IProcessor
+{
+    public void Process(string name, int age, bool active) { }
+}"));
+                var result = await _advancedStructuralEngine.IntroduceParameterObjectAsync("IProcessor.cs", "Process");
+                Assert.That(result, Is.Not.Null, "Should return a result");
+                // Every declaration takes the record and nothing is left for the caller to warn about
+                Assert.That(result.Message, Does.Not.Contain("WARNING"), "All implementations were updated, so there is nothing to warn about");
+                Assert.That(result.UpdatedText, Does.Contain("public record ProcessParameters"), "Should add the generated record");
+                Assert.That(result.UpdatedText, Does.Contain("void Process(ProcessParameters request);"), "Should rewrite the interface signature to take the record");
+                Assert.That(result.Changes, Has.Count.EqualTo(3), "Interface file plus both implementer files");
+                foreach (var implementerFile in new[] { "Processor1.cs", "Processor2.cs" })
+                {
+                    var text = result.Changes.Single(kv => kv.Key.Absolute.EndsWith(implementerFile, StringComparison.Ordinal)).Value;
+                    Assert.That(text, Does.Contain("public void Process(ProcessParameters request)"), $"{implementerFile} should take the record");
+                    Assert.That(text, Does.Not.Contain("string name, int age, bool active"), $"{implementerFile} should lose the old parameters");
+                }
+            }
+
+            [Test]
+            [Category("StructuralRefactoringEngine")] // sentinel:auto-category
+            public async Task BUG_57_IntroduceParameterObject_InterfaceAndImplementersInOneFile_BareNameEditsFirstImplementerAndWarns()
             {
                 const string code = @"
 public interface IProcessor
@@ -3336,12 +3371,13 @@ public class Processor2 : IProcessor
                 SetMultipleFiles(("IProcessor.cs", code));
                 var result = await _advancedStructuralEngine.IntroduceParameterObjectAsync("IProcessor.cs", "Process");
                 Assert.That(result, Is.Not.Null, "Should return a result");
-                // Only the interface is updated; implementations are left as they were and a WARNING is returned
-                Assert.That(result!.Message, Does.Contain("WARNING:"), "Should warn that implementations were not updated");
-                // Interface signature is rewritten to take the generated record; implementations are unchanged
+                // A bare name resolves to the first implementation (class-first); the interface and the second class are untouched, hence the warning.
+                // TODO a class-targeted method does not cascade to the interface or its other implementers (only an interface-targeted call does)
+                Assert.That(result.Message, Does.Contain("WARNING:"), "Should warn that the interface was not updated");
                 Assert.That(result.UpdatedText, Does.Contain("public record ProcessParameters"), "Should add the generated record");
-                Assert.That(result.UpdatedText, Does.Contain("ProcessParameters request"), "Should rewrite the interface signature to take the record");
-                Assert.That(result.UpdatedText, Does.Contain("public void Process(string name, int age, bool active) { }"), "Implementations should be left unchanged");
+                Assert.That(result.UpdatedText, Does.Contain("ProcessParameters request"), "Should rewrite the implementation to take the record");
+                Assert.That(result.UpdatedText, Does.Contain("void Process(string name, int age, bool active);"), "The interface signature is left unchanged");
+                Assert.That(result.UpdatedText, Does.Contain("public void Process(string name, int age, bool active) { }"), "The second implementation is left unchanged");
             }
 
 

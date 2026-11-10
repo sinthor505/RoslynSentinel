@@ -1126,6 +1126,92 @@ public class StructuralRefactoringEngine
         return root;
     }
 
+    // True when the record's namespace is not visible from the implementer without a using directive: different
+    // namespaces, and the implementer is not nested inside the record's namespace.
+    private static bool NamespaceNeedsUsing(INamespaceSymbol implementerNamespace, INamespaceSymbol recordNamespace)
+    {
+        var implementerName = implementerNamespace.ToDisplayString();
+        var recordName = recordNamespace.ToDisplayString();
+        return implementerName != recordName && !implementerName.StartsWith(recordName + ".", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Rewrites one method declaration (the target or an implementer of it) to take the parameter object: the parameter list
+    /// becomes <c>(RecordName request, kept parameters...)</c>, references to the grouped parameters become <c>request.Property</c>,
+    /// and a "TODO: Update call sites" comment is added. Parameters are addressed by position, so an implementer that renamed them
+    /// maps onto the same record properties.
+    /// </summary>
+    private static MethodDeclarationSyntax RewriteMethodForParameterObject(MethodDeclarationSyntax method, IReadOnlyList<int> groupedIndices, IReadOnlyList<int> keptIndices, IReadOnlyList<string> propertyNames, string recordName)
+    {
+        var parameters = method.ParameterList.Parameters;
+        var requestParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier("request")).WithType(SyntaxFactory.ParseTypeName(recordName + " "));
+        var newParams = new List<ParameterSyntax>
+        {
+            requestParam
+        };
+        newParams.AddRange(keptIndices.Select(i => parameters[i]));
+        var newParamList = method.ParameterList.WithParameters(SyntaxFactory.SeparatedList(newParams));
+        // Param->property rewrite map: this declaration's own parameter name -> request.<record property>
+        var rewriteMap = new Dictionary<string, string>();
+        for (var k = 0; k < groupedIndices.Count; k++)
+        {
+            rewriteMap[parameters[groupedIndices[k]].Identifier.Text] = $"request.{propertyNames[k]}";
+        }
+
+        var rewriter = new ParamToPropertyRewriter(rewriteMap);
+        var newMethodNode = method.WithParameterList(newParamList);
+        var todoLine = SyntaxFactory.Comment($"// TODO: Update call sites to use {recordName}");
+        var todoEol = method.DescendantTrivia().FirstOrDefault(t => t.IsKind(SyntaxKind.EndOfLineTrivia));
+        var todoNewLine = todoEol.IsKind(SyntaxKind.EndOfLineTrivia) ? todoEol : SyntaxFactory.EndOfLine(Environment.NewLine);
+        if (method.Body != null)
+        {
+            var block = (BlockSyntax)rewriter.Visit(method.Body)!;
+            // The TODO rides as leading trivia of the first statement (or of the closing brace when the body is
+            // empty): replacing a statement or token would discard the comment trivia.
+            if (block.Statements.Count > 0)
+            {
+                var firstStmt = block.Statements[0];
+                var stmtLead = firstStmt.GetLeadingTrivia();
+                var todoLead = new List<SyntaxTrivia>();
+                if (stmtLead.Count > 0 && stmtLead.Last().IsKind(SyntaxKind.WhitespaceTrivia))
+                {
+                    todoLead.Add(stmtLead.Last());
+                }
+                todoLead.Add(todoLine);
+                todoLead.Add(todoNewLine);
+                var newFirst = firstStmt.WithLeadingTrivia(SyntaxFactory.TriviaList(todoLead).AddRange(stmtLead));
+                block = block.WithStatements(block.Statements.Replace(firstStmt, newFirst));
+            }
+            else
+            {
+                var closeLead = block.CloseBraceToken.LeadingTrivia;
+                var closeIndent = closeLead.Count > 0 && closeLead.Last().IsKind(SyntaxKind.WhitespaceTrivia) ? closeLead.Last().ToString() : string.Empty;
+                var closeTodoLead = SyntaxFactory.TriviaList(SyntaxFactory.Whitespace(closeIndent + "    "), todoLine, todoNewLine);
+                block = block.WithCloseBraceToken(block.CloseBraceToken.WithLeadingTrivia(closeTodoLead.AddRange(closeLead)));
+            }
+            newMethodNode = newMethodNode.WithBody(block);
+        }
+        else if (method.ExpressionBody != null)
+        {
+            // An expression body has no statement to carry the comment, so the TODO is its own line directly above the
+            // declaration (leading trivia of its first token), inserted just before the declaration line's indentation:
+            // doc comments and attributes stay above it, and the method's own text keeps its place.
+            newMethodNode = newMethodNode.WithExpressionBody((ArrowExpressionClauseSyntax)rewriter.Visit(method.ExpressionBody)!);
+            var lead = newMethodNode.GetLeadingTrivia();
+            if (lead.Count > 0 && lead.Last().IsKind(SyntaxKind.WhitespaceTrivia))
+            {
+                var indent = lead.Last();
+                newMethodNode = newMethodNode.WithLeadingTrivia(lead.RemoveAt(lead.Count - 1).AddRange(new[] { indent, todoLine, todoNewLine, indent }));
+            }
+            else
+            {
+                newMethodNode = newMethodNode.WithLeadingTrivia(lead.AddRange(new[] { todoLine, todoNewLine }));
+            }
+        }
+
+        return newMethodNode;
+    }
+
     public async Task<DocumentEditResult> IntroduceParameterObjectAsync(FilePathWrapper filePath, string methodName, string? newTypeName = null, string[]? parameterNames = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -1177,8 +1263,16 @@ public class StructuralRefactoringEngine
                 representatives.Add(candidate);
             }
         }
-        // One family: keep the class-first ordering so later code retargets to the interface as before.
+        // One family: keep the class-first ordering, so a bare name resolves to the implementation.
         MethodDeclarationSyntax? methodNode = representatives.Count == 1 ? methodMatches[0] : null;
+        if (representatives.Count == 1 && methodMatches.Count > 1 && !string.IsNullOrWhiteSpace(contextSnippet)
+            && RoslynSentinel.Common.SnippetMatching.SnippetLookup.TryResolve(sourceText, contextSnippet, lineBefore, lineAfter, out var familySnippetMatch, out _))
+        {
+            // The family spans an interface and its implementations in this file: a snippet inside one declaration
+            // picks that one (inside the interface method it selects the interface-target path, which updates every
+            // implementer). A snippet that resolves nowhere in the family keeps the class-first default, as before.
+            methodNode = methodMatches.FirstOrDefault(m => m.FullSpan.Contains(familySnippetMatch.Start)) ?? methodNode;
+        }
         if (representatives.Count > 1)
         {
             if (string.IsNullOrWhiteSpace(contextSnippet) && string.IsNullOrWhiteSpace(lineBefore) && string.IsNullOrWhiteSpace(lineAfter))
@@ -1237,124 +1331,156 @@ public class StructuralRefactoringEngine
         static string Capitalize(string s) => s.Length == 0 ? s : char.ToUpper(s[0]) + s.Substring(1);
         var recordParams = groupedParams.Select(p => SyntaxFactory.Parameter(SyntaxFactory.Identifier(Capitalize(p.Identifier.Text))).WithType(p.Type!));
         var recordDecl = SyntaxFactory.RecordDeclaration(SyntaxFactory.Token(SyntaxKind.RecordKeyword), SyntaxFactory.Identifier(recordName)).WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword))).WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(recordParams))).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
-        // Build new parameter list: (RecordName request, [CT params])
-        var requestParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier("request")).WithType(SyntaxFactory.ParseTypeName(recordName + " "));
-        var remainingParams = candidateParams.Where(p => !groupedParams.Contains(p)).ToList();
-        var newParams = new List<ParameterSyntax>
-        {
-            requestParam
-        };
-        newParams.AddRange(remainingParams);
-        newParams.AddRange(ctParams);
-        var newParamList = methodNode.ParameterList.WithParameters(SyntaxFactory.SeparatedList(newParams));
-        // Build param->property rewrite map: paramName -> request.ParamName
-        var rewriteMap = groupedParams.ToDictionary(p => p.Identifier.Text, p => $"request.{Capitalize(p.Identifier.Text)}");
-        // Rewrite references in method body
-        SyntaxNode? newBody = null;
-        if (methodNode.Body != null)
-        {
-            var rewriter = new ParamToPropertyRewriter(rewriteMap);
-            newBody = rewriter.Visit(methodNode.Body);
-        }
-
-        var newMethodNode = methodNode.WithParameterList(newParamList);
-        if (newBody is BlockSyntax block)
-        {
-            // The TODO rides as leading trivia of the first statement (or of the closing brace when the body is
-            // empty): replacing a statement or token would discard the comment trivia.
-            var todoLine = SyntaxFactory.Comment($"// TODO: Update call sites to use {recordName}");
-            var todoEol = methodNode.DescendantTrivia().FirstOrDefault(t => t.IsKind(SyntaxKind.EndOfLineTrivia));
-            var todoNewLine = todoEol.IsKind(SyntaxKind.EndOfLineTrivia) ? todoEol : SyntaxFactory.EndOfLine(Environment.NewLine);
-            if (block.Statements.Count > 0)
-            {
-                var firstStmt = block.Statements[0];
-                var stmtLead = firstStmt.GetLeadingTrivia();
-                var todoLead = new List<SyntaxTrivia>();
-                if (stmtLead.Count > 0 && stmtLead.Last().IsKind(SyntaxKind.WhitespaceTrivia))
-                {
-                    todoLead.Add(stmtLead.Last());
-                }
-                todoLead.Add(todoLine);
-                todoLead.Add(todoNewLine);
-                var newFirst = firstStmt.WithLeadingTrivia(SyntaxFactory.TriviaList(todoLead).AddRange(stmtLead));
-                block = block.WithStatements(block.Statements.Replace(firstStmt, newFirst));
-            }
-            else
-            {
-                var closeLead = block.CloseBraceToken.LeadingTrivia;
-                var closeIndent = closeLead.Count > 0 && closeLead.Last().IsKind(SyntaxKind.WhitespaceTrivia) ? closeLead.Last().ToString() : string.Empty;
-                var closeTodoLead = SyntaxFactory.TriviaList(SyntaxFactory.Whitespace(closeIndent + "    "), todoLine, todoNewLine);
-                block = block.WithCloseBraceToken(block.CloseBraceToken.WithLeadingTrivia(closeTodoLead.AddRange(closeLead)));
-            }
-            newMethodNode = newMethodNode.WithBody(block);
-        }
-
-        // If method is on an interface, also update interface definition
-        var classNode = methodNode.Parent as ClassDeclarationSyntax;
-        var interfaceNode = methodNode.Parent as InterfaceDeclarationSyntax;
-        // Shared annotation for every node introduced/replaced below (the rewritten method and,
+        // The parameters are addressed by POSITION so an implementer (which may rename them) is rewritten the same way:
+        // new list = (RecordName request, the non-grouped parameters in order, then the CancellationToken parameters).
+        var groupedIndices = groupedParams.Select(p => allParams.IndexOf(p)).ToList();
+        var keptIndices = candidateParams.Where(p => !groupedParams.Contains(p)).Concat(ctParams).Select(p => allParams.IndexOf(p)).ToList();
+        var propertyNames = groupedParams.Select(p => Capitalize(p.Identifier.Text)).ToList();
+        // Shared annotation for every node introduced/replaced below (the rewritten methods and,
         // further down, the newly-appended record declaration) -> lets the final
         // RoslynFormattingHelper.FormatAnnotatedSpansAsync pass reformat just these edited spans instead of
         // reflowing the whole file, in the document's own line ending.
         var editAnnotation = Formatter.Annotation;
-        var annotatedNewMethodNode = newMethodNode.WithAdditionalAnnotations(editAnnotation);
+        var targetMarker = new SyntaxAnnotation("IntroduceParameterObject.Target");
+        var annotatedNewMethodNode = RewriteMethodForParameterObject(methodNode, groupedIndices, keptIndices, propertyNames, recordName).WithAdditionalAnnotations(editAnnotation, targetMarker);
         string? warning = null;
-        SyntaxNode newRoot = root;
-        if (interfaceNode != null && methodSymbol?.ExplicitInterfaceImplementations.Length == 0)
+
+        // Interface-targeted: every implementer takes the record too (call sites stay manual).
+        var interfaceTarget = methodNode.Parent is InterfaceDeclarationSyntax && methodSymbol?.ExplicitInterfaceImplementations.Length == 0;
+        var implementers = new List<(MethodDeclarationSyntax Declaration, Document Document, INamespaceSymbol Namespace)>();
+        var withoutSource = new List<string>();
+        if (interfaceTarget)
         {
-            // Update interface method
-            var newInterface = interfaceNode.ReplaceNode(methodNode, annotatedNewMethodNode);
-            newRoot = root.ReplaceNode(interfaceNode, newInterface);
-            warning = "WARNING: The interface method was updated, but its implementations were not. Update the implementations manually.";
-        }
-        else if (classNode != null && methodSymbol?.ExplicitInterfaceImplementations.Length == 0)
-        {
-            // Check if method implements an interface
-            if (methodSymbol?.ContainingType?.Interfaces.Length > 0)
+            foreach (var implementation in (await SymbolFinder.FindImplementationsAsync(methodSymbol!, solution, null, cancellationToken)).OfType<IMethodSymbol>())
             {
-                // Method implements interface -> warn, but still update the implementation and fall through to
-                // the record append below (returning early left the rewritten method referencing an undeclared record).
-                warning = "WARNING: This method implements an interface. Update the interface signature in the corresponding interface file.";
+                var resolved = false;
+                foreach (var reference in implementation.DeclaringSyntaxReferences)
+                {
+                    if (solution.GetDocument(reference.SyntaxTree) is { } implementerDocument
+                        && await reference.GetSyntaxAsync(cancellationToken) is MethodDeclarationSyntax implementerDeclaration
+                        && implementerDeclaration.ParameterList.Parameters.Count == allParams.Count)
+                    {
+                        implementers.Add((implementerDeclaration, implementerDocument, implementation.ContainingType.ContainingNamespace));
+                        resolved = true;
+                    }
+                }
+
+                if (!resolved)
+                {
+                    withoutSource.Add(implementation.ContainingType.ToDisplayString());
+                }
             }
-            newRoot = root.ReplaceNode(methodNode, annotatedNewMethodNode);
+
+            if (withoutSource.Count > 0)
+            {
+                warning = $"WARNING: Implementations without editable source in the solution were not updated: {string.Join(", ", withoutSource.Distinct())}. Update them manually.";
+            }
+            else if (implementers.Count == 0)
+            {
+                warning = "WARNING: The interface method was updated, but no implementations of it were found in the solution. Update any implementations outside the solution manually.";
+            }
         }
-        else
+        else if (methodNode.Parent is ClassDeclarationSyntax && methodSymbol?.ExplicitInterfaceImplementations.Length == 0 && methodSymbol?.ContainingType?.Interfaces.Length > 0)
         {
-            newRoot = root.ReplaceNode(methodNode, annotatedNewMethodNode);
+            // Method implements interface -> warn, but still update the implementation and fall through to
+            // the record append below (returning early left the rewritten method referencing an undeclared record).
+            // TODO a class-targeted method that implements an interface does not update the interface or its other implementers; only the interface-targeted path does
+            warning = "WARNING: This method implements an interface. Update the interface signature in the corresponding interface file.";
         }
 
-        // Append record declaration to end of file
-        var compilationUnit = newRoot as CompilationUnitSyntax;
-        if (compilationUnit != null)
+        // Group the implementer declarations by document; each document is edited in one pass over its root.
+        var implementersByDocument = implementers
+            .GroupBy(i => i.Document.Id)
+            .ToDictionary(g => g.Key, g => g.ToList());
+        var recordNamespace = methodSymbol?.ContainingType?.ContainingNamespace;
+
+        async Task<string> EditDocumentAsync(Document editedDocument, SyntaxNode editedRoot, SyntaxNode? targetReplacement, bool appendRecord)
         {
-            var annotatedRecordDecl = recordDecl.WithAdditionalAnnotations(editAnnotation);
-            // Find the namespace or use file-scoped namespace
-            var nsNode = compilationUnit.Members.OfType<NamespaceDeclarationSyntax>().LastOrDefault();
-            var fileScopeNs = compilationUnit.Members.OfType<FileScopedNamespaceDeclarationSyntax>().LastOrDefault();
-            if (nsNode != null)
+            var replacements = new Dictionary<SyntaxNode, SyntaxNode>();
+            if (targetReplacement != null)
             {
-                var newNs = nsNode.AddMembers(annotatedRecordDecl);
-                newRoot = compilationUnit.ReplaceNode(nsNode, newNs);
+                replacements[methodNode] = targetReplacement;
             }
-            else if (fileScopeNs != null)
+
+            var needsUsing = false;
+            if (implementersByDocument.TryGetValue(editedDocument.Id, out var inDocument))
             {
-                var newNs = fileScopeNs.AddMembers(annotatedRecordDecl);
-                newRoot = compilationUnit.ReplaceNode(fileScopeNs, newNs);
+                foreach (var implementer in inDocument)
+                {
+                    if (editedRoot.FindNode(implementer.Declaration.Span) is MethodDeclarationSyntax located && !replacements.ContainsKey(located))
+                    {
+                        replacements[located] = RewriteMethodForParameterObject(located, groupedIndices, keptIndices, propertyNames, recordName).WithAdditionalAnnotations(editAnnotation);
+                    }
+
+                    needsUsing |= recordNamespace is { IsGlobalNamespace: false } && NamespaceNeedsUsing(implementer.Namespace, recordNamespace);
+                }
             }
-            else
+
+            var editedNewRoot = editedRoot.ReplaceNodes(replacements.Keys, (original, _) => replacements[original]);
+            if (appendRecord && editedNewRoot is CompilationUnitSyntax compilationUnit)
             {
-                // Top-level: add after the last type declaration
-                newRoot = compilationUnit.AddMembers(annotatedRecordDecl);
+                var annotatedRecordDecl = recordDecl.WithAdditionalAnnotations(editAnnotation);
+                // The record goes into the namespace that holds the target method (the file's only one in the usual case);
+                // a target outside any namespace gets a top-level record.
+                var targetNamespace = compilationUnit.GetAnnotatedNodes(targetMarker).FirstOrDefault()?.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
+                editedNewRoot = targetNamespace switch
+                {
+                    NamespaceDeclarationSyntax blockNamespace => compilationUnit.ReplaceNode(blockNamespace, blockNamespace.AddMembers(annotatedRecordDecl)),
+                    FileScopedNamespaceDeclarationSyntax fileScopedNamespace => compilationUnit.ReplaceNode(fileScopedNamespace, fileScopedNamespace.AddMembers(annotatedRecordDecl)),
+                    _ => compilationUnit.AddMembers(annotatedRecordDecl)
+                };
             }
+
+            if (needsUsing && editedNewRoot is CompilationUnitSyntax unitForUsing)
+            {
+                var usingName = recordNamespace!.ToDisplayString();
+                if (!unitForUsing.DescendantNodes().OfType<UsingDirectiveSyntax>().Any(u => u.Alias is null && u.StaticKeyword.IsKind(SyntaxKind.None) && u.Name?.ToString() == usingName))
+                {
+                    // Written with "\n": FormatAnnotatedSpansAsync gives every changed line the document's own line ending.
+                    var firstUsing = unitForUsing.Usings.Count == 0;
+                    var directive = SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(usingName))
+                        .WithTrailingTrivia(firstUsing ? SyntaxFactory.TriviaList(SyntaxFactory.EndOfLine("\n"), SyntaxFactory.EndOfLine("\n")) : SyntaxFactory.TriviaList(SyntaxFactory.EndOfLine("\n")))
+                        .WithAdditionalAnnotations(editAnnotation);
+                    editedNewRoot = unitForUsing.AddUsings(directive);
+                }
+            }
+
+            var formattedDocument = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(editedDocument, editedNewRoot, await _workspaceManager.ResolveEolAsync(editedDocument, cancellationToken), cancellationToken);
+            return (await formattedDocument.GetTextAsync(cancellationToken)).ToString();
         }
 
-        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
+        var targetText = await EditDocumentAsync(document, root, annotatedNewMethodNode, appendRecord: true);
+
+        // Every other document that holds an implementer (the target document was handled above, in the same pass).
+        var changes = new Dictionary<FilePathWrapper, string>();
+        foreach (var otherDocumentId in implementersByDocument.Keys.Where(id => id != document.Id))
+        {
+            var otherDocument = solution.GetDocument(otherDocumentId)!;
+            var otherRoot = await otherDocument.GetSyntaxRootAsync(cancellationToken);
+            if (otherRoot is null)
+            {
+                withoutSource.Add(otherDocument.FilePath ?? otherDocument.Name);
+                warning = $"WARNING: Implementations without editable source in the solution were not updated: {string.Join(", ", withoutSource.Distinct())}. Update them manually.";
+                continue;
+            }
+
+            changes[otherDocument.FilePath ?? otherDocument.Name] = await EditDocumentAsync(otherDocument, otherRoot, null, appendRecord: false);
+        }
+
+        if (changes.Count > 0)
+        {
+            changes[filePath] = targetText;
+        }
+
+        var updatedNote = implementers.Count == 0 ? string.Empty : $" Updated {implementers.Count} implementation(s) in {implementersByDocument.Count} file(s).";
+        var message = $"Introduced parameter object '{recordName}'.{updatedNote}";
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = warning is null ? $"Introduced parameter object '{recordName}'." : $"Introduced parameter object '{recordName}'. {warning}",
-            UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
+            Message = warning is null ? message : $"{message} {warning}",
+            UpdatedText = targetText,
+            Changes = changes
         };
     }
 

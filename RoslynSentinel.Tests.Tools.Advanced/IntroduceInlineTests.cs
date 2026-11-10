@@ -192,7 +192,34 @@ public class Calc
 
     [Test]
     [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task IntroduceParameterObject_InterfaceOnly_SummaryWarnsImplementationsNotUpdated()
+    public async Task IntroduceParameterObject_InterfaceWithImplementersInOtherFilesAndNamespace_UpdatesAllAndPassesTheCompileGate()
+    {
+        using var workspace = InMemoryWorkspace.Create(
+            ("A.cs", "namespace Contracts;\r\n\r\npublic interface IProcessor\r\n{\r\n    void Process(string name, int age);\r\n}\r\n"),
+            ("B.cs", "namespace Impl;\r\n\r\npublic class Processor : Contracts.IProcessor\r\n{\r\n    public void Process(string fullName, int years)\r\n    {\r\n        var text = fullName + years;\r\n    }\r\n}\r\n"),
+            ("C.cs", "namespace Impl;\r\n\r\npublic class ExplicitProcessor : Contracts.IProcessor\r\n{\r\n    void Contracts.IProcessor.Process(string name, int age) { }\r\n}\r\n"));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.IntroduceParameterObjectTool(reason: "test message", workspace.PathOf("A.cs"), "Process");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        var summary = (RoslynSentinel.Common.AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.Description, Does.Not.Contain("WARNING"));
+        Assert.That(summary.Description, Does.Contain("Updated 2 implementation(s) in 2 file(s)."));
+        Assert.That(summary.Description, Does.Contain("Call sites need manual follow-up."));
+        var contracts = workspace.ReadText("A.cs");
+        Assert.That(contracts, Does.Contain("void Process(ProcessParameters request);"));
+        Assert.That(contracts, Does.Contain("public record ProcessParameters(string Name, int Age);"));
+        var implementer = workspace.ReadText("B.cs");
+        Assert.That(implementer, Does.Contain("using Contracts;"));
+        Assert.That(implementer, Does.Contain("public void Process(ProcessParameters request)"));
+        Assert.That(implementer, Does.Contain("var text = request.Name + request.Age;"));
+        var explicitImplementer = workspace.ReadText("C.cs");
+        Assert.That(explicitImplementer, Does.Contain("using Contracts;"));
+        Assert.That(explicitImplementer, Does.Contain("void Contracts.IProcessor.Process(ProcessParameters request)"));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
+    public async Task IntroduceParameterObject_InterfaceWithNoImplementersInSolution_SummaryWarnsNoneFound()
     {
         const string interfaceOnlySource = @"
 public interface IProcessor
@@ -204,7 +231,7 @@ public interface IProcessor
         var result = await tools.IntroduceParameterObjectTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Process");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         var summary = (RoslynSentinel.Common.AppliedChangeSummary)result.SuccessData!;
-        Assert.That(summary.Description, Does.Contain("WARNING:"));
+        Assert.That(summary.Description, Does.Contain("WARNING: The interface method was updated, but no implementations of it were found in the solution."));
     }
 
     [Test]
