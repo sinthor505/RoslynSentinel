@@ -193,6 +193,20 @@ public class SymbolRelationshipImpl
 
     public async Task<SentinelCallToolResult<object>> PreviewRenameImpact(ToolCallReason reason, string? filePath = null, string? symbolName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? docCommentId = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
+        // Without either locator the engine threw "File not found: " with an empty path, and a 10-chain run
+        // (host 113, 2026-11-10, run 209) repeated the same call 9 times. Say what is missing and how to get it.
+        if (string.IsNullOrWhiteSpace(filePath) && string.IsNullOrWhiteSpace(docCommentId))
+        {
+            var search = RoslynSentinel.Common.ToolCallHint.Call("Search", ("mode", "symbol"), ("query", symbolName ?? "<name>"));
+            return new SentinelCallToolResult<object>
+            {
+                IsError = true,
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
+                    $"PreviewRenameImpact needs filePath (the file that declares '{symbolName}') or docCommentId plus projectName; " +
+                    $"symbolName alone cannot locate the symbol. Get the declaring file from {search}, then retry with filePath. Nothing was run."),
+            };
+        }
+
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
