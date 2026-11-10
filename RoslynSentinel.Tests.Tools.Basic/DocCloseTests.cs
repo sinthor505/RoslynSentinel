@@ -9,7 +9,8 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// <see cref="DocTrailerEngine.CloseDoc"/> against throwaway docs trees (one GUID temp dir per test, so parallel-safe).
 /// CloseDoc reads commit trailers, so each repo is a real git repo; most tests need no commit.
 /// </summary>
-// Suspected flaky on full/parallel runs like ServerBinaryStalenessGitTests: 'git failed to run: ...' when GitProcess.TryRun returns null (git spawn under load); passes when the fixture runs alone.
+// KNOWN FLAKE on full/parallel runs (spawns git): disregard a failure here when the change did not touch process spawning; re-run the class alone first.
+// Suspected cause: pipe EOF reads starved under load. Fix pointer: GitProcess.TryRun dedicated reader threads and GitTestRepo (docs/current/issues/issue_process_spawn_test_flake.md).
 [TestFixture]
 [Category("OutOfProcess")] // starts git processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class DocCloseTests
