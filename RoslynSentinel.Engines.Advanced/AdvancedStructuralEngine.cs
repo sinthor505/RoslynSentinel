@@ -1243,16 +1243,19 @@ public class StructuralRefactoringEngine
                 return symbol;
             }
 
-            foreach (var member in symbol.ContainingType.AllInterfaces.SelectMany(i => i.GetMembers(symbol.Name).OfType<IMethodSymbol>()))
-            {
-                if (SymbolEqualityComparer.Default.Equals(symbol.ContainingType.FindImplementationForInterfaceMember(member), symbol))
-                {
-                    return member;
-                }
-            }
-
-            return symbol;
+            return ImplicitInterfaceMembers(symbol).FirstOrDefault() ?? symbol;
         }
+        // Interface members this (non-explicit) method implements by name and signature.
+        static IEnumerable<IMethodSymbol> ImplicitInterfaceMembers(IMethodSymbol symbol) =>
+            symbol.ContainingType.AllInterfaces
+                .SelectMany(i => i.GetMembers(symbol.Name).OfType<IMethodSymbol>())
+                .Where(member => SymbolEqualityComparer.Default.Equals(symbol.ContainingType.FindImplementationForInterfaceMember(member), symbol));
+        // Every interface member a class/struct method implements, explicitly or implicitly (open generic definitions).
+        static List<IMethodSymbol> ImplementedInterfaceMembers(IMethodSymbol symbol) =>
+            symbol.ExplicitInterfaceImplementations.Concat(ImplicitInterfaceMembers(symbol))
+                .Select(member => member.OriginalDefinition)
+                .Distinct<IMethodSymbol>(SymbolEqualityComparer.Default)
+                .ToList();
         var familySeen = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
         var representatives = new List<MethodDeclarationSyntax>();
         foreach (var candidate in methodMatches)
@@ -1326,33 +1329,94 @@ public class StructuralRefactoringEngine
             throw new ToolTargetIneligibleException("No parameters to group.");
         }
 
-        // Generate record name
+        // The parameters are addressed by POSITION (in the method this call named) so every declaration of the contract, which
+        // may rename them, is rewritten the same way: new list = (RecordName request, the non-grouped parameters in order,
+        // then the CancellationToken parameters).
+        var groupedIndices = groupedParams.Select(p => allParams.IndexOf(p)).ToList();
+        var keptIndices = candidateParams.Where(p => !groupedParams.Contains(p)).Concat(ctParams).Select(p => allParams.IndexOf(p)).ToList();
+
+        // The declaration that owns the signature (and, below, the record): the method itself, or - when it implements an
+        // interface member - that member, so a class-targeted call is handled as if the interface had been targeted.
+        var target = methodNode;
+        var targetDocument = document;
+        var contractSymbol = methodNode.Parent is InterfaceDeclarationSyntax && methodSymbol?.ExplicitInterfaceImplementations.Length == 0 ? methodSymbol : null;
+        if (contractSymbol is null && methodSymbol is not null && methodSymbol.ContainingType.TypeKind != TypeKind.Interface)
+        {
+            var implemented = ImplementedInterfaceMembers(methodSymbol);
+            if (implemented.Count > 0)
+            {
+                var editable = new List<(IMethodSymbol Member, MethodDeclarationSyntax Declaration, Document Document)>();
+                var external = new List<IMethodSymbol>();
+                foreach (var member in implemented)
+                {
+                    var found = false;
+                    foreach (var reference in member.DeclaringSyntaxReferences)
+                    {
+                        if (solution.GetDocument(reference.SyntaxTree) is { } declaringDocument
+                            && await reference.GetSyntaxAsync(cancellationToken) is MethodDeclarationSyntax declaringSyntax)
+                        {
+                            editable.Add((member, declaringSyntax, declaringDocument));
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found)
+                    {
+                        external.Add(member);
+                    }
+                }
+
+                static string Describe(IEnumerable<IMethodSymbol> members) => string.Join(", ", members.Select(m => $"{m.ContainingType.ToDisplayString()}.{m.Name}"));
+                if (external.Count > 0)
+                {
+                    // Refused before anything is edited: rewriting the implementation would break a contract the tool cannot change.
+                    throw new ToolTargetIneligibleException($"'{methodName}' implements {Describe(external)}, which has no editable declaration in the solution (metadata or a package reference), so its signature cannot be changed and rewriting the method would break that contract. Nothing was changed. Next: call IntroduceParameterObject on a method that is not tied to an external interface member.");
+                }
+
+                if (editable.Count > 1)
+                {
+                    // TODO introduce a parameter object across several interfaces implemented by one method (each interface and its other implementers would need the same record)
+                    throw new ToolTargetIneligibleException($"'{methodName}' implements members of more than one interface ({Describe(editable.Select(e => e.Member))}); the parameter object would have to change all of them at once, which is not supported. Nothing was changed. Next: call IntroduceParameterObject on one interface method (it updates that interface and its implementers) after decoupling the others, or change the signatures by hand.");
+                }
+
+                if (editable[0].Declaration.ParameterList.Parameters.Count != allParams.Count)
+                {
+                    throw new ToolTargetIneligibleException($"'{methodName}' implements {Describe([editable[0].Member])}, but that declaration has a different parameter count, so the parameters cannot be mapped by position. Nothing was changed.");
+                }
+
+                (contractSymbol, target, targetDocument) = editable[0];
+            }
+        }
+
+        var targetRoot = targetDocument.Id == document.Id ? root : await target.SyntaxTree.GetRootAsync(cancellationToken);
+        var targetSemanticModel = targetDocument.Id == document.Id ? semanticModel : await targetDocument.GetSemanticModelAsync(cancellationToken);
+        // The record takes its property names and types from the declaration that owns the signature (the interface member in
+        // a cascade), because the record lives beside it and those types must resolve there.
+        // TODO a generic interface member (I<T>.Run(T x)) yields a record whose property types mention the interface's type parameter, which the record does not declare
+        var targetParams = target.ParameterList.Parameters;
         var recordName = newTypeName ?? (methodName + "Parameters");
         // Build record properties: capitalize first letter
         static string Capitalize(string s) => s.Length == 0 ? s : char.ToUpper(s[0]) + s.Substring(1);
-        var recordParams = groupedParams.Select(p => SyntaxFactory.Parameter(SyntaxFactory.Identifier(Capitalize(p.Identifier.Text))).WithType(p.Type!));
+        var recordParams = groupedIndices.Select(i => SyntaxFactory.Parameter(SyntaxFactory.Identifier(Capitalize(targetParams[i].Identifier.Text))).WithType(targetParams[i].Type!));
         var recordDecl = SyntaxFactory.RecordDeclaration(SyntaxFactory.Token(SyntaxKind.RecordKeyword), SyntaxFactory.Identifier(recordName)).WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword))).WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(recordParams))).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
-        // The parameters are addressed by POSITION so an implementer (which may rename them) is rewritten the same way:
-        // new list = (RecordName request, the non-grouped parameters in order, then the CancellationToken parameters).
-        var groupedIndices = groupedParams.Select(p => allParams.IndexOf(p)).ToList();
-        var keptIndices = candidateParams.Where(p => !groupedParams.Contains(p)).Concat(ctParams).Select(p => allParams.IndexOf(p)).ToList();
-        var propertyNames = groupedParams.Select(p => Capitalize(p.Identifier.Text)).ToList();
+        var propertyNames = groupedIndices.Select(i => Capitalize(targetParams[i].Identifier.Text)).ToList();
         // Shared annotation for every node introduced/replaced below (the rewritten methods and,
         // further down, the newly-appended record declaration) -> lets the final
         // RoslynFormattingHelper.FormatAnnotatedSpansAsync pass reformat just these edited spans instead of
         // reflowing the whole file, in the document's own line ending.
         var editAnnotation = Formatter.Annotation;
         var targetMarker = new SyntaxAnnotation("IntroduceParameterObject.Target");
-        var annotatedNewMethodNode = RewriteMethodForParameterObject(methodNode, groupedIndices, keptIndices, propertyNames, recordName, newLine, semanticModel).WithAdditionalAnnotations(editAnnotation, targetMarker);
+        var annotatedNewMethodNode = RewriteMethodForParameterObject(target, groupedIndices, keptIndices, propertyNames, recordName, newLine, targetSemanticModel).WithAdditionalAnnotations(editAnnotation, targetMarker);
         string? warning = null;
 
-        // Interface-targeted: every implementer takes the record too (call sites stay manual).
-        var interfaceTarget = methodNode.Parent is InterfaceDeclarationSyntax && methodSymbol?.ExplicitInterfaceImplementations.Length == 0;
+        // Interface contract (targeted directly, or reached from an implementing method): every implementer takes the record
+        // too (call sites stay manual).
         var implementers = new List<(MethodDeclarationSyntax Declaration, Document Document, INamespaceSymbol Namespace)>();
         var withoutSource = new List<string>();
-        if (interfaceTarget)
+        if (contractSymbol is not null)
         {
-            foreach (var implementation in (await SymbolFinder.FindImplementationsAsync(methodSymbol!, solution, null, cancellationToken)).OfType<IMethodSymbol>())
+            foreach (var implementation in (await SymbolFinder.FindImplementationsAsync(contractSymbol, solution, null, cancellationToken)).OfType<IMethodSymbol>())
             {
                 var resolved = false;
                 foreach (var reference in implementation.DeclaringSyntaxReferences)
@@ -1372,6 +1436,12 @@ public class StructuralRefactoringEngine
                 }
             }
 
+            // The method this call named always takes the record, even if the symbol search did not return it.
+            if (!ReferenceEquals(target, methodNode) && !implementers.Any(i => i.Document.Id == document.Id && i.Declaration.Span == methodNode.Span))
+            {
+                implementers.Add((methodNode, document, methodSymbol!.ContainingType.ContainingNamespace));
+            }
+
             if (withoutSource.Count > 0)
             {
                 warning = $"WARNING: Implementations without editable source in the solution were not updated: {string.Join(", ", withoutSource.Distinct())}. Update them manually.";
@@ -1381,26 +1451,21 @@ public class StructuralRefactoringEngine
                 warning = "WARNING: The interface method was updated, but no implementations of it were found in the solution. Update any implementations outside the solution manually.";
             }
         }
-        else if (methodNode.Parent is ClassDeclarationSyntax && methodSymbol?.ExplicitInterfaceImplementations.Length == 0 && methodSymbol?.ContainingType?.Interfaces.Length > 0)
-        {
-            // Method implements interface -> warn, but still update the implementation and fall through to
-            // the record append below (returning early left the rewritten method referencing an undeclared record).
-            // TODO a class-targeted method that implements an interface does not update the interface or its other implementers; only the interface-targeted path does
-            warning = "WARNING: This method implements an interface. Update the interface signature in the corresponding interface file.";
-        }
 
         // Group the implementer declarations by document; each document is edited in one pass over its root.
         var implementersByDocument = implementers
             .GroupBy(i => i.Document.Id)
             .ToDictionary(g => g.Key, g => g.ToList());
-        var recordNamespace = methodSymbol?.ContainingType?.ContainingNamespace;
+        // The record lives with the declaration that owns the signature (the interface in a cascade), so that is the namespace
+        // every other edited document needs a using for.
+        var recordNamespace = (contractSymbol ?? methodSymbol)?.ContainingType?.ContainingNamespace;
 
         async Task<string> EditDocumentAsync(Document editedDocument, SyntaxNode editedRoot, SyntaxNode? targetReplacement, bool appendRecord)
         {
             var replacements = new Dictionary<SyntaxNode, SyntaxNode>();
             if (targetReplacement != null)
             {
-                replacements[methodNode] = targetReplacement;
+                replacements[target] = targetReplacement;
             }
 
             var needsUsing = false;
@@ -1452,11 +1517,23 @@ public class StructuralRefactoringEngine
             return (await formattedDocument.GetTextAsync(cancellationToken)).ToString();
         }
 
-        var targetText = await EditDocumentAsync(document, root, annotatedNewMethodNode, appendRecord: true);
+        var targetText = await EditDocumentAsync(targetDocument, targetRoot, annotatedNewMethodNode, appendRecord: true);
 
-        // Every other document that holds an implementer (the target document was handled above, in the same pass).
+        // The key a changed document goes under: the caller's own path for the document this call named.
+        FilePathWrapper ChangeKey(Document changedDocument)
+        {
+            if (changedDocument.Id == document.Id)
+            {
+                return filePath;
+            }
+
+            return changedDocument.FilePath ?? changedDocument.Name;
+        }
+
+        // Every other document that holds an implementer (the target document, which may hold the interface, was handled above, in
+        // the same pass).
         var changes = new Dictionary<FilePathWrapper, string>();
-        foreach (var otherDocumentId in implementersByDocument.Keys.Where(id => id != document.Id))
+        foreach (var otherDocumentId in implementersByDocument.Keys.Where(id => id != targetDocument.Id))
         {
             var otherDocument = solution.GetDocument(otherDocumentId)!;
             var otherRoot = await otherDocument.GetSyntaxRootAsync(cancellationToken);
@@ -1467,13 +1544,16 @@ public class StructuralRefactoringEngine
                 continue;
             }
 
-            changes[otherDocument.FilePath ?? otherDocument.Name] = await EditDocumentAsync(otherDocument, otherRoot, null, appendRecord: false);
+            changes[ChangeKey(otherDocument)] = await EditDocumentAsync(otherDocument, otherRoot, null, appendRecord: false);
         }
 
         if (changes.Count > 0)
         {
-            changes[filePath] = targetText;
+            changes[ChangeKey(targetDocument)] = targetText;
         }
+
+        // UpdatedText is the text of the file this call named (the interface may live in another document).
+        var updatedText = targetDocument.Id == document.Id ? targetText : changes[filePath];
 
         var updatedNote = implementers.Count == 0 ? string.Empty : $" Updated {implementers.Count} implementation(s) in {implementersByDocument.Count} file(s).";
         var message = $"Introduced parameter object '{recordName}'.{updatedNote}";
@@ -1482,7 +1562,7 @@ public class StructuralRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = warning is null ? message : $"{message} {warning}",
-            UpdatedText = targetText,
+            UpdatedText = updatedText,
             Changes = changes
         };
     }

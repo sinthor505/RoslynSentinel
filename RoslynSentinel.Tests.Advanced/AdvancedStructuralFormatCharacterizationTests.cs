@@ -8,7 +8,8 @@ namespace RoslynSentinel.Tests.Advanced;
 /// <summary>
 /// C5b-2a characterization tests (docs/current/proposals/closed/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
 /// Byte-exact pins for <c>StructuralRefactoringEngine.IntroduceParameterObjectAsync</c>: the main path (rewritten method
-/// plus appended record) and the interface-warning path (rewritten method only, returned with a warning message), the
+/// plus appended record) and the interface-cascade path (class method, the interface it implements and the record, all in one
+/// document), the
 /// two annotated-container sites routed onto <c>RoslynFormattingHelper.FormatAnnotatedSpansAsync</c>. The source
 /// carries irregular spacing, comments and blank lines in code the engine does not touch, so a regression that formats
 /// the whole document shows up as a diff. Written against the unmodified call (plain
@@ -271,7 +272,7 @@ public class AdvancedStructuralFormatCharacterizationTests
         "",
         "public interface IWorker",
         "{",
-        "    void Run(int a, string b);",
+        "    void Run(RunParameters request);",
         "}",
         "",
         "public record RunParameters(int A, string B);",
@@ -280,42 +281,42 @@ public class AdvancedStructuralFormatCharacterizationTests
 
     [TestCase(false)]
     [TestCase(true)]
-    public async Task IntroduceParameterObject_WarningPath_UntouchedCodeKeepsIrregularSpacing_ByteExact(bool crlf)
+    public async Task IntroduceParameterObject_InterfaceCascadePath_UntouchedCodeKeepsIrregularSpacing_ByteExact(bool crlf)
     {
         SetSource(Src(crlf, WarnInput()));
 
         var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run");
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-        Assert.That(result.Message, Does.Contain("WARNING: This method implements an interface."));
+        Assert.That(result.Message, Does.Not.Contain("WARNING"));
         Assert.That(result.UpdatedText, Is.EqualTo(Src(crlf, WarnExpected())));
     }
 
     [Test]
-    public async Task IntroduceParameterObject_WarningPath_LfDocument_ResultHasNoCarriageReturn()
+    public async Task IntroduceParameterObject_InterfaceCascadePath_LfDocument_ResultHasNoCarriageReturn()
     {
         SetSource(Src(false, WarnInput()));
 
         var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run");
 
-        Assert.That(result.Message, Does.Contain("WARNING: This method implements an interface."));
+        Assert.That(result.Message, Does.Not.Contain("WARNING"));
         Assert.That(result.UpdatedText, Does.Not.Contain("\r"));
     }
 
     [Test]
-    public async Task IntroduceParameterObject_WarningPath_CrlfDocument_ResultHasNoBareLineFeed()
+    public async Task IntroduceParameterObject_InterfaceCascadePath_CrlfDocument_ResultHasNoBareLineFeed()
     {
         SetSource(Src(true, WarnInput()));
 
         var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run");
 
-        Assert.That(result.Message, Does.Contain("WARNING: This method implements an interface."));
+        Assert.That(result.Message, Does.Not.Contain("WARNING"));
         Assert.That(result.UpdatedText.Replace("\r\n", ""), Does.Not.Contain("\n"));
     }
 
     [TestCase(MethodBraceAnchor)]
     [TestCase(PreMethodLineAnchor)]
-    public async Task IntroduceParameterObject_WarningPath_MixedEol_StrayCrlfLineKeepsItsTerminator(string anchor)
+    public async Task IntroduceParameterObject_InterfaceCascadePath_MixedEol_StrayCrlfLineKeepsItsTerminator(string anchor)
     {
         // Changed lines take the resolved EOL, not the majority one; Lf keeps this LF-majority mixed source's pinned expectation.
         _workspaceManager.EolModeOverride = EolMode.Lf;
@@ -324,7 +325,7 @@ public class AdvancedStructuralFormatCharacterizationTests
 
         var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run");
 
-        Assert.That(result.Message, Does.Contain("WARNING: This method implements an interface."));
+        Assert.That(result.Message, Does.Not.Contain("WARNING"));
         Assert.That(result.UpdatedText, Is.EqualTo(WithStrayCrlf(Src(false, WarnExpected()), anchor)));
     }
 
@@ -439,20 +440,21 @@ public class AdvancedStructuralFormatCharacterizationTests
     }
 
     [Test]
-    public async Task IntroduceParameterObject_InterfaceDeclaredBeforeClass_EditsTheClassAndKeepsTheTodoAndMessage_ByteExact()
+    public async Task IntroduceParameterObject_InterfaceDeclaredBeforeClass_ClassTarget_UpdatesInterfaceAndClass_ByteExact()
     {
         SetSource(Src(false, InterfaceFirstInput()));
 
         var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run");
 
-        // The exact success wording (it once read "// Local variable introduced.") plus the interface warning.
-        Assert.That(result.Message, Is.EqualTo("Introduced parameter object 'RunParameters'. WARNING: This method implements an interface. Update the interface signature in the corresponding interface file."));
+        // The exact success wording (it once read "// Local variable introduced."); no interface warning any more.
+        Assert.That(result.Message, Is.EqualTo("Introduced parameter object 'RunParameters'. Updated 1 implementation(s) in 1 file(s)."));
         Assert.That(result.Changes, Is.Empty);
-        // The class (not the interface declared first) is edited, and its own parameter names (x, y) shape the record.
+        // The class is targeted, so the interface declared first is edited too, and the record takes the interface's parameter
+        // names (a, b), not the class's (x, y); the class body maps its own y onto the property B by position.
         Assert.That(result.UpdatedText, Is.EqualTo(Src(false,
             "public interface IWorker",
             "{",
-            "    void Run(int a, string b);",
+            "    void Run(RunParameters request);",
             "}",
             "",
             "public class Worker : IWorker",
@@ -460,11 +462,11 @@ public class AdvancedStructuralFormatCharacterizationTests
             "    public void Run(RunParameters request)",
             "    {",
             "        // TODO: Update call sites to use RunParameters",
-            "        System.Console.WriteLine(request.Y);",
+            "        System.Console.WriteLine(request.B);",
             "    }",
             "}",
             "",
-            "public record RunParameters(int X, string Y);",
+            "public record RunParameters(int A, string B);",
             "")));
     }
 
@@ -762,5 +764,236 @@ public class AdvancedStructuralFormatCharacterizationTests
         Assert.That(result.UpdatedText, Does.Contain("Console.WriteLine(other.n);"), "other.n is a member access on another object, not the parameter.");
         Assert.That(result.UpdatedText, Does.Contain("Console.WriteLine(request.Name);"));
         Assert.That(result.UpdatedText, Does.Not.Contain("Console.WriteLine(n);"));
+    }
+
+    // ---- class-targeted: a method that implements an interface cascades to the interface and every implementer ----
+
+    private static int CountOf(string text, string needle) => text.Split(needle).Length - 1;
+
+    [Test]
+    public async Task IntroduceParameterObject_ClassTarget_TwoClassesAndInterfaceInOneDocument_UpdatesAllAndAppendsRecordOnce_ByteExact()
+    {
+        SetSource(Src(false,
+            "public interface IProcessor",
+            "{",
+            "    void Process(string a, int b);",
+            "}",
+            "",
+            "public class First : IProcessor",
+            "{",
+            "    public void Process(string a, int b)",
+            "    {",
+            "        System.Console.WriteLine(a + b);",
+            "    }",
+            "}",
+            "",
+            "public class Second : IProcessor",
+            "{",
+            "    public void Process(string x, int y)",
+            "    {",
+            "        System.Console.WriteLine(x + y);",
+            "    }",
+            "}",
+            ""));
+
+        // The call names the first class's method (the class is the entry point, not the interface).
+        var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Process", contextSnippet: "public void Process(string a, int b)");
+
+        Assert.That(result.Message, Is.EqualTo("Introduced parameter object 'ProcessParameters'. Updated 2 implementation(s) in 1 file(s)."));
+        Assert.That(result.Changes, Is.Empty, "Everything lives in the named file, so the result carries just UpdatedText.");
+        Assert.That(result.UpdatedText, Is.EqualTo(Src(false,
+            "public interface IProcessor",
+            "{",
+            "    void Process(ProcessParameters request);",
+            "}",
+            "",
+            "public class First : IProcessor",
+            "{",
+            "    public void Process(ProcessParameters request)",
+            "    {",
+            "        // TODO: Update call sites to use ProcessParameters",
+            "        System.Console.WriteLine(request.A + request.B);",
+            "    }",
+            "}",
+            "",
+            "public class Second : IProcessor",
+            "{",
+            "    public void Process(ProcessParameters request)",
+            "    {",
+            "        // TODO: Update call sites to use ProcessParameters",
+            "        System.Console.WriteLine(request.A + request.B);",
+            "    }",
+            "}",
+            "",
+            "public record ProcessParameters(string A, int B);",
+            "")));
+        Assert.That(CountOf(result.UpdatedText, "record ProcessParameters"), Is.EqualTo(1), "The record is appended exactly once.");
+    }
+
+    [Test]
+    public async Task IntroduceParameterObject_ClassTarget_InterfaceInOtherDocument_RecordBesideInterface_UsingAddedToClassDocuments_ByteExact()
+    {
+        SetSources(
+            ("A.cs", Src(false,
+                "namespace Contracts;",
+                "",
+                "public interface IProcessor",
+                "{",
+                "    void Process(string name, int age);",
+                "}",
+                "")),
+            ("B.cs", Src(false,
+                "using System;",
+                "",
+                "namespace Impl;",
+                "",
+                "public class Processor : Contracts.IProcessor",
+                "{",
+                "    public void Process(string fullName, int years)",
+                "    {",
+                "        Console.WriteLine(fullName + years);",
+                "    }",
+                "}",
+                "")),
+            ("C.cs", Src(false,
+                "namespace Impl;",
+                "",
+                "public class ExplicitProcessor : Contracts.IProcessor",
+                "{",
+                "    void Contracts.IProcessor.Process(string name, int age)",
+                "    {",
+                "        System.Console.WriteLine(name);",
+                "    }",
+                "}",
+                "")));
+
+        // The call names the class method in B.cs; the interface is in A.cs and a sibling (explicit) implementer in C.cs.
+        var result = await _engine.IntroduceParameterObjectAsync("B.cs", "Process");
+
+        Assert.That(result.Message, Is.EqualTo("Introduced parameter object 'ProcessParameters'. Updated 2 implementation(s) in 2 file(s)."));
+        Assert.That(result.Changes, Has.Count.EqualTo(3));
+        var expectedB = Src(false,
+            "using System;",
+            "using Contracts;",
+            "",
+            "namespace Impl;",
+            "",
+            "public class Processor : Contracts.IProcessor",
+            "{",
+            "    public void Process(ProcessParameters request)",
+            "    {",
+            "        // TODO: Update call sites to use ProcessParameters",
+            "        Console.WriteLine(request.Name + request.Age);",
+            "    }",
+            "}",
+            "");
+        // The record sits beside the interface (A.cs), once, and takes the interface's parameter names.
+        Assert.That(ChangedText(result, "A.cs"), Is.EqualTo(Src(false,
+            "namespace Contracts;",
+            "",
+            "public interface IProcessor",
+            "{",
+            "    void Process(ProcessParameters request);",
+            "}",
+            "",
+            "public record ProcessParameters(string Name, int Age);",
+            "")));
+        // The class document is in another namespace than the interface: it gets the using; UpdatedText is the named file (B.cs).
+        Assert.That(ChangedText(result, "B.cs"), Is.EqualTo(expectedB));
+        Assert.That(result.UpdatedText, Is.EqualTo(expectedB));
+        Assert.That(ChangedText(result, "C.cs"), Is.EqualTo(Src(false,
+            "using Contracts;",
+            "",
+            "namespace Impl;",
+            "",
+            "public class ExplicitProcessor : Contracts.IProcessor",
+            "{",
+            "    void Contracts.IProcessor.Process(ProcessParameters request)",
+            "    {",
+            "        // TODO: Update call sites to use ProcessParameters",
+            "        System.Console.WriteLine(request.Name);",
+            "    }",
+            "}",
+            "")));
+        Assert.That(result.Changes.Values.Sum(text => CountOf(text, "record ProcessParameters")), Is.EqualTo(1), "The record is appended exactly once across all documents.");
+    }
+
+    [Test]
+    public async Task IntroduceParameterObject_ClassTarget_ExplicitImplementationNamed_CascadesToInterface()
+    {
+        SetSources(
+            ("A.cs", Src(false,
+                "namespace Contracts;",
+                "",
+                "public interface IProcessor",
+                "{",
+                "    void Process(string name, int age);",
+                "}",
+                "")),
+            ("C.cs", Src(false,
+                "namespace Contracts;",
+                "",
+                "public class ExplicitProcessor : IProcessor",
+                "{",
+                "    void IProcessor.Process(string name, int age)",
+                "    {",
+                "    }",
+                "}",
+                "")));
+
+        var result = await _engine.IntroduceParameterObjectAsync("C.cs", "Process");
+
+        Assert.That(result.Changes, Has.Count.EqualTo(2));
+        Assert.That(ChangedText(result, "A.cs"), Does.Contain("void Process(ProcessParameters request);").And.Contain("record ProcessParameters(string Name, int Age);"));
+        Assert.That(ChangedText(result, "C.cs"), Does.Contain("void IProcessor.Process(ProcessParameters request)").And.Not.Contain("record "));
+    }
+
+    [Test]
+    public async Task IntroduceParameterObject_ClassTarget_MetadataInterfaceMember_IsRefusedBeforeAnyEdit()
+    {
+        SetSource(Src(false,
+            "public class ByLength : System.Collections.Generic.IComparer<string>",
+            "{",
+            "    public int Compare(string x, string y)",
+            "    {",
+            "        return x.Length - y.Length;",
+            "    }",
+            "}",
+            ""));
+
+        // The engine only returns edits, so a throw means nothing is written.
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(
+            async () => await _engine.IntroduceParameterObjectAsync("Test.cs", "Compare"));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(ex.Message, Does.Contain("System.Collections.Generic.IComparer<T>.Compare").And.Contain("Nothing was changed"));
+    }
+
+    [Test]
+    public async Task IntroduceParameterObject_ClassTarget_ImplementsMembersOfTwoSourceInterfaces_IsRefusedNamingBoth()
+    {
+        SetSource(Src(false,
+            "public interface IFirst",
+            "{",
+            "    void Run(int a, string b);",
+            "}",
+            "",
+            "public interface ISecond",
+            "{",
+            "    void Run(int a, string b);",
+            "}",
+            "",
+            "public class Both : IFirst, ISecond",
+            "{",
+            "    public void Run(int a, string b)",
+            "    {",
+            "    }",
+            "}",
+            ""));
+
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(
+            async () => await _engine.IntroduceParameterObjectAsync("Test.cs", "Run", contextSnippet: "public void Run(int a, string b)"));
+
+        Assert.That(ex.Message, Does.Contain("IFirst.Run").And.Contain("ISecond.Run").And.Contain("Nothing was changed"));
     }
 }

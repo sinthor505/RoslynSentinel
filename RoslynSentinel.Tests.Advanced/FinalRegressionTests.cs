@@ -108,8 +108,8 @@ public class FinalRegressionTests
         Assert.That(classStart, Is.GreaterThanOrEqualTo(0), "Class Processor should still be present");
         Assert.That(result.UpdatedText.Substring(classStart), Does.Contain("Process(ProcessParameters request"), "Class implementation should take the parameter object");
         Assert.That(result.UpdatedText, Does.Contain("public record ProcessParameters"), "Record declaration should be appended");
-        Assert.That(result.UpdatedText, Does.Contain("void Process(string name, int age, bool active);"), "Interface signature should be unchanged");
-        Assert.That(result.Message, Does.Contain("WARNING"), "Interface implementation should produce a warning");
+        Assert.That(result.UpdatedText, Does.Contain("void Process(ProcessParameters request);"), "Interface signature should take the record too");
+        Assert.That(result.Message, Does.Not.Contain("WARNING"), "The interface is updated, so no warning");
     }
 
     // ────────────────────────────────────────────────────────────────────────────
