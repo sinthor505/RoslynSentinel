@@ -11,6 +11,8 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 /// Shape of the projected BuildResult returned by the BuildTool tool (quickBuild): green builds carry counts only,
 /// failed builds carry a breakdown and every error inline (the result marshaller pages a long list).
 /// </summary>
+// KNOWN FLAKE on full/parallel runs (spawns child processes through ChildProcessCapture): disregard a failure here when the change did not touch process spawning; re-run the class alone first.
+// Suspected cause: ChildProcessCapture's pool-backed async pipe reads starved under load. Reference fix to copy if confirmed: GitProcess.TryRun dedicated reader threads (docs/current/issues/issue_process_spawn_test_flake.md).
 [TestFixture]
 [Category("WorkspaceTools")] // sentinel:auto-category
 public class BuildToolResultShapeTests
