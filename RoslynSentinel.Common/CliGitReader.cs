@@ -46,6 +46,26 @@ internal sealed class CliGitReader : IGitReader
         return run is { ExitCode: 0 } ? ParseStatus(run.Value.StdOut) : null;
     }
 
+    public WorkingTreeStatus? GetRepositoryStatus(string workingDirectory, TimeSpan cliTimeout)
+    {
+        // The arguments the Git tool has always used for status. -z makes quoting moot; core.quotePath=false is kept for parity with the old call.
+        var status = GitProcess.TryRun(workingDirectory, cliTimeout, "-c", "core.quotePath=false", "status", "--porcelain=v1", "-z", "--untracked-files=all");
+        if (status is not { ExitCode: 0 })
+        {
+            return null;
+        }
+
+        // rev-parse --abbrev-ref HEAD exits 128 on an unborn branch: no branch name then.
+        var branchRun = GitProcess.TryRun(workingDirectory, cliTimeout, "rev-parse", "--abbrev-ref", "HEAD");
+        var branch = branchRun is { ExitCode: 0 } ? branchRun.Value.StdOut.Trim() : null;
+
+        // The git directory comes from rev-parse, not workingDirectory + ".git", so a linked worktree (where .git is a file) resolves to its own state directory.
+        var gitDirectory = GitProcess.TryRun(workingDirectory, cliTimeout, "rev-parse", "--absolute-git-dir");
+        var inProgress = gitDirectory is { ExitCode: 0 } ? GitOperationState.Detect(gitDirectory.Value.StdOut.Trim()) : null;
+
+        return new WorkingTreeStatus(branch, ParseStatus(status.Value.StdOut), inProgress);
+    }
+
     public string? ReadBlobAtHead(string workingDirectory, string relativePath, TimeSpan cliTimeout)
     {
         // cat-file blob (not show): a directory is an error here, where "show" would print a tree listing. "./" makes the path relative to the working directory.

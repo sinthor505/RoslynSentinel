@@ -601,16 +601,26 @@ public class GitImpl : IGitOperations
         StdOutAsBytes = true,
     };
 
+    // The typed read seam (libgit2 first, git CLI fallback) the read operations moved onto, one at a time: status so far.
+    // Mutations and the remaining reads still run the CLI through RunGitAsync. Injectable (internal constructor) so a test can
+    // force one backend; production always uses the shared GitReaders.Default.
+    private readonly IGitReader _gitReader;
+
     public GitImpl(ISolutionProvider workspaceManager)
+        : this(workspaceManager, new NullLogger<GitImpl>(), GitReaders.Default)
     {
-        _workspaceManager = workspaceManager;
-        _logger = new NullLogger<GitImpl>();
     }
 
     public GitImpl(ISolutionProvider workspaceManager, ILogger<GitImpl> logger)
+        : this(workspaceManager, logger, GitReaders.Default)
+    {
+    }
+
+    internal GitImpl(ISolutionProvider workspaceManager, ILogger<GitImpl> logger, IGitReader gitReader)
     {
         _workspaceManager = workspaceManager;
         _logger = logger;
+        _gitReader = gitReader;
     }
 
     /// <summary>
@@ -2153,21 +2163,8 @@ public class GitImpl : IGitOperations
         if (dirRaw.ExitCode != 0)
             return null;
 
-        var gitDir = dirRaw.Stdout.Trim();
-        if (gitDir.Length == 0 || !Directory.Exists(gitDir))
-            return null;
-
-        if (Directory.Exists(Path.Combine(gitDir, "rebase-merge")))
-            return "rebase";
-        if (Directory.Exists(Path.Combine(gitDir, "rebase-apply")))
-            return File.Exists(Path.Combine(gitDir, "rebase-apply", "applying")) ? "am" : "rebase";
-        if (File.Exists(Path.Combine(gitDir, "CHERRY_PICK_HEAD")))
-            return "cherry-pick";
-        if (File.Exists(Path.Combine(gitDir, "REVERT_HEAD")))
-            return "revert";
-        if (File.Exists(Path.Combine(gitDir, "MERGE_HEAD")))
-            return "merge";
-        return null;
+        // The same checks the status reader runs (GitOperationState), so every caller agrees on what "in progress" means.
+        return GitOperationState.Detect(dirRaw.Stdout.Trim());
     }
 
     /// <summary>
@@ -2232,6 +2229,114 @@ public class GitImpl : IGitOperations
         return raw.ExitCode == 0;
     }
 
+    /// <summary>
+    /// Presents the reader's status rows exactly as the tool always has: staged and unstaged entries with a label per XY
+    /// letter, conflicts labelled "conflict" on both sides, untracked paths listed individually, and past
+    /// <paramref name="maxEntries"/> a 10-per-list sample with the full counts.
+    /// </summary>
+    private static GitStatusResult BuildStatusResult(WorkingTreeStatus snapshot, int maxEntries)
+    {
+        var branch = snapshot.Branch ?? "unknown";
+        var staged = new List<GitStatusEntry>();
+        var unstaged = new List<GitStatusEntry>();
+        var untracked = new List<string>();
+
+        foreach (var change in snapshot.Changes)
+        {
+            var x = change.IndexState;
+            var y = change.WorkTreeState;
+            var path = change.Path;
+            var originalPath = change.OriginalPath;
+
+            if (x == '?' && y == '?')
+            {
+                untracked.Add(path);
+                continue;
+            }
+
+            if (IsConflictPair(x, y))
+            {
+                // Both sides are labelled "conflict": AA/DD would otherwise read as a staged
+                // add/delete, which is the opposite of what an unmerged path is.
+                staged.Add(new GitStatusEntry { Status = "conflict", Path = path });
+                unstaged.Add(new GitStatusEntry { Status = "conflict", Path = path });
+                continue;
+            }
+
+            if (x != ' ' && x != '?')
+            {
+                staged.Add(new GitStatusEntry
+                {
+                    Status = StatusLabel(x),
+                    Path = path,
+                    OriginalPath = x is 'R' or 'C' ? originalPath : null,
+                });
+            }
+            if (y != ' ' && y != '?')
+            {
+                unstaged.Add(new GitStatusEntry
+                {
+                    Status = StatusLabel(y),
+                    Path = path,
+                    OriginalPath = y is 'R' or 'C' ? originalPath : null,
+                });
+            }
+        }
+
+        bool isClean = staged.Count == 0 && unstaged.Count == 0 && untracked.Count == 0;
+        int total = staged.Count + unstaged.Count + untracked.Count;
+        var sampleSize = Math.Min(10, maxEntries);
+
+        if (total > maxEntries)
+        {
+            return new GitStatusResult
+            {
+                IsError = false,
+                Branch = branch,
+                IsClean = isClean,
+                IsTruncated = true,
+                InProgress = snapshot.InProgress,
+                TotalStagedCount = staged.Count,
+                TotalUnstagedCount = unstaged.Count,
+                TotalUntrackedCount = untracked.Count,
+                StagedByStatus = staged.GroupBy(e => e.Status).ToDictionary(g => g.Key, g => g.Count()),
+                UnstagedByStatus = unstaged.GroupBy(e => e.Status).ToDictionary(g => g.Key, g => g.Count()),
+                Staged = staged.Take(sampleSize).ToList(),
+                Unstaged = unstaged.Take(sampleSize).ToList(),
+                Untracked = untracked.Take(sampleSize).ToList(),
+            };
+        }
+
+        return new GitStatusResult
+        {
+            IsError = false,
+            Branch = branch,
+            IsClean = isClean,
+            InProgress = snapshot.InProgress,
+            Staged = staged,
+            Unstaged = unstaged,
+            Untracked = untracked,
+        };
+    }
+
+    /// <summary>
+    /// The status reader could not answer (git failed, was missing or timed out). Re-runs the status command once so the
+    /// caller gets git's own message, as the tool always reported it.
+    /// </summary>
+    private async Task<GitStatusResult> StatusFailureAsync(string gitRoot, CancellationToken cancellationToken)
+    {
+        var branchRaw = await RunGitAsync(gitRoot,
+            ["rev-parse", "--abbrev-ref", "HEAD"], cancellationToken);
+        var branch = branchRaw.ExitCode == 0 ? branchRaw.Stdout.Trim() : "unknown";
+
+        var statusRaw = await RunGitAsync(gitRoot,
+            ["-c", "core.quotePath=false", "status", "--porcelain=v1", "-z", "--untracked-files=all"], cancellationToken);
+        var error = statusRaw.ExitCode != 0
+            ? CleanGitStderr(statusRaw.Stderr)
+            : "git status could not be read (it failed or timed out); retry the call. Nothing was changed.";
+        return new GitStatusResult { IsError = true, Branch = branch, Error = error };
+    }
+
     public async Task<GitStatusResult> StatusAsync(string gitRoot, int maxEntries, CancellationToken cancellationToken)
     {
         if (maxEntries < 1 || maxEntries > MaxStatusMaxEntries)
@@ -2240,118 +2345,20 @@ public class GitImpl : IGitOperations
             {
                 IsError = true,
                 Error = $"maxEntries must be between 1 and {MaxStatusMaxEntries} (got {maxEntries}). " +
-                        $"Retry with a value in that range, e.g. maxEntries: {DefaultStatusMaxEntries}. Nothing was changed.",
+                        $"Retry with a value in that range, e.g. maxEntries: {DefaultStatusMaxEntries}. Nothing was changed."
             };
         }
 
         try
         {
-            var branchRaw = await RunGitAsync(gitRoot,
-                ["rev-parse", "--abbrev-ref", "HEAD"], cancellationToken);
-            var branch = branchRaw.ExitCode == 0 ? branchRaw.Stdout.Trim() : "unknown";
+            // The typed seam answers in-process (libgit2) and falls back to the git CLI on its own. It blocks, so it runs off the
+            // caller's thread; the token only stops a call that has not started (libgit2 cannot be cancelled mid-call and the CLI
+            // reader is bounded by GitProcessTimeout instead).
+            var snapshot = await Task.Run(() => _gitReader.GetRepositoryStatus(gitRoot, GitProcessTimeout), cancellationToken);
+            if (snapshot is null)
+                return await StatusFailureAsync(gitRoot, cancellationToken);
 
-            // core.quotePath=false keeps non-ASCII paths verbatim (not "\303\251"-style escapes) and
-            // -z makes each record NUL-terminated with no quoting at all, so spaces and any other
-            // character round-trip into the `paths` parameter unchanged.
-            var statusRaw = await RunGitAsync(gitRoot,
-                ["-c", "core.quotePath=false", "status", "--porcelain=v1", "-z", "--untracked-files=all"], cancellationToken);
-            if (statusRaw.ExitCode != 0)
-                return new GitStatusResult { IsError = true, Branch = branch, Error = CleanGitStderr(statusRaw.Stderr) };
-
-            var staged = new List<GitStatusEntry>();
-            var unstaged = new List<GitStatusEntry>();
-            var untracked = new List<string>();
-
-            // Records are "XY <path>" separated by NUL. For a rename/copy (R/C on either side) the
-            // NEXT record is the original path (note: -z reverses the "from -> to" order of the
-            // non-z format). RunGitAsync appends a line terminator after the last NUL, which leaves
-            // a short trailing fragment that the length check below skips.
-            var records = statusRaw.Stdout.Split('\0');
-            for (var i = 0; i < records.Length; i++)
-            {
-                var record = records[i];
-                if (record.Length < 4) continue;
-                var x = record[0];
-                var y = record[1];
-                var path = record[3..];
-
-                string? originalPath = null;
-                if (x is 'R' or 'C' || y is 'R' or 'C')
-                {
-                    if (i + 1 < records.Length)
-                        originalPath = records[++i];
-                }
-
-                if (x == '?' && y == '?')
-                {
-                    untracked.Add(path);
-                    continue;
-                }
-
-                if (IsConflictPair(x, y))
-                {
-                    // Both sides are labelled "conflict": AA/DD would otherwise read as a staged
-                    // add/delete, which is the opposite of what an unmerged path is.
-                    staged.Add(new GitStatusEntry { Status = "conflict", Path = path });
-                    unstaged.Add(new GitStatusEntry { Status = "conflict", Path = path });
-                    continue;
-                }
-
-                if (x != ' ' && x != '?')
-                {
-                    staged.Add(new GitStatusEntry
-                    {
-                        Status = StatusLabel(x),
-                        Path = path,
-                        OriginalPath = x is 'R' or 'C' ? originalPath : null,
-                    });
-                }
-                if (y != ' ' && y != '?')
-                {
-                    unstaged.Add(new GitStatusEntry
-                    {
-                        Status = StatusLabel(y),
-                        Path = path,
-                        OriginalPath = y is 'R' or 'C' ? originalPath : null,
-                    });
-                }
-            }
-
-            bool isClean = staged.Count == 0 && unstaged.Count == 0 && untracked.Count == 0;
-            int total = staged.Count + unstaged.Count + untracked.Count;
-            var inProgress = await DetectInProgressAsync(gitRoot, cancellationToken);
-            var sampleSize = Math.Min(10, maxEntries);
-
-            if (total > maxEntries)
-            {
-                return new GitStatusResult
-                {
-                    IsError = false,
-                    Branch = branch,
-                    IsClean = isClean,
-                    IsTruncated = true,
-                    InProgress = inProgress,
-                    TotalStagedCount = staged.Count,
-                    TotalUnstagedCount = unstaged.Count,
-                    TotalUntrackedCount = untracked.Count,
-                    StagedByStatus = staged.GroupBy(e => e.Status).ToDictionary(g => g.Key, g => g.Count()),
-                    UnstagedByStatus = unstaged.GroupBy(e => e.Status).ToDictionary(g => g.Key, g => g.Count()),
-                    Staged = staged.Take(sampleSize).ToList(),
-                    Unstaged = unstaged.Take(sampleSize).ToList(),
-                    Untracked = untracked.Take(sampleSize).ToList(),
-                };
-            }
-
-            return new GitStatusResult
-            {
-                IsError = false,
-                Branch = branch,
-                IsClean = isClean,
-                InProgress = inProgress,
-                Staged = staged,
-                Unstaged = unstaged,
-                Untracked = untracked,
-            };
+            return BuildStatusResult(snapshot, maxEntries);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

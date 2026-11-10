@@ -30,11 +30,18 @@ namespace RoslynSentinel.Common;
 ///     date order. They agree except for same-second commits on parallel branches (git breaks such ties by traversal
 ///     order, libgit2 differently), so a log range of commits made within one second on different branches may be listed in a different order.
 /// (6) A blob that is a directory in HEAD, or a missing path, is null here; the CLI reader uses cat-file blob, which also fails for a directory.
+/// (8) GetRepositoryStatus: a repository with submodules is answered by the CLI (a dirty submodule is not reproduced); a HEAD outside refs/heads does the same,
+///     and so does a possible intent-to-add file (a new-in-index, modified-in-workdir entry holding the empty blob).
+///     The short branch name follows git's ambiguity rule for the common cases (a tag, remote or refs/ entry of the same name gives "heads/name").
+///     A path containing a line feed is returned verbatim here; the Git tool's old CLI path re-joined it with the platform newline.
 /// </para>
 /// </summary>
 internal sealed class Libgit2GitReader : IGitReader
 {
     private const int MinimumShortHashLength = 7;
+
+    // The empty blob in a SHA-1 repository, the id git gives an intent-to-add index entry.
+    private const string EmptyBlobSha = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391";
 
     public string? GetHeadSha(string workingDirectory, bool shortForm, TimeSpan cliTimeout)
     {
@@ -125,6 +132,87 @@ internal sealed class Libgit2GitReader : IGitReader
         // git prints tracked changes first, then untracked entries; libgit2 interleaves them by path.
         tracked.AddRange(untracked);
         return tracked;
+    }
+
+    // git sorts status rows by path in byte (UTF-8) order; libgit2 follows the file system's case rules, which are case-insensitive on Windows.
+    private static readonly Comparer<string> Utf8PathOrder = Comparer<string>.Create(
+        (x, y) => Encoding.UTF8.GetBytes(x).AsSpan().SequenceCompareTo(Encoding.UTF8.GetBytes(y)));
+
+    public WorkingTreeStatus? GetRepositoryStatus(string workingDirectory, TimeSpan cliTimeout)
+    {
+        using var repo = Open(workingDirectory);
+        if (repo is null)
+        {
+            return null;
+        }
+
+        // libgit2 and git can disagree on a dirty submodule (new commits, modified or untracked content): the CLI answers for any repository that has one.
+        if (repo.Submodules.Any())
+        {
+            throw new NotSupportedException("The repository has submodules; libgit2's submodule status is not reproduced.");
+        }
+
+        var options = new StatusOptions
+        {
+            Show = StatusShowOption.IndexAndWorkDir,
+            IncludeIgnored = false,
+            IncludeUntracked = true,
+            // --untracked-files=all: every untracked file individually, not a collapsed "dir/".
+            RecurseUntrackedDirs = true,
+            RecurseIgnoredDirs = false,
+            IncludeUnaltered = false,
+            DetectRenamesInIndex = true,
+            DetectRenamesInWorkDir = false,
+        };
+
+        var tracked = new List<WorkingTreeChange>();
+        var untracked = new List<WorkingTreeChange>();
+        foreach (var entry in repo.RetrieveStatus(options))
+        {
+            // An intent-to-add file (git add -N) is " A" in git but added-and-modified here, and libgit2sharp does not expose the
+            // flag. Its index entry is the empty blob, so a new-in-index and modified-in-workdir entry holding it is left to the CLI
+            // (a real empty file staged and then edited lands there too, which is merely slower, never wrong).
+            if (entry.State.HasFlag(FileStatus.NewInIndex) && entry.State.HasFlag(FileStatus.ModifiedInWorkdir)
+                && repo.Index[entry.FilePath]?.Id.Sha == EmptyBlobSha)
+            {
+                throw new NotSupportedException("A new-in-index file holding the empty blob may be intent-to-add, which libgit2 reports differently from git.");
+            }
+
+            AddRows(entry, tracked, untracked);
+        }
+
+        var rows = new List<WorkingTreeChange>(tracked.Count + untracked.Count);
+        rows.AddRange(tracked.OrderBy(change => change.Path, Utf8PathOrder));
+        rows.AddRange(untracked.OrderBy(change => change.Path, Utf8PathOrder));
+        return new WorkingTreeStatus(HeadBranchName(repo), rows, GitOperationState.Detect(repo.Info.Path));
+    }
+
+    /// <summary>
+    /// What <c>git rev-parse --abbrev-ref HEAD</c> prints: the short branch name ("heads/name" when a tag or another ref would
+    /// make the short name ambiguous), "HEAD" when detached, null for an unborn branch.
+    /// </summary>
+    private static string? HeadBranchName(Repository repo)
+    {
+        if (repo.Info.IsHeadDetached)
+        {
+            return "HEAD";
+        }
+
+        var head = repo.Head;
+        if (head.Tip is null)
+        {
+            return null;
+        }
+
+        const string headsPrefix = "refs/heads/";
+        if (!head.CanonicalName.StartsWith(headsPrefix, StringComparison.Ordinal))
+        {
+            throw new NotSupportedException($"HEAD points at '{head.CanonicalName}', outside refs/heads.");
+        }
+
+        var name = head.CanonicalName[headsPrefix.Length..];
+        string[] competing = [$"refs/{name}", $"refs/tags/{name}", $"refs/remotes/{name}", $"refs/remotes/{name}/HEAD"];
+        return competing.Any(reference => repo.Refs[reference] is not null) ? "heads/" + name : name;
     }
 
     public string? ReadBlobAtHead(string workingDirectory, string relativePath, TimeSpan cliTimeout)

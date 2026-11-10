@@ -916,6 +916,12 @@ public class GitReaderParityTests
             return null;
         }
 
+        public WorkingTreeStatus? GetRepositoryStatus(string workingDirectory, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
         public string? ReadBlobAtHead(string workingDirectory, string relativePath, TimeSpan cliTimeout)
         {
             Gate();

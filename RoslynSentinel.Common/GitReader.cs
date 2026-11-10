@@ -19,6 +19,16 @@ internal sealed record ChangedCommit(string ShortHash, string Subject, IReadOnly
 internal sealed record CommitMessage(string Sha, string Message);
 
 /// <summary>
+/// Everything the Git tool's <c>status</c> operation reads in one typed answer. <see cref="Branch"/> is what
+/// <c>git rev-parse --abbrev-ref HEAD</c> prints: the branch's short name, <c>HEAD</c> when detached, null when HEAD
+/// cannot be resolved (an unborn branch). <see cref="Changes"/> are the porcelain rows with every untracked file listed
+/// individually (<c>--untracked-files=all</c>), tracked rows first and then untracked rows, each group in git's
+/// byte-wise path order. <see cref="InProgress"/> names the half-finished multi-step operation
+/// (see <see cref="GitOperationState.Detect"/>), null when none.
+/// </summary>
+internal sealed record WorkingTreeStatus(string? Branch, IReadOnlyList<WorkingTreeChange> Changes, string? InProgress);
+
+/// <summary>
 /// Which implementation answered a git read. <see cref="None"/> until the first call.
 /// </summary>
 internal enum GitReaderBackend
@@ -50,6 +60,13 @@ internal interface IGitReader
     /// <paramref name="pathspecs"/> restrict the rows (relative to <paramref name="workingDirectory"/>; git glob semantics, no pathspec magic).
     /// </summary>
     IReadOnlyList<WorkingTreeChange>? GetStatus(string workingDirectory, IReadOnlyList<string>? pathspecs, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// What the Git tool's <c>status</c> operation presents: branch, every changed and untracked file individually, and the
+    /// in-progress operation (see <see cref="WorkingTreeStatus"/>). Null when git cannot answer (not a repository, git
+    /// missing or timed out, <c>status</c> failing); an unborn HEAD is an answer with a null <see cref="WorkingTreeStatus.Branch"/>.
+    /// </summary>
+    WorkingTreeStatus? GetRepositoryStatus(string workingDirectory, TimeSpan cliTimeout);
 
     /// <summary>The content of the blob at <paramref name="relativePath"/> (relative to <paramref name="workingDirectory"/>) in HEAD, decoded as UTF-8; null when HEAD has no such blob (missing path, or a directory).</summary>
     string? ReadBlobAtHead(string workingDirectory, string relativePath, TimeSpan cliTimeout);
