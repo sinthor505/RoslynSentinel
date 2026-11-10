@@ -179,13 +179,51 @@ public class RefactoringSignatureImpl
         // refusal and CompilerErrorLookupHelper adds the CS0101/CS0111 hint. RenameSymbolTool is a rename, not a merge, so no
         // body-reconciliation policy exists to apply. Decision 13 in
         // docs/current/proposals/proposal_journal_digest_followup_decisions.md: do not re-investigate or "fix" this.
+        // A renamed top-level type whose file is named after it takes the file along (IDE behaviour; eval run 113 T15: the model
+        // read the old-stem file's new name and found nothing). The file move rides in the SAME apply as the symbol rename, so
+        // it is atomic: a failure anywhere refuses the whole rename and writes nothing, never a renamed symbol in an old-named
+        // file. Only the matching-stem declaration files move; if the target name is taken, that file stays and the response says why.
+        string? solutionRoot = _workspaceManager.GetSolutionRoot();
+        string RelativeOrAbsolute(FilePathWrapper path) => solutionRoot is null ? path.Absolute : Path.GetRelativePath(solutionRoot, path.Absolute);
+        var changes = new Dictionary<FilePathWrapper, string>(result.PendingChanges);
+        var fileMoves = new List<(FilePathWrapper From, FilePathWrapper To)>();
+        var deletePaths = new List<FilePathWrapper>();
+        var skippedMoveNotes = new List<string>();
+        // READCHOKEPOINT-CAST: read the committed solution through the reader view of the workspace manager.
+        var committedForMoves = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        foreach (var (from, to, skipReason) in TypeFileRename.FindMatchingFiles(committedForMoves, resolution.Symbol!, result.NewName, solutionRoot))
+        {
+            if (!changes.TryGetValue(from, out var movedContent))
+                continue;
+            if (skipReason is not null)
+            {
+                skippedMoveNotes.Add($"'{RelativeOrAbsolute(from)}' is named after '{result.OldName}' but was not renamed: {skipReason}.");
+                continue;
+            }
+
+            if (TypeFileRename.TargetExists(to) || changes.ContainsKey(to))
+            {
+                skippedMoveNotes.Add($"'{RelativeOrAbsolute(from)}' is named after '{result.OldName}' but was not renamed: '{RelativeOrAbsolute(to)}' already exists. Rename or delete that file first, then {ToolCallHint.Call("SyncTypeAndFilename")} to move this one.");
+                continue;
+            }
+
+            deletePaths.AddRange(TypeFileRename.MoveInto(changes, from, to, movedContent));
+            fileMoves.Add((from, to));
+        }
+
         var apply = await ValidateAndApplyAsync(
-            result.PendingChanges,
+            changes,
             $"Rename '{result.OldName}' to '{result.NewName}'.",
-            "RenameSymbol", dryRun, returnDiff, cancellationToken: cancellationToken);
+            "RenameSymbol", dryRun, returnDiff, cancellationToken: cancellationToken,
+            deletePaths: deletePaths.Count == 0 ? null : deletePaths);
 
         if (apply.Error is not null)
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
+
+        // fileRenamed is the first move; any further moves (same-named partial files in different folders) are named in the note.
+        var fileRenamed = fileMoves.Count == 0 ? null : new RenameSymbolFileRenamed(RelativeOrAbsolute(fileMoves[0].From), RelativeOrAbsolute(fileMoves[0].To));
+        var fileRenameNotes = fileMoves.Skip(1).Select(m => $"Also renamed '{RelativeOrAbsolute(m.From)}' to '{RelativeOrAbsolute(m.To)}'.").Concat(skippedMoveNotes).ToList();
+        string? fileRenameNote = fileRenameNotes.Count == 0 ? null : string.Join(" ", fileRenameNotes);
 
         // Residual mentions: return only a small summary (owner ruling D2); the full rows are stored once as an Envelope
         // large result and reached through the per-bucket GetLargeResult calls in residualMentions.details.
@@ -222,7 +260,9 @@ public class RefactoringSignatureImpl
                     : null,
                 residualMentions = residualView,
                 residualMentionsNote = residualNote,
-                docCommentIdNote
+                docCommentIdNote,
+                fileRenamed,
+                fileRenameNote
             }
         };
     }

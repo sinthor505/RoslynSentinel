@@ -1536,8 +1536,15 @@ public class OrderPricingRefactorChainAgentTests
     // Shared helpers
     // ============================================================================================
 
-    private string CalculatorPath =>
-        Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "FixtureHelpers", "OrderPricingCalculator.cs");
+    private string CalculatorPath
+    {
+        get
+        {
+            var directory = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "FixtureHelpers");
+            var renamed = Path.Combine(directory, "StandardOrderPricingCalculator.cs");
+            return File.Exists(renamed) ? renamed : Path.Combine(directory, "OrderPricingCalculator.cs");
+        }
+    }
 
     private string CheckoutPath =>
         Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "FixtureHelpers", "OrderCheckout.cs");

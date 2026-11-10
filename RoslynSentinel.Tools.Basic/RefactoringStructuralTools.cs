@@ -31,7 +31,11 @@ public sealed record RenameSymbolData(
     RenameSymbolUpdatedHandle? UpdatedHandle,
     ResidualMentionsView? ResidualMentions,
     string? ResidualMentionsNote,
-    string? DocCommentIdNote = null);
+    string? DocCommentIdNote = null,
+    RenameSymbolFileRenamed? FileRenamed = null,
+    string? FileRenameNote = null);
+// A top-level type's file is renamed together with the type (paths relative to the solution root where one is loaded).
+public sealed record RenameSymbolFileRenamed(string From, string To);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on

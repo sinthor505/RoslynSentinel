@@ -14,7 +14,7 @@ public class RefactoringSignatureTools
 
     [McpServerTool(Name = "RenameSymbol", UseStructuredContent = false, OutputSchemaType = typeof(RenameSymbolResultEnvelope))]
     [Produces(DataTag.ChangeId)]
-    [Description("Renames a symbol and all its references. Returns changeId, updatedHandle, residualMentions (summary of old-name hits it couldn't reach; rows via details). Types/members: does not touch using directives (use UsingDirective). Namespace: docCommentId N:Ns.Name, newName = new last segment.")]
+    [Description("Renames a symbol and all its references; also renames the file when it is named after the renamed top-level type (fileRenamed). Returns changeId, updatedHandle, residualMentions (summary of old-name hits it couldn't reach; rows via details). Types/members: does not touch using directives (use UsingDirective). Namespace: docCommentId N:Ns.Name, newName = new last segment.")]
     public Task<SentinelCallToolResult<object>> RenameSymbolTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description(ToolParams.ProjectName)] string projectName,

@@ -1415,23 +1415,15 @@ public class RefactoringStructuralImpl
                 return RefactoringToolHelpers.RequireUpdatedText(result, "SyncTypeAndFilename", filePathResolved)!;
 
             var (newPath, content) = result.Changes.First();
-            if (File.Exists(newPath))
+            if (TypeFileRename.TargetExists(newPath))
             {
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ToolErrorCode.TargetIneligible, $"SyncTypeAndFilename: target file '{newPath}' already exists - refusing to overwrite. Pass targetTypeName to pick a different type, or rename or delete the existing file first.") };
             }
 
-            // deletePaths (not removePaths) so the old file's delete goes through
-            // ApplyProposedChangesAsync's tracked delete path: that's what captures its pre-image
-            // content into the operation blob, which is what makes UndoLastApplyTool able to actually
-            // restore a rename instead of reporting NoReversibleItems for it. It also removes the
-            // old Document from the workspace itself, so a separate RemoveDocumentByPathAsync call
-            // is no longer needed afterward. Passing filePathResolved in BOTH removePaths and
-            // deletePaths would ask ValidateChangesAsync to RemoveDocument the same path twice
-            // against its own candidate solution, throwing InvalidOperationException on the second
-            // attempt (deletePaths already covers pre-validate exclusion via ValidateAndApplyHelper's
-            // allRemovePaths merge) -> removePaths is intentionally omitted here.
-            var changes = new Dictionary<FilePathWrapper, string> { [newPath] = content };
-            var apply = await ValidateAndApplyAsync(changes, result.Message ?? $"Rename '{Path.GetFileName(filePathResolved)}' to '{Path.GetFileName(newPath)}'.", "SyncTypeAndFilename", dryRun, returnDiff, cancellationToken: cancellationToken, deletePaths: [filePathResolved]);
+            // The old file goes through deletePaths (not removePaths); the why is on TypeFileRename.MoveInto, shared with RenameSymbol.
+            var changes = new Dictionary<FilePathWrapper, string>();
+            var deletePaths = TypeFileRename.MoveInto(changes, filePathResolved, newPath, content);
+            var apply = await ValidateAndApplyAsync(changes, result.Message ?? $"Rename '{Path.GetFileName(filePathResolved)}' to '{Path.GetFileName(newPath)}'.", "SyncTypeAndFilename", dryRun, returnDiff, cancellationToken: cancellationToken, deletePaths: deletePaths);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
 
