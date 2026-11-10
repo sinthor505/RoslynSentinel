@@ -1462,7 +1462,46 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 // load/reload (WithDocumentText/AddDocument only ever update this manager's
                 // in-memory CurrentSolution property, never the underlying _workspace). Fold just
                 // the changed .cs files into the existing CurrentSolution instead.
-                bool needsReloadAfterAll = await ApplyInMemoryDocumentUpdatesAsync(changes, CancellationToken.None);
+                // Lock rules (same as the write chokepoint): (a) _solutionLock is already held here, so the OS write
+                // lock is taken inside it, never the reverse; (b) the FileStream lock is NOT re-entrant, so it is taken
+                // only at this entry point - ApplyInMemoryDocumentUpdatesAsync must never take it; (c) it is released
+                // before the reload handling below and is never held across a full MSBuild reload.
+                WriteLockLease? foldLease = null;
+                var foldLockRoot = WriteLockRoot();
+                if (foldLockRoot is not null)
+                {
+                    var foldHolder = new WriteLockHolder(null, "server-debounce", "DebounceFold", "folding external file changes into the workspace", DateTime.UtcNow);
+                    // TODO the debounce busy path waits up to DebounceWait while holding _solutionLock (accepted for v1, plan_stale_read_guard_followups Step 9c)
+                    var foldAcquired = await CrossProcessWriteLock.AcquireAsync(foldLockRoot, foldHolder, WriteLockOptions.DebounceWait, CancellationToken.None);
+                    if (!foldAcquired.Acquired)
+                    {
+                        // Busy: re-queue the changes and retry later. No disk read, no latch, no reload-failure record.
+                        foreach (var changed in changes)
+                        {
+                            _pendingChanges.TryAdd(changed, DateTime.UtcNow);
+                        }
+                        if (watcherErrored)
+                        {
+                            _watcherErrored = true;
+                        }
+                        _debounceTimer.Change(DebounceRetryDelayMs, Timeout.Infinite);
+                        return;
+                    }
+                    foldLease = foldAcquired.Lease;
+                }
+
+                bool needsReloadAfterAll;
+                try
+                {
+                    needsReloadAfterAll = await ApplyInMemoryDocumentUpdatesAsync(changes, CancellationToken.None);
+                }
+                finally
+                {
+                    if (foldLease is not null)
+                    {
+                        await foldLease.DisposeAsync();
+                    }
+                }
                 if (needsReloadAfterAll)
                 {
                     var slnPath = _workspace.CurrentSolution.FilePath;
