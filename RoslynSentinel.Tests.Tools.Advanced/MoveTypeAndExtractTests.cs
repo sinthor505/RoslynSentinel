@@ -8,7 +8,6 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
 // In-memory (FakeWorkspaceManager) tests split out of BatteryTwentyFourTests so they cannot leak files into the bin dir.
-// TODO move the ChangeSignature/MoveMember/MoveAllTypesToFiles tests of this file to Tests.Tools.Basic (needs the file split)
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
 public sealed class MoveTypeAndExtractTests
@@ -67,44 +66,6 @@ public sealed class MoveTypeAndExtractTests
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Status.cs"), Does.Contain("enum Status"));
         Assert.That(workspace.ReadText("Order.cs"), Does.Not.Contain("enum Status"));
-    }
-
-    // --- MoveAllTypesToFiles (file scope) ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task MoveAllTypesToFiles_FileScope_EachTypeGetsOwnFile()
-    {
-        using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
-        var result = await tools.MoveAllTypesToFilesTool(reason: "test message", ToolScope.file, workspace.PathOf("Order.cs"));
-        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
-        Assert.That(workspace.ReadText("Status.cs"), Does.Contain("enum Status"));
-        Assert.That(workspace.ReadText("IService.cs"), Does.Contain("interface IService"));
-        Assert.That(workspace.ReadText("Order.cs"), Does.Not.Contain("enum Status"));
-    }
-
-    // --- MoveAllTypesToFiles (project scope) ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task MoveAllTypesToFilesInProject_ProjectScope_MovesStatusToOwnFile()
-    {
-        using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
-        var result = await tools.MoveAllTypesToFilesTool(reason: "test message", ToolScope.project, "InMemoryProject");
-        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
-        Assert.That(workspace.ReadText("Status.cs"), Does.Contain("enum Status"));
-    }
-
-    // --- MoveAllTypesToFiles (solution scope) ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task MoveAllTypesToFilesInSolution_SolutionScope_MovesStatusToOwnFile()
-    {
-        using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BatteryToolFactory.CreateCoreRefactoringTools(workspace.Manager);
-        var result = await tools.MoveAllTypesToFilesTool(reason: "test message", ToolScope.solution);
-        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
-        Assert.That(workspace.ReadText("Status.cs"), Does.Contain("enum Status"));
     }
 
     // --- ExtractMembersToPartial ---

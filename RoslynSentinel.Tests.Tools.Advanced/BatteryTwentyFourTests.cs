@@ -138,13 +138,6 @@ public class BatteryTwentyFourTests
         return (dir, System.IO.Path.Combine(dir, "Refactor.cs"));
     }
 
-    private async Task<string> ReadCommittedRefactorText()
-    {
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
-        var doc = solution.Projects.SelectMany(p => p.Documents).Single(d => d.Name == "Refactor.cs");
-        return (await doc.GetTextAsync()).ToString();
-    }
-
     private async Task<string> ReadCommittedText(string fileName)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
