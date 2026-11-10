@@ -1,7 +1,6 @@
-using System.Diagnostics;
-
 using RoslynSentinel.Common.GitWorktree;
 using RoslynSentinel.Tools.Advanced;
+using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;
 
 namespace RoslynSentinel.Tests.SubAgent;
 
@@ -20,18 +19,18 @@ public class WorktreeTeardownTests
     [SetUp]
     public void SetUp()
     {
-        Assume.That(RunGit(Path.GetTempPath(), "--version").ExitCode, Is.EqualTo(0), "git must be on PATH");
+        Assume.That(IsGitAvailable(), "git must be on PATH");
 
         _root = Path.Combine(Path.GetTempPath(), "subagent-worktree-tests-" + Guid.NewGuid().ToString("N")[..8]);
         _repo = Path.Combine(_root, "repo");
         Directory.CreateDirectory(_repo);
 
-        RunGitOrFail(_repo, "init", "--quiet");
-        RunGitOrFail(_repo, "config", "user.email", "test@example.com");
-        RunGitOrFail(_repo, "config", "user.name", "Test");
+        RunGit(_repo, "init", "--quiet");
+        RunGit(_repo, "config", "user.email", "test@example.com");
+        RunGit(_repo, "config", "user.name", "Test");
         File.WriteAllText(Path.Combine(_repo, "a.txt"), "hello");
-        RunGitOrFail(_repo, "add", "-A");
-        RunGitOrFail(_repo, "commit", "--quiet", "-m", "initial");
+        RunGit(_repo, "add", "-A");
+        RunGit(_repo, "commit", "--quiet", "-m", "initial");
     }
 
     [TearDown]
@@ -51,35 +50,6 @@ public class WorktreeTeardownTests
         Directory.Delete(_root, recursive: true);
     }
 
-    private static (int ExitCode, string StdOut, string StdErr) RunGit(string workingDirectory, params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = true,
-            UseShellExecute = false,
-        };
-        foreach (var arg in args)
-        {
-            psi.ArgumentList.Add(arg);
-        }
-
-        using var process = Process.Start(psi)!;
-        process.StandardInput.Close();
-        var stdOut = process.StandardOutput.ReadToEnd();
-        var stdErr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        return (process.ExitCode, stdOut, stdErr);
-    }
-
-    private static void RunGitOrFail(string workingDirectory, params string[] args)
-    {
-        var (exitCode, _, stdErr) = RunGit(workingDirectory, args);
-        Assert.That(exitCode, Is.EqualTo(0), $"git {string.Join(' ', args)} failed: {stdErr}");
-    }
-
     private (GitWorktreeManager Git, string Worktree, string Branch) CreateRun()
     {
         var runId = SubAgentRunNaming.NewRunId();
@@ -94,7 +64,7 @@ public class WorktreeTeardownTests
     }
 
     private bool BranchExists(string branch) =>
-        RunGit(_repo, "rev-parse", "--verify", "--quiet", branch).ExitCode == 0;
+        RunGitRaw(_repo, "rev-parse", "--verify", "--quiet", branch).ExitCode == 0;
 
     [Test]
     public void DirtyWorktree_IsRefusedWithoutForce_AndRemovedWithIt()

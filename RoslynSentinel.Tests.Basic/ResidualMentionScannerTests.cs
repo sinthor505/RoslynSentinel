@@ -9,6 +9,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 
 using RoslynSentinel.Engines.Basic;
+using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;
 
 namespace RoslynSentinel.Tests.Basic;
 
@@ -199,7 +200,7 @@ public class ResidualMentionScannerTests
     {
         InitGitRepo();
         WriteFileUnderRoot("notes.md", "Mentions OldName here.\n");
-        RunGit("add", "notes.md");
+        RunGit(_root, "add", "notes.md");
 
         var mentions = await ResidualMentionScanner.ScanAsync(new AdhocWorkspace().CurrentSolution, _root, "OldName", isNamespace: false);
 
@@ -214,7 +215,7 @@ public class ResidualMentionScannerTests
         WriteFileUnderRoot("notes.md", "Mentions OldName here.\n");
         WriteFileUnderRoot(Path.Combine("bin-vscode", "app.deps.json"), "{ \"k\": \"OldName\" }\n");
         WriteFileUnderRoot("untracked.md", "OldName untracked\n");
-        RunGit("add", ".gitignore", "notes.md");
+        RunGit(_root, "add", ".gitignore", "notes.md");
 
         var mentions = await ResidualMentionScanner.ScanAsync(new AdhocWorkspace().CurrentSolution, _root, "OldName", isNamespace: false);
 
@@ -224,30 +225,7 @@ public class ResidualMentionScannerTests
     // Turns _root into a git repository. No commit is made: --cached reads the index.
     private void InitGitRepo()
     {
-        RunGit("init", "--quiet");
-    }
-
-    private void RunGit(params string[] args)
-    {
-        var info = new System.Diagnostics.ProcessStartInfo("git")
-        {
-            WorkingDirectory = _root,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        foreach (var arg in args)
-        {
-            info.ArgumentList.Add(arg);
-        }
-
-        using var process = System.Diagnostics.Process.Start(info)!;
-        process.StandardInput.Close();
-        var stderr = process.StandardError.ReadToEnd();
-        process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
-        Assert.That(process.ExitCode, Is.EqualTo(0), $"git {string.Join(' ', args)} failed: {stderr}");
+        RunGit(_root, "init", "--quiet");
     }
 
     [Test]
