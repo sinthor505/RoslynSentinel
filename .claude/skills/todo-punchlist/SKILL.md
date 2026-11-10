@@ -58,6 +58,9 @@ entries by text later, as lines shift.
   close finished entries with `scripts/Close-TodoItem.ps1 -Prefix -Title -Evidence`; shrink partial
   entries in TODO.md to what is left.
 - Read the report, update the tracker.
+- Every progress update to the owner leads with done/total, remaining, time so far and a rough time
+  left, e.g. "7 of 16 items done, 9 remaining; ~50 min so far, ~2 h left (about 17 min/batch)". Log
+  each batch's duration (`duration_ms` from its notification) in the tracker and estimate from it.
 
 ## 6. After each batch
 

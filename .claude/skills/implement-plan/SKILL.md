@@ -58,6 +58,9 @@ is the step heading. Owner rulings include the mode and the presence answer.
 - After each Direct step or each batch: update the tracker, mark the step in the plan doc
   (`- Done: <hash>`), update its Status line to `IN PROGRESS <date>. Steps <n-m> done (<hashes>).`,
   and commit the doc. Run tests per the reference.
+- Every progress update to the owner leads with done/total, remaining, time so far and a rough time
+  left, e.g. "13 of 28 slices done, 15 remaining; ~2 h so far, ~3 h left (about 10 min/slice)". Log
+  each batch's duration (`duration_ms` from its notification) in the tracker and estimate from it.
 - Server source changed and a step needs a live check: `Build(level: fullBuild)`, restart your own
   idle instance, `LoadSolution`, then check.
 - A step blocked by a deferred decision or a blocker: continue with steps that do not depend on it;
