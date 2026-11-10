@@ -6,7 +6,8 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// <see cref="ServerBinaryStaleness.EvaluateGit"/> against throwaway git repos. Takes the sha and directory as
 /// arguments, so it never touches the static LoadedSolutionDirectory / Current cache (safe in parallel).
 /// </summary>
-// Flaky on full/parallel runs: a different test of this fixture sometimes fails with 'git failed to run: ...' (git spawn); passes when the fixture is run alone.
+// KNOWN FLAKE on full/parallel runs (spawns git): disregard a failure here when the change did not touch process spawning; re-run the class alone first.
+// Suspected cause: pipe EOF reads starved under load. Fix pointer: GitProcess.TryRun dedicated reader threads and GitTestRepo (docs/current/issues/issue_process_spawn_test_flake.md).
 [TestFixture]
 [Category("OutOfProcess")] // starts git/dotnet/powershell processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class ServerBinaryStalenessGitTests
@@ -53,8 +54,7 @@ public class ServerBinaryStalenessGitTests
         return RunGit(_repo, "rev-parse", "HEAD");
     }
 
-    // Suspected flaky: failed once in a full solution run ("git failed to run: init --quiet", null result) and passed when the class ran alone.
-[Test]
+    [Test]
     public void SameSha_IsNotStale()
     {
         var sha = Commit("RoslynSentinel.Common/a.cs", "first");
@@ -74,9 +74,7 @@ public class ServerBinaryStalenessGitTests
         Assert.That(ServerBinaryStaleness.EvaluateGit(sha, _repo).IsStale, Is.False);
     }
 
-    // Fails only on full/parallel runs with 'git failed to run: rev-parse HEAD': GitProcess.TryRun returned null
-    // (process start, 60s timeout, or pipe EOF wait under load), not a shared-repo collision (each test has its own GUID repo).
-    // Passes alone; do not paper over it with retry loops.
+    // Known flake (see the class comment); do not paper over it with retry loops.
     [Test]
     [NonParallelizable]
     public void LaterCommitTouchingServerSource_IsStaleAndListed()

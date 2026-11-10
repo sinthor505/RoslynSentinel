@@ -9,6 +9,8 @@ namespace RoslynSentinel.Tests.SubAgent;
 /// worktree, let a "model" dirty it, then force-remove it and delete its branch. The non-forced
 /// removal PlanStepRunner uses refuses a dirty tree, which is exactly why the force option exists.
 /// </summary>
+// KNOWN FLAKE on full/parallel runs (spawns git): disregard a failure here when the change did not touch process spawning; re-run the class alone first.
+// Suspected cause: pipe EOF reads starved under load. Fix pointer: GitProcess.TryRun dedicated reader threads and GitTestRepo (docs/current/issues/issue_process_spawn_test_flake.md).
 [TestFixture]
 [Category("OutOfProcess")] // starts git/dotnet/powershell processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class WorktreeTeardownTests
