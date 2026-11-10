@@ -30,6 +30,8 @@
 			<InternalsVisibleTo Include="RoslynSentinel.Engines.Basic" />
 			<!-- StaleReadGuardTests uses the internal AddExternalChangeForTest drift seam. -->
 			<InternalsVisibleTo Include="RoslynSentinel.Tests.Basic" />
+		<!-- GitImpl.RunGitAsync / RunGitBytesAsync are thin wrappers over the internal GitProcess runner. -->
+		<InternalsVisibleTo Include="RoslynSentinel.Tools.Basic" />
 	</ItemGroup>
 
 </Project>

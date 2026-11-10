@@ -207,34 +207,24 @@ public sealed class GitWorktreeManager(
         return exitCode == 0 ? null : $"{stdOut}\n{stdErr}".Trim();
     }
 
+    // A hang backstop, not a latency bound: `git worktree add` checks out the whole tree and `worktree remove --force`
+    // deletes it, which on a large repo (this one included) can take minutes, and the old runner had no timeout at all.
+    private static readonly TimeSpan GitCommandTimeout = TimeSpan.FromMinutes(10);
+
     private static (int ExitCode, string StdOut, string StdErr) RunGit(string workingDirectory, params string[] gitArgs)
     {
-        var psi = new ProcessStartInfo("git")
+        // GitProcess closes stdin (a git child inheriting the host's stdin, the live JSON-RPC pipe inside a stdio MCP
+        // server or a test host launched by one, can stall indefinitely), drains stdout and stderr concurrently and
+        // kills the tree on timeout. Failures throw as the old Process.Start/WaitForExit code did.
+        var run = GitProcess.Run(workingDirectory, gitArgs, GitCommandTimeout);
+        return run.Outcome switch
         {
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = true,
-            UseShellExecute = false,
+            GitRunOutcome.Completed => (run.ExitCode, run.StdOut, run.StdErr),
+            GitRunOutcome.Failed => throw new InvalidOperationException(
+                $"git {string.Join(' ', gitArgs)} could not be run in {workingDirectory}: {run.FailureDetail}"),
+            _ => throw new TimeoutException(
+                $"git {string.Join(' ', gitArgs)} did not finish in {workingDirectory} ({run.FailureDetail})"),
         };
-        // Non-interactive by construction: git must never prompt for credentials.
-        psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
-        psi.Environment["GCM_INTERACTIVE"] = "never";
-        foreach (var a in gitArgs)
-        {
-            psi.ArgumentList.Add(a);
-        }
-
-        using var process = Process.Start(psi)!;
-        // Close stdin immediately. Without this the child inherits the host's stdin, which inside a
-        // stdio MCP server (or a test host launched by one) is the live JSON-RPC pipe; a git child
-        // holding that open can stall indefinitely. Same fix and rationale as GitImpl.RunGitAsync.
-        process.StandardInput.Close();
-        // TODO stdout then stderr are read sequentially, which can deadlock on large stderr and has no timeout; GitProcess.TryRun drains both concurrently with a timeout - migrate RunGit onto it.
-        var stdOut = process.StandardOutput.ReadToEnd();
-        var stdErr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        return (process.ExitCode, stdOut, stdErr);
     }
 
     private static void RunGitOrThrow(string workingDirectory, params string[] gitArgs)

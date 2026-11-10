@@ -580,7 +580,26 @@ public class GitImpl : IGitOperations
     // documented in docs/current/blockers/blocking_error_git_status_timeout.md (first hang is always
     // the process-spawn itself, not anything git does once running). Falls back to "git" if PATH
     // resolution fails here, preserving prior behavior.
-    private static readonly string GitExecutablePath = ResolveGitExecutablePath();
+    private static readonly string GitExecutablePath = GitProcess.ResolveGitExecutablePath();
+
+    // Belt-and-braces on top of the UTF-8 pipe decoding GitProcess applies: tell git itself to treat commit/log
+    // text as UTF-8, in case a repo-level i18n.* config otherwise changes how git encodes that text before it
+    // ever reaches the pipe (docs/current/blockers/blocking_error_git_diff_mojibake_display.md).
+    private static readonly string[] GitEncodingConfigArgs =
+        ["-c", "i18n.logOutputEncoding=utf-8", "-c", "i18n.commitEncoding=utf-8"];
+
+    private static readonly GitRunOptions GitTextRunOptions = new()
+    {
+        GitExecutable = GitExecutablePath,
+        PrefixArgs = GitEncodingConfigArgs,
+    };
+
+    private static readonly GitRunOptions GitBytesRunOptions = new()
+    {
+        GitExecutable = GitExecutablePath,
+        PrefixArgs = GitEncodingConfigArgs,
+        StdOutAsBytes = true,
+    };
 
     public GitImpl(ISolutionProvider workspaceManager)
     {
@@ -1645,155 +1664,103 @@ public class GitImpl : IGitOperations
 
         return null;
     }
+
+    // Runs git through the shared GitProcess runner and keeps GitImpl's old contract: a git that does not exit
+    // within GitProcessTimeout is killed and surfaces as TimeoutException (a caller-supplied token still cancels
+    // earlier and surfaces as OperationCanceledException). The timeout covers MCP calls that omit cancellationToken,
+    // which would otherwise wait on a hung git process forever.
+    private async Task<GitRunResult> RunGitCoreAsync(
+        string gitRoot, string[] args, GitRunOptions options, CancellationToken cancellationToken)
+    {
+        var run = await GitProcess.RunAsync(gitRoot, args, GitProcessTimeout, cancellationToken, options);
+        switch (run.Outcome)
+        {
+            case GitRunOutcome.Completed:
+                return run;
+            case GitRunOutcome.Failed:
+                throw new InvalidOperationException($"Git could not be run: {run.FailureDetail}");
+            default:
+                // Full detail (args, timeout value, TODO cross-reference) is server-side only, via the logger
+                // call below -> every caller's catch block folds the thrown exception's Message straight into
+                // the ResultError text returned to the agent, so that Message must stay a plain, self-contained
+                // statement with no internal paths/docs the agent can't open.
+                if (_logger.IsEnabled(LogLevel.Error))
+                {
+                    _logger.LogError(
+                        "git {Args} did not finish within {TimeoutSeconds}s ({Outcome}: {Detail}) and was killed. Not a normal git " +
+                        "failure - see docs/TODO.md's 'Git(operation: status) hung indefinitely' entry.",
+                        string.Join(' ', args), GitProcessTimeout.TotalSeconds, run.Outcome, run.FailureDetail); // hint-ok: logger message text, not a callable tool response
+                }
+
+                throw new TimeoutException($"Git operation timed out after {GitProcessTimeout.TotalSeconds:0}s and was cancelled.");
+        }
+    }
+
+    // Reproduces what Process.OutputDataReceived + StringBuilder.AppendLine produced: text split at CR, LF or CRLF,
+    // every line (empty ones included) re-terminated with Environment.NewLine, a missing final newline added, and
+    // empty text staying empty. Removing this changes the text of every Git tool result (CRLF becomes whatever git
+    // wrote), so it stays until the callers are audited (see the TODO in RunGitAsync).
+    private static string RejoinLines(string text)
+    {
+        if (text.Length == 0)
+        {
+            return text;
+        }
+
+        var joined = new StringBuilder(text.Length + 16);
+        var lineStart = 0;
+        var i = 0;
+        while (i < text.Length)
+        {
+            var c = text[i];
+            if (c is '\r' or '\n')
+            {
+                joined.Append(text, lineStart, i - lineStart).Append(Environment.NewLine);
+                if (c == '\r' && i + 1 < text.Length && text[i + 1] == '\n')
+                {
+                    i++;
+                }
+
+                i++;
+                lineStart = i;
+            }
+            else
+            {
+                i++;
+            }
+        }
+
+        if (lineStart < text.Length)
+        {
+            joined.Append(text, lineStart, text.Length - lineStart).Append(Environment.NewLine);
+        }
+
+        return joined.ToString();
+    }
+
     private async Task<GitRawResult> RunGitAsync(
         string gitRoot, string[] args, CancellationToken cancellationToken)
     {
-        using var process = new System.Diagnostics.Process();
-        process.StartInfo = new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = GitExecutablePath,
-            WorkingDirectory = gitRoot,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            // Without these, Process decodes the redirected pipes using Console.OutputEncoding,
-            // which on Windows defaults to the legacy OS codepage, not UTF-8. GitTool writes UTF-8 to
-            // stdout/stderr regardless of that codepage, so every non-ASCII multi-byte character
-            // (e.g. an em dash in a diffed file) gets decoded one byte at a time as separate
-            // legacy-codepage characters and re-encoded into mojibake like "ΓÇö" - see
-            // docs/current/blockers/blocking_error_git_diff_mojibake_display.md. Forcing UTF-8 here
-            // makes decoding match what git actually wrote.
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
-        };
-        // Non-interactive by construction: stdin is closed and there is no console, so a credential
-        // prompt can never be answered and would otherwise hang until GitProcessTimeout kills it.
-        // GIT_TERMINAL_PROMPT=0 makes git itself fail fast ("terminal prompts disabled");
-        // GCM_INTERACTIVE=never does the same for GitTool Credential Manager, which can otherwise pop
-        // a GUI prompt that nobody is there to answer.
-        process.StartInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
-        process.StartInfo.Environment["GCM_INTERACTIVE"] = "never";
-        // Belt-and-braces: also tell git explicitly to treat commit/log text as UTF-8, in case a
-        // repo-level i18n.* config otherwise changes how git itself encodes that text before it
-        // ever reaches the pipe.
-        process.StartInfo.ArgumentList.Add("-c");
-        process.StartInfo.ArgumentList.Add("i18n.logOutputEncoding=utf-8");
-        process.StartInfo.ArgumentList.Add("-c");
-        process.StartInfo.ArgumentList.Add("i18n.commitEncoding=utf-8");
-        foreach (var arg in args)
-            process.StartInfo.ArgumentList.Add(arg);
-
-        var stdout = new StringBuilder();
-        var stderr = new StringBuilder();
-        process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdout.AppendLine(e.Data); };
-        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderr.AppendLine(e.Data); };
-
-        // A caller-supplied token (if any) can still cancel earlier than GitProcessTimeout -> this
-        // only adds a ceiling for the common case (MCP call omits cancellationToken, so this method
-        // otherwise gets CancellationToken.None and would wait on a hung git process forever).
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(GitProcessTimeout);
-
-        process.Start();
-        // Close stdin immediately: an inherited/open but undrained stdin handle is a known cause of
-        // a spawned console child stalling indefinitely waiting for input it will never receive,
-        // even for commands (like rev-parse) that never read from it.
-        process.StandardInput.Close();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        try
-        {
-            await process.WaitForExitAsync(timeoutCts.Token);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            TryKillGitProcess(process);
-            // Full detail (args, timeout value, TODO cross-reference) is server-side only, via the
-            // logger call below -> every caller's catch block folds the thrown exception's Message
-            // straight into the ResultError text returned to the agent, so that Message must stay
-            // a plain, self-contained statement with no internal paths/docs the agent can't open.
-            if (_logger.IsEnabled(LogLevel.Error))
-            {
-                _logger.LogError(
-                    "git {Args} did not exit within {TimeoutSeconds}s and was killed. Not a normal git " +
-                    "failure - see docs/TODO.md's 'Git(operation: status) hung indefinitely' entry.",
-                    string.Join(' ', args), GitProcessTimeout.TotalSeconds); // hint-ok: logger message text, not a callable tool response
-            }
-            throw new TimeoutException($"Git operation timed out after {GitProcessTimeout.TotalSeconds:0}s and was cancelled.");
-        }
-
+        var run = await RunGitCoreAsync(gitRoot, args, GitTextRunOptions, cancellationToken);
+        // TODO the line re-join below reproduces the old BeginOutputReadLine/AppendLine output (every line ends in
+        // Environment.NewLine, a missing final newline is added); drop it and return run.StdOut/StdErr verbatim once
+        // the ~69 callers and their tests are audited for CRLF-vs-LF and trailing-newline assumptions.
         return new GitRawResult
         {
-            ExitCode = process.ExitCode,
-            Stdout = stdout.ToString(),
-            Stderr = stderr.ToString()
+            ExitCode = run.ExitCode,
+            Stdout = RejoinLines(run.StdOut),
+            Stderr = RejoinLines(run.StdErr)
         };
     }
 
-    // Byte-exact sibling of RunGitAsync, for output whose line endings must survive untouched (a diff that
-    // will be re-applied as a patch). Its process setup is DUPLICATED from RunGitAsync on purpose: RunGitAsync
-    // reads stdout through OutputDataReceived, which splits on line breaks, drops each CR/LF and re-adds
-    // Environment.NewLine via AppendLine, so every line ending in a diff would be rewritten (CRLF on Windows).
-    // Here stdout is copied raw from the pipe's BaseStream and no StandardOutputEncoding is set; callers decode
-    // with Encoding.Latin1 so one char is one byte. Duplicated rather than refactored because every GitTool test
-    // depends on RunGitAsync. Follow-up: extract the shared process setup into one helper used by both.
+    // Byte-exact sibling of RunGitAsync, for output whose line endings must survive untouched (a diff that will be
+    // re-applied as a patch). Stdout comes back raw from GitProcess (no line re-join, no decoding); callers decode
+    // with Encoding.Latin1 so one char is one byte. Stderr is line-rejoined exactly as RunGitAsync does.
     private async Task<(int ExitCode, byte[] Stdout, string Stderr)> RunGitBytesAsync(
         string gitRoot, string[] args, CancellationToken cancellationToken)
     {
-        using var process = new System.Diagnostics.Process();
-        process.StartInfo = new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = GitExecutablePath,
-            WorkingDirectory = gitRoot,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            StandardErrorEncoding = Encoding.UTF8,
-        };
-        // Same non-interactive setup as RunGitAsync: fail fast instead of waiting on a credential prompt.
-        process.StartInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
-        process.StartInfo.Environment["GCM_INTERACTIVE"] = "never";
-        process.StartInfo.ArgumentList.Add("-c");
-        process.StartInfo.ArgumentList.Add("i18n.logOutputEncoding=utf-8");
-        process.StartInfo.ArgumentList.Add("-c");
-        process.StartInfo.ArgumentList.Add("i18n.commitEncoding=utf-8");
-        foreach (var arg in args)
-            process.StartInfo.ArgumentList.Add(arg);
-
-        var stderr = new StringBuilder();
-        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderr.AppendLine(e.Data); };
-
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(GitProcessTimeout);
-
-        process.Start();
-        process.StandardInput.Close();
-        process.BeginErrorReadLine();
-        using var stdout = new MemoryStream();
-        var copyTask = process.StandardOutput.BaseStream.CopyToAsync(stdout, timeoutCts.Token);
-        try
-        {
-            await process.WaitForExitAsync(timeoutCts.Token);
-            await copyTask;
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            TryKillGitProcess(process);
-            try { await copyTask; } catch (Exception) { /* the copy is abandoned with the killed process */ }
-            if (_logger.IsEnabled(LogLevel.Error))
-            {
-                _logger.LogError(
-                    "git {Args} did not exit within {TimeoutSeconds}s and was killed (byte-exact runner).",
-                    string.Join(' ', args), GitProcessTimeout.TotalSeconds);
-            }
-            throw new TimeoutException($"Git operation timed out after {GitProcessTimeout.TotalSeconds:0}s and was cancelled.");
-        }
-
-        return (process.ExitCode, stdout.ToArray(), stderr.ToString());
+        var run = await RunGitCoreAsync(gitRoot, args, GitBytesRunOptions, cancellationToken);
+        return (run.ExitCode, run.StdOutBytes, RejoinLines(run.StdErr));
     }
 
     private static FileDiffLoad NoUnstagedChangesLoad(string path) => new(path, null, GitErrorCodes.NoChanges,
@@ -2096,45 +2063,6 @@ public class GitImpl : IGitOperations
                     _logger.LogWarning(ex, "Could not delete temporary hunk patch file {PatchFile}", patchFile);
                 }
             }
-        }
-    }
-
-    private static string ResolveGitExecutablePath()
-    {
-        var pathVar = Environment.GetEnvironmentVariable("PATH") ?? "";
-        var extensions = OperatingSystem.IsWindows()
-            ? (Environment.GetEnvironmentVariable("PATHEXT") ?? ".EXE").Split(';')
-            : [""];
-
-        foreach (var dir in pathVar.Split(Path.PathSeparator))
-        {
-            if (dir.Length == 0)
-                continue;
-
-            foreach (var ext in extensions)
-            {
-                var candidate = Path.Combine(dir, "git" + ext);
-                if (File.Exists(candidate))
-                    return candidate;
-            }
-        }
-
-        // Fall back to bare "git" (prior behavior) so a PATH this scan couldn't see (e.g. an App
-        // Paths registry redirect) still has a chance to work rather than failing outright.
-        return "git";
-    }
-
-    private static void TryKillGitProcess(System.Diagnostics.Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
-        }
-        catch
-        {
-            // Best-effort -> the process may have exited between the check and the kill, or the
-            // handle may already be invalid. Nothing more useful to do here.
         }
     }
 
