@@ -1141,7 +1141,7 @@ public class StructuralRefactoringEngine
     /// and a "TODO: Update call sites" comment is added. Parameters are addressed by position, so an implementer that renamed them
     /// maps onto the same record properties.
     /// </summary>
-    private static MethodDeclarationSyntax RewriteMethodForParameterObject(MethodDeclarationSyntax method, IReadOnlyList<int> groupedIndices, IReadOnlyList<int> keptIndices, IReadOnlyList<string> propertyNames, string recordName, SyntaxTrivia todoNewLine)
+    private static MethodDeclarationSyntax RewriteMethodForParameterObject(MethodDeclarationSyntax method, IReadOnlyList<int> groupedIndices, IReadOnlyList<int> keptIndices, IReadOnlyList<string> propertyNames, string recordName, SyntaxTrivia todoNewLine, SemanticModel? semanticModel = null)
     {
         var parameters = method.ParameterList.Parameters;
         var requestParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier("request")).WithType(SyntaxFactory.ParseTypeName(recordName + " "));
@@ -1158,7 +1158,9 @@ public class StructuralRefactoringEngine
             rewriteMap[parameters[groupedIndices[k]].Identifier.Text] = $"request.{propertyNames[k]}";
         }
 
-        var rewriter = new ParamToPropertyRewriter(rewriteMap);
+        // The method's own symbol (null without a model) decides which identifiers bind to its grouped parameters.
+        var methodSymbol = semanticModel?.GetDeclaredSymbol(method);
+        var rewriter = new ParamToPropertyRewriter(rewriteMap, semanticModel, methodSymbol, groupedIndices, propertyNames);
         var newMethodNode = method.WithParameterList(newParamList);
         var todoLine = SyntaxFactory.Comment($"// TODO: Update call sites to use {recordName}");
         if (method.Body != null)
@@ -1341,7 +1343,7 @@ public class StructuralRefactoringEngine
         // reflowing the whole file, in the document's own line ending.
         var editAnnotation = Formatter.Annotation;
         var targetMarker = new SyntaxAnnotation("IntroduceParameterObject.Target");
-        var annotatedNewMethodNode = RewriteMethodForParameterObject(methodNode, groupedIndices, keptIndices, propertyNames, recordName, newLine).WithAdditionalAnnotations(editAnnotation, targetMarker);
+        var annotatedNewMethodNode = RewriteMethodForParameterObject(methodNode, groupedIndices, keptIndices, propertyNames, recordName, newLine, semanticModel).WithAdditionalAnnotations(editAnnotation, targetMarker);
         string? warning = null;
 
         // Interface-targeted: every implementer takes the record too (call sites stay manual).
@@ -1404,11 +1406,13 @@ public class StructuralRefactoringEngine
             var needsUsing = false;
             if (implementersByDocument.TryGetValue(editedDocument.Id, out var inDocument))
             {
+                // editedRoot is this document's own original root, so the implementers bind through its model.
+                var editedSemanticModel = await editedDocument.GetSemanticModelAsync(cancellationToken);
                 foreach (var implementer in inDocument)
                 {
                     if (editedRoot.FindNode(implementer.Declaration.Span) is MethodDeclarationSyntax located && !replacements.ContainsKey(located))
                     {
-                        replacements[located] = RewriteMethodForParameterObject(located, groupedIndices, keptIndices, propertyNames, recordName, newLine).WithAdditionalAnnotations(editAnnotation);
+                        replacements[located] = RewriteMethodForParameterObject(located, groupedIndices, keptIndices, propertyNames, recordName, newLine, editedSemanticModel).WithAdditionalAnnotations(editAnnotation);
                     }
 
                     needsUsing |= recordNamespace is { IsGlobalNamespace: false } && NamespaceNeedsUsing(implementer.Namespace, recordNamespace);
@@ -1483,17 +1487,53 @@ public class StructuralRefactoringEngine
         };
     }
 
-    // TODO ParamToPropertyRewriter rewrites any identifier matching a grouped parameter name, including member accesses like x.name
     private class ParamToPropertyRewriter : CSharpSyntaxRewriter
     {
         private readonly Dictionary<string, string> _map;
-        public ParamToPropertyRewriter(Dictionary<string, string> map)
+        private readonly SemanticModel? _semanticModel;
+        private readonly IMethodSymbol? _methodSymbol;
+        private readonly Dictionary<int, string> _ordinalMap = new Dictionary<int, string>();
+
+        // With a model, identifiers bind by symbol: only references to the grouped parameters of the rewritten method are
+        // replaced. Without one, the name-text map is used and member names, named-argument labels and object initializer
+        // targets are skipped.
+        public ParamToPropertyRewriter(Dictionary<string, string> map, SemanticModel? semanticModel, IMethodSymbol? methodSymbol, IReadOnlyList<int> groupedIndices, IReadOnlyList<string> propertyNames)
         {
             _map = map;
+            _semanticModel = semanticModel;
+            _methodSymbol = methodSymbol;
+            for (var k = 0; k < groupedIndices.Count; k++)
+            {
+                _ordinalMap[groupedIndices[k]] = $"request.{propertyNames[k]}";
+            }
         }
 
         public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
         {
+            // A named-argument label binds to the callee's parameter, so it is never a use of the grouped parameter.
+            if (node.Parent is NameColonSyntax)
+            {
+                return base.VisitIdentifierName(node);
+            }
+
+            if (_semanticModel is not null)
+            {
+                if (_methodSymbol is not null
+                    && _semanticModel.GetSymbolInfo(node).Symbol is IParameterSymbol parameter
+                    && SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol, _methodSymbol)
+                    && _ordinalMap.TryGetValue(parameter.Ordinal, out var boundReplacement))
+                {
+                    return SyntaxFactory.ParseExpression(boundReplacement).WithTriviaFrom(node);
+                }
+
+                return base.VisitIdentifierName(node);
+            }
+
+            if (IsMemberNameOrInitializerTarget(node))
+            {
+                return base.VisitIdentifierName(node);
+            }
+
             var name = node.Identifier.Text;
             if (_map.TryGetValue(name, out var replacement))
             {
@@ -1501,6 +1541,17 @@ public class StructuralRefactoringEngine
             }
 
             return base.VisitIdentifierName(node);
+        }
+
+        private static bool IsMemberNameOrInitializerTarget(IdentifierNameSyntax node)
+        {
+            return node.Parent switch
+            {
+                MemberAccessExpressionSyntax access => access.Name == node,
+                MemberBindingExpressionSyntax binding => binding.Name == node,
+                AssignmentExpressionSyntax assignment => assignment.Left == node && assignment.Parent is InitializerExpressionSyntax,
+                _ => false,
+            };
         }
     }
 

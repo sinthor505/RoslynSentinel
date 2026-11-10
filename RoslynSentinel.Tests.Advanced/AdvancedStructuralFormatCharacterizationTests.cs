@@ -698,4 +698,69 @@ public class AdvancedStructuralFormatCharacterizationTests
 
         Assert.That(ex!.Message, Does.Contain("Some/Dir/Missing.cs"));
     }
+
+    [Test]
+    public async Task IntroduceParameterObject_MemberNameLabelAndInitializerTarget_LeftUnchanged_ValueUsesRewritten()
+    {
+        SetSource(Src(false,
+            "using System;",
+            "",
+            "public class Other { public string name; }",
+            "public class Foo { public string name { get; set; } }",
+            "",
+            "public class Worker",
+            "{",
+            "    public void Run(string name, int count)",
+            "    {",
+            "        var other = new Other();",
+            "        Console.WriteLine(other.name);",
+            "        Log(name: name);",
+            "        var foo = new Foo { name = name };",
+            "        Console.WriteLine(name);",
+            "    }",
+            "",
+            "    private void Log(string name) { }",
+            "}"));
+
+        var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run", parameterNames: new[] { "name" });
+
+        Assert.That(result.UpdatedText, Does.Contain("public void Run(RunParameters request, int count)"));
+        Assert.That(result.UpdatedText, Does.Contain("Console.WriteLine(other.name);"), "A member access on another object is not a parameter use.");
+        Assert.That(result.UpdatedText, Does.Contain("Log(name: request.Name);"), "The named-argument label stays; only its value is a use.");
+        Assert.That(result.UpdatedText, Does.Contain("new Foo { name = request.Name }"), "The object-initializer member target stays; the value is a use.");
+        Assert.That(result.UpdatedText, Does.Contain("Console.WriteLine(request.Name);"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("Log(name: name)"));
+    }
+
+    [Test]
+    public async Task IntroduceParameterObject_InterfaceTargetRenamedImplementer_BindsByPosition_OtherMemberLeftUnchanged()
+    {
+        SetSource(Src(false,
+            "using System;",
+            "",
+            "public interface IWorker",
+            "{",
+            "    void Run(string name, int count);",
+            "}",
+            "",
+            "public class Other { public string n; }",
+            "",
+            "public class Worker : IWorker",
+            "{",
+            "    public void Run(string n, int c)",
+            "    {",
+            "        var other = new Other();",
+            "        Console.WriteLine(other.n);",
+            "        Console.WriteLine(n);",
+            "    }",
+            "}"));
+
+        var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run", parameterNames: new[] { "name" }, contextSnippet: "void Run(string name, int count);");
+
+        Assert.That(result.UpdatedText, Does.Contain("void Run(RunParameters request, int count);"));
+        Assert.That(result.UpdatedText, Does.Contain("public void Run(RunParameters request, int c)"), "The implementer's renamed parameter is rewritten by position.");
+        Assert.That(result.UpdatedText, Does.Contain("Console.WriteLine(other.n);"), "other.n is a member access on another object, not the parameter.");
+        Assert.That(result.UpdatedText, Does.Contain("Console.WriteLine(request.Name);"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("Console.WriteLine(n);"));
+    }
 }
