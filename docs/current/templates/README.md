@@ -51,5 +51,9 @@ and the monthly `closed_*.md` rollups; do not add new docs there.
     commit that finishes it carries `Closes: <id>` (put both above `Co-Authored-By`). Only `Closes:` means
     done; plans land in slices, so `Plan:` alone means in progress. Do not put IDs in code comments. On
     closing, update the doc's Status line, move it to its folder's `closed/` and move its TODO.md entry to
-    CLOSED.md. The report-only `TRAILER` check in `scripts/Test-GuidanceHygiene.ps1` (run with `pwsh`) flags unknown IDs and closure candidates; a `ProjectDoc` extension is not built (see
-    [idea_doc_id_commit_trailers_and_reconciliation.md](../ideas/idea_doc_id_commit_trailers_and_reconciliation.md)).
+    CLOSED.md. The report-only `TRAILER` check in `scripts/Test-GuidanceHygiene.ps1` (run with `pwsh`) and `ProjectDoc`
+    (`action: trailers` lists docs with their `Plan:`/`Closes:` commits, closure candidates and unknown IDs;
+    `validate` checks one ID; `close` with `name` = the ID and `content` = the new Status text sets the Status
+    line, moves the doc to `closed/`, adds the CLOSED.md entry (moving its TODO.md line when one links to the
+    doc) and fixes relative links) do this for you (see
+    [idea_doc_id_commit_trailers_and_reconciliation.md](../ideas/closed/idea_doc_id_commit_trailers_and_reconciliation.md)).

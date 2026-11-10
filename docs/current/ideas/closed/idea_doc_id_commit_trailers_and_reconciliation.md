@@ -1,6 +1,6 @@
 # Idea: commit trailers (Plan:/Closes:) to reconcile plan, proposal and finding docs with git history
 
-**Status:** PARTLY DONE 2026-11-05. The convention is written down (templates/README.md rule 11, 2026-10-21) and the report-only `TRAILER` check exists in `scripts/Test-GuidanceHygiene.ps1` (2026-11-02); the later `ProjectDoc` extension is not built.
+**Status:** IMPLEMENTED 2026-11-10 (6252fdd2, b4378c41, 8dee86f2). The convention is written down (templates/README.md rule 11, 2026-10-21), the report-only `TRAILER` check exists in `scripts/Test-GuidanceHygiene.ps1` (2026-11-02), and `ProjectDoc` now has `action: trailers`, `validate` and `close` (engine: `RoslynSentinel.Engines.Basic/DocTrailerEngine.cs`). Ids compare case-sensitively there; the script's hashtable is case-insensitive. Reference-style link definitions are not rewritten on close (TODO marker in `RewriteLinks`).
 
 ## What happened
 Plans, proposals and findings were left open long after the work shipped, so TODO.md and the doc
