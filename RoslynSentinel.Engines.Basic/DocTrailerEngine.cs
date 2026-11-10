@@ -703,6 +703,8 @@ public static class DocTrailerEngine
     private static (string Text, int Fixed) RewriteLinks(string text, LinkMap map)
     {
         // TODO reference-style link definitions ("[label]: target") and angle-bracket targets are not rewritten.
+        // Parked: none exist in the repo; scripts/Test-GuidanceHygiene.ps1 reports them as LINK-FORM, which is the
+        // trigger to implement this.
         if (!text.Contains("](", StringComparison.Ordinal))
         {
             return (text, 0);

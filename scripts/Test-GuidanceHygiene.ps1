@@ -18,6 +18,9 @@
     TODO-LINK    relative markdown links in TODO.md whose target does not exist
     TODO-FORMAT  TODO.md entries longer than 12 lines (candidates to shrink to a link)
     TRAILER      git commit trailers `Plan:`/`Closes:` naming no doc under docs; open docs with a `Closes:` commit
+    LINK-FORM    reference-style (`[x]: path`) or angle-bracket (`](<path>)`) markdown links in docs/current
+                 (not closed/), CLAUDE.md and the memory directory; `DocTrailerEngine.RewriteLinks` (doc close)
+                 does not rewrite these forms, so a moved doc would leave them dead. Code spans and fences are skipped.
 
 .PARAMETER MemoryDir
   Defaults to the Claude project memory directory derived from the repo root.
@@ -154,6 +157,25 @@ for ($i = 0; $i -lt $todo.Count; $i++) {
     if ($todo[$i] -match '^(#{2,3}\s|- \*\*|- \[)') {
         if ($null -ne $start -and ($i - $start) -gt 12) { Add-Finding 'TODO-FORMAT' ("lines {0}-{1} ({2} lines): '{3}'" -f ($start + 1), $i, ($i - $start), $todo[$start].Trim().Substring(0, [math]::Min(60, $todo[$start].Trim().Length))) }
         $start = $i
+    }
+}
+
+# ---- Link forms that DocTrailerEngine.RewriteLinks does not rewrite on doc close.
+# Fenced blocks and inline code spans are stripped first (TODO.md quotes both forms in backticks).
+$linkFormFiles = @($docFiles | Where-Object { $_.FullName -notmatch '\\closed\\' }) +
+    @(Get-Item (Join-Path $RepoRoot 'CLAUDE.md')) +
+    @(Get-ChildItem $MemoryDir -Filter *.md -File)
+foreach ($f in $linkFormFiles) {
+    $inFence = $false
+    $n = 0
+    foreach ($line in (Get-Content $f.FullName)) {
+        $n++
+        if ($line -match '^\s*(```|~~~)') { $inFence = -not $inFence; continue }
+        if ($inFence) { continue }
+        $plain = $line -replace '`[^`]*`', ''
+        $rel = if ($f.FullName.StartsWith($RepoRoot)) { $f.FullName.Substring($RepoRoot.Length + 1) } else { "memory\$($f.Name)" }
+        if ($plain -match '^\s{0,3}\[[^\]]+\]:\s*\S') { Add-Finding 'LINK-FORM' "${rel}:${n}: reference-style link definition" }
+        if ($plain -match '\]\(<[^>]*>') { Add-Finding 'LINK-FORM' "${rel}:${n}: angle-bracket link target" }
     }
 }
 
