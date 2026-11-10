@@ -301,6 +301,8 @@ public class OrderPricingRefactorChainAgentTests
           `CalcDisc`) - same inputs must still produce the same outputs.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
+        - Then run the tests in the `ContosoOrders.Tests` project with an MCP tool and confirm every
+          test passes. A failing test means a behavior changed: fix the code, not the test.
 
         ## Before you report done
 
@@ -410,6 +412,8 @@ public class OrderPricingRefactorChainAgentTests
           `CalcDisc`) - same inputs must still produce the same outputs.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
+        - Then run the tests in the `ContosoOrders.Tests` project with an MCP tool and confirm every
+          test passes. A failing test means a behavior changed: fix the code, not the test.
 
         ## Before you report done
 
@@ -551,6 +555,8 @@ public class OrderPricingRefactorChainAgentTests
           `discountRate`, introduced solely by step 6.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
+        - Then run the tests in the `ContosoOrders.Tests` project with an MCP tool and confirm every
+          test passes. A failing test means a behavior changed: fix the code, not the test.
 
         ## Before you report done
 
@@ -739,6 +745,8 @@ public class OrderPricingRefactorChainAgentTests
           non-negative inputs - only the declared type of the private field backing it changes.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
+        - Then run the tests in the `ContosoOrders.Tests` project with an MCP tool and confirm every
+          test passes. A failing test means a behavior changed: fix the code, not the test.
 
         ## Before you report done
 
@@ -941,6 +949,8 @@ public class OrderPricingRefactorChainAgentTests
           internally.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
+        - Then run the tests in the `ContosoOrders.Tests` project with an MCP tool and confirm every
+          test passes. A failing test means a behavior changed: fix the code, not the test.
 
         ## Before you report done
 
@@ -1159,6 +1169,8 @@ public class OrderPricingRefactorChainAgentTests
         - `OrderCheckout`'s own public constructor must remain parameterless.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
+        - Then run the tests in the `ContosoOrders.Tests` project with an MCP tool and confirm every
+          test passes. A failing test means a behavior changed: fix the code, not the test.
 
         ## Before you report done
 
@@ -1379,6 +1391,8 @@ public class OrderPricingRefactorChainAgentTests
         - `OrderCheckout`'s own public constructor must remain parameterless.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
+        - Then run the tests in the `ContosoOrders.Tests` project with an MCP tool and confirm every
+          test passes. A failing test means a behavior changed: fix the code, not the test.
 
         ## Before you report done
 

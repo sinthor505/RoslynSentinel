@@ -150,6 +150,29 @@ never met the gate.
   - a single-file rename of `CalcDisc` gets the RenameSymbol line when RenameSymbol is registered;
   - the same rename gets the batch line when RenameSymbol is not registered;
   - a correct two-file batch passes with no report.
+- **Built:** `30f304ed`, `3f716737`, `4257167d`. Follow-ups from the 2026-11-09/10 runs, also built:
+  `01b64868` (rename pairing by unique signature shape, tolerating accessibility changes and unrelated new
+  members; CS0266/CS0737 hints) and `705ebc7f` (the RenameSymbol next step carries the real `projectName`
+  and `docCommentId`; CS0107 hint).
+
+### Follow-up idea (agreed 2026-11-10, not designed): report removed literals on a successful edit
+
+- **Evidence:** run `20261110-000712-639` (10-chain, qwen3.5-9b-coder). At T2 the model rewrote the whole
+  calculator file in one ReplaceSnippet call and dropped the `* 1.1m` preferred-customer scaling. The build
+  stayed clean, so the compile gate had nothing to report. The edit was carried through T5, and only the
+  harness's own post-run `ContosoOrders.Tests` run caught it (`GetFinalPrice_PreferredCustomer_AppliesScaledDiscount`:
+  expected 89.0, actual 90.0).
+- **Idea:** the same per-member baseline/candidate comparison as the symbol diff also compares the literal
+  tokens (numeric and string) in each surviving member's body. A successful write that removes a literal
+  from a member gets one advisory line, for example "removed literal `1.1m` from
+  `CalculateDiscountedTotal`". It is not a rejection.
+- **Why:** silent behaviour loss in a whole-member or whole-file rewrite is the failure the compile gate
+  cannot see. A literal that disappears is a cheap, low-noise proxy for it.
+- **Open:**
+  - Noise when a literal moves into a new constant or helper (for example step 10's `LocalZone = 1`):
+    suppress it when the same literal value appears in a member or constant added by the same edit.
+  - Whether it lives in the success response (`findings`, advisory) or only on writes larger than N lines.
+  - Cost on large files: only edited members are compared.
 
 ## Findings from the open-question review (2026-10-19)
 

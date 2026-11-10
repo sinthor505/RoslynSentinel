@@ -88,6 +88,8 @@ public class OrderPricingRefactorAgentTests
           `CalcDisc`) - same inputs must still produce the same outputs.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
+        - Then run the tests in the `ContosoOrders.Tests` project with an MCP tool and confirm every
+          test passes. A failing test means a behavior changed: fix the code, not the test.
 
         ## Before you report done
 
