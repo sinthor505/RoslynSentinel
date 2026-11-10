@@ -786,7 +786,7 @@ public class MsToolAugmentEngine
                 try
                 {
                     // TODO this no-solution-loaded fallback write never reaches the chokepoint, so it does not take the cross-process write lock (plan_stale_read_guard_followups Step 9b); in-process exclusion only.
-                var writeRefusal = await EolFileWriter.WriteAllTextResolvedAsync(filePath, formatted, source, cancellationToken);
+                    var writeRefusal = await EolFileWriter.WriteAllTextResolvedAsync(filePath, formatted, source, cancellationToken);
                     if (writeRefusal != null)
                     {
                         return MsAugmentResult.Fail($"Could not write file '{filePath}': {writeRefusal}");

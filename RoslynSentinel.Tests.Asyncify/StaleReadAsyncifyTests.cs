@@ -187,13 +187,30 @@ public class StaleReadAsyncifyTests
     }
 
     [Test, CancelAfter(60000)]
-    public async Task AddCancellationToken_NeverObservedThenChangedOnDisk_SucceedsAndWrites()
+    public async Task AddCancellationToken_NeverObservedThenChangedOnDisk_FoldPendingOnceThenWrites()
     {
         SetSource(SvcSource, "Svc.cs");
         var path = PathOf("Svc.cs");
         File.WriteAllText(path, File.ReadAllText(path) + "// changed on disk by another session\n");
         var external = File.ReadAllText(path);
         AsAgent("agentA");
+
+        // The agent never read the file, so no StaleRead applies. The write chokepoint still sees memory differ from
+        // disk and refuses the first call once with FoldPending, folding the file in memory as it does. The retry
+        // then writes normally.
+        var first = await _asyncifyTools.AddCancellationTokenTool(
+            reason: "test message",
+            targets: [new BatchTarget { FilePath = PathOf("Svc.cs") }],
+            dryRun: false);
+
+        Assert.That(!first.IsError, Is.True, first.ErrorData?.ToString());
+        Assert.That(first.SuccessData, Is.Not.Null);
+        Assert.That(first.SuccessData!.Succeeded, Is.Zero, "The first call must be refused once while memory differs from disk.");
+        var firstReasons = first.SuccessData.Failures.Select(f => f.Reason).ToList();
+        Assert.That(firstReasons, Has.Some.Contains("FoldPending"),
+            "The first refusal must carry the FoldPending code. Reasons: " + string.Join(" | ", firstReasons));
+        Assert.That(File.ReadAllText(path), Is.EqualTo(external),
+            "A FoldPending refusal must leave the externally written disk text untouched.");
 
         var result = await _asyncifyTools.AddCancellationTokenTool(
             reason: "test message",
@@ -203,11 +220,11 @@ public class StaleReadAsyncifyTests
         Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
         Assert.That(result.SuccessData, Is.Not.Null);
         Assert.That(result.SuccessData!.Succeeded, Is.GreaterThanOrEqualTo(1),
-            "An unobserved target must be written normally under the quiet policy.");
+            "An unobserved target must be written normally on the retry under the quiet policy.");
         Assert.That(result.SuccessData.Failed, Is.Zero);
         var onDisk = File.ReadAllText(path);
         Assert.That(onDisk, Does.Contain("CancellationToken"));
-        Assert.That(onDisk, Is.Not.EqualTo(external), "The unobserved file must be modified.");
+        Assert.That(onDisk, Is.Not.EqualTo(external), "The unobserved file must be modified on the retry.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════

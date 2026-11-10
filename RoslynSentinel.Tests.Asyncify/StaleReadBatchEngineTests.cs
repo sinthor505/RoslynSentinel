@@ -121,7 +121,7 @@ public class StaleReadBatchEngineTests
     }
 
     [Test, CancelAfter(60000)]
-    public async Task PropagateCtBatch_NeverObservedThenChangedOnDisk_SucceedsAndWrites()
+    public async Task PropagateCtBatch_NeverObservedThenChangedOnDisk_FoldPendingOnceThenWrites()
     {
         SetSource(ForwardingSource.Replace("\r\n", "\n"), "TripService.cs");
         var path = PathOf("TripService.cs");
@@ -129,10 +129,22 @@ public class StaleReadBatchEngineTests
         File.WriteAllText(path, external);
         AsAgent("agentA");
 
+        // The agent never read the file, so no StaleRead applies. The write chokepoint still sees memory differ from
+        // disk and refuses the first call once with FoldPending, folding the file in memory as it does. The retry
+        // then writes normally.
+        var first = await _batchEngine.PropagateCancellationTokenBatchAsync(InputFor(path));
+
+        Assert.That(first.Applied, Is.Empty, "The first call must be refused once while memory differs from disk.");
+        Assert.That(first.Failed, Has.Count.EqualTo(1));
+        Assert.That(first.Failed[0].Reason, Does.Contain("FoldPending"),
+            "The first refusal must carry the FoldPending code. Reason: " + first.Failed[0].Reason);
+        Assert.That(File.ReadAllText(path), Is.EqualTo(external),
+            "A FoldPending refusal must leave the externally written disk text untouched.");
+
         var result = await _batchEngine.PropagateCancellationTokenBatchAsync(InputFor(path));
 
-        Assert.That(result.Failed, Is.Empty, "An unobserved target must be written normally under the quiet policy.");
+        Assert.That(result.Failed, Is.Empty, "An unobserved target must be written normally on the retry under the quiet policy.");
         Assert.That(result.Applied, Has.Count.EqualTo(1));
-        Assert.That(File.ReadAllText(path), Is.Not.EqualTo(external), "The unobserved file must be modified.");
+        Assert.That(File.ReadAllText(path), Is.Not.EqualTo(external), "The unobserved file must be modified on the retry.");
     }
 }
