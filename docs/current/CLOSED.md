@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Post-write fold failure queues one bounded reload - resolved (2026-11-10)
+
+A post-write fold failure queues one bounded `ReloadWorkspaceFromDiskAsync` (2026-11-09) - like the debounce-retry path; the latch stays if it fails; Small-Medium - [doc](proposals/proposal_workspace_reload_failure_visibility.md)
+
+Evidence: commit titled "#6 ..." (git log); WorkspaceDebounceReloadTests PostWriteFoldFails_*; PostWriteFoldOverride test seam
+
 ## Startup auto-load records StartupLoad; staleness from last successful load - resolved (2026-11-10)
 
 Startup auto-load records trigger `StartupLoad`, and `GetWorkspaceStatus` staleness uses `_lastSuccessfulLoadUtc` (2026-11-09) - Small-Medium - [doc](proposals/proposal_workspace_reload_failure_visibility.md)

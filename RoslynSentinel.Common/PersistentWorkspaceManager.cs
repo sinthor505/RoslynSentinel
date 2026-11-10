@@ -180,6 +180,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     private readonly Timer _debounceTimer;
     // Bounded automatic retry of a failed debounce reload; every attempt holds _solutionLock for a full MSBuild load, so keep it bounded.
     private int _debounceRetryCount;
+    // 0/1 guard: at most one reload queued after a failed post-write fold (see the finally in ApplyProposedChangesAsync).
+    private int _foldFailureReloadQueued;
     private const int MaxDebounceRetries = 1;
     // Delay before the automatic debounce retry (test seam).
     internal int DebounceRetryDelayMs { get; set; } = 3000;
@@ -2245,6 +2247,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         var noOp = new List<string>();
         var failed = new Dictionary<FilePathWrapper, string>();
         bool needsFullReload = false;
+        bool foldFailed = false;
         WriteLockLease? writeLease = null;
 
         // Clear retry cache for this specific batch
@@ -2622,7 +2625,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 }
                 try
                 {
-                    needsFullReload = await ApplyInMemoryDocumentUpdatesAsync(succeeded, CancellationToken.None);
+                    needsFullReload = await (PostWriteFoldOverride ?? ApplyInMemoryDocumentUpdatesAsync)(succeeded, CancellationToken.None);
                     // A changed file the fold could not read leaves the workspace behind disk, so it is not in sync either.
                     workspaceInSync = !needsFullReload && !HasUnfoldedFiles;
                     if (!needsFullReload)
@@ -2659,6 +2662,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         _logger.LogWarning(ex, "Workspace refresh failed after applying changes. Workspace may be stale; call LoadSolution with forceReload: true to resync.");
                     }
                     RecordReloadFailure(WorkspaceReloadTriggerKind.PostWriteSync, null, ex, oldWorkspaceKept: true);
+                    foldFailed = true;
                 }
             }
 
@@ -2693,6 +2697,34 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 await writeLease.DisposeAsync();
             }
             _solutionLock.Release();
+
+            // The watcher suppresses the echo of our own write, so a failed post-write fold is not repaired by it.
+            // Without this reload only a manual LoadSolution(forceReload: true) clears the PostWriteSync latch.
+            // The reload is one-shot per failing write and never stacked (the guard). A successful swap clears the
+            // latch (SwapInFreshWorkspaceLocked); a failure leaves the PostWriteReload latch.
+            if (foldFailed && !needsFullReload && _workspace != null && !string.IsNullOrEmpty(SolutionPath)
+                && Interlocked.CompareExchange(ref _foldFailureReloadQueued, 1, 0) == 0)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await ReloadWorkspaceFromDiskAsync(CancellationToken.None);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (_logger.IsEnabled(LogLevel.Error))
+                        {
+                            _logger.LogError(ex, "Background workspace reload after a failed post-write fold failed.");
+                        }
+                        RecordReloadFailure(WorkspaceReloadTriggerKind.PostWriteReload, null, ex, oldWorkspaceKept: true);
+                    }
+                    finally
+                    {
+                        Volatile.Write(ref _foldFailureReloadQueued, 0);
+                    }
+                });
+            }
 
             if (needsFullReload && _workspace != null && !string.IsNullOrEmpty(SolutionPath))
             {
@@ -3222,6 +3254,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
     // Test seam so tests can make the MSBuild open throw; default is the real open.
     internal Func<MSBuildWorkspace, string, CancellationToken, Task<Solution>> OpenSolutionOverride { get; set; } = static (ws, path, ct) => ws.OpenSolutionAsync(path, null, ct);
+
+    // Test seam: when set, replaces the post-write in-memory fold call so a test can make the fold throw; null in production.
+    internal Func<List<string>, CancellationToken, Task<bool>>? PostWriteFoldOverride { get; set; }
 
     // No lock needed; the old workspace is never touched here.
     private async Task<(MSBuildWorkspace Workspace, Solution Solution)> OpenFreshWorkspaceAsync(string solutionPath, CancellationToken cancellationToken)

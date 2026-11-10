@@ -125,6 +125,75 @@ public class WorkspaceDebounceReloadTests
 
     [Test]
     [NonParallelizable]
+    public async Task PostWriteFoldFails_QueuesReload_NextWriteSucceedsWithoutLoadSolution()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var manager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await manager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var path = FindFixtureCsFile(manager, fixture);
+        var original = await File.ReadAllTextAsync(path);
+        var foldCalls = 0;
+        manager.PostWriteFoldOverride = (files, ct) =>
+        {
+            if (Interlocked.Increment(ref foldCalls) == 1)
+            {
+                throw new IOException("fold boom");
+            }
+            return manager.ApplyInMemoryDocumentUpdatesAsync(files, ct);
+        };
+
+        var firstText = original + "\n// fold failure test\n";
+        var first = await manager.ApplyProposedChangesAsync(new Dictionary<FilePathWrapper, string> { [new FilePathWrapper(path)] = firstText });
+        Assert.That(first.WorkspaceInSync, Is.False, "a failed post-write fold must leave the workspace out of sync");
+
+        // The queued reload swaps in a fresh workspace from disk, which clears the PostWriteSync latch without LoadSolution.
+        await WaitUntilAsync(() => manager.ReloadFailure is null, TimeSpan.FromSeconds(60));
+        Assert.That(manager.ReloadFailure, Is.Null, "the queued post-write reload did not clear the fold-failure latch");
+
+        var second = await manager.ApplyProposedChangesAsync(new Dictionary<FilePathWrapper, string> { [new FilePathWrapper(path)] = firstText + "// second\n" });
+        Assert.That(second.Summary, Does.Not.StartWith("Refused"), second.Summary);
+        Assert.That(second.WorkspaceInSync, Is.True);
+        Assert.That(foldCalls, Is.EqualTo(2));
+    }
+
+    [Test]
+    [NonParallelizable]
+    public async Task PostWriteFoldFails_ReloadAlsoFails_LatchStaysAndNextWriteIsRefused()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var manager = Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await manager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var path = FindFixtureCsFile(manager, fixture);
+        var original = await File.ReadAllTextAsync(path);
+        var foldCalls = 0;
+        manager.PostWriteFoldOverride = (files, ct) =>
+        {
+            if (Interlocked.Increment(ref foldCalls) == 1)
+            {
+                throw new IOException("fold boom");
+            }
+            return manager.ApplyInMemoryDocumentUpdatesAsync(files, ct);
+        };
+        manager.OpenSolutionOverride = (ws, p, ct) => throw new IOException("boom");
+
+        var first = await manager.ApplyProposedChangesAsync(new Dictionary<FilePathWrapper, string> { [new FilePathWrapper(path)] = original + "\n// fold failure test\n" });
+        Assert.That(first.WorkspaceInSync, Is.False, "a failed post-write fold must leave the workspace out of sync");
+
+        // The queued reload also fails: the latch moves to PostWriteReload, the old workspace is kept, and it stays set.
+        await WaitUntilAsync(() => manager.ReloadFailure is { Trigger: WorkspaceReloadTriggerKind.PostWriteReload }, TimeSpan.FromSeconds(60));
+        Assert.That(manager.ReloadFailure, Is.Not.Null, "the failed queued reload did not record a failure");
+        Assert.That(manager.ReloadFailure!.Trigger, Is.EqualTo(WorkspaceReloadTriggerKind.PostWriteReload));
+        Assert.That(manager.ReloadFailure.OldWorkspaceKept, Is.True);
+
+        var second = await manager.ApplyProposedChangesAsync(new Dictionary<FilePathWrapper, string> { [new FilePathWrapper(path)] = original + "\n// fold failure test\n// second\n" });
+        Assert.That(second.Summary, Does.StartWith("Refused - the workspace is stale"), second.Summary);
+        Assert.That(foldCalls, Is.EqualTo(1));
+    }
+
+    [Test]
+    [NonParallelizable]
     public async Task DebounceReload_FailsOnceThenSucceeds_RetriesWithoutRecordingFailure()
     {
         using var fixture = new TestSolutionFixture();
@@ -219,4 +288,10 @@ public class WorkspaceDebounceReloadTests
             await Task.Delay(25);
         }
     }
+
+    private static string FindFixtureCsFile(PersistentWorkspaceManager manager, TestSolutionFixture fixture)
+    => manager.CurrentSolution!.Projects
+        .SelectMany(p => p.Documents)
+        .Select(d => d.FilePath)
+        .First(f => f is not null && f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && File.Exists(f) && f.StartsWith(fixture.SolutionDirectory, StringComparison.OrdinalIgnoreCase))!;
 }

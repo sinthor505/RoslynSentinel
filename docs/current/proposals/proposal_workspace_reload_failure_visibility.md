@@ -248,6 +248,10 @@ symptom this proposal wants to stop depending on. Needed:
   the debounce-retry path does (READY, Small-Medium); the latch stays if it fails. Why: the watcher
   suppresses the echo of our own write (~1277-1305), so today only a manual `LoadSolution(forceReload:
   true)` clears it. Check: with an injected fold failure, the next write succeeds without `LoadSolution`.
+  **Done 2026-11-10 (#6):** the `finally` of `ApplyProposedChangesAsync` queues one `ReloadWorkspaceFromDiskAsync` after a fold failure
+  (0/1 guard `_foldFailureReloadQueued`, never stacked; a successful swap clears the latch, a failed reload leaves `PostWriteReload`).
+  Fault seam (section 8): internal `PostWriteFoldOverride` on the manager, replacing the post-write fold call. Tests in
+  `WorkspaceDebounceReloadTests` (`PostWriteFoldFails_*`).
 - (iii) Live-check the stale-workspace stamp once (READY, Small): use `LaunchTestInstance` with a broken
   `.csproj`, confirm a tool result carries the stamp, and record the outcome here.
   `WorkspaceStaleStampFilterTests` covers it in process, through the `RecordReloadFailure` seam.
