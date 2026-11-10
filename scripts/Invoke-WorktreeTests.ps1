@@ -156,9 +156,13 @@ if ($Projects) {
         $match
     }
 } else {
+    # Default selection only takes projects listed in RoslynSentinel.slnx: a detached project
+    # (e.g. Tests.Integration) is never built by the solution build, so it would report "no TRX".
+    $slnxText = Get-Content (Join-Path $RepoPath 'RoslynSentinel.slnx') -Raw
     $selected = $all | Where-Object {
         $leaf = Split-Path $_ -LeafBase
-        -not ($excludedByDefault | Where-Object { $leaf -like "*.$_" })
+        (-not ($excludedByDefault | Where-Object { $leaf -like "*.$_" })) -and
+            $slnxText.Contains("$leaf.csproj")
     }
 }
 
