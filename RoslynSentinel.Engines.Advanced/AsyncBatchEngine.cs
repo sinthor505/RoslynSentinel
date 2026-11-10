@@ -567,7 +567,7 @@ public class AsyncBatchEngine
             {
                 // The async overload already exists -> try adding CT to it instead of failing
                 var asyncMethodName = candidate.MethodName + "Async";
-                // TODO AddCancellationTokenToMethodAsync, RemoveMigrationCandidatesAsync and FlagMigrationCandidateAsync below still resolve the method by name only; thread candidateType into them so a same-named candidate in another class does not fail this fallback as ambiguous
+                // TODO RemoveMigrationCandidatesAsync below still resolves the method by name only (it strips the flag from same-named methods in other classes too); thread candidateType into it
                 _logger.LogInformation(
                     "Async overload '{AsyncMethod}' already exists - attempting CT add fallback",
                     asyncMethodName);
@@ -575,7 +575,8 @@ public class AsyncBatchEngine
                 try
                 {
                     var ctResult = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync(
-                        candidate.FilePath, asyncMethodName, progress, cancellationToken);
+                        candidate.FilePath, asyncMethodName, progress, cancellationToken,
+                        callerContainingType: candidateType);
                     if (ctResult.Outcome == EditOutcome.Modified)
                     {
                         var ctValidation = await _validationEngine.ValidateChangesAsync(
@@ -608,7 +609,7 @@ public class AsyncBatchEngine
                         else
                         {
                             var ctFlagOutcome = await FlagBridgeCandidateForReviewAsync(
-                                candidate.FilePath, candidate.MethodName, ctValidation.Diagnostics, "Bridge", progress, cancellationToken);
+                                candidate.FilePath, candidate.MethodName, ctValidation.Diagnostics, "Bridge", progress, cancellationToken, callerContainingType: candidateType);
                             skipped.Add(new BridgeSkippedInfo(
                                 candidate.FilePath, candidate.MethodName,
                                 $"CT-add validation failed for '{asyncMethodName}': {ctValidation.Diagnostics.Count} error(s){DiagSummary(ctValidation.Diagnostics)}; {ctFlagOutcome}",
@@ -669,7 +670,7 @@ public class AsyncBatchEngine
                                     bodyValidation.Diagnostics.Count > 0
                                         ? $"[{bodyValidation.Diagnostics[0].Id}] {bodyValidation.Diagnostics[0].Message}" : "");
                                 var bodyFlagOutcome = await FlagBridgeCandidateForReviewAsync(
-                                    candidate.FilePath, candidate.MethodName, bodyValidation.Diagnostics, "Bridge", progress, cancellationToken);
+                                    candidate.FilePath, candidate.MethodName, bodyValidation.Diagnostics, "Bridge", progress, cancellationToken, callerContainingType: candidateType);
                                 skipped.Add(new BridgeSkippedInfo(
                                     candidate.FilePath, candidate.MethodName,
                                     $"Body-rewrite validation failed for '{asyncMethodName}': {bodyValidation.Diagnostics.Count} error(s){DiagSummary(bodyValidation.Diagnostics)}; {bodyFlagOutcome}",
@@ -2236,7 +2237,8 @@ public class AsyncBatchEngine
         List<DiagnosticInfo> diagnostics,
         string producer,
         IProgress<EngineProgress>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? callerContainingType = null)
     {
         var flagOutcome = "skipped; the manual-review flag could not be written";
         try
@@ -2245,6 +2247,7 @@ public class AsyncBatchEngine
                 filePath, methodName, "NeedsManualReview",
                 score: 0,
                 reason: $"{producer} produced {diagnostics.Count} compiler error(s){DiagSummary(diagnostics)}",
+                callerContainingType: callerContainingType,
                 progress: progress,
                 cancellationToken: cancellationToken);
             var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes, cancellationToken: cancellationToken, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStaleQuiet);

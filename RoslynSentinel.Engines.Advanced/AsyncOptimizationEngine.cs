@@ -1256,11 +1256,13 @@ public class AsyncOptimizationEngine
         };
     }
 
+    /// <param name="callerContainingType">Optional containing-type display text (as in <c>ObsoleteCallerFinding.CallerType</c>) that picks the method among same-named methods in different classes; null, "&lt;unknown&gt;" or no match keeps the ambiguity refusal.</param>
     public async Task<DocumentEditResult> AddCancellationTokenToMethodAsync(
         FilePathWrapper filePath,
         string methodName,
         IProgress<EngineProgress>? progress = default,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? callerContainingType = null)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
@@ -1273,7 +1275,7 @@ public class AsyncOptimizationEngine
 
         var methodMatches = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .Where(m => m.Identifier.Text == methodName).ToList();
-        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(NarrowByContainingType(methodMatches, callerContainingType), "Method", methodName);
         if (methodNode == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' not found in file. Method names are case-sensitive; use the exact name as declared in source.", "method", methodName);
@@ -1869,6 +1871,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// <param name="score">Optional eligibility score (default 0 = unscored).</param>
     /// <param name="reason">Optional human-readable rationale for the flag.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <param name="callerContainingType">Optional containing-type display text (as in <c>ObsoleteCallerFinding.CallerType</c>) that picks the method among same-named methods in different classes; null, "&lt;unknown&gt;" or no match keeps the ambiguity refusal.</param>
     /// <returns>
     /// A <see cref="FlagMigrationCandidateEngineResult"/> containing the changes to write,
     /// idempotency metadata (<see cref="FlagMigrationCandidateEngineResult.WasAlreadyFlagged"/>,
@@ -1885,7 +1888,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
         int score = 0,
         string? reason = null,
         IProgress<EngineProgress>? progress = default,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? callerContainingType = null)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
@@ -1899,7 +1903,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var methodMatches = root.DescendantNodes()
                              .OfType<MethodDeclarationSyntax>()
                              .Where(m => m.Identifier.Text == methodName).ToList();
-        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName) ?? throw new ToolNotFoundException(
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(NarrowByContainingType(methodMatches, callerContainingType), "Method", methodName) ?? throw new ToolNotFoundException(
                 $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.", "method", methodName);
         var methodLine = methodNode.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
 

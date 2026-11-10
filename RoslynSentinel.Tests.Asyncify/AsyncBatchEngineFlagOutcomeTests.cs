@@ -926,4 +926,57 @@ public class AsyncBatchEngineFlagOutcomeTests
         Assert.That(System.Text.RegularExpressions.Regex.Matches(onDisk, @"async Task<int> GetTripsAsync\(").Count, Is.EqualTo(2),
             "Each class must gain its own GetTripsAsync overload.");
     }
+
+    // Two same-named candidates in different classes that each already have an async overload: both
+    // GetTripsAsync must gain a CancellationToken. The second add used to fail as ambiguous by name alone.
+    [Test, CancelAfter(60000)]
+    public async Task RunBridgeBatch_TwoSameNamedCandidatesWithExistingAsyncOverload_BothGainCancellationToken()
+    {
+        var source = """
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+
+            public class FirstService
+            {
+                [MigrationCandidate("AsyncBridgeCandidate", Score = 70, Reason = "calls-CommonSearch:70", FlaggedDate = "2026-06-01")]
+                public int GetTrips(int companyId)
+                {
+                    return companyId;
+                }
+
+                public async Task<int> GetTripsAsync(int companyId)
+                {
+                    await Task.Yield();
+                    return companyId;
+                }
+            }
+
+            public class SecondService
+            {
+                [MigrationCandidate("AsyncBridgeCandidate", Score = 70, Reason = "calls-CommonSearch:70", FlaggedDate = "2026-06-01")]
+                public int GetTrips(int companyId)
+                {
+                    return companyId + 1;
+                }
+
+                public async Task<int> GetTripsAsync(int companyId)
+                {
+                    await Task.Yield();
+                    return companyId + 1;
+                }
+            }
+
+            """ + "\n" + AttrStub;
+        var lf = source.Replace("\r\n", "\n");
+        SetSource(workspaceText: lf, diskText: lf);
+
+        var result = await _batchEngine.RunBridgeBatchAsync(maxBridges: 5);
+
+        Assert.That(result.Skipped, Is.Empty, string.Join("; ", result.Skipped.Select(s => s.Reason)));
+        Assert.That(result.Applied, Has.Count.EqualTo(2));
+        var onDisk = File.ReadAllText(Path.Combine(_tempDir, "TripService.cs")).Replace("\r\n", "\n");
+        Assert.That(System.Text.RegularExpressions.Regex.Matches(onDisk, @"GetTripsAsync\(int companyId, CancellationToken cancellationToken = default\)").Count, Is.EqualTo(2),
+            "Both classes' GetTripsAsync must gain a CancellationToken parameter.");
+    }
 }
