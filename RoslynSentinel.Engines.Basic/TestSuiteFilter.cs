@@ -43,6 +43,7 @@ public static class TestSuiteFilter
         }
 
         return $"The fast suite excludes [Category(\"{OutOfProcessCategory}\")] fixtures (git/build/test-run/process tests), which may hold the tests this filter names. "
+            // TODO the hint drops the caller's filter/scope/scopeName, so a model copying it verbatim runs the whole solution full (~11 min); thread them through.
             + ToolCallHint.Next("RunTest", "to include them.", ("suite", "full"));
     }
 }
