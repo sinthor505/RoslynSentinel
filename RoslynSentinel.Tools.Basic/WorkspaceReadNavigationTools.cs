@@ -232,7 +232,8 @@ public class WorkspaceReadNavigationTools
             };
         }
 
-        return await DispatchSearchCore(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, contextLines, cancellationToken);
+        var searchResult = await DispatchSearchCore(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, contextLines, cancellationToken);
+        return _impl.AddZeroHitEvidence(mode, query, searchResult);
     }
 
     /// <summary>

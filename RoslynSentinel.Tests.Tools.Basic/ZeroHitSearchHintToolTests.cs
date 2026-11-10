@@ -134,4 +134,94 @@ public class ZeroHitSearchHintToolTests
         Assert.That(result.TotalRecords, Is.EqualTo(0));
         Assert.That(result.Findings.Where(f => f.Source == "EditAttribution"), Is.Empty);
     }
+
+    [Test]
+    [CancelAfter(30000)]
+    public async Task AddZeroHitEvidence_SymbolMode_ZeroRecords_ForeignBlob_AddsInfoFinding()
+    {
+        var file = FileIn("A.cs");
+        File.WriteAllText(file, Original);
+        await WriteForeignBlobAsync(ForeignBefore);
+        using var manager = NewManager(file, Original);
+        var readNav = Battery.Basic.TestTools.WorkspaceReadNavigationImpl(manager);
+
+        SetMe(); var input = new SentinelCallToolResult<object> { IsError = false, TotalRecords = 0, Findings = [new Finding("X", "pre", FindingSeverity.Info)] };
+        var result = readNav.AddZeroHitEvidence(SearchMode.symbol, "Zorblax", input);
+
+        Assert.That(result.Findings, Has.Count.EqualTo(2));
+        Assert.That(result.Findings.Where(f => f.Source == "X").ToList(), Has.Count.EqualTo(1));
+        var notes = result.Findings.Where(f => f.Source == "EditAttribution").ToList();
+        Assert.That(notes, Has.Count.EqualTo(1));
+        Assert.That(notes[0].Severity, Is.EqualTo(FindingSeverity.Info));
+        Assert.That(notes[0].Message, Does.Contain("Zorblax").And.Contain("other-agent"));
+    }
+
+    [Test]
+    [CancelAfter(30000)]
+    public async Task AddZeroHitEvidence_WithRecords_Unchanged()
+    {
+        var file = FileIn("A.cs");
+        File.WriteAllText(file, Original);
+        await WriteForeignBlobAsync(ForeignBefore);
+        using var manager = NewManager(file, Original);
+        var readNav = Battery.Basic.TestTools.WorkspaceReadNavigationImpl(manager);
+
+        SetMe(); var input = new SentinelCallToolResult<object> { IsError = false, TotalRecords = 3, Findings = [new Finding("X", "pre", FindingSeverity.Info)] };
+        var result = readNav.AddZeroHitEvidence(SearchMode.symbol, "Zorblax", input);
+
+        Assert.That(result, Is.SameAs(input));
+        Assert.That(result.Findings, Has.Count.EqualTo(1));
+        Assert.That(result.Findings.Where(f => f.Source == "EditAttribution"), Is.Empty);
+    }
+
+    [Test]
+    [CancelAfter(30000)]
+    public async Task AddZeroHitEvidence_TextMode_Unchanged()
+    {
+        var file = FileIn("A.cs");
+        File.WriteAllText(file, Original);
+        await WriteForeignBlobAsync(ForeignBefore);
+        using var manager = NewManager(file, Original);
+        var readNav = Battery.Basic.TestTools.WorkspaceReadNavigationImpl(manager);
+
+        SetMe(); var input = new SentinelCallToolResult<object> { IsError = false, TotalRecords = 0 };
+        var result = readNav.AddZeroHitEvidence(SearchMode.text, "Zorblax", input);
+
+        Assert.That(result, Is.SameAs(input));
+        Assert.That(result.Findings, Is.Null.Or.Empty);
+    }
+
+    [Test]
+    [CancelAfter(30000)]
+    public async Task AddZeroHitEvidence_BlankQuery_Unchanged()
+    {
+        var file = FileIn("A.cs");
+        File.WriteAllText(file, Original);
+        await WriteForeignBlobAsync(ForeignBefore);
+        using var manager = NewManager(file, Original);
+        var readNav = Battery.Basic.TestTools.WorkspaceReadNavigationImpl(manager);
+
+        SetMe(); var input = new SentinelCallToolResult<object> { IsError = false, TotalRecords = 0 };
+        var result = readNav.AddZeroHitEvidence(SearchMode.@class, "", input);
+
+        Assert.That(result, Is.SameAs(input));
+        Assert.That(result.Findings, Is.Null.Or.Empty);
+    }
+
+    [Test]
+    [CancelAfter(30000)]
+    public async Task AddZeroHitEvidence_IsError_Unchanged()
+    {
+        var file = FileIn("A.cs");
+        File.WriteAllText(file, Original);
+        await WriteForeignBlobAsync(ForeignBefore);
+        using var manager = NewManager(file, Original);
+        var readNav = Battery.Basic.TestTools.WorkspaceReadNavigationImpl(manager);
+
+        SetMe(); var input = new SentinelCallToolResult<object> { IsError = true, TotalRecords = 0 };
+        var result = readNav.AddZeroHitEvidence(SearchMode.symbol, "Zorblax", input);
+
+        Assert.That(result, Is.SameAs(input));
+        Assert.That(result.Findings, Is.Null.Or.Empty);
+    }
 }

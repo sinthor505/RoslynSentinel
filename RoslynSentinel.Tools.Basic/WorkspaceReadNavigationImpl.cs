@@ -1294,6 +1294,23 @@ public class WorkspaceReadNavigationImpl
         }
     }
 
+    // Adds the zero-hit EditAttribution note to a non-text search that matched nothing. Text mode adds its own notes inside SearchSolutionText.
+    public SentinelCallToolResult<object> AddZeroHitEvidence(SearchMode mode, string? query, SentinelCallToolResult<object> result)
+    {
+        if (result.IsError || result.TotalRecords != 0 || mode == SearchMode.text || string.IsNullOrWhiteSpace(query))
+        {
+            return result;
+        }
+
+        var notes = NotFoundEvidence.ForZeroHitSearch(_workspaceManager.GetSolutionRoot(), query, isRegex: false);
+        if (notes.Count == 0)
+        {
+            return result;
+        }
+
+        return result with { Findings = [.. (result.Findings ?? []), .. notes] };
+    }
+
     // Globs without a path separator (e.g. "*.cs", "OrderService.cs") are matched against the
     // bare filename so callers can filter by name without knowing the file's directory. Globs
     // with a separator (e.g. "**/OrderService.cs", "ContosoOrders.Core/*.cs") are matched against
