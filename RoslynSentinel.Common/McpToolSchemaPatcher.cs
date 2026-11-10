@@ -218,10 +218,7 @@ public static class McpToolSchemaPatcher
     /// <summary>
     /// Every <see cref="McpServerToolAttribute"/> method declared in <paramref name="assemblies"/>, with the
     /// declaring type and method so a tool can be created at runtime (see <see cref="CreateSentinelTool"/>).
-    /// The same tool name can be declared by more than one class (a facade and the split class behind it),
-    /// so a name may appear more than once.
     /// </summary>
-    // TODO the split *Tools classes are deleted, so no tool name has two declaring classes; revisit this remark and the callers that group by name
     public static IReadOnlyList<(string ToolName, Type ToolType, MethodInfo Method)> DiscoverToolMethods(IEnumerable<Assembly> assemblies)
     {
         var discovered = new List<(string ToolName, Type ToolType, MethodInfo Method)>();

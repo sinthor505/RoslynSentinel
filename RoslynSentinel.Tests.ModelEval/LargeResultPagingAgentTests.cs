@@ -48,7 +48,7 @@ public class LargeResultPagingAgentTests
     // exposes every read tool the paging path needs. The BlockedToolNames filter below does the no-edit enforcement.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Refactor", "Workspace", "WorkspaceFileContent",
+        "Refactor", "Workspace",
     };
 
     // Same mutating-tool block list as PlanOnlyAgentTests.

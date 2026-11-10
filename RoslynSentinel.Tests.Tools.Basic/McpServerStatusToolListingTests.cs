@@ -87,16 +87,33 @@ public class McpServerStatusToolListingTests
     }
 
     [Test]
-    public void AllListing_HasOneEntryPerToolName_PreferringTheActiveClass()
+    public void AllListing_ReportsBuildOnTheActiveWorkspaceToolsClass()
     {
-        // TODO the split *Tools classes are gone, so no tool name has two declaring classes any more; with the dedup logic in ServerStatusTools this test only guards an invariant nothing can violate
         var status = Call(["WorkspaceTools"], McpServerStatusToolListing.all);
 
-        Assert.That(status.AllDeclaredTools.Select(t => t.Name), Is.Unique,
-            "A tool name declared by both a facade and its split class must be reported once.");
         var build = status.AllDeclaredTools.Single(t => t.Name == "Build");
         Assert.That(build.ActiveForThisMode, Is.True);
         Assert.That(build.ClassName, Is.EqualTo("WorkspaceTools"));
+    }
+
+    // McpServerStatus (ServerStatusTools), ActiveToolSurface.IsCallable and ToolsetService all map a tool name to ONE declaring
+    // class and assume no other class declares the same name; this scan fails the day a second class does.
+    [Test]
+    public void EveryToolName_IsDeclaredByExactlyOneClass()
+    {
+        _ = typeof(WorkspaceTools).Assembly; // make sure Tools.Basic is loaded before scanning
+        var assemblies = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => a.GetName().Name?.StartsWith("RoslynSentinel.Tools.", StringComparison.Ordinal) == true)
+            .ToArray();
+
+        var duplicates = McpToolSchemaPatcher.DiscoverAllDeclaredTools(assemblies)
+            .GroupBy(t => t.ToolName, StringComparer.Ordinal)
+            .Select(g => (Name: g.Key, Classes: g.Select(t => t.ClassName).Distinct(StringComparer.Ordinal).OrderBy(c => c, StringComparer.Ordinal).ToArray()))
+            .Where(t => t.Classes.Length > 1)
+            .Select(t => $"{t.Name} <- {string.Join(", ", t.Classes)}")
+            .ToArray();
+
+        Assert.That(duplicates, Is.Empty, "Each tool name must be declared by exactly one class; declared more than once: " + string.Join("; ", duplicates));
     }
 
     [Test]

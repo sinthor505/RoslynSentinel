@@ -72,7 +72,7 @@ public class PlanThenExecuteAgentTests
     // only the prompt differs from that test's MinimalGuidanceDisambiguated variant.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Refactor", "Workspace", "WorkspaceFileContent",
+        "Refactor", "Workspace",
     };
 
     private IHost _host = null!;

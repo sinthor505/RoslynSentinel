@@ -59,19 +59,17 @@ public record ActiveToolSurface
             return false;
         }
 
-        // TODO the split *Tools classes are deleted, so a tool name now has one declaring class; simplify to a single-class lookup if no other duplicate exists
-        // A tool name can be declared by more than one class (a facade and the split class behind it); one
-        // active declaring class is enough, as in McpServerStatus.
-        return DeclaringClassesByTool().TryGetValue(toolName, out var classes) && classes.Any(ActiveToolClasses.Contains);
+        // Each tool name is declared by exactly one class, as in McpServerStatus.
+        return DeclaringClassByTool().TryGetValue(toolName, out var className) && ActiveToolClasses.Contains(className);
     }
 
     private static readonly object DeclaringClassesLock = new();
     private static int _declaringClassesAssemblyCount = -1;
-    private static IReadOnlyDictionary<string, string[]> _declaringClassesByTool = new Dictionary<string, string[]>();
+    private static IReadOnlyDictionary<string, string> _declaringClassByTool = new Dictionary<string, string>();
 
-    /// <summary>Tool name -> declaring class names, reflected once per set of loaded RoslynSentinel assemblies
+    /// <summary>Tool name -> declaring class name, reflected once per set of loaded RoslynSentinel assemblies
     /// (the same discovery McpServerStatus runs); rebuilt only if an assembly loads later.</summary>
-    private static IReadOnlyDictionary<string, string[]> DeclaringClassesByTool()
+    private static IReadOnlyDictionary<string, string> DeclaringClassByTool()
     {
         var assemblies = AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => a.GetName().Name?.StartsWith("RoslynSentinel", StringComparison.Ordinal) == true)
@@ -80,13 +78,17 @@ public record ActiveToolSurface
         {
             if (assemblies.Length != _declaringClassesAssemblyCount)
             {
-                _declaringClassesByTool = McpToolSchemaPatcher.DiscoverAllDeclaredTools(assemblies)
-                    .GroupBy(t => t.ToolName, StringComparer.Ordinal)
-                    .ToDictionary(g => g.Key, g => g.Select(t => t.ClassName).Distinct(StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+                var byTool = new Dictionary<string, string>(StringComparer.Ordinal);
+                foreach (var (toolName, className) in McpToolSchemaPatcher.DiscoverAllDeclaredTools(assemblies))
+                {
+                    byTool.TryAdd(toolName, className);
+                }
+
+                _declaringClassByTool = byTool;
                 _declaringClassesAssemblyCount = assemblies.Length;
             }
 
-            return _declaringClassesByTool;
+            return _declaringClassByTool;
         }
     }
 

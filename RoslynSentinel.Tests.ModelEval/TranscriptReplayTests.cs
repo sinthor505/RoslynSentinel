@@ -37,7 +37,8 @@ public class TranscriptReplayTests
 {
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Generation", "Refactoring", "Workspace", "WorkspaceFileContent",
+        // TODO "Refactoring" is not a mode in ToolClassRegistry (the key is "Refactor") and is ignored with a startup warning; decide whether the replay needs "Refactor" or drop it.
+        "Generation", "Refactoring", "Workspace",
     };
 
     private static readonly Regex SizeFromPathRegex = new(@"[/\\]n(\d+)[/\\]", RegexOptions.Compiled);

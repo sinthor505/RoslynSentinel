@@ -278,7 +278,7 @@ public class WholeFileRewriteAgentTests
     // context bloat and slows the model down for tasks that never call those tools.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Refactor", "Workspace", "WorkspaceFileContent",
+        "Refactor", "Workspace",
     };
 
     private IHost _host = null!;

@@ -102,6 +102,29 @@ public class NoActiveToolsStartupTests
     }
 
     [Test]
+    [Category("ServerStartupHelpers")]
+    public void UnknownModeAmongKnownOnes_IsWarnedAbout_NamingTheModeAndListingTheValidOnes()
+    {
+        // A removed or misspelled mode next to a valid one still starts (the valid mode supplies tools), so the
+        // warning is the only signal the operator gets.
+        var warning = ServerStartupHelpers.DescribeUnknownModes(
+            ToolClassRegistry.ModeToToolClasses, Names("Workspace", "WorkspaceFileContent"));
+
+        Assert.That(warning, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(warning, Does.StartWith("WARNING: unknown --mode name(s) ignored: WorkspaceFileContent."));
+            Assert.That(warning, Does.Contain("Valid modes: "));
+            Assert.That(warning, Does.Contain("Workspace"), "must list the valid modes");
+            Assert.That(warning, Does.Contain("claude-lean"), "must list the valid modes");
+        });
+        Assert.That(
+            ServerStartupHelpers.DescribeUnknownModes(ToolClassRegistry.ModeToToolClasses, Names("Workspace", "Admin")),
+            Is.Null,
+            "known modes produce no warning");
+    }
+
+    [Test]
     public void ExcludeToolsRemovingEverything_IsReportedAsAnExcludeProblem()
     {
         // Third distinct route to zero. Exclude wins and is applied last, so the operator needs to

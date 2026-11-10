@@ -176,7 +176,7 @@ public static class ServerStartupHelpers
 
         foreach (var mode in activeModes)
         {
-            // TODO An unknown mode name is silently ignored; warn at startup so a typo or a removed mode (e.g. WorkspaceFileContent, still listed in ModelEval ActiveModes) is visible.
+            // An unknown mode name contributes no classes here; HandleNoActiveTools reports it once at startup (DescribeUnknownModes).
             if (modeToToolClasses.TryGetValue(mode, out var classes))
             {
                 foreach (var className in classes)
@@ -412,6 +412,28 @@ public static class ServerStartupHelpers
     }
 
     /// <summary>
+    /// Returns a startup warning naming every mode in <paramref name="activeModes"/> that <paramref name="modeToToolClasses"/>
+    /// does not know (a typo, or a mode that was removed), together with the valid mode names; null when all are known.
+    /// Such a mode is otherwise silently ignored by <see cref="ResolveActiveToolClasses"/>.
+    /// </summary>
+    public static string? DescribeUnknownModes(
+        IReadOnlyDictionary<string, string[]> modeToToolClasses,
+        HashSet<string> activeModes)
+    {
+        var unknown = activeModes
+            .Where(m => !modeToToolClasses.ContainsKey(m))
+            .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (unknown.Length == 0)
+        {
+            return null;
+        }
+
+        var validModes = string.Join(", ", modeToToolClasses.Keys.OrderBy(m => m, StringComparer.OrdinalIgnoreCase));
+        return $"WARNING: unknown --mode name(s) ignored: {string.Join(", ", unknown)}. Valid modes: {validModes}.";
+    }
+
+    /// <summary>
     /// Checks the no-active-tools condition and, when it applies, reports it and returns true so
     /// the caller can return without building a host. Shared by all four entry points so the
     /// message and exit behaviour can't drift between transports.
@@ -430,6 +452,14 @@ public static class ServerStartupHelpers
         HashSet<string> includeTools,
         HashSet<string> excludeTools)
     {
+        // Unknown modes are warned about on stderr (never stdout, see above) whether or not the launch still has tools.
+        var unknownModes = DescribeUnknownModes(modeToToolClasses, activeModes);
+        if (unknownModes is not null)
+        {
+            Console.Error.WriteLine(unknownModes);
+            Debug.WriteLine(unknownModes);
+        }
+
         var failure = DescribeNoActiveToolsFailure(modeArg, modeToToolClasses, activeModes, includeTools, excludeTools);
         if (failure is null)
         {

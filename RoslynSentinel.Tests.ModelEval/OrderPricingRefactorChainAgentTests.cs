@@ -69,7 +69,7 @@ public class OrderPricingRefactorChainAgentTests
     // ModifyModifierTool, SyncInterfaceTool), without pulling in Advanced's larger tool catalog.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Refactor", "Workspace", "WorkspaceFileContent"
+        "Refactor", "Workspace"
     };
 
     // Toggle for an isolation experiment: with WriteFileTool blocked, the model must use ApplyDiffTool/
