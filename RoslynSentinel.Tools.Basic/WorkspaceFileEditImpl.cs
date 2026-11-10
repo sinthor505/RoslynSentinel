@@ -935,7 +935,7 @@ public class WorkspaceFileEditImpl
                         : new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
                             IsError = true,
-                            ErrorData = new ResultError(ToolErrorCode.Exception, $"ReplaceSnippet validate failed: {validationResult.Diagnostics.ToInfo()}")
+                            ErrorData = new ResultError(ToolErrorCode.ValidationFailed, $"ReplaceSnippet validate failed: {validationResult.Diagnostics.ToInfo()}")
                         };
                     }
 
@@ -961,7 +961,7 @@ public class WorkspaceFileEditImpl
                         return new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
                             IsError = true,
-                            ErrorData = new ResultError(ToolErrorCode.Exception,
+                            ErrorData = new ResultError(ToolErrorCode.ValidationFailed,
                                 "ReplaceSnippet: the edit matched the target file, but the resulting code introduces new compiler errors - change not applied. " +
                                 repeatNote +
                                 (untouchedNote is null ? "" : untouchedNote + " ") +
@@ -1224,7 +1224,7 @@ public class WorkspaceFileEditImpl
                 : new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, $"ReplaceSnippet batch validate failed.", StructuredDetail: validationResult.Diagnostics)
+                    ErrorData = new ResultError(ToolErrorCode.ValidationFailed, $"ReplaceSnippet batch validate failed.", StructuredDetail: validationResult.Diagnostics)
                 };
         }
 
@@ -1254,7 +1254,7 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.Exception,
+                    ErrorData = new ResultError(ToolErrorCode.ValidationFailed,
                         "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors, so nothing was changed; every file is exactly as you last read it. " +
                         repeatNote +
                         (untouchedNote is null ? "" : untouchedNote + " ") +
@@ -1375,7 +1375,7 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.Exception,
+                    ErrorData = new ResultError(ToolErrorCode.ValidationFailed,
                         "CreateFile: this content would introduce new compiler errors - not written to disk. Fix the issue(s) below and retry:\n" +
                         "[COMPILER ERROR]\n" +
                         await EditImpactGate.PrependAsync(_workspaceManager, changes, result.ValidationResult, _activeToolSurface, await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken))

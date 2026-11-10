@@ -293,6 +293,7 @@ public class CreateFileDeleteFileTests
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("this content would introduce new compiler errors"));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.ValidationFailed), "a compile-gate rejection is recoverable, not an internal Exception");
         Assert.That(File.Exists(newFile), Is.False);
     }
 

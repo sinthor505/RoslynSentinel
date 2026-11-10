@@ -113,6 +113,7 @@ public class ReplaceSnippetCrossFileRejectionTests
         {
             Assert.That(message, Does.Contain("introduces new compiler errors"));
             Assert.That(message, Does.Not.Contain("this edit did not change"));
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.ValidationFailed), "a compile-gate rejection is recoverable, not an internal Exception");
         });
         Assert.That(workspace.ReadText(CheckoutRelativePath), Is.EqualTo(originalCheckout), "a rejected edit must not write file B");
     }
