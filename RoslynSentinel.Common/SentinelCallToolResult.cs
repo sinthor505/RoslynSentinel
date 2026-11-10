@@ -188,6 +188,12 @@ public static class ToolErrorCode
     public const string FoldPending = "FoldPending";
 
     /// <summary>
+    /// Another session holds the cross-process write lock, so the write was not attempted. Nothing was written; the
+    /// session is NOT halted. Retry in a moment. Distinct from <see cref="FoldPending"/> (an in-memory fold pending).
+    /// </summary>
+    public const string WriteLockBusy = "WriteLockBusy";
+
+    /// <summary>
     /// The operation was cancelled before it finished.
     /// </summary>
     public const string Cancelled = "Cancelled";

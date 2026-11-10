@@ -23,6 +23,9 @@ public static class WriteRefusal
             case ToolErrorCode.FoldPending:
                 error = FoldPendingError(toolName, result);
                 return true;
+            case ToolErrorCode.WriteLockBusy:
+                error = WriteLockBusyError(toolName, result);
+                return true;
             default:
                 return false;
         }
@@ -63,5 +66,10 @@ public static class WriteRefusal
             : null;
         var message = $"{toolName}: {list} is changing on disk; retry in a moment. Nothing was written.";
         return new ResultError(ToolErrorCode.FoldPending, message, StructuredDetail: structuredDetail);
+    }
+
+    private static ResultError WriteLockBusyError(string toolName, ApplyChangesResult result)
+    {
+        return new ResultError(ToolErrorCode.WriteLockBusy, $"{toolName}: {result.Summary}");
     }
 }
