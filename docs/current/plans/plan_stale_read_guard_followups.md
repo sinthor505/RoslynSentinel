@@ -127,6 +127,12 @@ file of the returned symbol (whole-file hash). `ListAll` does NOT record. `Inspe
   `DispatchSearch` for the other modes. Storing `AfterSource` in blobs is a separate idea doc, not this plan.
 - **Run:** owner present, Batched mode.
 
+**Owner, 2026-11-09 (fourth round, after B6):** FoldPending does NOT refuse when the proposed content already equals
+the disk pre-image (a no-op write): fold inline and proceed. A refusal there costs a weak model a round-trip for
+nothing. Slice 8b-3 (start of B7) makes the change and reverts fixture edits that existed only for this case; it also
+adds the missing test for the persisting-mismatch Warning path. Also standing from this run: per slice filtered test
+runs, one full run per batch, code and tests in one dispatch when they fit (`dispatch-implementer`, "Tests and test runs").
+
 **Open, with my recommendation (not decided):** none; Risks and open decisions 1-10 are all settled above.
 
 ## Execution rules
