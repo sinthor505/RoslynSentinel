@@ -132,6 +132,7 @@ public class EditImpactGateWiringTests
 
         Assert.That(error.Message, Does.Contain("IMPACT-MARKER"));
         Assert.That(error.Message, Does.Not.Contain(UntouchedSentence));
-        Assert.That(error.Message, Does.Contain("Fix the issue(s) below and retry."));
+        // The impact text ends with a Next step; a trailing "retry" contradicted it (proposal_semantic_edit_impact_diagnostics.md, Second slice step 0).
+        Assert.That(error.Message, Does.Not.Contain("Fix the issue(s) below and retry"));
     }
 }

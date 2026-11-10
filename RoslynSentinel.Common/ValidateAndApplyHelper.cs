@@ -180,8 +180,8 @@ public static class ValidateAndApplyHelper
             var validationError = new ResultError(
                 ToolErrorCode.ValidationFailed,
                 $"{operationName}: the change was valid and matched its target(s), but introduces new compiler errors - change not applied. " +
-                (untouchedText is null ? "" : untouchedText + " ") +
-                $"Fix the issue(s) below and retry.",
+                (impactText is null ? (untouchedText is null ? "" : untouchedText + " ") : impactText.TrimEnd()) +
+                (impactText is null ? "Fix the issue(s) below and retry." : ""),
                 detailString,
                 detail.Cast<object>().ToList());
             // Foreign-agent findings for the files that failed the compile gate; null when there are none so single-agent output is unchanged.

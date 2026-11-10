@@ -1,6 +1,6 @@
 # Semantic edit-impact diagnostics, a playbook and GetHelp: explain a rejected edit by what it changed
 
-**Status:** PROPOSED 2026-10-19. First slice (symbol diff, attribution, next-step line at the shared gate) approved 2026-11-09, see "First slice"; the rest is unreviewed. Open questions were investigated 2026-10-19 (answers inline); a few remain.
+**Status:** PROPOSED 2026-10-19. First slice (symbol diff, attribution, next-step line at the shared gate) approved 2026-11-09 and built, see "First slice". Second slice (rename lifting, edited-file attribution, wire verdict list) approved 2026-11-10, see "Second slice"; the rest is unreviewed. Open questions were investigated 2026-10-19 (answers inline); a few remain.
 
 ## Motivation
 
@@ -173,6 +173,68 @@ never met the gate.
     suppress it when the same literal value appears in a member or constant added by the same edit.
   - Whether it lives in the success response (`findings`, advisory) or only on writes larger than N lines.
   - Cost on large files: only edited members are compared.
+
+### Second slice, approved 2026-11-10: lift renames, attribute edited-file errors, verdict list on the wire
+
+**Evidence.** Batch C of the 10-chain (`evals/eval_tenchain_reasoning_replay_2026_11_10.md`; logs under
+`c:\tmp\rs_head113\ModelTestingResults\113\Model_AppliesTenChainedRefactors`, runs 301=`20261110-093510-834`,
+303=`-095808-391`, 305=`-102443-078`, 309=`-105423-057`, contrast 302=`-095008-706`). The first-slice
+redirect is correct and carries a copyable `RenameSymbol(projectName, docCommentId, newName)` call, yet the
+model resends the rejected ReplaceSnippet. Its reasoning names RenameSymbol while the emitted call repeats
+the previous tool name, so better text alone will not break the loop.
+
+| Pattern | Runs | What happens | Fix |
+| --- | --- | --- | --- |
+| A | 305, 303 | Pure class rename via ReplaceSnippet; redirect correct; 305 sends the identical call 9 times (T11-T19), 0 RenameSymbol calls | Lift the rename |
+| B | 301 | Rename plus added base interface, sent in parallel with an edit of the caller file; the caller edit gets bare CS0246/CS1061 with no next step because edited-file diagnostics are never attributed (`EditImpactAnalyzer.cs:206-209`) | Lift rename plus the rest; attribute edited-file errors |
+| C | 309 | Extract plus rename in one edit is classified "removed CalcDisc, added CalculateBaseDiscount, CalculateDiscountedTotal" (two added members of the same shape defeat unique pairing), so the redirect asks for batchEdits | Better pairing |
+
+As-built facts this slice relies on: the analyzer does no reference lookup and attributes by old-name token
+in the diagnostic message; locals and local functions are not diffed; `EditImpactResult` is structured but
+reaches the wire only as `ResultError.Message` text (`EditImpactGate.cs:63`). ReplaceSnippet calls
+`EditImpactGate.DescribeAsync` itself (`WorkspaceFileEditImpl.cs:~955`, batch `:~1246`), not through
+`ValidateAndApplyHelper`.
+
+**Steps, in order, each compile-green:**
+
+0. **Text fix, then re-baseline.** When a next step exists, drop the trailing "Fix the issue(s) below and
+   retry:" (`WorkspaceFileEditImpl.cs:962-967`); it contradicts the redirect. Re-run the 10-chain with this
+   and `31b206a6` (exact-repeat note, built after batch C) to get a fresh baseline before step 1.
+1. **Rename lifting (experimental, server flag `--lift-renames`, off by default).** When the symbol diff
+   finds exactly one unambiguous rename and the gate rejects the edit: run `Renamer.RenameSymbolAsync` on
+   the baseline for the old symbol; take its output for every unedited document; keep the model's
+   candidate text for the edited documents; validate the result through the same gate. Covers a pure rename
+   (A) and a rename combined with other edits in the same call (B). On success the response states it
+   plainly, e.g. "applied as RenameSymbol: N call sites in M files", with the files changed. If errors
+   remain, reject with the remaining verdicts. Refuse to lift (fall back to the first-slice redirect) when
+   pairing is ambiguous or the rename resolves to more than one symbol. A/B by restarting with and without
+   the flag, never by prompt changes.
+2. **Edited-file attribution and locals.** Pass the edited spans to the analyzer. A diagnostic in an
+   edited file but outside the edited span is attributed like one in an unedited file. Diff locals and
+   local functions inside edited members, keyed by (member, name), so a renamed local whose later uses sit
+   outside the snippet gets "renamed local x -> y; N uses outside your edit" instead of a raw CS0103.
+   Fixes the bare second call in pattern B and the local-variable case.
+3. **Verdict list on the wire.** Serialize the changes into the rejection's structured detail: per entry
+   kind, old/new name, location, verdict (valid / breaks N uses / lifted), broken uses (capped) and the
+   suggested call. Advisory entries on a successful write (the removed-literal idea above) go to `findings`.
+   Lets the eval harness assert on the verdict rather than on message text.
+4. **Pairing for pattern C.** When a removed member ties with two added members of the same shape, pair it
+   with the added member that calls the other one (the renamed method calls the extracted helper). Verify
+   against run 309 before building; hypothesis.
+
+**Parked: reference impact and rebinding detection.** For removed, renamed or signature-changed members,
+look up references on the baseline and check whether each still binds to the same symbol in the candidate
+(an edit can compile while calls silently bind to another overload, extension or hidden member). Capped,
+changed members only. Sibling of the removed-literal idea. Parked until an eval failure needs it.
+
+**Still rejected: fixes driven by compiler diagnostics.** Roslyn's code fix for a missing name is to
+generate the member, which restores the old name the model meant to remove; diagnostics cascade and most
+have no unique fix. Intent lifting from the symbol diff is the mechanism instead.
+
+**Done when:** fixture tests (OrderPricingCalculator/OrderCheckout, no model) cover: a pure rename lifted
+with the flag on and redirected with it off; a rename plus base-list change lifted; an ambiguous pairing
+not lifted; a renamed local with a use outside the snippet attributed; the verdict list present in the
+structured detail. Then the 10-chain re-run with qwen3.5-9b, flag on vs off.
 
 ## Findings from the open-question review (2026-10-19)
 

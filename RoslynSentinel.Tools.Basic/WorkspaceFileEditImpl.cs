@@ -944,6 +944,7 @@ public class WorkspaceFileEditImpl
                     if (WriteRefusal.TryMap("ReplaceSnippet", result, out var refusal))
                         return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
                     string? untouchedNote = null;
+                    string? impactNote = null;
                     var repeatNote = "";
                     if (result.IsError && result.ValidationResult != null)
                     {
@@ -952,7 +953,8 @@ public class WorkspaceFileEditImpl
                         _rejectedEdits.Remember((string)targetPath, newContent);
                         // The edit-impact report, when it can attribute the errors to unedited files, replaces the generic
                         // untouched-file sentence (it already covers it); null keeps that sentence.
-                        untouchedNote = await EditImpactGate.DescribeAsync(_workspaceManager, snippetChanges, result.ValidationResult, _activeToolSurface, cancellationToken: cancellationToken)
+                        impactNote = await EditImpactGate.DescribeAsync(_workspaceManager, snippetChanges, result.ValidationResult, _activeToolSurface, cancellationToken: cancellationToken);
+                        untouchedNote = impactNote
                             ?? ValidateAndApplyHelper.DescribeUntouchedFileErrors(snippetChanges.Keys.Select(k => (string)k), result.ValidationResult.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath");
                     }
                     if (result.IsError && result.ValidationResult != null)
@@ -963,7 +965,7 @@ public class WorkspaceFileEditImpl
                                 "ReplaceSnippet: the edit matched the target file, but the resulting code introduces new compiler errors - change not applied. " +
                                 repeatNote +
                                 (untouchedNote is null ? "" : untouchedNote + " ") +
-                                "Fix the issue(s) below and retry:\n" +
+                                (impactNote is null ? "Fix the issue(s) below and retry:\n" : "Compiler errors caused by this edit:\n") +
                                 "[COMPILER ERROR]\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, snippetChanges.Keys.Select(k => (string)k).ToList()))
                         };
@@ -1233,6 +1235,7 @@ public class WorkspaceFileEditImpl
             if (WriteRefusal.TryMap("ReplaceSnippet", result, out var refusal))
                 return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
             string? untouchedNote = null;
+            string? impactNote = null;
             var repeatNote = "";
             if (result.IsError && result.ValidationResult != null)
             {
@@ -1243,7 +1246,8 @@ public class WorkspaceFileEditImpl
                         _rejectedEdits.Remember(rejectedPath, rejectedNewContent);
                 // The edit-impact report, when it can attribute the errors to unedited files, replaces the generic
                 // untouched-file sentence (it already covers it); null keeps that sentence.
-                untouchedNote = await EditImpactGate.DescribeAsync(_workspaceManager, finalContents, result.ValidationResult, _activeToolSurface, cancellationToken: cancellationToken)
+                impactNote = await EditImpactGate.DescribeAsync(_workspaceManager, finalContents, result.ValidationResult, _activeToolSurface, cancellationToken: cancellationToken);
+                untouchedNote = impactNote
                     ?? ValidateAndApplyHelper.DescribeUntouchedFileErrors(finalContents.Keys.Select(k => (string)k), result.ValidationResult.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath");
             }
             if (result.IsError && result.ValidationResult != null)
@@ -1254,7 +1258,7 @@ public class WorkspaceFileEditImpl
                         "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors, so nothing was changed; every file is exactly as you last read it. " +
                         repeatNote +
                         (untouchedNote is null ? "" : untouchedNote + " ") +
-                        "Fix the issue(s) below and retry:\n" +
+                        (impactNote is null ? "Fix the issue(s) below and retry:\n" : "Compiler errors caused by this edit:\n") +
                         "[COMPILER ERROR]\n" +
                         await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, finalContents.Keys.Select(k => (string)k).ToList()),
                         StructuredDetail: result.ValidationResult.Diagnostics),
