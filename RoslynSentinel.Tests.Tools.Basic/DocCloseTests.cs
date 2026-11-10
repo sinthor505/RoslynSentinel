@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 
 using RoslynSentinel.Engines.Basic;
+using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;
 
 namespace RoslynSentinel.Tests.Tools.Basic;
 
@@ -20,14 +21,13 @@ public class DocCloseTests
     [SetUp]
     public void SetUp()
     {
-        if (GitProcess.TryRun(Path.GetTempPath(), GitTimeout, "--version") is not { ExitCode: 0 })
+        if (!IsGitAvailable())
         {
             Assert.Ignore("git is not available on PATH.");
         }
 
         _repo = Path.Combine(Path.GetTempPath(), "rs-docclose-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_repo);
-        RunGit(_repo, "init", "--quiet");
+        InitRepo(_repo);
     }
 
     [TearDown]
@@ -45,14 +45,6 @@ public class DocCloseTests
         }
 
         Directory.Delete(_repo, recursive: true);
-    }
-
-    private static string RunGit(string directory, params string[] args)
-    {
-        var result = GitProcess.TryRun(directory, GitTimeout, args);
-        Assert.That(result, Is.Not.Null, "git failed to run: " + string.Join(' ', args) + " (" + GitProcess.LastFailure + ")");
-        Assert.That(result!.Value.ExitCode, Is.EqualTo(0), "git " + string.Join(' ', args));
-        return result.Value.StdOut.Trim();
     }
 
     private void Commit(string subject, string? trailers = null)

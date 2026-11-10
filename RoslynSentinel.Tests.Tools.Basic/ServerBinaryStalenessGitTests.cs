@@ -1,3 +1,5 @@
+using static RoslynSentinel.Tests.Battery.Basic.GitTestRepo;
+
 namespace RoslynSentinel.Tests.Tools.Basic;
 
 /// <summary>
@@ -9,20 +11,18 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 [Category("OutOfProcess")] // starts git/dotnet/powershell processes; excluded from RunTest suite "fast" (the default), run with suite "full"
 public class ServerBinaryStalenessGitTests
 {
-    private static readonly TimeSpan GitTimeout = TimeSpan.FromSeconds(60);
     private string _repo = null!;
 
     [SetUp]
     public void SetUp()
     {
-        if (GitProcess.TryRun(Path.GetTempPath(), GitTimeout, "--version") is not { ExitCode: 0 })
+        if (!IsGitAvailable())
         {
             Assert.Ignore("git is not available on PATH.");
         }
 
         _repo = Path.Combine(Path.GetTempPath(), "rs-staleness-git-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_repo);
-        RunGit(_repo, "init", "--quiet");
+        InitRepo(_repo);
     }
 
     [TearDown]
@@ -40,16 +40,6 @@ public class ServerBinaryStalenessGitTests
         }
 
         Directory.Delete(_repo, recursive: true);
-    }
-
-    private static string RunGit(string directory, params string[] args)
-    {
-        var result = GitProcess.TryRun(directory, GitTimeout, args);
-        // TODO Suspected flaky: LaterCommitTouchingServerSource_IsStaleAndListed failed here once in a full solution run ("git failed to run: rev-parse HEAD", TryRun returned null) and passes alone; cause not traced.
-        // TryRun now records the reason in GitProcess.LastFailure; read it from the failure message next time.
-        Assert.That(result, Is.Not.Null, "git failed to run: " + string.Join(' ', args) + " (" + GitProcess.LastFailure + ")");
-        Assert.That(result!.Value.ExitCode, Is.EqualTo(0), "git " + string.Join(' ', args));
-        return result.Value.StdOut.Trim();
     }
 
     /// <summary>Writes <paramref name="relativePath"/>, commits it and returns the full sha.</summary>
