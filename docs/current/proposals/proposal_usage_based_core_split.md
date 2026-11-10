@@ -1,15 +1,32 @@
 # Split the solution on measured tool usage, freeze Advanced and Experimental outside the main solution
 
-**Status:** PROPOSED 2026-10-19. Awaiting review; nothing built.
+**Status:** PARTIAL: slice 2 for MoveMember, ChangeSignature and MoveAllTypesToFiles is IN PROGRESS 2026-11-10 (promoted into a new Tools.Basic class; engines were already in Engines.Basic: BasicRefactoringEngine and MemberRefactoringEngine). MoveType still pending (needs StructuralRefactoringEngine.MoveTypeToOuterScopeAsync moved into Engines.Basic). Other slices not started; slices 3-4 need rewording (see below).
+
+**Refreshed 2026-11-10.** Originally PROPOSED 2026-10-19. Updated in place for these changes since then:
+`RoslynSentinel.Server.Basic` no longer exists (folded into `Server.Advanced`, which is now the only server
+project and one binary hosting both flavors; see `docs/current/references/reference_architecture_map.md`),
+so slices 3 and 4 are obsolete as written. The usage totals are refreshed (59,595 calls over 191 journal
+files, per the Decisions section); per-tool counts, line counts and the blast-radius window below were
+NOT recomputed and stay "as of 2026-10-19". ChangeSignature, MoveMember, SemanticFindReplace,
+InspectSymbol, UsingDirective and GetDiagnostics are already in the claude-lean core list
+(`ToolClassRegistry.ClaudeLeanToolNames`, `RoslynSentinel.Server.Advanced/ToolClassRegistry.cs:49`; since
+commit 7162d29b). Of the originally used Advanced tools, only MoveType stays in `Tools.Advanced` for now.
+The Decisions section at the end is the owner ruling and is unchanged.
 
 ## Motivation
 
 Only a small part of the tool surface gets used, but core changes still have to keep all of it compiling
 and green. The Basic/Advanced split was meant to contain that blast radius, but it sorted tools by how
-sophisticated they seemed, not by whether they are used. Measured on 2026-10-19:
+sophisticated they seemed, not by whether they are used. Measured on 2026-10-19 (per-tool counts, tool
+counts, line counts and the commit window below are from that date unless marked refreshed):
 
-**Usage.** The source is 88 `.claude/journal/*.calls.jsonl` files, 22,589 calls, about 2026-10-01 to 2026-10-20.
-- Advanced: 3 of 54 tools were ever called. MoveMember 26, SubAgent 17, MoveType 4.
+**Usage.** Original source: 88 `.claude/journal/*.calls.jsonl` files, 22,589 calls, about 2026-10-01 to
+2026-10-20. The journal has since grown to 191 files and 59,595 calls (2026-11-09 review); the per-tool
+counts below were not recomputed, so treat them as the 2026-10-19 snapshot. Slice 1 exists to redo this
+cheaply.
+- Advanced: 3 of 54 tools were ever called. MoveMember 26, SubAgent 17, MoveType 4. Today
+  `docs/generated/architecture_tools.md` lists 52 Tools.Advanced, 62 Tools.Basic and 4 Tools.Experimental
+  rows (row count by class and tool name; approximate, includes tools whose home changed since 10-19).
 - Experimental: 0 of 4 tools were called (`CodeTransformTools`).
 - Basic: 25 of 61 tools were never called. ConstructorParameter, CreateProject, Declaration,
   DeleteUnusedSymbol, ExtractLocalVariable, ExtractMethod, Features, GetBestInsertionPoint,
@@ -21,14 +38,17 @@ sophisticated they seemed, not by whether they are used. Measured on 2026-10-19:
   GetMethodSource 1269, Build 763, Member 744.
 - Caveat: the journal covers Claude sessions only, not model-eval or PlanStepRunner runs.
 
-**Reachability.** From `RoslynSentinel.Server.Basic/ToolClassRegistry.cs`:
+**Reachability.** From `RoslynSentinel.Server.Advanced/ToolClassRegistry.cs` (the registry moved there when
+Server.Basic was folded in; the counts are as of 2026-10-19):
 - 40 of the 54 Advanced tools cannot be reached from the `claude` or `claude-lean` modes. They are
   Asyncify 15, Intelligence 7, Scan 6, Quality 5, Generation 4, Commenting 1, Modernization 1 and
   SubAgentEval 1.
-- `ClaudeLeanOnDemandToolClasses` (lines 80-87) brings in AdvancedRefactoringTools and SubAgentTools.
-  Experimental is reachable only through `ExperimentalMode` (line 157).
+- `ClaudeLeanOnDemandToolClasses` (lines 82-88) brings in AdvancedRefactoringTools and SubAgentTools.
+  Experimental is reachable only through `ExperimentalMode` (declared line 26, mapped line 124).
 
-**Size.** In lines of code, excluding bin, obj and Worktree.
+**Size.** In lines of code, excluding bin, obj and Worktree. As of 2026-10-19: the table predates the
+Server.Basic fold, so its "Server.Basic" production lines now sit inside `Server.Advanced`, and the
+core/Advanced split of that project is no longer clean (see "Why Advanced cannot be unlinked").
 
 | Side | Production | Tests |
 | --- | --- | --- |
@@ -67,19 +87,31 @@ sophisticated they seemed, not by whether they are used. Measured on 2026-10-19:
 
 **Why Advanced cannot be unlinked as-is.**
 - Some core tools live in Advanced:
-  - MoveMember, MoveType and SubAgent are in use.
+  - MoveMember and SubAgent are in use, and MoveType (4 calls). MoveMember and ChangeSignature are in the
+    claude-lean core list but their tool class (`AdvancedRefactoringTools`) is still in Tools.Advanced;
+    that is what slice 2 is moving (in progress).
   - ChangeSignature is named in the `implementer`, `implementer-sweep`, `orchestrator` and
     `journal-improvement-planner` agent docs.
-  - The `moveExtract` toolset in `RoslynSentinel.Common/ToolsetCatalog.cs` mixes 12 Advanced and
-    11 Basic tools.
-- Four test projects reference `Server.Advanced`: Tests.Server, Tests.ModelEval, Tests.SubAgent and
-  Tests.Integration. Tests.Integration is not in the slnx.
-- The running server is the Advanced binary, started with `claude-lean,subagenttools`.
+  - The `moveExtract` toolset in `RoslynSentinel.Common/ToolsetCatalog.cs` mixed 12 Advanced and
+    11 Basic tools on 2026-10-19 (not recounted).
+- `Server.Advanced` is now the only server project, so it is not a freezable "Advanced" project. It
+  hosts both flavors: `ServiceRegistrationExtensionsBasic.cs` (`AddRoslynSentinelToolsBasic`) and
+  `ServiceRegistrationExtensionsAdvanced.cs` (`AddRoslynSentinelToolsAdvanced`), and its csproj
+  references Tools.Advanced and Tools.Experimental (`docs/generated/architecture_projects.md:11`). Slice 5
+  therefore cannot move `Server.Advanced` to a frozen slnx; it has to cut those references and the Advanced
+  DI block instead (see slice 5).
+- Every test project that needs a server references `Server.Advanced` (Tests.Server, Tests.ModelEval,
+  Tests.SubAgent, Tests.Integration, plus Tests.Advanced and Tests.Asyncify). Tests.Integration is not in
+  the slnx.
+- The running server is the Advanced binary, started with `claude-lean,subagenttools`; there is no Basic
+  binary to switch to.
 
-What works in our favour: Tools.Basic and Server.Basic have no `<ProjectReference>` to Advanced or
-Experimental (`docs/generated/architecture_projects.md:12,27`). The only links are class-name strings in
-`ToolClassRegistry.cs`, `ToolsetCatalog.cs:63`, `ServerStartupHelpers.cs:46,123` and
-`ServiceRegistrationExtensionsBasic.cs:202`.
+What works in our favour: Tools.Basic and Engines.Basic have no `<ProjectReference>` to Advanced or
+Experimental (`docs/generated/architecture_projects.md:10,28`). The remaining links are class-name strings
+in `ToolClassRegistry.cs` (lines 64, 70, 86-87, 96, 117, 124), `ToolsetCatalog.cs` (comments at 64 and 80)
+and comments in `ServerStartupHelpers.cs:207-208` and `ServiceRegistrationExtensionsBasic.cs:200`, plus
+the Server.Advanced project references above. The earlier line numbers (`ServerStartupHelpers.cs:46,123`,
+`ServiceRegistrationExtensionsBasic.cs:202`) no longer match.
 
 ## Proposal
 
@@ -97,7 +129,11 @@ and stays in `RoslynSentinel.slnx`. Everything else is frozen, not deleted.
      - **supported**: unused but cheap to keep.
      - **frozen**.
    - This report is the evidence for every later slice. Re-run it monthly.
-2. **Promote the used Advanced tools into Basic.**
+2. **Promote the used Advanced tools into Basic.** IN PROGRESS 2026-11-10 for MoveMember, ChangeSignature
+   and MoveAllTypesToFiles (a new Tools.Basic class; their engines were already in Engines.Basic:
+   `BasicRefactoringEngine` and `MemberRefactoringEngine`, so only the `AdvancedRefactoringTools` wrapper
+   is split and the tests move). MoveType is pending: it needs
+   `StructuralRefactoringEngine.MoveTypeToOuterScopeAsync` moved into Engines.Basic first.
    - Move MoveMember, MoveType and ChangeSignature, plus the engine code they need, into
      Tools.Basic and Engines.Basic. Add SubAgent if model-eval stays in core.
    - Their tests go to Tests.Tools.Basic and Tests.Basic. That includes the MoveMember slice tests
@@ -109,24 +145,40 @@ and stays in `RoslynSentinel.slnx`. Everything else is frozen, not deleted.
    - Follow the migration-first route in CLAUDE.md: the new member goes beside the old one, the old
      one gets `[Obsolete]`, and it is removed last.
    - Open bug: cross-project MoveType (engine reorg leftovers, bug 2) travels with it.
-3. **Point server and eval tests at `Server.Basic`.**
-   - Tests.Server, Tests.ModelEval, Tests.SubAgent and Tests.Integration.
-   - Any test that really needs Advanced moves to an Advanced test project.
-4. **Switch the live launch to the Basic binary.** Fix the launch args too: `subagenttools` is not
-   a registered mode name.
-5. **Freeze.**
+3. **OBSOLETE as written (was: point server and eval tests at `Server.Basic`).** Server.Basic is gone;
+   Tests.Server, Tests.ModelEval, Tests.SubAgent and Tests.Integration (and Tests.Advanced and
+   Tests.Asyncify) already reference the one server project, `Server.Advanced`. Replacement, still
+   to do and needing a plan: decide which of those tests need Tools.Advanced types at all. Any that do
+   move to an Advanced test project, so that after slice 5 the server tests build without the frozen
+   projects.
+4. **OBSOLETE as written (was: switch the live launch to the Basic binary).** There is one
+   `Server.Advanced` binary hosting both flavors, so there is no Basic binary to switch to. What
+   remains: fix the launch args (`subagenttools` is not a registered mode name) and, at slice 5, make
+   the same binary start without the Advanced tool classes.
+5. **Freeze.** Needs rewording; the "move `Server.Advanced` out" step no longer applies.
    - Move these into a new `RoslynSentinel.Advanced.slnx`:
-     - Engines.Advanced, Tools.Advanced, Tools.Experimental and Server.Advanced.
+     - Engines.Advanced, Tools.Advanced and Tools.Experimental.
      - Tests.Advanced, Tests.Tools.Advanced, Tests.Battery.Advanced and Tests.Asyncify.
+   - `Server.Advanced` stays in `RoslynSentinel.slnx` as the only server (OPEN: rename it, since
+     "Advanced" no longer describes it). Cut its `<ProjectReference>`s to Tools.Advanced and
+     Tools.Experimental and move the Advanced DI block
+     (`ServiceRegistrationExtensionsAdvanced.cs`, `AddRoslynSentinelToolsAdvanced`) into the frozen
+     solution or a frozen server project. The Basic DI block (`ServiceRegistrationExtensionsBasic.cs`)
+     stays.
    - Remove them from `RoslynSentinel.slnx`. Tag the cut-off commit (`advanced-frozen-<date>`).
    - The frozen solution has no promise of compiling against a moving core. A tool comes back by
      being promoted through slice 2 with its tests, never by keeping Advanced green.
 6. **Clean up core.**
-   - Remove Advanced and Experimental class-name strings from `ToolClassRegistry.cs` (lines 70,
-     84-85, 97, 140-157) and `ToolsetCatalog.cs`.
-   - Fix the Basic `claude` mode entry. It lists AdvancedRefactoringTools, which Basic cannot load.
-   - Remove the Advanced test names from `docs/known-failing-tests.Basic.txt`, for example
-     `AddConfigureAwaitFalse_*` and `ConvertToBackgroundService_*`.
+   - Remove Advanced and Experimental class-name strings from
+     `RoslynSentinel.Server.Advanced/ToolClassRegistry.cs` (as of 2026-11-10: lines 64, 70, 86-87, 96,
+     106, 117, 121, 124) and `ToolsetCatalog.cs` (comments at 64 and 80).
+   - The single `ModeToToolClasses` map now registers inert names where a class is absent, so the old
+     "Basic `claude` mode lists AdvancedRefactoringTools, which Basic cannot load" fix is moot as a
+     bug. It stays on the list only as a name to remove once `AdvancedRefactoringTools` is gone.
+   - Remove the Advanced test names from the known-failing baselines for example
+     `AddConfigureAwaitFalse_*` and `ConvertToBackgroundService_*`. `docs/known-failing-tests.Basic.txt`
+     no longer exists; `docs/known-failing-tests.Advanced.txt` and `.Solution.txt` do (re-check their
+     contents first, see Open questions).
    - Drop the Advanced flavour from `scripts/build.ps1`, or point it at the frozen slnx.
    - Update CLAUDE.md: the Architecture section and the "Advanced is additive" line.
 7. **Tier Basic itself** using the slice 1 report.
@@ -167,8 +219,9 @@ type, move construction behind factories first.
 
 ## Alternatives considered, not pursued
 
-- **Unlink Advanced as-is.** Breaks four test projects, drops four tools in active use and changes
-  the running binary in one step. Slices 2-4 are what make it safe.
+- **Unlink Advanced as-is.** Breaks the test projects that reference `Server.Advanced`, drops tools in
+  active use and changes the running binary in one step. Slice 2 (and the reworded slice 3) are what
+  make it safe.
 - **Move unused tools into Tools.Experimental and split that out.**
   - Experimental references Engines.Advanced, and the cost sits in the engines (28.7K lines) and the
     tests (45K lines), not in the tool classes (9K lines in Tools.Advanced). Moving tool classes alone
@@ -183,21 +236,27 @@ type, move construction behind factories first.
 
 ## Open questions
 
-- Which Engines.Advanced types MoveMember, MoveType and ChangeSignature depend on. This sets the
-  size of slice 2. Not yet traced.
+- Which Engines.Advanced types MoveType depends on. For MoveMember, ChangeSignature and
+  MoveAllTypesToFiles the engines were already in Engines.Basic (slice 2 in progress); MoveType needs
+  `MoveTypeToOuterScopeAsync` moved.
 - Is SubAgent (and the `modelEval` toolset) core? It depends on whether model-eval runs stay part of
   the regular workflow.
 - How much do model-eval and PlanStepRunner runs use the 25 never-called Basic tools? Not measured;
   the journal covers Claude sessions only.
-- Do the 21 Basic and 10 Advanced known-failing baseline entries still fail?
+- Do the known-failing baseline entries (21 Basic and 10 Advanced on 2026-10-19) still fail? The Basic
+  file is gone and the memory note says the test baseline is 0 failures; re-check the Advanced and
+  Solution files before slice 6.
 - Where the `claude-lean,subagenttools` launch args are set. Nothing in the repo sets them.
+- Server.Advanced is the only server and hosts both flavors: rename it, or keep the name? (Affects slice 5.)
 - Should `docs/generated/` keep listing the frozen projects?
 
 ## Cost / risk
 
 - Slice 2 is the only part with real refactoring risk. MoveMember was just hardened
   (38d37dbf), so it should move with its tripwire tests.
-- Slice 5 needs a server restart and a fresh chat, because the tool surface changes.
+- Slice 5 needs a server restart and a fresh chat, because the tool surface changes. It also now has to
+  split the Advanced DI registration out of the only server project, which is more than a solution-file
+  move.
 - Once frozen, Advanced will stop compiling against core quickly. That is accepted: bringing a tool
   back means fixing it forward.
 - When slice 5 lands, the build and test baselines and `scripts/build.ps1` flavours change together.
@@ -209,7 +268,8 @@ type, move construction behind factories first.
 ## Related
 
 - `docs/generated/architecture_projects.md`, `docs/generated/architecture_tools.md`
-- `RoslynSentinel.Server.Basic/ToolClassRegistry.cs`, `RoslynSentinel.Common/ToolsetCatalog.cs`
+- `RoslynSentinel.Server.Advanced/ToolClassRegistry.cs`, `RoslynSentinel.Common/ToolsetCatalog.cs`,
+  `docs/current/references/reference_architecture_map.md`
 - Memory: engine reorg leftovers (open bug 2, cross-project MoveType); server flavours and build configs
 - Ideas: `docs/current/ideas/idea_tool_attribution.md`, `docs/current/ideas/closed/idea_server_telemetry.md`.
   Both overlap with the slice 1 usage report.
