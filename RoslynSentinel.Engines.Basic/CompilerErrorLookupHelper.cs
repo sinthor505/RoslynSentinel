@@ -123,6 +123,11 @@ public static class CompilerErrorLookupHelper
             return DescribeCs0107(diagnostic);
         }
 
+        if (diagnostic.Id == "CS0144")
+        {
+            return DescribeCs0144(diagnostic);
+        }
+
         return null;
     }
 
@@ -180,6 +185,17 @@ public static class CompilerErrorLookupHelper
     /// ("private static internal"). The modifiers found are read from the quoted source line, up to the first '(', '=', '{', '&lt;' or ';',
     /// and left out when the line is not available.
     /// </summary>
+    /// <summary>
+    /// CS0144 ("Cannot create an instance of the abstract type or interface 'X'"): typically a field retyped to an interface
+    /// that kept its target-typed <c>new()</c>. 10-chain runs 214 and 216 (2026-11-10) hit it on step 7 and gave the step up.
+    /// </summary>
+    private static string DescribeCs0144(DiagnosticInfo diagnostic)
+    {
+        var quoted = System.Text.RegularExpressions.Regex.Match(diagnostic.Message ?? string.Empty, "'([^']+)'");
+        var type = quoted.Success ? quoted.Groups[1].Value : "the interface";
+        return $"  {type} cannot be created with new() or new {type}(). Keep {type} as the declared type and name a concrete class that implements it on the right-hand side, for example: private readonly {type} _field = new SomeImplementingClass();";
+    }
+
     private static string DescribeCs0107(DiagnosticInfo diagnostic)
     {
         var found = new List<string>();

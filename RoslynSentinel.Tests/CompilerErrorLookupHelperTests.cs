@@ -243,6 +243,30 @@ public class CompilerErrorLookupHelperTests
     }
 
     /// <summary>
+    /// CS0144 (10-chain runs 214 and 216, 2026-11-10): a field retyped to an interface kept its target-typed new();
+    /// the hint names the interface and says to construct a concrete class.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_Cs0144_NamesTheInterfaceAndSaysToNameAConcreteClass()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Checkout.cs", """
+            namespace TestProj;
+
+            public interface IPricing { decimal Total(decimal a); }
+
+            public class Checkout
+            {
+                private readonly IPricing _calculator = new();
+            }
+            """));
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("IPricing cannot be created with new() or new IPricing(). Keep IPricing as the declared type"));
+    }
+
+    /// <summary>
     /// CS0107 (eval run 20261109-233953-684: a whole-file write produced "private static internal", and the model removed the wrong
     /// modifier). The gate's diagnostics carry the source line, which names the modifiers found.
     /// </summary>
