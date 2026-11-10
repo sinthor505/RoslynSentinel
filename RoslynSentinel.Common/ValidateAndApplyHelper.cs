@@ -88,11 +88,11 @@ public static class ValidateAndApplyHelper
         CancellationToken cancellationToken = default,
         IReadOnlyCollection<FilePathWrapper>? deletePaths = null,
         Func<DiagnosticReport, CancellationToken, Task<string>>? describeValidationFailure = null,
+        IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits = null,
         // Deliberate deviation from the chokepoint's default-None pattern (owner decision 2026-11-09):
         // engine tools opt in to the stale-read guard once, here. The Quiet value refuses an
         // observed-then-changed target but does not add the "not read first" finding, because engine
         // tools edit many files.
-        IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits = null,
         StaleReadPolicy staleReadPolicy = StaleReadPolicy.RefuseIfObservedStaleQuiet,
         // Edit-impact report (EditImpactGate.Describer in Engines.Basic; Common cannot call an engine). A non-null text
         // replaces the untouched-file sentence, which it already covers; null keeps DescribeUntouchedFileErrors as the fallback.

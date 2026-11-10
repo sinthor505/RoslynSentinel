@@ -939,7 +939,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 // A full reload re-derives CurrentSolution from disk, so any drift flagged against the
                 // previous in-memory state is stale by construction -> otherwise a flag raised before
                 // the reload permanently blocks writes to that file for the rest of the session, since
-                // only ClearExternalFileChanges (not a reload) ever drains _externalChanges.
+                // a reload does not drain _externalChanges by itself; the ClearExternalFileChanges call
+                // just below does.
                 ClearExternalFileChanges();
 
                 // Rebuild the content-hash baseline from what was just loaded -> same "full reset, not
@@ -2665,6 +2666,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         }
         finally
         {
+            // TODO the release-on-exception path (Step 9b test row X) is untested: it needs a fault-injection seam (a test hook that throws after the lock is acquired and before the write completes) so a test can prove the lock is released when the write faults.
             if (writeLease is not null)
             {
                 await writeLease.DisposeAsync();
@@ -2959,6 +2961,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     }
                     else if (_foldRefusedFiles.ContainsKey((string)target))
                     {
+                        // TODO this persisting-mismatch Warning reuses WorkspaceStaleText.Recovery, whose text talks about a broken .csproj/.sln; the persisting-mismatch case needs its own recovery wording.
                         foldFindings.Add(new Finding("WriteChokepoint", $"{fileName} still differs from disk after a fold; the write proceeded against the in-memory text. {WorkspaceStaleText.Recovery}", FindingSeverity.Warning));
                     }
                     else

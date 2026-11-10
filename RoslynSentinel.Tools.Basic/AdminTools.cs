@@ -75,6 +75,7 @@ public class AdminTools
         if (operation == ExternalFileDriftOperation.Status)
         {
             var summary = current.Count > 0 ? $" ({DriftMessages.SummarizeFiles(current)})" : string.Empty;
+            // TODO ExternalFileDrift Status prints SessionHalted=IsSessionHalted(), which is always False now (dead-latch cleanup), while the tool description says it is true only after an unrecoverable breaker trip; drop the field or fix the description.
             return Ok($"SessionHalted={_workspaceManager.IsSessionHalted()}; tracked external changes: {current.Count}{summary}.");
         }
 
