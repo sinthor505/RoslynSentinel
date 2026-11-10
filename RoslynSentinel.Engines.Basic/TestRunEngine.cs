@@ -439,38 +439,23 @@ public class TestRunEngine
                 process.StartInfo.ArgumentList.Add(effectiveFilter);
             }
 
-            var stdout = new StringBuilder();
-            var stderr = new StringBuilder();
-            process.OutputDataReceived += (_, e) => { if (e.Data is not null) { stdout.AppendLine(e.Data); } };
-            process.ErrorDataReceived += (_, e) => { if (e.Data is not null) { stderr.AppendLine(e.Data); } };
-
             process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
 
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+            // Waits for process exit, not pipe EOF: a grandchild holding the pipes (a reused MSBuild node, a
+            // test host child) must not keep the run alive after dotnet exited. See ChildProcessCapture.
+            var capture = await ChildProcessCapture.RunAsync(process, TimeSpan.FromSeconds(timeoutSeconds), cancellationToken);
 
             string? timeoutDetail = null;
-            try
+            if (capture.TimedOut)
             {
-                await process.WaitForExitAsync(linkedCts.Token);
-            }
-            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-            {
-                try
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-                catch
-                {
-                    // Best-effort -> process may have already exited between the timeout firing and the kill.
-                }
-                timeoutDetail = $"Test run exceeded {timeoutSeconds}s and was terminated.";
+                var exitState = capture.RootExited
+                    ? $"the test process had exited, exit code {capture.ExitCode}"
+                    : "the test process had not exited";
+                timeoutDetail = $"Test run exceeded {timeoutSeconds}s and was terminated ({exitState}).";
             }
 
-            var stdoutText = stdout.ToString();
-            var stderrText = stderr.ToString();
+            var stdoutText = capture.StdOut;
+            var stderrText = capture.StdErr;
 
             var lockDetail = DetectFileLock(stdoutText, stderrText);
 

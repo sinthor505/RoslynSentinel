@@ -17,6 +17,12 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 public static class TestEngines
 {
+    static TestEngines()
+    {
+        // Tests must not leave reusable MSBuild nodes holding pipes or orphaned after the test host exits; spawned dotnet build/test children inherit this.
+        Environment.SetEnvironmentVariable("MSBUILDDISABLENODEREUSE", "1");
+    }
+
     /// <summary>
     /// Fresh container for one factory call. When a workspace manager is passed it replaces the registered one for
     /// IWorkspaceManager / ISolutionProvider / IWorkspaceReader, so every engine the container resolves for the

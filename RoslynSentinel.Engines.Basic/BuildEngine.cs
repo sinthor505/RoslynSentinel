@@ -342,39 +342,21 @@ public class BuildEngine
 
         process.Start();
 
-        // Process.WaitForExitAsync alongside BeginOutputReadLine/BeginErrorReadLine can hang
-        // indefinitely even after the child has exited: confirmed live via attached debugger that a
-        // "dotnet build" child had fully exited (no such process remained) while WaitForExitAsync was
-        // still stuck awaiting pipe EOF -> a grandchild (e.g. an MSBuild worker node) can inherit and
-        // hold the redirected stdout/stderr handles open. Reading the streams directly with
-        // ReadToEndAsync -> instead of the event-based BeginOutputReadLine/BeginErrorReadLine -> and
-        // bounding the whole thing with a timeout that kills the process tree closes both the hang
-        // and its blast radius.
-        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
-
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(linkedCts.Token);
-        var stderrTask = process.StandardError.ReadToEndAsync(linkedCts.Token);
-        var exitTask = process.WaitForExitAsync(linkedCts.Token);
-
-        try
+        // A grandchild (e.g. an MSBuild worker node with /nodeReuse:true) can inherit and hold the redirected
+        // stdout/stderr handles open after dotnet itself exited, so waiting for pipe EOF can last until the
+        // timeout. ChildProcessCapture waits for process exit, then gives the reads a short drain grace.
+        var capture = await ChildProcessCapture.RunAsync(process, TimeSpan.FromMinutes(5), cancellationToken);
+        if (capture.TimedOut)
         {
-            await Task.WhenAll(stdoutTask, stderrTask, exitTask);
-        }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
-        {
-            TryKillProcessTree(process);
+            var exitState = capture.RootExited
+                ? $"the build process had exited, exit code {capture.ExitCode}"
+                : "the build process had not exited";
             return new EngineResultWrapper<BuildResult>(EngineOutcome.Failure,
-                error: new EngineError("The full build timed out after 5 minutes and the build process was terminated."));
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            TryKillProcessTree(process);
-            throw;
+                error: new EngineError($"The full build timed out after 5 minutes ({exitState}) and the process tree was terminated."));
         }
 
-        var stdoutText = stdoutTask.Result;
-        var stderrText = stderrTask.Result;
+        var stdoutText = capture.StdOut;
+        var stderrText = capture.StdErr;
 
         var (errors, warnings) = ParseDiagnostics(stdoutText);
 
@@ -383,6 +365,12 @@ public class BuildEngine
             stderrText.Contains("MSB3021") || stdoutText.Contains("MSB3021"))
         {
             detail = "Build failed to copy the output file - it is likely locked by a running process (e.g. this MCP server or an IDE holding the binary). Close the process holding the file and retry.";
+        }
+
+        if (capture.DrainTimedOut)
+        {
+            var drainNote = "The output streams were still held open by a child process after dotnet exited; the build output may be incomplete.";
+            detail = detail is null ? drainNote : detail + " " + drainNote;
         }
 
         if (artifactsPath is not null)
@@ -398,11 +386,11 @@ public class BuildEngine
 
         const int SummaryTopN = 50;
         return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, new BuildResult(
-            Outcome: process.ExitCode == 0 ? BuildOutcome.Succeeded : BuildOutcome.Failed,
+            Outcome: capture.ExitCode == 0 ? BuildOutcome.Succeeded : BuildOutcome.Failed,
             Level: usedLevel,
             ProjectsCompiled: builtProjectNames,
             DiagnosticsComplete: true,
-            ExitCode: process.ExitCode,
+            ExitCode: capture.ExitCode!.Value,
             ErrorCount: errors.Count,
             WarningCount: warnings.Count,
             // Every diagnostic: BuildResultProjector caps warnings by maxDetails and the result marshaller
@@ -417,19 +405,5 @@ public class BuildEngine
             Duration: DateTime.UtcNow - start,
             Detail: detail
         ));
-    }
-
-    private static void TryKillProcessTree(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (InvalidOperationException)
-        {
-        }
     }
 }
