@@ -4,6 +4,9 @@ using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tools.Basic;
 
+// Carries [McpServerToolType] so every reflection scanner sees it, but is registered explicitly as an always-on class
+// (ServiceRegistrationExtensionsBasic) and deliberately kept out of ToolClassRegistry, so it is never counted or excludable.
+[McpServerToolType]
 public class ServerStatusTools
 {
     private readonly IWorkspaceManager _workspaceManager;
@@ -40,6 +43,7 @@ public class ServerStatusTools
     }
 
     [McpServerTool(Name = "McpServerStatus")]
+    [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)] // read-only diagnostic an operator or agent needs while halted (breaker filter refuses every tool not on the allow-list)
     [Produces(DataTag.ResultOnly)]
     [Description("Diagnostic snapshot: server build identity (serverVersion, serverBuildTimeUtc, serverBinaryPath, serverPid, buildSha, binaryStaleness = commits since buildSha touching server source, else loaded assemblies with a newer build on disk), session-halt state, circuit breaker, loaded workspace (isFreshStartup = this server process has not loaded a solution yet, e.g. just restarted), active tool-mode resolution. " +
         "Tools are gated per mode: before concluding a tool does not exist, call with toolListing=inactive." +

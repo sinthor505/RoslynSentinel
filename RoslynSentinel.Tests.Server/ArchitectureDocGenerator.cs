@@ -180,9 +180,10 @@ public static class ArchitectureDocGenerator
                     var fullDesc = descAttr?.Description ?? "";
                     var summary = TruncateSummary(fullDesc, 120);
                     
+                    // ServerStatusTools is not in ToolClassRegistry (always on, registered explicitly), so it has no class-to-modes entry.
                     var modes = classToModes.TryGetValue(toolType.Name, out var m) 
                         ? ResolvePerToolModes(toolType.Name, toolName, m) 
-                        : new List<string>();
+                        : toolType == typeof(ServerStatusTools) ? new List<string> { "always on" } : new List<string>();
                     
                     var breakerAttr = method.GetCustomAttribute<UnrecoverableBreakerAttribute>();
                     var isBreakerAllowed = breakerAttr?.Access == UnrecoverableBreakerAccess.Allowed;
@@ -279,6 +280,12 @@ public static class ArchitectureDocGenerator
             
             foreach (var toolType in toolTypes)
             {
+                // ServerStatusTools is the always-on class: registered explicitly in ServiceRegistrationExtensionsBasic and deliberately not in ToolClassRegistry.
+                if (toolType == typeof(ServerStatusTools))
+                {
+                    continue;
+                }
+
                 if (!registeredClasses.Contains(toolType.Name))
                 {
                     unregistered.Add(toolType.Name);

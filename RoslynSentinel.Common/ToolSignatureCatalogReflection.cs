@@ -60,21 +60,7 @@ public static class ToolSignatureCatalogReflection
 
             foreach (var type in TryGetTypes(assembly))
             {
-                // Always-on tool classes such as ServerStatusTools are registered without [McpServerToolType], so also scan types that declare [McpServerTool] methods.
-                // GetMethods throws on framework types whose signatures reference unavailable types; such types are not tool classes.
-                bool scannable;
-                try
-                {
-                    scannable = type.GetCustomAttribute<McpServerToolTypeAttribute>(inherit: false) is not null
-                        || type.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
-                            .Any(m => m.GetCustomAttribute<McpServerToolAttribute>(inherit: false) is not null);
-                }
-                catch (Exception)
-                {
-                    scannable = false;
-                }
-
-                if (!scannable)
+                if (type.GetCustomAttribute<McpServerToolTypeAttribute>(inherit: false) is null)
                 {
                     continue;
                 }

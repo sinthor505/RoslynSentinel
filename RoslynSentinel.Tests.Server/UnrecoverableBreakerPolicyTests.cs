@@ -24,7 +24,7 @@ public class UnrecoverableBreakerPolicyTests
     [Test]
     public void AllowedToolNames_EqualsExpectedSet()
     {
-        // Golden test: the allow-list must be exactly these 8 tools, ordinal comparison, sorted.
+        // Golden test: the allow-list must be exactly these 9 tools, ordinal comparison, sorted.
         var expected = new SortedSet<string>(StringComparer.Ordinal)
         {
             "ReadFile",
@@ -34,14 +34,15 @@ public class UnrecoverableBreakerPolicyTests
             "GetOperationDetail",
             "GetWorkspaceHealth",
             "ExternalFileDrift",
-            "Git"
+            "Git",
+            "McpServerStatus"
         };
 
         var actual = new SortedSet<string>(UnrecoverableBreakerPolicy.AllowedToolNames, StringComparer.Ordinal);
 
         Assert.That(actual, Is.EqualTo(expected),
             $"The allow-list is defined by [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)] " +
-            $"attributes on tool methods. Expected 8 distinct tool names; got {actual.Count}. " +
+            $"attributes on tool methods. Expected 9 distinct tool names; got {actual.Count}. " +
             $"Missing: {string.Join(", ", expected.Except(actual))}. " +
             $"Extra: {string.Join(", ", actual.Except(expected))}.");
     }
@@ -50,7 +51,6 @@ public class UnrecoverableBreakerPolicyTests
     [TestCase("")]
     [TestCase("WriteFile")]
     [TestCase("ApplyDiff")]
-    [TestCase("McpServerStatus")]
     public void IsAllowed_ReturnsFalseForBlockedTools(string? toolName)
     {
         Assert.That(UnrecoverableBreakerPolicy.IsAllowed(toolName), Is.False,
@@ -71,6 +71,7 @@ public class UnrecoverableBreakerPolicyTests
     [TestCase("GetOperationDetail")]
     [TestCase("GetWorkspaceHealth")]
     [TestCase("ExternalFileDrift")]
+    [TestCase("McpServerStatus")] // declared by ServerStatusTools, the always-on class outside ToolClassRegistry
     public void IsAllowed_ReturnsTrueForAllowedTools(string toolName)
     {
         Assert.That(UnrecoverableBreakerPolicy.IsAllowed(toolName), Is.True,

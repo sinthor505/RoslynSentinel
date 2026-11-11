@@ -43,9 +43,13 @@ public class ToolClassRegistrationTests
     [TearDown]
     public void TearDown() => _provider?.Dispose();
 
+    // ServerStatusTools carries [McpServerToolType] but is the always-on class: the host registers it explicitly
+    // (ServiceRegistrationExtensionsBasic: AddSingleton + WithSentinelTools<ServerStatusTools>) and deliberately keeps it out of
+    // ToolClassRegistry and AddRoslynSentinelToolClassesBasic, so it is exempt from the registered/resolves checks below.
     private static IReadOnlyList<Type> ToolClasses() =>
         typeof(WorkspaceTools).Assembly.GetTypes()
             .Where(t => t.IsClass && !t.IsAbstract && t.GetCustomAttribute<McpServerToolTypeAttribute>() != null)
+            .Where(t => t != typeof(ServerStatusTools))
             .OrderBy(t => t.Name, StringComparer.Ordinal)
             .ToArray();
 

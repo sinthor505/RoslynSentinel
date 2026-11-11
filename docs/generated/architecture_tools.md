@@ -88,6 +88,7 @@
 | RefactoringStructuralTools | ModifyModifier | Claude, Refactor, RefactoringStructural | - | Adds or removes a non-accessibility modifier keyword (use ChangeAccessibility for private/public/etc.,... |
 | RefactoringStructuralTools | SyncTypeAndFilename | Claude, claude-lean (on demand), Refactor, RefactoringStructural | - | Synchronizes the filename to match a type declared in the file. |
 | SemanticFindReplaceTools | SemanticFindReplace | claude-lean, SemanticFindReplace | - | Semantic (compiler-aware, not text) find-replace. invertBoolean renames a bool property or field and inverts its... |
+| ServerStatusTools | McpServerStatus | always on | Allowed | Diagnostic snapshot: server build identity (serverVersion, serverBuildTimeUtc, serverBinaryPath, serverPid, buildSha,... |
 | SymbolNavigationTools | GetTypeInfo | Claude, claude-lean (on demand), SymbolNavigation, Workspace | - | Returns type information for a type you already know the name of - hierarchy, members, or both. |
 | SymbolNavigationTools | InspectSymbol | Claude, claude-lean, SymbolNavigation, Workspace | - | Inspects a symbol in depth. |
 | SymbolNavigationTools | LocateSymbol | Claude, SymbolNavigation, Workspace | - | Locates declaration sites for a symbol by name. |
