@@ -224,11 +224,14 @@ public sealed class ModelAgentRunner
             var turnCompletedAt = DateTimeOffset.Now;
 
             _logger.LogInformation(
-                "Turn {Turn}: model responded in {Latency} - {ToolCallCount} tool call(s). Tokens: input {InputTokens} (cached {CachedInputTokens}), output {OutputTokens} (reasoning {ReasoningTokens}), total {TotalTokens}. Reasoning: {Reasoning} Content: {Content}",
+                "Turn {Turn}: model responded in {Latency} - {ToolCallCount} tool call(s). Tokens: input {InputTokens} (cached {CachedInputTokens}), output {OutputTokens} (reasoning {ReasoningTokens}), total {TotalTokens}. First token {TimeToFirstTokenSeconds} s, generation {GenerationSeconds} s, {TokensPerSecond} tok/s. Reasoning: {Reasoning} Content: {Content}",
                 turnNumber, turnStopwatch.Elapsed, modelMessage.ToolCalls.Count,
                 modelMessage.InputTokens?.ToString() ?? "n/a", modelMessage.CachedInputTokens?.ToString() ?? "n/a",
                 modelMessage.OutputTokens?.ToString() ?? "n/a", modelMessage.ReasoningTokens?.ToString() ?? "n/a",
                 modelMessage.TotalTokens?.ToString() ?? "n/a",
+                modelMessage.TimeToFirstTokenSeconds?.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) ?? "n/a",
+                modelMessage.GenerationSeconds?.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) ?? "n/a",
+                modelMessage.TokensPerSecond?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "n/a",
                 string.IsNullOrWhiteSpace(modelMessage.ReasoningContent) ? "(none)" : modelMessage.ReasoningContent,
                 string.IsNullOrWhiteSpace(modelMessage.Content) ? "(none)" : modelMessage.Content);
 

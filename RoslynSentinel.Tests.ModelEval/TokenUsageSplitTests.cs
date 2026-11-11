@@ -128,6 +128,76 @@ public class TokenUsageSplitTests
         Assert.That(withSplit.Turns[0].ModelMessage.ReasoningTokens, Is.EqualTo(2));
     }
 
+    [Test]
+    public async Task Client_MeasuresFirstTokenAndGenerationTime_WhenStreamHasGenerationEvent()
+    {
+        var completed = CompletedEvent("""{"input_tokens":10,"output_tokens":40,"total_tokens":50}""");
+        var client = NewClient(new StreamHandler(() => new TwoPartDelayedStream(
+            "event: response.output_item.added\ndata: {}\n\n", TimeSpan.FromMilliseconds(200), completed)));
+
+        var reply = await client.CompleteAsync(
+            [new AgentChatMessage { Role = "user", Content = "hi" }],
+            [],
+            256);
+
+        Assert.That(reply.TimeToFirstTokenSeconds, Is.Not.Null);
+        Assert.That(reply.TimeToFirstTokenSeconds, Is.GreaterThanOrEqualTo(0.0));
+
+        // Lower bound only: the delay is real time, so machine load can only make the window longer.
+        Assert.That(reply.GenerationSeconds, Is.GreaterThanOrEqualTo(0.15));
+        Assert.That(reply.TokensPerSecond, Is.GreaterThan(0.0));
+        Assert.That(reply.TokensPerSecond, Is.LessThanOrEqualTo(40 / 0.15));
+    }
+
+    [Test]
+    public async Task Client_StreamWithoutGenerationEvent_LeavesTimingNull()
+    {
+        var client = NewClient(CompletedEvent("""{"input_tokens":10,"output_tokens":4,"total_tokens":14}"""));
+
+        var reply = await client.CompleteAsync(
+            [new AgentChatMessage { Role = "user", Content = "hi" }],
+            [],
+            256);
+
+        Assert.That(reply.TimeToFirstTokenSeconds, Is.Null);
+        Assert.That(reply.GenerationSeconds, Is.Null);
+        Assert.That(reply.TokensPerSecond, Is.Null);
+    }
+
+    [Test]
+    public void Transcript_WithoutTiming_OmitsTheFieldsFromJson()
+    {
+        var withoutTiming = new AgentChatMessage { Role = "assistant", Content = "x", TotalTokens = 5 };
+
+        var json = JsonSerializer.Serialize(withoutTiming);
+
+        Assert.That(json, Does.Not.Contain("TimeToFirstTokenSeconds"));
+        Assert.That(json, Does.Not.Contain("GenerationSeconds"));
+        Assert.That(json, Does.Not.Contain("TokensPerSecond"));
+
+        var withTiming = new AgentChatMessage
+        {
+            Role = "assistant", Content = "x", TimeToFirstTokenSeconds = 1.5, GenerationSeconds = 2.0, TokensPerSecond = 20.0,
+        };
+
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(withTiming));
+
+        Assert.That(doc.RootElement.GetProperty("TimeToFirstTokenSeconds").GetDouble(), Is.EqualTo(1.5));
+        Assert.That(doc.RootElement.GetProperty("GenerationSeconds").GetDouble(), Is.EqualTo(2.0));
+        Assert.That(doc.RootElement.GetProperty("TokensPerSecond").GetDouble(), Is.EqualTo(20.0));
+    }
+
+    [Test]
+    public void TranscriptResumeLoad_OldTranscriptJsonWithoutTiming_StillLoads()
+    {
+        var source = LoadFromTempFile(OldTranscriptJson);
+
+        Assert.That(source.Turns, Has.Count.EqualTo(1));
+        Assert.That(source.Turns[0].ModelMessage.TimeToFirstTokenSeconds, Is.Null);
+        Assert.That(source.Turns[0].ModelMessage.GenerationSeconds, Is.Null);
+        Assert.That(source.Turns[0].ModelMessage.TokensPerSecond, Is.Null);
+    }
+
     private static ResumeSource LoadFromTempFile(string json)
     {
         var path = Path.Combine(Path.GetTempPath(), $"token-split-{Guid.NewGuid():N}.json");
@@ -153,6 +223,90 @@ public class TokenUsageSplitTests
             BaseAddress = new Uri("http://localhost/v1/"),
         };
         return new LmStudioAgentClient(httpClient, "test-model", NullLogger<LmStudioAgentClient>.Instance);
+    }
+
+    private static LmStudioAgentClient NewClient(HttpMessageHandler handler)
+    {
+        var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("http://localhost/v1/"),
+        };
+        return new LmStudioAgentClient(httpClient, "test-model", NullLogger<LmStudioAgentClient>.Instance);
+    }
+
+    /// <summary>Answers every chat request with a fresh stream from the factory; the models endpoint is 404.</summary>
+    private sealed class StreamHandler(Func<Stream> streamFactory) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/api/v0/models", StringComparison.Ordinal))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(streamFactory()),
+            });
+        }
+    }
+
+    /// <summary>Serves the first text, waits, then serves the second, so the client sees a real gap between the first generation event and response.completed.</summary>
+    private sealed class TwoPartDelayedStream(string first, TimeSpan delay, string second) : Stream
+    {
+        private readonly Queue<byte[]> _parts = new([Encoding.UTF8.GetBytes(first), Encoding.UTF8.GetBytes(second)]);
+        private byte[]? _current;
+        private int _offset;
+        private bool _delayed;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (_current is null || _offset >= _current.Length)
+            {
+                if (_parts.Count == 0)
+                {
+                    return 0;
+                }
+
+                if (_current is not null && !_delayed)
+                {
+                    _delayed = true;
+                    await Task.Delay(delay, cancellationToken);
+                }
+
+                _current = _parts.Dequeue();
+                _offset = 0;
+            }
+
+            var count = Math.Min(buffer.Length, _current.Length - _offset);
+            _current.AsMemory(_offset, count).CopyTo(buffer);
+            _offset += count;
+            return count;
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            ReadAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     /// <summary>Answers every chat request with the same SSE body; the models endpoint is 404 so the status probe stays quiet.</summary>

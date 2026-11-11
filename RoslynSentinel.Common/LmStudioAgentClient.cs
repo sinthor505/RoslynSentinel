@@ -164,6 +164,7 @@ public sealed class LmStudioAgentClient
                 JsonSerializer.Serialize(requestBody, JsonOptions), Encoding.UTF8, "application/json"),
         };
 
+        var requestStopwatch = System.Diagnostics.Stopwatch.StartNew();
         using var response = await _httpClient.SendAsync(
             request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
@@ -178,11 +179,18 @@ public sealed class LmStudioAgentClient
         using var reader = new StreamReader(stream);
 
         ResponseObject? completedResponse = null;
+        TimeSpan? firstGenerationAt = null;
+        TimeSpan? completedAt = null;
         var reasoningBuilders = new Dictionary<string, StringBuilder>();
         var messageBuilders = new Dictionary<string, StringBuilder>();
 
         await foreach (var (eventType, data) in ReadServerSentEventsAsync(reader, cancellationToken))
         {
+            if (firstGenerationAt is null && IsGenerationEvent(eventType))
+            {
+                firstGenerationAt = requestStopwatch.Elapsed;
+            }
+
             switch (eventType)
             {
                 case "response.reasoning_text.delta":
@@ -218,6 +226,7 @@ public sealed class LmStudioAgentClient
                     {
                         var evt = JsonSerializer.Deserialize<ResponseCompletedEvent>(data, JsonOptions)!;
                         completedResponse = evt.Response;
+                        completedAt = requestStopwatch.Elapsed;
                         break;
                     }
                 case "response.failed":
@@ -291,6 +300,13 @@ public sealed class LmStudioAgentClient
             })
             .ToList();
 
+        double? generationSeconds = firstGenerationAt is { } firstAt && completedAt is { } doneAt
+            ? (doneAt - firstAt).TotalSeconds
+            : null;
+        double? tokensPerSecond = completedResponse.Usage?.OutputTokens is { } outputTokens && generationSeconds is >= 0.001
+            ? outputTokens / generationSeconds.Value
+            : null;
+
         return new AgentChatMessage
         {
             Role = "assistant",
@@ -302,6 +318,9 @@ public sealed class LmStudioAgentClient
             OutputTokens = completedResponse.Usage?.OutputTokens,
             CachedInputTokens = completedResponse.Usage?.InputTokensDetails?.CachedTokens,
             ReasoningTokens = completedResponse.Usage?.OutputTokensDetails?.ReasoningTokens,
+            TimeToFirstTokenSeconds = firstGenerationAt is { } ttft ? Math.Round(ttft.TotalSeconds, 3) : null,
+            GenerationSeconds = generationSeconds is { } gen ? Math.Round(gen, 3) : null,
+            TokensPerSecond = tokensPerSecond is { } tps ? Math.Round(tps, 2) : null,
         };
     }
 
@@ -440,6 +459,14 @@ public sealed class LmStudioAgentClient
             }
         }
     }
+
+    /// <summary>
+    /// True for the first stream events that only arrive once the model is generating. response.created and
+    /// response.in_progress are sent at once, before prompt processing; response.output_item.added is the first
+    /// event after it, for text and for tool calls alike (measured against a live LM Studio).
+    /// </summary>
+    private static bool IsGenerationEvent(string eventType) =>
+        eventType == "response.output_item.added" || eventType.EndsWith(".delta", StringComparison.Ordinal);
 
     /// <summary>
     /// How many of the most recent assistant turns get their reasoning replayed. Replaying every turn's
@@ -829,6 +856,37 @@ public sealed class AgentChatMessage
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? ReasoningTokens
+    {
+        get; init;
+    }
+
+    /// <summary>
+    /// Client-measured (LM Studio's /v1/responses reports no timing): seconds from sending the request to the first
+    /// generation event of the stream, so it includes prompt processing. Null for non-assistant roles and when the
+    /// stream had no generation event.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? TimeToFirstTokenSeconds
+    {
+        get; init;
+    }
+
+    /// <summary>
+    /// Client-measured seconds from the first generation event to response.completed; null when
+    /// TimeToFirstTokenSeconds is null.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? GenerationSeconds
+    {
+        get; init;
+    }
+
+    /// <summary>
+    /// OutputTokens divided by GenerationSeconds (client-measured, not backend-reported); null when either is missing
+    /// or the window is under a millisecond.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? TokensPerSecond
     {
         get; init;
     }
