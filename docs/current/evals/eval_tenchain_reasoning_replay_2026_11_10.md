@@ -343,6 +343,62 @@ Archive `C:\tmp\rs_eval_h1\ModelTestingResults\113\Model_AppliesTenChainedRefact
 - **R3 T2:** three failures in one turn ('oldContent' is required; CS0246; file IOrderPricingCalculator.cs not found
   anywhere in the loaded solution) in a turn that sent several calls at once; R3 still passed in 15 turns.
 
+## Batch H2: master 68f1614a, rename lifting ON, 4/5 (2026-11-11)
+
+**Setup.** Host 113, `qwen3.5-9b-coder`, 60160 context, parallel 4, reasoning budget as before (not re-verified from the
+host). Worktree `C:\tmp\rs_eval_h2` (branch `eval/h2`) at master 68f1614a: H1 plus 2dc261ee (a lift forgets rejected edits
+for files it wrote, lift summary quotes rewritten call sites with "do not edit them again", clearer failed-lift note),
+e1b56ead (Member not-found evidence), isToolActive hints, Member remove type vs constructor, per-turn cached/reasoning
+token counts. `ROSLYNSENTINEL_LIFT_RENAMES=1`, same command as H1 with `-Repeats 5`. L2. Archive
+`C:\tmp\rs_eval_h2\ModelTestingResults\113\Model_AppliesTenChainedRefactors\`, runs `20261111-093725-368`,
+`094447-121`, `095056-631`, `095900-524`, `100655-627`. Run 1 showed 0 lifts and 11 redirects, so liveness was checked on
+run 2 (2 lifts, 0 redirects): the flag was live and run 1 was a lift refusal.
+
+| Run | Folder | Result | Turns | Failed | Lifted (turns) | Redirected | Model RenameSymbol |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| R1 | 093725-368 | FAIL RepeatedToolFailure | 14 | 12 | 0 | 11 (T3, T5-T14) | 0 |
+| R2 | 094447-121 | pass | 23 | 0 | 2 (2, 14) | 0 | 0 |
+| R3 | 095056-631 | pass | 20 | 4 | 1 (8) | 1 (2) | T3 ok |
+| R4 | 095900-524 | pass | 22 | 2 | 2 (2, 5) | 0 | 0 |
+| R5 | 100655-627 | pass | 18 | 1 | 2 (2, 8) | 0 | 0 |
+
+| Measure | G (10) | H1 (5) | H2 (5) |
+| --- | --- | --- | --- |
+| Pass | 8/10 | 4/5 | 4/5 |
+| Mean turns (H2 passing only: 20.8) | 19.7 | 18.6 | 19.4 |
+| Mean failed calls (H2 passing only: 1.8) | 3.7 | 2.8 | 3.8 |
+| Lifts per run (of 2 renames) | 1.4 | 1.6 | 1.4 |
+| Redirects per run | 0.6 | 0.6 | 2.4 (0.25 without R1) |
+| Longest identical consecutive call | 2 | 2 | 10 (R1 T5-T14) |
+| Stale oldContent right after a lift | 2 of 14 | 2 of 8 | 0 of 7 |
+
+- **Stale oldContent after a lift: 0 of 7 in H2** (G+H1: 4 of 22). All 7 lift results carried "Rewritten call sites:" and
+  "These call sites are already updated; do not edit them again." (`RenameLifter.cs:55` `DescribeRewrittenLines`,
+  `WorkspaceFileEditImpl.cs:944`). The model never quoted the line; its next-turn reasoning shows it noticed the
+  caller was updated (R2 T3 "...automatically renamed the method and updated the call site in OrderCheckout.cs"). R2 T3 and R4 T3/T6
+  attribute the lift to RenameSymbol, though it came from ReplaceSnippet. No lifted call-site edit was repeated
+  verbatim; R4 T7 and R5 T10 edited the quoted `OrderCheckout.cs:5` line but with a different newContent (field retyped to the interface), a real next step.
+  The forget-rejected-edits path is untested here (no lift was followed by a re-sent rejected edit).
+- **Same stale error without a lift (R3 T3 -> T4):** the model's own RenameSymbol (T3, ok) renamed the class in
+  `OrderCheckout.cs`; T4's ReplaceSnippet on that file still used `OrderPricingCalculator _calculator` and failed
+  "oldContent was not found: it matches nothing at any whitespace tolerance probed."
+- **R1 (`093725-368`), RepeatedToolFailure at T14.** T2 CreateFile of `IOrderPricingCalculator.cs`; T3 one whole-file
+  ReplaceSnippet (reason "rewrite OrderPricingCalculator.cs with all 10 refactoring steps") that renamed BOTH the class
+  and `CalcDisc` -> `CalculateDiscountedTotal`. Redirect T3: "...change not applied. Next step: This edit renames
+  OrderPricingCalculator to StandardOrderPricingCalculator and 1 file(s) still use OrderPricingCalculator: use
+  RenameSymbol(reason: ..., projectName: "ContosoOrders.Core", docCommentId: ..."; T5-T14 add "You already sent this
+  exact edit and it was rejected the same way; sending it again cannot succeed. Do what the next step below says
+  instead." Reasoning at T4-T14 names RenameSymbol every turn ("I keep getting the same rejection with the same
+  suggested tool. Let me use the RenameSymbol tool as suggested." T8); every emitted call was the same ReplaceSnippet.
+  Traced (failure-root-cause-analyst): the lift refused because the edit has two renames: `RenameLifter.cs:115-119` at
+  68f1614a, `if (renames.Count != 1 || ...) return null;`, and the fallback is silent (`TryLiftRenameAsync`,
+  `WorkspaceFileEditImpl.cs:927-931` returns null; the lift note is set only for attempted lifts, `:1538-1548`). Master
+  already has 2ef7d88e ("class and method renamed together"; main tree `RenameLifter.cs:122` reads
+  `renames.Count == 0 || ...`), made after this worktree was cut; H1 R5 T3-T4 was probably the same cause (hypothesis).
+  The redirect names only the first rename, so following it would still leave `CalcDisc` renamed by the model's own text.
+- **Smaller:** R4 T16 CS0111 (re-declared member), R5 T4 CS0103 `LocalZone`, R3 T2 three failures in one turn (all
+  recovered). Cached/reasoning token fields are present in the transcript (14 occurrences in run 1).
+
 ## Out of scope
 
 - Batch C ran before 31b206a6 and 28391d8c; their effect is unmeasured.
