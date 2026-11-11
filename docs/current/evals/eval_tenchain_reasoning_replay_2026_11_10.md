@@ -545,13 +545,41 @@ Worktree `C:\tmp\rs_eval_h1` (H1's, reused), `-Repeats 10`. L1. Archive
   actually call RenameSymbol directly", then 15 identical ReplaceSnippet calls (T16-T20, T22-T31) despite "You already sent
   this exact edit". RenameSymbol never called. This is the failure rename lifting targets (no lift-on batch had it).
 - **R8: NotFound with a wrong matchLine.** T29, T32 "oldContent was found (1 match(es)), but not at the matchLine you
-  supplied"; T26, T28 NotFound on the renamed file. The harness counted 7 ReplaceSnippet failures, the transcript shows 8
-  plus one "guardrail redirect" found only in the console summary (unresolved).
+  supplied"; T26, T28 NotFound on the renamed file. The harness counted 7 ReplaceSnippet failures; the 8th (T5) is the
+  rename guardrail redirect, which `AgentToolErrorAssertions.cs:41-47` counts separately (resolved below).
 - **Smaller:** R5 T8 ModifyModifier `modifier: "internal"` ("Valid values are: virtual, abstract, ..."); the model
   called ChangeAccessibility in the same turn. R9 T21 CreateFile on an existing file. Stale-path ReadFile in R1, R4, R5,
   R8, R9.
 - **Token fields (plan step 6):** `InputTokens`/`OutputTokens` are populated; `CachedInputTokens`/`ReasoningTokens`
   are absent (hypothesis: LM Studio does not report them).
+
+**Root causes (failure-root-cause-analyst, 2026-11-11; R1, R2, R8; R4 not traced, rename lifting targets it).** Source
+read in the e9d16dfd worktree.
+
+- **Step 10 is the only edit step nothing checks.** The prompt is unambiguous (replace both literals; "only the two
+  case-pattern literals are replaced"). The fixture's 7 tests are 4 front-door tests plus reflection tests for steps 3, 7
+  and 9 (`OrderPricingRefactorChainAgentTests.cs` comment "Acceptance tests for steps 3, 7 and 9", added in 42cbdea4 after
+  omissions on those steps; no stated reason to leave 10 out). R1's own whole-file `newContent` (T3/T5) declared the
+  constants but kept `1 =>`/`2 =>`; it applied with no diagnostics and every later Build/RunTest was green. R2 T32 replaced
+  only `2`; its reasoning contradicts the `LocalZone` it had just added.
+- **R2: a 0-match RunTest read as a pass.** T40 `filter: FullyQualifiedName~SummarizeShippingTest` returned "Tests passed: 0
+  tests, 0 passed" (`TestRunEngine.cs:291`) with a hint to run the full suite; T41's 7/7 was then cited as step-10 evidence.
+- **R8 T26/T28: literal escapes in oldContent.** The model pasted the JSON-escaped ReadFile text (backslash-r-backslash-n,
+  backslash-quote). The error said "no window ... reaches a similarity of 0.50 ... re-read the file and check the file
+  path" (wrong advice; T28 repeated it). `DescribeEscapedQuotes` (`SnippetErrorFormatter.cs:563`) handles only `\"`/`\\`
+  near a close window and never fired; nothing detects literal `\r`/`\n`.
+- **R8 T29/T32: unneeded, wrong matchLine.** oldContent was already unique; the model guessed matchLine (38 for 40; then
+  40 after its own 3-line insert, real 43). `SnippetSelectorFilter.Apply` (`SnippetSelectors.cs:76-92`) drops the only
+  match and `BuildSelectorMismatch` (`SnippetErrorFormatter.cs:319`) names the real line; each cost one turn. No reason
+  for the hard filter is stated in code (inherited from the old matcher).
+- **Budget arithmetic.** T5 redirect excluded; T15, T18, T26, T28, T29, T30, T32 = 7 > 5, each one-turn recoverable.
+
+Candidate fixes, ranked (not approved): (1) a source-text Step 10 test in the fixture (`RefactorAcceptanceTestsFileContent`;
+fails while `SummarizeShipping` still matches `\b[12]\s*=>`; update the "3, 7 and 9" comment and prompt line); (2) detect
+literal escape sequences in oldContent and say "send real newlines"; (3) RunTest with a filter matching 0 tests is not
+"Tests passed" and the hint says no test name contains the filter; (4) a unique exact match with a wrong matchLine
+applies with a note (selector semantics change: proposal first); (5) matchLine description: "only when oldContent matches
+more than once; omit otherwise" (`ToolParams.cs:63`).
 
 ## Out of scope
 
