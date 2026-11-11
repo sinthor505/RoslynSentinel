@@ -10,8 +10,9 @@ namespace RoslynSentinel.Common;
 /// first index mutation, and the index is written once, at the end, through libgit2's index.lock plus rename (the same protocol git uses).
 /// <para>
 /// Decline rules, in the order they are checked (each is one condition that routes to the git CLI):
-/// (S1) repository shape: GIT_DIR, GIT_WORK_TREE or GIT_INDEX_FILE set, not inside a repository, or a directory below the repository root;
-/// (S2) index-format features: core.fsmonitor, core.untrackedCache, core.splitIndex, core.sparseCheckout, index.sparse, feature.manyFiles or index.skipHash enabled, or index.version set;
+/// (S1) repository shape: a process environment variable that git honours and libgit2 does not (GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_CONFIG_*, see <c>OverridingEnvironmentVariables</c>),
+/// extensions.worktreeConfig with a config.worktree, not inside a repository, or a directory below the repository root (the first two are decided by <c>Open</c>, for every reader method);
+/// (S2) index-format features: core.fsmonitor, core.untrackedCache, core.splitIndex (or a sharedindex file, which <c>OpenForIndexRead</c> declines for every index read), core.sparseCheckout, index.sparse, feature.manyFiles or index.skipHash enabled, or index.version set;
 /// (S3) a submodule, a gitlink entry, an unmerged entry or an assume-unchanged entry in the index;
 /// (S4) a possible intent-to-add entry (stage only: the empty blob, absent from HEAD), whose flag libgit2 does not expose;
 /// (S5) core.safecrlf set to anything but false-like or warn (stage only: git can fail the add where libgit2 would not);
@@ -263,14 +264,9 @@ internal sealed partial class Libgit2GitReader
     /// <summary>S1, S2: the repository at <paramref name="workingDirectory"/>, opened for an index write; declines what libgit2 would write differently from git.</summary>
     private static Repository OpenForIndexWrite(string workingDirectory)
     {
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GIT_DIR"))
-            || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GIT_WORK_TREE"))
-            || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GIT_INDEX_FILE")))
-        {
-            throw Decline("GIT_DIR, GIT_WORK_TREE or GIT_INDEX_FILE is set; libgit2 ignores them and git does not.");
-        }
-
-        var repo = Open(workingDirectory) ?? throw Decline($"'{workingDirectory}' is not inside a git repository; git words the error.");
+        // The process-environment declines (GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, ... see OverridingEnvironmentVariables), a worktree config and a split index are
+        // all decided by the shared open helpers, so the index writes and the reads cannot disagree about them.
+        var repo = OpenForIndexRead(workingDirectory) ?? throw Decline($"'{workingDirectory}' is not inside a git repository; git words the error.");
         try
         {
             if (RelativeToWorkdir(repo, workingDirectory).Length != 0)

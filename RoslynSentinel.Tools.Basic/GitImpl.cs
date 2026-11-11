@@ -3752,6 +3752,7 @@ public class GitImpl : IGitOperations
 
         // The staged revert was computed against headBefore; committing it on top of a different HEAD would silently undo whatever
         // landed in between. Stop with the revert still staged (abort backs it out) instead.
+        // Untested on purpose: the window is the gap between two git processes and git revert --no-commit runs no hook that could move HEAD inside it, and RunGitAsync has no seam to inject a move.
         var headNow = await ReadHeadWithParentsAsync(gitRoot, cancellationToken);
         if (headNow is null || headNow[0] != headBefore[0])
         {

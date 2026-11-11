@@ -64,7 +64,7 @@ namespace RoslynSentinel.Common;
 ///     reads <c>&lt;commondir&gt;/config</c> through a separate <see cref="Configuration"/> for a linked worktree. With that, libgit2 and the CLI agree for
 ///     core.autocrlf, filemode, symlinks, ignorecase, safecrlf, excludesFile, quotepath and eol in the main tree and in a linked worktree, and the settings
 ///     that change the answer (core.abbrev below 7, branch.sort, diff.renames / status.renames other than true, diff.orderFile) decline in both places.
-///     No method declines merely because the directory is a linked worktree. Not covered: extensions.worktreeConfig (per-worktree config overrides).
+///     No method declines merely because the directory is a linked worktree. extensions.worktreeConfig: libgit2 ignores config.worktree, so a worktree that has one is declined whole (see (13)).
 ///     Pinned by GitWorktreeRepoLocalConfigTests.
 /// (12) StageWholeFiles and UnstagePaths WRITE the index (Libgit2GitReader.IndexWrites.cs, parity-tested in GitStageToolParityTests). libgit2 serves only the ordinary case:
 ///     files that contain no carriage return and meet no filter, ident or working-tree-encoding attribute (so core.autocrlf, eol, text and -text cannot change the stored bytes),
@@ -75,6 +75,12 @@ namespace RoslynSentinel.Common;
 ///     The one gap is the hand-over between releasing our lock and libgit2 taking its own; a writer that slips in makes libgit2's lock fail (declined), it cannot be overwritten.
 ///     Pinned by the index.lock tests of GitStageToolParityTests (held lock, and a CLI writer racing the libgit2 one). The stat data of staged entries is libgit2's own
 ///     (git ls-files -s, status and fsck agree). Where core.filemode is false a staged file's mode is the existing entry's, or 100644 for a new one, as git does.
+/// (13) Environment and repository settings libgit2 does not honour (probed 2026-11-11, pinned by GitReaderEnvironmentTests), all declines, so the CLI answers with git's own view:
+///     (a) a process environment variable in <c>OverridingEnvironmentVariables</c> (GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_CONFIG_GLOBAL/SYSTEM/COUNT/PARAMETERS, XDG_CONFIG_HOME, ...) declines EVERY method, from <c>Open</c>;
+///     (b) extensions.worktreeConfig together with a config.worktree for the worktree declines every method, from <c>Open</c>;
+///     (c) a split index (a sharedindex.* file in the worktree's git directory, or core.splitIndex on) declines the methods that load the index, from <c>OpenForIndexRead</c>:
+///         without it they throw LibGit2SharpException "unsupported mandatory extension: 'link'", a counted failure instead of a planned decline.
+///     System-level gitattributes (etc/gitattributes of the git installation) cannot be varied by a test without writing into the machine's git installation: untested; libgit2 reads that file as git does.
 /// </para>
 /// </summary>
 internal sealed partial class Libgit2GitReader : IGitReader
@@ -147,7 +153,7 @@ internal sealed partial class Libgit2GitReader : IGitReader
 
     public IReadOnlyList<WorkingTreeChange>? GetStatus(string workingDirectory, IReadOnlyList<string>? pathspecs, TimeSpan cliTimeout)
     {
-        using var repo = Open(workingDirectory);
+        using var repo = OpenForIndexRead(workingDirectory);
         if (repo is null)
         {
             return null;
@@ -193,7 +199,7 @@ internal sealed partial class Libgit2GitReader : IGitReader
 
     public WorkingTreeStatus? GetRepositoryStatus(string workingDirectory, TimeSpan cliTimeout)
     {
-        using var repo = Open(workingDirectory);
+        using var repo = OpenForIndexRead(workingDirectory);
         if (repo is null)
         {
             return null;
@@ -313,7 +319,7 @@ internal sealed partial class Libgit2GitReader : IGitReader
     /// missing) and, once touched, makes libgit2's own later lookups on that <see cref="Repository"/> miss it too (probed 2026-11-11: <c>core.abbrev=4</c> repo-local, then
     /// <c>repo.Config.Get</c>, then <c>ShortenObjectId(.., 4)</c> returns 7 characters in a worktree, 4 when the managed config was not touched first). A linked worktree is therefore
     /// read through a separate <see cref="Configuration"/> built on the common directory's config file, which leaves the repository's native config alone.
-    /// Not covered: <c>extensions.worktreeConfig</c> (<c>config.worktree</c>), which no repository this server meets uses.
+    /// <c>extensions.worktreeConfig</c> (<c>config.worktree</c>) is not read here either: <see cref="Open"/> declines such a worktree before any config is read (<see cref="RequireNoPerWorktreeConfig"/>).
     /// </summary>
     private static string? ConfigValue(Repository repo, string key)
     {
@@ -589,7 +595,7 @@ internal sealed partial class Libgit2GitReader : IGitReader
 
     public IReadOnlyList<string>? ListTrackedPaths(string workingDirectory, TimeSpan cliTimeout)
     {
-        using var repo = Open(workingDirectory);
+        using var repo = OpenForIndexRead(workingDirectory);
         if (repo is null)
         {
             return null;
@@ -725,7 +731,7 @@ internal sealed partial class Libgit2GitReader : IGitReader
     public IReadOnlyList<string>? ListIndexPathsMatching(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout)
     {
         RequireCleanRelativePaths(paths);
-        using var repo = Open(workingDirectory);
+        using var repo = OpenForIndexRead(workingDirectory);
         if (repo is null)
         {
             return null;
@@ -793,7 +799,7 @@ internal sealed partial class Libgit2GitReader : IGitReader
     public IReadOnlyList<string>? FindIgnoredPaths(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout)
     {
         RequireCleanRelativePaths(paths);
-        using var repo = Open(workingDirectory);
+        using var repo = OpenForIndexRead(workingDirectory);
         if (repo is null)
         {
             return null;
@@ -944,7 +950,8 @@ internal sealed partial class Libgit2GitReader : IGitReader
         }
 
         var specs = paths is { Count: > 0 } ? ParseLogPathspecs(paths) : null;
-        using var repo = Open(workingDirectory);
+        // Only "staged" loads the index (tree to index); a tree-to-tree range never does, so a split index is no reason to decline it.
+        using var repo = isRange ? Open(workingDirectory) : OpenForIndexRead(workingDirectory);
         if (repo is null)
         {
             return null;
@@ -1058,16 +1065,130 @@ internal sealed partial class Libgit2GitReader : IGitReader
         }
     }
 
-    /// <summary>Opens the repository containing <paramref name="workingDirectory"/>; null when there is none.</summary>
+    /// <summary>
+    /// <c>extensions.worktreeConfig</c> makes git read <c>config.worktree</c> in the worktree's own git directory (the main working tree's is <c>.git/config.worktree</c>) on top of the
+    /// shared config, and libgit2 1.8.6 does not: it opens such a repository without complaint and answers from the shared config only (probed 2026-11-11: with core.autocrlf=true,
+    /// core.abbrev and roslynsentinel.commitTrailers set in config.worktree, git saw them in the main working tree and in the linked worktree, <c>GetBoolConfig</c> through libgit2
+    /// did not). A setting that only <c>config.worktree</c> holds could change any answer here (EOL conversion, abbreviation, ignorecase, the opt-in trailers), so a worktree
+    /// that has the file while the extension is on is declined whole, from <see cref="Open"/>, rather than deciding method by method which reads depend on config. Without
+    /// the extension git ignores <c>config.worktree</c>, so its mere presence declines nothing. Reads only the one repository config file, and only when <c>config.worktree</c> exists.
+    /// </summary>
+    private static void RequireNoPerWorktreeConfig(string gitDirectory)
+    {
+        if (!File.Exists(Path.Combine(gitDirectory, "config.worktree")))
+        {
+            return;
+        }
+
+        var commonFile = Path.Combine(gitDirectory, "commondir");
+        var common = File.Exists(commonFile)
+            ? Path.GetFullPath(Path.Combine(gitDirectory, File.ReadAllText(commonFile).Trim()))
+            : gitDirectory;
+        using var config = Configuration.BuildFrom(Path.Combine(common, "config"));
+        if (config.Get<string>("extensions.worktreeConfig") is { } entry && !IsFalseLike(entry.Value ?? "true"))
+        {
+            throw new NotSupportedException("extensions.worktreeConfig is on and this worktree has a config.worktree, which libgit2 does not read, so git answers.");
+        }
+    }
+
+    /// <summary>
+    /// A split index is a <c>link</c> extension in the index file that names a <c>sharedindex.&lt;sha&gt;</c> file in the SAME git directory as the index (the per-worktree one for a
+    /// linked worktree, probed 2026-11-11), and it is mandatory: libgit2 cannot load the index at all. Declined when such a file is present (a leftover one after
+    /// <c>--no-split-index</c> only costs a spawn) or when core.splitIndex is on (the CLI's next write would create it, and a plain index becomes a split one between two calls).
+    /// The cheap file check runs first; the config read of a linked worktree opens the main repository.
+    /// </summary>
+    private static void RequireNoSplitIndex(Repository repo)
+    {
+        var gitDirectory = repo.Info.Path;
+        if (Directory.Exists(gitDirectory) && Directory.EnumerateFiles(gitDirectory, "sharedindex.*").Any())
+        {
+            throw new NotSupportedException("The index is a split index (a sharedindex file exists); libgit2 cannot read its 'link' extension, so git answers.");
+        }
+
+        if (EffectiveConfigValue(repo, "core.splitindex") is { } value && !IsFalseLike(value))
+        {
+            throw new NotSupportedException($"core.splitindex is '{value}': the index may become a split index, which libgit2 cannot read, so git answers.");
+        }
+    }
+
+    /// <summary>
+    /// <see cref="Open"/> for a method that loads the index (status, ls-files, check-ignore, the staged diff, the index writes): additionally declines a split index
+    /// (<see cref="RequireNoSplitIndex"/>), which libgit2 1.8.6 cannot read. Probed 2026-11-11 on a main working tree and on a linked worktree: GetStatus, GetRepositoryStatus,
+    /// ListTrackedPaths, ListIndexPathsMatching, FindIgnoredPaths and GetNameStatus("staged") throw <see cref="LibGit2SharpException"/> "unsupported mandatory extension: 'link'"
+    /// (a counted failure, logged on stderr) where this makes them decline; every other method never touches the index and keeps using <see cref="Open"/>.
+    /// A method that is added later and reads the index must use this too: GitReaderEnvironmentTests walks every IGitReader method over a split-index repository.
+    /// </summary>
+    private static Repository? OpenForIndexRead(string workingDirectory)
+    {
+        var repo = Open(workingDirectory);
+        if (repo is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            RequireNoSplitIndex(repo);
+            return repo;
+        }
+        catch
+        {
+            repo.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Process environment variables that make git read or write somewhere, or with settings, that libgit2 (through LibGit2Sharp) does not consult: it opens the repository
+    /// it discovers from the directory and reads config from the repository, the user's home and the system directory only. Probed 2026-11-11 against libgit2 1.8.6 /
+    /// git 2.55 on Windows, with the variable set on this process only: GIT_DIR (HEAD, refs, index and history all came from the other repository in git, not here), GIT_INDEX_FILE
+    /// (status, ls-files and the staged diff read another index in git), GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM, XDG_CONFIG_HOME, GIT_CONFIG_COUNT and GIT_CONFIG_PARAMETERS (git saw the
+    /// setting, libgit2 did not) were all ignored. The rest of the list was not shown to differ by a probe (the probe repository had no system config, no ceiling and no alternates to
+    /// matter) but git documents the same effect and the cost of a false decline is one process spawn: GIT_WORK_TREE and GIT_COMMON_DIR (another working tree or common directory),
+    /// GIT_OBJECT_DIRECTORY and GIT_ALTERNATE_OBJECT_DIRECTORIES (another object store), GIT_CEILING_DIRECTORIES and GIT_DISCOVERY_ACROSS_FILESYSTEM (git may fail to find the
+    /// repository where libgit2 finds it), GIT_CONFIG_NOSYSTEM (git skips the system config, libgit2 reads it), GIT_ATTR_SOURCE and GIT_ATTR_NOSYSTEM (other attributes). A variable counts
+    /// as set when it is present at all (an empty value on Windows deletes the variable). XDG_CONFIG_HOME is declined on every platform although only a Windows probe was run: where
+    /// libgit2 does honour it (Linux) the decline is merely slower. System-level gitattributes (<c>etc/gitattributes</c> under the git install) cannot be varied by a test without
+    /// writing into the machine's git installation; libgit2 does read that file, and the S9 attribute rule of the index writes covers it (see GitReaderEnvironmentTests).
+    /// </summary>
+    private static readonly string[] OverridingEnvironmentVariables =
+    [
+        "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_CEILING_DIRECTORIES", "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+        "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "XDG_CONFIG_HOME",
+        "GIT_ATTR_SOURCE", "GIT_ATTR_NOSYSTEM",
+    ];
+
+    /// <summary>
+    /// Opens the repository containing <paramref name="workingDirectory"/>; null when there is none. The one door every method here goes through, so the declines that
+    /// hold for the whole repository live here: an <see cref="OverridingEnvironmentVariables"/> entry is set (checked first: with GIT_DIR set git finds a repository
+    /// from anywhere, so "no repository here" is not libgit2's to say either), or the worktree has its own config (<see cref="RequireNoPerWorktreeConfig"/>).
+    /// A method that reads the index opens through <see cref="OpenForIndexRead"/> instead.
+    /// </summary>
+    /// <exception cref="NotSupportedException">One of the declines above: git answers.</exception>
     private static Repository? Open(string workingDirectory)
     {
+        foreach (var name in OverridingEnvironmentVariables)
+        {
+            if (Environment.GetEnvironmentVariable(name) is not null)
+            {
+                throw new NotSupportedException($"{name} is set in the process environment; git honours it and libgit2 does not.");
+            }
+        }
+
         if (!Directory.Exists(workingDirectory))
         {
             return null;
         }
 
         var gitDirectory = Repository.Discover(workingDirectory);
-        return gitDirectory is null ? null : new Repository(gitDirectory);
+        if (gitDirectory is null)
+        {
+            return null;
+        }
+
+        RequireNoPerWorktreeConfig(gitDirectory);
+        return new Repository(gitDirectory);
     }
 
     /// <summary>

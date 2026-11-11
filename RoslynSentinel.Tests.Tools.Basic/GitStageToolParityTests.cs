@@ -166,8 +166,7 @@ public class GitStageToolParityTests
         Func<GitImpl, string, Task<GitStatusResult>> run,
         Action<IGitReader, string> direct,
         string reasonFragment,
-        string autocrlf = "false",
-        bool followUpReadMayFail = false)
+        string autocrlf = "false")
     {
         var cliDir = NewRepo(arrange, autocrlf);
         var compositeDir = NewRepo(arrange, autocrlf);
@@ -188,16 +187,8 @@ public class GitStageToolParityTests
             // The LAST decline: a later reader call of the same tool call (the status read after a stage) may decline for another reason and overwrite it (a
             // submodule repository, say), so the specific reason is asserted on the direct libgit2 throw above, not here.
             Assert.That(composite.LastDeclineReason, Is.Not.Null.And.Not.Empty);
-            if (followUpReadMayFail)
-            {
-                // TODO libgit2 throws LibGit2SharpException (a counted failure, logged once) instead of declining when it reads a split index the CLI wrote; make it decline
-                Assert.That(composite.FirstFallbackReason, Is.Null.Or.StartWith("LibGit2SharpException"));
-            }
-            else
-            {
-                Assert.That(composite.CliFallbackCount, Is.Zero, "a planned decline is not a failure");
-                Assert.That(composite.FirstFallbackReason, Is.Null);
-            }
+            Assert.That(composite.CliFallbackCount, Is.Zero, "a planned decline is not a failure");
+            Assert.That(composite.FirstFallbackReason, Is.Null);
         });
         AssertSameIndex(compositeDir, cliDir, "composite after a decline");
         return cli;
@@ -891,8 +882,7 @@ public class GitStageToolParityTests
             },
             (impl, repo) => StageListed(impl, repo, "a.txt"),
             (reader, repo) => StageListedDirect(reader, repo, "a.txt"),
-            key.ToLowerInvariant(),
-            followUpReadMayFail: key == "core.splitIndex");
+            key.ToLowerInvariant());
 
         Assert.That(cli.IsError, Is.False, cli.Error);
     }
@@ -900,7 +890,8 @@ public class GitStageToolParityTests
     [Test]
     public async Task Decline_SplitIndexExtensionAlreadyInTheIndexFile_Libgit2CannotReadItAndTheCliAnswersAsync()
     {
-        // The 'link' extension is mandatory: libgit2 fails to read the index (a LibGit2SharpException, which the composite turns into a fallback).
+        // The 'link' extension is mandatory: libgit2 cannot read the index. The reader declines (a sharedindex file is in the git directory) before it opens the index, so this is a planned
+        // decline, never a LibGit2SharpException failure (GitReaderEnvironmentTests probes every reader method on a split index).
         var cliDir = NewRepo(repo => SplitIndex(repo));
         var compositeDir = NewRepo(repo => SplitIndex(repo));
         var cli = await Impl(new CliGitReader()).StageAsync(cliDir, GitStageScope.all, null, CancellationToken.None);
@@ -908,7 +899,9 @@ public class GitStageToolParityTests
         var viaComposite = await Impl(composite).StageAsync(compositeDir, GitStageScope.all, null, CancellationToken.None);
 
         Assert.That(Serialize(viaComposite), Is.EqualTo(Serialize(cli)));
-        Assert.That(composite.CliFallbackCount, Is.GreaterThan(0));
+        Assert.That(composite.DeclineCount, Is.GreaterThan(0));
+        Assert.That(composite.CliFallbackCount, Is.Zero, "a split index is a planned decline, not a failure");
+        Assert.That(composite.FirstFallbackReason, Is.Null);
         AssertSameIndex(compositeDir, cliDir, "split index");
 
         static void SplitIndex(string repo)
