@@ -92,6 +92,29 @@ internal interface IGitReader
     /// <summary>The paths in the index (<c>ls-files --cached</c>) under <paramref name="workingDirectory"/>, relative to it, in index order.</summary>
     IReadOnlyList<string>? ListTrackedPaths(string workingDirectory, TimeSpan cliTimeout);
 
+    /// <summary>
+    /// The index entries (<c>git --literal-pathspecs ls-files -z --cached -- paths</c>) that are one of <paramref name="paths"/> or lie under one as a
+    /// directory, repo-relative with '/', each once, in index order. Pathspecs are literal and case-sensitive. The libgit2 reader throws
+    /// <see cref="NotSupportedException"/> for a path that is not a clean repo-relative one (git normalises or rejects those). Null when git cannot
+    /// answer (not a repository, a path git rejects, git missing or timed out).
+    /// </summary>
+    IReadOnlyList<string>? ListIndexPathsMatching(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// The files in HEAD's tree (<c>git --literal-pathspecs ls-tree -r -z --name-only HEAD -- paths</c>) that are one of <paramref name="paths"/> or lie
+    /// under one as a directory (a directory itself is never listed), each once, in no guaranteed order. Same path rules as
+    /// <see cref="ListIndexPathsMatching"/>; null as well on an unborn HEAD.
+    /// </summary>
+    IReadOnlyList<string>? ListHeadPathsMatching(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// The members of <paramref name="paths"/> that <c>git check-ignore -q -- path</c> reports as ignored (exit 0), in the order given: ignore rules from
+    /// every .gitignore, .git/info/exclude and core.excludesFile, an ignored parent directory included, and never a file already in the index. A path
+    /// git rejects (outside the repository) is simply not ignored. The libgit2 reader throws <see cref="NotSupportedException"/> for a path that is
+    /// not a clean repo-relative one. Null when there is no repository.
+    /// </summary>
+    IReadOnlyList<string>? FindIgnoredPaths(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout);
+
     /// <summary>Every commit reachable from HEAD (<c>git log</c> with no range), newest first, with its raw message.</summary>
     IReadOnlyList<CommitMessage>? GetCommitMessages(string workingDirectory, TimeSpan cliTimeout);
 }

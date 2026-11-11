@@ -70,6 +70,15 @@ internal sealed class FallbackGitReader : IGitReader
     public IReadOnlyList<string>? ListTrackedPaths(string workingDirectory, TimeSpan cliTimeout) =>
         Invoke(reader => reader.ListTrackedPaths(workingDirectory, cliTimeout));
 
+    public IReadOnlyList<string>? ListIndexPathsMatching(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout) =>
+        Invoke(reader => reader.ListIndexPathsMatching(workingDirectory, paths, cliTimeout));
+
+    public IReadOnlyList<string>? ListHeadPathsMatching(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout) =>
+        Invoke(reader => reader.ListHeadPathsMatching(workingDirectory, paths, cliTimeout));
+
+    public IReadOnlyList<string>? FindIgnoredPaths(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout) =>
+        Invoke(reader => reader.FindIgnoredPaths(workingDirectory, paths, cliTimeout));
+
     public IReadOnlyList<CommitMessage>? GetCommitMessages(string workingDirectory, TimeSpan cliTimeout) =>
         Invoke(reader => reader.GetCommitMessages(workingDirectory, cliTimeout));
 

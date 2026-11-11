@@ -145,6 +145,36 @@ internal sealed class CliGitReader : IGitReader
         return run.Value.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.Ordinal).ToList();
     }
 
+    public IReadOnlyList<string>? ListIndexPathsMatching(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout) =>
+        ListPathspecMatches(workingDirectory, cliTimeout, ["--literal-pathspecs", "ls-files", "-z", "--cached", "--", .. paths]);
+
+    public IReadOnlyList<string>? ListHeadPathsMatching(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout) =>
+        ListPathspecMatches(workingDirectory, cliTimeout, ["--literal-pathspecs", "ls-tree", "-r", "-z", "--name-only", "HEAD", "--", .. paths]);
+
+    public IReadOnlyList<string>? FindIgnoredPaths(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout)
+    {
+        // One check per path, as the Git tool always did: exit 0 is ignored, 1 is not, and 128 (a path outside the repository) is not ignored either.
+        var ignored = new List<string>();
+        foreach (var path in paths)
+        {
+            if (GitProcess.TryRun(workingDirectory, cliTimeout, "check-ignore", "-q", "--", path) is { ExitCode: 0 })
+            {
+                ignored.Add(path);
+            }
+        }
+
+        return ignored;
+    }
+
+    /// <summary>Runs an ls-files/ls-tree <c>-z</c> listing; the NUL-separated names, each once; null on a non-zero exit (a rejected pathspec, an unborn HEAD).</summary>
+    private static IReadOnlyList<string>? ListPathspecMatches(string workingDirectory, TimeSpan cliTimeout, string[] args)
+    {
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, args);
+        return run is { ExitCode: 0 }
+            ? run.Value.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.Ordinal).ToList()
+            : null;
+    }
+
     public IReadOnlyList<CommitMessage>? GetCommitMessages(string workingDirectory, TimeSpan cliTimeout)
     {
         var run = GitProcess.TryRun(workingDirectory, cliTimeout, "log", "--format=%H%x1f%B%x1e");

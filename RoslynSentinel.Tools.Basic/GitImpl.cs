@@ -2818,32 +2818,16 @@ public class GitImpl : IGitOperations
             .Select(p => p.Replace('\\', '/').TrimEnd('/'))
             .ToList();
 
-        // Check index state: git --literal-pathspecs ls-files -z --cached -- <paths>
-        var lsFilesBase = new[] { "--literal-pathspecs", "ls-files", "-z", "--cached", "--" };
-        var lsFilesArgs = lsFilesBase.Concat(normalized).ToArray();
-        var lsFilesRaw = await RunGitAsync(gitRoot, lsFilesArgs, cancellationToken);
+        // Index state: the entries matching the paths (git --literal-pathspecs ls-files -z --cached -- <paths>). The typed seam reads the
+        // index in-process (libgit2) and runs that git command for what it declines. The reads block, so they run off the caller's thread;
+        // the token only stops a call that has not started. A null answer (git failed) is empty, as the non-zero exit was.
+        var indexPaths = await Task.Run(() => _gitReader.ListIndexPathsMatching(gitRoot, normalized, GitProcessTimeout), cancellationToken);
+        var inIndex = new HashSet<string>(indexPaths ?? [], StringComparer.OrdinalIgnoreCase);
 
-        var inIndex = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (lsFilesRaw.ExitCode == 0 && lsFilesRaw.Stdout.Length > 0)
-        {
-            var indexPaths = lsFilesRaw.Stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var p in indexPaths)
-                inIndex.Add(p);
-        }
-
-        // Check HEAD state: git --literal-pathspecs ls-tree -r -z --name-only HEAD -- <paths>
-        // For an unborn HEAD (no commits), this will fail, which we treat as empty.
-        var lsTreeBase = new[] { "--literal-pathspecs", "ls-tree", "-r", "-z", "--name-only", "HEAD", "--" };
-        var lsTreeArgs = lsTreeBase.Concat(normalized).ToArray();
-        var lsTreeRaw = await RunGitAsync(gitRoot, lsTreeArgs, cancellationToken);
-
-        var inHead = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (lsTreeRaw.ExitCode == 0 && lsTreeRaw.Stdout.Length > 0)
-        {
-            var headPaths = lsTreeRaw.Stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var p in headPaths)
-                inHead.Add(p);
-        }
+        // HEAD state: the files in HEAD's tree matching the paths (git --literal-pathspecs ls-tree -r -z --name-only HEAD -- <paths>).
+        // For an unborn HEAD (no commits) the answer is null, which we treat as empty.
+        var headPaths = await Task.Run(() => _gitReader.ListHeadPathsMatching(gitRoot, normalized, GitProcessTimeout), cancellationToken);
+        var inHead = new HashSet<string>(headPaths ?? [], StringComparer.OrdinalIgnoreCase);
 
         // Classify each path
         var result = new List<ClassifiedPath>();
@@ -2888,15 +2872,10 @@ public class GitImpl : IGitOperations
     private async Task<List<string>> FindIgnoredPathsAsync(
         string gitRoot, List<string> paths, CancellationToken cancellationToken)
     {
-        var ignored = new List<string>();
-        foreach (var path in paths)
-        {
-            var raw = await RunGitAsync(gitRoot, ["check-ignore", "-q", "--", path], cancellationToken);
-            if (raw.ExitCode == 0)
-                ignored.Add(path);
-        }
-
-        return ignored;
+        // The typed seam answers in-process (libgit2's ignore rules) where that matches git check-ignore, and runs git check-ignore -q for
+        // each path otherwise. It blocks, so it runs off the caller's thread; the token only stops a call that has not started.
+        var ignored = await Task.Run(() => _gitReader.FindIgnoredPaths(gitRoot, paths, GitProcessTimeout), cancellationToken);
+        return ignored is null ? [] : [.. ignored];
     }
 
     /// <summary>

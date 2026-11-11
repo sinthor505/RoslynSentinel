@@ -940,6 +940,24 @@ public class GitReaderParityTests
             return null;
         }
 
+        public IReadOnlyList<string>? ListIndexPathsMatching(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
+        public IReadOnlyList<string>? ListHeadPathsMatching(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
+        public IReadOnlyList<string>? FindIgnoredPaths(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
         public IReadOnlyList<CommitMessage>? GetCommitMessages(string workingDirectory, TimeSpan cliTimeout)
         {
             Gate();

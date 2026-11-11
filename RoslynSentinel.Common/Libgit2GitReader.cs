@@ -583,6 +583,154 @@ internal sealed class Libgit2GitReader : IGitReader
         return [.. repo.Commits.QueryBy(filter).Select(commit => new CommitMessage(commit.Sha, commit.Message))];
     }
 
+    /// <summary>
+    /// The pathspecs the two path-matching reads accept: ones git reads the same literally and after its own normalisation. A path git rewrites
+    /// ("./x", "a//b", "a/../b", an absolute or drive path, a trailing slash) or rejects (empty, outside the repository) is left to git.
+    /// </summary>
+    private static void RequireCleanRelativePaths(IReadOnlyList<string> paths)
+    {
+        foreach (var path in paths)
+        {
+            if (path.Length == 0 || path.Contains('\\') || path.Contains(':') || path[0] == '/' || path.Split('/').Any(segment => segment is "" or "." or ".."))
+            {
+                throw new NotSupportedException($"'{path}' is not a clean repo-relative path, so git normalises or rejects it.");
+            }
+        }
+    }
+
+    /// <summary>True when <paramref name="path"/> is one of <paramref name="wanted"/> or lies under one of them as a directory.</summary>
+    private static bool IsAtOrUnder(string path, HashSet<string> wanted)
+    {
+        if (wanted.Contains(path))
+        {
+            return true;
+        }
+
+        for (var slash = path.LastIndexOf('/'); slash > 0; slash = path.LastIndexOf('/', slash - 1))
+        {
+            if (wanted.Contains(path[..slash]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public IReadOnlyList<string>? ListIndexPathsMatching(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout)
+    {
+        RequireCleanRelativePaths(paths);
+        using var repo = Open(workingDirectory);
+        if (repo is null)
+        {
+            return null;
+        }
+
+        // git reads the pathspecs relative to the directory it runs in; the Git tool always passes the repository root.
+        if (RelativeToWorkdir(repo, workingDirectory).Length != 0)
+        {
+            throw new NotSupportedException("The working directory is below the repository root, so git resolves the pathspecs against it.");
+        }
+
+        // Literal and case-sensitive, even with core.ignorecase (git's index pathspec match only folds case for the :(icase) magic).
+        var wanted = new HashSet<string>(paths, StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var matches = new List<string>();
+        foreach (var entry in repo.Index)
+        {
+            // An unmerged path has one entry per stage; it is listed once.
+            if (IsAtOrUnder(entry.Path, wanted) && seen.Add(entry.Path))
+            {
+                matches.Add(entry.Path);
+            }
+        }
+
+        return matches;
+    }
+
+    public IReadOnlyList<string>? ListHeadPathsMatching(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout)
+    {
+        RequireCleanRelativePaths(paths);
+        using var repo = Open(workingDirectory);
+        if (repo is null)
+        {
+            return null;
+        }
+
+        if (RelativeToWorkdir(repo, workingDirectory).Length != 0)
+        {
+            throw new NotSupportedException("The working directory is below the repository root, so git resolves the pathspecs against it.");
+        }
+
+        // ls-tree HEAD fails on an unborn branch; null, as the CLI's non-zero exit.
+        var tip = repo.Head.Tip;
+        if (tip is null)
+        {
+            return null;
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var matches = new List<string>();
+        foreach (var path in paths)
+        {
+            // Null for a missing path, or one through a file or a submodule: ls-tree lists nothing for those either.
+            var entry = tip.Tree[path];
+            if (entry is not null)
+            {
+                AddHeadFiles(entry, path, seen, matches);
+            }
+        }
+
+        return matches;
+    }
+
+    public IReadOnlyList<string>? FindIgnoredPaths(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout)
+    {
+        RequireCleanRelativePaths(paths);
+        using var repo = Open(workingDirectory);
+        if (repo is null)
+        {
+            return null;
+        }
+
+        if (RelativeToWorkdir(repo, workingDirectory).Length != 0)
+        {
+            throw new NotSupportedException("The working directory is below the repository root, so git resolves the pathspecs against it.");
+        }
+
+        // libgit2's Ignore reads .gitignore files, .git/info/exclude and core.excludesFile with git's precedence and negation (verified against
+        // git check-ignore); what it does not do is git's "a tracked file is never ignored", so that is applied here.
+        var ignored = new List<string>();
+        foreach (var path in paths)
+        {
+            if (repo.Index[path] is null && repo.Ignore.IsPathIgnored(path))
+            {
+                ignored.Add(path);
+            }
+        }
+
+        return ignored;
+    }
+
+    /// <summary>ls-tree -r --name-only: a file or submodule is listed by its path; a directory only through the files (and submodules) beneath it.</summary>
+    private static void AddHeadFiles(TreeEntry entry, string path, HashSet<string> seen, List<string> matches)
+    {
+        if (entry.TargetType != TreeEntryTargetType.Tree)
+        {
+            if (seen.Add(path))
+            {
+                matches.Add(path);
+            }
+
+            return;
+        }
+
+        foreach (var child in (Tree)entry.Target)
+        {
+            AddHeadFiles(child, path + "/" + child.Name, seen, matches);
+        }
+    }
+
     /// <summary>Opens the repository containing <paramref name="workingDirectory"/>; null when there is none.</summary>
     private static Repository? Open(string workingDirectory)
     {
