@@ -41,7 +41,18 @@
   agent id, `Tool-Agent: <id>`; amend replaces them. The tool finds its commit by walking up to 50
   commits from HEAD for the id, else from git's summary line, else from the parent chain (merge
   resolutions accept MERGE_HEAD). Read with normal git precedence, so a global setting also enables
-  it. Enabled on this repo 2026-11-10. Revert carries no trailer yet (`// TODO` in `RevertAsync`).
+  it. Enabled on this repo 2026-11-10. Revert carries the trailers too since `1d01246e` (config on:
+  `revert --no-commit` + `commit --no-edit --no-verify --trailer`, mirroring plain revert's hook
+  behaviour; conflict/empty/root reverts fall back to the plain single `git revert`).
+- Phase I (2026-11-11): `8a7c94fa` libgit2 1.8.6 rejects `extensions.relativeWorktrees` (all reads
+  fall back to the CLI, pinned by tests); `d2b866b8` in a linked worktree LibGit2Sharp reads only the
+  per-worktree config, so config is now read from `<commondir>/config`, and status declines when
+  `diff.renames`/`status.renames` is not true; `a0d882dd` path listings in git's UTF-8 byte order;
+  `faba1f2c` stage 3 scoped: whole-file `stage`/`add` and path-listed `unstage` via libgit2 (about
+  13 / 7.5 ms vs 56 / 57 ms CLI). Hunk staging, no-path `unstage`, commit and revert stay on the CLI.
+  Stage never converts line endings: files containing CR bytes, `core.safecrlf`, filter/ident/
+  encoding attributes and non-regular files decline to the CLI (12 decline rules in total), and a
+  held `index.lock` declines without touching the index.
 - Risk not yet tested: `worktree.useRelativePaths=true` (git 2.48+) writes
   `extensions.relativeWorktrees`, which libgit2 1.8.6 probably rejects; reads would fall back.
 
