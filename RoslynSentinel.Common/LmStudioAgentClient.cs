@@ -298,6 +298,8 @@ public sealed class LmStudioAgentClient
             ReasoningContent = string.IsNullOrEmpty(reasoningText) ? null : reasoningText,
             ToolCalls = toolCalls,
             TotalTokens = completedResponse.Usage?.TotalTokens,
+            InputTokens = completedResponse.Usage?.InputTokens,
+            OutputTokens = completedResponse.Usage?.OutputTokens,
         };
     }
 
@@ -683,6 +685,19 @@ public sealed class LmStudioAgentClient
         {
             get; set;
         }
+
+        // TODO the usage object also carries input_tokens_details.cached_tokens and output_tokens_details.reasoning_tokens; not recorded yet (would explain reasoning-heavy turns).
+        [JsonPropertyName("input_tokens")]
+        public int? InputTokens
+        {
+            get; set;
+        }
+
+        [JsonPropertyName("output_tokens")]
+        public int? OutputTokens
+        {
+            get; set;
+        }
     }
 
     private sealed class OutputItem
@@ -745,6 +760,27 @@ public sealed class AgentChatMessage
     /// pressure (see ModelAgentRunner.RunAsync) must fall back to PromptTokenEstimator when null.
     /// </summary>
     public int? TotalTokens
+    {
+        get; init;
+    }
+
+    /// <summary>
+    /// Backend-reported prompt (input_tokens) / completion (output_tokens) count for the request that produced
+    /// this message; null for non-assistant roles and when the backend omitted usage. Their sum is TotalTokens
+    /// when all three are reported.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? InputTokens
+    {
+        get; init;
+    }
+
+    /// <summary>
+    /// Backend-reported completion (output_tokens) count for the request that produced this message; see
+    /// InputTokens. Null for non-assistant roles and when the backend omitted usage.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? OutputTokens
     {
         get; init;
     }

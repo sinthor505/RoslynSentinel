@@ -209,8 +209,9 @@ public sealed class ModelAgentRunner
             var turnCompletedAt = DateTimeOffset.Now;
 
             _logger.LogInformation(
-                "Turn {Turn}: model responded in {Latency} - {ToolCallCount} tool call(s). Reasoning: {Reasoning} Content: {Content}",
+                "Turn {Turn}: model responded in {Latency} - {ToolCallCount} tool call(s). Tokens: input {InputTokens}, output {OutputTokens}, total {TotalTokens}. Reasoning: {Reasoning} Content: {Content}",
                 turnNumber, turnStopwatch.Elapsed, modelMessage.ToolCalls.Count,
+                modelMessage.InputTokens?.ToString() ?? "n/a", modelMessage.OutputTokens?.ToString() ?? "n/a", modelMessage.TotalTokens?.ToString() ?? "n/a",
                 string.IsNullOrWhiteSpace(modelMessage.ReasoningContent) ? "(none)" : modelMessage.ReasoningContent,
                 string.IsNullOrWhiteSpace(modelMessage.Content) ? "(none)" : modelMessage.Content);
 
