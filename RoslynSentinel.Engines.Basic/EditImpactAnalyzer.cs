@@ -23,7 +23,7 @@ public static class EditImpactAnalyzer
     /// Tool names the next-step lines can mention. A guard test checks each is a real tool name, because they are plain
     /// strings here (Engines cannot see the tool classes).
     /// </summary>
-    public static readonly IReadOnlyList<string> NamedTools = ["RenameSymbol", "ChangeSignature", "MethodSignature", "ChangeAccessibility", "ReplaceSnippet"];
+    public static readonly IReadOnlyList<string> NamedTools = ["RenameSymbol", "ChangeSignature", "MethodSignature", "ChangeAccessibility", "ReplaceSnippet", "DeleteFile"];
 
     private const int MaxChangesShown = 2;
     private const int MaxUsesShown = 2;
@@ -80,7 +80,8 @@ public static class EditImpactAnalyzer
         IReadOnlyCollection<FilePathWrapper>? removedPaths = null,
         CancellationToken cancellationToken = default,
         IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? editedSpans = null,
-        IReadOnlyDictionary<string, string>? rejectedSiblingTexts = null)
+        IReadOnlyDictionary<string, string>? rejectedSiblingTexts = null,
+        Func<string, string?>? declaringFileOf = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var baselineTexts = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
@@ -173,9 +174,45 @@ public static class EditImpactAnalyzer
             isDeclared = declared.Contains;
         }
 
+        // Type renames only: for a new type name, the baseline file outside this edit that already declares it (the rename would be a duplicate type).
+        if (validation.Diagnostics.Any(d => d.Severity == "Error"))
+        {
+            var renamedFileOf = new Dictionary<string, string?>(StringComparer.Ordinal);
+            foreach (var change in EditImpactSymbolDiff.Diff(baselineTexts, candidateTexts).Where(c => c.Kind == SymbolChangeKind.Renamed && c.NewName is not null && !EditImpactLocalDiff.IsLocal(c)))
+            {
+                renamedFileOf[change.NewName!] = change.File;
+            }
+
+            var declaredElsewhere = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var project in baseline.Projects)
+            {
+                if (renamedFileOf.Count == 0 || await project.GetCompilationAsync(cancellationToken) is not { } compilation)
+                {
+                    continue;
+                }
+
+                foreach (var name in renamedFileOf.Keys.Where(n => !declaredElsewhere.ContainsKey(n)).ToList())
+                {
+                    foreach (var symbol in compilation.GetSymbolsWithName(name, SymbolFilter.Type, cancellationToken))
+                    {
+                        var path = symbol.Locations.FirstOrDefault(l => l.IsInSource)?.SourceTree?.FilePath;
+                        if (path is not null && !candidateTexts.ContainsKey(path)
+                            && !string.Equals(Path.GetFileName(path), renamedFileOf[name], StringComparison.OrdinalIgnoreCase))
+                        {
+                            declaredElsewhere[name] = path;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            declaringFileOf = name => declaredElsewhere.GetValueOrDefault(name);
+        }
+
         return Analyze(baselineTexts, candidateTexts, validation.Diagnostics, isToolActive, unchanged,
             symbolHandleOf: change => handles.TryGetValue(change, out var handle) ? handle : null,
-            editedRegions: editedRegions, rejectedSiblingTexts: siblings, isDeclared: isDeclared);
+            editedRegions: editedRegions, rejectedSiblingTexts: siblings, isDeclared: isDeclared,
+            declaringFileOf: declaringFileOf);
     }
 
     /// <summary>
@@ -299,7 +336,8 @@ public static class EditImpactAnalyzer
         Func<SymbolChange, SymbolHandle?>? symbolHandleOf = null,
         IReadOnlyDictionary<string, IReadOnlyList<TextSpan>>? editedRegions = null,
         IReadOnlyDictionary<string, string>? rejectedSiblingTexts = null,
-        Func<string, bool>? isDeclared = null)
+        Func<string, bool>? isDeclared = null,
+        Func<string, string?>? declaringFileOf = null)
     {
         var editedPaths = baselineTexts.Keys.Concat(candidateTexts.Keys).ToList();
         var errors = diagnostics.Where(d => d.Severity == "Error").ToList();
@@ -323,6 +361,14 @@ public static class EditImpactAnalyzer
         var changes = EditImpactSymbolDiff.Diff(baselineTexts, candidateTexts).ToList();
         changes.AddRange(EditImpactLocalDiff.Diff(baselineTexts, candidateTexts));
         changes.AddRange(unapplied);
+        if (declaringFileOf is not null)
+        {
+            changes = changes.Select(c => c.Kind == SymbolChangeKind.Renamed && !EditImpactLocalDiff.IsLocal(c) && c.NewName is { } newName
+                && declaringFileOf(newName) is { } takenIn
+                    ? c with { NewNameTakenIn = takenIn }
+                    : c).ToList();
+        }
+
         var candidates = changes
             .Where(c => c.Kind is SymbolChangeKind.Removed or SymbolChangeKind.Renamed or SymbolChangeKind.SignatureChanged or SymbolChangeKind.Unapplied
                 || (c.Kind == SymbolChangeKind.AccessibilityChanged && c.AccessibilityNarrowed))
@@ -562,7 +608,7 @@ public static class EditImpactAnalyzer
 
         var tools = change.Kind switch
         {
-            SymbolChangeKind.Renamed => new[] { "RenameSymbol" },
+            SymbolChangeKind.Renamed => change.NewNameTakenIn is null ? new[] { "RenameSymbol" } : Array.Empty<string>(),
             SymbolChangeKind.SignatureChanged => ["ChangeSignature", "MethodSignature"],
             SymbolChangeKind.AccessibilityChanged => ["ChangeAccessibility"],
             _ => Array.Empty<string>(),
@@ -581,7 +627,16 @@ public static class EditImpactAnalyzer
         {
             case SymbolChangeKind.Renamed:
                 {
-                    // TODO when the same edit also has a CS0101 duplicate-type error, this rename headline leads and buries it (eval run 20261111-061005-246 T12); lead with the duplicate instead
+                    // TODO a property or method renamed to an existing member name (CS0102/CS0111) gets no taken-name hint; only type renames are covered
+                    if (change.NewNameTakenIn is { } takenIn)
+                    {
+                        var takenFile = Path.GetFileName(takenIn);
+                        var taken = $"This edit renames {name} to {change.NewName}, but {change.NewName} is already declared in {takenFile}, so the rename would create a duplicate type and {files} file(s) still use {name}: keep {name} in newContent, or pick a name no file declares";
+                        return isToolActive("DeleteFile")
+                            ? taken + $". If {takenFile} is the superseded copy, delete it with {ToolCallHint.Call("DeleteFile", ("filePath", takenIn))} and make this change in the same step."
+                            : taken + $". If {takenFile} is the superseded copy, remove its {change.NewName} declaration in the same call: " + batch;
+                    }
+
                     var lead = $"This edit renames {name} to {change.NewName} and {files} file(s) still use {name}: ";
                     // Built only when active: ToolCallHint.Call records the tool as suggested guidance.
                     if (!isToolActive("RenameSymbol"))

@@ -131,6 +131,36 @@ public class EditImpactAnalyzerTests
     // Eval run 20261109-233953-684 T7: the next step pasted the placeholders `<projectName>` / `<docCommentId>`, the model
     // improvised an id without the parameter list and RenameSymbol answered "no longer resolves".
     [Test]
+    public async Task RenameToNameAnotherFileDeclares_NamesTheDeclaringFileAndSuggestsNoRename()
+    {
+        var renamed = Calculator.Replace("OrderPricingCalculator", "OrderCheckout");
+
+        var (result, report) = await GateAndAnalyzeAsync(Texts((CalculatorFile, renamed)), Active("RenameSymbol", "ReplaceSnippet", "DeleteFile"));
+
+        Assert.That(report.IsError, Is.True, "the rename must be rejected, otherwise the fixture proves nothing");
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.NextStepLine, Does.Contain(CheckoutFile).And.Contain("already declared"));
+        Assert.That(result.NextStepLine, Does.Contain("DeleteFile"));
+        Assert.That(result.Text, Does.Not.Contain("RenameSymbol"));
+        Assert.That(result.NextStepLine, Does.Not.Contain("RenameSymbol"));
+        Assert.That(result.Verdicts, Is.Not.Null);
+        Assert.That(result.Verdicts!.Where(v => v.SuggestedTool == "RenameSymbol"), Is.Empty);
+    }
+
+    [Test]
+    public async Task RenameToNameAnotherFileDeclares_DeleteFileNotActive_NamesNoDeleteAndNoRename()
+    {
+        var renamed = Calculator.Replace("OrderPricingCalculator", "OrderCheckout");
+
+        var (result, _) = await GateAndAnalyzeAsync(Texts((CalculatorFile, renamed)), Active("RenameSymbol", "ReplaceSnippet"));
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.NextStepLine, Does.Contain("already declared"));
+        Assert.That(result.NextStepLine, Does.Not.Contain("DeleteFile"));
+        Assert.That(result.NextStepLine, Does.Not.Contain("RenameSymbol"));
+    }
+
+    [Test]
     public async Task RenameSuggestion_CarriesTheRealProjectNameAndDocCommentId_AndTheIdResolvesThroughTheWirePath()
     {
         var renamed = Calculator.Replace("CalcDisc", "CalculateDiscountedTotal");
