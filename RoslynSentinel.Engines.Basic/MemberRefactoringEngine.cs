@@ -2352,7 +2352,7 @@ public class MemberRefactoringEngine
 
         if (member == null)
         {
-            throw new ToolNotFoundException("Member not found.", "member", memberName);
+            throw new ToolNotFoundException(await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken), "member", memberName);
         }
 
         // Must run before the ContainsDiagnostics check below: a multi-member source always has
@@ -2634,7 +2634,7 @@ public class MemberRefactoringEngine
                     $"edit the file's raw text with {ToolCallHint.Call("ReplaceSnippet")} or {ToolCallHint.Call("ApplyDiff")} only as a last resort.", "member", memberName); // hint-ok: Member(remove) in the message above is prose describing the operation, not a call to make
             }
 
-            throw new ToolNotFoundException("Member not found.", "member", memberName);
+            throw new ToolNotFoundException(await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken), "member", memberName);
         }
 
         // Check for usages using SymbolFinder before removing
