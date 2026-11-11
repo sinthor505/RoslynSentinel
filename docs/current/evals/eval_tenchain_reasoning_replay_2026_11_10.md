@@ -206,7 +206,28 @@ L1. Archive: `ModelTestingResults\113\Model_AppliesTenChainedRefactors\`, runs `
   '...OrderPricingCalculator.cs' was not found anywhere in the loaded solution", no pointer to the new file); identical
   ReplaceSnippet resend after an error in 7 runs (1-2 each), the repeat note fired once (R4 T12) and R4 then re-read and
   changed the edit; Git "not inside a git repository" (R4 T9, R8 T5/T16/T18), unchecked against the fixture setup.
-  Root-cause trace of R1 and R8: pending.
+
+**Root causes (failure-root-cause-analyst, 2026-11-11).** No server log exists for ModelEval runs; evidence is
+`transcript.json`, `agent.log` and source.
+
+- **R1.** The model sent `[replace, apply]` as a pair in one message at all six turns; its T2 reasoning already says
+  "needs to be exactly 'apply'", so the enum error taught nothing and each pair stayed in history as a few-shot
+  example. No "Did you mean" (the enum rejection in `ToolArgumentValidator.cs` suggests only within edit distance 2).
+  Source of `replace` (hypothesis): `add, remove, replace` enums elsewhere on the 60-tool surface and ReplaceSnippet's
+  own "use Member(operation: replace)". Context: T1 is 26.6k tokens in every run (44% of the window, mostly tool
+  schemas, hypothesis); the T2/T4 readings (57.9k, 64.5k) look like an LM Studio `total_tokens` anomaly, since T3
+  (31.2k) and T5 (34.4k) carry the same history (hypothesis).
+- **R8.** At T2 the model wrote the final-state class into a new file instead of running the steps; the next edit hit
+  CS0101. `DeleteFile` is not in the eval's modes (`{Refactor, Workspace}`; the transcript's tool list confirms it),
+  and every other route dead-ended: ReplaceSnippet -> Member remove; Member remove refused on a string-literal
+  reflection risk ("Delete manually", no such tool) and advertises `skipPrecheck`, which does not apply to type
+  removal; DeleteUnusedSymbol's error did not name the missing `projectName`; the CS0101 redirect suggested
+  RenameSymbol to a name that already existed (T22 failed on it). T31 exhausted the context (total = 60,160) and the
+  runner treated "no tool calls" as finished.
+- **Git "not inside a git repository".** By design (the fixture is a temp copy), but `Workspace` mode exposes Git.
+  R4 T9 was the model misreading a correct ReadFile as a rolled-back rename.
+
+Fixes: `plans/plan_tenchain_batch_f_fixes.md`.
 
 ## Out of scope
 
