@@ -20,7 +20,7 @@ public class TokenUsageSplitTests
         """{"SystemPrompt":"s","UserPrompt":"u","Tools":[],"Turns":[{"TurnNumber":1,"ModelMessage":{"Role":"assistant","Content":"x","ToolCalls":[],"TotalTokens":5},"ModelLatency":"00:00:01","StartedAt":"2026-11-11T10:00:00+00:00","CompletedAt":"2026-11-11T10:00:01+00:00","ToolCalls":[]}]}""";
 
     private const string SplitTranscriptJson =
-        """{"SystemPrompt":"s","UserPrompt":"u","Tools":[],"Turns":[{"TurnNumber":1,"ModelMessage":{"Role":"assistant","Content":"x","ToolCalls":[],"TotalTokens":5,"InputTokens":10,"OutputTokens":4},"ModelLatency":"00:00:01","StartedAt":"2026-11-11T10:00:00+00:00","CompletedAt":"2026-11-11T10:00:01+00:00","ToolCalls":[]}]}""";
+        """{"SystemPrompt":"s","UserPrompt":"u","Tools":[],"Turns":[{"TurnNumber":1,"ModelMessage":{"Role":"assistant","Content":"x","ToolCalls":[],"TotalTokens":5,"InputTokens":10,"OutputTokens":4,"CachedInputTokens":6,"ReasoningTokens":2},"ModelLatency":"00:00:01","StartedAt":"2026-11-11T10:00:00+00:00","CompletedAt":"2026-11-11T10:00:01+00:00","ToolCalls":[]}]}""";
 
     [Test]
     public async Task Client_ParsesInputAndOutputTokens_FromResponseUsage()
@@ -53,6 +53,36 @@ public class TokenUsageSplitTests
     }
 
     [Test]
+    public async Task Client_ParsesCachedAndReasoningTokens_FromResponseUsageDetails()
+    {
+        var client = NewClient(CompletedEvent("""{"input_tokens":1200,"input_tokens_details":{"cached_tokens":1000},"output_tokens":345,"output_tokens_details":{"reasoning_tokens":300},"total_tokens":1545}"""));
+
+        var reply = await client.CompleteAsync(
+            [new AgentChatMessage { Role = "user", Content = "hi" }],
+            [],
+            256);
+
+        Assert.That(reply.CachedInputTokens, Is.EqualTo(1000));
+        Assert.That(reply.ReasoningTokens, Is.EqualTo(300));
+        Assert.That(reply.InputTokens, Is.EqualTo(1200));
+        Assert.That(reply.OutputTokens, Is.EqualTo(345));
+    }
+
+    [Test]
+    public async Task Client_UsageWithoutDetails_LeavesCachedAndReasoningNull()
+    {
+        var client = NewClient(CompletedEvent("""{"input_tokens":10,"output_tokens":4,"total_tokens":14}"""));
+
+        var reply = await client.CompleteAsync(
+            [new AgentChatMessage { Role = "user", Content = "hi" }],
+            [],
+            256);
+
+        Assert.That(reply.CachedInputTokens, Is.Null);
+        Assert.That(reply.ReasoningTokens, Is.Null);
+    }
+
+    [Test]
     public void Transcript_WithoutTokenSplit_OmitsTheFieldsFromJson()
     {
         var withoutSplit = new AgentChatMessage { Role = "assistant", Content = "x", TotalTokens = 5 };
@@ -61,13 +91,21 @@ public class TokenUsageSplitTests
 
         Assert.That(json, Does.Not.Contain("InputTokens"));
         Assert.That(json, Does.Not.Contain("OutputTokens"));
+        Assert.That(json, Does.Not.Contain("CachedInputTokens"));
+        Assert.That(json, Does.Not.Contain("ReasoningTokens"));
 
-        var withSplit = new AgentChatMessage { Role = "assistant", Content = "x", TotalTokens = 5, InputTokens = 3, OutputTokens = 2 };
+        var withSplit = new AgentChatMessage
+        {
+            Role = "assistant", Content = "x", TotalTokens = 5, InputTokens = 3, OutputTokens = 2,
+            CachedInputTokens = 1, ReasoningTokens = 1,
+        };
 
         using var doc = JsonDocument.Parse(JsonSerializer.Serialize(withSplit));
 
         Assert.That(doc.RootElement.GetProperty("InputTokens").GetInt32(), Is.EqualTo(3));
         Assert.That(doc.RootElement.GetProperty("OutputTokens").GetInt32(), Is.EqualTo(2));
+        Assert.That(doc.RootElement.GetProperty("CachedInputTokens").GetInt32(), Is.EqualTo(1));
+        Assert.That(doc.RootElement.GetProperty("ReasoningTokens").GetInt32(), Is.EqualTo(1));
     }
 
     [Test]
@@ -78,12 +116,16 @@ public class TokenUsageSplitTests
         Assert.That(source.Turns, Has.Count.EqualTo(1));
         Assert.That(source.Turns[0].ModelMessage.InputTokens, Is.Null);
         Assert.That(source.Turns[0].ModelMessage.OutputTokens, Is.Null);
+        Assert.That(source.Turns[0].ModelMessage.CachedInputTokens, Is.Null);
+        Assert.That(source.Turns[0].ModelMessage.ReasoningTokens, Is.Null);
 
         var withSplit = LoadFromTempFile(SplitTranscriptJson);
 
         Assert.That(withSplit.Turns, Has.Count.EqualTo(1));
         Assert.That(withSplit.Turns[0].ModelMessage.InputTokens, Is.EqualTo(10));
         Assert.That(withSplit.Turns[0].ModelMessage.OutputTokens, Is.EqualTo(4));
+        Assert.That(withSplit.Turns[0].ModelMessage.CachedInputTokens, Is.EqualTo(6));
+        Assert.That(withSplit.Turns[0].ModelMessage.ReasoningTokens, Is.EqualTo(2));
     }
 
     private static ResumeSource LoadFromTempFile(string json)

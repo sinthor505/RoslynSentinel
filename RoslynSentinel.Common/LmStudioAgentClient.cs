@@ -300,6 +300,8 @@ public sealed class LmStudioAgentClient
             TotalTokens = completedResponse.Usage?.TotalTokens,
             InputTokens = completedResponse.Usage?.InputTokens,
             OutputTokens = completedResponse.Usage?.OutputTokens,
+            CachedInputTokens = completedResponse.Usage?.InputTokensDetails?.CachedTokens,
+            ReasoningTokens = completedResponse.Usage?.OutputTokensDetails?.ReasoningTokens,
         };
     }
 
@@ -686,7 +688,6 @@ public sealed class LmStudioAgentClient
             get; set;
         }
 
-        // TODO the usage object also carries input_tokens_details.cached_tokens and output_tokens_details.reasoning_tokens; not recorded yet (would explain reasoning-heavy turns).
         [JsonPropertyName("input_tokens")]
         public int? InputTokens
         {
@@ -695,6 +696,33 @@ public sealed class LmStudioAgentClient
 
         [JsonPropertyName("output_tokens")]
         public int? OutputTokens
+        {
+            get; set;
+        }
+
+        [JsonPropertyName("input_tokens_details")]
+        public UsageDetails? InputTokensDetails
+        {
+            get; set;
+        }
+
+        [JsonPropertyName("output_tokens_details")]
+        public UsageDetails? OutputTokensDetails
+        {
+            get; set;
+        }
+    }
+
+    private sealed class UsageDetails
+    {
+        [JsonPropertyName("cached_tokens")]
+        public int? CachedTokens
+        {
+            get; set;
+        }
+
+        [JsonPropertyName("reasoning_tokens")]
+        public int? ReasoningTokens
         {
             get; set;
         }
@@ -781,6 +809,26 @@ public sealed class AgentChatMessage
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? OutputTokens
+    {
+        get; init;
+    }
+
+    /// <summary>
+    /// Backend-reported input_tokens_details.cached_tokens: how many of InputTokens were served from the prompt
+    /// cache; null for non-assistant roles and when the backend omitted it.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CachedInputTokens
+    {
+        get; init;
+    }
+
+    /// <summary>
+    /// Backend-reported output_tokens_details.reasoning_tokens: how many of OutputTokens were reasoning; null for
+    /// non-assistant roles and when the backend omitted it.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ReasoningTokens
     {
         get; init;
     }

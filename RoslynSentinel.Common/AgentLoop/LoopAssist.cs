@@ -156,6 +156,8 @@ public sealed class LoopAssistTracker(LoopAssistOptions options)
                     TotalTokens = message.TotalTokens,
                     InputTokens = message.InputTokens,
                     OutputTokens = message.OutputTokens,
+                    CachedInputTokens = message.CachedInputTokens,
+                    ReasoningTokens = message.ReasoningTokens,
                     ToolCalls = message.ToolCalls.Where(tc => !removed.ContainsKey(tc.Id)).ToList(),
                     CollapsedToolCalls = true,
                 });

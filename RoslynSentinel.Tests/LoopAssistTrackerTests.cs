@@ -314,6 +314,40 @@ public class LoopAssistTrackerTests
     }
 
     [Test]
+    public void CollapseForReplay_CopiesTheTokenDetailFieldsOfACollapsedAssistantTurn()
+    {
+        var tracker = On();
+        var messages = new List<AgentChatMessage>();
+        AddRejectedTurn(tracker, messages, 1);
+
+        // The second identical rejection is the repeat, so its assistant turn is rebuilt by CollapseForReplay.
+        var call = Call("c2");
+        var result = Rejection(call.Id, RenameRejection);
+        messages.Add(new AgentChatMessage
+        {
+            Role = "assistant",
+            ReasoningContent = "plan 2",
+            ToolCalls = [call],
+            InputTokens = 100,
+            CachedInputTokens = 60,
+            OutputTokens = 20,
+            ReasoningTokens = 15,
+            TotalTokens = 120,
+        });
+        messages.Add(new AgentChatMessage { Role = "tool", ToolCallId = call.Id, Content = result });
+        tracker.Observe(call, result, isError: true);
+
+        var replay = tracker.CollapseForReplay(messages, []);
+        var rebuilt = replay.Single(m => m.Role == "assistant" && m.CollapsedToolCalls);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rebuilt.CachedInputTokens, Is.EqualTo(60));
+            Assert.That(rebuilt.ReasoningTokens, Is.EqualTo(15));
+        });
+    }
+
+    [Test]
     public void CollapseForReplay_ReportsACollapseAssistOnlyWhenAGroupGrew()
     {
         var tracker = On();
