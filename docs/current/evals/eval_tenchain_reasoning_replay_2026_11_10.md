@@ -289,9 +289,12 @@ code is 98a55ad5 (F: 69606748). L2 (harness only: worktree, env var, harness che
 - **Suggested server changes (not made):** (1) lift summary prints the rewritten line(s) per other file plus "do not
   repeat this call-site edit"; (2) lift-failed message says the rename itself was fine and the errors come from the
   model's other text; (3) CS0111 same-file collision says "'X' is already declared at <file>:<line>; your newContent
-  declares it again"; (4) "Member not found." states what was searched. One unexplained point: in R3 T8 the
-  rejected-edit-origin note ("comes from your rejected edit's newContent", `RejectedEditMemory.Explains`,
-  `WorkspaceFileEditImpl.cs:159`) did not fire although it should have matched (hypothesis, not traced).
+  declares it again"; (4) "Member not found." states what was searched. Correction (peer review of the transcript):
+  in R3 T8 the rejected-edit-origin note DID fire (agent.log lines 310, 325, 620: "This oldContent comes from your
+  rejected edit's newContent. That edit was not applied, so the file still has the old text"). It is wrong there:
+  the T7 edit was rejected by the gate and then lifted, so OrderCheckout.cs had been rewritten, not left with the
+  old text. The R3 finding is that a lifted edit stays in `RejectedEditMemory` and later produces this misleading
+  note; (5) forget the remembered rejected edit for every file a successful lift writes.
 - The tool list is not recorded in the run artifacts (as noted for E); the G build still offered Git and had no
   DeleteFile, so R4 T25 may not reproduce under the current surface.
 
