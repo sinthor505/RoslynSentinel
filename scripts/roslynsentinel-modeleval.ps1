@@ -117,7 +117,8 @@
     OrderPricingRefactorChain4 | OrderPricingRefactorChain5 | OrderPricingRefactorChain6 |
     OrderPricingRefactorChain7 | OrderPricingRefactorChain8 | OrderPricingRefactorChain9 |
     OrderPricingRefactorChain10 | ResumeTranscript (resume a saved ten-chain transcript and resample
-    the next turns; see -ResumeTranscript). Required. Accepts multiple values (e.g.
+    the next turns; see -ResumeTranscript) | ScoreTranscript (score a saved transcript without calling a
+    model; see -ScoreTranscript). Required. Accepts multiple values (e.g.
     -Test OrderPricingRefactor,OrderPricingRefactorChain4,OrderPricingRefactorChain5) to run
     each one in turn, in the order given, all under the same -HostAddress/-Model/-Repeats -
     this is the supported way to queue a multi-test overnight sequence: it reuses this script's
@@ -206,6 +207,20 @@
     ResumeTranscript only: 'user' (default) or 'assistant', the role of the injected message
     (ROSLYNSENTINEL_MODELEVAL_LOOP_ASSIST_ROLE). Only matters with -LoopAssist.
 
+.PARAMETER ScoreTranscript
+    ScoreTranscript only (required there): transcript.json, or the run folder holding it, to score.
+    No model is called, so -HostAddress is still required by this script but any alias works. The
+    scorer appends one line per transcript to the CSV (ROSLYNSENTINEL_MODELEVAL_SCORE_TRANSCRIPT).
+
+.PARAMETER ScoreCsv
+    ScoreTranscript only: the results CSV the scorer appends one line to; a header is written when the
+    file is missing or empty. Default: score.csv in the folder holding the transcript
+    (ROSLYNSENTINEL_MODELEVAL_SCORE_CSV).
+
+.PARAMETER ScoreTool
+    ScoreTranscript only: the tool whose first call and recovery are scored. Default: ReplaceSnippet
+    (ROSLYNSENTINEL_MODELEVAL_SCORE_TOOL).
+
 .EXAMPLE
     .\roslynsentinel-modeleval.ps1 -HostAddress 112 -Test SizeThreshold -Size 60
     Sweep size=60 against the .112 GTX 1080 host.
@@ -226,7 +241,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript')]
+    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript')]
     [string[]]$Test,
 
     [Parameter(Position = 2)]
@@ -263,7 +278,13 @@ param(
     [switch]$LoopAssist,
 
     [ValidateSet('user', 'assistant')]
-    [string]$LoopAssistRole = 'user'
+    [string]$LoopAssistRole = 'user',
+
+    [string]$ScoreTranscript,
+
+    [string]$ScoreCsv,
+
+    [string]$ScoreTool = 'ReplaceSnippet'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -308,6 +329,7 @@ $testNames = @{
     'OrderPricingRefactorChain9'    = 'Model_AppliesNineChainedRefactors'
     'OrderPricingRefactorChain10'   = 'Model_AppliesTenChainedRefactors'
     'ResumeTranscript'              = 'ResumeFromTranscript_SamplesTheNextTurns'
+    'ScoreTranscript'               = 'ScoreSavedTranscript_AppendsOneLine'
 }
 
 if ($Test -contains 'ResumeTranscript') {
@@ -319,6 +341,23 @@ if ($Test -contains 'ResumeTranscript') {
     }
     # The testhost runs from the scratch build folder, so hand it an absolute path.
     $ResumeTranscript = (Resolve-Path -LiteralPath $ResumeTranscript).Path
+}
+
+if ($Test -contains 'ScoreTranscript') {
+    if (-not $ScoreTranscript) {
+        throw "-Test ScoreTranscript needs -ScoreTranscript <path to transcript.json or its run folder>."
+    }
+    if (-not (Test-Path -LiteralPath $ScoreTranscript)) {
+        throw "-ScoreTranscript '$ScoreTranscript' does not exist."
+    }
+    # The testhost runs from the scratch build folder, so hand it an absolute path.
+    $ScoreTranscript = (Resolve-Path -LiteralPath $ScoreTranscript).Path
+    # -ScoreCsv may name a file that does not exist yet, so it cannot go through Resolve-Path.
+    if ($ScoreCsv) {
+        # GetFullPath resolves against the .NET process directory, not PowerShell's location, so anchor relative paths first.
+        if (-not [System.IO.Path]::IsPathRooted($ScoreCsv)) { $ScoreCsv = Join-Path (Get-Location).Path $ScoreCsv }
+        $ScoreCsv = [System.IO.Path]::GetFullPath($ScoreCsv)
+    }
 }
 
 $artifactsPath = Join-Path $repoRoot "_scratchbuild_$suffix"
@@ -410,6 +449,22 @@ if ($currentTest -eq 'ResumeTranscript') {
 }
 else {
     Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_TRANSCRIPT, Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_KEEP_TURNS, Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_SAMPLES, Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_CONTINUE_TURNS -ErrorAction SilentlyContinue
+}
+
+if ($currentTest -eq 'ScoreTranscript') {
+    $env:ROSLYNSENTINEL_MODELEVAL_SCORE_TRANSCRIPT = $ScoreTranscript
+    if ($ScoreCsv) {
+        $env:ROSLYNSENTINEL_MODELEVAL_SCORE_CSV = $ScoreCsv
+    }
+    else {
+        Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_SCORE_CSV -ErrorAction SilentlyContinue
+    }
+    $env:ROSLYNSENTINEL_MODELEVAL_SCORE_TOOL = $ScoreTool
+    $csvShown = if ($ScoreCsv) { $ScoreCsv } else { '<default: score.csv beside the transcript>' }
+    Write-Host "    ScoreTranscript=$ScoreTranscript csv=$csvShown tool=$ScoreTool" -ForegroundColor Cyan
+}
+else {
+    Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_SCORE_TRANSCRIPT, Env:\ROSLYNSENTINEL_MODELEVAL_SCORE_CSV, Env:\ROSLYNSENTINEL_MODELEVAL_SCORE_TOOL -ErrorAction SilentlyContinue
 }
 
 $csproj = Join-Path $repoRoot 'RoslynSentinel.Tests.ModelEval\RoslynSentinel.Tests.ModelEval.csproj'
