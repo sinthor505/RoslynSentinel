@@ -114,11 +114,10 @@ public static class CallToolFailureHandler
                 .ToArray();
             if (McpToolSchemaPatcher.DiscoverAllDeclaredTools(assemblies).Any(t => t.ToolName == tool))
             {
-                // TODO ToolSignatureCatalogReflection skips McpServerStatus (Scan_HintCallLiterals_AreValid: "Unknown tool 'McpServerStatus'"), so ToolCallHint.Call may render it without arguments; literal text until that is fixed
-                // hint-ok: McpServerStatus is missing from the reflection catalog; literal call keeps its arguments
                 return new ResultError(
                     ToolErrorCode.TargetIneligible,
-                    $"{tool} exists but is not enabled in this server's mode. McpServerStatus(toolListing: inactive, toolNameFilter: {tool}) shows how it is enabled.");
+                    $"{tool} exists but is not enabled in this server's mode. "
+                    + ToolCallHint.Call("McpServerStatus", ("toolListing", "inactive"), ("toolNameFilter", tool)) + " shows how it is enabled.");
             }
         }
         catch (Exception)
@@ -126,9 +125,9 @@ public static class CallToolFailureHandler
             // Lookup failure: fall through to the not-declared text rather than surface a second error.
         }
 
-        // hint-ok: McpServerStatus is missing from the reflection catalog; literal call keeps its arguments
         return new ResultError(
             ToolErrorCode.NotFound,
-            $"There is no tool named '{tool}' on this server. Check the tool name; McpServerStatus(toolListing: all) lists every tool.");
+            $"There is no tool named '{tool}' on this server. Check the tool name; "
+            + ToolCallHint.Call("McpServerStatus", ("toolListing", "all")) + " lists every tool.");
     }
 }

@@ -3,3 +3,4 @@
 # `// hint-ok: <reason>` comment on their statement. This file may only shrink.
 # Refresh after removing hints: set ROSLYNSENTINEL_UPDATE_HINT_BASELINE=1 and run
 # ToolHintRatchetTests.Scan_MatchesBaseline. Line format: <path> | <member> | <tool> | <count>
+RoslynSentinel.Common/SolutionLoadState.cs | LoadWaitTimedOut | McpServerStatus | 1
