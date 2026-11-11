@@ -587,7 +587,9 @@ internal sealed class Libgit2GitReader : IGitReader
         }
 
         // ls-files lists the index under the working directory, relative to it; .gitignore plays no part.
-        // TODO with core.ignorecase=true (git init's default on Windows) libgit2 enumerates a mixed-case index case-insensitively ("a.txt" before "Case.txt") where git lists byte order ("Case.txt" first); found 2026-11-11 in main and worktree alike, config-independent. Not checked whether a caller (ResidualMentionScanner) depends on the order; sort Ordinal here if one does.
+        // With core.ignorecase=true (git init's default on Windows) libgit2 enumerates a mixed-case index case-insensitively ("a.txt" before "Case.txt") where git lists
+        // UTF-8 byte order ("Case.txt" first), in the main tree and a linked worktree alike. No caller found depends on it today (ResidualMentionScanner sorts, but its
+        // OrdinalIgnoreCase sort is unstable for case-only duplicates, so its input order could reach the output), so the list is put in git's order: see InGitOrder.
         var prefix = RelativeToWorkdir(repo, workingDirectory);
         var leading = prefix.Length == 0 ? string.Empty : prefix + "/";
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -601,6 +603,13 @@ internal sealed class Libgit2GitReader : IGitReader
             }
         }
 
+        return InGitOrder(paths);
+    }
+
+    /// <summary>The order git prints index and tree paths in: byte order of the UTF-8 path (the libgit2 index enumerates case-insensitively under core.ignorecase=true). The entries are unique.</summary>
+    private static List<string> InGitOrder(List<string> paths)
+    {
+        paths.Sort(Utf8PathOrder);
         return paths;
     }
 
@@ -732,7 +741,7 @@ internal sealed class Libgit2GitReader : IGitReader
             }
         }
 
-        return matches;
+        return InGitOrder(matches);
     }
 
     public IReadOnlyList<string>? ListHeadPathsMatching(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout)
@@ -768,7 +777,8 @@ internal sealed class Libgit2GitReader : IGitReader
             }
         }
 
-        return matches;
+        // ls-tree prints tree order whatever order the pathspecs were given in; tree order of full file paths is UTF-8 byte order.
+        return InGitOrder(matches);
     }
 
     public IReadOnlyList<string>? FindIgnoredPaths(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout)

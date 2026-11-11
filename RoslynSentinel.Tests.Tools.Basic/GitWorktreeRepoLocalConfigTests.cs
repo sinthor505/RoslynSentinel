@@ -146,9 +146,9 @@ public class GitWorktreeRepoLocalConfigTests
         new("GetLog", nameof(IGitReader.GetLog), (r, d) => r.GetLog(d, 10, revision: null, paths: null, pickaxe: null, pickaxeRegex: false, follow: false, Timeout)),
         new("GetLog(paths)", nameof(IGitReader.GetLog), (r, d) => r.GetLog(d, 10, revision: null, paths: ["a.txt"], pickaxe: null, pickaxeRegex: false, follow: false, Timeout)),
         new("ReadBlobAtHead", nameof(IGitReader.ReadBlobAtHead), (r, d) => r.ReadBlobAtHead(d, "crlf-both.txt", Timeout)),
-        // Compared sorted: with core.ignorecase=true libgit2 lists a mixed-case index case-insensitively where git lists byte order (a main-tree difference, not a config one; see the TODO on ListTrackedPaths).
-        new("ListTrackedPaths", nameof(IGitReader.ListTrackedPaths), (r, d) => r.ListTrackedPaths(d, Timeout)?.Order(StringComparer.Ordinal).ToArray()),
-        new("ListIndexPathsMatching", nameof(IGitReader.ListIndexPathsMatching), (r, d) => r.ListIndexPathsMatching(d, ["Case.txt", "case.txt", "sub"], Timeout)?.Order(StringComparer.Ordinal).ToArray()),
+        // Compared in the order returned: both readers list git's byte order (GitPathOrderParityTests pins that for mixed-case and non-ASCII names).
+        new("ListTrackedPaths", nameof(IGitReader.ListTrackedPaths), (r, d) => r.ListTrackedPaths(d, Timeout)),
+        new("ListIndexPathsMatching", nameof(IGitReader.ListIndexPathsMatching), (r, d) => r.ListIndexPathsMatching(d, ["Case.txt", "case.txt", "sub"], Timeout)),
         new("ListHeadPathsMatching", nameof(IGitReader.ListHeadPathsMatching), (r, d) => r.ListHeadPathsMatching(d, ["Case.txt", "case.txt", "sub"], Timeout)),
         new("FindIgnoredPaths", nameof(IGitReader.FindIgnoredPaths), (r, d) => r.FindIgnoredPaths(d, ["x.excluded", "build/x.txt", "Build/x.txt", "x.log", "a.txt", "case.txt"], Timeout)),
         new("ListBranches", nameof(IGitReader.ListBranches), (r, d) => r.ListBranches(d, Timeout)),
