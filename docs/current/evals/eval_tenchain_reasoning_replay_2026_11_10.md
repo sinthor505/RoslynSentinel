@@ -167,6 +167,47 @@ Details and the role analysis: `proposals/proposal_first_person_turn_injection.m
 template (helper private then internal; preferred-customer `discount` local "as step 1 left it"; the class name until
 step 8). Batches after 8b73a4f5 are not strictly comparable with A-E.
 
+## Batch F: qwen3.5-9b-coder on 69606748, reasoning budget off, 8/10 (2026-11-11)
+
+**Setup.** Host 113, `qwen3.5-9b-coder` (default template), 60160 context, parallel 4. LM Studio reasoning budget
+disabled by the owner (it had been 2048 tokens, after which LM Studio injects "... okay, now i have enough information
+to answer."); the loaded config still lists the budget message but no budget value, so "off" rests on the owner's
+setting. Code pinned at 69606748 in worktree `C:\tmp\rs_eval_f` (removed afterwards). No loop assist, no loop latch.
+L1. Archive: `ModelTestingResults\113\Model_AppliesTenChainedRefactors\`, runs `20261111-042157-571` to
+`20261111-054606-850`.
+
+| Run | Folder | Result | Turns | Failed calls | RenameSymbol turns |
+| --- | --- | --- | --- | --- | --- |
+| R1 | 042157-571 | FAIL error budget (ReplaceSnippet 7 > 5) | 24 | 10 | T5, T8 |
+| R2 | 043342-782 | pass | 23 | 6 | T3, T9 |
+| R3 | 044120-103 | pass | 29 | 4 | T4, T11 |
+| R4 | 044956-702 | pass | 28 | 6 | T3, T17 |
+| R5 | 045814-629 | pass | 27 | 6 | T4, T11 |
+| R6 | 050746-067 | pass | 20 | 3 | T4, T7 |
+| R7 | 051519-343 | pass | 18 | 2 | T4, T8 |
+| R8 | 052200-824 | FAIL step 1 never completed | 31 | 22 | T22 (errored) |
+| R9 | 053938-295 | pass | 20 | 5 | T3, T10 |
+| R10 | 054606-850 | pass | 20 | 5 | T3, T11 |
+
+- **Not comparable with E.** Code (a918d07d to 69606748), the 10-step prompt (8b73a4f5) and the reasoning budget all
+  changed; 8/10 vs 7/10 is within noise and cannot be attributed to any one of them.
+- **Budget artefact gone.** "now i have enough information" occurs 0 times in every `agent.log` and `transcript.json`.
+  Reasoning is short (median 166.5 chars/turn over 240 turns); code-like text in about 70 turns is identifiers and
+  signatures, not method bodies. Max 26,453 chars at R8 T31 (no tool call, cut off mid-sentence at 100% context).
+- **Rename loop: 0/10.** Every run reached RenameSymbol itself; 0 identical RenameSymbol resends. The
+  `residualMentionsNote` (a string literal in the acceptance test) was never followed up with `GetLargeResult`.
+- **R1: invalid enum value repeated.** ReplaceSnippet `action: 'replace'` at T2, T4, T7, T12, T18, T19 ("'replace' is
+  not a valid value ... Valid values are: apply, validate."), each followed by an `apply` retry in the same turn.
+  Context 96% at T2, 107% at T4 (7 context warnings).
+- **R8: duplicate-file deadlock.** T2 CreateFile `StandardOrderPricingCalculator.cs` while `OrderPricingCalculator.cs`
+  still held the class; about 19 failed delete attempts T3-T26 across Member, Git, DeleteUnusedSymbol and
+  ReplaceSnippet; T22 RenameSymbol "already defines a member called 'SummarizeShipping'"; T31 context full.
+- **Smaller findings:** stale-path ReadFile after the class rename (R3 T27, R9 T6, R10 T13: "File
+  '...OrderPricingCalculator.cs' was not found anywhere in the loaded solution", no pointer to the new file); identical
+  ReplaceSnippet resend after an error in 7 runs (1-2 each), the repeat note fired once (R4 T12) and R4 then re-read and
+  changed the edit; Git "not inside a git repository" (R4 T9, R8 T5/T16/T18), unchecked against the fixture setup.
+  Root-cause trace of R1 and R8: pending.
+
 ## Out of scope
 
 - Batch C ran before 31b206a6 and 28391d8c; their effect is unmeasured.
