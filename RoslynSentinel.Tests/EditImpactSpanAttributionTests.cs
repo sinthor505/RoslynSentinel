@@ -94,6 +94,58 @@ public class EditImpactSpanAttributionTests
         Assert.That(verdicts[0], Has.Property("DeclarationKind").EqualTo("parameter").And.Property("Verdict").EqualTo("breaksUses"));
     }
 
+    // Batch H5 R5: the method, its parameter (signature only) and an added helper with the same parameter types in one edit. The method's key changes with its name, and
+    // the helper shares its parameter types, so the parameter rename was skipped as "member is gone or new" until the pairing pass matched them by unchanged body.
+    [Test]
+    public async Task RenamedParameter_WhileTheMethodIsAlsoRenamed_IsStillAttributed()
+    {
+        using var _ = LiftRenamesOptions.OverrideForCurrentContext(false);
+        using var workspace = CreateWorkspace();
+
+        var result = await TestTools.WorkspaceTools(workspace.Manager).ReplaceSnippetTool(
+            reason: "rename the method and its parameter in the signature only, and add a helper",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(PricingRelativePath),
+            oldContent: "public decimal CalcDisc(decimal amount, decimal rate)",
+            newContent: "private static decimal MultiplyAmountAndRate(decimal amount, decimal rate) => amount * rate;\n\n    public decimal CalculateDiscountedTotal(decimal amount, decimal discountRate)");
+
+        Assert.That(result.IsError, Is.True);
+        var message = result.ErrorData?.Message ?? string.Empty;
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("renamed parameter rate -> discountRate"), message);
+            Assert.That(message, Does.Contain("use(s) outside your edit"), message);
+        });
+    }
+
+    // Batch H5 R5: with the lift on the merged set (method rename applied to the caller) is rejected for the parameter; the errors sit in the model's own file, outside its
+    // edit, and used to be treated as inside it because no edited spans were passed after a lift.
+    [Test]
+    public async Task RenamedParameter_WhileTheMethodIsAlsoRenamed_WithTheLiftOn_IsStillAttributed()
+    {
+        using var _ = LiftRenamesOptions.OverrideForCurrentContext(true);
+        using var workspace = CreateWorkspace();
+
+        var result = await TestTools.WorkspaceTools(workspace.Manager).ReplaceSnippetTool(
+            reason: "rename the method and its parameter in the signature only, and add a helper",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(PricingRelativePath),
+            oldContent: "public decimal CalcDisc(decimal amount, decimal rate)",
+            // The helper has another parameter list than the method: the lift's symbol diff refuses to pair a rename when two added methods share its shape (test (a) covers that shape).
+            newContent: "private static decimal Double(decimal amount) => amount * 2m;\n\n    public decimal CalculateDiscountedTotal(decimal amount, decimal discountRate)");
+
+        Assert.That(result.IsError, Is.True, "the body still uses the old parameter name");
+        var message = result.ErrorData?.Message ?? string.Empty;
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("trial was rolled back"), "the lift was tried: " + message);
+            Assert.That(message, Does.Contain("renamed parameter rate -> discountRate"), message);
+            Assert.That(message, Does.Contain("use(s) outside your edit"), message);
+        });
+        var verdicts = result.ErrorData?.StructuredDetail?.OfType<EditImpactDetail>().Single().Verdicts ?? [];
+        Assert.That(verdicts.Any(v => v.DeclarationKind == "parameter"), Is.True, string.Join(" | ", verdicts.Select(v => $"{v.Kind} {v.DeclarationKind} {v.OldName}->{v.NewName} {v.Verdict}")));
+    }
+
     [Test]
     public async Task RenamedOutVariable_WithAUseOutsideTheSnippet_IsAttributed()
     {

@@ -1309,6 +1309,8 @@ public class WorkspaceFileEditImpl
                     string? liftRefusalNote = null;
                     IReadOnlyDictionary<string, IReadOnlyList<(int Line, string OldText, string NewText)>>? liftRewrites = null;
                     List<ImpactVerdict>? liftVerdicts = null;
+                    // Batch H5 R5: the model's own text, kept because a lift replaces snippetChanges with the merged set (see RenameLifter.MergedEditedSpansAsync).
+                    var candidateChanges = snippetChanges;
                     if (result.IsError && result.ValidationResult != null && await TryLiftRenameAsync(snippetChanges, liftSpans, cancellationToken) is { } lift)
                     {
                         if (lift.Result is null)
@@ -1339,7 +1341,8 @@ public class WorkspaceFileEditImpl
                         // untouched-file sentence (it already covers it); null keeps that sentence.
                         // Spans only for the model's own text: a lifted (merged) set was changed outside them. Siblings: rejected edits of other files (parallel calls).
                         impact = await EditImpactGate.AnalyzeAsync(_workspaceManager, snippetChanges, result.ValidationResult, _activeToolSurface, cancellationToken: cancellationToken,
-                            editedSpans: liftNote is null ? liftSpans : null,
+                            // Batch H5 R5: after a lift the spans are the model's own line ranges mapped onto the merged text, so an error the rename left in the model's file but outside its edit is attributed.
+                            editedSpans: liftNote is null ? liftSpans : await RenameLifter.MergedEditedSpansAsync(_workspaceManager, candidateChanges, snippetChanges, liftSpans, cancellationToken),
                             rejectedSiblingTexts: SiblingEditTexts(snippetChanges.Keys.Select(k => (string)k).ToList()));
                         impactNote = impact?.Text;
                         untouchedNote = impactNote
@@ -1665,6 +1668,8 @@ public class WorkspaceFileEditImpl
             string? liftRefusalNote = null;
             IReadOnlyDictionary<string, IReadOnlyList<(int Line, string OldText, string NewText)>>? liftRewrites = null;
             List<ImpactVerdict>? liftVerdicts = null;
+            // Batch H5 R5: the model's own texts, kept because a lift replaces finalContents with the merged set (see RenameLifter.MergedEditedSpansAsync).
+            var candidateContents = finalContents;
             if (result.IsError && result.ValidationResult != null && await TryLiftRenameAsync(finalContents, liftSpans, cancellationToken) is { } lift)
             {
                 if (lift.Result is null)
@@ -1697,7 +1702,8 @@ public class WorkspaceFileEditImpl
                 // untouched-file sentence (it already covers it); null keeps that sentence.
                 // Spans only for the model's own text: a lifted (merged) set was changed outside them. Siblings: rejected edits of other files (parallel calls).
                 impact = await EditImpactGate.AnalyzeAsync(_workspaceManager, finalContents, result.ValidationResult, _activeToolSurface, cancellationToken: cancellationToken,
-                    editedSpans: liftNote is null ? liftSpans : null,
+                    // Batch H5 R5: after a lift the spans are the model's own line ranges mapped onto the merged text, so an error the rename left in the model's file but outside its edit is attributed.
+                    editedSpans: liftNote is null ? liftSpans : await RenameLifter.MergedEditedSpansAsync(_workspaceManager, candidateContents, finalContents, liftSpans, cancellationToken),
                     rejectedSiblingTexts: SiblingEditTexts(finalContents.Keys.Select(k => (string)k).ToList()));
                 impactNote = impact?.Text;
                 untouchedNote = impactNote

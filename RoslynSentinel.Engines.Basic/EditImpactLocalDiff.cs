@@ -31,36 +31,71 @@ internal static class EditImpactLocalDiff
         {
             if (!newMembers.TryGetValue(key, out var newLocals))
             {
-                // The member is gone or new on one side: the member diff reports that; its locals say nothing more.
+                // The member is gone or new on one side (or renamed: see the pairing pass below): the member diff reports that; its locals say nothing more here.
                 continue;
             }
 
-            var removed = oldLocals.Where(o => !newLocals.Any(n => n.Kind == o.Kind && n.Name == o.Name)).ToList();
-            var added = newLocals.Where(n => !oldLocals.Any(o => o.Kind == n.Kind && o.Name == n.Name)).ToList();
-            var container = key.Display;
-            if (removed.Count == 1 && added.Count == 1 && removed[0].Kind == added[0].Kind)
+            DiffLocals(key.Display, oldLocals.Locals, newLocals.Locals, changes);
+        }
+
+        // Batch H5 R5: a member renamed in the same edit has a different key on each side (the name is part of it), so the exact pass skipped it and a parameter
+        // renamed in its signature went unattributed. Pair each unmatched baseline member with the one unmatched candidate member of the same type path, kind and
+        // parameter-type list. When there are several of one shape on either side (an added helper with the same parameter types, as in the failing run), only
+        // members with the same body text count, since a rename leaves the body alone; when that is still not exactly one on BOTH sides the pairing is ambiguous and the member is skipped.
+        var unmatchedOld = oldMembers.Where(kv => !newMembers.ContainsKey(kv.Key)).ToList();
+        var unmatchedNew = newMembers.Where(kv => !oldMembers.ContainsKey(kv.Key)).ToList();
+        foreach (var (oldKey, oldMember) in unmatchedOld)
+        {
+            var sameShapeNew = unmatchedNew.Where(n => SameShape(oldKey, n.Key)).ToList();
+            var sameShapeOld = unmatchedOld.Where(o => SameShape(o.Key, oldKey)).ToList();
+            if (sameShapeNew.Count != 1 || sameShapeOld.Count != 1)
             {
-                changes.Add(new SymbolChange(SymbolChangeKind.Renamed, removed[0].Kind, container, removed[0].Name, added[0].Name, added[0].File, added[0].Line, null, null));
+                sameShapeNew = sameShapeNew.Where(n => n.Value.Body == oldMember.Body).ToList();
+                sameShapeOld = sameShapeOld.Where(o => o.Value.Body == oldMember.Body).ToList();
+            }
+
+            if (sameShapeNew.Count != 1 || sameShapeOld.Count != 1)
+            {
                 continue;
             }
 
-            foreach (var local in removed)
-            {
-                changes.Add(new SymbolChange(SymbolChangeKind.Removed, local.Kind, container, local.Name, null, local.File, local.Line, null, null));
-            }
+            // The candidate member's display is the container: it is the name the edited code now has.
+            DiffLocals(sameShapeNew[0].Key.Display, oldMember.Locals, sameShapeNew[0].Value.Locals, changes);
         }
 
         return changes;
     }
 
+    // Batch H5 R5: same type path, parameter-type list and member kind, whatever the member is called.
+    private static bool SameShape(MemberKey a, MemberKey b)
+        => a.TypePath == b.TypePath && a.ParameterTypes == b.ParameterTypes && a.MemberKind == b.MemberKind;
+
+    private static void DiffLocals(string container, List<LocalDeclaration> oldLocals, List<LocalDeclaration> newLocals, List<SymbolChange> changes)
+    {
+        var removed = oldLocals.Where(o => !newLocals.Any(n => n.Kind == o.Kind && n.Name == o.Name)).ToList();
+        var added = newLocals.Where(n => !oldLocals.Any(o => o.Kind == n.Kind && o.Name == n.Name)).ToList();
+        if (removed.Count == 1 && added.Count == 1 && removed[0].Kind == added[0].Kind)
+        {
+            changes.Add(new SymbolChange(SymbolChangeKind.Renamed, removed[0].Kind, container, removed[0].Name, added[0].Name, added[0].File, added[0].Line, null, null));
+            return;
+        }
+
+        foreach (var local in removed)
+        {
+            changes.Add(new SymbolChange(SymbolChangeKind.Removed, local.Kind, container, local.Name, null, local.File, local.Line, null, null));
+        }
+    }
+
     /// <summary>True for an entry this class produced.</summary>
     public static bool IsLocal(SymbolChange change) => change.DeclarationKind is "local" or "local function" or "parameter";
 
-    private readonly record struct MemberKey(string Identity, string Display);
+    // Batch H5 R5: TypePath, ParameterTypes and MemberKind (all part of Identity already) are kept apart for the renamed-member pairing pass of Diff.
+    private readonly record struct MemberKey(string Identity, string Display, string TypePath, string ParameterTypes, string MemberKind);
 
-    private static Dictionary<MemberKey, List<LocalDeclaration>> Collect(IReadOnlyDictionary<string, string?> texts)
+    // Batch H5 R5: Body is the member's body text without whitespace, to tell a renamed member from an added helper of the same parameter types.
+    private static Dictionary<MemberKey, (List<LocalDeclaration> Locals, string Body)> Collect(IReadOnlyDictionary<string, string?> texts)
     {
-        var result = new Dictionary<MemberKey, List<LocalDeclaration>>();
+        var result = new Dictionary<MemberKey, (List<LocalDeclaration> Locals, string Body)>();
         foreach (var (path, text) in texts)
         {
             if (string.IsNullOrEmpty(text))
@@ -86,7 +121,7 @@ internal static class EditImpactLocalDiff
                 };
                 // The member is keyed by its parameter TYPES (whitespace-free), not their names: a renamed parameter must keep the member's key.
                 var parameterTypes = Whitespace.Replace(string.Join(",", member.ParameterList.Parameters.Select(p => p.Type?.ToString() ?? string.Empty)), string.Empty);
-                var key = new MemberKey($"{typePath}|{name}|{parameterTypes}", typePath.Length == 0 ? name : $"{typePath}.{name}");
+                var key = new MemberKey($"{typePath}|{name}|{parameterTypes}", typePath.Length == 0 ? name : $"{typePath}.{name}", typePath, parameterTypes, member.Kind().ToString());
                 var locals = member.ParameterList.Parameters
                     .Select(p => new LocalDeclaration("parameter", p.Identifier.ValueText, file, LineOf(p.Identifier)))
                     .ToList();
@@ -114,7 +149,7 @@ internal static class EditImpactLocalDiff
                 }
 
                 // A partial type can hold the same member key in two files only if it is declared twice; the later file wins.
-                result[key] = locals;
+                result[key] = (locals, Whitespace.Replace((member.Body?.ToString() ?? member.ExpressionBody?.ToString()) ?? string.Empty, string.Empty));
             }
         }
 

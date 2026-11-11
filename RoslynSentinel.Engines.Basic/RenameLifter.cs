@@ -232,9 +232,114 @@ public static class RenameLifter
         }
     }
 
+    /// <summary>
+    /// Batch H5 R5: the edited spans to hand the edit-impact analyzer when the rename lift's MERGED set was rejected. The analyzer verifies spans against the text it is
+    /// given, and the merged text of an edited file may differ from the model's candidate text by renamed identifiers (which change offsets but never line counts), so
+    /// the model's own replaced regions are mapped to the same LINE ranges in the merged text and re-expressed as spans that verify against it. A file whose merged
+    /// text equals the candidate keeps its spans unchanged; a file whose candidate regions cannot be verified, or whose line count differs between candidate and merged
+    /// text, gets no entry (the analyzer then treats the whole file as edited, as it did before this helper). Files only the rename rewrote are not in
+    /// <paramref name="editedSpans"/> and stay without an entry.
+    /// </summary>
+    /// <param name="workspaceManager">Supplies the committed (baseline) solution.</param>
+    /// <param name="candidateChanges">The model's candidate text per edited file, before the lift.</param>
+    /// <param name="mergedChanges">The lift's merged set (the model's files with the renamer's surviving changes, plus the files only the rename rewrote).</param>
+    /// <param name="editedSpans">The model's replacements per file as spans of the baseline text (what <see cref="PlanAsync"/> received).</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    public static async Task<IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>> MergedEditedSpansAsync(
+        IWorkspaceManager workspaceManager,
+        IReadOnlyDictionary<FilePathWrapper, string> candidateChanges,
+        IReadOnlyDictionary<FilePathWrapper, string> mergedChanges,
+        IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> editedSpans,
+        CancellationToken cancellationToken = default)
+    {
+        var result = new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>>();
+        Solution? baseline = null;
+        foreach (var (path, spans) in editedSpans)
+        {
+            if (!candidateChanges.TryGetValue(path, out var candidate) || !mergedChanges.TryGetValue(path, out var mergedText))
+            {
+                continue;
+            }
+
+            if (string.Equals(candidate, mergedText, StringComparison.Ordinal))
+            {
+                result[path] = spans;
+                continue;
+            }
+
+            baseline ??= await workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            if (await EditImpactAnalyzer.DocumentTextAsync(baseline, path.ToString(), cancellationToken) is not { } before
+                || EditImpactAnalyzer.CandidateRegions(before, candidate, spans) is not { } regions)
+            {
+                continue;
+            }
+
+            var candidateLines = LineStarts(candidate);
+            var mergedLines = LineStarts(mergedText);
+            if (candidateLines.Count != mergedLines.Count)
+            {
+                // TODO a lifted merge that changes the line count of an edited file (a rename never does) leaves that file unattributed; map by content if it ever happens
+                continue;
+            }
+
+            // The model's regions as whole lines of the merged text, overlapping or touching ones joined.
+            var mergedRegions = new List<TextSpan>();
+            foreach (var region in regions.OrderBy(r => r.Start))
+            {
+                var first = LineIndexOf(candidateLines, region.Start);
+                var last = LineIndexOf(candidateLines, Math.Max(region.End - 1, region.Start));
+                var start = mergedLines[first];
+                var end = last + 1 < mergedLines.Count ? mergedLines[last + 1] : mergedText.Length;
+                if (mergedRegions.Count > 0 && start <= mergedRegions[^1].End)
+                {
+                    var previous = mergedRegions[^1];
+                    mergedRegions[^1] = TextSpan.FromBounds(previous.Start, Math.Max(previous.End, end));
+                }
+                else
+                {
+                    mergedRegions.Add(TextSpan.FromBounds(start, end));
+                }
+            }
+
+            // EditImpactAnalyzer.CandidateRegions wants replacements as (baseline span, new text) and finds each new text at span.Start plus the length change of the
+            // ones before it. A zero-length span at region.Start minus the text length of the regions before makes it land exactly on the merged region; when that
+            // position is not inside the baseline text the analyzer's check fails and the file is treated as edited as a whole.
+            var synthetic = new List<TextChange>();
+            var delta = 0;
+            foreach (var region in mergedRegions)
+            {
+                synthetic.Add(new TextChange(new TextSpan(region.Start - delta, 0), mergedText.Substring(region.Start, region.Length)));
+                delta += region.Length;
+            }
+
+            result[path] = synthetic;
+        }
+
+        return result;
+    }
+
     /// <summary>Whether two renamer changes collide: their spans share text, or both insert at the same position.</summary>
     private static bool Overlaps(TextSpan a, TextSpan b)
         => (a.Start < b.End && b.Start < a.End) || (a.Length == 0 && b.Length == 0 && a.Start == b.Start);
+
+    /// <summary>Batch H5 R5: the offset where each line of <paramref name="text"/> starts (a line ends at its LF; the first starts at 0).</summary>
+    private static List<int> LineStarts(string text)
+    {
+        var starts = new List<int> { 0 };
+        for (var i = text.IndexOf('\n'); i >= 0; i = text.IndexOf('\n', i + 1))
+        {
+            starts.Add(i + 1);
+        }
+
+        return starts;
+    }
+
+    /// <summary>Batch H5 R5: the index of the line that holds <paramref name="offset"/>.</summary>
+    private static int LineIndexOf(List<int> lineStarts, int offset)
+    {
+        var index = lineStarts.BinarySearch(offset);
+        return index >= 0 ? index : ~index - 1;
+    }
 
     /// <summary>
     /// One entry per distinct line the rename changed in a document, as <c>File.cs:12  trimmed line</c> from the NEW text. The changes are
