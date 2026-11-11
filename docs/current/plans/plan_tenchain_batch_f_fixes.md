@@ -1,7 +1,7 @@
 # Plan: fix the environment defects behind 10-chain batch F's two failures
 
-**Status:** IN PROGRESS 2026-11-11. Steps 4, 6 done (b7e7df52, 5135db55, 6343bdd3, 38fe365d); step 4 regression
-(SafeDelete on a namespace) fixed next. Batched in order A=4, B=6, C=2+5, D=1, E=3
+**Status:** IN PROGRESS 2026-11-11. Steps 4, 6, 2, 5 done (b7e7df52, 5135db55, d791d8d4, 6343bdd3, 38fe365d,
+e303b7d1, 5cd92422); steps 1 and 3 left. Batched in order A=4, B=6, C=2+5, D=1, E=3
 (E after the peer's edit-impact work commits). Line numbers were re-checked against HEAD 25482ef4 on 2026-11-11 (review notes per step); still
 re-locate with `Search` before editing.
 
@@ -89,6 +89,7 @@ full build and server restart before live use.
   `ProposedChangeAction { apply, validate }` (`Common/ToolEnums.cs:116`). Existing aliases are parameter-name only
   (`ParameterAliases` `:577`). Tests: `Tests.Server/ToolArgumentCaseNormalizationTests.cs`,
   `Tests.Server/ToolParameterAliasTests.cs`. Settled (see Decision).
+- Done: e303b7d1 (`EnumValueAliases`; guard `EveryEnumValueAlias_IsNotAMember_AndTargetsASchemaEnumMember`).
 
 ### Step 3 - No RenameSymbol advice toward a name that already exists
 
@@ -134,6 +135,9 @@ full build and server restart before live use.
 - Done: b7e7df52, 5135db55. R8 "1 usages" verified as a self-typed member plus recursive call. Left a TODO in
   `MemberRefactoringEngine.IsTypeRemovalTargetAsync`: Member remove of a type that declares a constructor resolves the
   name to the constructor (unreproduced).
+- Done (regression fix): d791d8d4. Step 4 let SafeDelete through on a namespace (line 1 col 1); `RequireDeletableDeclaration`
+  now admits only type, method, property, field, event. TODO left: the line/column overload removes the node at the
+  position, which may be a reference rather than the declaration.
 
 ### Step 5 - DeleteUnusedSymbol names the missing parameter
 
@@ -143,6 +147,7 @@ full build and server restart before live use.
 - Done when: a test with `docCommentId` alone gets the specific message.
 - Review 2026-11-11: message `:905`; pair check `:874`, symbolName `:890`, line/column `:896`; params default `""`
   (`:839`). Direct-Impl test pattern: `Tests.Tools.Basic/StaleReadEngineToolsTests.cs:399`.
+- Done: 5cd92422 (`DescribeMissingParameterAsync`, mirror cases covered).
 
 ### Step 6 - Harness: ContextExhausted stop reason and split token logging
 
