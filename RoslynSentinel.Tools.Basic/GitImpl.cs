@@ -3513,11 +3513,27 @@ public class GitImpl : IGitOperations
             }
             args.Add(commitHash);
 
-            // TODO revert could carry the Tool-Call-Id trailer via --no-commit + commit
             // Read BEFORE the revert: DeriveNewCommitHashAsync's fallback proves a HEAD is ours by its parent chain.
             var headBefore = noCommit ? null : await ReadHeadWithParentsAsync(gitRoot, cancellationToken);
 
-            var revertRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
+            // Opt-in (git config roslynsentinel.commitTrailers=true): git revert has no --trailer, so the revert is staged with
+            // --no-commit and committed with them (RevertWithTrailersAsync, which falls back to the single call below wherever the
+            // two steps could differ). Off, or noCommit, is exactly the single `git revert` of before.
+            // --no-verify here MIRRORS git revert's own hook behaviour (a plain git revert never runs pre-commit or commit-msg, so the
+            // two-step path must not either); it is not a policy skip of hooks.
+            var trailerPlan = noCommit ? null : await PlanCommitTrailersAsync(gitRoot, ["--no-edit", "--no-verify"], amend: false, hasMessage: true, cancellationToken);
+            string? trailerCallId = null;
+            GitRawResult revertRaw;
+            if (trailerPlan is { } plan)
+            {
+                var noCommitArgs = new List<string>(args);
+                noCommitArgs.Insert(2, "--no-commit");
+                (revertRaw, trailerCallId) = await RevertWithTrailersAsync(gitRoot, [.. args], [.. noCommitArgs], plan, headBefore, cancellationToken);
+            }
+            else
+            {
+                revertRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
+            }
 
             if (revertRaw.ExitCode != 0)
                 return await AppendInProgressAsync(new GitRevertResult { IsError = true, CommitHash = commitHash, Error = CleanGitStderr(revertRaw.Stderr) }, gitRoot, cancellationToken);
@@ -3527,7 +3543,14 @@ public class GitImpl : IGitOperations
             {
                 // Never `rev-parse HEAD` (another session may have committed since); an empty hash means it could not be
                 // established, see DeriveNewCommitHashAsync.
-                newHash = await DeriveNewCommitHashAsync(gitRoot, revertRaw.Stdout, headBefore, amend: false, cancellationToken);
+                // With trailers committed, the commit is the one carrying this call's id; not found falls back to the derivation.
+                if (trailerCallId is not null)
+                {
+                    newHash = await Task.Run(() => _gitReader.FindCommitByTrailer(gitRoot, GitCommitTrailers.ToolCallIdKey, trailerCallId, GitCommitTrailers.LookupDepth, GitProcessTimeout), cancellationToken) ?? "";
+                }
+
+                if (newHash.Length == 0)
+                    newHash = await DeriveNewCommitHashAsync(gitRoot, revertRaw.Stdout, headBefore, amend: false, cancellationToken);
             }
 
             return new GitRevertResult
@@ -3656,6 +3679,79 @@ public class GitImpl : IGitOperations
         var raw = await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", "MERGE_HEAD^{commit}"], cancellationToken);
         var hash = raw.ExitCode == 0 ? raw.Stdout.Trim() : "";
         return hash.Length > 0 ? hash : null;
+    }
+
+    /// <summary>
+    /// A revert that carries the commit trailers of <paramref name="plan"/>: <c>git revert --no-commit</c>, then <c>git commit --no-edit</c>
+    /// (git picks the revert message up from MERGE_MSG) with the trailers. Returns the raw result to report and the call id when the trailers
+    /// were committed (null: the plain <paramref name="plainArgs"/> revert answered instead, so there is no trailer to look up).
+    /// <para>
+    /// Every case where the two steps could behave differently from today's single <c>git revert</c> runs that single call, so its output and
+    /// repository state are today's exactly: an operation already in progress or staged changes (plain revert refuses; <c>--no-commit</c>
+    /// would not, and the commit would sweep the staged files into the revert), a revert that fails or conflicts (undone with
+    /// <c>reset --merge</c>, safe because the index was clean and nothing was in progress, then re-run plainly so the error text, hints and
+    /// in-progress state are today's), and a revert that changes nothing (same). Known differences when it does commit: <c>--no-verify</c>
+    /// keeps the hook set of a plain revert (no pre-commit, no commit-msg; plain revert never runs them), but prepare-commit-msg sees source
+    /// "merge" instead of "message"; and the stdout (reported as Message) has no " Date:" line, which only git revert's own summary prints.
+    /// </para>
+    /// </summary>
+    private async Task<(GitRawResult Raw, string? CallId)> RevertWithTrailersAsync(
+        string gitRoot, string[] plainArgs, string[] noCommitArgs, (string CallId, string[] MessageArgs) plan,
+        string[]? headBefore, CancellationToken cancellationToken)
+    {
+        async Task<bool> HasStagedChangesAsync()
+        {
+            // 0 = identical to HEAD, 1 = differs; anything else (error) is treated as "has changes", the conservative answer.
+            var raw = await RunGitAsync(gitRoot, ["diff", "--cached", "--quiet"], cancellationToken);
+            return raw.ExitCode != 0;
+        }
+
+        async Task<(GitRawResult Raw, string? CallId)> PlainAfterUndoAsync()
+        {
+            await RunGitAsync(gitRoot, ["reset", "--merge"], cancellationToken);
+            return (await RunGitAsync(gitRoot, plainArgs, cancellationToken), null);
+        }
+
+        if (headBefore is null
+            || await DetectInProgressAsync(gitRoot, cancellationToken) is not null
+            || await HasStagedChangesAsync())
+        {
+            return (await RunGitAsync(gitRoot, plainArgs, cancellationToken), null);
+        }
+
+        var staged = await RunGitAsync(gitRoot, noCommitArgs, cancellationToken);
+        if (staged.ExitCode != 0 || !await HasStagedChangesAsync())
+        {
+            return await PlainAfterUndoAsync();
+        }
+
+        // The staged revert was computed against headBefore; committing it on top of a different HEAD would silently undo whatever
+        // landed in between. Stop with the revert still staged (abort backs it out) instead.
+        var headNow = await ReadHeadWithParentsAsync(gitRoot, cancellationToken);
+        if (headNow is null || headNow[0] != headBefore[0])
+        {
+            return (new GitRawResult
+            {
+                ExitCode = 1,
+                Stdout = "",
+                Stderr = "HEAD moved while the revert was being staged (another session committed), so it was not committed. The staged revert is still pending.",
+            }, null);
+        }
+
+        // plan.MessageArgs carries --no-verify: it MIRRORS git revert's own hook behaviour (plain git revert never runs pre-commit or
+        // commit-msg, so this commit must not either); it is not a policy skip of hooks.
+        var commitArgs = new[] { "commit" }.Concat(plan.MessageArgs).ToArray();
+        var committed = await RunGitAsync(gitRoot, commitArgs, cancellationToken);
+        if (GitCommitTrailers.IsTrailerOptionUnsupported(committed.ExitCode, committed.Stderr))
+        {
+            // git older than 2.32: option parsing failed before anything was committed, so commit without the trailers (see CommitAsync).
+            _logger.LogInformation("git commit does not support --trailer (git older than 2.32); reverting without Tool-Call-Id/Tool-Agent trailers.");
+            // --no-verify MIRRORS git revert's own hook behaviour (plain git revert never runs pre-commit or commit-msg); not a policy skip of hooks.
+            committed = await RunGitAsync(gitRoot, ["commit", "--no-edit", "--no-verify"], cancellationToken);
+            return (committed, null);
+        }
+
+        return (committed, committed.ExitCode == 0 ? plan.CallId : null);
     }
 
     /// <summary>
