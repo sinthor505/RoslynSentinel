@@ -48,6 +48,11 @@ public class WorkspaceFileEditImpl
 
     private readonly RejectedEditMemory _rejectedEdits = SharedRejectedEdits;
 
+    // Same reasoning as SharedRejectedEdits: the successful single-edit calls must be visible to the next per-call instance.
+    private static readonly AppliedEditMemory SharedAppliedEdits = new();
+
+    private readonly AppliedEditMemory _appliedEdits = SharedAppliedEdits;
+
     // Same reasoning as SharedRejectedEdits: tool-class instances are per call, so the registry of running calls has to be process-wide.
     private static readonly InFlightEditMemory SharedInFlightEdits = new();
 
@@ -193,6 +198,74 @@ public class WorkspaceFileEditImpl
                 var rejectedLines = new HashSet<string>(TrimmedLines(rejected), StringComparer.Ordinal);
                 return missing.All(rejectedLines.Contains);
             });
+        }
+    }
+
+    // The last few SUCCESSFUL single-edit ReplaceSnippet calls per file. A model that sends the same edit twice in one turn
+    // (action replace, then apply) reaches the second call after the first has landed; without this it fails "oldContent was
+    // not found" and burns its failure budget (eval batch H4 run 1). Bounded per file. Not dropped on a write: the write
+    // itself is what makes a repeat a no-op. FindDuplicate also checks that the file still holds the edit's newContent.
+    // NOTE: shared process-wide through SharedAppliedEdits, like RejectedEditMemory.
+    private sealed class AppliedEditMemory
+    {
+        private const int MaxEntriesPerFile = 3;
+        private readonly Dictionary<string, List<(string OldContent, string NewContent, string ChangeId)>> _byFile = new(StringComparer.OrdinalIgnoreCase);
+        private readonly object _gate = new();
+
+        private static string Key(string path)
+        {
+            try
+            {
+                return Path.GetFullPath(path);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                return path;
+            }
+        }
+
+        private static string NormalizeEol(string text) => text.Replace("\r\n", "\n").Replace('\r', '\n');
+
+        public void Remember(string path, string? oldContent, string? newContent, string changeId)
+        {
+            // A pure deletion leaves nothing a repeat could be matched against.
+            if (string.IsNullOrWhiteSpace(newContent))
+                return;
+            lock (_gate)
+            {
+                var key = Key(path);
+                if (!_byFile.TryGetValue(key, out var entries))
+                    _byFile[key] = entries = [];
+                entries.Add((oldContent ?? string.Empty, newContent, changeId));
+                while (entries.Count > MaxEntriesPerFile)
+                    entries.RemoveAt(0);
+            }
+        }
+
+        /// <summary>
+        /// The changeId of a remembered edit with the same oldContent AND newContent (ignoring line endings), when the file
+        /// still contains that newContent; null otherwise. Newest entry wins.
+        /// </summary>
+        public string? FindDuplicate(string path, string? oldContent, string? newContent, string fileText)
+        {
+            if (string.IsNullOrWhiteSpace(newContent))
+                return null;
+            var normalizedOld = NormalizeEol(oldContent ?? string.Empty);
+            var normalizedNew = NormalizeEol(newContent);
+            if (!NormalizeEol(fileText).Contains(normalizedNew, StringComparison.Ordinal))
+                return null;
+            lock (_gate)
+            {
+                if (!_byFile.TryGetValue(Key(path), out var entries))
+                    return null;
+                for (var i = entries.Count - 1; i >= 0; i--)
+                {
+                    var entry = entries[i];
+                    if (NormalizeEol(entry.OldContent) == normalizedOld && NormalizeEol(entry.NewContent) == normalizedNew)
+                        return entry.ChangeId;
+                }
+                return null;
+            }
         }
     }
 
@@ -944,10 +1017,13 @@ public class WorkspaceFileEditImpl
         // rename rewrote, say plainly that the trial rename was clean; otherwise stay hedged (the rename may share the blame).
         var errorFiles = lifted.ValidationResult?.Diagnostics.Where(d => d.Severity == "Error").Select(d => Path.GetFileName(d.FilePath.ToString())).ToList() ?? [];
         var errorsInRenamedFiles = errorFiles.Any(f => plan.RenamedFiles.Contains(f, StringComparer.OrdinalIgnoreCase));
+        // Batch H4 R1 T7, R2 T7, R3 T6: "tried as a RenameSymbol ... Nothing was changed" was read as "the rename may have persisted". Lead with the
+        // rollback and say the rename comes back with the resent edit.
+        const string trialRolledBack = "The trial was rolled back: no file was changed, the rename included, so every file still has its old text.";
         var note = lifted.IsError
             ? errorsInRenamedFiles
-                ? $"Your edit renames {plan.DescribeRenames()}. It was tried as a RenameSymbol ({plan.CallSiteCount} call site(s) in {plan.RenamedFiles.Count} other file(s)) with your own text kept for the file(s) you edited, and errors remain in files the rename rewrote, so nothing was changed."
-                : $"Your edit renames {plan.DescribeRenames()}. In a trial the rename itself applied cleanly ({plan.CallSiteCount} call site(s) in {plan.RenamedFiles.Count} other file(s) updated, your own text kept for the file(s) you edited); the remaining errors come from the other text in your edit, not from the rename. Nothing was changed. The remaining errors are listed below."
+                ? $"{trialRolledBack} Your edit renames {plan.DescribeRenames()}. It was tried as a RenameSymbol ({plan.CallSiteCount} call site(s) in {plan.RenamedFiles.Count} other file(s)) with your own text kept for the file(s) you edited, and errors remain in files the rename rewrote."
+                : $"{trialRolledBack} Your edit renames {plan.DescribeRenames()}. In the trial the rename itself was clean ({plan.CallSiteCount} call site(s) in {plan.RenamedFiles.Count} other file(s)); the errors below come from the other text in your edit, not from the rename. Fix them and resend the whole edit: the rename is applied together with it."
             : $"Applied as RenameSymbol: {plan.Describe()} Files changed: {string.Join(", ", plan.Changes.Keys.Select(k => Path.GetFileName((string)k)))}."
                 + (rewrittenLines.Length == 0 ? "" : "\n" + rewrittenLines + "\n" + RenameLifter.AlreadyUpdatedSentence);
         _logger.LogInformation("ReplaceSnippet rename lift of {Renames}: {Outcome}", plan.DescribeRenames(), lifted.IsError ? "still rejected" : "applied");
@@ -1156,6 +1232,22 @@ public class WorkspaceFileEditImpl
                             oldText, oldContent, lineBefore, lineAfter, memberNameAt: MemberNameResolverFor(root),
                             withinMember: withinMember, matchLine: matchLine);
                     }
+                    // Batch H4 R1: an identical edit sent twice (e.g. action replace + apply in one turn) is a no-op success, not a not-found failure.
+                    catch (ToolNotFoundException) when (_appliedEdits.FindDuplicate((string)(document.FilePath ?? filePathResolved), oldContent, newContent, oldText.ToString()) is not null)
+                    {
+                        var duplicateOf = _appliedEdits.FindDuplicate((string)(document.FilePath ?? filePathResolved), oldContent, newContent, oldText.ToString());
+                        return new SentinelCallToolResult<ReplaceSnippetResult>()
+                        {
+                            IsError = false,
+                            SuccessData = new ReplaceSnippetResult(
+                                new ApplyChangesResult(
+                                    IsError: false,
+                                    SucceededFiles: new List<string>(),
+                                    FailedFiles: new Dictionary<FilePathWrapper, string>(),
+                                    Summary: $"No change: this exact edit was already applied by an earlier ReplaceSnippet call (changeId {duplicateOf}), and the file already contains your newContent. Do not send it again; continue with the next step."),
+                                null, null, null)
+                        };
+                    }
                     catch (ToolNotFoundException notFound) when (_rejectedEdits.Explains((string)(document.FilePath ?? filePathResolved), oldContent, oldText.ToString()))
                     {
                         // Same error and code; only the text grows, so callers branching on NotFound are unaffected.
@@ -1280,6 +1372,9 @@ public class WorkspaceFileEditImpl
                             RewrittenLineMemory.Shared.Remember("the rename lift", liftRewrites);
                     }
                     var changeId = Guid.NewGuid().ToString("n")[..8];
+                    // Batch H4 R1: remember the applied edit so an identical second call is a no-op (see AppliedEditMemory). A lifted edit wrote other files too, so it is not remembered.
+                    if (!result.IsError && liftNote is null)
+                        _appliedEdits.Remember((string)targetPath, oldContent, newContent, changeId);
                     var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet", result, blobChangeId: changeId, cancellationToken: cancellationToken);
                     var appliedSummary = liftNote is null ? result.Summary : $"{liftNote} {result.Summary}";
                     var strippedResult = result with { PreImages = null, Summary = blobWrite.Written ? $"{appliedSummary} Call {ToolCallHint.Call("UndoLastApply", ("changeId", changeId))} to revert." : appliedSummary };
@@ -1465,6 +1560,7 @@ public class WorkspaceFileEditImpl
                 }
                 catch (ToolException toolEx)
                 {
+                    // TODO duplicate-apply no-op for batch edits (single-edit path has it: AppliedEditMemory, Batch H4 R1)
                     var rejectedOriginNote = toolEx is ToolNotFoundException && _rejectedEdits.Explains((string)canonicalPath, edit.OldContent, originalString)
                         ? " " + RejectedOriginNote
                         : "";

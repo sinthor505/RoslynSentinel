@@ -405,7 +405,8 @@ public class ReplaceSnippetRenameLiftTests
         var message = result.ErrorData?.Message ?? string.Empty;
         Assert.Multiple(() =>
         {
-            Assert.That(message, Does.Contain("the rename itself applied cleanly"));
+            Assert.That(message, Does.Contain("the rename itself was clean"));
+            Assert.That(message, Does.Contain("The trial was rolled back: no file was changed, the rename included"));
             Assert.That(message, Does.Contain("not from the rename"));
             Assert.That(message, Does.Contain("undeclaredValue"));
             Assert.That(message, Does.Not.Contain("errors remain in files the rename rewrote"));

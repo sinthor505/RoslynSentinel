@@ -106,4 +106,16 @@ public class RenameSymbolMissingParameterListTests
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), result.ErrorData.Message);
         Assert.That(result.ErrorData.Message, Does.Contain("no longer resolves"));
     }
+
+    [Test]
+    public async Task RenameSymbol_ChangeIdPassedAsDocCommentId_SaysItIsNotAnIdInsteadOfRenamedAsync()
+    {
+        // Batch H4 R4 T6.1: the changeId from an undo hint was passed as the symbol id.
+        var result = await RenameAsync("0cbca485", "Whatever");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), result.ErrorData.Message);
+        Assert.That(result.ErrorData.Message, Does.Contain("is not a documentation-comment ID"));
+        Assert.That(result.ErrorData.Message, Does.Not.Contain("no longer resolves"));
+    }
 }
