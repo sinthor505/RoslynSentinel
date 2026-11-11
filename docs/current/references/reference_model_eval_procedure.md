@@ -191,6 +191,28 @@ different mechanism, not by the same one:
 Launch two hosts concurrently by running the script twice (background jobs / separate
 terminals) — each gets its own `--artifacts-path` automatically, so they won't collide.
 
+### Resuming from a saved transcript (`-Test ResumeTranscript`)
+
+Measures loop assist (or any prompt/tool change) at the exact turn a loop starts instead of waiting for it in a full
+batch. The test (`TranscriptResumeAgentTests`, [Explicit]) keeps turns 1..K of a saved
+`Model_AppliesTenChainedRefactors` transcript, rebuilds that file state by re-executing the kept calls on a fresh
+ContosoOrders fixture, seeds the conversation with those turns (loop assist observes them too), and lets the live model
+generate `-ContinueTurns` more turns, `-Samples` times, each sample on its own fixture. It asserts nothing about the
+model; it fails only if every sample harness-errored. The fixture GUID folder in the transcript is rewritten to the new
+fixture; everything else in the prompts and history is verbatim.
+
+```powershell
+# 10-chain run R9 (T2 and T3 are the identical rejected ReplaceSnippet; K=3 makes the model produce T4)
+$t = 'ModelTestingResults\113\Model_AppliesTenChainedRefactors\20261110-231957-659\transcript.json'
+.\scripts\roslynsentinel-modeleval.ps1 113 ResumeTranscript -ResumeTranscript $t -ResumeKeepTurns 3 -Samples 10 -ContinueTurns 3
+.\scripts\roslynsentinel-modeleval.ps1 113 ResumeTranscript -ResumeTranscript $t -ResumeKeepTurns 3 -Samples 10 -ContinueTurns 3 -LoopAssist
+```
+
+Results land in `ModelTestingResults\<host>\ResumeFromTranscript_SamplesTheNextTurns\<timestamp>\`: `results.csv` (one row
+per sample: sampleIndex, loopAssist, role, firstNewToolName, firstCallIdenticalToRejected,
+reachedRenameSymbolWithinTurns, assistCount, then stopReason, newCalls, harnessError) and `sample-NN\transcript.json` /
+`agent.log`. `assistCount` includes assists fired while seeding the kept turns.
+
 ## Output locations
 
 - Per-run transcripts + `agent.log`: `RoslynSentinel.Tests.ModelEval/bin/Debug/net10.0/model-eval/<TestName>/<timestamp>/`

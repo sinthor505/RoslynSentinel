@@ -215,60 +215,9 @@ public class TranscriptReplayTests
                 : $"Replayed {callIndex} tool call(s); {mismatchCount} call(s) had an IsError flag that diverged from the recording - see above.");
     }
 
-    private async Task<(string ResultText, bool IsError)> ReplayToolCallAsync(
-        ReplayToolCallDto recordedCall, CancellationToken cancellationToken)
-    {
-        Dictionary<string, object?> arguments;
-        try
-        {
-            arguments = JsonSerializer.Deserialize<Dictionary<string, object?>>(recordedCall.ArgumentsJson) ?? [];
-        }
-        catch (JsonException ex)
-        {
-            return ($$"""{"isError":true,"error":"Malformed recorded arguments JSON: {{ex.Message}}"}""", true);
-        }
-
-        CallToolResult result;
-        try
-        {
-            result = await _mcpClient.CallToolAsync(
-                recordedCall.ToolName,
-                arguments,
-                progress: null,
-                options: null,
-                cancellationToken: cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            return ($$"""{"isError":true,"error":"MCP call threw: {{ex.Message}}"}""", true);
-        }
-
-        var text = result.Content
-            .OfType<TextContentBlock>()
-            .Select(c => c.Text)
-            .FirstOrDefault() ?? "";
-
-        return (text, result.IsError == true || BodyReportsFailure(text));
-    }
-
-    private static bool BodyReportsFailure(string resultText)
-    {
-        if (string.IsNullOrWhiteSpace(resultText))
-        {
-            return false;
-        }
-
-        try
-        {
-            using var doc = JsonDocument.Parse(resultText);
-            return doc.RootElement.TryGetProperty("isError", out var errorProp)
-                && errorProp.ValueKind == JsonValueKind.True;
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
+    private Task<(string ResultText, bool IsError)> ReplayToolCallAsync(
+        ReplayToolCallDto recordedCall, CancellationToken cancellationToken) =>
+        TranscriptReplayHelper.ReplayToolCallAsync(_mcpClient, recordedCall.ToolName, recordedCall.ArgumentsJson, cancellationToken);
 
     private static readonly Regex OriginalSolutionDirectoryRegex = new(
         @"[A-Za-z]:[\\/].*?RoslynSentinelTests_[0-9a-fA-F-]+",

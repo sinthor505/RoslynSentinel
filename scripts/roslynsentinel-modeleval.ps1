@@ -116,7 +116,8 @@
     LargeResultPagingReadFileOnly | PlanThenExecute | ScriptedPlan | PlanImplementVerify | OrderPricingRefactor |
     OrderPricingRefactorChain4 | OrderPricingRefactorChain5 | OrderPricingRefactorChain6 |
     OrderPricingRefactorChain7 | OrderPricingRefactorChain8 | OrderPricingRefactorChain9 |
-    OrderPricingRefactorChain10. Required. Accepts multiple values (e.g.
+    OrderPricingRefactorChain10 | ResumeTranscript (resume a saved ten-chain transcript and resample
+    the next turns; see -ResumeTranscript). Required. Accepts multiple values (e.g.
     -Test OrderPricingRefactor,OrderPricingRefactorChain4,OrderPricingRefactorChain5) to run
     each one in turn, in the order given, all under the same -HostAddress/-Model/-Repeats -
     this is the supported way to queue a multi-test overnight sequence: it reuses this script's
@@ -182,6 +183,29 @@
 .PARAMETER StreamTimeout
 	How many seconds to wait before assuming the model has failed to generating streaming tokens.
 
+.PARAMETER ResumeTranscript
+    ResumeTranscript only (required there): transcript.json, or the run folder holding it, of a
+    Model_AppliesTenChainedRefactors run (ROSLYNSENTINEL_MODELEVAL_RESUME_TRANSCRIPT).
+
+.PARAMETER ResumeKeepTurns
+    ResumeTranscript only: keep turns 1..K of the transcript as history (default 3, so the model
+    generates turn 4). ROSLYNSENTINEL_MODELEVAL_RESUME_KEEP_TURNS.
+
+.PARAMETER Samples
+    ResumeTranscript only: how many live resamples (default 10). ROSLYNSENTINEL_MODELEVAL_RESUME_SAMPLES.
+
+.PARAMETER ContinueTurns
+    ResumeTranscript only: live turns each sample runs after the resume point (default 3).
+    ROSLYNSENTINEL_MODELEVAL_RESUME_CONTINUE_TURNS.
+
+.PARAMETER LoopAssist
+    ResumeTranscript only: turn loop assist on for the samples (ROSLYNSENTINEL_MODELEVAL_LOOP_ASSIST=1).
+    Without it the script sets the variable to 0, so a variable left in the shell cannot skew an A/B pair.
+
+.PARAMETER LoopAssistRole
+    ResumeTranscript only: 'user' (default) or 'assistant', the role of the injected message
+    (ROSLYNSENTINEL_MODELEVAL_LOOP_ASSIST_ROLE). Only matters with -LoopAssist.
+
 .EXAMPLE
     .\roslynsentinel-modeleval.ps1 -HostAddress 112 -Test SizeThreshold -Size 60
     Sweep size=60 against the .112 GTX 1080 host.
@@ -202,7 +226,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10')]
+    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript')]
     [string[]]$Test,
 
     [Parameter(Position = 2)]
@@ -226,7 +250,20 @@ param(
 
     [double]$MinP,
 	
-	[double]$StreamTimeout
+	[double]$StreamTimeout,
+
+    [string]$ResumeTranscript,
+
+    [int]$ResumeKeepTurns = 3,
+
+    [int]$Samples = 10,
+
+    [int]$ContinueTurns = 3,
+
+    [switch]$LoopAssist,
+
+    [ValidateSet('user', 'assistant')]
+    [string]$LoopAssistRole = 'user'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -270,6 +307,18 @@ $testNames = @{
     'OrderPricingRefactorChain8'    = 'Model_AppliesEightChainedRefactors'
     'OrderPricingRefactorChain9'    = 'Model_AppliesNineChainedRefactors'
     'OrderPricingRefactorChain10'   = 'Model_AppliesTenChainedRefactors'
+    'ResumeTranscript'              = 'ResumeFromTranscript_SamplesTheNextTurns'
+}
+
+if ($Test -contains 'ResumeTranscript') {
+    if (-not $ResumeTranscript) {
+        throw "-Test ResumeTranscript needs -ResumeTranscript <path to transcript.json or its run folder>."
+    }
+    if (-not (Test-Path -LiteralPath $ResumeTranscript)) {
+        throw "-ResumeTranscript '$ResumeTranscript' does not exist."
+    }
+    # The testhost runs from the scratch build folder, so hand it an absolute path.
+    $ResumeTranscript = (Resolve-Path -LiteralPath $ResumeTranscript).Path
 }
 
 $artifactsPath = Join-Path $repoRoot "_scratchbuild_$suffix"
@@ -348,6 +397,19 @@ if ($currentTest -eq 'SizeThreshold') {
 }
 else {
     Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_SIZES -ErrorAction SilentlyContinue
+}
+if ($currentTest -eq 'ResumeTranscript') {
+    $env:ROSLYNSENTINEL_MODELEVAL_RESUME_TRANSCRIPT = $ResumeTranscript
+    $env:ROSLYNSENTINEL_MODELEVAL_RESUME_KEEP_TURNS = "$ResumeKeepTurns"
+    $env:ROSLYNSENTINEL_MODELEVAL_RESUME_SAMPLES = "$Samples"
+    $env:ROSLYNSENTINEL_MODELEVAL_RESUME_CONTINUE_TURNS = "$ContinueTurns"
+    # Always set (not just when -LoopAssist is passed) so an A/B pair is never skewed by a variable left in the shell.
+    $env:ROSLYNSENTINEL_MODELEVAL_LOOP_ASSIST = if ($LoopAssist) { '1' } else { '0' }
+    $env:ROSLYNSENTINEL_MODELEVAL_LOOP_ASSIST_ROLE = $LoopAssistRole
+    Write-Host "    ResumeTranscript=$ResumeTranscript keep=$ResumeKeepTurns samples=$Samples continue=$ContinueTurns loopAssist=$($LoopAssist.IsPresent) role=$LoopAssistRole" -ForegroundColor Cyan
+}
+else {
+    Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_TRANSCRIPT, Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_KEEP_TURNS, Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_SAMPLES, Env:\ROSLYNSENTINEL_MODELEVAL_RESUME_CONTINUE_TURNS -ErrorAction SilentlyContinue
 }
 
 $csproj = Join-Path $repoRoot 'RoslynSentinel.Tests.ModelEval\RoslynSentinel.Tests.ModelEval.csproj'

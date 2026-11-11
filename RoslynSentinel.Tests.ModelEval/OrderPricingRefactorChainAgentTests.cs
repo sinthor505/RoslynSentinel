@@ -1300,7 +1300,7 @@ public class OrderPricingRefactorChainAgentTests
             $"Step 6: negative rate should still throw ArgumentOutOfRangeException. Transcript: {result.TranscriptPath}");
     }
 
-    private const string RefactorAcceptanceTestsFileContent = """
+    internal const string RefactorAcceptanceTestsFileContent = """
 using System;
 using System.Linq;
 using System.Reflection;

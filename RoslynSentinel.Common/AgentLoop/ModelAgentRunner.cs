@@ -107,12 +107,22 @@ public sealed class ModelAgentRunner
     /// timestamp matching; a caller with no such concept (the in-process ModelEval tests) can omit
     /// it and one is generated so every transcript still carries one.
     /// </param>
+    /// <param name="seedTurns">
+    /// Turns a previous run already produced (system and user prompt are still the first two parameters), used
+    /// to resume from a saved transcript: each seeded turn is replayed into the conversation exactly as the loop
+    /// would have built it (the assistant message with its reasoning/content/calls, then one tool message per
+    /// recorded call result), copied into the new transcript, and its tool calls are shown to the loop-assist
+    /// tracker so a repeat in the seeded turns counts (and its injection follows that turn's results). The live
+    /// loop then continues from the last seeded turn's number, so <c>turnCap</c> must already include the seeded
+    /// turns. The caller is responsible for the tool-side state (re-executing the calls on a fresh fixture).
+    /// </param>
     public async Task<AgentRunResult> RunAsync(
         string systemPrompt,
         string userPrompt,
         string transcriptDirectory,
         CancellationToken cancellationToken = default,
-        string? runId = null)
+        string? runId = null,
+        IReadOnlyList<AgentTranscriptTurn>? seedTurns = null)
     {
         runId ??= DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff");
 
@@ -154,6 +164,11 @@ public sealed class ModelAgentRunner
         var overallStopwatch = Stopwatch.StartNew();
         var stopReason = AgentStopReason.TurnCapExceeded;
         var turnNumber = 0;
+        if (seedTurns is { Count: > 0 })
+        {
+            turnNumber = SeedConversation(seedTurns, messages, transcript, assistTracker);
+            await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
+        }
 
         // Consecutive-failure tracking for the repeated-failure breaker. Consecutive rather than
         // cumulative: three different tools failing once each is a model exploring, while the same
@@ -372,6 +387,58 @@ public sealed class ModelAgentRunner
             TurnCount = turnNumber,
             RepeatedFailure = repeatedFailure,
         };
+    }
+
+    /// <summary>
+    /// Replays <paramref name="seedTurns"/> into <paramref name="messages"/> and <paramref name="transcript"/> the way the
+    /// live loop builds them (assistant message, one tool message per call, then any loop-assist injection after the
+    /// turn's results), observing each call with the tracker. The seeded copies carry no Assists of their own: the
+    /// tracker recomputes them, so a source transcript recorded with a different assist setting is seeded consistently
+    /// with this run's setting. Returns the last seeded turn number.
+    /// </summary>
+    // TODO seeded failures do not feed the consecutive-failure breaker (lastFailureSignature/consecutiveFailures live in RunAsync); harmless while the limit is high, as in the eval fixtures.
+    private int SeedConversation(
+        IReadOnlyList<AgentTranscriptTurn> seedTurns,
+        List<AgentChatMessage> messages,
+        AgentTranscript transcript,
+        LoopAssistTracker assistTracker)
+    {
+        foreach (var seed in seedTurns)
+        {
+            var turn = new AgentTranscriptTurn
+            {
+                TurnNumber = seed.TurnNumber,
+                ModelMessage = seed.ModelMessage,
+                ModelLatency = seed.ModelLatency,
+                StartedAt = seed.StartedAt,
+                CompletedAt = seed.CompletedAt,
+                ToolCalls = [.. seed.ToolCalls],
+            };
+            transcript.Turns.Add(turn);
+            messages.Add(seed.ModelMessage);
+
+            var pendingInjections = new List<AgentAssist>();
+            foreach (var call in seed.ToolCalls)
+            {
+                messages.Add(new AgentChatMessage { Role = "tool", ToolCallId = call.ToolCallId, Content = call.ResultJson });
+                var injection = assistTracker.Observe(
+                    new AgentToolCall { Id = call.ToolCallId, Name = call.ToolName, ArgumentsJson = call.ArgumentsJson },
+                    call.ResultJson, call.IsError);
+                if (injection is not null)
+                {
+                    pendingInjections.Add(injection);
+                }
+            }
+
+            foreach (var pending in pendingInjections)
+            {
+                messages.Add(assistTracker.CreateAssistMessage(pending.Text));
+            }
+
+            RecordAssists(transcript, turn, pendingInjections);
+        }
+
+        return seedTurns[^1].TurnNumber;
     }
 
     /// <summary>

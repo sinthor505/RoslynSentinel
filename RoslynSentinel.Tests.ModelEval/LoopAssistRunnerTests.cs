@@ -172,6 +172,107 @@ public class LoopAssistRunnerTests
         });
     }
 
+    [Test]
+    public async Task SeededTurns_LoopAssistOn_TrackerCountsTheSeededRepeat_AndTheFirstLiveRequestCarriesTheHistory()
+    {
+        var run = NewRun(new LoopAssistOptions(true, "user"), turnCap: 4);
+
+        var result = await run.Runner.RunAsync(
+            "seed-system", "seed-user", _runDirectory, TestContext.CurrentContext.CancellationToken, seedTurns: ThreeSeedTurns());
+
+        var turns = result.Transcript.Turns;
+        var body = run.RequestBodies[^1]; // the one live completion request (an earlier entry may be the context-length probe)
+        Assert.Multiple(() =>
+        {
+            // The seeded turns come first, numbered as recorded; the one live turn continues from them.
+            Assert.That(turns.Select(t => t.TurnNumber), Is.EqualTo(new[] { 1, 2, 3, 4 }));
+            Assert.That(result.TurnCount, Is.EqualTo(4));
+            Assert.That(turns[0].Assists, Is.Null);
+            Assert.That(turns[1].Assists, Is.Null, "the first rejection is not a repeat");
+
+            // 2 identical rejections inside the seed: the injection fires on turn 3, before any live turn.
+            Assert.That(turns[2].Assists!.Select(a => (a.Kind, a.RepeatCount)), Is.EqualTo(new[] { (AgentAssist.InjectionKind, 2) }));
+            Assert.That(result.Transcript.AssistCount, Is.GreaterThanOrEqualTo(1));
+
+            // The first live request replays the seeded history in order, with the repeat collapsed and the injection after it.
+            var order = new[] { "seed-user", "seed turn 1", "seed-outline-result", "seed turn 2", "seed turn 3", "I have sent the same LocateSymbol call 2 times" }
+                .Select(marker => body.IndexOf(marker, StringComparison.Ordinal)).ToList();
+            Assert.That(order, Has.All.GreaterThanOrEqualTo(0), "every seeded marker reaches the request");
+            Assert.That(order, Is.Ordered);
+            Assert.That(body, Does.Contain("seed-system"));
+            Assert.That(body, Does.Contain("(sent 1 more time, rejected identically)"));
+            Assert.That(CountOf(body, "\"arguments\":"), Is.EqualTo(2), "call 1 and the first rejection; the repeat is collapsed");
+        });
+    }
+
+    [Test]
+    public async Task SeededTurns_LoopAssistOff_ReplayTheSeededHistoryUnchanged()
+    {
+        var run = NewRun(LoopAssistOptions.Off, turnCap: 4);
+
+        var result = await run.Runner.RunAsync(
+            "seed-system", "seed-user", _runDirectory, TestContext.CurrentContext.CancellationToken, seedTurns: ThreeSeedTurns());
+
+        var body = run.RequestBodies[^1];
+        var json = await File.ReadAllTextAsync(result.TranscriptPath);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Transcript.Turns.Select(t => t.TurnNumber), Is.EqualTo(new[] { 1, 2, 3, 4 }));
+            Assert.That(result.Transcript.Turns.Take(3).SelectMany(t => t.ToolCalls).Select(c => c.ToolName),
+                Is.EqualTo(new[] { "GetFileOutline", "LocateSymbol", "LocateSymbol" }));
+            Assert.That(json, Does.Not.Contain("Assists"));
+            Assert.That(CountOf(body, "\"arguments\":"), Is.EqualTo(3), "every seeded call is replayed");
+            Assert.That(body, Does.Not.Contain("I have sent the same"));
+            Assert.That(body, Does.Not.Contain("rejected identically"));
+            Assert.That(
+                new[] { "seed-user", "seed turn 1", "seed-outline-result", "seed turn 2", "seed turn 3" }
+                    .Select(marker => body.IndexOf(marker, StringComparison.Ordinal)),
+                Is.Ordered.And.All.GreaterThanOrEqualTo(0));
+        });
+    }
+
+    private const string SeedLocateArguments = """{"reason":"loop assist test","symbolName":"NoSuchSymbol"}""";
+
+    private const string SeedRejection =
+        """{"isError":true,"errorData":{"errorCode":"NotFound","message":"LocateSymbol: nothing matched. Next step: use Search instead."}}""";
+
+    /// <summary>The first three turns of a resumed run: a successful read, then the same call rejected twice.</summary>
+    private static List<AgentTranscriptTurn> ThreeSeedTurns() =>
+    [
+        SeedTurn(1, "call_seed_1", "GetFileOutline", """{"filePath":"a.cs"}""", false, """{"isError":false,"outline":"seed-outline-result"}"""),
+        SeedTurn(2, "call_seed_2", "LocateSymbol", SeedLocateArguments, true, SeedRejection),
+        SeedTurn(3, "call_seed_3", "LocateSymbol", SeedLocateArguments, true, SeedRejection),
+    ];
+
+    private static AgentTranscriptTurn SeedTurn(
+        int turnNumber, string callId, string tool, string argumentsJson, bool isError, string resultJson) => new()
+    {
+        TurnNumber = turnNumber,
+        ModelLatency = TimeSpan.FromSeconds(1),
+        StartedAt = DateTimeOffset.Now,
+        CompletedAt = DateTimeOffset.Now,
+        ModelMessage = new AgentChatMessage
+        {
+            Role = "assistant",
+            Content = $"seed turn {turnNumber}",
+            ToolCalls = [new AgentToolCall { Id = callId, Name = tool, ArgumentsJson = argumentsJson }],
+        },
+        ToolCalls =
+        [
+            new AgentToolCallRecord
+            {
+                ToolName = tool,
+                ArgumentsJson = argumentsJson,
+                ResultJson = resultJson,
+                IsError = isError,
+                Latency = TimeSpan.FromMilliseconds(5),
+                StartedAt = DateTimeOffset.Now,
+                CompletedAt = DateTimeOffset.Now,
+                ToolCallId = callId,
+            },
+        ],
+    };
+
     private (ModelAgentRunner Runner, List<string> RequestBodies, ListLogger Logger) NewRun(LoopAssistOptions options, int turnCap)
     {
         var bodies = new List<string>();
