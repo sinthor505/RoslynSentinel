@@ -83,7 +83,8 @@ live where the live server cannot reach them:
   (`ModelAgentRunner.cs:105-110`) takes a system prompt, a user prompt, and a transcript directory,
   and returns an `AgentRunResult` (`AgentTranscript.cs:135-162`): `StopReason` (an
   `AgentStopReason` enum - `ModelFinished`/`TurnCapExceeded`/`WallClockCapExceeded`/
-  `UnknownToolRequested`/`RepeatedToolFailure`, `AgentTranscript.cs:99-113`), the full `Transcript`,
+  `UnknownToolRequested`/`RepeatedToolFailure`/`LoopLatchIgnored`/`ContextExhausted`; line numbers
+  stale, see `AgentTranscript.cs`), the full `Transcript`,
   its on-disk `TranscriptPath`, `TurnCount`, and (when the breaker tripped) a `RepeatedFailureDetail`.
   `Converged` (`AgentTranscript.cs:161`) is true only when the model stopped on its own within the
   caps - it says nothing about whether the task was done correctly, only that the model didn't get

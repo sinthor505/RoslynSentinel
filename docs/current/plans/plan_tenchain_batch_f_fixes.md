@@ -1,6 +1,7 @@
 # Plan: fix the environment defects behind 10-chain batch F's two failures
 
-**Status:** IN PROGRESS 2026-11-11. Steps 4 done (b7e7df52, 5135db55). Batched in order A=4, B=6, C=2+5, D=1, E=3
+**Status:** IN PROGRESS 2026-11-11. Steps 4, 6 done (b7e7df52, 5135db55, 6343bdd3, 38fe365d); step 4 regression
+(SafeDelete on a namespace) fixed next. Batched in order A=4, B=6, C=2+5, D=1, E=3
 (E after the peer's edit-impact work commits). Line numbers were re-checked against HEAD 25482ef4 on 2026-11-11 (review notes per step); still
 re-locate with `Search` before editing.
 
@@ -162,6 +163,10 @@ full build and server restart before live use.
   as text into `SubAgentResult`/`SubAgentEvalResult`. Test: a scripted `HttpMessageHandler` that routes by URL (models
   endpoint returns `loaded_context_length`); existing handlers (`LoopLatchRunnerTests.cs:~194`) answer every request
   with SSE. 6a: stop reason + test; 6b: token split.
+- Done: 6343bdd3 (6a), 38fe365d (6b). Counts live on `AgentChatMessage.InputTokens`/`OutputTokens` (nullable) and reach
+  the transcript via `ModelMessage`; field names `input_tokens`/`output_tokens` from the OpenAI Responses reference,
+  unverified against a live LM Studio payload (check one transcript on the next live run). TODO left in `UsageObject`
+  for cached/reasoning token details.
 
 ## Out of scope
 
