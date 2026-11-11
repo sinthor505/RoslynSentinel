@@ -442,7 +442,7 @@ public class CompilerErrorLookupHelperTests
 
         var description = await CompilerErrorLookupHelper.DescribeAsync(new DiagnosticReport(true, [cs0111]), _symbolNavigationEngine);
 
-        Assert.That(description, Does.Contain("'IOrderPricingCalculator' already declares 'DescribeOrder' with these parameter types at line 5 of this file"));
+        Assert.That(description, Does.Contain("'DescribeOrder' collides with an existing declaration: 'IOrderPricingCalculator' already declares it with these parameter types at line 5 of this file"));
         Assert.That(description, Does.Not.Contain("could not be found"));
     }
 

@@ -638,9 +638,10 @@ public static class CompilerErrorLookupHelper
                 .FirstOrDefault();
             if (sameFile != null)
             {
-                var owner = typeName is null ? "This file" : $"'{typeName}'";
-                return $"  {owner} already declares '{memberName}' with these parameter types at line {sameFile.Line} of this file; your edit declares it again. " +
-                    "If your task asked for this member, it is already there: keep the existing declaration and drop the new one. An overload needs different parameter types.";
+                // Worded for both an edit that re-declares the member and a rename onto an existing name (RenameSymbolTests).
+                var owner = typeName is null ? "the file" : $"'{typeName}'";
+                return $"  '{memberName}' collides with an existing declaration: {owner} already declares it with these parameter types at line {sameFile.Line} of this file, so this change would declare it twice. " +
+                    "If the member you wanted is already there, keep it and drop the new one; otherwise use a different name or different parameter types.";
             }
 
             return $"  '{memberName}' collides with an existing declaration, but its real location could not be found - this may be a genuine duplicate rather than a wrong-path new file.";
