@@ -62,9 +62,12 @@ public static class CallToolFailureHandler
         // InvalidArgument here, not in the shared ToolErrorMapper.ToCodeAndMessage (tool-internal catch blocks
         // use that, and an internal JSON parse failure is a real fault). A JsonException thrown inside a tool
         // body also lands here; accepted as rare.
+        // Idle restart resets on-demand toolsets while the client still lists their tools (2026-11-10); explain instead of "failed unexpectedly".
         var error = ex is JsonException
             ? new ResultError(ToolErrorCode.InvalidArgument, $"{name}: invalid arguments - {ex.Message} Fix the argument and call again.")
-            : ToolErrorMapper.ToResultError(ex, null!, name);
+            : ex is McpProtocolException { Message: var message } && message.StartsWith("Unknown tool", StringComparison.Ordinal)
+                ? UnknownToolError(toolName, message)
+                : ToolErrorMapper.ToResultError(ex, null!, name);
         var envelope = new SentinelCallToolResult<object>
         {
             IsError = true,
@@ -78,5 +81,53 @@ public static class CallToolFailureHandler
             Content = [new TextContentBlock { Text = JsonSerializer.Serialize(envelope, McpJsonUtilities.DefaultOptions) }],
             IsError = true,
         };
+    }
+
+    /// <summary>
+    /// Explains an unknown-tool protocol error: the tool is in an on-demand toolset (reset by a server restart),
+    /// or it is declared but not enabled in this mode, or no tool has that name. A failed lookup falls through to
+    /// the not-declared text, so this never throws.
+    /// </summary>
+    private static ResultError UnknownToolError(string? toolName, string message)
+    {
+        var tool = toolName ?? string.Empty;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(tool))
+            {
+                var open = message.IndexOf('\'');
+                var close = message.LastIndexOf('\'');
+                tool = open >= 0 && close > open ? message.Substring(open + 1, close - open - 1) : string.Empty;
+            }
+
+            var set = ToolsetCatalog.FindSet(tool);
+            if (set is not null)
+            {
+                return new ResultError(
+                    ToolErrorCode.TargetIneligible,
+                    $"{tool} is not active on this server instance: on-demand toolsets reset when the server restarts. Call "
+                    + ToolCallHint.Call("McpToolsetControl", ("toolSet", set.Value.ToString()), ("enabled", "true")) + " and retry.");
+            }
+
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies()
+                .Where(a => a.GetName().Name?.StartsWith("RoslynSentinel", StringComparison.Ordinal) == true)
+                .ToArray();
+            if (McpToolSchemaPatcher.DiscoverAllDeclaredTools(assemblies).Any(t => t.ToolName == tool))
+            {
+                return new ResultError(
+                    ToolErrorCode.TargetIneligible,
+                    $"{tool} exists but is not enabled in this server's mode. "
+                    + ToolCallHint.Call("McpServerStatus", ("toolListing", "inactive"), ("toolNameFilter", tool)) + " shows how it is enabled.");
+            }
+        }
+        catch (Exception)
+        {
+            // Lookup failure: fall through to the not-declared text rather than surface a second error.
+        }
+
+        return new ResultError(
+            ToolErrorCode.NotFound,
+            $"There is no tool named '{tool}' on this server. Check the tool name; "
+            + ToolCallHint.Call("McpServerStatus", ("toolListing", "all")) + " lists every tool.");
     }
 }

@@ -157,6 +157,50 @@ public class CallToolFailureFilterTests
     }
 
     [Test]
+    public async Task UnknownTool_InOnDemandToolset_NamesMcpToolsetControl()
+    {
+        var thrown = new ModelContextProtocol.McpProtocolException("Unknown tool: 'GitRemote'", ModelContextProtocol.McpErrorCode.InvalidParams);
+
+        var result = await CallToolFailureHandler.InvokeAsync(
+            () => ValueTask.FromException<CallToolResult>(thrown), "GitRemote", CancellationToken.None);
+
+        Assert.That(result.IsError, Is.True);
+        var errorData = ErrorDataOf(result);
+        Assert.That(errorData["errorCode"]!.GetValue<string>(), Is.Not.EqualTo(ToolErrorCode.Exception));
+        var message = errorData["message"]!.GetValue<string>();
+        Assert.That(message, Does.Contain("McpToolsetControl").And.Contain("git"));
+        Assert.That(message, Does.Not.Contain("McpProtocolException"));
+    }
+
+    [Test]
+    public async Task UnknownTool_DeclaredButInactive_PointsToMcpServerStatus()
+    {
+        var thrown = new ModelContextProtocol.McpProtocolException("Unknown tool: 'FailureProbe'", ModelContextProtocol.McpErrorCode.InvalidParams);
+
+        var result = await CallToolFailureHandler.InvokeAsync(
+            () => ValueTask.FromException<CallToolResult>(thrown), "FailureProbe", CancellationToken.None);
+
+        Assert.That(result.IsError, Is.True);
+        var errorData = ErrorDataOf(result);
+        Assert.That(errorData["errorCode"]!.GetValue<string>(), Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(errorData["message"]!.GetValue<string>(), Does.Contain("exists but is not enabled").And.Contain("McpServerStatus"));
+    }
+
+    [Test]
+    public async Task UnknownTool_NotDeclared_SaysNoSuchTool()
+    {
+        var thrown = new ModelContextProtocol.McpProtocolException("Unknown tool: 'NoSuchToolXyz'", ModelContextProtocol.McpErrorCode.InvalidParams);
+
+        var result = await CallToolFailureHandler.InvokeAsync(
+            () => ValueTask.FromException<CallToolResult>(thrown), "NoSuchToolXyz", CancellationToken.None);
+
+        Assert.That(result.IsError, Is.True);
+        var errorData = ErrorDataOf(result);
+        Assert.That(errorData["errorCode"]!.GetValue<string>(), Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(errorData["message"]!.GetValue<string>(), Does.Contain("no tool named"));
+    }
+
+    [Test]
     public async Task SuccessfulCall_IsReturnedUntouched()
     {
         var expected = new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
