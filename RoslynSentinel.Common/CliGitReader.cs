@@ -66,6 +66,66 @@ internal sealed class CliGitReader : IGitReader
         return new WorkingTreeStatus(branch, ParseStatus(status.Value.StdOut), inProgress);
     }
 
+    public IReadOnlyList<LogCommit>? GetLog(string workingDirectory, int maxCount, string? revision, IReadOnlyList<string>? paths, string? pickaxe, bool pickaxeRegex, bool follow, TimeSpan cliTimeout)
+    {
+        // The Git tool's own runner forces UTF-8 for commit text (a repo-level i18n.* setting could otherwise change what reaches the pipe): same here.
+        string[] args = ["-c", "i18n.logOutputEncoding=utf-8", "-c", "i18n.commitEncoding=utf-8", .. BuildLogArguments(maxCount, revision, paths, pickaxe, pickaxeRegex, follow)];
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, args);
+        return run is { ExitCode: 0 } ? ParseLogEntries(run.Value.StdOut) : null;
+    }
+
+    /// <summary>The <c>git log</c> arguments (without the leading <c>-c</c> pairs) for <see cref="IGitReader.GetLog"/>; the Git tool's own CLI retry shares them.</summary>
+    internal static List<string> BuildLogArguments(int maxCount, string? revision, IReadOnlyList<string>? paths, string? pickaxe, bool pickaxeRegex, bool follow)
+    {
+        // %B (the full body) can hold newlines, so fields are separated by the unit separator and commits end with the record separator.
+        var format = $"%H{UnitSeparator}%h{UnitSeparator}%an{UnitSeparator}%aI{UnitSeparator}%B{RecordSeparator}";
+        var args = new List<string> { "log", $"--max-count={maxCount}", $"--format={format}" };
+        // Attached form (-S<text> / -G<regex>) so a value beginning with '-' is never read as an option.
+        if (!string.IsNullOrWhiteSpace(pickaxe))
+        {
+            args.Add((pickaxeRegex ? "-G" : "-S") + pickaxe);
+        }
+
+        if (follow)
+        {
+            args.Add("--follow");
+        }
+
+        if (!string.IsNullOrWhiteSpace(revision))
+        {
+            args.Add(revision);
+        }
+
+        if (paths is not null)
+        {
+            args.Add("--");
+            args.AddRange(paths);
+        }
+
+        return args;
+    }
+
+    /// <summary>
+    /// Parses the <see cref="BuildLogArguments"/> output: records end at the record separator (the newline <c>--format</c> adds after each leads the next
+    /// record), fields split at the unit separator, and a record with fewer than five fields is skipped. The message is returned untouched.
+    /// </summary>
+    internal static List<LogCommit> ParseLogEntries(string output)
+    {
+        var commits = new List<LogCommit>();
+        foreach (var record in output.Split(RecordSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = record.TrimStart('\n', '\r').Split(UnitSeparator);
+            if (parts.Length < 5)
+            {
+                continue;
+            }
+
+            commits.Add(new LogCommit(parts[0], parts[1], parts[2], parts[3], parts[4]));
+        }
+
+        return commits;
+    }
+
     public string? ReadBlobAtHead(string workingDirectory, string relativePath, TimeSpan cliTimeout)
     {
         // cat-file blob (not show): a directory is an error here, where "show" would print a tree listing. "./" makes the path relative to the working directory.

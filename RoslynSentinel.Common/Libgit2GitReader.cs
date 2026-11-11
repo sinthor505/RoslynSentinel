@@ -1,4 +1,7 @@
 using System.Text;
+using System.Buffers.Binary;
+using System.Numerics;
+using System.Text.RegularExpressions;
 using LibGit2Sharp;
 
 namespace RoslynSentinel.Common;
@@ -32,12 +35,23 @@ namespace RoslynSentinel.Common;
 /// (6) A blob that is a directory in HEAD, or a missing path, is null here; the CLI reader uses cat-file blob, which also fails for a directory.
 /// (8) GetRepositoryStatus: a repository with submodules is answered by the CLI (a dirty submodule is not reproduced); a HEAD outside refs/heads does the same,
 ///     and so does a possible intent-to-add file (a new-in-index, modified-in-workdir entry holding the empty blob).
+/// (9) GetLog is answered by libgit2 only where git's output can be reproduced exactly; everything else is declined (NotSupportedException) and the CLI answers:
+///     pickaxe (-S, -G) and --follow (no libgit2 equivalent; a reimplementation would differ on binary files, textconv, regex dialect and rename heuristics);
+///     revisions other than a plain ref, hash or HEAD~N/^N (ranges, :/text, @{...}); pathspecs with glob characters, magic or relative segments;
+///     a path-limited walk that reaches a merge commit (git's history simplification is not reproduced); shallow clones, info/grafts and refs/replace;
+///     commits with a non-UTF-8 encoding header, text with U+FFFD (invalid UTF-8) or the field separators the CLI parser uses.
+///     Reproduced: git's default order (a commit-date queue, ties in insertion order, not libgit2's sorter), %h's automatic abbreviation length
+///     (core.abbrev, else from the packed object count; alternates and multi-pack-index are declined, an explicit core.abbrev=auto too), %aI (author offset,
+///     a zero offset spelled "Z" or "+00:00" as the installed git does, learned from one CLI call per process), and case-sensitive pathspec matching
+///     (git's tree diff ignores core.ignorecase) by comparing the tree entry id at each pathspec with the first parent's. A path-limited walk is declined
+///     after 2,000 commits examined. A custom GIT_OBJECT_DIRECTORY is declined.
 ///     The short branch name follows git's ambiguity rule for the common cases (a tag, remote or refs/ entry of the same name gives "heads/name").
 ///     A path containing a line feed is returned verbatim here; the Git tool's old CLI path re-joined it with the platform newline.
 /// </para>
 /// </summary>
 internal sealed class Libgit2GitReader : IGitReader
 {
+    // TODO GetHeadSha(shortForm) and GetCommitsSince still shorten to a fixed 7; git's auto abbreviation grows with the object count (see AbbreviationLength), so they may differ from the CLI on a repo of more than about 16k packed objects (not verified).
     private const int MinimumShortHashLength = 7;
 
     // The empty blob in a SHA-1 repository, the id git gives an intent-to-add index entry.
@@ -213,6 +227,293 @@ internal sealed class Libgit2GitReader : IGitReader
         var name = head.CanonicalName[headsPrefix.Length..];
         string[] competing = [$"refs/{name}", $"refs/tags/{name}", $"refs/remotes/{name}", $"refs/remotes/{name}/HEAD"];
         return competing.Any(reference => repo.Refs[reference] is not null) ? "heads/" + name : name;
+    }
+
+    /// <summary>
+    /// Histories git walks differently from a plain parent chain: shallow clones, info/grafts and replace refs (loose, or named in packed-refs).
+    /// </summary>
+    private static void RequirePlainHistory(Repository repo)
+    {
+        var common = CommonDirectory(repo);
+        var packedRefs = Path.Combine(common, "packed-refs");
+        if (repo.Info.IsShallow
+            || File.Exists(Path.Combine(common, "info", "grafts"))
+            || Directory.Exists(Path.Combine(common, "refs", "replace"))
+            || (File.Exists(packedRefs) && File.ReadLines(packedRefs).Any(line => line.Contains(" refs/replace/", StringComparison.Ordinal))))
+        {
+            throw new NotSupportedException("The repository is shallow or has grafts or replace refs, so git walks its history.");
+        }
+    }
+
+    /// <summary>The git directory shared by all worktrees (the per-worktree directory itself unless it has a commondir file).</summary>
+    private static string CommonDirectory(Repository repo)
+    {
+        var gitDirectory = repo.Info.Path;
+        var commonFile = Path.Combine(gitDirectory, "commondir");
+        return File.Exists(commonFile)
+            ? Path.GetFullPath(Path.Combine(gitDirectory, File.ReadAllText(commonFile).Trim()))
+            : gitDirectory;
+    }
+
+    /// <summary>
+    /// The hex length git's <c>%h</c> starts from (find_unique_abbrev): core.abbrev when set (a number from 4 to 40, or a false-like value for the full
+    /// hash), otherwise automatic: half the bit length of the packed object count, rounded up, at least 7. The result is then made unique by
+    /// <see cref="ObjectDatabase.ShortenObjectId(GitObject, int)"/>, which extends it exactly as git does.
+    /// </summary>
+    private static int AbbreviationLength(Repository repo)
+    {
+        var setting = repo.Config.Get<string>("core.abbrev")?.Value;
+        // An explicit "auto" is not handled: libgit2's own ShortenObjectId fails to parse it as a number, so it falls to the throw below and git answers.
+        if (setting is null)
+        {
+            var count = PackedObjectCount(repo);
+            var bits = count == 0 ? 1 : 64 - BitOperations.LeadingZeroCount((ulong)count);
+            return Math.Max((bits + 1) / 2, 7);
+        }
+
+        if (setting.ToUpperInvariant() is "NO" or "FALSE" or "OFF" or "0")
+        {
+            return 40;
+        }
+
+        if (int.TryParse(setting, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var configured) && configured is >= 4 and <= 40)
+        {
+            return configured;
+        }
+
+        throw new NotSupportedException($"core.abbrev '{setting}' is left to git.");
+    }
+
+    /// <summary>
+    /// git's approximate object count: the objects in all pack indexes (loose objects are not counted). Alternates and a multi-pack-index change
+    /// what git counts, so they are declined.
+    /// </summary>
+    private static long PackedObjectCount(Repository repo)
+    {
+        var objects = Path.Combine(CommonDirectory(repo), "objects");
+        var packs = Path.Combine(objects, "pack");
+        if (File.Exists(Path.Combine(objects, "info", "alternates"))
+            || File.Exists(Path.Combine(packs, "multi-pack-index"))
+            || Directory.Exists(Path.Combine(packs, "multi-pack-index.d"))
+            || Environment.GetEnvironmentVariable("GIT_OBJECT_DIRECTORY") is not null
+            || Environment.GetEnvironmentVariable("GIT_ALTERNATE_OBJECT_DIRECTORIES") is not null)
+        {
+            throw new NotSupportedException("The object store has alternates, a multi-pack-index or an overridden location, so git counts it.");
+        }
+
+        if (!Directory.Exists(packs))
+        {
+            return 0;
+        }
+
+        var total = 0L;
+        foreach (var index in Directory.EnumerateFiles(packs, "*.idx"))
+        {
+            // git skips an index whose pack file is missing.
+            if (File.Exists(Path.ChangeExtension(index, ".pack")))
+            {
+                total += ReadPackIndexObjectCount(index);
+            }
+        }
+
+        return total;
+    }
+
+    /// <summary>The object count of a pack index: the last of the 256 fan-out entries (after an 8-byte header in version 2).</summary>
+    private static long ReadPackIndexObjectCount(string indexPath)
+    {
+        using var stream = new FileStream(indexPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        Span<byte> word = stackalloc byte[4];
+        stream.ReadExactly(word);
+        var version2 = word.SequenceEqual(new byte[] { 0xff, 0x74, 0x4f, 0x63 });
+        stream.Seek(version2 ? 8 + (255 * 4) : 255 * 4, SeekOrigin.Begin);
+        stream.ReadExactly(word);
+        return BinaryPrimitives.ReadUInt32BigEndian(word);
+    }
+
+    /// <summary>
+    /// git log's default walk: a queue ordered by committer date (a new entry goes after every entry with the same or a later date),
+    /// popping the front and queueing its unseen parents. Not libgit2's sorter, which breaks same-second ties differently.
+    /// </summary>
+    private static List<LogCommit> WalkLog(Repository repo, Commit tip, int maxCount, List<(string Path, bool DirectoryOnly)>? specs, string workingDirectory, TimeSpan cliTimeout)
+    {
+        var filtered = specs is { Count: > 0 };
+        var abbreviation = AbbreviationLength(repo);
+        var commits = new List<LogCommit>();
+        var seen = new HashSet<string>(StringComparer.Ordinal) { tip.Sha };
+        var queue = new List<Commit> { tip };
+        var examined = 0;
+        while (queue.Count > 0 && commits.Count < maxCount)
+        {
+            var commit = queue[0];
+            queue.RemoveAt(0);
+            if (filtered && ++examined > MaxPathLimitedCommitsExamined)
+            {
+                throw new NotSupportedException($"A path-limited walk passed {MaxPathLimitedCommitsExamined} commits without finishing; git's own walk is faster from here, so git answers.");
+            }
+            var parents = commit.Parents.ToList();
+            if (filtered && parents.Count > 1)
+            {
+                throw new NotSupportedException("A path-limited walk reached a merge commit; git's history simplification is not reproduced, so git answers.");
+            }
+
+            // Linear history: a commit is listed when it changes something under a pathspec (no rename detection), a root commit when it adds something.
+            var parentTree = filtered && parents.Count > 0 ? parents[0].Tree : null;
+            if (!filtered || specs!.Any(spec => ChangesPathspec(commit.Tree, parentTree, spec.Path, spec.DirectoryOnly)))
+            {
+                commits.Add(ToLogCommit(repo, commit, abbreviation, workingDirectory, cliTimeout));
+            }
+
+            foreach (var parent in parents)
+            {
+                if (seen.Add(parent.Sha))
+                {
+                    InsertByCommitDate(queue, parent);
+                }
+            }
+        }
+
+        return commits;
+    }
+
+    private static void InsertByCommitDate(List<Commit> queue, Commit commit)
+    {
+        var date = commit.Committer.When.ToUnixTimeSeconds();
+        var index = queue.FindIndex(queued => queued.Committer.When.ToUnixTimeSeconds() < date);
+        if (index < 0)
+        {
+            queue.Add(commit);
+        }
+        else
+        {
+            queue.Insert(index, commit);
+        }
+    }
+
+    private static LogCommit ToLogCommit(Repository repo, Commit commit, int abbreviation, string workingDirectory, TimeSpan cliTimeout)
+    {
+        // git re-encodes a message from its encoding header to UTF-8; libgit2 hands the bytes over as stored.
+        if (commit.Encoding is { } encoding && !encoding.Equals("UTF-8", StringComparison.OrdinalIgnoreCase) && !encoding.Equals("UTF8", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new NotSupportedException($"Commit {commit.Sha} declares encoding '{encoding}', so git converts it.");
+        }
+
+        var author = commit.Author;
+        var message = commit.Message;
+        // U+FFFD: bytes that were not valid UTF-8, which git and .NET may replace differently. U+001E/U+001F are the CLI parser's separators and
+        // would truncate or split the commit there (the tool's long-standing behavior), so the CLI keeps answering for them.
+        if (author.Name.AsSpan().IndexOfAny('�', '\u001e', '\u001f') >= 0 || message.AsSpan().IndexOfAny('�', '\u001e', '\u001f') >= 0)
+        {
+            throw new NotSupportedException($"Commit {commit.Sha} holds invalid UTF-8 or a separator character, so git answers.");
+        }
+
+        // git's strict ISO date: the author's own offset, with a zero offset spelled the way the installed git spells it.
+        var when = author.When;
+        var date = when.Offset == TimeSpan.Zero
+            ? when.ToString("yyyy-MM-dd'T'HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture) + ZeroOffsetDesignator(workingDirectory, cliTimeout, commit.Sha)
+            : when.ToString("yyyy-MM-dd'T'HH:mm:sszzz", System.Globalization.CultureInfo.InvariantCulture);
+
+        // ShortenObjectId returns an all-zero id for a full-length request (core.abbrev of 40 or no), where git prints the whole hash.
+        var shortSha = abbreviation >= 40 ? commit.Sha : repo.ObjectDatabase.ShortenObjectId(commit, abbreviation);
+        return new LogCommit(commit.Sha, shortSha, author.Name, date, message);
+    }
+
+    private static List<(string Path, bool DirectoryOnly)> ParseLogPathspecs(IReadOnlyList<string> paths)
+    {
+        var specs = new List<(string Path, bool DirectoryOnly)>();
+        foreach (var raw in paths)
+        {
+            var directoryOnly = raw.EndsWith('/');
+            var spec = directoryOnly ? raw[..^1] : raw;
+            // Plain relative paths only: glob characters, pathspec magic, a drive or backslash, and ".", ".." or empty segments need git's pathspec rules.
+            if (spec.Length == 0 || spec.IndexOfAny(['*', '?', '[', ']', '\\', ':', '!', '^']) >= 0 || spec.Split('/').Any(segment => segment is "" or "." or ".."))
+            {
+                throw new NotSupportedException($"Pathspec '{raw}' needs git's pathspec rules, so git answers.");
+            }
+
+            specs.Add((spec, directoryOnly));
+        }
+
+        return specs;
+    }
+
+    /// <summary>
+    /// A commit changes a pathspec when the entry at that path (a file, or a directory standing for everything under it) differs from its first
+    /// parent's, or from nothing for a root commit: git's pathspec-limited tree diff, answered by comparing one entry id per tree instead of
+    /// diffing whole trees. Case-sensitive even with core.ignorecase: git's tree diff only folds case for the :(icase) magic, which
+    /// ParseLogPathspecs sends to git.
+    /// </summary>
+    private static bool ChangesPathspec(Tree tree, Tree? parentTree, string path, bool directoryOnly) =>
+        EntryIdAt(tree, path, directoryOnly) != (parentTree is null ? null : EntryIdAt(parentTree, path, directoryOnly));
+
+    /// <summary>The object id at <paramref name="path"/>, or null when nothing is there (for a trailing-slash pathspec, when it is not a directory).</summary>
+    private static string? EntryIdAt(Tree tree, string path, bool directoryOnly)
+    {
+        var entry = tree[path];
+        return entry is null || (directoryOnly && entry.TargetType != TreeEntryTargetType.Tree) ? null : entry.Target.Sha;
+    }
+
+    // A revision this reader resolves itself: a ref name, hash or HEAD with optional ~N / ^N suffixes. Ranges, :/text, @{...} and globs go to git.
+    // ".." would match inside a name here, so it is rejected separately.
+    private static readonly Regex SimpleRevision = new(@"^[A-Za-z0-9_][A-Za-z0-9_./+\-]*([~^][0-9]*)*$", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
+
+    public IReadOnlyList<LogCommit>? GetLog(string workingDirectory, int maxCount, string? revision, IReadOnlyList<string>? paths, string? pickaxe, bool pickaxeRegex, bool follow, TimeSpan cliTimeout)
+    {
+        if (!string.IsNullOrWhiteSpace(pickaxe))
+        {
+            throw new NotSupportedException("libgit2 has no pickaxe search; -S and -G differ on binary files, textconv and regex dialect, so git answers.");
+        }
+
+        if (follow)
+        {
+            throw new NotSupportedException("git log --follow is a rename-detection heuristic libgit2 does not offer, so git answers.");
+        }
+
+        var specs = paths is null ? null : ParseLogPathspecs(paths);
+        var hasRevision = !string.IsNullOrWhiteSpace(revision);
+        if (hasRevision && (revision!.Contains("..", StringComparison.Ordinal) || !SimpleRevision.IsMatch(revision)))
+        {
+            throw new NotSupportedException($"'{revision}' is not a plain ref, hash or HEAD~N form, so git resolves it.");
+        }
+
+        using var repo = Open(workingDirectory);
+        if (repo is null)
+        {
+            return null;
+        }
+
+        RequirePlainHistory(repo);
+
+        Commit? tip;
+        if (hasRevision)
+        {
+            // Without "--" git refuses a name that is both a revision and a file (and the CLI error text must stay the tool's); libgit2 would resolve it.
+            if (paths is null && (File.Exists(Path.Combine(workingDirectory, revision!)) || Directory.Exists(Path.Combine(workingDirectory, revision!))))
+            {
+                throw new NotSupportedException($"'{revision}' is also a path in the working directory; git decides whether that is ambiguous.");
+            }
+
+            // Unknown revision: null, as the CLI's non-zero exit, so the tool reports git's own message.
+            tip = repo.Lookup<Commit>(revision!);
+        }
+        else
+        {
+            tip = repo.Head.Tip; // null on an unborn branch
+        }
+
+        if (tip is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return WalkLog(repo, tip, maxCount, specs, workingDirectory, cliTimeout);
+        }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            throw new NotSupportedException("A commit date or UTC offset is outside .NET's range, so git answers.", ex);
+        }
     }
 
     public string? ReadBlobAtHead(string workingDirectory, string relativePath, TimeSpan cliTimeout)
@@ -429,4 +730,45 @@ internal sealed class Libgit2GitReader : IGitReader
         _ when state.HasFlag(FileStatus.TypeChangeInWorkdir) => 'T',
         _ => ' ',
     };
+
+    private static string? _zeroOffsetDesignator;
+
+    /// <summary>
+    /// How the installed git prints a zero UTC offset in <c>%aI</c>: "Z" on current versions, "+00:00" on older ones. Asked of the CLI once per
+    /// process (with a commit whose author offset is zero), so the libgit2 path reproduces whichever git the tool would otherwise have run.
+    /// </summary>
+    private static string ZeroOffsetDesignator(string workingDirectory, TimeSpan cliTimeout, string sha)
+    {
+        var known = Volatile.Read(ref _zeroOffsetDesignator);
+        if (known is not null)
+        {
+            return known;
+        }
+
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, "log", "-1", "--format=%aI", sha);
+        var text = run is { ExitCode: 0 } ? run.Value.StdOut.Trim() : null;
+        if (text is not null && text.EndsWith('Z'))
+        {
+            known = "Z";
+        }
+        else if (text is not null && text.EndsWith("+00:00", StringComparison.Ordinal))
+        {
+            known = "+00:00";
+        }
+        else
+        {
+            throw new NotSupportedException("The installed git did not report how it prints a zero UTC offset, so git answers.");
+        }
+
+        Volatile.Write(ref _zeroOffsetDesignator, known);
+        return known;
+    }
+
+    /// <summary>
+    /// A path-limited walk looks at every commit it passes (tens of microseconds each) and on a history with merges ends in a decline anyway; past
+    /// this many the git CLI (which prunes with its commit-graph) answers, so the wasted in-process work stays well under one CLI call's cost.
+    /// </summary>
+    // TODO a path-limited log on a merge-heavy history (this repo's) walks to its first merge and then declines: measured 25-100 ms of wasted in-process work
+    // before the CLI's roughly 110 ms. Reproducing git's history simplification at a merge (or a cheap look-ahead for merges) would remove it.
+    private const int MaxPathLimitedCommitsExamined = 2000;
 }

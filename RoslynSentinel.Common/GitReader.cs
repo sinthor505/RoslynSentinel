@@ -19,6 +19,14 @@ internal sealed record ChangedCommit(string ShortHash, string Subject, IReadOnly
 internal sealed record CommitMessage(string Sha, string Message);
 
 /// <summary>
+/// One commit as the Git tool's <c>log</c> operation presents it: the full and abbreviated hash (<c>%H</c>, <c>%h</c>), the author name
+/// (<c>%an</c>, no mailmap), the author date as strict ISO 8601 with the author's own UTC offset (<c>%aI</c>, e.g.
+/// <c>2026-01-02T03:04:05+05:30</c>, <c>+00:00</c> never <c>Z</c>) and the raw message (<c>%B</c>, subject and body exactly as stored,
+/// still with its original line endings and trailing newline; the tool normalizes those when it builds its DTO).
+/// </summary>
+internal sealed record LogCommit(string Sha, string ShortSha, string AuthorName, string AuthorDate, string Message);
+
+/// <summary>
 /// Everything the Git tool's <c>status</c> operation reads in one typed answer. <see cref="Branch"/> is what
 /// <c>git rev-parse --abbrev-ref HEAD</c> prints: the branch's short name, <c>HEAD</c> when detached, null when HEAD
 /// cannot be resolved (an unborn branch). <see cref="Changes"/> are the porcelain rows with every untracked file listed
@@ -67,6 +75,16 @@ internal interface IGitReader
     /// missing or timed out, <c>status</c> failing); an unborn HEAD is an answer with a null <see cref="WorkingTreeStatus.Branch"/>.
     /// </summary>
     WorkingTreeStatus? GetRepositoryStatus(string workingDirectory, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// What the Git tool's <c>log</c> operation presents: up to <paramref name="maxCount"/> commits, newest first in git's default order,
+    /// from <paramref name="revision"/> (null or blank is HEAD), limited to <paramref name="paths"/> when given (an empty list is the bare <c>--</c>),
+    /// optionally by pickaxe (<c>-S</c>, or <c>-G</c> when <paramref name="pickaxeRegex"/>; blank means none) and following renames of one path
+    /// (<paramref name="follow"/>). The CLI implementation runs <c>git log</c> with exactly those options; the libgit2 implementation throws
+    /// <see cref="NotSupportedException"/> for what it cannot reproduce, so the composite reader answers from the CLI. Null when git cannot
+    /// answer (not a repository, unknown revision, unborn HEAD, git missing or timed out).
+    /// </summary>
+    IReadOnlyList<LogCommit>? GetLog(string workingDirectory, int maxCount, string? revision, IReadOnlyList<string>? paths, string? pickaxe, bool pickaxeRegex, bool follow, TimeSpan cliTimeout);
 
     /// <summary>The content of the blob at <paramref name="relativePath"/> (relative to <paramref name="workingDirectory"/>) in HEAD, decoded as UTF-8; null when HEAD has no such blob (missing path, or a directory).</summary>
     string? ReadBlobAtHead(string workingDirectory, string relativePath, TimeSpan cliTimeout);

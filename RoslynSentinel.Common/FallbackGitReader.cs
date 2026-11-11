@@ -61,6 +61,9 @@ internal sealed class FallbackGitReader : IGitReader
     public WorkingTreeStatus? GetRepositoryStatus(string workingDirectory, TimeSpan cliTimeout) =>
         Invoke(reader => reader.GetRepositoryStatus(workingDirectory, cliTimeout));
 
+    public IReadOnlyList<LogCommit>? GetLog(string workingDirectory, int maxCount, string? revision, IReadOnlyList<string>? paths, string? pickaxe, bool pickaxeRegex, bool follow, TimeSpan cliTimeout) =>
+        Invoke(reader => reader.GetLog(workingDirectory, maxCount, revision, paths, pickaxe, pickaxeRegex, follow, cliTimeout));
+
     public string? ReadBlobAtHead(string workingDirectory, string relativePath, TimeSpan cliTimeout) =>
         Invoke(reader => reader.ReadBlobAtHead(workingDirectory, relativePath, cliTimeout));
 

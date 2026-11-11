@@ -922,6 +922,12 @@ public class GitReaderParityTests
             return null;
         }
 
+        public IReadOnlyList<LogCommit>? GetLog(string workingDirectory, int maxCount, string? revision, IReadOnlyList<string>? paths, string? pickaxe, bool pickaxeRegex, bool follow, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
         public string? ReadBlobAtHead(string workingDirectory, string relativePath, TimeSpan cliTimeout)
         {
             Gate();

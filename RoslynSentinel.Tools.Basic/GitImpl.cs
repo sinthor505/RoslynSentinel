@@ -2366,67 +2366,71 @@ public class GitImpl : IGitOperations
         }
     }
 
+    /// <summary>
+    /// Presents a reader's commit as the tool always has. The message gets what the old text pipeline gave it: every line break
+    /// (CR, LF or CRLF) becomes the platform newline (<see cref="RejoinLines"/>), then leading and trailing line breaks are trimmed.
+    /// </summary>
+    private static GitCommitEntry ToCommitEntry(LogCommit commit) => new()
+    {
+        Hash = commit.Sha,
+        ShortHash = commit.ShortSha,
+        Author = commit.AuthorName,
+        Date = commit.AuthorDate,
+        Message = RejoinLines(commit.Message).Trim('\n', '\r'),
+    };
+
+    /// <summary>
+    /// The log reader could not answer (unknown revision, unborn HEAD, git failed or timed out). Runs the same command through the tool's own
+    /// runner so the caller gets git's message exactly as before; if it succeeds this time, its output is presented like a reader's.
+    /// </summary>
+    private async Task<GitLogResult> LogViaCliAsync(
+        string gitRoot, int count, string? refName, List<string>? pathList, string? pickaxe, bool pickaxeRegex, bool follow, CancellationToken cancellationToken)
+    {
+        var args = CliGitReader.BuildLogArguments(count, refName, pathList, pickaxe, pickaxeRegex, follow);
+        var logRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
+        if (logRaw.ExitCode != 0)
+            return new GitLogResult { IsError = true, Error = CleanGitStderr(logRaw.Stderr) };
+
+        return new GitLogResult { IsError = false, Commits = [.. CliGitReader.ParseLogEntries(logRaw.Stdout).Select(ToCommitEntry)] };
+    }
+
     public async Task<GitLogResult> LogAsync(
         string gitRoot, int count, string? refName, string? paths, string? pickaxe, bool pickaxeRegex, bool follow, CancellationToken cancellationToken)
     {
         count = Math.Clamp(count, 1, 100);
         try
         {
-            // Unit separator (ASCII 31) delimits fields; record separator (ASCII 30) delimits
-            // commits -> %B (full body) can itself contain embedded newlines, so a plain '\n' split
-            // is not safe once the body is multi-line.
-            const string fieldSep = "\x1f";
-            const string recordSep = "\x1e";
-            var format = $"%H{fieldSep}%h{fieldSep}%an{fieldSep}%aI{fieldSep}%B{recordSep}";
-
-            var args = new List<string> { "log", $"--max-count={count}", $"--format={format}" };
-            // Attached form (-S<text> / -G<regex>) so a value beginning with '-' is never read as an option.
-            if (!string.IsNullOrWhiteSpace(pickaxe))
-                args.Add((pickaxeRegex ? "-G" : "-S") + pickaxe);
-            if (follow)
-                args.Add("--follow");
-            if (!string.IsNullOrWhiteSpace(refName))
-                args.Add(refName);
+            List<string>? pathList = null;
             if (!string.IsNullOrWhiteSpace(paths))
             {
                 var parsedPaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
                 if (pathsError != null)
                     return new GitLogResult { IsError = true, Error = pathsError };
 
-                var pathCount = parsedPaths!.Count();
-                if (follow && pathCount != 1)
-                    return new GitLogResult { IsError = true, Error = $"follow needs exactly one path in paths, but {pathCount} were supplied. Pass a single file path, or omit follow." };
-
-                args.Add("--");
-                args.AddRange(parsedPaths!);
+                pathList = [.. parsedPaths!];
+                if (follow && pathList.Count != 1)
+                    return new GitLogResult { IsError = true, Error = $"follow needs exactly one path in paths, but {pathList.Count} were supplied. Pass a single file path, or omit follow." };
             }
             else if (follow)
             {
                 return new GitLogResult { IsError = true, Error = "follow needs exactly one path in paths, but none was supplied. Pass a single file path, or omit follow." };
             }
 
-            var logRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
+            // Pickaxe (-S/-G) and --follow have no libgit2 equivalent that matches git, so they go straight to git. Offering them to the
+            // reader would only make it decline, and a decline is recorded as a fallback (FirstFallbackReason), which is meant to flag a
+            // broken libgit2, not an option that is known to be CLI-only.
+            if (!string.IsNullOrWhiteSpace(pickaxe) || follow)
+                return await LogViaCliAsync(gitRoot, count, refName, pathList, pickaxe, pickaxeRegex, follow, cancellationToken);
 
-            if (logRaw.ExitCode != 0)
-                return new GitLogResult { IsError = true, Error = CleanGitStderr(logRaw.Stderr) };
+            // The typed seam answers in-process (libgit2) where it can reproduce git's output exactly and runs the git CLI otherwise
+            // (ranges, merges under a path filter, ...). It blocks, so it runs off the caller's thread; the token only
+            // stops a call that has not started.
+            var commits = await Task.Run(
+                () => _gitReader.GetLog(gitRoot, count, refName, pathList, pickaxe, pickaxeRegex, follow, GitProcessTimeout), cancellationToken);
+            if (commits is null)
+                return await LogViaCliAsync(gitRoot, count, refName, pathList, pickaxe, pickaxeRegex, follow, cancellationToken);
 
-            var commits = new List<GitCommitEntry>();
-            foreach (var record in logRaw.Stdout.Split(recordSep, StringSplitOptions.RemoveEmptyEntries))
-            {
-                var trimmedRecord = record.TrimStart('\n', '\r');
-                var parts = trimmedRecord.Split(fieldSep);
-                if (parts.Length < 5) continue;
-                commits.Add(new GitCommitEntry
-                {
-                    Hash = parts[0],
-                    ShortHash = parts[1],
-                    Author = parts[2],
-                    Date = parts[3],
-                    Message = parts[4].Trim('\n', '\r'),
-                });
-            }
-
-            return new GitLogResult { IsError = false, Commits = commits };
+            return new GitLogResult { IsError = false, Commits = [.. commits.Select(ToCommitEntry)] };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
