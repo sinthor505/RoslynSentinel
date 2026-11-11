@@ -1882,6 +1882,9 @@ public class MemberRefactoringEngine
     /// contextSnippet to target the constructor. Returns an empty member list in that case so the
     /// caller's type fallback runs.
     /// </summary>
+    // TODO Two type-over-constructor rules: this one (attribute paths, keyed on contextSnippet) and
+    // ExcludeSameNamedConstructors (Member remove, keyed on containerName). Fold into one rule once the attribute
+    // paths' behaviour is pinned by tests.
     private static List<SyntaxNodeCandidate> DropOwnConstructorsWhenTypeMatches(List<SyntaxNodeCandidate> memberCandidates, List<SyntaxNodeCandidate> allCandidates, string? contextSnippet, string? lineBefore, string? lineAfter)
     {
         var hasSnippet = !string.IsNullOrWhiteSpace(contextSnippet) || !string.IsNullOrWhiteSpace(lineBefore) || !string.IsNullOrWhiteSpace(lineAfter);
