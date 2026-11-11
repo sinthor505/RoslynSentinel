@@ -1,6 +1,6 @@
 # Plan: short targeted model-eval scenarios (cold-start and resume, clean and faulted)
 
-**Status:** APPROVED 2026-11-11. Reviewed against source and open decisions settled with the owner; no step started.
+**Status:** IN PROGRESS 2026-11-11. Steps 1, 3 and 4 done (3f87a527, 1506ed14, 56ab9526, bf403f75, 030c70d6, f4a69c16, 2e15938d); step 2 waits on another session's uncommitted edits in `ModelAgentRunner.cs`; steps 5 to 11 not started.
 
 ## Problem
 
@@ -115,6 +115,8 @@ C#; none in `agent.log` or `test-result.txt`).
     `ModelAgentRunner.cs:155` and writes it at `:687-692`; copy the process-wide stamp in at creation.
   - Done when: Build 0 errors; a unit test shows a stamped transcript carries both values, an unstamped
     one omits them, and a transcript without them deserializes.
+  - Done: 3f87a527840ebc47f6b51176aea669e234e6fb6f (`AgentTranscript.CommitHash`, `WorkingTreeDirty`,
+    `ModelAgentRunner.ProcessStamp`).
 - **1b - ModelEval sets the stamp**
   - Files: `RoslynSentinel.Common/RoslynSentinel.Common.csproj` (`InternalsVisibleTo`, `:26-35`), the
     ModelEval assembly setup, one test file.
@@ -122,6 +124,9 @@ C#; none in `agent.log` or `test-result.txt`).
     `FallbackGitReader.cs:221`) from the repo root (the walk `ModelTestingResultsArchiver.FindRepoRoot`
     does), once, in `ModelEvalAssemblySetUp`.
   - Done when: Build 0 errors; a unit test shows the helper returns the repo's HEAD.
+  - Done: 1506ed149e066802de28a085c7a3728059c91147. The dirty flag counts tracked changes plus untracked
+    `.cs` and `.csproj` files. The stamp is null when the test binaries run from a folder with no
+    `RoslynSentinel.slnx` above them.
 
 ### Step 2 - Record tool descriptions and parameter schemas in the transcript
 
@@ -130,8 +135,13 @@ C#; none in `agent.log` or `test-result.txt`).
   `ModelAgentRunner.cs:156`. Beside it record, per tool, the description (set at `:133`) and
   `AgentToolDefinition.ParametersSchema` (a `JsonElement`, `LmStudioAgentClient.cs:882`, set at `:134`).
   Keep `Tools` as it is. Dictionaries need no new type.
-- Done when: Build 0 errors; a unit test with a fake client shows both recorded; a transcript without
-  them deserializes.
+- Also record the run's stop reason on the transcript: a saved transcript has none today, so `BudgetOut`
+  cannot be scored from a file (found in step 3d).
+- Done when: Build 0 errors; a unit test with a fake client shows all three recorded; a transcript
+  without them deserializes (`Turns` and `Tools` are get-only: read back with
+  `PreferredObjectCreationHandling = Populate`, as step 3d does).
+- Waiting 2026-11-11: `ModelAgentRunner.cs` carries another session's uncommitted edits. Needed before
+  step 8d only.
 
 ### Step 3 - Per-call scorer, recovery telemetry and results CSV
 
@@ -145,6 +155,9 @@ C#; none in `agent.log` or `test-result.txt`).
     (`AgentToolErrorAssertions.cs:32`) refines the class within the code; it is not a fallback.
   - Done when: unit tests classify a redirect, a compile-gate rejection, a `NotFound` and a result with
     no code, using result JSON copied from archived transcripts.
+  - Done: 56ab9526c3185d077cca912f794aa582c97d45fb (`ErrorCodeOf`, `ClassifyError` in
+    `AgentToolErrorAssertions.cs`; a copy of the runner's read, with a `// TODO` to merge the two once
+    `ModelAgentRunner.cs` is free).
 - **3b - scorer**
   - Files: new scorer in `RoslynSentinel.Tests.ModelEval`, one test file.
   - Change: a pure function over an `AgentTranscript`, a tool under test, the expected outcome, the
@@ -162,6 +175,8 @@ C#; none in `agent.log` or `test-result.txt`).
       reasoning; count of retry phrases ("let me try again", "a different approach" and similar, from
       one list in the scorer).
   - Done when: unit tests score hand-built transcripts for every failure class and each telemetry count.
+  - Done: bf403f754b1b8c9d42dc762442f8fddad826532f (`ScenarioScorer`, `ScoreResult`, which also has a
+    `Passed` field). Transcripts do record reasoning, so identical reasoning blocks are counted.
 - **3c - results CSV**
   - Files: new type and writer in `RoslynSentinel.Tests.ModelEval`, one test file.
   - Change: one line per sample: the 3b fields plus scenario id, type, fault kind, commit, dirty flag,
@@ -169,6 +184,7 @@ C#; none in `agent.log` or `test-result.txt`).
     transcript path. `ResumeSampleRow` (`TranscriptResume.cs`, header constant at `:95`) has
     rename-specific columns and stays as it is.
   - Done when: a unit test round-trips a line, including one Inconclusive sample.
+  - Done: 030c70d6a0950beed784c8b1903c6a64a437bebe (`ScenarioSample`, `ScenarioSampleCsv`).
 - **3d - score a saved transcript**
   - Files: a no-model `[Explicit]` test in `RoslynSentinel.Tests.ModelEval`, `scripts/roslynsentinel-modeleval.ps1`.
   - Change: score a transcript file or run folder named by an environment variable and append to a CSV;
@@ -176,6 +192,9 @@ C#; none in `agent.log` or `test-result.txt`).
   - Done when: run over one archived run folder under
     `ModelTestingResults/113/Model_AppliesTenChainedRefactors/` it writes one line with the
     `ReplaceSnippet` counts.
+  - Done: f4a69c16b427574bb36eef202ab5c29a1d98a0c0 (`-Test ScoreTranscript` with `-ScoreTranscript`,
+    `-ScoreCsv`, `-ScoreTool`). On run `20261110-194407-573`: first `ReplaceSnippet` call failed with
+    `ValidationFailed` (guardrail redirect), 6 calls to recover.
 
 ### Step 4 - Stop marker in the system prompt
 
@@ -187,6 +206,8 @@ C#; none in `agent.log` or `test-result.txt`).
   your final message with `BLOCKED:` followed by what you tried and the error you received."
   List every other user of the constant in the commit message.
 - Done when: Build 0 errors; the ModelEval and `RoslynSentinel.Tests` classes that reference the prompt pass.
+- Done: 2e15938de0a6af591b99387c946a7b1b80f67cd5. The commit message lists the 10 users of the constant;
+  no test pins the prompt text.
 
 ### Step 5 - Scenario base fixture and the first type 1 scenario
 
