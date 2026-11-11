@@ -36,6 +36,12 @@
   list 55 ms to 4-7 ms. Live server after restart: `gitBackend` reports `Libgit2`, native load and
   repo probe ok, `shortHashLength` 8, zero CLI fallbacks. The bundled libgit2 build reports Https
   and Ssh support.
+- Commit trailers `ebde548e` (opt-in): `git config roslynsentinel.commitTrailers true` makes
+  `Git(commit)` add `Tool-Call-Id: <echoed toolCallId>` (48 random bits) and, when the call has an
+  agent id, `Tool-Agent: <id>`; amend replaces them. The tool finds its commit by walking up to 50
+  commits from HEAD for the id, else from git's summary line, else from the parent chain (merge
+  resolutions accept MERGE_HEAD). Read with normal git precedence, so a global setting also enables
+  it. Enabled on this repo 2026-11-10. Revert carries no trailer yet (`// TODO` in `RevertAsync`).
 - Risk not yet tested: `worktree.useRelativePaths=true` (git 2.48+) writes
   `extensions.relativeWorktrees`, which libgit2 1.8.6 probably rejects; reads would fall back.
 
