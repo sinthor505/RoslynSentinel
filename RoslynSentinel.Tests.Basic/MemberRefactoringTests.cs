@@ -1719,6 +1719,44 @@ public class MyController
     }
 
     [Test]
+    public async Task AddAttribute_BareTypeNameWithOwnConstructor_TargetsType()
+    {
+        SetSource(@"
+public class Widget
+{
+    public Widget() { }
+    public void Run() { }
+}
+", "Widget.cs");
+
+        var result = await _memberRefactoringEngine.AddAttributeAsync("Widget.cs", "Widget", "Serializable");
+
+        var attrIdx = result.UpdatedText.IndexOf("[Serializable]", StringComparison.Ordinal);
+        Assert.That(attrIdx, Is.GreaterThanOrEqualTo(0), "Attribute should be added.");
+        Assert.That(attrIdx, Is.LessThan(result.UpdatedText.IndexOf("public class Widget", StringComparison.Ordinal)), "Attribute should go on the class, not the constructor.");
+        Assert.That(result.UpdatedText.IndexOf("[Serializable]", attrIdx + 1, StringComparison.Ordinal), Is.EqualTo(-1), "Attribute should be added exactly once.");
+    }
+
+    [Test]
+    public async Task AddAttribute_SnippetOnOwnConstructor_TargetsConstructor()
+    {
+        SetSource(@"
+public class Widget
+{
+    public Widget() { }
+    public void Run() { }
+}
+", "Widget.cs");
+
+        var result = await _memberRefactoringEngine.AddAttributeAsync("Widget.cs", "Widget", "Obsolete", contextSnippet: "public Widget()");
+
+        var attrIdx = result.UpdatedText.IndexOf("[Obsolete]", StringComparison.Ordinal);
+        Assert.That(attrIdx, Is.GreaterThanOrEqualTo(0), "Attribute should be added.");
+        Assert.That(attrIdx, Is.GreaterThan(result.UpdatedText.IndexOf("public class Widget", StringComparison.Ordinal)), "Attribute should stay inside the class body.");
+        Assert.That(attrIdx, Is.LessThan(result.UpdatedText.IndexOf("public Widget()", StringComparison.Ordinal)), "Attribute should go on the constructor, which follows the attribute.");
+    }
+
+    [Test]
     public async Task AddAttribute_ToMethod_WithoutBrackets()
     {
         SetSource(@"
@@ -1820,6 +1858,27 @@ public class Foo
 
         Assert.That(result.UpdatedText, Does.Not.Contain("[Obsolete("), "Attribute should be removed from method.");
         Assert.That(result.UpdatedText, Does.Contain("[Obsolete]"), "Class attribute should remain.");
+    }
+
+    [Test]
+    public async Task RemoveAttribute_BareTypeNameWithOwnConstructor_TargetsType()
+    {
+        SetSource(@"
+[Obsolete]
+public class Widget
+{
+    [Obsolete]
+    public Widget() { }
+    public void Run() { }
+}
+", "Widget.cs");
+
+        var result = await _memberRefactoringEngine.RemoveAttributeAsync("Widget.cs", "Widget", "Obsolete");
+
+        var remaining = result.UpdatedText.IndexOf("[Obsolete]", StringComparison.Ordinal);
+        Assert.That(remaining, Is.GreaterThanOrEqualTo(0), "One attribute should remain.");
+        Assert.That(result.UpdatedText.IndexOf("[Obsolete]", remaining + 1, StringComparison.Ordinal), Is.EqualTo(-1), "Only one attribute should remain.");
+        Assert.That(remaining, Is.GreaterThan(result.UpdatedText.IndexOf("public class Widget", StringComparison.Ordinal)), "The class attribute should be removed, leaving the constructor's.");
     }
 
     [Test]

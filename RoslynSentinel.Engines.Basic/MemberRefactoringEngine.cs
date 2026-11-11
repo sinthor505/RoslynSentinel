@@ -1755,7 +1755,7 @@ public class MemberRefactoringEngine
         SyntaxNode? targetNode = null;
         var allCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken);
         var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(allCandidates.Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
-        var memberNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(DropOwnConstructorsWhenTypeMatches(memberCandidates, allCandidates, contextSnippet, lineBefore, lineAfter), sourceText, contextSnippet, lineBefore, lineAfter,
+        var memberNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(PreferTypeOverOwnConstructors(allCandidates, memberCandidates, targetName, null, contextSnippet, lineBefore, lineAfter), sourceText, contextSnippet, lineBefore, lineAfter,
             (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
         if (memberNode != null)
         {
@@ -1877,26 +1877,6 @@ public class MemberRefactoringEngine
         };
     }
 
-    /// <summary>
-    /// A bare type name also matches its own constructor. With no snippet the type is meant; pass a
-    /// contextSnippet to target the constructor. Returns an empty member list in that case so the
-    /// caller's type fallback runs.
-    /// </summary>
-    // TODO Two type-over-constructor rules: this one (attribute paths, keyed on contextSnippet) and
-    // ExcludeSameNamedConstructors (Member remove, keyed on containerName). Fold into one rule once the attribute
-    // paths' behaviour is pinned by tests.
-    private static List<SyntaxNodeCandidate> DropOwnConstructorsWhenTypeMatches(List<SyntaxNodeCandidate> memberCandidates, List<SyntaxNodeCandidate> allCandidates, string? contextSnippet, string? lineBefore, string? lineAfter)
-    {
-        var hasSnippet = !string.IsNullOrWhiteSpace(contextSnippet) || !string.IsNullOrWhiteSpace(lineBefore) || !string.IsNullOrWhiteSpace(lineAfter);
-        if (hasSnippet || memberCandidates.Count == 0 || memberCandidates.Any(c => c.Kind != CandidateKind.Constructor))
-        {
-            return memberCandidates;
-        }
-
-        var hasType = allCandidates.Any(c => c.Kind is CandidateKind.Class or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Interface or CandidateKind.Enum);
-        return hasType ? new List<SyntaxNodeCandidate>() : memberCandidates;
-    }
-
     public async Task<DocumentEditResult> RemoveAttributeAsync(FilePathWrapper filePath, string targetName, string attributeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
@@ -1920,7 +1900,7 @@ public class MemberRefactoringEngine
         MemberDeclarationSyntax? memberTarget = null;
         var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)
             .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
-        memberTarget = SyntaxTargetResolver.ResolveBySnippetOrThrow(DropOwnConstructorsWhenTypeMatches(memberCandidates, SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken), contextSnippet, lineBefore, lineAfter), sourceText, contextSnippet, lineBefore, lineAfter,
+        memberTarget = SyntaxTargetResolver.ResolveBySnippetOrThrow(PreferTypeOverOwnConstructors(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken), memberCandidates, targetName, null, contextSnippet, lineBefore, lineAfter), sourceText, contextSnippet, lineBefore, lineAfter,
             (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
 
         if (memberTarget == null)
@@ -2578,7 +2558,9 @@ public class MemberRefactoringEngine
         var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(allNameCandidates
             .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember))
             .ToList());
-        memberCandidates = ExcludeSameNamedConstructors(allNameCandidates, memberCandidates, memberName, containerName);
+        // Snippets are not passed: a snippet quoting the type's own declaration line must still remove the type
+        // (it would match no constructor). containerName = the type reaches the constructor instead.
+        memberCandidates = PreferTypeOverOwnConstructors(allNameCandidates, memberCandidates, memberName, containerName, null, null, null);
         memberCandidates = SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName);
         member = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
             (candidates, matches, failureMode) => SyntaxTargetResolver.BuildOverloadHintForCandidates(candidates, matches, failureMode, sourceText, document.FilePath ?? string.Empty, "remove", memberName))?.Node;
@@ -2700,8 +2682,9 @@ public class MemberRefactoringEngine
         var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(allNameCandidates
             .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember))
             .ToList());
-        // Same-named constructors are dropped by ExcludeSameNamedConstructors, shared with RemoveMemberAsync.
-        memberCandidates = ExcludeSameNamedConstructors(allNameCandidates, memberCandidates, memberName, containerName);
+        // Same-named constructors are dropped by PreferTypeOverOwnConstructors, shared with RemoveMemberAsync
+        // (no snippets passed, same reason as there).
+        memberCandidates = PreferTypeOverOwnConstructors(allNameCandidates, memberCandidates, memberName, containerName, null, null, null);
         if (SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName).Count > 0)
             return false;
 
@@ -5576,11 +5559,16 @@ public class MemberRefactoringEngine
 
     /// <summary>
     /// A bare type name also matches its own constructor (a ConstructorDeclaration shares the type's name).
-    /// When a type of that name is declared and containerName does not name that type itself, the type is
-    /// the target, so its constructor candidates are dropped. Returns memberCandidates unchanged otherwise.
+    /// When a type of that name is declared, its constructor candidates are dropped so the type is the target.
+    /// Returns memberCandidates unchanged when a snippet can point at the constructor, or when containerName
+    /// names that type itself.
     /// </summary>
-    private static List<SyntaxNodeCandidate> ExcludeSameNamedConstructors(List<SyntaxNodeCandidate> allNameCandidates, List<SyntaxNodeCandidate> memberCandidates, string memberName, string? containerName)
+    private static List<SyntaxNodeCandidate> PreferTypeOverOwnConstructors(List<SyntaxNodeCandidate> allCandidates, List<SyntaxNodeCandidate> memberCandidates, string memberName, string? containerName, string? contextSnippet, string? lineBefore, string? lineAfter)
     {
+        // The attribute paths used to keep constructors when a non-constructor shared the name; now only the constructors are dropped.
+        if (!string.IsNullOrWhiteSpace(contextSnippet) || !string.IsNullOrWhiteSpace(lineBefore) || !string.IsNullOrWhiteSpace(lineAfter))
+            return memberCandidates;
+
         if (containerName is not null)
         {
             var containerTypeName = containerName;
@@ -5594,7 +5582,7 @@ public class MemberRefactoringEngine
                 return memberCandidates;
         }
 
-        var hasType = allNameCandidates.Any(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum);
+        var hasType = allCandidates.Any(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum);
         return hasType ? memberCandidates.Where(c => c.Kind != CandidateKind.Constructor).ToList() : memberCandidates;
     }
 }
