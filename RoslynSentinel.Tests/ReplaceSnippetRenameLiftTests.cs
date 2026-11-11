@@ -285,6 +285,69 @@ public class ReplaceSnippetRenameLiftTests
         });
     }
 
+    // Any entry that cannot be resolved to exactly one symbol refuses the whole lift: the class rename alone is not applied.
+    [Test]
+    public async Task FlagOn_ClassAndOverloadedMethodRenamedInOneEdit_IsNotLiftedAtAll()
+    {
+        using var _ = LiftRenamesOptions.OverrideForCurrentContext(true);
+        const string overloadedPricing = """
+        namespace ContosoOrders.Core;
+
+        public class OrderPricingCalculator
+        {
+            public decimal CalcDisc(decimal a) => a;
+            public decimal CalcDisc(decimal a, decimal b) => a + b;
+        }
+        """;
+        using var workspace = InMemoryWorkspace.Create((PricingRelativePath, overloadedPricing), (CheckoutRelativePath, CheckoutSource));
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+        var originalPricing = workspace.ReadText(PricingRelativePath);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "rename the class and one overload in one edit",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(PricingRelativePath),
+            oldContent: "public class OrderPricingCalculator\n{\n    public decimal CalcDisc(decimal a) => a;",
+            newContent: "public class DiscountPricingCalculator\n{\n    public decimal CalculateDiscountedTotal(decimal a) => a;");
+
+        Assert.That(result.IsError, Is.True, "an unresolvable entry must refuse the whole lift");
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData?.Message, Does.Not.Contain("Applied as RenameSymbol"));
+            Assert.That(workspace.ReadText(PricingRelativePath), Is.EqualTo(originalPricing));
+            Assert.That(workspace.ReadText(CheckoutRelativePath), Does.Contain("OrderPricingCalculator c"));
+        });
+    }
+
+    // H1 R5 T3/T4: one edit renamed a class AND its method, and the lift refused because it wanted exactly one rename. Each rename is now lifted on its own
+    // against the baseline and the changes are unioned: the caller's line carries both new names.
+    [Test]
+    public async Task FlagOn_ClassAndMethodRenamedInOneEdit_BothAreLiftedAndListed()
+    {
+        using var _ = LiftRenamesOptions.OverrideForCurrentContext(true);
+        using var workspace = CreateWorkspace();
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "rename the calculator class and its discount method in one edit",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(PricingRelativePath),
+            oldContent: "public class OrderPricingCalculator\n{\n    public decimal CalcDisc(decimal a) => a;\n}",
+            newContent: "public class DiscountPricingCalculator\n{\n    public decimal CalculateDiscountedTotal(decimal a) => a;\n}");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var summary = result.SuccessData?.ReplacementResult?.Summary ?? string.Empty;
+        Assert.Multiple(() =>
+        {
+            Assert.That(workspace.ReadText(CheckoutRelativePath), Does.Contain("decimal F(DiscountPricingCalculator c) => c.CalculateDiscountedTotal(1m);"));
+            Assert.That(workspace.ReadText(PricingRelativePath), Does.Contain("public class DiscountPricingCalculator"));
+            Assert.That(summary, Does.Contain("Applied as RenameSymbol"));
+            Assert.That(summary, Does.Contain("class OrderPricingCalculator -> DiscountPricingCalculator"));
+            Assert.That(summary, Does.Contain("method CalcDisc -> CalculateDiscountedTotal"));
+            Assert.That(summary, Does.Contain("OrderCheckout.cs:5  decimal F(DiscountPricingCalculator c) => c.CalculateDiscountedTotal(1m);"));
+        });
+    }
+
     // Batch G R3: a rejected edit of the caller file is remembered; when a lift then rewrites that file, a later not-found oldContent copied from the
     // rejected edit must not be told "the file still has the old text", because the lift rewrote it.
     [Test]

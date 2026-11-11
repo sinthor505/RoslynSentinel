@@ -11,20 +11,26 @@ namespace RoslynSentinel.Engines.Basic;
 /// RenameSymbol output for every document the model did not edit. Engine-internal: it carries no status, only the
 /// merged change set the caller validates and the numbers it reports.
 /// </summary>
-/// <param name="Rename">The single unambiguous rename found by the symbol diff.</param>
+/// <param name="Renames">Every rename the symbol diff found, in diff order; each was resolved to exactly one symbol and renamed on its own against the baseline (there is at least one).</param>
 /// <param name="Changes">Every edited document with the model's candidate text, plus every other document the rename changed with the renamed text. The set the compile gate validates.</param>
 /// <param name="RenamedFiles">File names (no directory) of the documents the model did not edit and the rename changed.</param>
 /// <param name="CallSiteCount">Number of text changes the rename made in <paramref name="RenamedFiles"/>.</param>
 /// <param name="EditedFileUseCount">Number of old-name uses the rename rewrote inside the files the model edited, outside its edited spans (for example the class's own constructor).</param>
 /// <param name="RewrittenLines">Per file in <paramref name="RenamedFiles"/>, the rewritten lines as <c>File.cs:12  trimmed source line</c> (one per changed line, in file order); null when not collected.</param>
 public sealed record RenameLiftResult(
-    SymbolChange Rename,
+    IReadOnlyList<SymbolChange> Renames,
     Dictionary<FilePathWrapper, string> Changes,
     IReadOnlyList<string> RenamedFiles,
     int CallSiteCount,
     int EditedFileUseCount = 0,
     IReadOnlyDictionary<string, IReadOnlyList<string>>? RewrittenLines = null)
 {
+    /// <summary>The first rename of <see cref="Renames"/>; the single wire verdict of the lift (<see cref="ToVerdict"/>) describes this one.</summary>
+    public SymbolChange Rename => Renames[0];
+
+    /// <summary>Each rename as "class A -> B, method C -> D".</summary>
+    public string DescribeRenames() => string.Join(", ", Renames.Select(r => $"{r.DeclarationKind} {r.OldName} -> {r.NewName}"));
+
     /// <summary>
     /// The lines the lift rewrote in the other files, at most <paramref name="maxPerFile"/> per file and then "+N more", so the model
     /// sees its call sites are already updated (batch G R3: it re-sent its own call-site edit with the old text). Empty when none were collected.
@@ -51,7 +57,7 @@ public sealed record RenameLiftResult(
 
     /// <summary>One sentence for the response: what was renamed and how many uses in how many other files the lift rewrote.</summary>
     public string Describe()
-        => $"{Rename.DeclarationKind} {Rename.OldName} -> {Rename.NewName}: {CallSiteCount} call site(s) in {RenamedFiles.Count} other file(s) ({string.Join(", ", RenamedFiles)}), "
+        => $"{DescribeRenames()}: {CallSiteCount} call site(s) in {RenamedFiles.Count} other file(s) ({string.Join(", ", RenamedFiles)}), "
             + (EditedFileUseCount > 0
                 ? $"plus {EditedFileUseCount} more use(s) in the file(s) you edited that your edit left on the old name; your own edited text was kept."
                 : "while your edit's own text was kept for the file(s) you edited.");
@@ -113,21 +119,58 @@ public static class RenameLifter
             }
 
             var renames = EditImpactAnalyzer.DiffSymbols(baselineTexts, candidateTexts).Where(c => c.Kind == SymbolChangeKind.Renamed).ToList();
-            if (renames.Count != 1 || renames[0].NewName is not { Length: > 0 } newName)
+            if (renames.Count == 0 || renames.Any(r => string.IsNullOrEmpty(r.NewName)))
             {
                 return null;
             }
 
-            var rename = renames[0];
-            var symbol = await ResolveUniqueOldSymbolAsync(baseline, rename, cancellationToken);
-            if (symbol is null)
+            // Every entry must resolve to exactly one symbol; one that does not (ambiguous, overloaded, declared twice) refuses the whole
+            // lift, because lifting only part of the edit's renames would leave the rest of the model's intent half applied.
+            var symbols = new List<ISymbol>();
+            foreach (var renameEntry in renames)
             {
-                return null;
+                if (await ResolveUniqueOldSymbolAsync(baseline, renameEntry, cancellationToken) is not { } resolved)
+                {
+                    return null;
+                }
+
+                symbols.Add(resolved);
             }
 
             // Comments and strings stay untouched, as in the RenameSymbol tool (Roslyn would rewrite any string containing the old name).
             var renameOptions = new SymbolRenameOptions { RenameInComments = false, RenameInStrings = false };
-            var renamed = await Renamer.RenameSymbolAsync(baseline, symbol, renameOptions, newName, cancellationToken);
+
+            // Each rename runs on its own against the baseline (H1 R5 T3/T4: one whole-file edit renamed a class and its method, and only the
+            // class had callers outside the file). Their text changes are unioned per document in baseline coordinates; a change that overlaps
+            // one already taken is dropped. A rename with no use outside the model's edit adds nothing here. The compile gate then validates.
+            var renamerChanges = new Dictionary<DocumentId, List<TextChange>>();
+            for (var i = 0; i < symbols.Count; i++)
+            {
+                var renamed = await Renamer.RenameSymbolAsync(baseline, symbols[i], renameOptions, renames[i].NewName!, cancellationToken);
+                foreach (var projectChange in renamed.GetChanges(baseline).GetProjectChanges())
+                {
+                    foreach (var changedId in projectChange.GetChangedDocuments())
+                    {
+                        if (baseline.GetDocument(changedId) is not { } oldDocument || renamed.GetDocument(changedId) is not { } newDocument)
+                        {
+                            continue;
+                        }
+
+                        if (!renamerChanges.TryGetValue(changedId, out var taken))
+                        {
+                            renamerChanges[changedId] = taken = [];
+                        }
+
+                        foreach (var change in await newDocument.GetTextChangesAsync(oldDocument, cancellationToken))
+                        {
+                            if (!taken.Any(existing => Overlaps(existing.Span, change.Span)))
+                            {
+                                taken.Add(change);
+                            }
+                        }
+                    }
+                }
+            }
 
             // Every document id the model edited (a linked file has one id per project): the candidate text wins there, and
             // the renamed text of that document, which also holds the model's old declaration site, is discarded.
@@ -146,46 +189,43 @@ public static class RenameLifter
             var editedFileUses = 0;
             var rewrittenLines = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
             var mergedEditedPaths = new HashSet<FilePathWrapper>();
-            foreach (var projectChange in renamed.GetChanges(baseline).GetProjectChanges())
+            foreach (var (documentId, documentChanges) in renamerChanges)
             {
-                foreach (var documentId in projectChange.GetChangedDocuments())
+                if (documentChanges.Count == 0 || baseline.GetDocument(documentId) is not { FilePath: { } filePath } oldDocument)
                 {
-                    if (baseline.GetDocument(documentId) is not { } oldDocument || renamed.GetDocument(documentId) is not { FilePath: { } filePath } newDocument)
-                    {
-                        continue;
-                    }
-
-                    if (editedIds.TryGetValue(documentId, out var editedPath))
-                    {
-                        // An edited file: the model's text wins inside its edited spans; the renamer's other changes (outside every
-                        // span) are applied on top, so a use of the old name its snippet did not reach is renamed too. A linked file
-                        // is merged once, through its first document.
-                        if (editedSpans is not null && editedSpans.TryGetValue(editedPath, out var spans) && mergedEditedPaths.Add(editedPath)
-                            && await MergeIntoEditedFileAsync(workspaceManager, editedPath, oldDocument, newDocument, spans, cancellationToken) is { } mergedFile)
-                        {
-                            merged[editedPath] = mergedFile.Text;
-                            editedFileUses += mergedFile.Uses;
-                        }
-
-                        continue;
-                    }
-
-                    var wrapper = new FilePathWrapper(filePath, workspaceManager.GetSolutionRoot());
-                    if (merged.ContainsKey(wrapper))
-                    {
-                        continue; // a linked file reached through a second project
-                    }
-
-                    var newText = await newDocument.GetTextAsync(cancellationToken);
-                    var textChanges = (await newDocument.GetTextChangesAsync(oldDocument, cancellationToken)).OrderBy(c => c.Span.Start).ToList();
-                    merged[wrapper] = newText.ToString();
-                    callSites += textChanges.Count;
-                    renamedFiles.Add(Path.GetFileName(filePath));
-                    rewrittenLines[Path.GetFileName(filePath)] = RewrittenLinesOf(Path.GetFileName(filePath), newText, textChanges);
+                    continue;
                 }
+
+                if (editedIds.TryGetValue(documentId, out var editedPath))
+                {
+                    // An edited file: the model's text wins inside its edited spans; the renamers' other changes (outside every
+                    // span) are applied on top, so a use of the old name its snippet did not reach is renamed too. A linked file
+                    // is merged once, through its first document.
+                    if (editedSpans is not null && editedSpans.TryGetValue(editedPath, out var spans) && mergedEditedPaths.Add(editedPath)
+                        && await MergeIntoEditedFileAsync(workspaceManager, editedPath, oldDocument, documentChanges, spans, cancellationToken) is { } mergedFile)
+                    {
+                        merged[editedPath] = mergedFile.Text;
+                        editedFileUses += mergedFile.Uses;
+                    }
+
+                    continue;
+                }
+
+                var wrapper = new FilePathWrapper(filePath, workspaceManager.GetSolutionRoot());
+                if (merged.ContainsKey(wrapper))
+                {
+                    continue; // a linked file reached through a second project
+                }
+
+                var orderedChanges = documentChanges.OrderBy(c => c.Span.Start).ToList();
+                var newText = (await oldDocument.GetTextAsync(cancellationToken)).WithChanges(orderedChanges);
+                merged[wrapper] = newText.ToString();
+                callSites += orderedChanges.Count;
+                renamedFiles.Add(Path.GetFileName(filePath));
+                rewrittenLines[Path.GetFileName(filePath)] = RewrittenLinesOf(Path.GetFileName(filePath), newText, orderedChanges);
             }
 
-            return renamedFiles.Count == 0 && editedFileUses == 0 ? null : new RenameLiftResult(rename, merged, renamedFiles, callSites, editedFileUses, rewrittenLines);
+            return renamedFiles.Count == 0 && editedFileUses == 0 ? null : new RenameLiftResult(renames, merged, renamedFiles, callSites, editedFileUses, rewrittenLines);
         }
         // The lift is an optional extra on a rejection that is already being reported: any Roslyn or workspace failure falls
         // back to the first-slice redirect instead of masking the real compiler errors with a second error.
@@ -194,6 +234,10 @@ public static class RenameLifter
             return null;
         }
     }
+
+    /// <summary>Whether two renamer changes collide: their spans share text, or both insert at the same position.</summary>
+    private static bool Overlaps(TextSpan a, TextSpan b)
+        => (a.Start < b.End && b.Start < a.End) || (a.Length == 0 && b.Length == 0 && a.Start == b.Start);
 
     /// <summary>
     /// One entry per distinct line the rename changed in a document, as <c>File.cs:12  trimmed line</c> from the NEW text. The changes are
@@ -226,10 +270,10 @@ public static class RenameLifter
     /// ReplaceSnippet paths normalise the candidate. Null when the renamer has no surviving change in this file.
     /// </summary>
     private static async Task<(string Text, int Uses)?> MergeIntoEditedFileAsync(
-        IWorkspaceManager workspaceManager, FilePathWrapper path, Document baselineDocument, Document renamedDocument,
+        IWorkspaceManager workspaceManager, FilePathWrapper path, Document baselineDocument, IReadOnlyList<TextChange> renamerChanges,
         IReadOnlyList<TextChange> modelEdits, CancellationToken cancellationToken)
     {
-        var surviving = (await renamedDocument.GetTextChangesAsync(baselineDocument, cancellationToken))
+        var surviving = renamerChanges
             .Where(c => !modelEdits.Any(e => c.Span.Start < e.Span.End && c.Span.End > e.Span.Start))
             .ToList();
         if (surviving.Count == 0)

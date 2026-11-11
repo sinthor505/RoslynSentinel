@@ -215,6 +215,12 @@ reaches the wire only as `ResultError.Message` text (`EditImpactGate.cs:63`). Re
    threaded from both ReplaceSnippet paths) win; renamer changes outside every span are applied on top, so an
    old-name use the snippet did not reach (own constructor, self-call) is renamed too. A file with no span
    information keeps the model's text verbatim.
+   **Multi-rename (2026-11-11):** "exactly one rename" was too strict. H1 R5 T3/T4 (run `20261111-092200-526`) sent a whole-file edit
+   renaming a class and its method; only the class had callers outside the file, yet the diff held two `Renamed`
+   entries and the lift refused (`RenameLifter` guard `renames.Count != 1`). Now every `Renamed` entry is resolved
+   to exactly one symbol (any entry that is not refuses the whole lift) and renamed independently on the baseline; the
+   changes are unioned per document in baseline coordinates (overlaps dropped), the model's spans still win, and the gate
+   validates. The summary lists each rename ("class A -> B, method C -> D") and keeps the rewritten-line quote.
 2. **Edited-file attribution and locals.** Pass the edited spans to the analyzer. A diagnostic in an
    edited file but outside the edited span is attributed like one in an unedited file. Diff locals and
    local functions inside edited members, keyed by (member, name), so a renamed local whose later uses sit

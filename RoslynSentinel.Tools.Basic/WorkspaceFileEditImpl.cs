@@ -938,11 +938,11 @@ public class WorkspaceFileEditImpl
         var errorsInRenamedFiles = errorFiles.Any(f => plan.RenamedFiles.Contains(f, StringComparer.OrdinalIgnoreCase));
         var note = lifted.IsError
             ? errorsInRenamedFiles
-                ? $"Your edit renames {plan.Rename.OldName} to {plan.Rename.NewName}. It was tried as a RenameSymbol ({plan.CallSiteCount} call site(s) in {plan.RenamedFiles.Count} other file(s)) with your own text kept for the file(s) you edited, and errors remain in files the rename rewrote, so nothing was changed."
-                : $"Your edit renames {plan.Rename.OldName} to {plan.Rename.NewName}. In a trial the rename itself applied cleanly ({plan.CallSiteCount} call site(s) in {plan.RenamedFiles.Count} other file(s) updated, your own text kept for the file(s) you edited); the remaining errors come from the other text in your edit, not from the rename. Nothing was changed. The remaining errors are listed below."
+                ? $"Your edit renames {plan.DescribeRenames()}. It was tried as a RenameSymbol ({plan.CallSiteCount} call site(s) in {plan.RenamedFiles.Count} other file(s)) with your own text kept for the file(s) you edited, and errors remain in files the rename rewrote, so nothing was changed."
+                : $"Your edit renames {plan.DescribeRenames()}. In a trial the rename itself applied cleanly ({plan.CallSiteCount} call site(s) in {plan.RenamedFiles.Count} other file(s) updated, your own text kept for the file(s) you edited); the remaining errors come from the other text in your edit, not from the rename. Nothing was changed. The remaining errors are listed below."
             : $"Applied as RenameSymbol: {plan.Describe()} Files changed: {string.Join(", ", plan.Changes.Keys.Select(k => Path.GetFileName((string)k)))}."
                 + (rewrittenLines.Length == 0 ? "" : "\n" + rewrittenLines + "\nThese call sites are already updated; do not edit them again.");
-        _logger.LogInformation("ReplaceSnippet rename lift of {OldName} -> {NewName}: {Outcome}", plan.Rename.OldName, plan.Rename.NewName, lifted.IsError ? "still rejected" : "applied");
+        _logger.LogInformation("ReplaceSnippet rename lift of {Renames}: {Outcome}", plan.DescribeRenames(), lifted.IsError ? "still rejected" : "applied");
         return (lifted, plan.Changes, note, plan.ToVerdict(lifted.IsError));
     }
 
