@@ -146,8 +146,22 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
 
     public Task<SolutionLoadStatus> WaitForLoadAsync(TimeSpan timeout, CancellationToken cancellationToken) => Task.FromResult(SolutionLoadStatus);
 
+    /// <summary>
+    /// Awaited at the start of every <see cref="ApplyProposedChangesAsync"/> call, so a test can hold one call in flight (block inside the hook on the first
+    /// call, let later calls through) while another call runs to completion. Null means no hook.
+    /// </summary>
+    public Func<Task>? BeforeApply
+    {
+        get; set;
+    }
+
     public async Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<EngineProgress>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null, bool exactRestore = false, string? operationLabel = null, StaleReadPolicy staleReadPolicy = StaleReadPolicy.None) // ignored: the fake does no EOL work
     {
+        if (BeforeApply is not null)
+        {
+            await BeforeApply();
+        }
+
         if (ApplyException is not null)
         {
             throw ApplyException;

@@ -29,6 +29,15 @@ public sealed record RenameLiftResult(
             + (EditedFileUseCount > 0
                 ? $"plus {EditedFileUseCount} more use(s) in the file(s) you edited that your edit left on the old name; your own edited text was kept."
                 : "while your edit's own text was kept for the file(s) you edited.");
+
+    /// <summary>
+    /// The wire verdict for this lift: "lifted" when the merged set applied, "liftRejected" when it was tried and still had errors.
+    /// <see cref="ImpactVerdict.BrokenUseCount"/> carries the uses the rename rewrote (call sites in other files plus uses elsewhere in the edited files).
+    /// </summary>
+    public ImpactVerdict ToVerdict(bool rejectedAfterLift)
+        => new("renamed", Rename.DeclarationKind, Rename.Container, Rename.OldName, Rename.NewName,
+            Rename.File is null ? null : Rename.Line > 0 ? $"{Rename.File}:{Rename.Line}" : Rename.File,
+            rejectedAfterLift ? "liftRejected" : "lifted", CallSiteCount + EditedFileUseCount, [], "RenameSymbol", null);
 }
 
 /// <summary>

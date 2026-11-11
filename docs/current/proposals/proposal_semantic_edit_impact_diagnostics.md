@@ -219,11 +219,26 @@ reaches the wire only as `ResultError.Message` text (`EditImpactGate.cs:63`). Re
    edited file but outside the edited span is attributed like one in an unedited file. Diff locals and
    local functions inside edited members, keyed by (member, name), so a renamed local whose later uses sit
    outside the snippet gets "renamed local x -> y; N uses outside your edit" instead of a raw CS0103.
-   Fixes the bare second call in pattern B and the local-variable case.
+   Fixes the bare second call in pattern B and the local-variable case. **Built (uncommitted) 2026-11-11:**
+   `EditImpactAnalyzer.AnalyzeAsync(editedSpans:)` converts the baseline-coordinate spans to candidate regions (verified against the candidate
+   text, else the whole file counts as edited); `IsOutsideEdit` attributes an error outside every region like one in an unedited file; local and
+   local-function renames/removals come from `EditImpactLocalDiff` (kept out of `DiffSymbols` so `RenameLifter` still counts only member renames).
+   Pattern B as built: the caller edit's error is INSIDE its own span (it uses a name only the rejected sibling edit declares), so outside-span
+   attribution alone does not reach it; `SymbolChangeKind.Unapplied` attributes a missing name that is declared nowhere in the solution but appears in
+   a rejected edit of another file (`RejectedEditMemory`) or one still in flight (`InFlightEditMemory`, registered while a ReplaceSnippet call runs), so it
+   is order-independent for parallel calls; paths are filtered to the analyzed solution's documents (the memories are process-wide). Parameters, pattern/out/deconstruction,
+   catch and foreach variables are diffed too (`EditImpactLocalDiff`, members keyed by parameter types).
+   Tests: `EditImpactSpanAttributionTests`.
 3. **Verdict list on the wire.** Serialize the changes into the rejection's structured detail: per entry
    kind, old/new name, location, verdict (valid / breaks N uses / lifted), broken uses (capped) and the
    suggested call. Advisory entries on a successful write (the removed-literal idea above) go to `findings`.
-   Lets the eval harness assert on the verdict rather than on message text.
+   Lets the eval harness assert on the verdict rather than on message text. **Built (uncommitted) 2026-11-11:** reuses the existing
+   `ResultError.StructuredDetail` channel (`errorData.structuredDetail`); new item `ImpactVerdict` (Engines.Basic: kind, declarationKind, container,
+   oldName, newName, location, verdict `valid`/`breaksUses`/`lifted`/`liftRejected`, brokenUseCount, brokenUses (DiagnosticInfo, capped 5),
+   suggestedTool, nextStep; max 20, added declarations left out). Both ReplaceSnippet rejections carry it as one typed item `EditImpactDetail {verdicts, diagnostics}` (the only element of
+   `structuredDetail`; verdicts empty when nothing was attributable; the lift attempt comes first). Revised 2026-11-11: this replaced the first-built mixed list. A lifted write adds an `EditImpact` finding `edit-impact verdict=lifted ...`.
+   `EditImpactGate.AnalyzeAsync` returns the structured result; `DescribeAsync` delegates. Not wired: the `ValidateAndApplyHelper` tools,
+   WriteFile/ApplyDiff/CreateFile (TODO in `EditImpactGate`).
 4. **Pairing for pattern C.** When a removed member ties with two added members of the same shape, pair it
    with the added member that calls the other one (the renamed method calls the extracted helper). Verify
    against run 309 before building; hypothesis.

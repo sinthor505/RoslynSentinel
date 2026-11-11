@@ -48,6 +48,11 @@ public class WorkspaceFileEditImpl
 
     private readonly RejectedEditMemory _rejectedEdits = SharedRejectedEdits;
 
+    // Same reasoning as SharedRejectedEdits: tool-class instances are per call, so the registry of running calls has to be process-wide.
+    private static readonly InFlightEditMemory SharedInFlightEdits = new();
+
+    private readonly InFlightEditMemory _inFlightEdits = SharedInFlightEdits;
+
     // 10-chain run 301 (host 113, 2026-11-10) sent the same two rejected edits for 12 turns while its reasoning said to use
     // RenameSymbol; the identical message gave no sign that it was repeating itself.
     private const string RepeatedRejectionNote = "You already sent this exact edit and it was rejected the same way; sending it again cannot succeed.";
@@ -137,6 +142,19 @@ public class WorkspaceFileEditImpl
         }
 
         /// <summary>
+        /// File name to the remembered rejected newContent (joined) of every file except <paramref name="excludedPaths"/>. For the edit-impact analyzer: a name the current
+        /// edit uses that only one of these declares comes from a sibling call that was rejected and so never applied (parallel calls cannot see each other).
+        /// </summary>
+        public Dictionary<string, string> OtherFilesNewContent(IEnumerable<string> excludedPaths)
+        {
+            var excluded = new HashSet<string>(excludedPaths.Select(Key), StringComparer.OrdinalIgnoreCase);
+            lock (_gate)
+                return _byFile
+                    .Where(kv => !excluded.Contains(kv.Key))
+                    .ToDictionary(kv => kv.Key, kv => string.Join("\n", kv.Value.Select(e => e.NewContent)), StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
         /// True when the edit equals a remembered rejected edit for the file: same oldContent AND same newContent, ignoring
         /// line endings. The same newContent under a different oldContent is a different edit, not a repeat.
         /// </summary>
@@ -175,6 +193,61 @@ public class WorkspaceFileEditImpl
                 var rejectedLines = new HashSet<string>(TrimmedLines(rejected), StringComparer.Ordinal);
                 return missing.All(rejectedLines.Contains);
             });
+        }
+    }
+
+    // The newContent of the ReplaceSnippet calls that are running right now, per file. A parallel call that is validated while another is still in flight cannot see
+    // that call's edit (each is checked on its own against the committed solution), so a name only the other call declares looks missing; the edit-impact analyzer
+    // consults this beside RejectedEditMemory (which only knows calls that already finished and were rejected) to attribute that error to the other edit instead of leaving
+    // it bare. An entry lives from the point the call has resolved its file(s) until the call ends, success or not. Process-wide like SharedRejectedEdits; the analyzer keeps
+    // only the paths that are documents of its own solution.
+    private sealed class InFlightEditMemory
+    {
+        private readonly Dictionary<Guid, List<(string Path, string NewContent)>> _byCall = new();
+        private readonly object _gate = new();
+
+        private static string Key(string path)
+        {
+            try
+            {
+                return Path.GetFullPath(path);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                return path;
+            }
+        }
+
+        /// <summary>Registers this call's edits (file path and newContent each); dispose the result when the call ends.</summary>
+        public IDisposable Register(IEnumerable<(string Path, string NewContent)> edits)
+        {
+            var id = Guid.NewGuid();
+            lock (_gate)
+                _byCall[id] = edits.Where(e => !string.IsNullOrWhiteSpace(e.NewContent)).Select(e => (Key(e.Path), e.NewContent)).ToList();
+            return new Registration(this, id);
+        }
+
+        /// <summary>Full file path to the newContent (joined) of every in-flight edit of a file other than <paramref name="excludedPaths"/>.</summary>
+        public Dictionary<string, string> OtherFilesNewContent(IEnumerable<string> excludedPaths)
+        {
+            var excluded = new HashSet<string>(excludedPaths.Select(Key), StringComparer.OrdinalIgnoreCase);
+            lock (_gate)
+                return _byCall.Values
+                    .SelectMany(edits => edits)
+                    .Where(e => !excluded.Contains(e.Path))
+                    .GroupBy(e => e.Path, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => string.Join("\n", g.Select(e => e.NewContent)), StringComparer.OrdinalIgnoreCase);
+        }
+
+        private void Remove(Guid id)
+        {
+            lock (_gate)
+                _byCall.Remove(id);
+        }
+
+        private sealed class Registration(InFlightEditMemory owner, Guid id) : IDisposable
+        {
+            public void Dispose() => owner.Remove(id);
         }
     }
 
@@ -843,7 +916,7 @@ public class WorkspaceFileEditImpl
     /// <paramref name="editedSpans"/> are the model's replacements per file as spans of the baseline text, so the rename also reaches old-name
     /// uses the model's snippets did not cover (a constructor or self-call elsewhere in an edited file).
     /// </summary>
-    private async Task<(ApplyChangesResult Result, Dictionary<FilePathWrapper, string> Changes, string Note)?> TryLiftRenameAsync(
+    private async Task<(ApplyChangesResult Result, Dictionary<FilePathWrapper, string> Changes, string Note, ImpactVerdict Verdict)?> TryLiftRenameAsync(
         Dictionary<FilePathWrapper, string> candidateChanges, IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> editedSpans, CancellationToken cancellationToken)
     {
         if (!LiftRenamesOptions.Enabled)
@@ -862,7 +935,46 @@ public class WorkspaceFileEditImpl
             ? $"Your edit renames {plan.Rename.OldName} to {plan.Rename.NewName}. It was tried as a RenameSymbol ({plan.CallSiteCount} call site(s) in {plan.RenamedFiles.Count} other file(s)) with your own text kept for the file(s) you edited, and it still leaves compiler errors, so nothing was changed."
             : $"Applied as RenameSymbol: {plan.Describe()} Files changed: {string.Join(", ", plan.Changes.Keys.Select(k => Path.GetFileName((string)k)))}.";
         _logger.LogInformation("ReplaceSnippet rename lift of {OldName} -> {NewName}: {Outcome}", plan.Rename.OldName, plan.Rename.NewName, lifted.IsError ? "still rejected" : "applied");
-        return (lifted, plan.Changes, note);
+        return (lifted, plan.Changes, note, plan.ToVerdict(lifted.IsError));
+    }
+
+    /// <summary>
+    /// The <c>errorData.structuredDetail</c> of a rejected ReplaceSnippet, single and batch alike: one <see cref="EditImpactDetail"/> holding the verdicts
+    /// (the lift attempt first, then the symbol-diff verdicts) and the compiler diagnostics as two named lists. Both lists may be empty; the shape does not vary.
+    /// </summary>
+    private static List<object> RejectionDetail(EditImpactResult? impact, ImpactVerdict? liftVerdict, IReadOnlyList<DiagnosticInfo> diagnostics)
+    {
+        var verdicts = new List<ImpactVerdict>();
+        if (liftVerdict is not null)
+            verdicts.Add(liftVerdict);
+        if (impact?.Verdicts is { } fromImpact)
+            verdicts.AddRange(fromImpact);
+        return [new EditImpactDetail(verdicts, diagnostics)];
+    }
+
+    /// <summary>
+    /// What other ReplaceSnippet edits say, for the impact analyzer's unapplied-name rule: full file path to newContent for every file except <paramref name="ownPaths"/>,
+    /// from edits that were already rejected (<see cref="RejectedEditMemory"/>) and edits that are running right now (<see cref="InFlightEditMemory"/>). Order-independent:
+    /// whichever of two parallel calls is checked first, the other is in one of the two.
+    /// </summary>
+    private Dictionary<string, string> SiblingEditTexts(IReadOnlyCollection<string> ownPaths)
+    {
+        var siblings = _rejectedEdits.OtherFilesNewContent(ownPaths);
+        foreach (var (path, text) in _inFlightEdits.OtherFilesNewContent(ownPaths))
+            siblings[path] = siblings.TryGetValue(path, out var rejected) ? rejected + "\n" + text : text;
+        return siblings;
+    }
+
+    /// <summary>
+    /// The findings of a successful ReplaceSnippet: those of the apply, plus one advisory line when the write was a lifted rename (step 3: advisory entries on a
+    /// successful write go to <c>findings</c>). The line is <c>edit-impact verdict=lifted kind=renamed ...</c> so a harness can match on it.
+    /// </summary>
+    private static List<Finding> WithLiftFinding(IEnumerable<Finding>? findings, ImpactVerdict? liftVerdict)
+    {
+        var all = findings is null ? [] : findings.ToList();
+        if (liftVerdict is { Verdict: "lifted" } v)
+            all.Add(new Finding("EditImpact", $"edit-impact verdict={v.Verdict} kind={v.Kind} declaration={v.DeclarationKind} old={v.OldName} new={v.NewName} usesRewritten={v.BrokenUseCount} suggestedTool={v.SuggestedTool}"));
+        return all;
     }
 
     public async Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippet(
@@ -1063,6 +1175,8 @@ public class WorkspaceFileEditImpl
                     {
                         [snippetChanges.Keys.Single()] = [new TextChange(new TextSpan(match.Start, match.Length), newContent)]
                     };
+                    // Visible to parallel calls' impact analysis until this call ends (see InFlightEditMemory).
+                    using var inFlight = _inFlightEdits.Register([((string)targetPath, newContent ?? string.Empty)]);
 
                     if (action == ProposedChangeAction.validate)
                     {
@@ -1086,6 +1200,7 @@ public class WorkspaceFileEditImpl
                     // Experimental rename lifting (--lift-renames, off by default): a rejected edit that is one unambiguous rename is
                     // re-validated as RenameSymbol output merged with this edit's own text; see TryLiftRenameAsync.
                     string? liftNote = null;
+                    ImpactVerdict? liftVerdict = null;
                     if (result.IsError && result.ValidationResult != null && await TryLiftRenameAsync(snippetChanges, liftSpans, cancellationToken) is { } lift)
                     {
                         if (WriteRefusal.TryMap("ReplaceSnippet", lift.Result, out var liftRefusal))
@@ -1093,9 +1208,11 @@ public class WorkspaceFileEditImpl
                         result = lift.Result;
                         snippetChanges = lift.Changes;
                         liftNote = lift.Note;
+                        liftVerdict = lift.Verdict;
                     }
                     string? untouchedNote = null;
                     string? impactNote = null;
+                    EditImpactResult? impact = null;
                     var isRepeat = false;
                     if (result.IsError && result.ValidationResult != null)
                     {
@@ -1103,7 +1220,11 @@ public class WorkspaceFileEditImpl
                         _rejectedEdits.Remember((string)targetPath, oldContent, newContent);
                         // The edit-impact report, when it can attribute the errors to unedited files, replaces the generic
                         // untouched-file sentence (it already covers it); null keeps that sentence.
-                        impactNote = await EditImpactGate.DescribeAsync(_workspaceManager, snippetChanges, result.ValidationResult, _activeToolSurface, cancellationToken: cancellationToken);
+                        // Spans only for the model's own text: a lifted (merged) set was changed outside them. Siblings: rejected edits of other files (parallel calls).
+                        impact = await EditImpactGate.AnalyzeAsync(_workspaceManager, snippetChanges, result.ValidationResult, _activeToolSurface, cancellationToken: cancellationToken,
+                            editedSpans: liftNote is null ? liftSpans : null,
+                            rejectedSiblingTexts: SiblingEditTexts(snippetChanges.Keys.Select(k => (string)k).ToList()));
+                        impactNote = impact?.Text;
                         untouchedNote = impactNote
                             ?? ValidateAndApplyHelper.DescribeUntouchedFileErrors(snippetChanges.Keys.Select(k => (string)k), result.ValidationResult.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath");
                     }
@@ -1119,7 +1240,8 @@ public class WorkspaceFileEditImpl
                                 (untouchedNote is null ? "" : untouchedNote + " ") +
                                 (impactNote is null ? "Fix the issue(s) below and retry:\n" : "Compiler errors caused by this edit:\n") +
                                 "[COMPILER ERROR]\n" +
-                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, snippetChanges.Keys.Select(k => (string)k).ToList()))
+                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, snippetChanges.Keys.Select(k => (string)k).ToList()),
+                                StructuredDetail: RejectionDetail(impact, liftVerdict, result.ValidationResult.Diagnostics))
                         };
                     if (!result.IsError)
                         _rejectedEdits.Forget((string)targetPath);
@@ -1134,7 +1256,7 @@ public class WorkspaceFileEditImpl
                     {
                         IsError = false,
                         SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent, blobWrite.Written ? changeId : null),
-                        Findings = result.Findings ?? []
+                        Findings = WithLiftFinding(result.Findings, liftVerdict)
                     };
                 }
                 catch (Exception ex)
@@ -1384,6 +1506,9 @@ public class WorkspaceFileEditImpl
             };
         }
 
+        // Visible to parallel calls' impact analysis until this call ends (see InFlightEditMemory).
+        using var inFlight = _inFlightEdits.Register(newContentsByFile.SelectMany(kv => kv.Value.Select(c => (kv.Key, c.NewContent ?? string.Empty))));
+
         if (action == ProposedChangeAction.validate)
         {
             var validationResult = await _validationEngine.ValidateChangesAsync(finalContents, cancellationToken: cancellationToken);
@@ -1404,6 +1529,7 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
             // Experimental rename lifting (--lift-renames, off by default); see TryLiftRenameAsync and the single-edit path.
             string? liftNote = null;
+            ImpactVerdict? liftVerdict = null;
             if (result.IsError && result.ValidationResult != null && await TryLiftRenameAsync(finalContents, liftSpans, cancellationToken) is { } lift)
             {
                 if (WriteRefusal.TryMap("ReplaceSnippet", lift.Result, out var liftRefusal))
@@ -1411,9 +1537,11 @@ public class WorkspaceFileEditImpl
                 result = lift.Result;
                 finalContents = lift.Changes;
                 liftNote = lift.Note;
+                liftVerdict = lift.Verdict;
             }
             string? untouchedNote = null;
             string? impactNote = null;
+            EditImpactResult? impact = null;
             var isRepeat = false;
             if (result.IsError && result.ValidationResult != null)
             {
@@ -1423,7 +1551,11 @@ public class WorkspaceFileEditImpl
                         _rejectedEdits.Remember(rejectedPath, rejectedEdit.OldContent, rejectedEdit.NewContent);
                 // The edit-impact report, when it can attribute the errors to unedited files, replaces the generic
                 // untouched-file sentence (it already covers it); null keeps that sentence.
-                impactNote = await EditImpactGate.DescribeAsync(_workspaceManager, finalContents, result.ValidationResult, _activeToolSurface, cancellationToken: cancellationToken);
+                // Spans only for the model's own text: a lifted (merged) set was changed outside them. Siblings: rejected edits of other files (parallel calls).
+                impact = await EditImpactGate.AnalyzeAsync(_workspaceManager, finalContents, result.ValidationResult, _activeToolSurface, cancellationToken: cancellationToken,
+                    editedSpans: liftNote is null ? liftSpans : null,
+                    rejectedSiblingTexts: SiblingEditTexts(finalContents.Keys.Select(k => (string)k).ToList()));
+                impactNote = impact?.Text;
                 untouchedNote = impactNote
                     ?? ValidateAndApplyHelper.DescribeUntouchedFileErrors(finalContents.Keys.Select(k => (string)k), result.ValidationResult.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath");
             }
@@ -1440,7 +1572,7 @@ public class WorkspaceFileEditImpl
                         (impactNote is null ? "Fix the issue(s) below and retry:\n" : "Compiler errors caused by this edit:\n") +
                         "[COMPILER ERROR]\n" +
                         await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, finalContents.Keys.Select(k => (string)k).ToList()),
-                        StructuredDetail: result.ValidationResult.Diagnostics),
+                        StructuredDetail: RejectionDetail(impact, liftVerdict, result.ValidationResult.Diagnostics)),
                 };
             if (!result.IsError)
             {
@@ -1458,7 +1590,7 @@ public class WorkspaceFileEditImpl
             {
                 IsError = false,
                 SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent, blobWrite.Written ? changeId : null),
-                Findings = result.Findings ?? []
+                Findings = WithLiftFinding(result.Findings, liftVerdict)
             };
         }
         catch (Exception ex)

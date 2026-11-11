@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Text;
 
 namespace RoslynSentinel.Engines.Basic;
 
@@ -27,6 +28,10 @@ public static class EditImpactAnalyzer
     private const int MaxChangesShown = 2;
     private const int MaxUsesShown = 2;
 
+    // The wire verdict list is capped so errorData.structuredDetail stays small (ResultPager cuts a big one by path).
+    private const int MaxVerdicts = 20;
+    private const int MaxBrokenUsesOnTheWire = 5;
+
     private static readonly Regex Identifier = new(@"[A-Za-z_][A-Za-z0-9_]*", RegexOptions.Compiled);
     private static readonly Regex Quoted = new(@"'([^']*)'", RegexOptions.Compiled);
 
@@ -37,6 +42,9 @@ public static class EditImpactAnalyzer
     private static readonly HashSet<string> SignatureIds = ["CS7036", "CS1501", "CS1503", "CS1729", "CS0029", "CS0266"];
 
     private static readonly HashSet<string> AccessibilityIds = ["CS0122"];
+
+    // A local or local function that is gone is only ever reported as an unknown simple name.
+    private static readonly HashSet<string> LocalIds = ["CS0103"];
 
     /// <summary>The symbol diff of the edited files; public so the diff can be unit-tested without diagnostics.</summary>
     /// <param name="baselineTexts">Path to the text before the edit; null or empty for a file the edit creates.</param>
@@ -55,13 +63,24 @@ public static class EditImpactAnalyzer
     /// <param name="validation">The gate's report; only errors are read.</param>
     /// <param name="isToolActive">Whether a tool can be named to the caller, for example <c>ActiveToolSurface.IsCallable</c>.</param>
     /// <param name="removedPaths">Files the edit removes or moves away; their declarations count as removed.</param>
+    /// <param name="editedSpans">
+    /// Per edited file, the model's replacements as spans of the BASELINE text (as the ReplaceSnippet paths resolved them). With them, a diagnostic in an
+    /// edited file but outside every replaced span is attributed like one in an unedited file; without an entry the whole file counts as edited.
+    /// </param>
+    /// <param name="rejectedSiblingTexts">
+    /// Full file path to the newContent of recent edits of OTHER files that the gate rejected (or that are still in flight). Only paths that are documents of
+    /// <paramref name="baseline"/> count (the memory behind it is process-wide). A name this edit uses that is declared nowhere in the solution
+    /// but appears there is attributed to that unapplied edit (parallel calls cannot see each other).
+    /// </param>
     public static async Task<EditImpactResult?> AnalyzeAsync(
         Solution baseline,
         IReadOnlyDictionary<FilePathWrapper, string> changes,
         DiagnosticReport validation,
         Func<string, bool> isToolActive,
         IReadOnlyCollection<FilePathWrapper>? removedPaths = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? editedSpans = null,
+        IReadOnlyDictionary<string, string>? rejectedSiblingTexts = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var baselineTexts = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
@@ -109,8 +128,85 @@ public static class EditImpactAnalyzer
             }
         }
 
+        // Baseline-coordinate spans to candidate-coordinate regions; a file whose spans cannot be verified against the candidate text keeps
+        // no entry, so all of it counts as edited (the first-slice behavior).
+        var editedRegions = new Dictionary<string, IReadOnlyList<TextSpan>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (path, spans) in editedSpans ?? new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>>())
+        {
+            if (baselineTexts.GetValueOrDefault(path.ToString()) is { } before
+                && candidateTexts.GetValueOrDefault(path.ToString()) is { } after
+                && CandidateRegions(before, after, spans) is { } regions)
+            {
+                editedRegions[path.ToString()] = regions;
+            }
+        }
+
+        // Sibling texts of this solution only, by file name for the message; then which names the unapplied-sibling rule may claim: only quoted
+        // names from missing-name errors that a sibling's text mentions.
+        var siblings = rejectedSiblingTexts?
+            .Where(kv => baseline.GetDocumentIdsWithFilePath(kv.Key).Any())
+            .GroupBy(kv => Path.GetFileName(kv.Key), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => string.Join("\n", g.Select(kv => kv.Value)), StringComparer.OrdinalIgnoreCase);
+        Func<string, bool>? isDeclared = null;
+        if (siblings is { Count: > 0 })
+        {
+            var wanted = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var d in validation.Diagnostics.Where(d => d.Severity == "Error" && MissingNameIds.Contains(d.Id)))
+            {
+                wanted.UnionWith(MessageIdentifiers(d.Message));
+            }
+
+            var declared = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var project in baseline.Projects)
+            {
+                if (await project.GetCompilationAsync(cancellationToken) is not { } compilation)
+                {
+                    continue;
+                }
+
+                foreach (var name in wanted.Where(n => !declared.Contains(n) && compilation.ContainsSymbolsWithName(n, SymbolFilter.TypeAndMember)).ToList())
+                {
+                    declared.Add(name);
+                }
+            }
+
+            isDeclared = declared.Contains;
+        }
+
         return Analyze(baselineTexts, candidateTexts, validation.Diagnostics, isToolActive, unchanged,
-            symbolHandleOf: change => handles.TryGetValue(change, out var handle) ? handle : null);
+            symbolHandleOf: change => handles.TryGetValue(change, out var handle) ? handle : null,
+            editedRegions: editedRegions, rejectedSiblingTexts: siblings, isDeclared: isDeclared);
+    }
+
+    /// <summary>
+    /// The replaced regions in CANDIDATE text coordinates, from the replacements' spans in baseline coordinates. Each replacement's new text is looked
+    /// up at its computed offset in the candidate (line-ending normalized, because the write path normalizes); null when any of them is not found
+    /// there, for example when the candidate is a merged set whose text was changed outside the model's spans, so the caller treats the whole file as edited.
+    /// </summary>
+    internal static IReadOnlyList<TextSpan>? CandidateRegions(string baseline, string candidate, IReadOnlyList<TextChange> changes)
+    {
+        var eol = candidate.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var regions = new List<TextSpan>();
+        int delta = 0;
+        foreach (var change in changes.OrderBy(c => c.Span.Start))
+        {
+            if (change.Span.End > baseline.Length)
+            {
+                return null;
+            }
+
+            var start = change.Span.Start + delta;
+            var written = Regex.Replace(change.NewText ?? string.Empty, "\r\n|\r|\n", eol);
+            if (start < 0 || start + written.Length > candidate.Length || string.CompareOrdinal(candidate, start, written, 0, written.Length) != 0)
+            {
+                return null;
+            }
+
+            regions.Add(new TextSpan(start, written.Length));
+            delta += written.Length - change.Span.Length;
+        }
+
+        return regions;
     }
 
     /// <summary>
@@ -200,20 +296,35 @@ public static class EditImpactAnalyzer
         IReadOnlyList<DiagnosticInfo> diagnostics,
         Func<string, bool> isToolActive,
         IReadOnlyDictionary<string, string>? unchangedTexts = null,
-        Func<SymbolChange, SymbolHandle?>? symbolHandleOf = null)
+        Func<SymbolChange, SymbolHandle?>? symbolHandleOf = null,
+        IReadOnlyDictionary<string, IReadOnlyList<TextSpan>>? editedRegions = null,
+        IReadOnlyDictionary<string, string>? rejectedSiblingTexts = null,
+        Func<string, bool>? isDeclared = null)
     {
         var editedPaths = baselineTexts.Keys.Concat(candidateTexts.Keys).ToList();
-        var outside = diagnostics
-            .Where(d => d.Severity == "Error" && !editedPaths.Any(e => SameFile(e, d.FilePath.ToString())))
-            .ToList();
-        if (outside.Count == 0)
+        var errors = diagnostics.Where(d => d.Severity == "Error").ToList();
+        var outside = errors.Where(d => IsOutsideEdit(d, editedPaths, candidateTexts, editedRegions)).ToList();
+        var unapplied = UnappliedNames(errors, rejectedSiblingTexts, isDeclared);
+        if (outside.Count == 0 && unapplied.Count == 0)
         {
             return null;
         }
 
-        var changes = EditImpactSymbolDiff.Diff(baselineTexts, candidateTexts);
+        // Source lines to quote: the baseline text for an unedited file, the candidate text for an edited one (diagnostic positions are in it).
+        var lineTexts = new Dictionary<string, string>(unchangedTexts ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase);
+        foreach (var (candidatePath, candidateText) in candidateTexts)
+        {
+            if (candidateText is not null)
+            {
+                lineTexts[candidatePath] = candidateText;
+            }
+        }
+
+        var changes = EditImpactSymbolDiff.Diff(baselineTexts, candidateTexts).ToList();
+        changes.AddRange(EditImpactLocalDiff.Diff(baselineTexts, candidateTexts));
+        changes.AddRange(unapplied);
         var candidates = changes
-            .Where(c => c.Kind is SymbolChangeKind.Removed or SymbolChangeKind.Renamed or SymbolChangeKind.SignatureChanged
+            .Where(c => c.Kind is SymbolChangeKind.Removed or SymbolChangeKind.Renamed or SymbolChangeKind.SignatureChanged or SymbolChangeKind.Unapplied
                 || (c.Kind == SymbolChangeKind.AccessibilityChanged && c.AccessibilityNarrowed))
             .Where(c => MatchName(c) is not null)
             .ToList();
@@ -222,11 +333,14 @@ public static class EditImpactAnalyzer
             return null;
         }
 
+        var outsideSet = new HashSet<DiagnosticInfo>(outside);
         var attributed = new Dictionary<SymbolChange, List<(DiagnosticInfo Diagnostic, string? Line)>>();
         var attributedDiagnostics = new List<DiagnosticInfo>();
-        foreach (var diagnostic in outside)
+        foreach (var diagnostic in errors)
         {
-            var line = SourceLineOf(diagnostic, unchangedTexts);
+            // An error inside the edit itself is only ever explained by an unapplied sibling edit; everything else here is by old name.
+            bool isOutside = outsideSet.Contains(diagnostic);
+            var line = SourceLineOf(diagnostic, lineTexts);
             var messageTokens = MessageIdentifiers(diagnostic.Message);
             var lineTokens = line is null ? [] : Identifier.Matches(line).Select(m => m.Value).ToHashSet(StringComparer.Ordinal);
 
@@ -235,13 +349,25 @@ public static class EditImpactAnalyzer
             int bestScore = 0;
             foreach (var candidate in candidates)
             {
+                if (!isOutside && candidate.Kind != SymbolChangeKind.Unapplied)
+                {
+                    continue;
+                }
+
                 if (!IdsFor(candidate).Contains(diagnostic.Id))
                 {
                     continue;
                 }
 
+                // A local is only visible in the file that declares it.
+                if (EditImpactLocalDiff.IsLocal(candidate)
+                    && !string.Equals(Path.GetFileName(diagnostic.FilePath.ToString()), candidate.File, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 var name = MatchName(candidate)!;
-                int score = messageTokens.Contains(name) ? 2 : lineTokens.Contains(name) ? 1 : 0;
+                int score = messageTokens.Contains(name) ? 2 : candidate.Kind == SymbolChangeKind.Unapplied ? 0 : lineTokens.Contains(name) ? 1 : 0;
                 if (score > bestScore)
                 {
                     best = candidate;
@@ -273,11 +399,11 @@ public static class EditImpactAnalyzer
             .ThenByDescending(kv => kv.Value.Count)
             .ToList();
         var primary = ordered[0];
-        var nextStep = NextStepFor(primary.Key, primary.Value.Select(u => u.Diagnostic).ToList(), changes, isToolActive, symbolHandleOf);
+        var nextStep = NextStepOf(primary.Key, primary.Value.Select(u => u.Diagnostic).ToList(), changes, isToolActive, symbolHandleOf);
 
         var text = new StringBuilder();
         text.Append("Next step: ").AppendLine(nextStep);
-        text.AppendLine("Edit impact (symbols this edit changed that unedited files still use):");
+        text.AppendLine("Edit impact (symbols this edit changed that code outside your edit still uses):");
         foreach (var (change, uses) in ordered.Take(MaxChangesShown))
         {
             var distinctUses = uses
@@ -285,7 +411,8 @@ public static class EditImpactAnalyzer
                 .Select(g => g.First())
                 .ToList();
             var more = distinctUses.Count > MaxUsesShown ? $" (+{distinctUses.Count - MaxUsesShown} more)" : string.Empty;
-            text.Append("  - ").Append(Describe(change, changes)).AppendLine(more);
+            var outsideCount = EditImpactLocalDiff.IsLocal(change) ? $"; {distinctUses.Count} use(s) outside your edit" : string.Empty;
+            text.Append("  - ").Append(Describe(change, changes)).Append(outsideCount).AppendLine(more);
             foreach (var (diagnostic, line) in distinctUses.Take(MaxUsesShown))
             {
                 text.Append("      ").Append(Path.GetFileName(diagnostic.FilePath.ToString())).Append(':').Append(diagnostic.StartLine);
@@ -304,7 +431,143 @@ public static class EditImpactAnalyzer
         }
 
         var unattributed = outside.Where(d => !attributedDiagnostics.Contains(d)).ToList();
-        return new EditImpactResult(text.ToString().TrimEnd(), nextStep, changes, attributedDiagnostics, unattributed);
+        return new EditImpactResult(text.ToString().TrimEnd(), nextStep, changes, attributedDiagnostics, unattributed,
+            BuildVerdicts(changes, attributed, isToolActive, symbolHandleOf));
+    }
+
+    /// <summary>
+    /// True when the diagnostic is not inside the edit: its file is not an edited file, or (with regions for that file) its start lies outside
+    /// every replaced region. A file with no regions entry counts as edited as a whole.
+    /// </summary>
+    private static bool IsOutsideEdit(
+        DiagnosticInfo diagnostic,
+        IReadOnlyList<string> editedPaths,
+        IReadOnlyDictionary<string, string?> candidateTexts,
+        IReadOnlyDictionary<string, IReadOnlyList<TextSpan>>? editedRegions)
+    {
+        var path = diagnostic.FilePath.ToString();
+        var edited = editedPaths.FirstOrDefault(e => SameFile(e, path));
+        if (edited is null)
+        {
+            return true;
+        }
+
+        if (editedRegions is null || editedRegions.FirstOrDefault(kv => SameFile(kv.Key, path)).Value is not { } regions
+            || !candidateTexts.TryGetValue(edited, out var candidateText) || candidateText is null)
+        {
+            return false;
+        }
+
+        int offset = 0;
+        for (int line = 1; line < diagnostic.StartLine; line++)
+        {
+            int newline = candidateText.IndexOf('\n', offset);
+            if (newline < 0)
+            {
+                return false;
+            }
+
+            offset = newline + 1;
+        }
+
+        offset += Math.Max(diagnostic.StartColumn - 1, 0);
+        return !regions.Any(r => offset >= r.Start && offset < Math.Max(r.End, r.Start + 1));
+    }
+
+    /// <summary>
+    /// The names the compiler reports as missing that are declared nowhere in the baseline solution but appear in a recent rejected edit of another
+    /// file: one <see cref="SymbolChangeKind.Unapplied"/> entry per name. Empty when there are no rejected sibling edits.
+    /// </summary>
+    private static List<SymbolChange> UnappliedNames(
+        IReadOnlyList<DiagnosticInfo> errors,
+        IReadOnlyDictionary<string, string>? rejectedSiblingTexts,
+        Func<string, bool>? isDeclared)
+    {
+        // Order-independent for parallel calls: the caller supplies both the edits that were already rejected and the ones still in flight (WorkspaceFileEditImpl.SiblingEditTexts).
+        var result = new List<SymbolChange>();
+        if (rejectedSiblingTexts is null || rejectedSiblingTexts.Count == 0)
+        {
+            return result;
+        }
+
+        var tokensByFile = rejectedSiblingTexts.ToDictionary(
+            kv => kv.Key,
+            kv => Identifier.Matches(kv.Value).Select(m => m.Value).ToHashSet(StringComparer.Ordinal));
+        foreach (var diagnostic in errors.Where(d => MissingNameIds.Contains(d.Id)))
+        {
+            foreach (var name in MessageIdentifiers(diagnostic.Message))
+            {
+                if (result.Any(c => c.OldName == name) || isDeclared?.Invoke(name) == true)
+                {
+                    continue;
+                }
+
+                var file = tokensByFile.Where(kv => kv.Value.Contains(name)).Select(kv => kv.Key).FirstOrDefault();
+                if (file is not null)
+                {
+                    result.Add(new SymbolChange(SymbolChangeKind.Unapplied, "name", string.Empty, name, null, file, 0, null, null));
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// One <see cref="ImpactVerdict"/> per diff entry except added declarations (noise), the entries that break uses first, capped at
+    /// <see cref="MaxVerdicts"/>: "breaksUses" with the first few broken uses and the next step when diagnostics outside the edit were attributed to it,
+    /// "valid" otherwise.
+    /// </summary>
+    private static List<ImpactVerdict> BuildVerdicts(
+        IReadOnlyList<SymbolChange> changes,
+        Dictionary<SymbolChange, List<(DiagnosticInfo Diagnostic, string? Line)>> attributed,
+        Func<string, bool> isToolActive,
+        Func<SymbolChange, SymbolHandle?>? symbolHandleOf)
+    {
+        var verdicts = new List<(bool Breaks, ImpactVerdict Verdict)>();
+        foreach (var change in changes.Where(c => c.Kind != SymbolChangeKind.Added))
+        {
+            var location = change.File is null ? null : change.Line > 0 ? $"{change.File}:{change.Line}" : change.File;
+            var kind = change.Kind switch
+            {
+                SymbolChangeKind.Renamed => "renamed",
+                SymbolChangeKind.SignatureChanged => "signatureChanged",
+                SymbolChangeKind.AccessibilityChanged => "accessibilityChanged",
+                SymbolChangeKind.Unapplied => "unapplied",
+                _ => "removed",
+            };
+            if (attributed.TryGetValue(change, out var uses))
+            {
+                var useDiagnostics = uses.Select(u => u.Diagnostic).ToList();
+                verdicts.Add((true, new ImpactVerdict(kind, change.DeclarationKind, change.Container, change.OldName, change.NewName, location, "breaksUses",
+                    useDiagnostics.Count, useDiagnostics.Take(MaxBrokenUsesOnTheWire).ToList(), SuggestedToolFor(change, isToolActive),
+                    NextStepOf(change, useDiagnostics, changes, isToolActive, symbolHandleOf))));
+            }
+            else
+            {
+                verdicts.Add((false, new ImpactVerdict(kind, change.DeclarationKind, change.Container, change.OldName, change.NewName, location, "valid", 0, [], null, null)));
+            }
+        }
+
+        return verdicts.OrderByDescending(v => v.Breaks).Select(v => v.Verdict).Take(MaxVerdicts).ToList();
+    }
+
+    /// <summary>The tool the next step for this entry names (the first callable one of its row in the next-step table), or null when it names none.</summary>
+    private static string? SuggestedToolFor(SymbolChange change, Func<string, bool> isToolActive)
+    {
+        if (change.Kind == SymbolChangeKind.Unapplied || EditImpactLocalDiff.IsLocal(change))
+        {
+            return null;
+        }
+
+        var tools = change.Kind switch
+        {
+            SymbolChangeKind.Renamed => new[] { "RenameSymbol" },
+            SymbolChangeKind.SignatureChanged => ["ChangeSignature", "MethodSignature"],
+            SymbolChangeKind.AccessibilityChanged => ["ChangeAccessibility"],
+            _ => Array.Empty<string>(),
+        };
+        return tools.FirstOrDefault(isToolActive);
     }
 
     private static string NextStepFor(SymbolChange change, List<DiagnosticInfo> uses, IReadOnlyList<SymbolChange> all, Func<string, bool> isToolActive, Func<SymbolChange, SymbolHandle?>? symbolHandleOf = null)
@@ -365,9 +628,48 @@ public static class EditImpactAnalyzer
         }
     }
 
+    /// <summary>
+    /// The next step for one attributed entry: a local or an unapplied sibling name gets its own wording (no tool renames a local, and a
+    /// sibling's missing declaration is fixed in that sibling), every other entry goes to <see cref="NextStepFor"/>.
+    /// </summary>
+    internal static string NextStepOf(SymbolChange change, List<DiagnosticInfo> uses, IReadOnlyList<SymbolChange> all, Func<string, bool> isToolActive, Func<SymbolChange, SymbolHandle?>? symbolHandleOf = null)
+    {
+        var batch = isToolActive("ReplaceSnippet") ? "ReplaceSnippet call with batchEdits (one item per file, each with its own filePath)" : "call that edits each affected file";
+        if (change.Kind == SymbolChangeKind.Unapplied)
+        {
+            return $"{change.OldName} is declared nowhere in the solution as it is on disk now, and the only place your edits mention it is your other edit of {change.File}, which was rejected or was still being applied when this call was checked "
+                + $"(each call is checked on its own against the files as they are on disk, so parallel calls cannot see each other): wait for that edit to land (fix it first if it was rejected), then send this one, or put both files in one {batch}.";
+        }
+
+        if (EditImpactLocalDiff.IsLocal(change))
+        {
+            var member = change.Container;
+            var count = uses.Select(u => (File: Path.GetFileName(u.FilePath.ToString()), u.StartLine)).Distinct().Count();
+            return change.Kind == SymbolChangeKind.Renamed
+                ? $"This edit renames {change.DeclarationKind} {change.OldName} to {change.NewName} in {member}, but {count} use(s) of {change.OldName} are outside your edit: "
+                    + $"widen oldContent to cover every use (for example the whole {member} body), or add a batchEdits item per use, so all uses are renamed in the same call."
+                : $"This edit removes {change.DeclarationKind} {change.OldName} from {member} and {count} use(s) of it are outside your edit: "
+                    + $"keep {change.OldName} in newContent, or widen oldContent to cover every use and update them in the same call.";
+        }
+
+        return NextStepFor(change, uses, all, isToolActive, symbolHandleOf);
+    }
+
     private static string Describe(SymbolChange change, IReadOnlyList<SymbolChange> all)
     {
         var where = change.File is null ? string.Empty : $" ({change.File}:{change.Line})";
+        if (change.Kind == SymbolChangeKind.Unapplied)
+        {
+            return $"uses {change.OldName}, which only your other edit of {change.File} declares";
+        }
+
+        if (EditImpactLocalDiff.IsLocal(change))
+        {
+            return change.Kind == SymbolChangeKind.Renamed
+                ? $"renamed {change.DeclarationKind} {change.OldName} -> {change.NewName} in {change.Container}{where}"
+                : $"removed {change.DeclarationKind} {change.OldName} from {change.Container}{where}";
+        }
+
         switch (change.Kind)
         {
             case SymbolChangeKind.Renamed:
@@ -387,7 +689,7 @@ public static class EditImpactAnalyzer
         }
     }
 
-    private static HashSet<string> IdsFor(SymbolChange change) => change.Kind switch
+    private static HashSet<string> IdsFor(SymbolChange change) => EditImpactLocalDiff.IsLocal(change) ? LocalIds : change.Kind switch
     {
         SymbolChangeKind.SignatureChanged => SignatureIds,
         SymbolChangeKind.AccessibilityChanged => AccessibilityIds,
