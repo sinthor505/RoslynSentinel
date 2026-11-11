@@ -195,6 +195,51 @@ public class ContextExhaustedRunnerTests
         });
     }
 
+    [Test]
+    public async Task Run_RecordsToolDescriptionsSchemasAndStopReason()
+    {
+        var runner = NewRunner(contextLength: 4096, totalTokens: 1000);
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        using var json = JsonDocument.Parse(await File.ReadAllTextAsync(result.TranscriptPath));
+        var transcript = result.Transcript;
+        Assert.Multiple(() =>
+        {
+            Assert.That(transcript.ToolDescriptions, Is.Not.Null);
+            Assert.That(transcript.ToolSchemas, Is.Not.Null);
+            Assert.That(transcript.ToolDescriptions!.Keys, Is.EquivalentTo(transcript.Tools));
+            Assert.That(transcript.ToolSchemas!.Keys, Is.EquivalentTo(transcript.Tools));
+            Assert.That(transcript.ToolSchemas!.Values.Select(s => s.ValueKind), Is.All.EqualTo(JsonValueKind.Object));
+            Assert.That(transcript.StopReason, Is.EqualTo(AgentStopReason.ModelFinished));
+            Assert.That(json.RootElement.TryGetProperty("ToolDescriptions", out _), Is.True);
+            Assert.That(json.RootElement.TryGetProperty("ToolSchemas", out _), Is.True);
+            Assert.That(json.RootElement.TryGetProperty("StopReason", out _), Is.True);
+        });
+    }
+
+    [Test]
+    public void Transcript_WithoutToolMetadata_Deserializes()
+    {
+        const string text = "{\"RunId\":\"r1\",\"SystemPrompt\":\"s\",\"UserPrompt\":\"u\",\"Tools\":[\"t1\"],\"Turns\":[]}";
+        var options = new JsonSerializerOptions
+        {
+            PreferredObjectCreationHandling = System.Text.Json.Serialization.JsonObjectCreationHandling.Populate,
+        };
+
+        var transcript = JsonSerializer.Deserialize<AgentTranscript>(text, options);
+
+        Assert.That(transcript, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(transcript!.RunId, Is.EqualTo("r1"));
+            Assert.That(transcript.Tools, Is.EqualTo(new[] { "t1" }));
+            Assert.That(transcript.ToolDescriptions, Is.Null);
+            Assert.That(transcript.ToolSchemas, Is.Null);
+            Assert.That(transcript.StopReason, Is.Null);
+        });
+    }
+
     private ModelAgentRunner NewRunner(int? contextLength, int totalTokens)
     {
         LlmOptions.Configure(["--llm-model", ModelId]);

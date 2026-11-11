@@ -169,6 +169,17 @@ public sealed class ModelAgentRunner
             transcript.WorkingTreeDirty = stamp.Dirty;
         }
         transcript.Tools.AddRange(toolDefinitions.Select(t => t.Name));
+        transcript.ToolDescriptions = new Dictionary<string, string>(StringComparer.Ordinal);
+        transcript.ToolSchemas = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var t in toolDefinitions)
+        {
+            transcript.ToolDescriptions[t.Name] = t.Description ?? "";
+            // A default JsonElement (Undefined) cannot be cloned; such a tool is left out of ToolSchemas.
+            if (t.ParametersSchema.ValueKind != JsonValueKind.Undefined)
+            {
+                transcript.ToolSchemas[t.Name] = t.ParametersSchema.Clone();
+            }
+        }
         var assistTracker = new LoopAssistTracker(_loopAssist);
         if (assistTracker.Enabled)
         {
@@ -432,6 +443,7 @@ public sealed class ModelAgentRunner
             : "";
         _logger.LogInformation("Agent run finished: {StopReason} after {TurnCount} turn(s), {Elapsed}.{AssistOutcome}", stopReason, turnNumber, overallStopwatch.Elapsed, assistOutcome);
 
+        transcript.StopReason = stopReason;
         var transcriptPath = await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
 
         return new AgentRunResult

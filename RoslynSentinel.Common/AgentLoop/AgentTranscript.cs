@@ -58,6 +58,33 @@ public sealed class AgentTranscript
         get; set;
     }
 
+    /// <summary>
+    /// Tool name to description, for the same tools as <see cref="Tools"/>. Null, and so omitted from the JSON, for transcripts written before this was recorded.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, string>? ToolDescriptions
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Tool name to the tool's parameters JSON schema, for the same tools as <see cref="Tools"/>. Null, and so omitted from the JSON, for transcripts written before this was recorded.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, System.Text.Json.JsonElement>? ToolSchemas
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Why the run ended. Set only when the run ends, so the intermediate writes during a run omit it. Null, and so omitted from the JSON, for transcripts written before this was recorded.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AgentStopReason? StopReason
+    {
+        get; set;
+    }
+
     public List<AgentTranscriptTurn> Turns { get; } = [];
 
     // Models that emit reasoning inline wrap it in think tags; an unclosed or bare tag is not an answer either.
