@@ -229,6 +229,72 @@ L1. Archive: `ModelTestingResults\113\Model_AppliesTenChainedRefactors\`, runs `
 
 Fixes: `plans/plan_tenchain_batch_f_fixes.md`.
 
+## Batch G: batch F settings with rename lifting ON, 8/10 (2026-11-11)
+
+**Setup.** Flag-on arm of an A/B against F. Host 113, `qwen3.5-9b-coder` (default template), 60160 context, parallel 4,
+reasoning budget as in F (disabled by the owner; not re-verified from the host side in this session). Server flag
+`ROSLYNSENTINEL_LIFT_RENAMES=1`, set for the script process. Code: worktree `C:\tmp\rs_eval_g` (branch
+`eval/lift-renames-g`) = 98a55ad5 plus c05b5ee3 (cherry-pick of 25482ef4: `ModelEvalAssemblySetUp` now calls
+`LiftRenamesOptions.Configure([])` and `LoopLatchOptions.Configure([])`; before it the in-process eval server never
+read the env var, so the flag could not have been on). Command: `scripts\roslynsentinel-modeleval.ps1 -HostAddress 113
+-Test OrderPricingRefactorChain10 -Repeats 10 -Model qwen3.5-9b-coder`. Not baseline-comparable with F beyond the flag:
+code is 98a55ad5 (F: 69606748). L2 (harness only: worktree, env var, harness cherry-pick). Archive:
+`C:\tmp\rs_eval_g\ModelTestingResults\113\Model_AppliesTenChainedRefactors\`, runs `20261111-072809-916` to
+`20261111-083809-982`. Flag live in run 1: two "Applied as RenameSymbol" summaries (T2, T9), no rename redirects.
+
+| Run | Folder | Result | Turns | Failed | Lifted (turns) | Redirected | Model RenameSymbol |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| R1 | 072809-916 | pass | 20 | 0 | 2 (2, 9) | 0 | none |
+| R2 | 073415-454 | pass | 23 | 2 | 2 (2, 10) | 0 | none |
+| R3 | 074143-785 | FAIL ReplaceSnippet 7 > 5 | 18 | 7 | 2 (5, 7) | 0 | none |
+| R4 | 074907-352 | FAIL 13 > 12 failed calls | 26 | 13 | 2 (2, 10) | 0 | none |
+| R5 | 080745-132 | pass | 21 | 3 | 1 (11) | 1 | T7 |
+| R6 | 081426-175 | pass | 18 | 2 | 1 (9) | 1 | T5 |
+| R7 | 082011-811 | pass | 23 | 2 | 1 (10) | 1 | T5 |
+| R8 | 082725-816 | pass | 12 | 1 | 1 (6) | 1 | T4 |
+| R9 | 083117-555 | pass | 17 | 4 | 1 (9) | 2 | T7 |
+| R10 | 083809-982 | pass | 19 | 3 | 1 (2) | 0 | T8 (T6 error) |
+
+**F (off) vs G (on), same extraction (transcript.json, log-analyst):**
+
+| Measure | F off | G on |
+| --- | --- | --- |
+| Pass | 8/10 | 8/10 |
+| Mean turns (all / passing) | 24.0 / 23.1 | 19.7 / 19.1 |
+| Mean failed calls | 6.9 (69) | 3.7 (37) |
+| ReplaceSnippet calls | 93 | 75 |
+| Rename redirects | 19 | 6 |
+| Lifted renames | 0 | 14 of 20 renames (2 per run); the other 6 went via redirect and the model's own RenameSymbol |
+| Runs where the model never called RenameSymbol | 0 | 4 (R1-R4, both renames lifted) |
+| Longest consecutive identical call | 1 | 2 (R4 T23-24) |
+
+- **Rename loop stays gone (0/10 in F and G); lifting removes the redirect round-trip.** Redirects fell 19 to 6 and
+  turns/failed calls dropped by about a fifth/half. Pass rate is unchanged (8/10 both), so the lift did not move the pass
+  rate; the failures are elsewhere. Small sample; indication only.
+- **No wrong lift.** All 14 lifts rewrote the right call sites; none was re-sent, followed by another rename, or reverted.
+- **Lift-induced friction, 2 of 14 lifts (R2 T3, R3 T8).** After a lift rewrote `OrderCheckout.cs`, the model's next
+  ReplaceSnippet on that file used the old name in oldContent and failed NotFound. The lift summary names the file
+  ("1 call site(s) in 1 other file(s) (OrderCheckout.cs)") but not the rewritten line; the NotFound error did show the
+  current text (R2 recovered with one re-read at T4; in R3 the model read it as "the file got reset", T9). R3 T7 sent
+  an edit to that file in the same turn as the lifted class rename.
+- **R3 T2 failed lift attempt.** CS1503 came from the model's own `ArgumentOutOfRangeException(nameof(x), x)`, but the
+  message "It was tried as a RenameSymbol ... it still leaves compiler errors, so nothing was changed" reads as if the
+  rename was at fault.
+- **R4 (non-lift).** T4 CreateFile already put `DescribeOrder` in the interface; at T12 the model tried to "add the second
+  member" and re-sent the existing line. CS0111's hint says "its real location could not be found - this may be a
+  genuine duplicate" because `CompilerErrorLookupHelper.cs:598-605` drops candidates in the diagnostic's own file, so a
+  same-file duplicate always gets that wording. T14/T16/T23/T24 identical resends, T23-24 carrying "sending it again
+  cannot succeed". Member remove/replace on a type (T18, T19, T21 bare "Member not found."), Git offered in a non-git
+  fixture (T25). T26 ran 11 minutes (about 80k chars of reasoning) with no tool call.
+- **Suggested server changes (not made):** (1) lift summary prints the rewritten line(s) per other file plus "do not
+  repeat this call-site edit"; (2) lift-failed message says the rename itself was fine and the errors come from the
+  model's other text; (3) CS0111 same-file collision says "'X' is already declared at <file>:<line>; your newContent
+  declares it again"; (4) "Member not found." states what was searched. One unexplained point: in R3 T8 the
+  rejected-edit-origin note ("comes from your rejected edit's newContent", `RejectedEditMemory.Explains`,
+  `WorkspaceFileEditImpl.cs:159`) did not fire although it should have matched (hypothesis, not traced).
+- The tool list is not recorded in the run artifacts (as noted for E); the G build still offered Git and had no
+  DeleteFile, so R4 T25 may not reproduce under the current surface.
+
 ## Out of scope
 
 - Batch C ran before 31b206a6 and 28391d8c; their effect is unmeasured.
