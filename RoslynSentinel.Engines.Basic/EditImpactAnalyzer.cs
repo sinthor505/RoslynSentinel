@@ -363,11 +363,19 @@ public static class EditImpactAnalyzer
         changes.AddRange(unapplied);
         if (declaringFileOf is not null)
         {
-            changes = changes.Select(c => c.Kind == SymbolChangeKind.Renamed && !EditImpactLocalDiff.IsLocal(c) && c.NewName is { } newName
+            changes = changes.Select(c => c.Kind == SymbolChangeKind.Renamed && !EditImpactLocalDiff.IsLocal(c)
+                && c.DeclarationKind is ("class" or "struct" or "record" or "interface" or "enum" or "delegate")
+                && c.NewName is { } newName
                 && declaringFileOf(newName) is { } takenIn
                     ? c with { NewNameTakenIn = takenIn }
                     : c).ToList();
         }
+
+        // A member renamed to a name another declaration in the same container already uses (CS0102/CS0111).
+        changes = changes.Select(c => c.Kind == SymbolChangeKind.Renamed && !EditImpactLocalDiff.IsLocal(c) && c.NewNameTakenIn is null
+            && EditImpactSymbolDiff.FindTakenMember(candidateTexts, c) is { } taken
+                ? c with { NewNameTakenIn = taken.File, NewNameTakenLine = taken.Line }
+                : c).ToList();
 
         var candidates = changes
             .Where(c => c.Kind is SymbolChangeKind.Removed or SymbolChangeKind.Renamed or SymbolChangeKind.SignatureChanged or SymbolChangeKind.Unapplied
@@ -627,8 +635,12 @@ public static class EditImpactAnalyzer
         {
             case SymbolChangeKind.Renamed:
                 {
-                    // TODO a property or method renamed to an existing member name (CS0102/CS0111) gets no taken-name hint; only type renames are covered
-                    if (change.NewNameTakenIn is { } takenIn)
+                    if (change.NewNameTakenIn is { } takenMemberFile && change.NewNameTakenLine > 0)
+                    {
+                        return $"This edit renames {name} to {change.NewName}, but {change.NewName} is already declared in {change.Container} (at {takenMemberFile}:{change.NewNameTakenLine} and {change.File}:{change.Line}), so the rename would create a duplicate member and {files} file(s) still use {name}: keep {name} in newContent, or pick a name {change.Container} does not declare.";
+                    }
+
+                    if (change.NewNameTakenIn is { } takenIn && change.NewNameTakenLine == 0)
                     {
                         var takenFile = Path.GetFileName(takenIn);
                         var taken = $"This edit renames {name} to {change.NewName}, but {change.NewName} is already declared in {takenFile}, so the rename would create a duplicate type and {files} file(s) still use {name}: keep {name} in newContent, or pick a name no file declares";

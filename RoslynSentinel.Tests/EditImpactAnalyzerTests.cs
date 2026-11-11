@@ -67,9 +67,11 @@ public class EditImpactAnalyzerTests
 
     /// <summary>Runs the real gate over the proposed texts, then the analyzer over its report.</summary>
     private static async Task<(EditImpactResult? Result, DiagnosticReport Report)> GateAndAnalyzeAsync(
-        Dictionary<string, string> edits, Func<string, bool> isToolActive)
+        Dictionary<string, string> edits, Func<string, bool> isToolActive, IEnumerable<(string Path, string Text)>? baselineFiles = null)
     {
-        var baseline = Baseline();
+        var baseline = baselineFiles is null
+            ? Baseline()
+            : TestSolutionBuilder.CreateSolutionWithProject("TestProj", baselineFiles.ToArray());
         var changes = edits.ToDictionary(kv => (FilePathWrapper)kv.Key, kv => kv.Value);
         var report = await ValidationEngine.ValidateChangesAsync(baseline, changes);
         var result = await EditImpactAnalyzer.AnalyzeAsync(baseline, changes, report, isToolActive);
@@ -158,6 +160,66 @@ public class EditImpactAnalyzerTests
         Assert.That(result!.NextStepLine, Does.Contain("already declared"));
         Assert.That(result.NextStepLine, Does.Not.Contain("DeleteFile"));
         Assert.That(result.NextStepLine, Does.Not.Contain("RenameSymbol"));
+    }
+
+    [Test]
+    public async Task RenameMemberToExistingPropertyName_NamesTheDeclarationAndSuggestsNoRename()
+    {
+        const string rateCalculator = """
+            namespace TestProj;
+
+            public class OrderPricingCalculator
+            {
+                public decimal Rate { get; set; }
+
+                public decimal Factor { get; set; }
+            }
+            """;
+        const string rateCheckout = """
+            namespace TestProj;
+
+            public class OrderCheckout
+            {
+                public decimal Get(OrderPricingCalculator c) { return c.Rate; }
+            }
+            """;
+        var baselineFiles = new[] { (CalculatorFile, rateCalculator), (CheckoutFile, rateCheckout) };
+        var edited = rateCalculator.Replace("Rate", "Factor");
+
+        // The diff cannot tell which of two identical declarations was renamed, so both are named.
+        var factorLines = edited.Split('\n')
+            .Select((line, index) => (line, number: index + 1))
+            .Where(x => x.line.Contains("public decimal Factor"))
+            .Select(x => x.number)
+            .ToList();
+
+        var (result, report) = await GateAndAnalyzeAsync(Texts((CalculatorFile, edited)), Active("RenameSymbol", "ReplaceSnippet", "DeleteFile"), baselineFiles);
+
+        Assert.That(report.IsError, Is.True, "the duplicate and the broken caller must be reported, otherwise the fixture proves nothing");
+        Assert.That(result, Is.Not.Null);
+        Assert.That(factorLines, Has.Count.EqualTo(2), "both Factor declarations must be in the edited text");
+        Assert.That(result!.NextStepLine, Does.Contain("already declared in TestProj.OrderPricingCalculator"));
+        foreach (var factorLine in factorLines)
+        {
+            Assert.That(result.NextStepLine, Does.Contain($"{CalculatorFile}:{factorLine}"));
+        }
+        Assert.That(result.NextStepLine, Does.Not.Contain("RenameSymbol").And.Not.Contain("DeleteFile"));
+        Assert.That(result.Text, Does.Not.Contain("RenameSymbol").And.Not.Contain("DeleteFile"));
+        Assert.That(result.Verdicts?.Count(v => v.SuggestedTool == "RenameSymbol") ?? 0, Is.Zero);
+    }
+
+    [Test]
+    public async Task RenameMethodToLegalOverloadName_StillSuggestsRenameSymbol()
+    {
+        var overloaded = Calculator.Replace("CalcDisc", "Calc")
+            .Replace("public string DescribeOrder", "public decimal Calc(decimal amount) { return amount; }\n\n        public string DescribeOrder");
+
+        var (result, report) = await GateAndAnalyzeAsync(Texts((CalculatorFile, overloaded)), Active("RenameSymbol", "ReplaceSnippet"));
+
+        Assert.That(report.IsError, Is.True, "the untouched caller must break, otherwise the fixture proves nothing");
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.NextStepLine, Does.Not.Contain("already declared"), "a legal overload is not a duplicate member");
+        Assert.That(result.NextStepLine, Does.Contain("RenameSymbol"));
     }
 
     [Test]

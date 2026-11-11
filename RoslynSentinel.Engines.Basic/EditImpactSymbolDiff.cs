@@ -100,6 +100,41 @@ internal static class EditImpactSymbolDiff
         return changes;
     }
 
+    /// <summary>
+    /// For a Renamed method, property, field or event: the OTHER declaration in the candidate text that already uses the new name in the same container (the rename would be CS0102 / CS0111 duplicate), or null. A method renamed to the name of another method with different parameter types is a legal overload and is not a conflict.
+    /// </summary>
+    internal static (string File, int Line)? FindTakenMember(IReadOnlyDictionary<string, string?> candidateTexts, SymbolChange renamed)
+    {
+        if (renamed.Kind != SymbolChangeKind.Renamed
+            || renamed.DeclarationKind is not ("method" or "property" or "field" or "event")
+            || renamed.NewName is null
+            || renamed.File is null)
+        {
+            return null;
+        }
+
+        var decls = Collect(candidateTexts)
+            .Where(d => !d.IsType && d.Container == renamed.Container && d.Name == renamed.NewName && d.Kind is ("method" or "property" or "field" or "event"))
+            .ToList();
+        var self = decls.FirstOrDefault(d => d.File == renamed.File && d.Line == renamed.Line);
+        if (self is null)
+        {
+            return null;
+        }
+
+        foreach (var other in decls.Where(d => d != self))
+        {
+            // A method conflicts only with a non-method or a method of identical parameter list (overloads are legal).
+            var conflicts = self.Kind != "method" || other.Kind != "method" || other.Params == self.Params;
+            if (conflicts)
+            {
+                return (other.File, other.Line);
+            }
+        }
+
+        return null;
+    }
+
     private static bool InsideAny(string container, List<string> typeNames)
         => typeNames.Any(t => container == t || container.StartsWith(t + ".", StringComparison.Ordinal));
 

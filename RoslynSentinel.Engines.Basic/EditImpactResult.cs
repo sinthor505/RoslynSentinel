@@ -40,7 +40,8 @@ public enum SymbolChangeKind
 /// <param name="NewSignature">Rendered parameter list and return type after the edit (null for a removed declaration).</param>
 /// <param name="AccessibilityNarrowed">True for <see cref="SymbolChangeKind.AccessibilityChanged"/> when the new accessibility is more restrictive.</param>
 /// <param name="NewAccessibility">For <see cref="SymbolChangeKind.Renamed"/> of a member whose declared accessibility also changed: the new accessibility (for example "internal"); otherwise null.</param>
-/// <param name="NewNameTakenIn">For <see cref="SymbolChangeKind.Renamed"/> of a type whose new name a file OUTSIDE this edit already declares: the full path of that file; otherwise null.</param>
+/// <param name="NewNameTakenIn">For <see cref="SymbolChangeKind.Renamed"/> where the new name is already declared. A type: the full path of a file OUTSIDE this edit that declares it (NewNameTakenLine stays 0). A member: the file name (no directory) of the other declaration in the candidate text, with its line in NewNameTakenLine; otherwise null.</param>
+/// <param name="NewNameTakenLine">1-based line of the other declaration when a MEMBER was renamed to a name its container already declares; 0 otherwise.</param>
 public sealed record SymbolChange(
     SymbolChangeKind Kind,
     string DeclarationKind,
@@ -53,7 +54,8 @@ public sealed record SymbolChange(
     string? NewSignature,
     bool AccessibilityNarrowed = false,
     string? NewAccessibility = null,
-    string? NewNameTakenIn = null);
+    string? NewNameTakenIn = null,
+    int NewNameTakenLine = 0);
 
 /// <summary>
 /// What a rejected edit did to the symbols it touched, and which diagnostics in files the edit did not change follow from it.
