@@ -623,6 +623,9 @@ public static class CompilerErrorLookupHelper
             candidates = [];
         }
 
+        // TODO Same-file duplicates (an edit re-declaring a member already in the file) are dropped here, so the hint
+        // says "may be a genuine duplicate" and the model re-sends it (batch G R4, CS0111 at T12-T24). When only
+        // same-file candidates exist, say "'X' is already declared at file:line; your newContent declares it again."
         var realLocation = candidates.FirstOrDefault(c =>
             !string.IsNullOrEmpty(c.FilePath) &&
             !string.Equals(c.FilePath, diagnostic.FilePath.ToString(), StringComparison.OrdinalIgnoreCase));

@@ -1,8 +1,8 @@
 # Plan: fix the environment defects behind 10-chain batch F's two failures
 
-**Status:** IN PROGRESS 2026-11-11. Steps 4, 6, 2, 5, 1 done (b7e7df52, 5135db55, d791d8d4, 6343bdd3, 38fe365d,
-e303b7d1, 5cd92422, 4b1c5a7b); step 3 left. Batched in order A=4, B=6, C=2+5, D=1, E=3
-(E after the peer's edit-impact work commits). Line numbers were re-checked against HEAD 25482ef4 on 2026-11-11 (review notes per step); still
+**Status:** IMPLEMENTED 2026-11-11. b7e7df52, 5135db55, d791d8d4 (step 4), 6343bdd3, 38fe365d (step 6), e303b7d1
+(step 2), 5cd92422 (step 5), 4b1c5a7b (step 1), f171805b, 2f0f66e1 (step 3). Full suite green at 2f0f66e1. The
+validation batch (Execution rules) is still to run. Line numbers were re-checked against HEAD 25482ef4 on 2026-11-11 (review notes per step); still
 re-locate with `Search` before editing.
 
 ## Problem
@@ -112,6 +112,11 @@ full build and server restart before live use.
   are not in `MissingNameIds` (`:35`), so the error set must be threaded in. CS0101 text is in
   `DescribeDuplicateDeclarationAsync` (`CompilerErrorLookupHelper.cs:486-570`, text ~`:556-563`). Tests:
   `Tests/CompilerErrorLookupHelperTests.cs` (`:322`, `:339`), `Tests.Server/EditImpactToolNamesTests.cs`.
+- Done: f171805b (3a: `SymbolChange.NewNameTakenIn`, no RenameSymbol toward a taken type name, DeleteFile only when
+  active), 2f0f66e1 (3b: optional `isToolActive` on `DescribeAsync`; ReplaceSnippet, ReplaceSnippetBatch, CreateFile
+  pass it). TODOs left: member renames to a taken name (CS0102/CS0111) not covered; `DescribeAsync` callers not yet
+  passing `isToolActive` are listed above it. A null tool surface names no tool here, while `EditImpactGate` treats
+  null as all-callable (only unit tests and surface-less hosts; left as is).
 
 ### Step 4 - Member remove: real routes instead of "Delete manually" and `skipPrecheck`
 

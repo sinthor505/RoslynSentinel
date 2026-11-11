@@ -227,7 +227,7 @@ L1. Archive: `ModelTestingResults\113\Model_AppliesTenChainedRefactors\`, runs `
 - **Git "not inside a git repository".** By design (the fixture is a temp copy), but `Workspace` mode exposes Git.
   R4 T9 was the model misreading a correct ReadFile as a rolled-back rename.
 
-Fixes: `plans/plan_tenchain_batch_f_fixes.md`.
+Fixes: `plans/closed/plan_tenchain_batch_f_fixes.md` (implemented 2026-11-11).
 
 ## Batch G: batch F settings with rename lifting ON, 8/10 (2026-11-11)
 
