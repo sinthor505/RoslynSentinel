@@ -135,7 +135,48 @@ public class ScenarioAgentTests
             TestContext.Out.WriteLine($"Sample {sampleIndex}: final-state check failed: {ex.Message}");
         }
 
+        // The fixture directory is deleted when the environment is disposed, so the snapshot is the only record of the files the verdict was computed from.
+        try
+        {
+            SnapshotFinalState(scenario, environment.SolutionDirectory, sampleDirectory);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            TestContext.Out.WriteLine($"Sample {sampleIndex}: final-state snapshot failed: {ex.Message}");
+        }
+
         return (result, verdict);
+    }
+
+    private static void SnapshotFinalState(ScenarioDefinition scenario, string solutionDirectory, string sampleDirectory)
+    {
+        var finalStateDirectory = Path.Combine(sampleDirectory, "final-state");
+        var keys = scenario.StagedFiles.Keys.ToList();
+        var duplicateNames = keys
+            .GroupBy(k => Path.GetFileName(k))
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToHashSet();
+
+        foreach (var key in keys)
+        {
+            var source = Path.Combine(solutionDirectory, key.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(source))
+            {
+                TestContext.Out.WriteLine($"final-state: {key} is missing");
+                continue;
+            }
+
+            Directory.CreateDirectory(finalStateDirectory);
+            var fileName = Path.GetFileName(key);
+            var segments = key.Split('/');
+            if (duplicateNames.Contains(fileName) && segments.Length > 1)
+            {
+                fileName = string.Join("_", segments[..^1]) + "_" + fileName;
+            }
+
+            File.Copy(source, Path.Combine(finalStateDirectory, fileName), overwrite: true);
+        }
     }
 
     /// <summary>One sample's isolated world: fixture on disk with the scenario's staged files, in-process MCP server, MCP client, LM client.</summary>
