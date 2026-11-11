@@ -976,6 +976,24 @@ public class GitReaderParityTests
             return null;
         }
 
+        public IReadOnlyList<NameStatusEntry>? GetNameStatus(string workingDirectory, string target, IReadOnlyList<string>? paths, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
+        public IReadOnlyList<NameStatusEntry>? GetCommitNameStatus(string workingDirectory, string revision, IReadOnlyList<string>? paths, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
+        public CommitHeader? GetCommitHeader(string workingDirectory, string revision, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
         public IReadOnlyList<CommitMessage>? GetCommitMessages(string workingDirectory, TimeSpan cliTimeout)
         {
             Gate();

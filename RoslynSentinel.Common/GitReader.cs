@@ -60,6 +60,19 @@ internal sealed record BranchRef(string Name, bool IsCurrent, bool IsRemote);
 internal sealed record StashRef(int Index, string ShortSha, string CommitterDate, string Subject);
 
 /// <summary>
+/// One row of <c>git diff --name-status</c>: <see cref="Status"/> is git's letter ("A", "D", "M", "T", or for a rename or copy the letter with its
+/// similarity such as "R087"), <see cref="Path"/> the path as git prints it (repo-root-relative, '/' separators, never octal-escaped; git's own quoting for a name
+/// with a quote, backslash or control character) and <see cref="OldPath"/> the pre-rename path for "R"/"C" rows, else null.
+/// </summary>
+internal sealed record NameStatusEntry(string Status, string Path, string? OldPath = null);
+
+/// <summary>
+/// What the Git tool's <c>show</c> operation prints about a commit: the full hash (<c>%H</c>), the author name (<c>%an</c>, no mailmap), the author date as
+/// strict ISO 8601 with the author's own offset (<c>%aI</c>) and the message (<c>%B</c>, raw; the tool trims and normalizes it when it builds its DTO).
+/// </summary>
+internal sealed record CommitHeader(string Sha, string AuthorName, string AuthorDate, string Message);
+
+/// <summary>
 /// The typed read-only git probes the server runs on its own behalf (staleness check, build stamp, not-found evidence,
 /// residual-mention scan, doc trailer scan), behind one seam so a libgit2 implementation and the git CLI implementation
 /// can be compared and swapped. Every method takes the directory git would run in (it need not be the repo root, and
@@ -145,6 +158,30 @@ internal interface IGitReader
 
     /// <summary>The number of stash entries (<c>git stash list</c>); null when git cannot answer.</summary>
     int? CountStashes(string workingDirectory, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// The file list of the Git tool's <c>diff</c> with <c>nameOnly</c> (<c>git -c core.quotePath=false diff --name-status</c> plus the target, then <c>-- paths</c>):
+    /// <paramref name="target"/> is "working" (index to working tree), "staged" (<c>--cached</c>), a ref (against the working tree) or <c>refA..refB</c>, passed to git as
+    /// given; untracked files are never listed; rows are in git's byte-wise path order. <paramref name="paths"/> null means no <c>--</c>, an empty list a bare <c>--</c>.
+    /// The CLI reader answers every target. The libgit2 reader serves only "staged" and <c>refA..refB</c> and throws <see cref="NotSupportedException"/> for the others
+    /// (a comparison against the working tree needs git's EOL-filtered hashing, which libgit2's diff does not reproduce) and for what else it cannot reproduce (anything
+    /// that needs rename detection, submodules, unmerged paths, a path git would quote, a pathspec that is not a plain path, a revision form other than a simple ref, a
+    /// repository where <c>diff.renames</c> or <c>diff.orderFile</c> is configured). Null when git cannot answer (not a repository, unknown revision, git missing or timed out).
+    /// </summary>
+    IReadOnlyList<NameStatusEntry>? GetNameStatus(string workingDirectory, string target, IReadOnlyList<string>? paths, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// The file list of the Git tool's <c>show</c> with <c>nameOnly</c>: <c>git diff --name-status &lt;revision&gt;^ &lt;revision&gt;</c>, or against the empty tree for a root commit
+    /// (a merge commit is diffed against its first parent). Same pathspec rules, decline rules and null conditions as <see cref="GetNameStatus"/>.
+    /// </summary>
+    IReadOnlyList<NameStatusEntry>? GetCommitNameStatus(string workingDirectory, string revision, IReadOnlyList<string>? paths, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// The header of the Git tool's <c>show</c>: hash, author name, author date and message of <paramref name="revision"/> (<c>git show --no-patch</c> with those
+    /// format fields). The libgit2 reader throws <see cref="NotSupportedException"/> for what it cannot reproduce (a revision that is not a plain commit, such as an
+    /// annotated tag; a declared non-UTF-8 encoding; text git and .NET decode differently). Null when git cannot answer (not a repository, unknown revision).
+    /// </summary>
+    CommitHeader? GetCommitHeader(string workingDirectory, string revision, TimeSpan cliTimeout);
 
     /// <summary>Every commit reachable from HEAD (<c>git log</c> with no range), newest first, with its raw message.</summary>
     IReadOnlyList<CommitMessage>? GetCommitMessages(string workingDirectory, TimeSpan cliTimeout);

@@ -88,6 +88,15 @@ internal sealed class FallbackGitReader : IGitReader
     public int? CountStashes(string workingDirectory, TimeSpan cliTimeout) =>
         Invoke(reader => reader.CountStashes(workingDirectory, cliTimeout));
 
+    public IReadOnlyList<NameStatusEntry>? GetNameStatus(string workingDirectory, string target, IReadOnlyList<string>? paths, TimeSpan cliTimeout) =>
+        Invoke(reader => reader.GetNameStatus(workingDirectory, target, paths, cliTimeout));
+
+    public IReadOnlyList<NameStatusEntry>? GetCommitNameStatus(string workingDirectory, string revision, IReadOnlyList<string>? paths, TimeSpan cliTimeout) =>
+        Invoke(reader => reader.GetCommitNameStatus(workingDirectory, revision, paths, cliTimeout));
+
+    public CommitHeader? GetCommitHeader(string workingDirectory, string revision, TimeSpan cliTimeout) =>
+        Invoke(reader => reader.GetCommitHeader(workingDirectory, revision, cliTimeout));
+
     public IReadOnlyList<CommitMessage>? GetCommitMessages(string workingDirectory, TimeSpan cliTimeout) =>
         Invoke(reader => reader.GetCommitMessages(workingDirectory, cliTimeout));
 

@@ -252,6 +252,77 @@ internal sealed class CliGitReader : IGitReader
             : null;
     }
 
+    private const string EmptyTreeHash = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+    public IReadOnlyList<NameStatusEntry>? GetNameStatus(string workingDirectory, string target, IReadOnlyList<string>? paths, TimeSpan cliTimeout)
+    {
+        // Exactly what the Git tool's diff runs: core.quotePath=false so non-ASCII names are not octal-escaped; no rename flags, so git's default detection applies.
+        var args = new List<string> { "-c", "core.quotePath=false", "diff", "--name-status" };
+        if (target == "staged")
+        {
+            args.Add("--cached");
+        }
+        else if (target != "working")
+        {
+            args.Add(target);
+        }
+
+        AddPathLimit(args, paths);
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, [.. args]);
+        return run is { ExitCode: 0 } ? ParseNameStatus(run.Value.StdOut) : null;
+    }
+
+    public IReadOnlyList<NameStatusEntry>? GetCommitNameStatus(string workingDirectory, string revision, IReadOnlyList<string>? paths, TimeSpan cliTimeout)
+    {
+        var parent = GitProcess.TryRun(workingDirectory, cliTimeout, "rev-parse", "--verify", "--quiet", revision + "^");
+        var args = new List<string> { "-c", "core.quotePath=false", "diff", "--name-status", parent is { ExitCode: 0 } ? revision + "^" : EmptyTreeHash, revision };
+        AddPathLimit(args, paths);
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, [.. args]);
+        return run is { ExitCode: 0 } ? ParseNameStatus(run.Value.StdOut) : null;
+    }
+
+    public CommitHeader? GetCommitHeader(string workingDirectory, string revision, TimeSpan cliTimeout)
+    {
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, "show", "--format=%H%x1f%an%x1f%aI%x1f%B", "--no-patch", revision);
+        if (run is not { ExitCode: 0 })
+        {
+            return null;
+        }
+
+        // The tool has always split on the separator and taken the fourth field as the message.
+        var parts = run.Value.StdOut.TrimEnd('\n', '\r').Split(UnitSeparator);
+        return parts.Length < 4 ? null : new CommitHeader(parts[0], parts[1], parts[2], parts[3]);
+    }
+
+    private static void AddPathLimit(List<string> args, IReadOnlyList<string>? paths)
+    {
+        if (paths is not null)
+        {
+            args.Add("--");
+            args.AddRange(paths);
+        }
+    }
+
+    /// <summary>Parses <c>--name-status</c> text: "M&lt;TAB&gt;path" or, for a rename or copy, "R087&lt;TAB&gt;old&lt;TAB&gt;new". Paths stay as git printed them.</summary>
+    internal static List<NameStatusEntry> ParseNameStatus(string text)
+    {
+        var entries = new List<NameStatusEntry>();
+        foreach (var line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var columns = line.TrimEnd('\r').Split('\t');
+            if (columns.Length >= 3)
+            {
+                entries.Add(new NameStatusEntry(columns[0], columns[2], columns[1]));
+            }
+            else if (columns.Length == 2)
+            {
+                entries.Add(new NameStatusEntry(columns[0], columns[1]));
+            }
+        }
+
+        return entries;
+    }
+
     public IReadOnlyList<CommitMessage>? GetCommitMessages(string workingDirectory, TimeSpan cliTimeout)
     {
         var run = GitProcess.TryRun(workingDirectory, cliTimeout, "log", "--format=%H%x1f%B%x1e");

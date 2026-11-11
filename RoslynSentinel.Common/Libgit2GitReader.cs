@@ -392,20 +392,10 @@ internal sealed class Libgit2GitReader : IGitReader
 
     private static LogCommit ToLogCommit(Repository repo, Commit commit, int abbreviation, string workingDirectory, TimeSpan cliTimeout)
     {
-        // git re-encodes a message from its encoding header to UTF-8; libgit2 hands the bytes over as stored.
-        if (commit.Encoding is { } encoding && !encoding.Equals("UTF-8", StringComparison.OrdinalIgnoreCase) && !encoding.Equals("UTF8", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new NotSupportedException($"Commit {commit.Sha} declares encoding '{encoding}', so git converts it.");
-        }
-
+        // Encoding header, invalid UTF-8 and the CLI parser's separator characters: git answers those (see RequireStableCommitText).
+        RequireStableCommitText(commit);
         var author = commit.Author;
         var message = commit.Message;
-        // U+FFFD: bytes that were not valid UTF-8, which git and .NET may replace differently. U+001E/U+001F are the CLI parser's separators and
-        // would truncate or split the commit there (the tool's long-standing behavior), so the CLI keeps answering for them.
-        if (author.Name.AsSpan().IndexOfAny('�', '\u001e', '\u001f') >= 0 || message.AsSpan().IndexOfAny('�', '\u001e', '\u001f') >= 0)
-        {
-            throw new NotSupportedException($"Commit {commit.Sha} holds invalid UTF-8 or a separator character, so git answers.");
-        }
 
         // git's strict ISO date: the author's own offset, with a zero offset spelled the way the installed git spells it.
         var date = StrictIsoDate(author.When, workingDirectory, cliTimeout, commit.Sha, "%aI");
@@ -821,6 +811,134 @@ internal sealed class Libgit2GitReader : IGitReader
         return repo?.Stashes.Count();
     }
 
+    public IReadOnlyList<NameStatusEntry>? GetNameStatus(string workingDirectory, string target, IReadOnlyList<string>? paths, TimeSpan cliTimeout)
+    {
+        // Only comparisons that involve no working-tree file are served: tree to index ("staged") and tree to tree (refA..refB). libgit2's index-to-workdir
+        // diff (and its status) lists a stat-dirty file whose only difference is EOL conversion (core.autocrlf, .gitattributes text/eol) as modified, where git
+        // runs its clean filters and lists nothing; its tree-to-workdir diff gets that right but has no index awareness. Neither reproduces git's answer
+        // without a filter-aware hash, which libgit2's managed API does not offer, so "working" and a single ref stay with git. (A repository like this one,
+        // with core.autocrlf and a .gitattributes, would be declined anyway.)
+        var isRange = target.Contains("..", StringComparison.Ordinal);
+        if (target != "staged" && !isRange)
+        {
+            throw new NotSupportedException($"'{target}' compares against the working tree, whose EOL-filtered content libgit2's diff does not reproduce, so git answers.");
+        }
+
+        var specs = paths is { Count: > 0 } ? ParseLogPathspecs(paths) : null;
+        using var repo = Open(workingDirectory);
+        if (repo is null)
+        {
+            return null;
+        }
+
+        RequireNameStatusRepository(repo, workingDirectory);
+        // CompareOptions' default similarity detects renames; git's detection is not reproduced, so it is off and a result that could hold a rename is declined.
+        var options = new CompareOptions { Similarity = SimilarityOptions.None };
+        TreeChanges changes;
+        if (!isRange)
+        {
+            RequirePlainHistory(repo);
+            var head = repo.Head.Tip ?? throw new NotSupportedException("HEAD is unborn, so git diffs the index against the empty tree.");
+            changes = repo.Diff.Compare<TreeChanges>(head.Tree, DiffTargets.Index, null, null, options);
+        }
+        else
+        {
+            // refA..refB with a plain revision each side: tree to tree. refA...refB (merge base) and an empty side (meaning HEAD) are left to git.
+            var sides = target.Split("..");
+            if (sides.Length != 2 || target.Contains("...", StringComparison.Ordinal) || sides.Any(side => side.Length == 0))
+            {
+                throw new NotSupportedException($"'{target}' is not a plain refA..refB range, so git resolves it.");
+            }
+
+            // A "--" in the command (paths given, even none) makes a name that is both a revision and a file unambiguous.
+            var pathsGiven = paths is not null;
+            if (!pathsGiven && PathExists(workingDirectory, target))
+            {
+                throw new NotSupportedException($"'{target}' is also a path in the working directory; git decides whether that is ambiguous.");
+            }
+
+            var from = ResolveSimpleCommit(repo, workingDirectory, sides[0], pathsGiven);
+            var to = ResolveSimpleCommit(repo, workingDirectory, sides[1], pathsGiven);
+            if (from is null || to is null)
+            {
+                return null;
+            }
+
+            changes = repo.Diff.Compare<TreeChanges>(from.Tree, to.Tree, options);
+        }
+
+        using (changes)
+        {
+            return ToNameStatus(changes, specs, againstIndex: !isRange);
+        }
+    }
+
+    public IReadOnlyList<NameStatusEntry>? GetCommitNameStatus(string workingDirectory, string revision, IReadOnlyList<string>? paths, TimeSpan cliTimeout)
+    {
+        var specs = paths is { Count: > 0 } ? ParseLogPathspecs(paths) : null;
+        using var repo = Open(workingDirectory);
+        if (repo is null)
+        {
+            return null;
+        }
+
+        RequireNameStatusRepository(repo, workingDirectory);
+        // The tool's header call has no "--", so the name is checked for a clash with a file whatever the paths are.
+        var commit = ResolveSimpleCommit(repo, workingDirectory, revision, pathsGiven: false);
+        if (commit is null)
+        {
+            return null;
+        }
+
+        // git diff <rev>^ <rev>: a merge commit against its first parent, a root commit against the empty tree.
+        var options = new CompareOptions { Similarity = SimilarityOptions.None };
+        using var changes = repo.Diff.Compare<TreeChanges>(commit.Parents.FirstOrDefault()?.Tree, commit.Tree, options);
+        return ToNameStatus(changes, specs, againstIndex: false);
+    }
+
+    public CommitHeader? GetCommitHeader(string workingDirectory, string revision, TimeSpan cliTimeout)
+    {
+        if (revision.Contains("..", StringComparison.Ordinal) || !SimpleRevision.IsMatch(revision))
+        {
+            throw new NotSupportedException($"'{revision}' is not a plain ref, hash or HEAD~N form, so git resolves it.");
+        }
+
+        using var repo = Open(workingDirectory);
+        if (repo is null)
+        {
+            return null;
+        }
+
+        RequirePlainHistory(repo);
+        if (PathExists(workingDirectory, revision))
+        {
+            throw new NotSupportedException($"'{revision}' is also a path in the working directory; git decides whether that is ambiguous.");
+        }
+
+        // Unknown revision: null, as the CLI's non-zero exit, so the tool reports git's own message.
+        var found = repo.Lookup(revision);
+        if (found is null)
+        {
+            return null;
+        }
+
+        // An annotated tag makes git show print the tag's own header first; a tree or blob has no author at all.
+        if (found is not Commit commit)
+        {
+            throw new NotSupportedException($"'{revision}' is not a plain commit, so git shows it.");
+        }
+
+        RequireStableCommitText(commit);
+        try
+        {
+            return new CommitHeader(commit.Sha, commit.Author.Name, StrictIsoDate(commit.Author.When, workingDirectory, cliTimeout, commit.Sha, "%aI"), commit.Message);
+        }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            throw new NotSupportedException("A commit date or UTC offset is outside .NET's range, so git answers.", ex);
+        }
+    }
+
     /// <summary>Opens the repository containing <paramref name="workingDirectory"/>; null when there is none.</summary>
     private static Repository? Open(string workingDirectory)
     {
@@ -886,6 +1004,113 @@ internal sealed class Libgit2GitReader : IGitReader
         }
 
         return segments.Count == 0 ? null : string.Join('/', segments);
+    }
+
+    private static bool PathExists(string workingDirectory, string name) =>
+        File.Exists(Path.Combine(workingDirectory, name)) || Directory.Exists(Path.Combine(workingDirectory, name));
+
+    /// <summary>A plain revision (see <see cref="SimpleRevision"/>) as a commit; null when it does not resolve to one, so the CLI reports git's own error.</summary>
+    private static Commit? ResolveSimpleCommit(Repository repo, string workingDirectory, string revision, bool pathsGiven)
+    {
+        if (revision.Contains("..", StringComparison.Ordinal) || !SimpleRevision.IsMatch(revision))
+        {
+            throw new NotSupportedException($"'{revision}' is not a plain ref, hash or HEAD~N form, so git resolves it.");
+        }
+
+        if (!pathsGiven && PathExists(workingDirectory, revision))
+        {
+            throw new NotSupportedException($"'{revision}' is also a path in the working directory; git decides whether that is ambiguous.");
+        }
+
+        RequirePlainHistory(repo);
+        return repo.Lookup<Commit>(revision);
+    }
+
+    /// <summary>The checks every name-status read shares: git runs at the repository root, and no config that changes rename handling or ordering is set.</summary>
+    private static void RequireNameStatusRepository(Repository repo, string workingDirectory)
+    {
+        if (RelativeToWorkdir(repo, workingDirectory).Length != 0)
+        {
+            throw new NotSupportedException("The working directory is below the repository root, so git resolves the pathspecs against it.");
+        }
+
+        foreach (var key in new[] { "diff.renames", "diff.orderfile" })
+        {
+            if (repo.Config.Get<string>(key) is not null)
+            {
+                throw new NotSupportedException($"{key} is configured, so git decides rename handling and order.");
+            }
+        }
+    }
+
+    /// <summary>The checks <see cref="ToLogCommit"/> makes before it trusts a commit's text: git re-encodes a declared encoding and decodes invalid UTF-8 its own way.</summary>
+    private static void RequireStableCommitText(Commit commit)
+    {
+        if (commit.Encoding is { } encoding && !encoding.Equals("UTF-8", StringComparison.OrdinalIgnoreCase) && !encoding.Equals("UTF8", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new NotSupportedException($"Commit {commit.Sha} declares encoding '{encoding}', so git converts it.");
+        }
+
+        if (commit.Author.Name.AsSpan().IndexOfAny('�', '\u001e', '\u001f') >= 0 || commit.Message.AsSpan().IndexOfAny('�', '\u001e', '\u001f') >= 0)
+        {
+            throw new NotSupportedException($"Commit {commit.Sha} holds invalid UTF-8 or a separator character, so git answers.");
+        }
+    }
+
+    /// <summary>
+    /// The rows of a tree comparison as <c>git diff --name-status</c> prints them, limited to <paramref name="specs"/> when given (git diffs only the limited paths, so
+    /// the checks apply to those). Declines what the comparison cannot reproduce: a result with both an added and a deleted path (git would pair them as a rename
+    /// above its similarity threshold, and libgit2's score differs), submodule entries, unmerged or otherwise unmapped kinds, and a path git prints quoted.
+    /// </summary>
+    private static List<NameStatusEntry> ToNameStatus(TreeChanges changes, List<(string Path, bool DirectoryOnly)>? specs, bool againstIndex)
+    {
+        var entries = new List<NameStatusEntry>();
+        foreach (var change in changes)
+        {
+            // On Windows LibGit2Sharp hands paths back with backslashes; elsewhere a backslash is part of a name (and git quotes it).
+            var path = OperatingSystem.IsWindows() ? change.Path.Replace('\\', '/') : change.Path;
+            if (specs is not null && !specs.Any(spec => (!spec.DirectoryOnly && path == spec.Path) || path.StartsWith(spec.Path + "/", StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            if (change.Mode == Mode.GitLink || change.OldMode == Mode.GitLink)
+            {
+                throw new NotSupportedException("A submodule entry changed; git compares it by its own rules.");
+            }
+
+            // An intent-to-add path (git add -N) sits in the index as an empty blob; libgit2 lists it as added, git diff --cached leaves it out. The index does not
+            // say which empty blob is one, so an empty file new in the index is left to git too.
+            if (againstIndex && change.Exists && change.Oid.Sha == EmptyBlobSha)
+            {
+                throw new NotSupportedException($"'{path}' is an empty blob in the index, which may be an intent-to-add entry that git leaves out.");
+            }
+
+            var status = change.Status switch
+            {
+                ChangeKind.Added => "A",
+                ChangeKind.Deleted => "D",
+                ChangeKind.Modified => "M",
+                ChangeKind.TypeChanged => "T",
+                _ => throw new NotSupportedException($"A {change.Status} entry is left to git."),
+            };
+            // core.quotePath=false leaves bytes above 0x7f alone but git still quotes a quote, a backslash and control characters; invalid UTF-8 decodes differently.
+            if (path.Any(ch => ch < ' ' || ch is '"' or '\\' or '\u007f' or '�'))
+            {
+                throw new NotSupportedException($"'{path}' is a name git prints quoted or decodes differently.");
+            }
+
+            entries.Add(new NameStatusEntry(status, path));
+        }
+
+        if (entries.Any(entry => entry.Status == "A") && entries.Any(entry => entry.Status == "D"))
+        {
+            throw new NotSupportedException("The result has added and deleted paths, which git may pair as renames.");
+        }
+
+        // Byte-wise path order is git's tree-walk order (a directory sorts as "name/", which is the same comparison on whole paths).
+        entries.Sort((left, right) => Utf8PathOrder.Compare(left.Path, right.Path));
+        return entries;
     }
 
     private static string RootRelativePathspec(string prefix, string spec)

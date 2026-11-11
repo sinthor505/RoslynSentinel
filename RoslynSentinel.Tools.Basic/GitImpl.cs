@@ -2504,6 +2504,17 @@ public class GitImpl : IGitOperations
         return output.Split('\n').Count(l => l.StartsWith("diff --git", StringComparison.Ordinal));
     }
 
+    /// <summary>The text <c>git diff --name-status</c> prints for the rows the seam returned: one tab-separated line per file, each ending in a newline.</summary>
+    private static string FormatNameStatus(IReadOnlyList<NameStatusEntry> entries) =>
+        // Environment.NewLine, not "\n": RunGitAsync re-terminates every line that way (RejoinLines), and the text here must be what that path produced.
+        string.Concat(entries.Select(entry => entry.OldPath is null
+            ? $"{entry.Status}\t{entry.Path}{Environment.NewLine}"
+            : $"{entry.Status}\t{entry.OldPath}\t{entry.Path}{Environment.NewLine}"));
+
+    /// <summary>True for the diff targets the seam answers in-process: the index against HEAD ("staged") and refA..refB (not the three-dot form). Anything that compares with the working tree stays on git.</summary>
+    private static bool IsSeamDiffTarget(string target) =>
+        target == "staged" || (target.Contains("..", StringComparison.Ordinal) && !target.Contains("...", StringComparison.Ordinal));
+
     public async Task<GitDiffResult> DiffAsync(
         string gitRoot, string target, string? paths, int maxBytes, bool nameOnly, bool stat, CancellationToken cancellationToken)
     {
@@ -2546,17 +2557,30 @@ public class GitImpl : IGitOperations
                 args.Add(target);
             }
 
+            IReadOnlyList<string>? pathLimit = null; // null: no "--" in the command
             if (!string.IsNullOrWhiteSpace(paths))
             {
                 var parsedPaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
                 if (pathsError != null)
                     return new GitDiffResult { IsError = true, Error = pathsError };
 
+                pathLimit = parsedPaths;
                 args.Add("--");
                 args.AddRange(parsedPaths!);
             }
 
-            var diffRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
+            // nameOnly with staged or refA..refB: the file list is served by the seam (libgit2, git CLI as fallback). Everything else stays on the git CLI:
+            //  - working and a single ref compare with working-tree files: libgit2's index-to-workdir diff lists a stat-dirty file whose only difference is EOL
+            //    conversion (core.autocrlf, .gitattributes) as modified where git lists nothing, and its tree-to-workdir diff has no index awareness;
+            //  - stat and the patch: libgit2's Patch and DiffStats do not reproduce git's stat graph widths, abbreviated index lines, rename headers, no-newline
+            //    markers, binary notes or hunk-header function context byte for byte, and a patch writer is not worth building.
+            // A null answer re-runs the command below so git's own error text is what the caller sees.
+            var nameStatus = nameOnly && IsSeamDiffTarget(target)
+                ? await Task.Run(() => _gitReader.GetNameStatus(gitRoot, target, pathLimit, GitProcessTimeout), cancellationToken)
+                : null;
+            var diffRaw = nameStatus is not null
+                ? new GitRawResult { ExitCode = 0, Stdout = FormatNameStatus(nameStatus) }
+                : await RunGitAsync(gitRoot, [.. args], cancellationToken);
 
             if (diffRaw.ExitCode != 0)
             {
@@ -2596,38 +2620,64 @@ public class GitImpl : IGitOperations
 
         try
         {
-            const string fieldSep = "\x1f";
-            var format = $"%H{fieldSep}%h{fieldSep}%an{fieldSep}%aI{fieldSep}%B";
+            // The header (hash, author, date, message) is served by the seam; a null answer (or a git failure) re-runs `git show` so git's own error text is reported.
+            var header = await Task.Run(() => _gitReader.GetCommitHeader(gitRoot, target, GitProcessTimeout), cancellationToken);
+            if (header is null)
+            {
+                const string fieldSep = "\x1f";
+                var format = $"%H{fieldSep}%h{fieldSep}%an{fieldSep}%aI{fieldSep}%B";
 
-            var metaRaw = await RunGitAsync(
-                gitRoot, ["show", $"--format={format}", "--no-patch", target], cancellationToken);
-            if (metaRaw.ExitCode != 0)
-                return new GitShowResult { IsError = true, Error = CleanGitStderr(metaRaw.Stderr) };
+                var metaRaw = await RunGitAsync(
+                    gitRoot, ["show", $"--format={format}", "--no-patch", target], cancellationToken);
+                if (metaRaw.ExitCode != 0)
+                    return new GitShowResult { IsError = true, Error = CleanGitStderr(metaRaw.Stderr) };
 
-            var metaParts = metaRaw.Stdout.TrimEnd('\n', '\r').Split(fieldSep);
-            if (metaParts.Length < 5)
-                return new GitShowResult { IsError = true, Error = $"Could not parse commit metadata for '{target}'." };
+                var metaParts = metaRaw.Stdout.TrimEnd('\n', '\r').Split(fieldSep);
+                if (metaParts.Length < 5)
+                    return new GitShowResult { IsError = true, Error = $"Could not parse commit metadata for '{target}'." };
 
-            var revParseRaw = await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", $"{target}^"], cancellationToken);
-            // core.quotePath=false so non-ASCII paths in headers and file lists are not octal-escaped.
-            var diffArgs = new List<string> { "-c", "core.quotePath=false", "diff" };
-            if (nameOnly)
-                diffArgs.Add("--name-status");
-            else if (stat)
-                diffArgs.Add("--stat=200");
-            diffArgs.Add(revParseRaw.ExitCode == 0 ? $"{target}^" : EmptyTreeHash);
-            diffArgs.Add(target);
+                header = new CommitHeader(metaParts[0], metaParts[2], metaParts[3], metaParts[4]);
+            }
+
+            IReadOnlyList<string>? pathLimit = null; // null: no "--" in the command
             if (!string.IsNullOrWhiteSpace(paths))
             {
                 var parsedPaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
                 if (pathsError != null)
                     return new GitShowResult { IsError = true, Error = pathsError };
 
-                diffArgs.Add("--");
-                diffArgs.AddRange(parsedPaths!);
+                pathLimit = parsedPaths;
             }
 
-            var diffRaw = await RunGitAsync(gitRoot, [.. diffArgs], cancellationToken);
+            // nameOnly: the file list is served by the seam, as for diff. stat and the patch stay on the git CLI for the reasons given in DiffAsync.
+            var nameStatus = nameOnly
+                ? await Task.Run(() => _gitReader.GetCommitNameStatus(gitRoot, target, pathLimit, GitProcessTimeout), cancellationToken)
+                : null;
+            GitRawResult diffRaw;
+            if (nameStatus is not null)
+            {
+                diffRaw = new GitRawResult { ExitCode = 0, Stdout = FormatNameStatus(nameStatus) };
+            }
+            else
+            {
+                var revParseRaw = await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", $"{target}^"], cancellationToken);
+                // core.quotePath=false so non-ASCII paths in headers and file lists are not octal-escaped.
+                var diffArgs = new List<string> { "-c", "core.quotePath=false", "diff" };
+                if (nameOnly)
+                    diffArgs.Add("--name-status");
+                else if (stat)
+                    diffArgs.Add("--stat=200");
+                diffArgs.Add(revParseRaw.ExitCode == 0 ? $"{target}^" : EmptyTreeHash);
+                diffArgs.Add(target);
+                if (pathLimit is not null)
+                {
+                    diffArgs.Add("--");
+                    diffArgs.AddRange(pathLimit);
+                }
+
+                diffRaw = await RunGitAsync(gitRoot, [.. diffArgs], cancellationToken);
+            }
+
             if (diffRaw.ExitCode != 0)
                 return new GitShowResult { IsError = true, Error = CleanGitStderr(diffRaw.Stderr) };
 
@@ -2637,13 +2687,13 @@ public class GitImpl : IGitOperations
             return new GitShowResult
             {
                 IsError = false,
-                Hash = metaParts[0],
-                Author = metaParts[2],
-                Date = metaParts[3],
-                Message = metaParts[4].Trim('\n', '\r'),
+                Hash = header.Sha,
+                Author = header.AuthorName,
+                Date = header.AuthorDate,
+                Message = header.Message.Trim('\n', '\r'),
                 Diff = diff,
                 FilesChanged = filesChanged,
-                Warning = DetectDecodeCorruption(diff) ?? DetectDecodeCorruption(metaParts[4]),
+                Warning = DetectDecodeCorruption(diff) ?? DetectDecodeCorruption(header.Message),
             };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
