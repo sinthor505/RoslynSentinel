@@ -3327,6 +3327,9 @@ public class GitImpl : IGitOperations
                 commitArgs = new[] { "commit" }.Concat(messageArgs).ToArray();
             }
 
+            // Read BEFORE the commit: DeriveNewCommitHashAsync's fallback proves a HEAD is ours by its parent chain.
+            var headBefore = await ReadHeadWithParentsAsync(gitRoot, cancellationToken);
+
             var commitRaw = await RunGitAsync(gitRoot, commitArgs, cancellationToken);
             if (commitRaw.ExitCode != 0)
             {
@@ -3360,8 +3363,10 @@ public class GitImpl : IGitOperations
                 return await AppendInProgressAsync(failed, gitRoot, cancellationToken);
             }
 
-            var hashRaw = await RunGitAsync(gitRoot, new[] { "rev-parse", "HEAD" }, cancellationToken);
-            var hash = hashRaw.ExitCode == 0 ? hashRaw.Stdout.Trim() : "";
+            // Never `rev-parse HEAD`: another server instance sharing this working tree can commit between the
+            // git commit above and any readback, so HEAD may already be that other commit. The hash comes from the
+            // commit's own summary line (see DeriveNewCommitHashAsync); empty means it could not be established.
+            var hash = await DeriveNewCommitHashAsync(gitRoot, commitRaw.Stdout, headBefore, amend, cancellationToken);
 
             // Sanity check, not a correctness fix: a SHA-1 hash is always exactly 40 hex
             // characters. This guards against a suspected (unconfirmed, see
@@ -3372,17 +3377,27 @@ public class GitImpl : IGitOperations
             if (hash.Length > 0 && (hash.Length != 40 || !hash.All(Uri.IsHexDigit)))
             {
                 _logger.LogWarning(
-                    "git rev-parse HEAD returned a value that is not a well-formed 40-character SHA-1 hash: " +
+                    "The derived commit hash is not a well-formed 40-character SHA-1 hash: " +
                     "length={Length}, value={Hash}. Returning it to the caller as-is for visibility.",
                     hash.Length, hash);
             }
 
             // message can be null here (amend --no-edit kept HEAD's existing message), so read
             // back the commit's actual message rather than echoing the (possibly absent) input.
-            var msgRaw = await RunGitAsync(gitRoot, new[] { "log", "-1", "--format=%B" }, cancellationToken);
-            var finalMessage = msgRaw.ExitCode == 0 ? msgRaw.Stdout.Trim() : message ?? "";
+            // Read by the explicit hash, not implicit HEAD (same race). With no hash the message is unknown for an
+            // amend that kept it, and the submitted text otherwise.
+            var finalMessage = message ?? "";
+            if (hash.Length > 0)
+            {
+                var msgRaw = await RunGitAsync(gitRoot, new[] { "log", "-1", "--format=%B", hash, "--" }, cancellationToken);
+                if (msgRaw.ExitCode == 0)
+                    finalMessage = msgRaw.Stdout.Trim();
+            }
 
-            // Populate RemainingStaged: list of paths still in the index after the commit
+            // Populate RemainingStaged: list of paths still in the index after the commit.
+            // Known limit: this reads the shared index, so a concurrent session staging or committing in the same
+            // working tree can add or remove paths here. It cannot be made exact without a repo-wide lock, so it is
+            // advisory (what the index held when this readback ran), unlike CommitHash/Message which are race-free.
             // core.quotePath=false so non-ASCII paths come back verbatim and can be passed to `paths`.
             var remainingRaw = await RunGitAsync(gitRoot, new[] { "-c", "core.quotePath=false", "diff", "--cached", "--name-only" }, cancellationToken);
             var remainingStaged = new List<string>();
@@ -3478,6 +3493,9 @@ public class GitImpl : IGitOperations
             }
             args.Add(commitHash);
 
+            // Read BEFORE the revert: DeriveNewCommitHashAsync's fallback proves a HEAD is ours by its parent chain.
+            var headBefore = noCommit ? null : await ReadHeadWithParentsAsync(gitRoot, cancellationToken);
+
             var revertRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
 
             if (revertRaw.ExitCode != 0)
@@ -3486,8 +3504,9 @@ public class GitImpl : IGitOperations
             string newHash = "";
             if (!noCommit)
             {
-                var hashRaw = await RunGitAsync(gitRoot, ["rev-parse", "HEAD"], cancellationToken);
-                newHash = hashRaw.ExitCode == 0 ? hashRaw.Stdout.Trim() : "";
+                // Never `rev-parse HEAD` (another session may have committed since); an empty hash means it could not be
+                // established, see DeriveNewCommitHashAsync.
+                newHash = await DeriveNewCommitHashAsync(gitRoot, revertRaw.Stdout, headBefore, amend: false, cancellationToken);
             }
 
             return new GitRevertResult
@@ -3504,7 +3523,106 @@ public class GitImpl : IGitOperations
         }
     }
 
-       /// <summary>
+    // The "[<branch> <abbrev>] <subject>" summary line `git commit` / `git revert` print on stdout for the commit they
+    // just created: "[master 1a2b3c4]", "[master (root-commit) 1a2b3c4]", "[detached HEAD 1a2b3c4]". Everything before the
+    // abbreviation is free text (translated "(root-commit)", branch name), so only its shape is matched: no ']' inside the
+    // bracket, a space, then 4-40 lowercase hex digits closing the bracket. A subject that itself contains "[abc1234]" is
+    // after the first ']' of the line and so never matches.
+    private static readonly System.Text.RegularExpressions.Regex CommitSummaryLine = new(
+        @"^\[[^\]\r\n]*? ([0-9a-f]{4,40})\]",
+        System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// HEAD's full hash followed by its parents' full hashes (one <c>rev-list --parents</c> call, so the pair is
+    /// consistent), or null when HEAD does not resolve (unborn branch or git failure).
+    /// </summary>
+    private async Task<string[]?> ReadHeadWithParentsAsync(string gitRoot, CancellationToken cancellationToken)
+    {
+        var raw = await RunGitAsync(gitRoot, ["rev-list", "--parents", "-n", "1", "HEAD", "--"], cancellationToken);
+        if (raw.ExitCode != 0)
+            return null;
+
+        var tokens = raw.Stdout.Split([' ', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        return tokens.Length == 0 ? null : tokens;
+    }
+
+    /// <summary>
+    /// True only when <paramref name="after"/> (HEAD plus its parents, read after the commit) is provably the commit
+    /// created by this call, judged against <paramref name="before"/> (read before it). A new commit's only parent is
+    /// the old HEAD (none on an unborn branch); an amended commit has the old HEAD's parents and a new hash. A commit
+    /// by another session landing in between (or after) changes the chain, so the check then fails rather than
+    /// guessing.
+    /// </summary>
+    internal static bool IsOwnHead(string[]? before, string[]? after, bool replacesHead)
+    {
+        if (after is null || after.Length == 0)
+            return false;
+
+        if (replacesHead)
+            return before is { Length: > 0 }
+                && after[0] != before[0]
+                && after.Skip(1).SequenceEqual(before.Skip(1));
+
+        var expectedParents = before is { Length: > 0 } ? new[] { before[0] } : [];
+        return (before is null || after[0] != before[0])
+            && after.Skip(1).SequenceEqual(expectedParents);
+    }
+
+    /// <summary>
+    /// Full hash of the commit named by the LAST <c>[branch abbrev]</c> summary line in <paramref name="commandStdout"/>
+    /// (a hook may print look-alike lines earlier; git prints its own summary last), or null when no line matches or
+    /// the abbreviation does not resolve to exactly one commit. <c>rev-parse --verify</c> fails on an ambiguous
+    /// abbreviation instead of choosing one, which is the behaviour wanted here. Earlier matches are tried only when
+    /// a later one does not resolve.
+    /// </summary>
+    private async Task<string?> ResolveSummaryHashAsync(string gitRoot, string commandStdout, CancellationToken cancellationToken)
+    {
+        var matches = CommitSummaryLine.Matches(commandStdout);
+        for (var i = matches.Count - 1; i >= 0; i--)
+        {
+            var abbrev = matches[i].Groups[1].Value;
+            var raw = await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", abbrev + "^{commit}"], cancellationToken);
+            if (raw.ExitCode != 0)
+                continue;
+
+            var full = raw.Stdout.Trim();
+            // SHA-1 (40) or SHA-256 (64) object names only.
+            if (full.Length is 40 or 64 && full.All(Uri.IsHexDigit))
+                return full;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The full hash of the commit that <c>git commit</c> / <c>git revert</c> just created, never "whatever HEAD is now":
+    /// another server instance sharing the working tree can commit between the git call and any readback. Order:
+    /// (1) the summary line git printed for this very commit, expanded with <c>rev-parse --verify</c>; (2) only if that
+    /// fails, HEAD, accepted when its parent chain proves it is ours (see <see cref="IsOwnHead"/>); (3) otherwise the
+    /// empty string, meaning "the commit exists but its hash could not be established" - the caller must say so,
+    /// and the log carries the detail. Never falls back to an unchecked HEAD.
+    /// </summary>
+    internal async Task<string> DeriveNewCommitHashAsync(
+        string gitRoot, string commandStdout, string[]? headBefore, bool amend, CancellationToken cancellationToken)
+    {
+        var fromSummary = await ResolveSummaryHashAsync(gitRoot, commandStdout, cancellationToken);
+        if (fromSummary is not null)
+            return fromSummary;
+
+        var headAfter = await ReadHeadWithParentsAsync(gitRoot, cancellationToken);
+        if (IsOwnHead(headBefore, headAfter, replacesHead: amend))
+        {
+            _logger.LogInformation("The commit summary line was unparsable or ambiguous; HEAD {Head} is proven to be the new commit by its parent chain.", headAfter![0]);
+            return headAfter[0];
+        }
+
+        _logger.LogWarning(
+            "The new commit's hash could not be established: no usable summary line in the git output and HEAD is not provably the new commit " +
+            "(another session probably committed meanwhile). Returning an empty CommitHash instead of a guess.");
+        return "";
+    }
+
+    /// <summary>
     /// Moves HEAD/the current branch to <paramref name="refName"/> without ever touching the working
     /// tree, so this can never discard uncommitted edits the way <c>git reset --hard</c> would -- only
     /// <see cref="GitResetMode.soft"/> and <see cref="GitResetMode.mixed"/> are exposed, matching

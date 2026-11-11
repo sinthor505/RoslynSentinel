@@ -197,18 +197,25 @@ public class GitTools
                 }
             }
 
+            var successFindings = new List<Finding>();
             if (operation == GitOperation.commit)
             {
                 // A commit result warns when the full test suite is stale (marker read only, never incremented here).
                 // The marker belongs to the loaded solution, and commit always targets that solution's repo.
-                var staleSuite = FullTestMarkerStore.StaleFindings(_workspaceManager.GetSolutionRoot());
-                if (staleSuite.Count > 0)
-                {
-                    return new SentinelCallToolResult<object> { IsError = false, SuccessData = result, Findings = staleSuite };
-                }
+                successFindings.AddRange(FullTestMarkerStore.StaleFindings(_workspaceManager.GetSolutionRoot()));
             }
 
-            return new SentinelCallToolResult<object> { IsError = false, SuccessData = result };
+            // The commit/revert happened but its hash could not be established (another session committed at the
+            // same moment and no summary line was usable): an empty CommitHash is honest, silence about it is not.
+            if ((result is GitCommitResult { CommitHash.Length: 0 })
+                || (result is GitRevertResult { CommitHash.Length: 0, PendingCommit: false }))
+            {
+                successFindings.Add(new Finding("Git", $"The {operation} succeeded but its CommitHash could not be established (another session probably committed in the same moment). CommitHash is empty rather than a guess; find the commit with {ToolCallHint.Call("Git", ("operation", "log"))}.", FindingSeverity.Warning));
+            }
+
+            return successFindings.Count > 0
+                ? new SentinelCallToolResult<object> { IsError = false, SuccessData = result, Findings = successFindings }
+                : new SentinelCallToolResult<object> { IsError = false, SuccessData = result };
         }
         else
         {
