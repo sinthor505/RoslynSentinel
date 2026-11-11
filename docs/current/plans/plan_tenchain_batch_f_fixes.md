@@ -1,7 +1,7 @@
 # Plan: fix the environment defects behind 10-chain batch F's two failures
 
-**Status:** IN PROGRESS 2026-11-11. Steps 4, 6, 2, 5 done (b7e7df52, 5135db55, d791d8d4, 6343bdd3, 38fe365d,
-e303b7d1, 5cd92422); steps 1 and 3 left. Batched in order A=4, B=6, C=2+5, D=1, E=3
+**Status:** IN PROGRESS 2026-11-11. Steps 4, 6, 2, 5, 1 done (b7e7df52, 5135db55, d791d8d4, 6343bdd3, 38fe365d,
+e303b7d1, 5cd92422, 4b1c5a7b); step 3 left. Batched in order A=4, B=6, C=2+5, D=1, E=3
 (E after the peer's edit-impact work commits). Line numbers were re-checked against HEAD 25482ef4 on 2026-11-11 (review notes per step); still
 re-locate with `Search` before editing.
 
@@ -73,6 +73,9 @@ full build and server restart before live use.
   `TranscriptResumeAgentTests.cs:40` has its own modes copy (point it at the shared static). No assertion counts
   tools. WholeFileWrite adds WriteFile, DeleteFile, ApplyDiff, ApplyUnifiedDiff; hiding three leaves DeleteFile.
   `MemberRefactoringEngine.cs:2633` names ApplyDiff/DeleteUnusedSymbol ungated - leave a TODO, do not fix here.
+- Done: 4b1c5a7b (shared `ChainEvalToolSurface`; test `OfferedTools_HaveDeleteFile_AndNoWriteFileGitOrProjectTools`).
+  TODOs left: stale ListWorkspaceSolutions/LoadSolution prompt lines; ungated Member(remove) hint. T1 token drop
+  needs the validation run.
 
 ### Step 2 - Enum aliases for ReplaceSnippet `action`, and member meanings in the rejection
 
