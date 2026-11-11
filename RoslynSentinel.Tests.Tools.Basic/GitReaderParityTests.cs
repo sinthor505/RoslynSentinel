@@ -787,13 +787,16 @@ public class GitReaderParityTests
         var sha = CommitAll(_repo, "first");
         var fallbacksBefore = GitReaders.Default.CliFallbackCount;
         var libgit2Before = GitReaders.Default.Libgit2Count;
+        // Another test in the process may already have made the shared reader decline a request (the Git tool's stage and unstage ride the seam and git answers an
+        // unmerged entry, for one): that first reason stays on the shared instance, so only a NEW reason from this call counts.
+        var reasonBefore = GitReaders.Default.FirstFallbackReason;
 
         var head = GitReaders.Default.GetHeadSha(_repo, shortForm: false, Timeout);
 
         Assert.Multiple(() =>
         {
             Assert.That(head, Is.EqualTo(sha));
-            Assert.That(GitReaders.Default.FirstFallbackReason, Is.Null, "libgit2 fell back to the CLI: native library missing or broken?");
+            Assert.That(GitReaders.Default.FirstFallbackReason, Is.EqualTo(reasonBefore), "libgit2 fell back to the CLI: native library missing or broken?");
             Assert.That(GitReaders.Default.CliFallbackCount, Is.EqualTo(fallbacksBefore));
             Assert.That(GitReaders.Default.Libgit2Count, Is.GreaterThan(libgit2Before));
             Assert.That(GitReaders.Default.LastBackend, Is.EqualTo(GitReaderBackend.Libgit2));
@@ -1035,6 +1038,18 @@ public class GitReaderParityTests
         {
             Gate();
             return null;
+        }
+
+        public GitRunResult StageWholeFiles(string workingDirectory, IndexStageMode mode, IReadOnlyList<string> paths, TimeSpan cliTimeout, CancellationToken cancellationToken)
+        {
+            Gate();
+            return default;
+        }
+
+        public GitRunResult UnstagePaths(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout, CancellationToken cancellationToken)
+        {
+            Gate();
+            return default;
         }
 
         public bool? GetBoolConfig(string workingDirectory, string key, TimeSpan cliTimeout)

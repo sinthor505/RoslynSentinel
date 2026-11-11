@@ -199,4 +199,38 @@ internal interface IGitReader
     /// a boolean (<c>git config --type=bool</c> rejects it), or git cannot answer.
     /// </summary>
     bool? GetBoolConfig(string workingDirectory, string key, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// Stages whole files the way the Git tool's <c>stage</c> does (<see cref="IndexStageMode"/> names the exact <c>git add</c> command); a partial (hunk) stage is not part
+    /// of the seam. <paramref name="paths"/> are the literal repo-relative paths of the two <c>*Listed</c> modes (empty for the other two). Unlike the reads this
+    /// WRITES the index and returns what the git command returned: a <see cref="GitRunResult"/> with exit code and stderr, so the caller maps a failure to its
+    /// error text exactly as it did for the CLI. The CLI implementation runs the command; the libgit2 implementation only ever succeeds (exit 0) and throws
+    /// <see cref="NotSupportedException"/> for everything it cannot reproduce byte for byte (see Libgit2GitReader.IndexWrites.cs), including a held <c>index.lock</c>, so git
+    /// answers and reports its own error. A caller token cancels a running CLI process.
+    /// </summary>
+    GitRunResult StageWholeFiles(string workingDirectory, IndexStageMode mode, IReadOnlyList<string> paths, TimeSpan cliTimeout, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Resets index entries to HEAD like the Git tool's <c>unstage</c>: <c>git reset -- paths</c> (<c>git reset</c> for an empty list), the working tree untouched.
+    /// Same contract as <see cref="StageWholeFiles"/>; the libgit2 implementation declines the whole-index form (git also moves ORIG_HEAD, writes a reflog entry
+    /// and clears merge state) and every pathspec that is not a plain literal path.
+    /// </summary>
+    GitRunResult UnstagePaths(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout, CancellationToken cancellationToken);
+}
+/// <summary>
+/// The four <c>git add</c> forms the Git tool's whole-file <c>stage</c> runs (see <see cref="IGitReader.StageWholeFiles"/>). DTO-EXEMPT: enum, not a data type.
+/// </summary>
+internal enum IndexStageMode
+{
+    /// <summary><c>git --literal-pathspecs add -u</c>: modifications and deletions of every tracked file, no paths.</summary>
+    UpdateTracked,
+
+    /// <summary><c>git add -A</c>: everything, untracked files included, no paths.</summary>
+    AddAll,
+
+    /// <summary><c>git --literal-pathspecs add -u -- paths</c>: modifications and deletions of tracked files at or under the paths.</summary>
+    UpdateListed,
+
+    /// <summary><c>git --literal-pathspecs add -- paths</c>: modifications, deletions and new (non-ignored) files at or under the paths.</summary>
+    AddListed,
 }

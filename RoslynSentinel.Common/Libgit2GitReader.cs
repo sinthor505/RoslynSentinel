@@ -66,9 +66,18 @@ namespace RoslynSentinel.Common;
 ///     that change the answer (core.abbrev below 7, branch.sort, diff.renames / status.renames other than true, diff.orderFile) decline in both places.
 ///     No method declines merely because the directory is a linked worktree. Not covered: extensions.worktreeConfig (per-worktree config overrides).
 ///     Pinned by GitWorktreeRepoLocalConfigTests.
+/// (12) StageWholeFiles and UnstagePaths WRITE the index (Libgit2GitReader.IndexWrites.cs, parity-tested in GitStageToolParityTests). libgit2 serves only the ordinary case:
+///     files that contain no carriage return and meet no filter, ident or working-tree-encoding attribute (so core.autocrlf, eol, text and -text cannot change the stored bytes),
+///     in a repository without submodules, gitlinks, unmerged, intent-to-add or assume-unchanged entries and without index-format features (split, sparse, untracked-cache, fsmonitor, v4).
+///     The decline rules S1-S11 and U1 are listed on that file's class comment; a decline happens before the first mutation and the CLI then runs the same git add / git reset.
+///     Like git, the call holds index.lock (created exclusively, delete-on-close) from before it reads the index until it hands it to libgit2 for the single write (libgit2 takes
+///     its own lock for the write and renames, as git does): a lock held by anyone else is declined, so git fails with its own message, and a no-op never rewrites the file.
+///     The one gap is the hand-over between releasing our lock and libgit2 taking its own; a writer that slips in makes libgit2's lock fail (declined), it cannot be overwritten.
+///     Pinned by the index.lock tests of GitStageToolParityTests (held lock, and a CLI writer racing the libgit2 one). The stat data of staged entries is libgit2's own
+///     (git ls-files -s, status and fsck agree). Where core.filemode is false a staged file's mode is the existing entry's, or 100644 for a new one, as git does.
 /// </para>
 /// </summary>
-internal sealed class Libgit2GitReader : IGitReader
+internal sealed partial class Libgit2GitReader : IGitReader
 {
     private readonly ShortHashLengths _lengths;
 

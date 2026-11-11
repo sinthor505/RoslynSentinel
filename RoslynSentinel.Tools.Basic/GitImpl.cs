@@ -601,9 +601,9 @@ public class GitImpl : IGitOperations
         StdOutAsBytes = true,
     };
 
-    // The typed read seam (libgit2 first, git CLI fallback) the read operations moved onto, one at a time: status so far.
-    // Mutations and the remaining reads still run the CLI through RunGitAsync. Injectable (internal constructor) so a test can
-    // force one backend; production always uses the shared GitReaders.Default.
+    // The typed git seam (libgit2 first, git CLI fallback): the read operations moved onto it one at a time, and whole-file stage and unstage are its only writes
+    // (RunIndexStageAsync, RunIndexUnstageAsync). Hunk staging, commit, revert, reset, abort and the rest still run the CLI through RunGitAsync.
+    // Injectable (internal constructor) so a test can force one backend; production always uses the shared GitReaders.Default.
     private readonly IGitReader _gitReader;
 
     public GitImpl(ISolutionProvider workspaceManager)
@@ -1687,6 +1687,12 @@ public class GitImpl : IGitOperations
         string gitRoot, string[] args, GitRunOptions options, CancellationToken cancellationToken)
     {
         var run = await GitProcess.RunAsync(gitRoot, args, GitProcessTimeout, cancellationToken, options);
+        return EnsureCompleted(run, args);
+    }
+
+    // The one place a git run that did not complete becomes an exception (see RunGitCoreAsync); shared with the index writes that go through the typed seam.
+    private GitRunResult EnsureCompleted(GitRunResult run, string[] args)
+    {
         switch (run.Outcome)
         {
             case GitRunOutcome.Completed:
@@ -1766,6 +1772,32 @@ public class GitImpl : IGitOperations
             Stderr = RejoinLines(run.StdErr)
         };
     }
+
+    // Whole-file stage goes through the typed seam: libgit2 in-process for ordinary text files, the same git add command as before for everything libgit2
+    // declines (see Libgit2GitReader.IndexWrites.cs). The seam hands back a GitRunResult, and a run that did not complete maps to the same exceptions as
+    // RunGitAsync, so the result and every error text stay what they were. The call blocks, so it runs off the caller's thread; the token cancels a running CLI process.
+    private async Task<GitRawResult> RunIndexStageAsync(
+        string gitRoot, IndexStageMode mode, IReadOnlyList<string> paths, CancellationToken cancellationToken)
+    {
+        var run = await Task.Run(() => _gitReader.StageWholeFiles(gitRoot, mode, paths, GitProcessTimeout, cancellationToken), cancellationToken);
+        return ToRawResult(EnsureCompleted(run, ["add", $"({mode})", .. paths]));
+    }
+
+    // The unstage twin of RunIndexStageAsync: git reset -- paths (a plain git reset for no paths), libgit2 in-process where it can reproduce that.
+    private async Task<GitRawResult> RunIndexUnstageAsync(
+        string gitRoot, IReadOnlyList<string> paths, CancellationToken cancellationToken)
+    {
+        var run = await Task.Run(() => _gitReader.UnstagePaths(gitRoot, paths, GitProcessTimeout, cancellationToken), cancellationToken);
+        return ToRawResult(EnsureCompleted(run, ["reset", .. paths]));
+    }
+
+    // The same line re-join RunGitAsync applies, so CleanGitStderr sees the text it always saw.
+    private static GitRawResult ToRawResult(GitRunResult run) => new()
+    {
+        ExitCode = run.ExitCode,
+        Stdout = RejoinLines(run.StdOut),
+        Stderr = RejoinLines(run.StdErr)
+    };
 
     // Byte-exact sibling of RunGitAsync, for output whose line endings must survive untouched (a diff that will be
     // re-applied as a patch). Stdout comes back raw from GitProcess (no line re-join, no decoding); callers decode
@@ -2970,11 +3002,9 @@ public class GitImpl : IGitOperations
 
         try
         {
-            string[] stageArgs;
             switch (scope)
             {
                 case GitStageScope.all:
-                    stageArgs = ["add", "-A"];
                     break;
                 case GitStageScope.listed:
                     // For scope=listed, classify the paths first to handle deletions (HeadOnly)
@@ -3024,9 +3054,7 @@ public class GitImpl : IGitOperations
                     // Stage InIndex paths using git --literal-pathspecs add -u -- <paths>
                     if (inIndex.Count > 0)
                     {
-                        var addUBase = new[] { "--literal-pathspecs", "add", "-u", "--" };
-                        var addUArgs = addUBase.Concat(inIndex).ToArray();
-                        var addURaw = await RunGitAsync(gitRoot, addUArgs, cancellationToken);
+                        var addURaw = await RunIndexStageAsync(gitRoot, IndexStageMode.UpdateListed, inIndex, cancellationToken);
                         if (addURaw.ExitCode != 0)
                         {
                             return new GitStatusResult
@@ -3059,9 +3087,7 @@ public class GitImpl : IGitOperations
                             };
                         }
 
-                        var addBase = new[] { "--literal-pathspecs", "add", "--" };
-                        var addArgs = addBase.Concat(untracked).ToArray();
-                        var addRaw = await RunGitAsync(gitRoot, addArgs, cancellationToken);
+                        var addRaw = await RunIndexStageAsync(gitRoot, IndexStageMode.AddListed, untracked, cancellationToken);
 
                         // Backstop: check for ignored-path advisory in stderr
                         if (addRaw.ExitCode != 0 && addRaw.Stderr.Contains("The following paths are ignored"))
@@ -3093,14 +3119,13 @@ public class GitImpl : IGitOperations
                     return await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
                 case GitStageScope.tracked:
                 default:
-                    stageArgs = ["--literal-pathspecs", "add", "-u"];
-                    var trackedRaw = await RunGitAsync(gitRoot, stageArgs, cancellationToken);
+                    var trackedRaw = await RunIndexStageAsync(gitRoot, IndexStageMode.UpdateTracked, [], cancellationToken);
                     if (trackedRaw.ExitCode != 0)
                         return new GitStatusResult { IsError = true, Error = $"git add failed: {CleanGitStderr(trackedRaw.Stderr)}" };
                     return await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
             }
 
-            var stageRaw = await RunGitAsync(gitRoot, stageArgs, cancellationToken);
+            var stageRaw = await RunIndexStageAsync(gitRoot, IndexStageMode.AddAll, [], cancellationToken);
             if (stageRaw.ExitCode != 0)
                 return new GitStatusResult { IsError = true, Error = $"git add failed: {CleanGitStderr(stageRaw.Stderr)}" };
 
@@ -3122,23 +3147,23 @@ public class GitImpl : IGitOperations
     {
         try
         {
-            string[] resetArgs;
+            IReadOnlyList<string> resetPaths;
             if (string.IsNullOrWhiteSpace(paths))
             {
                 // Whole index. Deliberately a plain `git reset` (mixed, no ref): it un-stages
                 // everything while leaving every working-tree edit on disk, so this can never
                 // destroy uncommitted work the way `reset --hard` would.
-                resetArgs = ["reset"];
+                resetPaths = [];
             }
             else
             {
                 var filePaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
                 if (pathsError != null)
                     return new GitStatusResult { IsError = true, Error = pathsError };
-                resetArgs = ["reset", "--", .. filePaths!];
+                resetPaths = filePaths!;
             }
 
-            var resetRaw = await RunGitAsync(gitRoot, resetArgs, cancellationToken);
+            var resetRaw = await RunIndexUnstageAsync(gitRoot, resetPaths, cancellationToken);
 
             // `git reset` exits 1 when the index still differs from HEAD after the reset, which is
             // the normal outcome here, not a failure. Treat stderr content as the real signal

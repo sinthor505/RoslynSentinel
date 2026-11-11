@@ -137,6 +137,8 @@ public class GitRelativeWorktreeTests
     /// <summary>One call per <see cref="IGitReader"/> method (GetHeadSha twice), each chosen so the CLI answer is a real, non-null one.</summary>
     private sealed record Probe(string Label, string Method, Func<IGitReader, string, object?> Call);
 
+    private static (int ExitCode, string StdErr) ExitAndStdErr(GitRunResult run) => (run.ExitCode, run.StdErr);
+
     private Probe[] Probes() =>
     [
         new("GetHeadSha(full)", nameof(IGitReader.GetHeadSha), (r, d) => r.GetHeadSha(d, shortForm: false, Timeout)),
@@ -160,6 +162,10 @@ public class GitRelativeWorktreeTests
         new("GetCommitMessages", nameof(IGitReader.GetCommitMessages), (r, d) => r.GetCommitMessages(d, Timeout)),
         new("FindCommitByTrailer", nameof(IGitReader.FindCommitByTrailer), (r, d) => r.FindCommitByTrailer(d, "Tool-Call-Id", "relwt-1", 50, Timeout)),
         new("GetBoolConfig", nameof(IGitReader.GetBoolConfig), (r, d) => r.GetBoolConfig(d, "worktree.useRelativePaths", Timeout)),
+        // The two index writes: projected to exit code and stderr (a GitRunResult carries a byte array, which does not compare or serialize usefully). a.txt is tracked, so staging it is
+        // an idempotent no-op or one more staged file whichever reader runs first; the unstaged path is in neither the index nor HEAD, so that reset changes nothing.
+        new("StageWholeFiles", nameof(IGitReader.StageWholeFiles), (r, d) => ExitAndStdErr(r.StageWholeFiles(d, IndexStageMode.AddListed, ["a.txt"], Timeout, CancellationToken.None))),
+        new("UnstagePaths", nameof(IGitReader.UnstagePaths), (r, d) => ExitAndStdErr(r.UnstagePaths(d, ["never-existed.txt"], Timeout, CancellationToken.None))),
     ];
 
     // ---- libgit2 rejects extensions.relativeWorktrees ----

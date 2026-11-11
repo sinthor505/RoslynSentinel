@@ -115,6 +115,8 @@ public class TestInstanceLauncherGitStampTests
         CommitAll(_repo, "first");
         var libgit2Before = GitReaders.Default.Libgit2Count;
         var fallbacksBefore = GitReaders.Default.CliFallbackCount;
+        // An earlier test may already have made the shared reader decline something (stage and unstage on an unmerged entry, say); only a new reason from this call counts.
+        var reasonBefore = GitReaders.Default.FirstFallbackReason;
 
         var (sha, dirty) = TestInstanceLauncher.ReadGitStamp(_repo);
 
@@ -122,7 +124,7 @@ public class TestInstanceLauncherGitStampTests
         // a silent fallback leaves FirstFallbackReason set and raises CliFallbackCount.
         Assert.That(sha, Is.Not.Null);
         Assert.That(dirty, Is.False);
-        Assert.That(GitReaders.Default.FirstFallbackReason, Is.Null, "libgit2 fell back to the CLI: native library missing or broken?");
+        Assert.That(GitReaders.Default.FirstFallbackReason, Is.EqualTo(reasonBefore), "libgit2 fell back to the CLI: native library missing or broken?");
         Assert.That(GitReaders.Default.CliFallbackCount, Is.EqualTo(fallbacksBefore));
         Assert.That(GitReaders.Default.Libgit2Count, Is.GreaterThanOrEqualTo(libgit2Before + 2));
     }

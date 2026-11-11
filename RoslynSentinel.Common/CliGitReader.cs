@@ -374,6 +374,34 @@ internal sealed class CliGitReader : IGitReader
         };
     }
 
+    // What the stage and unstage commands run with: the resolved git executable and the encoding config GitImpl has always put in front of its commands.
+    private static readonly GitRunOptions IndexWriteRunOptions = new()
+    {
+        GitExecutable = GitProcess.ResolveGitExecutablePath(),
+        PrefixArgs = ["-c", "i18n.logOutputEncoding=utf-8", "-c", "i18n.commitEncoding=utf-8"],
+    };
+
+    public GitRunResult StageWholeFiles(string workingDirectory, IndexStageMode mode, IReadOnlyList<string> paths, TimeSpan cliTimeout, CancellationToken cancellationToken)
+    {
+        // Exactly the commands GitImpl.StageAsync has always run (add -A without --literal-pathspecs, as before).
+        List<string> args = mode switch
+        {
+            IndexStageMode.UpdateTracked => ["--literal-pathspecs", "add", "-u"],
+            IndexStageMode.AddAll => ["add", "-A"],
+            IndexStageMode.UpdateListed => ["--literal-pathspecs", "add", "-u", "--", .. paths],
+            IndexStageMode.AddListed => ["--literal-pathspecs", "add", "--", .. paths],
+            _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown stage mode."),
+        };
+        return GitProcess.Run(workingDirectory, args, cliTimeout, cancellationToken, IndexWriteRunOptions);
+    }
+
+    public GitRunResult UnstagePaths(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout, CancellationToken cancellationToken)
+    {
+        // A plain mixed reset: un-stages without ever touching the working tree. With paths the pathspecs are git's own (globs and magic), as GitImpl.UnstageAsync passed them.
+        List<string> args = paths.Count == 0 ? ["reset"] : ["reset", "--", .. paths];
+        return GitProcess.Run(workingDirectory, args, cliTimeout, cancellationToken, IndexWriteRunOptions);
+    }
+
     /// <summary>Parses <c>log -z --name-only --format=%h%x1f%s</c>: NUL-separated tokens, a header (it holds the unit separator) followed by its path tokens.</summary>
     internal static List<ChangedCommit> ParseLog(string output)
     {
