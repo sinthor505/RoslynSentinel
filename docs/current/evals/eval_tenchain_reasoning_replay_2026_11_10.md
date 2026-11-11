@@ -119,8 +119,8 @@ template, 60160 context, worktree pinned at a918d07d) isolates the code change o
 
 **Setup.** Host 113, `qwen3.5-9b-coder` with its DEFAULT chat template (C used the fixed template), 60160 context,
 parallel 4. Code pinned at a918d07d in a separate worktree (`C:\tmp\rs_eval_a918`, branch `eval/batch-e-a918d07d`) so
-edits to the main tree during the run could not leak in. Archive: `C:\tmp\rs_eval_a918\ModelTestingResults\113\
-Model_AppliesTenChainedRefactors\`, runs `20261110-215536-336` to `20261110-232308-397`. L2 (coordinator made the
+edits to the main tree during the run could not leak in (worktree and branch removed afterwards). Archive (copied
+out of the worktree): `ModelTestingResults\113\Model_AppliesTenChainedRefactors\`, runs `20261110-215536-336` to `20261110-232308-397`. L2 (coordinator made the
 worktree); no other intervention.
 
 | Run | Folder | Result | Turns | Failed calls |

@@ -229,9 +229,45 @@ injection (every call produces exactly one short sentence) is bounded and stays 
 - Interaction with the existing `RepeatedToolFailure` breaker: does an escalation injection reset it,
   extend it, or leave it untouched?
 
+## Loop breaking: collapse repeated calls and a fact-only injection (approved 2026-11-10)
+
+First slice, ahead of the general mechanism above. It does not wait on the error-code audit, because it states
+only facts and quotes the server.
+
+**Evidence.** 10-chain runs on 2026-11-10 (`evals/eval_tenchain_reasoning_replay_2026_11_10.md`): batch C run 305
+sent the identical rejected ReplaceSnippet 9 times (T11-T19), batch E run R9 (`20261110-231957-659`, qwen3.5-9b-coder)
+9 times (T3-T11). Every rejection carried a correct, copyable "use RenameSymbol(...) instead" next step, and from
+31b206a6 on the "You already sent this exact edit" note. The reasoning names RenameSymbol every turn while the emitted
+call repeats the previous tool name. Hypothesis (from the eval doc): a run of identical function-call items in the
+replayed history is what the model copies. In batch D the runs that escaped the redirect usually made one different
+call first (LocateSymbol or Search), then RenameSymbol.
+
+**Design.**
+- **Collapse.** In the history the harness replays every turn (`LmStudioAgentClient`), keep the first of a run of
+  identical (tool name + arguments) calls that were rejected identically, and replace the repeats with one short note,
+  e.g. "(sent 4 more times, rejected identically)". The raw transcript keeps every turn unchanged.
+- **Injection.** When an identical call is rejected identically the 2nd time, insert one message between turns, built
+  only from facts: "I have sent the same {tool} call {n} times and it was rejected the same way each time. The error's
+  next step says: {the server's Next step line, verbatim}. My next call must be a different tool." With no Next step
+  in the rejection, the middle sentence is omitted. Escalate wording on later repeats; never repeat a sentence verbatim.
+- **Switch.** One environment variable turns collapse and injection on (name chosen at build time, e.g.
+  `ROSLYNSENTINEL_MODELEVAL_LOOP_ASSIST`); off by default, so a clean baseline stays available.
+- **Transcript flag (owner decision 2026-11-10).** Every turn that received an assist carries a top-level property
+  on the turn object in `transcript.json` (for example `assists: [{ "kind": "collapse" | "injection", "toolName",
+  "repeatCount", "text" }]`), so a run's assist count and the exact turns can be found without text search, and the
+  field can take future assist kinds. The run summary reports "passed clean" vs "passed with N assists".
+
+**Measurement.** The loop now occurs in about 1 of 10 coder runs, too rare for batch A/B. Resume R9's transcript at
+T3 (the interrogate script, `references/reference_interrogate_script.md`) and sample 10 times per arm: off, collapse
+only, collapse + injection. Metric: share of samples whose next call is not the rejected ReplaceSnippet, and share
+that reach RenameSymbol within 2 turns.
+
+**Open (this slice).** Message role of the injection (synthetic assistant vs user) under the qwen3.5 templates: test
+both in the R9 resample before choosing. Whether collapse alone is enough.
+
 ## Status
 
-Design proposal only — not yet implemented. Depends on
+Design proposal only — not yet implemented. The "Loop breaking" slice above is approved (2026-11-10). Depends on
 [`proposal_tool_error_code_taxonomy.md`](proposal_tool_error_code_taxonomy.md)'s audit for
 per-code guidance to be honest. Motivated by the competence step-change observed between
 early-September model-eval fixtures and PlanStepRunner run `20260911-205633-213`.
