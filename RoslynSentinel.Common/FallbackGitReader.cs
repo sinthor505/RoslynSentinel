@@ -9,11 +9,24 @@ namespace RoslynSentinel.Common;
 /// one call and fails on a later one (or a <see cref="TypeInitializationException"/> that sticks after a failed static
 /// constructor) is still covered.
 /// <para>
-/// A fallback is never silent. The first fallback for each distinct exception type is written once to stderr
-/// (stdout is the MCP JSON-RPC pipe) with the exception's type name and message, and the active backend is observable:
-/// <see cref="LastBackend"/> names the implementation that answered the most recent call, <see cref="Libgit2Count"/> and
-/// <see cref="CliFallbackCount"/> count calls per backend, and <see cref="FirstFallbackReason"/> keeps the first reason.
-/// All of it is thread-safe. A test that must prove libgit2 (not the fallback) serves a call asserts on these.
+/// Two different reasons send a call to the CLI, and they are counted apart.
+/// A decline is planned: the libgit2 reader throws <see cref="NotSupportedException"/> (not <see cref="PlatformNotSupportedException"/>) for a request it
+/// cannot reproduce byte for byte (pathspec magic, a carriage return in a file to stage, an unmerged or intent-to-add entry, a held index.lock, a config
+/// setting that changes the answer, a failed abbreviation-length probe, ...). It is the only decline signal: no null or sentinel result means a decline.
+/// A decline is normal, so it is never written to stderr (only a <c>Debug</c> trace) and it is not a fault: see <see cref="DeclineCount"/> and
+/// <see cref="LastDeclineReason"/>.
+/// A failure is real: <see cref="LibGit2SharpException"/> (for example a repository libgit2 cannot open), <see cref="DllNotFoundException"/>,
+/// <see cref="BadImageFormatException"/>, <see cref="TypeInitializationException"/>, <see cref="PlatformNotSupportedException"/>, <see cref="IOException"/> or
+/// <see cref="UnauthorizedAccessException"/>. A failure is never silent: the first one for each distinct exception type is written once to stderr
+/// (stdout is the MCP JSON-RPC pipe) with the exception's type name and message, and it is counted in <see cref="CliFallbackCount"/> and kept in
+/// <see cref="FirstFallbackReason"/>. Any other exception type is not caught and propagates to the caller.
+/// </para>
+/// <para>
+/// The active backend is observable: <see cref="LastBackend"/> names the implementation that answered the most recent call (the CLI for a decline and for a
+/// failure alike), <see cref="Libgit2Count"/> counts calls libgit2 served, <see cref="DeclineCount"/> and <see cref="CliFallbackCount"/> count the calls the
+/// CLI served after a decline and after a failure, and the two reason properties keep the first failure and the latest decline.
+/// All of it is thread-safe. A test that must prove libgit2 (not the CLI) serves a call asserts on these; a call that must be declined asserts on the
+/// decline members and that the failure members stayed untouched.
 /// </para>
 /// </summary>
 internal sealed class FallbackGitReader : IGitReader
@@ -24,8 +37,10 @@ internal sealed class FallbackGitReader : IGitReader
     private readonly ConcurrentDictionary<string, byte> _loggedKinds = new(StringComparer.Ordinal);
     private long _primaryCount;
     private long _fallbackCount;
+    private long _declineCount;
     private int _lastBackend;
     private string? _firstFallbackReason;
+    private string? _lastDeclineReason;
 
     /// <param name="primary">Tried first.</param>
     /// <param name="fallback">Answers when <paramref name="primary"/> throws a native-load or libgit2 failure.</param>
@@ -43,11 +58,23 @@ internal sealed class FallbackGitReader : IGitReader
     /// <summary>Calls answered by the primary (libgit2) implementation.</summary>
     internal long Libgit2Count => Interlocked.Read(ref _primaryCount);
 
-    /// <summary>Calls answered by the CLI fallback because the primary failed.</summary>
+    /// <summary>
+    /// Calls answered by the CLI because the primary REALLY FAILED (native library missing or broken, a repository libgit2 cannot open, an I/O error).
+    /// A planned decline is not counted here: see <see cref="DeclineCount"/>. Zero in a healthy environment.
+    /// </summary>
     internal long CliFallbackCount => Interlocked.Read(ref _fallbackCount);
 
-    /// <summary>"ExceptionType: message" of the first failure that caused a fallback; null while none has.</summary>
+    /// <summary>
+    /// "ExceptionType: message" of the first REAL failure that caused a fallback; null while none has. A planned decline never sets it
+    /// (see <see cref="LastDeclineReason"/>), so null is the expected value in a healthy environment.
+    /// </summary>
     internal string? FirstFallbackReason => Volatile.Read(ref _firstFallbackReason);
+
+    /// <summary>Calls answered by the CLI after the primary planned-declined them (<see cref="NotSupportedException"/>). Normal traffic, not a fault.</summary>
+    internal long DeclineCount => Interlocked.Read(ref _declineCount);
+
+    /// <summary>The message of the most recent planned decline; null while none has happened.</summary>
+    internal string? LastDeclineReason => Volatile.Read(ref _lastDeclineReason);
 
     public string? GetHeadSha(string workingDirectory, bool shortForm, TimeSpan cliTimeout) =>
         Invoke(reader => reader.GetHeadSha(workingDirectory, shortForm, cliTimeout));
@@ -122,13 +149,22 @@ internal sealed class FallbackGitReader : IGitReader
             Volatile.Write(ref _lastBackend, (int)GitReaderBackend.Libgit2);
             return result;
         }
+        // NotSupportedException: the primary declined a request it cannot reproduce (pathspec magic, a path outside the working tree, a carriage
+        // return in a file to stage, a held index.lock, ...). Planned and normal: counted as a decline, never logged to stderr.
+        catch (Exception ex) when (IsDecline(ex))
+        {
+            RecordDecline(ex);
+            var result = call(_fallback);
+            Interlocked.Increment(ref _declineCount);
+            Volatile.Write(ref _lastBackend, (int)GitReaderBackend.Cli);
+            return result;
+        }
         // LibGit2SharpException: libgit2 could not do it (cannot open the repo, unsupported repo format, ownership check).
         // DllNotFoundException / BadImageFormatException: the native library is missing or the wrong architecture.
         // TypeInitializationException: a static constructor failed earlier (it rethrows on every later use).
-        // NotSupportedException: the primary declined a request it cannot reproduce (pathspec magic, a path outside the working tree).
+        // PlatformNotSupportedException: a NotSupportedException subtype, but the runtime or native layer says so, not a planned decline.
         // IOException / UnauthorizedAccessException: libgit2 or the directory scan could not read the repository files.
-        catch (Exception ex) when (ex is LibGit2SharpException or DllNotFoundException or BadImageFormatException
-            or TypeInitializationException or NotSupportedException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (IsFailure(ex))
         {
             RecordFallback(ex);
             var result = call(_fallback);
@@ -138,12 +174,29 @@ internal sealed class FallbackGitReader : IGitReader
         }
     }
 
+    /// <summary>A planned decline: the libgit2 reader's <see cref="NotSupportedException"/>, the only decline signal (see the class summary).</summary>
+    internal static bool IsDecline(Exception ex) => ex is NotSupportedException and not PlatformNotSupportedException;
+
+    /// <summary>A real failure of the primary that the composite answers from the CLI for; any other exception type propagates.</summary>
+    internal static bool IsFailure(Exception ex) =>
+        ex is LibGit2SharpException or DllNotFoundException or BadImageFormatException or TypeInitializationException
+            or PlatformNotSupportedException or IOException or UnauthorizedAccessException;
+
+    private void RecordDecline(Exception ex)
+    {
+        var reason = string.IsNullOrEmpty(ex.Message) ? ex.GetType().Name : ex.Message;
+        Volatile.Write(ref _lastDeclineReason, reason);
+
+        // Declines are routine (every pathspec-magic log, every CR-containing stage): a debug-build trace only, nothing on stderr.
+        System.Diagnostics.Debug.WriteLine($"[RoslynSentinel.GitReader] libgit2 declined, the git CLI answers: {reason}");
+    }
+
     private void RecordFallback(Exception ex)
     {
         var reason = $"{ex.GetType().Name}: {ex.Message}";
         Interlocked.CompareExchange(ref _firstFallbackReason, reason, null);
 
-        // Once per exception type, so a harmless NotSupportedException (pathspec magic) cannot hide a later native-load failure.
+        // Once per exception type, so one repeated failure kind cannot hide a different one.
         if (_loggedKinds.TryAdd(ex.GetType().FullName ?? ex.GetType().Name, 0))
         {
             _log($"[RoslynSentinel.GitReader] libgit2 failed, using the git CLI instead (logged once per exception type): {reason}");

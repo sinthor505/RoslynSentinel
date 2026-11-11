@@ -102,6 +102,63 @@ public class McpServerStatusGitBackendTests
     }
 
     [Test]
+    public void GitBackendBlock_ShowsDeclinesAndFailuresApart()
+    {
+        // One planned decline (NotSupportedException), one real failure (DllNotFoundException), one call libgit2 serves: the block must keep them in three counters.
+        var logged = new ConcurrentQueue<string>();
+        var primary = new GitReaderParityTests.ScriptedReader("primary", call => call switch
+        {
+            0 => new NotSupportedException("pathspec magic"),
+            1 => new DllNotFoundException("native library missing"),
+            _ => null,
+        });
+        var reader = new FallbackGitReader(primary, new GitReaderParityTests.ScriptedReader("fallback", _ => null), logged.Enqueue);
+        var warmup = new GitBackendWarmup(() => "v1", _ => "ok", reader, logged.Enqueue);
+        warmup.Start();
+        Assert.That(warmup.NativeStatus.Wait(TimeSpan.FromSeconds(10)), Is.True);
+
+        reader.GetHeadSha("C:\\anywhere", false, TimeSpan.FromSeconds(5));
+        reader.GetHeadSha("C:\\anywhere", false, TimeSpan.FromSeconds(5));
+        reader.GetHeadSha("C:\\anywhere", false, TimeSpan.FromSeconds(5));
+        var block = StatusBlock(warmup);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(block.DeclineCount, Is.EqualTo(1));
+            Assert.That(block.LastDeclineReason, Is.EqualTo("pathspec magic"));
+            Assert.That(block.CliFallbackCount, Is.EqualTo(1), "failures only: the decline is not counted here");
+            Assert.That(block.FirstFallbackReason, Does.StartWith("DllNotFoundException").And.Contain("native library missing"));
+            Assert.That(block.Libgit2Count, Is.EqualTo(1));
+            Assert.That(logged, Has.Count.EqualTo(1), "only the failure is logged: " + string.Join(" | ", logged));
+            Assert.That(logged.Single(), Does.Contain("DllNotFoundException"));
+        });
+    }
+
+    [Test]
+    public void GitBackendBlock_WhenNothingDeclinedOrFailed_ReportsZeroAndNullForBoth()
+    {
+        var reader = new FallbackGitReader(
+            new GitReaderParityTests.ScriptedReader("primary", _ => null),
+            new GitReaderParityTests.ScriptedReader("fallback", _ => null),
+            _ => { });
+        var warmup = new GitBackendWarmup(() => "v1", _ => "ok", reader, log: null);
+        warmup.Start();
+        Assert.That(warmup.NativeStatus.Wait(TimeSpan.FromSeconds(10)), Is.True);
+
+        reader.GetHeadSha("C:\\anywhere", false, TimeSpan.FromSeconds(5));
+        var block = StatusBlock(warmup);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(block.Libgit2Count, Is.EqualTo(1));
+            Assert.That(block.CliFallbackCount, Is.Zero);
+            Assert.That(block.FirstFallbackReason, Is.Null);
+            Assert.That(block.DeclineCount, Is.Zero);
+            Assert.That(block.LastDeclineReason, Is.Null);
+        });
+    }
+
+    [Test]
     public void SlowNativeProbe_StatusReturnsWarmingWithinTheBound_ThenTheRealResult()
     {
         var gate = new TaskCompletionSource();

@@ -569,7 +569,10 @@ public class GitStatusToolParityTests
         Assert.Multiple(() =>
         {
             Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Cli), "a repository with a submodule is declined by libgit2 and answered by the CLI");
-            Assert.That(composite.FirstFallbackReason, Does.StartWith("NotSupportedException"));
+            Assert.That(composite.DeclineCount, Is.GreaterThanOrEqualTo(1));
+            Assert.That(composite.LastDeclineReason, Is.Not.Null.And.Not.Empty);
+            Assert.That(composite.CliFallbackCount, Is.Zero, "a planned decline is not a failure");
+            Assert.That(composite.FirstFallbackReason, Is.Null);
             Assert.That(JsonSerializer.Serialize(viaComposite), Is.EqualTo(JsonSerializer.Serialize(viaCli)));
         });
     }
@@ -592,6 +595,7 @@ public class GitStatusToolParityTests
             Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Libgit2), "libgit2 must serve status; a CLI answer means a silent fallback (reason: " + composite.FirstFallbackReason + ")");
             Assert.That(composite.Libgit2Count, Is.EqualTo(1));
             Assert.That(composite.CliFallbackCount, Is.EqualTo(0));
+            Assert.That(composite.DeclineCount, Is.Zero, "libgit2 must serve status; a decline would hand it to the CLI");
             Assert.That(composite.FirstFallbackReason, Is.Null);
         });
     }

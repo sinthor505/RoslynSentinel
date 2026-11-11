@@ -225,7 +225,10 @@ public class ShortHashLengthsTests
                 Assert.That(block.ShortHashLength, Is.Null);
                 Assert.That(viaComposite, Is.EqualTo(viaCli));
                 Assert.That(reader.LastBackend, Is.EqualTo(GitReaderBackend.Cli));
-                Assert.That(reader.FirstFallbackReason, Does.StartWith("NotSupportedException"));
+                Assert.That(reader.DeclineCount, Is.EqualTo(1));
+                Assert.That(reader.LastDeclineReason, Is.Not.Null.And.Not.Empty);
+                Assert.That(reader.CliFallbackCount, Is.Zero, "a failed length probe is a planned decline, not a failure");
+                Assert.That(reader.FirstFallbackReason, Is.Null);
             });
         }
 
@@ -249,7 +252,8 @@ public class ShortHashLengthsTests
             Assert.Multiple(() =>
             {
                 Assert.That(whileFailing, Is.EqualTo(afterRecovery));
-                Assert.That(reader.CliFallbackCount, Is.EqualTo(1), "only the call made while the probe failed went to the CLI");
+                Assert.That(reader.DeclineCount, Is.EqualTo(1), "only the call made while the probe failed went to the CLI");
+                Assert.That(reader.CliFallbackCount, Is.Zero, "a failed length probe is a planned decline, not a failure");
                 Assert.That(libgit2Calls, Is.EqualTo(1));
                 Assert.That(probes, Is.EqualTo(2));
             });

@@ -154,15 +154,15 @@ public class ServerBinaryStalenessGitTests
         var sha = Commit("RoslynSentinel.Common/a.cs", "first");
         Commit("RoslynSentinel.Tools.Basic/t.cs", "tools change");
         var libgit2Before = GitReaders.Default.Libgit2Count;
-        var fallbacksBefore = GitReaders.Default.CliFallbackCount;
 
         var report = ServerBinaryStaleness.EvaluateGit(sha, _repo);
 
-        // Counters are process-wide and other tests may add to them in parallel, so assert on direction, not exact deltas;
-        // a silent fallback leaves FirstFallbackReason set and raises CliFallbackCount.
+        // Counters are process-wide and other tests may add to them in parallel, so Libgit2Count is asserted on direction, not an exact delta. A REAL failure
+        // (FirstFallbackReason, CliFallbackCount) is asserted strictly: no test makes the shared reader fail. Planned declines (DeclineCount) are normal traffic
+        // on the shared reader, so they stay unasserted here: a decline of this call would show as no Libgit2Count increase.
         Assert.That(report.IsStale, Is.True);
         Assert.That(GitReaders.Default.FirstFallbackReason, Is.Null, "libgit2 fell back to the CLI: native library missing or broken?");
-        Assert.That(GitReaders.Default.CliFallbackCount, Is.EqualTo(fallbacksBefore));
+        Assert.That(GitReaders.Default.CliFallbackCount, Is.Zero);
         Assert.That(GitReaders.Default.Libgit2Count, Is.GreaterThan(libgit2Before));
     }
 

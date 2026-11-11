@@ -773,6 +773,8 @@ public class GitReaderParityTests
         {
             Assert.That(reader.FirstFallbackReason, Is.Null, "libgit2 fell back to the CLI: native library missing or broken?");
             Assert.That(reader.CliFallbackCount, Is.EqualTo(0));
+            Assert.That(reader.DeclineCount, Is.EqualTo(0), "libgit2 declined a probe: " + reader.LastDeclineReason);
+            Assert.That(reader.LastDeclineReason, Is.Null);
             Assert.That(reader.LastBackend, Is.EqualTo(GitReaderBackend.Libgit2));
             Assert.That(reader.Libgit2Count, Is.EqualTo(results.Length));
             Assert.That(log, Is.Empty);
@@ -785,19 +787,20 @@ public class GitReaderParityTests
     {
         Write(_repo, "a.txt", "a\n");
         var sha = CommitAll(_repo, "first");
-        var fallbacksBefore = GitReaders.Default.CliFallbackCount;
         var libgit2Before = GitReaders.Default.Libgit2Count;
-        // Another test in the process may already have made the shared reader decline a request (the Git tool's stage and unstage ride the seam and git answers an
-        // unmerged entry, for one): that first reason stays on the shared instance, so only a NEW reason from this call counts.
-        var reasonBefore = GitReaders.Default.FirstFallbackReason;
+        // Planned declines are normal traffic on the shared instance (the Git tool's stage and unstage ride the seam and git answers an unmerged entry, for one),
+        // so DeclineCount is compared before/after: this call must not add one. The failure members are asserted strictly (null/zero): no test makes the shared
+        // reader REALLY fail (tests that inject failures build their own composite), and a failure here is exactly what this test exists to catch.
+        var declinesBefore = GitReaders.Default.DeclineCount;
 
         var head = GitReaders.Default.GetHeadSha(_repo, shortForm: false, Timeout);
 
         Assert.Multiple(() =>
         {
             Assert.That(head, Is.EqualTo(sha));
-            Assert.That(GitReaders.Default.FirstFallbackReason, Is.EqualTo(reasonBefore), "libgit2 fell back to the CLI: native library missing or broken?");
-            Assert.That(GitReaders.Default.CliFallbackCount, Is.EqualTo(fallbacksBefore));
+            Assert.That(GitReaders.Default.FirstFallbackReason, Is.Null, "libgit2 fell back to the CLI: native library missing or broken?");
+            Assert.That(GitReaders.Default.CliFallbackCount, Is.Zero);
+            Assert.That(GitReaders.Default.DeclineCount, Is.EqualTo(declinesBefore), "this call must not be declined");
             Assert.That(GitReaders.Default.Libgit2Count, Is.GreaterThan(libgit2Before));
             Assert.That(GitReaders.Default.LastBackend, Is.EqualTo(GitReaderBackend.Libgit2));
         });
@@ -818,8 +821,11 @@ public class GitReaderParityTests
         {
             Assert.That(rows, Is.EqualTo(new[] { " M a.txt" }));
             Assert.That(reader.LastBackend, Is.EqualTo(GitReaderBackend.Cli));
-            Assert.That(reader.CliFallbackCount, Is.EqualTo(1));
-            Assert.That(reader.FirstFallbackReason, Does.StartWith("NotSupportedException"));
+            Assert.That(reader.DeclineCount, Is.EqualTo(1));
+            Assert.That(reader.LastDeclineReason, Is.Not.Null.And.Not.Empty);
+            Assert.That(reader.CliFallbackCount, Is.Zero, "a planned decline is not a failure");
+            Assert.That(reader.FirstFallbackReason, Is.Null);
+            Assert.That(log, Is.Empty, "a planned decline writes nothing to stderr");
         });
     }
 
@@ -849,6 +855,8 @@ public class GitReaderParityTests
             Assert.That(reader.LastBackend, Is.EqualTo(GitReaderBackend.Cli));
             Assert.That(reader.CliFallbackCount, Is.EqualTo(3));
             Assert.That(reader.Libgit2Count, Is.EqualTo(0));
+            Assert.That(reader.DeclineCount, Is.Zero, "a real failure is not a decline");
+            Assert.That(reader.LastDeclineReason, Is.Null);
             Assert.That(reader.FirstFallbackReason, Does.StartWith(failure.GetType().Name).And.Contain(failure.Message));
             Assert.That(log, Has.Count.EqualTo(1), "the fallback is logged once, not per call");
             Assert.That(log[0], Does.Contain(failure.GetType().Name).And.Contain(failure.Message));
@@ -875,12 +883,13 @@ public class GitReaderParityTests
             Assert.That(reader.LastBackend, Is.EqualTo(GitReaderBackend.Cli));
             Assert.That(reader.Libgit2Count, Is.EqualTo(1));
             Assert.That(reader.CliFallbackCount, Is.EqualTo(1));
+            Assert.That(reader.DeclineCount, Is.Zero);
             Assert.That(log, Has.Count.EqualTo(1));
         });
     }
 
     [Test]
-    public void Composite_DifferentFailureKinds_AreEachLoggedOnce()
+    public void Composite_DifferentFailureKinds_AreEachLoggedOnce_AndDeclinesAreNeverLogged()
     {
         var log = new List<string>();
         var primary = new ScriptedReader("primary", call => call switch
@@ -888,21 +897,71 @@ public class GitReaderParityTests
             0 => new NotSupportedException("pathspec magic"),
             1 => new DllNotFoundException("native library missing"),
             2 => new NotSupportedException("pathspec magic again"),
-            _ => new DllNotFoundException("native library missing again"),
+            3 => new DllNotFoundException("native library missing again"),
+            4 => new LibGit2SharpException("cannot open the repository"),
+            _ => new DllNotFoundException("native library missing a third time"),
         });
         var reader = new FallbackGitReader(primary, new ScriptedReader("fallback", _ => null), log.Add);
 
-        for (var i = 0; i < 4; i++)
+        for (var i = 0; i < 6; i++)
         {
             reader.GetHeadSha(_repo, false, Timeout);
         }
 
         Assert.Multiple(() =>
         {
-            Assert.That(log, Has.Count.EqualTo(2), "a harmless NotSupportedException must not hide a later native-load failure");
-            Assert.That(log[0], Does.Contain("NotSupportedException"));
-            Assert.That(log[1], Does.Contain("DllNotFoundException"));
-            Assert.That(reader.FirstFallbackReason, Does.StartWith("NotSupportedException"));
+            Assert.That(log, Has.Count.EqualTo(2), "one line per distinct FAILURE type; the two declines wrote nothing");
+            Assert.That(log[0], Does.Contain("DllNotFoundException"));
+            Assert.That(log[1], Does.Contain("LibGit2SharpException"));
+            Assert.That(reader.CliFallbackCount, Is.EqualTo(4), "three DllNotFoundException calls and one LibGit2SharpException call");
+            Assert.That(reader.FirstFallbackReason, Does.StartWith("DllNotFoundException").And.Contain("native library missing"), "the first REAL failure, not the earlier decline");
+            Assert.That(reader.DeclineCount, Is.EqualTo(2));
+            Assert.That(reader.LastDeclineReason, Is.EqualTo("pathspec magic again"));
+            Assert.That(reader.Libgit2Count, Is.Zero);
+            Assert.That(reader.LastBackend, Is.EqualTo(GitReaderBackend.Cli));
+        });
+    }
+
+    [Test]
+    public void Composite_PlannedDeclines_AreCountedApartFromFailures_AndLogNothing()
+    {
+        var log = new List<string>();
+        var primary = new ScriptedReader("primary", call => new NotSupportedException("decline " + call));
+        var reader = new FallbackGitReader(primary, new ScriptedReader("fallback", _ => null), log.Add);
+
+        var answers = new[] { reader.GetHeadSha(_repo, false, Timeout), reader.GetHeadSha(_repo, false, Timeout), reader.GetHeadSha(_repo, false, Timeout) };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(answers, Is.All.EqualTo("fallback"), "the CLI answers a declined call");
+            Assert.That(reader.LastBackend, Is.EqualTo(GitReaderBackend.Cli), "a declined call served by the CLI still reports the CLI");
+            Assert.That(reader.DeclineCount, Is.EqualTo(3));
+            Assert.That(reader.LastDeclineReason, Is.EqualTo("decline 2"), "the latest decline, message only");
+            Assert.That(reader.CliFallbackCount, Is.Zero, "declines are not failures");
+            Assert.That(reader.FirstFallbackReason, Is.Null);
+            Assert.That(reader.Libgit2Count, Is.Zero);
+            Assert.That(log, Is.Empty, "a planned decline is not written to stderr");
+        });
+    }
+
+    [Test]
+    public void Composite_PlatformNotSupportedException_IsAFailureNotADecline()
+    {
+        // PlatformNotSupportedException derives from NotSupportedException but comes from the runtime or native layer, never from the reader's planned declines.
+        var log = new List<string>();
+        var primary = new ScriptedReader("primary", _ => new PlatformNotSupportedException("no libgit2 for this platform"));
+        var reader = new FallbackGitReader(primary, new ScriptedReader("fallback", _ => null), log.Add);
+
+        var answer = reader.GetHeadSha(_repo, false, Timeout);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(answer, Is.EqualTo("fallback"));
+            Assert.That(reader.CliFallbackCount, Is.EqualTo(1));
+            Assert.That(reader.FirstFallbackReason, Does.StartWith("PlatformNotSupportedException"));
+            Assert.That(reader.DeclineCount, Is.Zero);
+            Assert.That(reader.LastDeclineReason, Is.Null);
+            Assert.That(log, Has.Count.EqualTo(1));
         });
     }
 
@@ -916,10 +975,11 @@ public class GitReaderParityTests
 
         Assert.Throws<InvalidOperationException>(() => reader.GetHeadSha(_repo, false, Timeout));
         Assert.That(reader.CliFallbackCount, Is.EqualTo(0));
+        Assert.That(reader.DeclineCount, Is.EqualTo(0));
     }
 
     /// <summary>A reader that answers "its name" for <see cref="GetHeadSha"/> and null elsewhere, throwing what <c>failure</c> returns for the zero-based call number.</summary>
-    private sealed class ScriptedReader(string name, Func<int, Exception?> failure) : IGitReader
+    internal sealed class ScriptedReader(string name, Func<int, Exception?> failure) : IGitReader
     {
         private int _calls;
 

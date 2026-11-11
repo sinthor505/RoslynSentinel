@@ -179,8 +179,10 @@ public class GitDiffShowToolParityTests
         var viaCli = await Diff(new CliGitReader(), root, target, paths);
         Assert.Multiple(() =>
         {
-            Assert.That(composite.CliFallbackCount, Is.EqualTo(1), "libgit2 should have declined this case (reason: " + composite.FirstFallbackReason + ")");
-            Assert.That(composite.FirstFallbackReason, Does.StartWith("NotSupportedException"));
+            Assert.That(composite.DeclineCount, Is.EqualTo(1), "libgit2 should have declined this case (failure reason: " + composite.FirstFallbackReason + ")");
+            Assert.That(composite.LastDeclineReason, Is.Not.Null.And.Not.Empty);
+            Assert.That(composite.CliFallbackCount, Is.Zero, "a planned decline is not a failure");
+            Assert.That(composite.FirstFallbackReason, Is.Null);
             Assert.That(Serialize(viaComposite), Is.EqualTo(Serialize(viaCli)));
         });
         return viaCli;
@@ -193,8 +195,10 @@ public class GitDiffShowToolParityTests
         var viaCli = await Show(new CliGitReader(), root, target, paths);
         Assert.Multiple(() =>
         {
-            Assert.That(composite.CliFallbackCount, Is.GreaterThanOrEqualTo(1), "libgit2 should have declined part of this case (reason: " + composite.FirstFallbackReason + ")");
-            Assert.That(composite.FirstFallbackReason, Does.StartWith("NotSupportedException"));
+            Assert.That(composite.DeclineCount, Is.GreaterThanOrEqualTo(1), "libgit2 should have declined part of this case (failure reason: " + composite.FirstFallbackReason + ")");
+            Assert.That(composite.LastDeclineReason, Is.Not.Null.And.Not.Empty);
+            Assert.That(composite.CliFallbackCount, Is.Zero, "a planned decline is not a failure");
+            Assert.That(composite.FirstFallbackReason, Is.Null);
             Assert.That(Serialize(viaComposite), Is.EqualTo(Serialize(viaCli)));
         });
         return viaCli;
@@ -344,6 +348,7 @@ public class GitDiffShowToolParityTests
             Assert.That(reference.Diff, Is.EqualTo(working.Diff));
             Assert.That(composite.Libgit2Count, Is.Zero);
             Assert.That(composite.CliFallbackCount, Is.Zero, "the tool does not even ask the reader");
+            Assert.That(composite.DeclineCount, Is.Zero, "the tool does not even ask the reader");
         });
     }
 
@@ -585,7 +590,8 @@ public class GitDiffShowToolParityTests
         Assert.Multiple(() =>
         {
             Assert.That(Serialize(viaComposite), Is.EqualTo(Serialize(viaCli)));
-            Assert.That(composite.CliFallbackCount, Is.EqualTo(1), "a name git prints quoted is left to git");
+            Assert.That(composite.DeclineCount, Is.EqualTo(1), "a name git prints quoted is left to git");
+            Assert.That(composite.CliFallbackCount, Is.Zero, "a planned decline is not a failure");
         });
     }
 
@@ -971,7 +977,8 @@ public class GitDiffShowToolParityTests
         Assert.Multiple(() =>
         {
             Assert.That(Serialize(viaComposite), Is.EqualTo(Serialize(viaCli)));
-            Assert.That(composite.CliFallbackCount, Is.GreaterThanOrEqualTo(1), "git prints the tag's own header for an annotated tag");
+            Assert.That(composite.DeclineCount, Is.GreaterThanOrEqualTo(1), "git prints the tag's own header for an annotated tag");
+            Assert.That(composite.CliFallbackCount, Is.Zero, "a planned decline is not a failure");
         });
     }
 
@@ -1014,6 +1021,7 @@ public class GitDiffShowToolParityTests
             Assert.That(Serialize(patch), Is.EqualTo(Serialize(viaCliPatch)));
             Assert.That(composite.Libgit2Count, Is.EqualTo(2), "only the header was read through libgit2, once per call");
             Assert.That(composite.CliFallbackCount, Is.Zero);
+            Assert.That(composite.DeclineCount, Is.Zero, "stat and patch are never asked of the reader, so nothing was declined");
         });
     }
 
@@ -1033,6 +1041,7 @@ public class GitDiffShowToolParityTests
             Assert.That(patch.Diff, Does.Contain("+changed"));
             Assert.That(composite.Libgit2Count, Is.Zero);
             Assert.That(composite.CliFallbackCount, Is.Zero);
+            Assert.That(composite.DeclineCount, Is.Zero);
         });
     }
 
@@ -1061,6 +1070,7 @@ public class GitDiffShowToolParityTests
             Assert.That(Lines(show), Is.EqualTo(new[] { "M\ta.txt" }));
             Assert.That(composite.FirstFallbackReason, Is.Null, "libgit2 must serve these reads; a CLI answer means a silent fallback");
             Assert.That(composite.CliFallbackCount, Is.Zero);
+            Assert.That(composite.DeclineCount, Is.Zero, "libgit2 must serve these reads; a decline would hand them to the CLI");
             Assert.That(composite.Libgit2Count, Is.EqualTo(4), "the staged and range file lists plus the show header and the show file list");
             Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Libgit2));
         });

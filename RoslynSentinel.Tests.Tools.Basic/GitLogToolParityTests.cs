@@ -89,13 +89,17 @@ public class GitLogToolParityTests
             if (bypassesReader)
             {
                 // Pickaxe and follow never reach the reader: they are not recorded as a fallback of libgit2.
-                Assert.That(composite.Libgit2Count + composite.CliFallbackCount, Is.Zero, "pickaxe and follow go straight to git");
+                Assert.That(composite.Libgit2Count + composite.CliFallbackCount + composite.DeclineCount, Is.Zero, "pickaxe and follow go straight to git");
                 Assert.That(composite.FirstFallbackReason, Is.Null);
+                Assert.That(composite.LastDeclineReason, Is.Null);
             }
             else
             {
-                Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Cli), "libgit2 should have declined this case (reason: " + composite.FirstFallbackReason + ")");
-                Assert.That(composite.FirstFallbackReason, Does.StartWith("NotSupportedException"));
+                Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Cli), "libgit2 should have declined this case (failure reason: " + composite.FirstFallbackReason + ")");
+                Assert.That(composite.DeclineCount, Is.GreaterThanOrEqualTo(1));
+                Assert.That(composite.LastDeclineReason, Is.Not.Null.And.Not.Empty);
+                Assert.That(composite.CliFallbackCount, Is.Zero, "a planned decline is not a failure");
+                Assert.That(composite.FirstFallbackReason, Is.Null);
             }
 
             Assert.That(JsonSerializer.Serialize(viaComposite), Is.EqualTo(JsonSerializer.Serialize(viaCli)));
@@ -882,6 +886,7 @@ public class GitLogToolParityTests
             Assert.That(composite.Libgit2Count, Is.EqualTo(1));
             Assert.That(composite.CliFallbackCount, Is.EqualTo(0));
             Assert.That(composite.FirstFallbackReason, Is.Null);
+            Assert.That(composite.DeclineCount, Is.Zero, "libgit2 must serve log; a decline would hand it to the CLI");
         });
     }
 

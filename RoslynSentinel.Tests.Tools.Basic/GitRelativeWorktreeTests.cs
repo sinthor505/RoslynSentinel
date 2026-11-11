@@ -238,6 +238,7 @@ public class GitRelativeWorktreeTests
                 Assert.That(viaComposite, Is.EqualTo(viaCli), probe.Label + ": composite differs from the CLI-only reader");
                 Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Cli), probe.Label);
                 Assert.That(composite.CliFallbackCount, Is.EqualTo(1), probe.Label);
+            Assert.That(composite.DeclineCount, Is.Zero, probe.Label + ": a repository libgit2 cannot open is a real failure, not a planned decline");
                 Assert.That(composite.Libgit2Count, Is.Zero, probe.Label + ": libgit2 must not have answered");
                 Assert.That(composite.FirstFallbackReason, Does.StartWith("LibGit2SharpException").And.Contain("relativeworktrees").IgnoreCase, probe.Label);
                 Assert.That(logged, Has.Count.EqualTo(1), probe.Label + ": the fallback is logged once, to the log sink");
@@ -326,7 +327,7 @@ public class GitRelativeWorktreeTests
             {
                 Assert.That(viaComposite, Is.EqualTo(viaCli), probe.Label + ": composite differs from the CLI-only reader");
                 // libgit2 may still decline a request it cannot reproduce (NotSupportedException); it must never fail to open the repository.
-                Assert.That(composite.FirstFallbackReason, Is.Null.Or.StartsWith("NotSupportedException"), probe.Label + ": libgit2 failed to open the repository");
+                Assert.That(composite.FirstFallbackReason, Is.Null, probe.Label + ": libgit2 failed to open the repository");
                 if (servedByLibgit2.Contains(probe.Label))
                 {
                     Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Libgit2), probe.Label + ": libgit2 should answer this (reason: " + composite.FirstFallbackReason + ")");

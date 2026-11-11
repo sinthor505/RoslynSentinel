@@ -114,18 +114,16 @@ public class TestInstanceLauncherGitStampTests
         Write("RoslynSentinel.Common/a.cs", "a\n");
         CommitAll(_repo, "first");
         var libgit2Before = GitReaders.Default.Libgit2Count;
-        var fallbacksBefore = GitReaders.Default.CliFallbackCount;
-        // An earlier test may already have made the shared reader decline something (stage and unstage on an unmerged entry, say); only a new reason from this call counts.
-        var reasonBefore = GitReaders.Default.FirstFallbackReason;
 
         var (sha, dirty) = TestInstanceLauncher.ReadGitStamp(_repo);
 
-        // Counters are process-wide and other tests may add to them in parallel, so assert on direction, not exact deltas;
-        // a silent fallback leaves FirstFallbackReason set and raises CliFallbackCount.
+        // Counters are process-wide and other tests may add to them in parallel, so Libgit2Count is asserted on direction, not an exact delta. A REAL failure
+        // (FirstFallbackReason, CliFallbackCount) is asserted strictly: no test makes the shared reader fail. An earlier test may have made it DECLINE something
+        // (stage and unstage on an unmerged entry, say); that is normal traffic and lives in DeclineCount, which stays unasserted here.
         Assert.That(sha, Is.Not.Null);
         Assert.That(dirty, Is.False);
-        Assert.That(GitReaders.Default.FirstFallbackReason, Is.EqualTo(reasonBefore), "libgit2 fell back to the CLI: native library missing or broken?");
-        Assert.That(GitReaders.Default.CliFallbackCount, Is.EqualTo(fallbacksBefore));
+        Assert.That(GitReaders.Default.FirstFallbackReason, Is.Null, "libgit2 fell back to the CLI: native library missing or broken?");
+        Assert.That(GitReaders.Default.CliFallbackCount, Is.Zero);
         Assert.That(GitReaders.Default.Libgit2Count, Is.GreaterThanOrEqualTo(libgit2Before + 2));
     }
 }

@@ -140,16 +140,16 @@ public class DocTrailerEngineTests
     {
         BuildFixture();
         var libgit2Before = RoslynSentinel.Common.GitReaders.Default.Libgit2Count;
-        var fallbacksBefore = RoslynSentinel.Common.GitReaders.Default.CliFallbackCount;
 
         var scan = DocTrailerEngine.ScanTrailers(_repo, GitTimeout);
 
-        // Counters are process-wide and other tests may add to them in parallel, so assert on direction, not exact deltas;
-        // a silent fallback leaves FirstFallbackReason set and raises CliFallbackCount.
+        // Counters are process-wide and other tests may add to them in parallel, so Libgit2Count is asserted on direction, not an exact delta. A REAL failure
+        // (FirstFallbackReason, CliFallbackCount) is asserted strictly: no test makes the shared reader fail. Planned declines (DeclineCount) are normal traffic
+        // on the shared reader, so they stay unasserted here: a decline of this call would show as no Libgit2Count increase.
         Assert.That(scan.Error, Is.Null);
         Assert.That(scan.CommitsWithTrailers, Is.EqualTo(5));
         Assert.That(RoslynSentinel.Common.GitReaders.Default.FirstFallbackReason, Is.Null, "libgit2 fell back to the CLI: native library missing or broken?");
-        Assert.That(RoslynSentinel.Common.GitReaders.Default.CliFallbackCount, Is.EqualTo(fallbacksBefore));
+        Assert.That(RoslynSentinel.Common.GitReaders.Default.CliFallbackCount, Is.Zero);
         Assert.That(RoslynSentinel.Common.GitReaders.Default.Libgit2Count, Is.GreaterThan(libgit2Before));
     }
 

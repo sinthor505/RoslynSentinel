@@ -116,7 +116,9 @@ public sealed class GitBackendWarmup
             FirstFallbackReason: _reader.FirstFallbackReason,
             Libgit2Count: _reader.Libgit2Count,
             CliFallbackCount: _reader.CliFallbackCount,
-            ShortHashLength: _lengths.SolutionRepositoryLength);
+            ShortHashLength: _lengths.SolutionRepositoryLength,
+            DeclineCount: _reader.DeclineCount,
+            LastDeclineReason: _reader.LastDeclineReason);
     }
 
     private GitBackendStatus RunNativeProbe()
@@ -203,6 +205,10 @@ internal sealed record GitBackendStatus(string Backend, string? Libgit2Version, 
 /// <c>NativeLoad</c> is ok, "failed: ..." or warming; <c>RepoProbe</c> is ok, "no repository", "fallback: ...", "not started (no
 /// solution loaded)" or warming. <c>ShortHashLength</c> is the abbreviation length git printed for the solution's repository at the last LoadSolution
 /// (null until probed, or when the probe failed). The remaining fields are the process-wide counters of the git reader seam.
+/// <c>FirstFallbackReason</c> and <c>CliFallbackCount</c> mean REAL FAILURES only (native load, a repository libgit2 cannot open, an I/O error):
+/// null and 0 are the healthy values. A planned decline (a request libgit2 deliberately leaves to the git CLI, such as pathspec magic or a CR in a
+/// file to stage) is reported in <c>DeclineCount</c> / <c>LastDeclineReason</c> instead and is normal traffic, not a fault.
+/// <c>Libgit2Count</c> is the calls libgit2 served.
 /// </summary>
 public sealed record GitBackendSnapshot(
     string ActiveBackend,
@@ -212,4 +218,6 @@ public sealed record GitBackendSnapshot(
     string? FirstFallbackReason,
     long Libgit2Count,
     long CliFallbackCount,
-    int? ShortHashLength = null);
+    int? ShortHashLength = null,
+    long DeclineCount = 0,
+    string? LastDeclineReason = null);

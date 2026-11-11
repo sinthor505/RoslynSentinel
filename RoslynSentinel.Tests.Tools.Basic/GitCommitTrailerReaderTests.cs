@@ -180,6 +180,7 @@ public class GitCommitTrailerReaderTests
         Assert.That(composite.FindCommitByTrailer(_repo, "Tool-Call-Id", "ZZZ999", 50, Timeout), Is.EqualTo(sha));
         Assert.That(composite.Libgit2Count, Is.EqualTo(2));
         Assert.That(composite.CliFallbackCount, Is.EqualTo(0), composite.FirstFallbackReason);
+        Assert.That(composite.DeclineCount, Is.EqualTo(0), composite.LastDeclineReason);
     }
 }
 

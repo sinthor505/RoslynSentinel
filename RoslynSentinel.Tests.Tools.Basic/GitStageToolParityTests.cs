@@ -149,6 +149,7 @@ public class GitStageToolParityTests
             Assert.That(Serialize(viaComposite), Is.EqualTo(Serialize(cli)), $"composite DTO differs from the CLI-backed one\ncomposite: {Serialize(viaComposite)}\ncli:       {Serialize(cli)}");
             Assert.That(composite.CliFallbackCount, Is.Zero, "libgit2 should serve every call here; first fallback: " + composite.FirstFallbackReason);
             Assert.That(composite.FirstFallbackReason, Is.Null);
+            Assert.That(composite.DeclineCount, Is.Zero, "libgit2 should serve every call here; last decline: " + composite.LastDeclineReason);
             Assert.That(composite.Libgit2Count, Is.GreaterThan(0));
         });
         AssertSameIndex(libDir, cliDir, "libgit2-only");
@@ -165,7 +166,8 @@ public class GitStageToolParityTests
         Func<GitImpl, string, Task<GitStatusResult>> run,
         Action<IGitReader, string> direct,
         string reasonFragment,
-        string autocrlf = "false")
+        string autocrlf = "false",
+        bool followUpReadMayFail = false)
     {
         var cliDir = NewRepo(arrange, autocrlf);
         var compositeDir = NewRepo(arrange, autocrlf);
@@ -182,8 +184,20 @@ public class GitStageToolParityTests
         Assert.Multiple(() =>
         {
             Assert.That(Serialize(viaComposite), Is.EqualTo(Serialize(cli)), "composite DTO differs from the CLI-backed one");
-            Assert.That(composite.CliFallbackCount, Is.GreaterThan(0), "the composite should have fallen back to the CLI");
-            Assert.That(composite.FirstFallbackReason, Does.Contain(reasonFragment));
+            Assert.That(composite.DeclineCount, Is.GreaterThan(0), "the composite should have fallen back to the CLI (failure reason: " + composite.FirstFallbackReason + ")");
+            // The LAST decline: a later reader call of the same tool call (the status read after a stage) may decline for another reason and overwrite it (a
+            // submodule repository, say), so the specific reason is asserted on the direct libgit2 throw above, not here.
+            Assert.That(composite.LastDeclineReason, Is.Not.Null.And.Not.Empty);
+            if (followUpReadMayFail)
+            {
+                // TODO libgit2 throws LibGit2SharpException (a counted failure, logged once) instead of declining when it reads a split index the CLI wrote; make it decline
+                Assert.That(composite.FirstFallbackReason, Is.Null.Or.StartWith("LibGit2SharpException"));
+            }
+            else
+            {
+                Assert.That(composite.CliFallbackCount, Is.Zero, "a planned decline is not a failure");
+                Assert.That(composite.FirstFallbackReason, Is.Null);
+            }
         });
         AssertSameIndex(compositeDir, cliDir, "composite after a decline");
         return cli;
@@ -877,7 +891,8 @@ public class GitStageToolParityTests
             },
             (impl, repo) => StageListed(impl, repo, "a.txt"),
             (reader, repo) => StageListedDirect(reader, repo, "a.txt"),
-            key.ToLowerInvariant());
+            key.ToLowerInvariant(),
+            followUpReadMayFail: key == "core.splitIndex");
 
         Assert.That(cli.IsError, Is.False, cli.Error);
     }
@@ -960,6 +975,7 @@ public class GitStageToolParityTests
         {
             Assert.That(new[] { all.ExitCode, tracked.ExitCode, listed.ExitCode, unstaged.ExitCode }, Is.All.Zero);
             Assert.That(composite.CliFallbackCount, Is.Zero, composite.FirstFallbackReason);
+            Assert.That(composite.DeclineCount, Is.Zero, composite.LastDeclineReason);
             Assert.That(composite.Libgit2Count, Is.EqualTo(4));
             Assert.That(File.ReadAllBytes(indexFile), Is.EqualTo(before), "nothing changed, so the index file must not be rewritten");
             Assert.That(File.Exists(indexFile + ".lock"), Is.False, "the lock this call took must be gone");
@@ -1038,12 +1054,14 @@ public class GitStageToolParityTests
         {
             composite.UnstagePaths(repo, paths, Timeout, CancellationToken.None);
             Assert.That(composite.CliFallbackCount, Is.Zero, "a plain literal path is served by libgit2: " + composite.FirstFallbackReason);
+            Assert.That(composite.DeclineCount, Is.Zero, "a plain literal path is served by libgit2: " + composite.LastDeclineReason);
         }
         else
         {
             Assert.Throws<NotSupportedException>(() => new Libgit2GitReader().UnstagePaths(repo, paths, Timeout, CancellationToken.None));
             composite.UnstagePaths(repo, paths, Timeout, CancellationToken.None);
-            Assert.That(composite.CliFallbackCount, Is.EqualTo(1));
+            Assert.That(composite.DeclineCount, Is.EqualTo(1));
+            Assert.That(composite.CliFallbackCount, Is.Zero, "a planned decline is not a failure");
         }
 
         new CliGitReader().UnstagePaths(reference, paths, Timeout, CancellationToken.None);
@@ -1083,7 +1101,8 @@ public class GitStageToolParityTests
             Assert.That(cli.IsError, Is.True);
             Assert.That(cli.Error, Does.Contain("index.lock"));
             Assert.That(Serialize(viaComposite), Is.EqualTo(Serialize(cli)));
-            Assert.That(composite.FirstFallbackReason, Does.Contain("index.lock"));
+            Assert.That(composite.LastDeclineReason, Does.Contain("index.lock"));
+            Assert.That(composite.CliFallbackCount, Is.Zero, "a held index.lock is a planned decline, not a failure");
             Assert.That(unstageCli.IsError, Is.True);
             Assert.That(Serialize(unstageComposite), Is.EqualTo(Serialize(unstageCli)));
             Assert.That(File.ReadAllText(lockFile), Is.EqualTo("held by someone else"), "the other process's lock must survive");
@@ -1096,6 +1115,7 @@ public class GitStageToolParityTests
         var result = await Impl(served).StageAsync(repo, GitStageScope.listed, Json("a.txt", "new.txt"), CancellationToken.None);
         Assert.That(result.IsError, Is.False, result.Error);
         Assert.That(served.CliFallbackCount, Is.Zero, served.FirstFallbackReason);
+        Assert.That(served.DeclineCount, Is.Zero, served.LastDeclineReason);
         Assert.That(IndexListing(repo), Does.Contain("new.txt"));
         Assert.That(File.Exists(lockFile), Is.False, "libgit2 must release the lock it took");
     }

@@ -418,7 +418,10 @@ public class GitPathClassificationToolParityTests
         Assert.Multiple(() =>
         {
             Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Cli));
-            Assert.That(composite.FirstFallbackReason, Does.StartWith("NotSupportedException"));
+            Assert.That(composite.DeclineCount, Is.GreaterThanOrEqualTo(1));
+            Assert.That(composite.LastDeclineReason, Is.Not.Null.And.Not.Empty);
+            Assert.That(composite.CliFallbackCount, Is.Zero, "a planned decline is not a failure");
+            Assert.That(composite.FirstFallbackReason, Is.Null);
             Assert.That(Sorted(viaComposite), Is.EqualTo(Sorted(viaCli)));
         });
     }
@@ -537,6 +540,7 @@ public class GitPathClassificationToolParityTests
             Assert.That(refused.IsError, Is.True);
             Assert.That(composite.FirstFallbackReason, Is.Null, "libgit2 must serve these reads; a CLI answer means a silent fallback");
             Assert.That(composite.CliFallbackCount, Is.Zero);
+            Assert.That(composite.DeclineCount, Is.Zero, "libgit2 must serve these reads; a decline would hand them to the CLI");
             // Hunks and each Stage classify once (index + HEAD); the ignored-path refusal adds a check-ignore call.
             Assert.That(composite.Libgit2Count, Is.GreaterThanOrEqualTo(7));
             Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Libgit2));

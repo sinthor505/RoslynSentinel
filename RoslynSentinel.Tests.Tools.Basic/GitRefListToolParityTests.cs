@@ -168,7 +168,10 @@ public class GitRefListToolParityTests
         Assert.Multiple(() =>
         {
             Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Cli), "libgit2 should have declined this case (reason: " + composite.FirstFallbackReason + ")");
-            Assert.That(composite.FirstFallbackReason, Does.StartWith("NotSupportedException"));
+            Assert.That(composite.DeclineCount, Is.GreaterThanOrEqualTo(1));
+            Assert.That(composite.LastDeclineReason, Is.Not.Null.And.Not.Empty);
+            Assert.That(composite.CliFallbackCount, Is.Zero, "a planned decline is not a failure");
+            Assert.That(composite.FirstFallbackReason, Is.Null);
             Assert.That(Serialize(viaComposite), Is.EqualTo(Serialize(viaCli)));
         });
         return viaCli;
@@ -411,6 +414,7 @@ public class GitRefListToolParityTests
         {
             Assert.That(composite.FirstFallbackReason, Is.Null, "libgit2 must serve a multi-pack-index repository now; a CLI answer means a decline");
             Assert.That(composite.CliFallbackCount, Is.Zero);
+            Assert.That(composite.DeclineCount, Is.Zero, "libgit2 must serve a multi-pack-index repository; a decline would hand it to the CLI");
             Assert.That(composite.Libgit2Count - libgit2Before, Is.GreaterThanOrEqualTo(2), "one libgit2 call each for the stash list and the log");
             Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Libgit2));
             Assert.That(Serialize(stashViaComposite), Is.EqualTo(Serialize(stashViaCli)));
@@ -513,6 +517,7 @@ public class GitRefListToolParityTests
             Assert.That(count, Is.EqualTo(1));
             Assert.That(composite.FirstFallbackReason, Is.Null, "libgit2 must serve these reads; a CLI answer means a silent fallback");
             Assert.That(composite.CliFallbackCount, Is.Zero);
+            Assert.That(composite.DeclineCount, Is.Zero, "libgit2 must serve these reads; a decline would hand them to the CLI");
             Assert.That(composite.Libgit2Count, Is.EqualTo(3));
             Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Libgit2));
         });
