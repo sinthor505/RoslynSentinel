@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Loop latch: disable a tool that keeps failing the same way until another tool succeeds - resolved (2026-11-10)
+
+Loop latch: disable a tool that keeps failing the same way until another tool succeeds - [doc](proposals/closed/proposal_loop_latch.md)
+
+Evidence: IMPLEMENTED 2026-11-10 in 69606748 (--loop-latch, off by default).
+
 ## Git-spawn test flake - resolved (2026-11-10)
 
 Git-spawn test flake (2026-11-05; decided 2026-11-10) - all three slices landed 2026-11-10 (`GitProcess` dedicated-thread reads d0ceef51; shared `Tests.Support.Basic/GitTestRepo.cs` replaces the 8 copies e3cdc6df..44a2944f; known-flake class comments 93160409..919cdccf); left: acceptance = 5 consecutive full worktree runs with no git-spawn failure - [doc](issues/issue_process_spawn_test_flake.md)
