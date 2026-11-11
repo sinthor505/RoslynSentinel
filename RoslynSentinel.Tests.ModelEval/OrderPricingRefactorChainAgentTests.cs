@@ -1303,7 +1303,7 @@ using Xunit;
 
 namespace ContosoOrders.Tests.ModelEvalGenerated
 {
-    // Acceptance tests for steps 3, 7 and 9 of the refactor plan. They fail until those steps are done.
+    // Acceptance tests for steps 1, 3, 7 and 9 of the refactor plan. They fail until those steps are done.
     public class RefactorAcceptanceTests
     {
         private const string Ns = "ContosoOrders.Core.FixtureHelpers.";
@@ -1324,6 +1324,45 @@ namespace ContosoOrders.Tests.ModelEvalGenerated
 
         private static string Describe(MethodInfo m) =>
             (m.IsPublic ? "public" : m.IsAssembly ? "internal" : m.IsPrivate ? "private" : m.IsFamily ? "protected" : "other") + " " + m.Name;
+
+        // Deviation from the reflection-only neighbours: the discount expression is inline text, which
+        // reflection cannot see, so this reads the source file (the same file the harness assertion reads).
+        private static string CalculatorSource()
+        {
+            var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null)
+            {
+                var folder = System.IO.Path.Combine(dir.FullName, "ContosoOrders.Core", "FixtureHelpers");
+                if (System.IO.Directory.Exists(folder))
+                {
+                    foreach (var name in new[] { "StandardOrderPricingCalculator.cs", "OrderPricingCalculator.cs" })
+                    {
+                        var path = System.IO.Path.Combine(folder, name);
+                        if (System.IO.File.Exists(path))
+                        {
+                            return System.IO.File.ReadAllText(path);
+                        }
+                    }
+                }
+
+                dir = dir.Parent;
+            }
+
+            throw new InvalidOperationException("Step 1: could not find the calculator source under ContosoOrders.Core/FixtureHelpers.");
+        }
+
+        [Fact]
+        public void Step1_BothBranchesUseTheExtractedHelper()
+        {
+            var calculatorCodeOnly = string.Join(
+                "\n",
+                CalculatorSource().Split('\n').Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+            var inlineDiscountExpressionCount = System.Text.RegularExpressions.Regex.Matches(
+                calculatorCodeOnly, @"amount\s*\*\s*(?:rate|discountRate)").Count;
+            Assert.True(inlineDiscountExpressionCount <= 1,
+                "The 'amount * rate' discount calculation should be extracted into a shared method, not repeated inline in both branches (found "
+                + inlineDiscountExpressionCount + " occurrences in code).");
+        }
 
         [Fact]
         public void Step3_ExtractedHelperIsInternal()
@@ -1466,7 +1505,7 @@ namespace ContosoOrders.Tests.ModelEvalGenerated
           build to just the `ContosoOrders.Core` project rather than the whole solution.
         - Then run the tests in the `ContosoOrders.Tests` project with an MCP tool and confirm every
           test passes. A failing test means a behavior changed: fix the code, not the test.
-        - `ContosoOrders.Tests/ModelEvalGenerated/RefactorAcceptanceTests.cs` checks steps 3, 7 and 9 and
+        - `ContosoOrders.Tests/ModelEvalGenerated/RefactorAcceptanceTests.cs` checks steps 1, 3, 7 and 9 and
           fails until they are done. Do not edit that file.
 
         ## Before you report done
