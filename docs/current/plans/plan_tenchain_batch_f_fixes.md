@@ -1,7 +1,7 @@
 # Plan: fix the environment defects behind 10-chain batch F's two failures
 
-**Status:** APPROVED 2026-11-11. Six fixes, batched in order A=4, B=6, C=2+5, D=1, E=3 (E after the peer's edit-impact
-work commits). Line numbers were re-checked against HEAD 25482ef4 on 2026-11-11 (review notes per step); still
+**Status:** IN PROGRESS 2026-11-11. Steps 4 done (b7e7df52, 5135db55). Batched in order A=4, B=6, C=2+5, D=1, E=3
+(E after the peer's edit-impact work commits). Line numbers were re-checked against HEAD 25482ef4 on 2026-11-11 (review notes per step); still
 re-locate with `Search` before editing.
 
 ## Problem
@@ -29,7 +29,8 @@ full build and server restart before live use.
   non-blocking warning on the success result listing every literal location (file:line); the delete proceeds
   (undoable). References inside the deleted declaration's own span no longer count as usages. Stop advertising
   `skipPrecheck` for type removal. Reason: the literal check is a heuristic, and the compile gate cannot catch real
-  reflection use anyway, so an override only adds a footgun parameter.
+  reflection use anyway, so an override only adds a footgun parameter. Owner accepted that this also applies to
+  DeleteUnusedSymbol (shared `SafeDeleteSymbolAsync`).
 - 2026-11-11 (owner): step 3 - `CompilerErrorLookupHelper.DescribeAsync` gets an optional `isToolActive` predicate;
   the CS0101 hint names DeleteFile only when it is callable.
 - 2026-11-11 (owner): step 1 - modes and hidden tools move to one shared static (both `hideTools` arms, `:128` and
@@ -129,6 +130,9 @@ full build and server restart before live use.
   (`MemberRemoveAsync` `:703`); it bypasses only the Impl-level caller check. Tool description overclaims
   (`RefactoringStructuralTools.cs:135`). Existing pin: `MemberRemoveTests.cs:229-254`. `SafeDeleteSymbolAsync` is
   also DeleteUnusedSymbol's engine: the warn-not-block change applies there too.
+- Done: b7e7df52, 5135db55. R8 "1 usages" verified as a self-typed member plus recursive call. Left a TODO in
+  `MemberRefactoringEngine.IsTypeRemovalTargetAsync`: Member remove of a type that declares a constructor resolves the
+  name to the constructor (unreproduced).
 
 ### Step 5 - DeleteUnusedSymbol names the missing parameter
 
