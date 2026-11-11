@@ -151,8 +151,8 @@ internal interface IGitReader
 
     /// <summary>
     /// The stash entries (<c>git stash list --format=%gd%x09%h%x09%cI%x09%gs</c>), newest (stash@{0}) first; empty when there are none. The libgit2 reader
-    /// throws <see cref="NotSupportedException"/> where it cannot reproduce the abbreviation length (see <c>GetLog</c>), but only when there is an entry to
-    /// abbreviate. Null when git cannot answer.
+    /// throws <see cref="NotSupportedException"/> when it cannot learn git's abbreviation length (the probe failed, see <c>ShortHashLengths</c>), but only
+    /// when there is an entry to abbreviate. Null when git cannot answer.
     /// </summary>
     IReadOnlyList<StashRef>? ListStashes(string workingDirectory, TimeSpan cliTimeout);
 

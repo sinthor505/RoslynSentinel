@@ -19,9 +19,11 @@ namespace RoslynSentinel.Common;
 /// </para>
 /// <para>
 /// Accepted differences from the CLI implementation (parity-tested in GitReaderParityTests):
-/// (1) Short hashes: git's default abbreviation grows with the repository's object count, libgit2's
-///     (<see cref="ObjectDatabase.ShortenObjectId(GitObject, int)"/>) stays at 7 until a prefix is ambiguous. Both are
-///     at least 7 characters and unique, and they agree on a small repository; they can differ on a large one.
+/// (1) Short hashes: git's default abbreviation grows with the repository's object count (and follows core.abbrev); libgit2's
+///     (<see cref="ObjectDatabase.ShortenObjectId(GitObject, int)"/>) has no such rule. The minimum length handed to it is therefore the one
+///     <c>git rev-parse --short HEAD</c> printed (see <see cref="ShortHashLengths"/>), cached per git common directory and refreshed on every
+///     LoadSolution, so the two agree. Accepted staleness: the cached length can lag git by one digit until the next LoadSolution after the
+///     object count crosses a threshold (or core.abbrev is edited); a failed probe declines to the CLI.
 /// (2) Conflicted status entries are reported as <c>UU</c> whatever the conflict kind (git distinguishes AA, DD, AU, ...).
 /// (3) Pathspec magic (a leading ':', as in ':(top)' or ':!x') is not supported and falls back to the CLI; plain paths and
 ///     globs are evaluated by libgit2's own matcher, which matches git's for the plain-path and '*' glob cases the callers use.
@@ -40,19 +42,28 @@ namespace RoslynSentinel.Common;
 ///     revisions other than a plain ref, hash or HEAD~N/^N (ranges, :/text, @{...}); pathspecs with glob characters, magic or relative segments;
 ///     a path-limited walk that reaches a merge commit (git's history simplification is not reproduced); shallow clones, info/grafts and refs/replace;
 ///     commits with a non-UTF-8 encoding header, text with U+FFFD (invalid UTF-8) or the field separators the CLI parser uses.
-///     Reproduced: git's default order (a commit-date queue, ties in insertion order, not libgit2's sorter), %h's automatic abbreviation length
-///     (core.abbrev, else from the packed object count; alternates and multi-pack-index are declined, an explicit core.abbrev=auto too), %aI (author offset,
+///     Reproduced: git's default order (a commit-date queue, ties in insertion order, not libgit2's sorter), %h's abbreviation length
+///     (probed from git once per repository, so core.abbrev, any object count, a multi-pack-index and alternates are all covered; see (1)), %aI (author offset,
 ///     a zero offset spelled "Z" or "+00:00" as the installed git does, learned from one CLI call per process), and case-sensitive pathspec matching
 ///     (git's tree diff ignores core.ignorecase) by comparing the tree entry id at each pathspec with the first parent's. A path-limited walk is declined
-///     after 2,000 commits examined. A custom GIT_OBJECT_DIRECTORY is declined.
+///     after 2,000 commits examined. A custom GIT_OBJECT_DIRECTORY or GIT_ALTERNATE_OBJECT_DIRECTORIES is declined.
 ///     The short branch name follows git's ambiguity rule for the common cases (a tag, remote or refs/ entry of the same name gives "heads/name").
 ///     A path containing a line feed is returned verbatim here; the Git tool's old CLI path re-joined it with the platform newline.
 /// </para>
 /// </summary>
 internal sealed class Libgit2GitReader : IGitReader
 {
-    // TODO GetHeadSha(shortForm) and GetCommitsSince still shorten to a fixed 7; git's auto abbreviation grows with the object count (see AbbreviationLength), so they may differ from the CLI on a repo of more than about 16k packed objects (not verified).
-    private const int MinimumShortHashLength = 7;
+    private readonly ShortHashLengths _lengths;
+
+    internal Libgit2GitReader() : this(ShortHashLengths.Shared)
+    {
+    }
+
+    /// <param name="lengths">Where git's per-repository abbreviation length is cached and probed (a test injects a counting probe).</param>
+    internal Libgit2GitReader(ShortHashLengths lengths)
+    {
+        _lengths = lengths;
+    }
 
     // The empty blob in a SHA-1 repository, the id git gives an intent-to-add index entry.
     private const string EmptyBlobSha = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391";
@@ -66,7 +77,7 @@ internal sealed class Libgit2GitReader : IGitReader
             return null;
         }
 
-        return shortForm ? repo.ObjectDatabase.ShortenObjectId(tip, MinimumShortHashLength) : tip.Sha;
+        return shortForm ? ShortId(repo, tip, ShortLength(repo, workingDirectory, cliTimeout)) : tip.Sha;
     }
 
     public IReadOnlyList<ChangedCommit>? GetCommitsSince(string workingDirectory, string sha, TimeSpan cliTimeout)
@@ -95,10 +106,12 @@ internal sealed class Libgit2GitReader : IGitReader
         };
 
         var commits = new List<ChangedCommit>();
+        // Probed on the first commit only (an empty range needs no abbreviation).
+        int? length = null;
         foreach (var commit in repo.Commits.QueryBy(filter))
         {
             commits.Add(new ChangedCommit(
-                repo.ObjectDatabase.ShortenObjectId(commit, MinimumShortHashLength),
+                ShortId(repo, commit, length ??= ShortLength(repo, workingDirectory, cliTimeout)),
                 commit.MessageShort,
                 ChangedPaths(repo, commit)));
         }
@@ -256,89 +269,75 @@ internal sealed class Libgit2GitReader : IGitReader
     }
 
     /// <summary>
-    /// The hex length git's <c>%h</c> starts from (find_unique_abbrev): core.abbrev when set (a number from 4 to 40, or a false-like value for the full
-    /// hash), otherwise automatic: half the bit length of the packed object count, rounded up, at least 7. The result is then made unique by
-    /// <see cref="ObjectDatabase.ShortenObjectId(GitObject, int)"/>, which extends it exactly as git does.
+    /// The hex length git's <c>%h</c> starts from for this repository: what <c>git rev-parse --short HEAD</c> printed (see <see cref="ShortHashLengths"/>:
+    /// cached per git common directory, refreshed on every LoadSolution, probed lazily here for a repository reached another way). It covers
+    /// <c>core.abbrev</c> (a number, a false-like value, <c>auto</c>), the object count, a multi-pack-index and alternates alike. The caller makes the
+    /// result unique with <see cref="ObjectDatabase.ShortenObjectId(GitObject, int)"/>, which extends it exactly as git does.
+    /// Accepted staleness: the length can lag git by one digit until the next LoadSolution after the object count crosses a threshold.
     /// </summary>
-    private static int AbbreviationLength(Repository repo)
+    /// <exception cref="NotSupportedException">The object store is relocated by environment variables, or the probe failed: git answers.</exception>
+    private int ShortLength(Repository repo, string workingDirectory, TimeSpan cliTimeout)
     {
-        var setting = repo.Config.Get<string>("core.abbrev")?.Value;
-        // An explicit "auto" is not handled: libgit2's own ShortenObjectId fails to parse it as a number, so it falls to the throw below and git answers.
-        if (setting is null)
-        {
-            var count = PackedObjectCount(repo);
-            var bits = count == 0 ? 1 : 64 - BitOperations.LeadingZeroCount((ulong)count);
-            return Math.Max((bits + 1) / 2, 7);
-        }
-
-        if (setting.ToUpperInvariant() is "NO" or "FALSE" or "OFF" or "0")
-        {
-            return 40;
-        }
-
-        if (int.TryParse(setting, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var configured) && configured is >= 4 and <= 40)
-        {
-            return configured;
-        }
-
-        throw new NotSupportedException($"core.abbrev '{setting}' is left to git.");
-    }
-
-    /// <summary>
-    /// git's approximate object count: the objects in all pack indexes (loose objects are not counted). Alternates and a multi-pack-index change
-    /// what git counts, so they are declined.
-    /// </summary>
-    private static long PackedObjectCount(Repository repo)
-    {
-        var objects = Path.Combine(CommonDirectory(repo), "objects");
-        var packs = Path.Combine(objects, "pack");
-        if (File.Exists(Path.Combine(objects, "info", "alternates"))
-            || File.Exists(Path.Combine(packs, "multi-pack-index"))
-            || Directory.Exists(Path.Combine(packs, "multi-pack-index.d"))
-            || Environment.GetEnvironmentVariable("GIT_OBJECT_DIRECTORY") is not null
+        // libgit2 does not read these, so git would walk a different object store; this guard predates the probe and is about the walk, not the length.
+        if (Environment.GetEnvironmentVariable("GIT_OBJECT_DIRECTORY") is not null
             || Environment.GetEnvironmentVariable("GIT_ALTERNATE_OBJECT_DIRECTORIES") is not null)
         {
-            throw new NotSupportedException("The object store has alternates, a multi-pack-index or an overridden location, so git counts it.");
+            throw new NotSupportedException("The object store location is overridden by an environment variable, so git reads it.");
         }
 
-        if (!Directory.Exists(packs))
+        return _lengths.Get(CommonDirectory(repo), workingDirectory, cliTimeout);
+    }
+
+    /// <summary>A short id at least <paramref name="length"/> hex digits long; ShortenObjectId returns an all-zero id for a full-length request, where git prints the whole hash.</summary>
+    private static string ShortId(Repository repo, GitObject target, int length)
+    {
+        if (length >= 40)
         {
-            return 0;
+            return target.Sha;
         }
 
-        var total = 0L;
-        foreach (var index in Directory.EnumerateFiles(packs, "*.idx"))
+        if (!string.Equals(repo.Config.Get<string>("core.abbrev")?.Value, "auto", StringComparison.OrdinalIgnoreCase))
         {
-            // git skips an index whose pack file is missing.
-            if (File.Exists(Path.ChangeExtension(index, ".pack")))
+            return repo.ObjectDatabase.ShortenObjectId(target, length);
+        }
+
+        for (var digits = length; digits < 40; digits++)
+        {
+            var prefix = target.Sha[..digits];
+            try
             {
-                total += ReadPackIndexObjectCount(index);
+                if (repo.Lookup(prefix) is not null)
+                {
+                    return prefix;
+                }
+            }
+            catch (AmbiguousSpecificationException)
+            {
+                // Another object shares this prefix: one more digit, exactly as git extends it.
             }
         }
 
-        return total;
+        return target.Sha;
     }
 
-    /// <summary>The object count of a pack index: the last of the 256 fan-out entries (after an 8-byte header in version 2).</summary>
-    private static long ReadPackIndexObjectCount(string indexPath)
+    /// <summary>
+    /// Re-probes git's abbreviation length for the repository of <paramref name="workingDirectory"/> and replaces the cached entry (the warmup's
+    /// second task calls this on every LoadSolution). Null when there is no repository or the probe failed.
+    /// </summary>
+    internal int? RefreshShortHashLength(string workingDirectory, TimeSpan cliTimeout)
     {
-        using var stream = new FileStream(indexPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        Span<byte> word = stackalloc byte[4];
-        stream.ReadExactly(word);
-        var version2 = word.SequenceEqual(new byte[] { 0xff, 0x74, 0x4f, 0x63 });
-        stream.Seek(version2 ? 8 + (255 * 4) : 255 * 4, SeekOrigin.Begin);
-        stream.ReadExactly(word);
-        return BinaryPrimitives.ReadUInt32BigEndian(word);
+        using var repo = Open(workingDirectory);
+        return repo is null ? null : _lengths.Refresh(CommonDirectory(repo), workingDirectory, cliTimeout);
     }
 
     /// <summary>
     /// git log's default walk: a queue ordered by committer date (a new entry goes after every entry with the same or a later date),
     /// popping the front and queueing its unseen parents. Not libgit2's sorter, which breaks same-second ties differently.
     /// </summary>
-    private static List<LogCommit> WalkLog(Repository repo, Commit tip, int maxCount, List<(string Path, bool DirectoryOnly)>? specs, string workingDirectory, TimeSpan cliTimeout)
+    private List<LogCommit> WalkLog(Repository repo, Commit tip, int maxCount, List<(string Path, bool DirectoryOnly)>? specs, string workingDirectory, TimeSpan cliTimeout)
     {
         var filtered = specs is { Count: > 0 };
-        var abbreviation = AbbreviationLength(repo);
+        var abbreviation = ShortLength(repo, workingDirectory, cliTimeout);
         var commits = new List<LogCommit>();
         var seen = new HashSet<string>(StringComparer.Ordinal) { tip.Sha };
         var queue = new List<Commit> { tip };
@@ -400,8 +399,7 @@ internal sealed class Libgit2GitReader : IGitReader
         // git's strict ISO date: the author's own offset, with a zero offset spelled the way the installed git spells it.
         var date = StrictIsoDate(author.When, workingDirectory, cliTimeout, commit.Sha, "%aI");
 
-        // ShortenObjectId returns an all-zero id for a full-length request (core.abbrev of 40 or no), where git prints the whole hash.
-        var shortSha = abbreviation >= 40 ? commit.Sha : repo.ObjectDatabase.ShortenObjectId(commit, abbreviation);
+        var shortSha = ShortId(repo, commit, abbreviation);
         return new LogCommit(commit.Sha, shortSha, author.Name, date, message);
     }
 
@@ -788,14 +786,14 @@ internal sealed class Libgit2GitReader : IGitReader
             return [];
         }
 
-        // Needed only when there is an entry to abbreviate; a repository whose abbreviation cannot be reproduced (see AbbreviationLength) is git's.
-        var abbreviation = AbbreviationLength(repo);
+        // Needed only when there is an entry to abbreviate; a failed length probe (see ShortLength) leaves the list to git.
+        var abbreviation = ShortLength(repo, workingDirectory, cliTimeout);
         try
         {
             return [.. stashes.Select((stash, index) =>
             {
                 var commit = stash.WorkTree;
-                var shortSha = abbreviation >= 40 ? commit.Sha : repo.ObjectDatabase.ShortenObjectId(commit, abbreviation);
+                var shortSha = ShortId(repo, commit, abbreviation);
                 return new StashRef(index, shortSha, StrictIsoDate(commit.Committer.When, workingDirectory, cliTimeout, commit.Sha, "%cI"), stash.Message);
             })];
         }

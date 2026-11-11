@@ -356,6 +356,37 @@ public class GitReaderParityTests
         });
     }
 
+    // The abbreviation length is probed from git (ShortHashLengths), so every core.abbrev setting, "auto" included, must give the CLI's answer.
+    // One setting per test case: the probe is cached per repository, so a setting edited mid-test would be (accepted) stale.
+    [TestCase("4", 4)]
+    [TestCase("7", 7)]
+    [TestCase("10", 10)]
+    [TestCase("12", 12)]
+    [TestCase("40", 40)]
+    [TestCase("no", 40)]
+    [TestCase("auto", 7)]
+    public void ShortHashes_AcrossCoreAbbrevSettings_BothReadersAgree(string setting, int expectedLength)
+    {
+        RunGit(_repo, "config", "core.abbrev", setting);
+        Write(_repo, "a.txt", "a\n");
+        var since = CommitAll(_repo, "first");
+        Write(_repo, "b.txt", "b\n");
+        CommitAll(_repo, "second");
+
+        var libHead = _lib.GetHeadSha(_repo, true, Timeout);
+        var cliHead = _cli.GetHeadSha(_repo, true, Timeout);
+        var libRows = Rows(_lib.GetCommitsSince(_repo, since, Timeout));
+        var cliRows = Rows(_cli.GetCommitsSince(_repo, since, Timeout));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(libHead, Is.EqualTo(cliHead));
+            Assert.That(libHead, Has.Length.EqualTo(expectedLength));
+            Assert.That(libRows, Is.EqualTo(cliRows));
+            Assert.That(libRows, Has.Length.EqualTo(1));
+        });
+    }
+
     [Test]
     public void HeadSha_UnbornHeadAndNonRepository_AreNull()
     {

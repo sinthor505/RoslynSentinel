@@ -38,24 +38,27 @@ public sealed class GitBackendWarmup
 
     /// <summary>The process-wide instance: probes libgit2 itself and reads the counters of <see cref="GitReaders.Default"/>.</summary>
     public static GitBackendWarmup Shared { get; } =
-        new(ProbeNativeLibrary, ProbeRepository, GitReaders.Default, FallbackGitReader.WriteToStandardError);
+        new(ProbeNativeLibrary, repoProbe: null, GitReaders.Default, FallbackGitReader.WriteToStandardError);
 
     private readonly Func<string> _nativeProbe;
     private readonly Func<string, string> _repoProbe;
     private readonly FallbackGitReader _reader;
+    private readonly ShortHashLengths _lengths;
     private readonly Action<string> _log;
     private readonly Lazy<Task<GitBackendStatus>> _native;
     private readonly ConcurrentDictionary<string, byte> _loggedRepoFailureKinds = new(StringComparer.Ordinal);
     private Task<string>? _repoTask;
 
     /// <param name="nativeProbe">Forces the native load and returns the libgit2 version text; throws when the load fails.</param>
-    /// <param name="repoProbe">Probes the repository of a directory and returns "ok", "no repository" or a result text; throws when libgit2 rejects it.</param>
+    /// <param name="repoProbe">Probes the repository of a directory and returns "ok", "no repository" or a result text; throws when libgit2 rejects it. Null (the default) opens the repository with libgit2, reads HEAD and refreshes the short-hash length in <paramref name="lengths"/>.</param>
     /// <param name="reader">Source of the fallback counters and first fallback reason that <see cref="Report"/> shows.</param>
     /// <param name="log">Receives the one-line failure messages; defaults to stderr.</param>
-    internal GitBackendWarmup(Func<string> nativeProbe, Func<string, string> repoProbe, FallbackGitReader reader, Action<string>? log = null)
+    /// <param name="lengths">The short-hash length cache the default repo probe refreshes and <see cref="Report"/> reads; defaults to <see cref="ShortHashLengths.Shared"/>.</param>
+    internal GitBackendWarmup(Func<string> nativeProbe, Func<string, string>? repoProbe, FallbackGitReader reader, Action<string>? log = null, ShortHashLengths? lengths = null)
     {
+        _lengths = lengths ?? ShortHashLengths.Shared;
         _nativeProbe = nativeProbe;
-        _repoProbe = repoProbe;
+        _repoProbe = repoProbe ?? (directory => ProbeRepository(directory, new Libgit2GitReader(_lengths)));
         _reader = reader;
         _log = log ?? FallbackGitReader.WriteToStandardError;
         _native = new Lazy<Task<GitBackendStatus>>(() => Task.Run(RunNativeProbe), LazyThreadSafetyMode.ExecutionAndPublication);
@@ -112,7 +115,8 @@ public sealed class GitBackendWarmup
             RepoProbe: repo,
             FirstFallbackReason: _reader.FirstFallbackReason,
             Libgit2Count: _reader.Libgit2Count,
-            CliFallbackCount: _reader.CliFallbackCount);
+            CliFallbackCount: _reader.CliFallbackCount,
+            ShortHashLength: _lengths.SolutionRepositoryLength);
     }
 
     private GitBackendStatus RunNativeProbe()
@@ -172,16 +176,19 @@ public sealed class GitBackendWarmup
 
     private static string ProbeNativeLibrary() => GlobalSettings.Version.ToString();
 
-    // The same open a real read does (inside the reader's per-call using), so a repo libgit2 rejects throws here.
-    private static string ProbeRepository(string solutionDirectory)
+    // The same open a real read does (inside the reader's per-call using), so a repo libgit2 rejects throws here. Then one `git rev-parse --short HEAD`
+    // refreshes the cached abbreviation length (every LoadSolution; see ShortHashLengths for the accepted staleness in between).
+    private static string ProbeRepository(string solutionDirectory, Libgit2GitReader reader)
     {
         if (Repository.Discover(solutionDirectory) is null)
         {
             return RepoNoRepository;
         }
 
-        _ = new Libgit2GitReader().GetHeadSha(solutionDirectory, shortForm: false, RepoProbeCliTimeout);
-        return RepoOk;
+        _ = reader.GetHeadSha(solutionDirectory, shortForm: false, RepoProbeCliTimeout);
+        return reader.RefreshShortHashLength(solutionDirectory, RepoProbeCliTimeout) is null
+            ? RepoOk + " (short-hash length not probed: reads that abbreviate use the git CLI)"
+            : RepoOk;
     }
 }
 
@@ -194,7 +201,8 @@ internal sealed record GitBackendStatus(string Backend, string? Libgit2Version, 
 /// <summary>
 /// The <c>gitBackend</c> block of McpServerStatus. <c>ActiveBackend</c> is Libgit2, CliFallback or warming;
 /// <c>NativeLoad</c> is ok, "failed: ..." or warming; <c>RepoProbe</c> is ok, "no repository", "fallback: ...", "not started (no
-/// solution loaded)" or warming. The remaining fields are the process-wide counters of the git reader seam.
+/// solution loaded)" or warming. <c>ShortHashLength</c> is the abbreviation length git printed for the solution's repository at the last LoadSolution
+/// (null until probed, or when the probe failed). The remaining fields are the process-wide counters of the git reader seam.
 /// </summary>
 public sealed record GitBackendSnapshot(
     string ActiveBackend,
@@ -203,4 +211,5 @@ public sealed record GitBackendSnapshot(
     string RepoProbe,
     string? FirstFallbackReason,
     long Libgit2Count,
-    long CliFallbackCount);
+    long CliFallbackCount,
+    int? ShortHashLength = null);

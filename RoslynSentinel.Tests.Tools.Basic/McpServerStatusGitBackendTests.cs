@@ -164,6 +164,20 @@ public class McpServerStatusGitBackendTests
     }
 
     [Test]
+    public void GitBackendBlock_ShowsTheSolutionRepositorysShortHashLength_OrNullUntilProbed()
+    {
+        var lengths = new ShortHashLengths((_, _) => 9);
+        var warmup = new GitBackendWarmup(() => "v1", _ => "ok", NewReader(), log: null, lengths);
+
+        var before = StatusBlock(warmup).ShortHashLength;
+        lengths.Refresh(Path.Combine(Path.GetTempPath(), "rs-status-shl", ".git"), "wd", TimeSpan.FromSeconds(1));
+        var after = StatusBlock(warmup).ShortHashLength;
+
+        Assert.That(before, Is.Null);
+        Assert.That(after, Is.EqualTo(9));
+    }
+
+    [Test]
     public void EachStartRepoProbe_ReplacesTheCapturedTask()
     {
         var warmup = new GitBackendWarmup(() => "v1", dir => dir, NewReader());

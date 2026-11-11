@@ -772,26 +772,22 @@ public class GitLogToolParityTests
 
     // ---- abbreviation ----
 
-    [Test]
-    public async Task Log_CoreAbbrevSettings_BothBackendsAgreeAsync()
+    [TestCase("4", 4)]
+    [TestCase("7", 7)]
+    [TestCase("10", 10)]
+    [TestCase("12", 12)]
+    [TestCase("40", 40)]
+    [TestCase("no", 40)]
+    [TestCase("auto", 7)]
+    public async Task Log_CoreAbbrevSettings_BothBackendsAgreeAsync(string setting, int expectedLength)
     {
         Commit(_repo, "first\n");
         Commit(_repo, "second\n");
+        RunGit(_repo, "config", "core.abbrev", setting);
 
-        var lengths = new List<string>();
-        foreach (var setting in new[] { "4", "7", "12", "40", "no" })
-        {
-            RunGit(_repo, "config", "core.abbrev", setting);
-            var result = await BothBackendsAsync(_repo);
-            lengths.Add($"{setting}={result.Commits[0].ShortHash.Length}");
-        }
+        var result = await BothBackendsAsync(_repo);
 
-        // An explicit "auto" (the same as unset to git) is not parsed by libgit2's ShortenObjectId, so git answers.
-        RunGit(_repo, "config", "core.abbrev", "auto");
-        var auto = await CliRoutedAsync(_repo);
-        lengths.Add($"auto={auto.Commits[0].ShortHash.Length}");
-
-        Assert.That(lengths, Is.EqualTo(new[] { "4=4", "7=7", "12=12", "40=40", "no=40", "auto=7" }));
+        Assert.That(result.Commits[0].ShortHash, Has.Length.EqualTo(expectedLength));
     }
 
     [Test]

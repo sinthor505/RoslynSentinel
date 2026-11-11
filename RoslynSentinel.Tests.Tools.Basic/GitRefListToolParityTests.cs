@@ -12,8 +12,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// <summary>
 /// Runs the Git tool's branch list (<see cref="GitImpl.BranchAsync"/> without a branch name), stash list and stash apply
 /// (<see cref="GitImpl.StashAsync"/>, which counts entries around the apply) with a libgit2-only reader and a CLI-only reader on throwaway repos and
-/// asserts the response DTOs serialize identically. A case libgit2 declines (a detached HEAD, branch.sort, a stash entry in a repository whose abbreviation
-/// length cannot be reproduced) goes through the production composite: the test asserts the CLI answered and that its DTO equals the CLI-only one. Neither
+/// asserts the response DTOs serialize identically. A case libgit2 declines (a detached HEAD, branch.sort) goes through the production composite: the test asserts the CLI answered and that its DTO equals the CLI-only one. Neither
 /// single-backend reader can fall back, so a libgit2 failure fails the test. Tag list and worktree list are not covered because they stay on the CLI.
 /// </summary>
 // KNOWN FLAKE on full/parallel runs (spawns git): disregard a failure here when the change did not touch process spawning; re-run the class alone first.
@@ -384,10 +383,10 @@ public class GitRefListToolParityTests
     }
 
     [Test]
-    public async Task Stashes_RepositoryWithAMultiPackIndex_EntriesAreAnsweredByTheCliButAnEmptyListIsServedAsync()
+    public async Task LogAndStashList_RepositoryWithAMultiPackIndex_AreServedByLibgit2AndEqualTheCliAsync()
     {
-        // git derives the abbreviation length from an object count the libgit2 reader cannot reproduce once a multi-pack-index exists, so a stash row
-        // (which carries an abbreviated hash) goes to git; an empty list needs no abbreviation and stays in-process.
+        // git's abbreviation length used to be estimated from the packed object count, which a multi-pack-index makes unreproducible, so this repository
+        // (like the real one) went to the CLI. The length is now probed from git itself, so libgit2 serves both and the rows equal the CLI's.
         CommitBaseline();
         RunGit(_repo, "repack", "-d", "-q");
         Commit(_repo, "second");
@@ -397,24 +396,48 @@ public class GitRefListToolParityTests
         RunGit(_repo, "repack", "-d", "-q");
         RunGit(_repo, "multi-pack-index", "write");
         Assert.That(File.Exists(Path.Combine(_repo, ".git", "objects", "pack", "multi-pack-index")), Is.True, "the fixture needs a multi-pack-index");
-
-        var emptyComposite = new FallbackGitReader(new Libgit2GitReader(), new CliGitReader(), _ => { });
-        var empty = await StashList(emptyComposite, _repo);
         PushStash("after midx");
+        PushStash("second after midx");
+
         var composite = new FallbackGitReader(new Libgit2GitReader(), new CliGitReader(), _ => { });
-        var viaComposite = await StashList(composite, _repo);
-        var viaCli = await StashList(new CliGitReader(), _repo);
+        var libgit2Before = composite.Libgit2Count;
+        var impl = Impl(composite);
+        var stashViaComposite = await StashList(composite, _repo);
+        var logViaComposite = await impl.LogAsync(_repo, 20, null, null, null, false, false, CancellationToken.None);
+        var stashViaCli = await StashList(new CliGitReader(), _repo);
+        var logViaCli = await Impl(new CliGitReader()).LogAsync(_repo, 20, null, null, null, false, false, CancellationToken.None);
 
         Assert.Multiple(() =>
         {
-            Assert.That(empty.Entries, Is.Empty);
-            Assert.That(emptyComposite.LastBackend, Is.EqualTo(GitReaderBackend.Libgit2));
-            Assert.That(emptyComposite.CliFallbackCount, Is.Zero);
-            Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Cli));
-            Assert.That(composite.FirstFallbackReason, Does.StartWith("NotSupportedException"));
-            Assert.That(Serialize(viaComposite), Is.EqualTo(Serialize(viaCli)));
-            Assert.That(viaCli.Entries, Has.Count.EqualTo(1));
+            Assert.That(composite.FirstFallbackReason, Is.Null, "libgit2 must serve a multi-pack-index repository now; a CLI answer means a decline");
+            Assert.That(composite.CliFallbackCount, Is.Zero);
+            Assert.That(composite.Libgit2Count - libgit2Before, Is.GreaterThanOrEqualTo(2), "one libgit2 call each for the stash list and the log");
+            Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Libgit2));
+            Assert.That(Serialize(stashViaComposite), Is.EqualTo(Serialize(stashViaCli)));
+            Assert.That(Serialize(logViaComposite), Is.EqualTo(Serialize(logViaCli)));
+            Assert.That(stashViaCli.Entries, Has.Count.EqualTo(2));
+            Assert.That(logViaCli.Commits, Has.Count.GreaterThanOrEqualTo(3));
         });
+    }
+
+    // One setting per test case (a fresh repository each): the probed abbreviation length is cached per repository, so editing core.abbrev mid-test would be
+    // the accepted staleness. "auto" is the same as unset to git.
+    [TestCase("7", 7)]
+    [TestCase("10", 10)]
+    [TestCase("12", 12)]
+    [TestCase("40", 40)]
+    [TestCase("auto", 7)]
+    public async Task Stashes_AcrossCoreAbbrevSettings_BothBackendsAgreeAsync(string setting, int expectedLength)
+    {
+        CommitBaseline();
+        RunGit(_repo, "config", "core.abbrev", setting);
+        PushStash("one");
+        PushStash("two");
+
+        var result = await StashesBothAsync(_repo);
+
+        Assert.That(result.Entries, Has.Count.EqualTo(2));
+        Assert.That(result.Entries.Select(e => e.Hash.Length), Is.All.EqualTo(expectedLength));
     }
 
     // ---- stash count and apply ----
