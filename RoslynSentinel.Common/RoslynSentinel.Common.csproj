@@ -33,6 +33,8 @@
 			<InternalsVisibleTo Include="RoslynSentinel.Tests.Basic" />
 		<!-- GitImpl.RunGitAsync / RunGitBytesAsync are thin wrappers over the internal GitProcess runner. -->
 		<InternalsVisibleTo Include="RoslynSentinel.Tools.Basic" />
+			<!-- ModelEvalAssemblySetUp stamps runs via the internal GitReaders.Default. -->
+			<InternalsVisibleTo Include="RoslynSentinel.Tests.ModelEval" />
 	</ItemGroup>
 
 </Project>

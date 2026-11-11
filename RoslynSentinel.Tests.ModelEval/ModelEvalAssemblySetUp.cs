@@ -1,4 +1,5 @@
 using RoslynSentinel.Common;
+using RoslynSentinel.Common.AgentLoop;
 
 namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
@@ -31,6 +32,7 @@ public class ModelEvalAssemblySetUp
         // env vars here (ROSLYNSENTINEL_LIFT_RENAMES, ROSLYNSENTINEL_LOOP_LATCH); unset leaves them off.
         LiftRenamesOptions.Configure([]);
         LoopLatchOptions.Configure([]);
+        ModelAgentRunner.ProcessStamp = ReadWorkingTreeStamp(AppContext.BaseDirectory);
 
         if (string.IsNullOrEmpty(LlmOptions.Model))
         {
@@ -51,6 +53,66 @@ public class ModelEvalAssemblySetUp
             Assert.Ignore(
                 $"LLM server at {LlmOptions.BaseUrl} did not respond within {ReachabilityTimeout.TotalSeconds}s " +
                 $"({ex.GetType().Name}: {ex.Message}) - is LM Studio running with a model loaded?");
+        }
+    }
+
+    /// <summary>
+    /// True when any tracked path changed, or an untracked .cs or .csproj exists. Untracked docs and other
+    /// files do not count: other sessions leave untracked notes that would make every run dirty.
+    /// </summary>
+    internal static bool IsDirty(IReadOnlyList<WorkingTreeChange> changes) =>
+        changes.Any(change => change.WorkTreeState != '?'
+            || change.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+            || change.Path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Reads the git HEAD and dirty flag of the repo holding <paramref name="startDirectory"/>, so each
+    /// model-eval transcript records which code it ran against. Returns null when no repo root is found,
+    /// git yields nothing, or anything throws.
+    /// </summary>
+    internal static (string CommitHash, bool Dirty)? ReadWorkingTreeStamp(string startDirectory)
+    {
+        try
+        {
+            // Copy of ModelTestingResultsArchiver.FindRepoRoot: that one is private and throws when no root is found.
+            var dir = new DirectoryInfo(startDirectory);
+            while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "RoslynSentinel.slnx")))
+            {
+                dir = dir.Parent;
+            }
+
+            if (dir is null)
+            {
+                return null;
+            }
+
+            var root = dir.FullName;
+
+            // libgit2 calls cannot be timed out and a stamp must never hang an eval run (a 600 s stall was
+            // seen when other sessions load the box); the abandoned task only holds a background thread.
+            var task = Task.Run<(string CommitHash, bool Dirty)?>(() =>
+            {
+                var sha = GitReaders.Default.GetHeadSha(root, shortForm: false, TimeSpan.FromSeconds(10))?.Trim();
+                var changes = GitReaders.Default.GetStatus(root, null, TimeSpan.FromSeconds(10));
+                if (string.IsNullOrEmpty(sha) || changes is null)
+                {
+                    return null;
+                }
+
+                return (sha, IsDirty(changes));
+            });
+
+            if (!task.Wait(TimeSpan.FromSeconds(30)))
+            {
+                return null;
+            }
+
+            return task.Result;
+        }
+        catch (Exception)
+        {
+            // A stamp failure must never fail an eval run; the transcript just omits the stamp.
+            return null;
         }
     }
 }
