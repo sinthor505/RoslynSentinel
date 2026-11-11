@@ -695,11 +695,34 @@ public static class ToolArgumentValidator
         };
 
     /// <summary>
+    /// Maps a value a caller sends that is not a member but is understood to mean one, per tool and
+    /// parameter: tool -> parameter -> alias -> member. Consulted by <see cref="NormalizeEnumCase"/> only when
+    /// the value matches no member even case-insensitively, and only when the target is a member of the
+    /// parameter's schema enum. Same bar as <see cref="ParameterAliases"/>: an alias must mean exactly what its
+    /// target means. All keys match case-insensitively.
+    /// </summary>
+    public static readonly System.Collections.Generic.IReadOnlyDictionary<string, System.Collections.Generic.IReadOnlyDictionary<string, System.Collections.Generic.IReadOnlyDictionary<string, string>>> EnumValueAliases =
+        new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyDictionary<string, System.Collections.Generic.IReadOnlyDictionary<string, string>>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ReplaceSnippet"] = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyDictionary<string, string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["action"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["replace"] = "apply",
+                    ["edit"] = "apply",
+                    ["write"] = "apply",
+                },
+            },
+        };
+
+    /// <summary>
     /// Repairs enum parameter values when the caller-provided string value is not an exact
     /// ordinal match but exactly one enum member matches under case-insensitive comparison,
     /// and returns one short note per repair (or <see langword="null"/> when nothing changed).
     /// When zero or two-or-more members match case-insensitively, the value is left unchanged
     /// for <see cref="Validate"/> to reject in step 3b.
+    /// When zero members match case-insensitively, an <see cref="EnumValueAliases"/> entry for this tool and
+    /// parameter repairs the value to its target, provided the target is a member.
     /// <para>
     /// Run before <see cref="ApplyParameterAliases"/>.
     /// </para>
@@ -764,6 +787,15 @@ public static class ToolArgumentValidator
             {
                 (repairs ??= new System.Collections.Generic.List<(string, string)>())
                     .Add((argument.Key, caseInsensitiveMatches[0]));
+            }
+            else if (caseInsensitiveMatches.Count == 0 &&
+                     EnumValueAliases.TryGetValue(toolName, out var toolAliases) &&
+                     toolAliases.TryGetValue(argument.Key, out var valueAliases) &&
+                     valueAliases.TryGetValue(actualValue, out var aliasTarget) &&
+                     members.Exists(m => string.Equals(m, aliasTarget, StringComparison.Ordinal)))
+            {
+                (repairs ??= new System.Collections.Generic.List<(string, string)>())
+                    .Add((argument.Key, aliasTarget));
             }
         }
 
@@ -1364,7 +1396,14 @@ public static class ToolArgumentValidator
                     {
                         var suggestion = SuggestClosest(actualValue, members);
                         var suggestionText = suggestion is not null ? $" Did you mean '{suggestion}'?" : "";
-                        return $"'{actualValue}' is not a valid value for parameter '{argument.Key}' of tool '{toolName}'.{suggestionText} Valid values are: {string.Join(", ", members)}. Nothing was executed.";
+                        // With no suggestion, the schema description is the only place that says what each member means.
+                        var meanings = suggestion is null &&
+                                       propertySchema.TryGetProperty("description", out var schemaDescription) &&
+                                       schemaDescription.ValueKind == System.Text.Json.JsonValueKind.String
+                            ? schemaDescription.GetString()?.Trim()
+                            : null;
+                        var meaningsText = string.IsNullOrEmpty(meanings) ? "" : $" Meanings: {meanings}";
+                        return $"'{actualValue}' is not a valid value for parameter '{argument.Key}' of tool '{toolName}'.{suggestionText} Valid values are: {string.Join(", ", members)}.{meaningsText} Nothing was executed.";
                     }
                 }
 

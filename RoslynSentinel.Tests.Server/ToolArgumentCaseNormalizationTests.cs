@@ -267,6 +267,95 @@ public class ToolArgumentCaseNormalizationTests
         Assert.That(text, Does.Not.Contain("->"),
             $"An exact case match must not generate a repair note (no '->'). Got: {text}");
     }
+
+    [Test]
+    public async Task ReplaceSnippetAction_Replace_IsAcceptedAsApply_WithNote()
+    {
+        // "replace" is not a member of ReplaceSnippet.action (apply, validate) but is understood to
+        // mean "apply". The call must run, and the repair must be reported as a plain text block
+        // (not inside the JSON-escaped first block), so the apostrophes in the note stay literal.
+        var result = await _client.CallToolAsync(
+            "ReplaceSnippet",
+            new Dictionary<string, object?>
+            {
+                ["reason"] = "test message",
+                ["action"] = "replace",
+                ["filePath"] = _seededFilePath,
+                ["oldContent"] = "Target(); }",
+                ["newContent"] = "Target(); } // invoked",
+            }!,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        var text = string.Join(" ", result.Content.OfType<TextContentBlock>().Select(b => b.Text));
+        Assert.That(result.IsError, Is.Not.True,
+            $"An aliased enum value must run, not be rejected. Got: {text}");
+        Assert.That(text, Does.Not.Contain("Nothing was executed"),
+            $"An aliased enum value must not produce the rejection wording. Got: {text}");
+        Assert.That(text, Does.Contain("treated as 'apply'"),
+            $"The repair must be reported as 'treated as apply'. Got: {text}");
+        Assert.That(text, Does.Contain("Use 'apply' in future calls"),
+            $"The repair note must tell the caller the canonical spelling. Got: {text}");
+        Assert.That(File.ReadAllText(_seededFilePath), Does.Contain("// invoked"),
+            "The edit must actually have been written under the repaired action.");
+    }
+
+    [Test]
+    public async Task ReplaceSnippetAction_Unknown_RejectionListsMeaningsFromSchemaDescription()
+    {
+        // "zzzz" has no case-insensitive match, no alias, and no close suggestion, so the rejection
+        // must fall back to the schema description of 'action' to say what each member means.
+        var result = await _client.CallToolAsync(
+            "ReplaceSnippet",
+            new Dictionary<string, object?>
+            {
+                ["reason"] = "test message",
+                ["action"] = "zzzz",
+                ["filePath"] = _seededFilePath,
+                ["oldContent"] = "Target(); }",
+                ["newContent"] = "Target(); } // never applied",
+            }!,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        var text = string.Join(" ", result.Content.OfType<TextContentBlock>().Select(b => b.Text));
+        Assert.That(result.IsError, Is.True,
+            $"An unknown enum value must be rejected. Got: {text}");
+        var message = RejectionMessage(text);
+        Assert.That(message, Does.Contain("is not a valid value for parameter 'action'"),
+            $"The rejection must name the invalid value and parameter. Got: {text}");
+        Assert.That(message, Does.Contain("Valid values are: apply, validate"),
+            $"The rejection must list the declared members. Got: {text}");
+        Assert.That(message, Does.Contain("Meanings:"),
+            $"With no suggestion, the rejection must append the schema description as meanings. Got: {text}");
+        Assert.That(message, Does.Contain("writes the change"),
+            $"The meanings must come from the real 'action' description. Got: {text}");
+    }
+
+    [Test]
+    public async Task EnumValue_RejectionWithDidYouMean_DoesNotAppendMeanings()
+    {
+        // "aply" is one edit away from "apply", which SuggestClosest names outright. The suggestion
+        // already tells the caller what to send, so the schema meanings must be suppressed.
+        var result = await _client.CallToolAsync(
+            "ReplaceSnippet",
+            new Dictionary<string, object?>
+            {
+                ["reason"] = "test message",
+                ["action"] = "aply",
+                ["filePath"] = _seededFilePath,
+                ["oldContent"] = "Target(); }",
+                ["newContent"] = "Target(); } // never applied",
+            }!,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        var text = string.Join(" ", result.Content.OfType<TextContentBlock>().Select(b => b.Text));
+        Assert.That(result.IsError, Is.True,
+            $"An unknown enum value must be rejected. Got: {text}");
+        var message = RejectionMessage(text);
+        Assert.That(message, Does.Contain("Did you mean 'apply'"),
+            $"A one-edit typo must produce a Did you mean suggestion. Got: {text}");
+        Assert.That(message, Does.Not.Contain("Meanings:"),
+            $"When a suggestion applies, the meanings text must not also be appended. Got: {text}");
+    }
 }
 
 /// <summary>

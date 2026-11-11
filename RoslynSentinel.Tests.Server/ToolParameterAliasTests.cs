@@ -339,6 +339,43 @@ public class ToolParameterAliasTests
     }
 
     [Test]
+    [Category("ToolArgumentValidator")] // sentinel:auto-category
+    public async Task EveryEnumValueAlias_IsNotAMember_AndTargetsASchemaEnumMember()
+    {
+        // Guards EnumValueAliases against drift: an alias that is itself a schema enum member is dead
+        // (the member matches first), and a target that is not a member would repair to a value Validate rejects.
+        var tools = await _client.ListToolsAsync(cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        var checkedEntries = 0;
+        foreach (var (toolName, parameters) in ToolArgumentValidator.EnumValueAliases)
+        {
+            var tool = tools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase));
+            if (tool is null || !tool.JsonSchema.TryGetProperty("properties", out var props))
+                continue; // tool not registered under the modes this fixture activates
+
+            foreach (var (parameter, aliases) in parameters)
+            {
+                Assert.That(props.TryGetProperty(parameter, out var parameterSchema), Is.True,
+                    $"{toolName}: enum alias table names parameter '{parameter}', which is not declared.");
+                Assert.That(parameterSchema.TryGetProperty("enum", out var enumNode), Is.True,
+                    $"{toolName}.{parameter} declares no schema enum, so enum aliases cannot target it.");
+                var members = enumNode.EnumerateArray().Select(e => e.GetString() ?? "").ToList();
+
+                foreach (var (alias, target) in aliases)
+                {
+                    Assert.That(members.Any(m => string.Equals(m, alias, StringComparison.OrdinalIgnoreCase)), Is.False,
+                        $"{toolName}.{parameter}: enum alias '{alias}' is itself a schema enum member, so the entry is dead or wrong.");
+                    Assert.That(members.Any(m => string.Equals(m, target, StringComparison.Ordinal)), Is.True,
+                        $"{toolName}.{parameter}: enum alias '{alias}' targets '{target}', which is not a schema enum member.");
+                    checkedEntries++;
+                }
+            }
+        }
+
+        Assert.That(checkedEntries, Is.GreaterThan(0), "No enum alias entry matched an active tool - the check was vacuous.");
+    }
+
+    [Test]
     public async Task FilePathSnakeCase_OnReadFile_IsRenamedWithAStandardNote()
     {
         // file_path is the built-in Read/Edit habit; the global table maps it to filePath on any tool that declares filePath.
