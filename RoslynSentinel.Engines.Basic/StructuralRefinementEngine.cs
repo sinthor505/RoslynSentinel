@@ -122,6 +122,9 @@ public class StructuralRefinementEngine
             throw new ToolNotFoundException($"No symbol found at line {line}, column {column} of '{filePath}'. Next: {ToolCallHint.Call("ReadFile")} the line to confirm the position.", "symbol");
         }
 
+        // TODO this overload removes 'node', which may be a reference expression rather than the declaration; not fixed in this slice.
+        RequireDeletableDeclaration(symbol);
+
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
         var externalLocations = ExternalReferenceLocations(references, symbol, document.FilePath ?? string.Empty);
         if (externalLocations.Count > 0)
@@ -298,6 +301,27 @@ public class StructuralRefinementEngine
     }
 
     /// <summary>
+    /// Refuses a delete whose resolved symbol is not a type or member declaration. A position on
+    /// <c>namespace X;</c> resolves to the namespace, and the declaration-span exclusion in
+    /// <see cref="ExternalReferenceLocations"/> would otherwise let the whole namespace be deleted.
+    /// </summary>
+    private static void RequireDeletableDeclaration(ISymbol symbol)
+    {
+        switch (symbol.Kind)
+        {
+            case SymbolKind.NamedType:
+            case SymbolKind.Method:
+            case SymbolKind.Property:
+            case SymbolKind.Field:
+            case SymbolKind.Event:
+                return;
+            default:
+                var searchHint = ToolCallHint.Call("Search", ("mode", "symbol"), ("query", symbol.Name));
+                throw new ToolTargetIneligibleException($"'{symbol.Name}' resolved to a {symbol.Kind.ToString().ToLowerInvariant()}, not a deletable declaration (type, method, property, field or event). Point line/column at the declaration you want to delete, or pass symbolName. Next: {searchHint} to find the declaration.", searchHint);
+        }
+    }
+
+    /// <summary>
     /// Safe deletes a symbol only if it has no usages in the entire solution (handle-based resolution).
     /// </summary>
     public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePathWrapper filePath, ISymbol symbol, CancellationToken cancellationToken = default)
@@ -306,6 +330,8 @@ public class StructuralRefinementEngine
         {
             throw new ToolFeatureDisabledException("DeleteUnusedSymbol");
         }
+
+        RequireDeletableDeclaration(symbol);
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();

@@ -342,6 +342,49 @@ public sealed class MemberRemoveTests
 
     [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task DeleteUnusedSymbol_OnNamespacePosition_IsRefusedAsTargetIneligible()
+    {
+        // Line 1, column 1 is the 'namespace' keyword; it resolves to the namespace symbol, which must never be deleted.
+        using var workspace = InMemoryWorkspace.Create(("Legacy.cs", Crlf("""
+                namespace TestProj;
+
+                public class Legacy
+                {
+                }
+                """)));
+        var workspaceTools = RoslynSentinel.Tests.Battery.Basic.TestTools.WorkspaceTools(workspace.Manager);
+        var before = workspace.ReadText("Legacy.cs");
+
+        var result = await workspaceTools.DeleteUnusedSymbolTool(reason: "test message", filePath: workspace.PathOf("Legacy.cs"), projectName: "", docCommentId: "", line: 1, column: 1);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(result.ErrorData!.Message, Does.Contain("namespace"));
+        Assert.That(workspace.ReadText("Legacy.cs"), Is.EqualTo(before));
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task RemoveMember_OnNamespaceName_IsNotDeletedAsAType()
+    {
+        using var workspace = InMemoryWorkspace.Create(("Legacy.cs", Crlf("""
+                namespace TestProj;
+
+                public class Legacy
+                {
+                }
+                """)));
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
+        var before = workspace.ReadText("Legacy.cs");
+
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Legacy.cs"), MemberAction.remove, memberName: "TestProj");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(workspace.ReadText("Legacy.cs"), Is.EqualTo(before));
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task RemoveMember_OnUnreferencedRecord_RemovesRecord()
     {
         // Regression test for docs/current/blockers/blocking_error_member_remove_refuses_record_types.md.
