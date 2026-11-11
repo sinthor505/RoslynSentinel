@@ -16,13 +16,39 @@ namespace RoslynSentinel.Engines.Basic;
 /// <param name="RenamedFiles">File names (no directory) of the documents the model did not edit and the rename changed.</param>
 /// <param name="CallSiteCount">Number of text changes the rename made in <paramref name="RenamedFiles"/>.</param>
 /// <param name="EditedFileUseCount">Number of old-name uses the rename rewrote inside the files the model edited, outside its edited spans (for example the class's own constructor).</param>
+/// <param name="RewrittenLines">Per file in <paramref name="RenamedFiles"/>, the rewritten lines as <c>File.cs:12  trimmed source line</c> (one per changed line, in file order); null when not collected.</param>
 public sealed record RenameLiftResult(
     SymbolChange Rename,
     Dictionary<FilePathWrapper, string> Changes,
     IReadOnlyList<string> RenamedFiles,
     int CallSiteCount,
-    int EditedFileUseCount = 0)
+    int EditedFileUseCount = 0,
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? RewrittenLines = null)
 {
+    /// <summary>
+    /// The lines the lift rewrote in the other files, at most <paramref name="maxPerFile"/> per file and then "+N more", so the model
+    /// sees its call sites are already updated (batch G R3: it re-sent its own call-site edit with the old text). Empty when none were collected.
+    /// </summary>
+    public string DescribeRewrittenLines(int maxPerFile = 5)
+    {
+        if (RewrittenLines is null || RewrittenLines.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var rows = new List<string>();
+        foreach (var (file, lines) in RewrittenLines)
+        {
+            rows.AddRange(lines.Take(maxPerFile).Select(l => "  " + l));
+            if (lines.Count > maxPerFile)
+            {
+                rows.Add($"  {file}: +{lines.Count - maxPerFile} more");
+            }
+        }
+
+        return rows.Count == 0 ? string.Empty : "Rewritten call sites:\n" + string.Join("\n", rows);
+    }
+
     /// <summary>One sentence for the response: what was renamed and how many uses in how many other files the lift rewrote.</summary>
     public string Describe()
         => $"{Rename.DeclarationKind} {Rename.OldName} -> {Rename.NewName}: {CallSiteCount} call site(s) in {RenamedFiles.Count} other file(s) ({string.Join(", ", RenamedFiles)}), "
@@ -118,6 +144,7 @@ public static class RenameLifter
             var renamedFiles = new List<string>();
             var callSites = 0;
             var editedFileUses = 0;
+            var rewrittenLines = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
             var mergedEditedPaths = new HashSet<FilePathWrapper>();
             foreach (var projectChange in renamed.GetChanges(baseline).GetProjectChanges())
             {
@@ -149,13 +176,16 @@ public static class RenameLifter
                         continue; // a linked file reached through a second project
                     }
 
-                    merged[wrapper] = (await newDocument.GetTextAsync(cancellationToken)).ToString();
-                    callSites += (await newDocument.GetTextChangesAsync(oldDocument, cancellationToken)).Count();
+                    var newText = await newDocument.GetTextAsync(cancellationToken);
+                    var textChanges = (await newDocument.GetTextChangesAsync(oldDocument, cancellationToken)).OrderBy(c => c.Span.Start).ToList();
+                    merged[wrapper] = newText.ToString();
+                    callSites += textChanges.Count;
                     renamedFiles.Add(Path.GetFileName(filePath));
+                    rewrittenLines[Path.GetFileName(filePath)] = RewrittenLinesOf(Path.GetFileName(filePath), newText, textChanges);
                 }
             }
 
-            return renamedFiles.Count == 0 && editedFileUses == 0 ? null : new RenameLiftResult(rename, merged, renamedFiles, callSites, editedFileUses);
+            return renamedFiles.Count == 0 && editedFileUses == 0 ? null : new RenameLiftResult(rename, merged, renamedFiles, callSites, editedFileUses, rewrittenLines);
         }
         // The lift is an optional extra on a rejection that is already being reported: any Roslyn or workspace failure falls
         // back to the first-slice redirect instead of masking the real compiler errors with a second error.
@@ -163,6 +193,29 @@ public static class RenameLifter
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// One entry per distinct line the rename changed in a document, as <c>File.cs:12  trimmed line</c> from the NEW text. The changes are
+    /// in baseline coordinates and ordered, so each one's new position is its start shifted by the length delta of the changes before it.
+    /// </summary>
+    private static List<string> RewrittenLinesOf(string fileName, SourceText newText, IReadOnlyList<TextChange> orderedChanges)
+    {
+        var lines = new List<string>();
+        var seen = new HashSet<int>();
+        var delta = 0;
+        foreach (var change in orderedChanges)
+        {
+            var newStart = Math.Clamp(change.Span.Start + delta, 0, newText.Length);
+            delta += (change.NewText?.Length ?? 0) - change.Span.Length;
+            var line = newText.Lines.GetLineFromPosition(newStart);
+            if (seen.Add(line.LineNumber))
+            {
+                lines.Add($"{fileName}:{line.LineNumber + 1}  {line.ToString().Trim()}");
+            }
+        }
+
+        return lines;
     }
 
     /// <summary>

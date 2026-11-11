@@ -931,9 +931,17 @@ public class WorkspaceFileEditImpl
         }
 
         var lifted = await _workspaceManager.ApplyProposedChangesAsync(plan.Changes, validateChanges: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+        var rewrittenLines = plan.DescribeRewrittenLines();
+        // Batch G R3 T2: the model blamed the rename for errors that came from the other text of its edit. When no remaining error sits in a file the
+        // rename rewrote, say plainly that the trial rename was clean; otherwise stay hedged (the rename may share the blame).
+        var errorFiles = lifted.ValidationResult?.Diagnostics.Where(d => d.Severity == "Error").Select(d => Path.GetFileName(d.FilePath.ToString())).ToList() ?? [];
+        var errorsInRenamedFiles = errorFiles.Any(f => plan.RenamedFiles.Contains(f, StringComparer.OrdinalIgnoreCase));
         var note = lifted.IsError
-            ? $"Your edit renames {plan.Rename.OldName} to {plan.Rename.NewName}. It was tried as a RenameSymbol ({plan.CallSiteCount} call site(s) in {plan.RenamedFiles.Count} other file(s)) with your own text kept for the file(s) you edited, and it still leaves compiler errors, so nothing was changed."
-            : $"Applied as RenameSymbol: {plan.Describe()} Files changed: {string.Join(", ", plan.Changes.Keys.Select(k => Path.GetFileName((string)k)))}.";
+            ? errorsInRenamedFiles
+                ? $"Your edit renames {plan.Rename.OldName} to {plan.Rename.NewName}. It was tried as a RenameSymbol ({plan.CallSiteCount} call site(s) in {plan.RenamedFiles.Count} other file(s)) with your own text kept for the file(s) you edited, and errors remain in files the rename rewrote, so nothing was changed."
+                : $"Your edit renames {plan.Rename.OldName} to {plan.Rename.NewName}. In a trial the rename itself applied cleanly ({plan.CallSiteCount} call site(s) in {plan.RenamedFiles.Count} other file(s) updated, your own text kept for the file(s) you edited); the remaining errors come from the other text in your edit, not from the rename. Nothing was changed. The remaining errors are listed below."
+            : $"Applied as RenameSymbol: {plan.Describe()} Files changed: {string.Join(", ", plan.Changes.Keys.Select(k => Path.GetFileName((string)k)))}."
+                + (rewrittenLines.Length == 0 ? "" : "\n" + rewrittenLines + "\nThese call sites are already updated; do not edit them again.");
         _logger.LogInformation("ReplaceSnippet rename lift of {OldName} -> {NewName}: {Outcome}", plan.Rename.OldName, plan.Rename.NewName, lifted.IsError ? "still rejected" : "applied");
         return (lifted, plan.Changes, note, plan.ToVerdict(lifted.IsError));
     }
@@ -1237,7 +1245,13 @@ public class WorkspaceFileEditImpl
                                 StructuredDetail: RejectionDetail(impact, liftVerdict, result.ValidationResult.Diagnostics))
                         };
                     if (!result.IsError)
+                    {
                         _rejectedEdits.Forget((string)targetPath);
+                        // A lifted rename also wrote other files (snippetChanges is the merged set then): an earlier rejected edit of one of them
+                        // must not make the "file still has the old text" note fire, because the lift rewrote that file (batch G R3).
+                        foreach (var writtenFile in snippetChanges.Keys)
+                            _rejectedEdits.Forget((string)writtenFile);
+                    }
                     var changeId = Guid.NewGuid().ToString("n")[..8];
                     var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet", result, blobChangeId: changeId, cancellationToken: cancellationToken);
                     var appliedSummary = liftNote is null ? result.Summary : $"{liftNote} {result.Summary}";
@@ -1569,7 +1583,8 @@ public class WorkspaceFileEditImpl
                 };
             if (!result.IsError)
             {
-                foreach (var writtenPath in newContentsByFile.Keys)
+                // finalContents is the merged set after a lift, so this also forgets the files the lift wrote (batch G R3), not only the edited ones.
+                foreach (var writtenPath in newContentsByFile.Keys.Concat(finalContents.Keys.Select(k => (string)k)))
                     _rejectedEdits.Forget(writtenPath);
             }
             var changeId = Guid.NewGuid().ToString("n")[..8];

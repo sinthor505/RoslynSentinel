@@ -284,4 +284,90 @@ public class ReplaceSnippetRenameLiftTests
             Assert.That(workspace.ReadText(CheckoutRelativePath), Does.Contain("c.CalcDisc(1m)"));
         });
     }
+
+    // Batch G R3: a rejected edit of the caller file is remembered; when a lift then rewrites that file, a later not-found oldContent copied from the
+    // rejected edit must not be told "the file still has the old text", because the lift rewrote it.
+    [Test]
+    public async Task FlagOn_AfterALiftWroteTheCaller_NotFoundOldContentGetsNoRejectedOriginNote()
+    {
+        using var _ = LiftRenamesOptions.OverrideForCurrentContext(true);
+        using var workspace = CreateWorkspace();
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+        const string callerLine = "decimal F(OrderPricingCalculator c) => c.CalcDisc(1m);";
+
+        // 1. A caller edit that is rejected (it adds a member with an undeclared name) and so is remembered; it keeps the old call line in its newContent.
+        var rejected = await tools.ReplaceSnippetTool(
+            reason: "add a helper beside the caller",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(CheckoutRelativePath),
+            oldContent: callerLine,
+            newContent: callerLine + "\n    int G() => undeclaredName;");
+        Assert.That(rejected.IsError, Is.True, "the caller edit must be rejected so that it is remembered");
+
+        // 2. The declaration rename is lifted and rewrites the caller file.
+        var lifted = await RenameMethodDeclarationOnly(workspace);
+        Assert.That(lifted.IsError, Is.False, lifted.ErrorData?.Message);
+
+        // 3. oldContent is the caller's old text, which the lift removed: an ordinary not-found, without the rejected-origin note.
+        var notFound = await tools.ReplaceSnippetTool(
+            reason: "edit the caller again using its old text",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(CheckoutRelativePath),
+            oldContent: callerLine,
+            newContent: "decimal F(OrderPricingCalculator c) => 0m;");
+
+        Assert.That(notFound.IsError, Is.True);
+        Assert.That(notFound.ErrorData?.Message, Does.Not.Contain("comes from your rejected edit's newContent"));
+    }
+
+    // Batch G R3 T2: the model blamed the rename for errors that came from the rest of its edit. When the trial rename was clean and the remaining
+    // errors sit in the file the model edited, the rejection says so and lists the errors.
+    [Test]
+    public async Task FlagOn_LiftTriedButOtherTextInTheEditIsBroken_SaysTheRenameWasCleanAndListsTheErrors()
+    {
+        using var _ = LiftRenamesOptions.OverrideForCurrentContext(true);
+        using var workspace = CreateWorkspace();
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+        var originalPricing = workspace.ReadText(PricingRelativePath);
+        var originalCheckout = workspace.ReadText(CheckoutRelativePath);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "rename the discount method and change its body",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(PricingRelativePath),
+            oldContent: "public decimal CalcDisc(decimal a) => a;",
+            newContent: "public decimal CalculateDiscountedTotal(decimal a) => undeclaredValue;");
+
+        Assert.That(result.IsError, Is.True, "the rest of the edit is broken, so the lift cannot apply");
+        var message = result.ErrorData?.Message ?? string.Empty;
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("the rename itself applied cleanly"));
+            Assert.That(message, Does.Contain("not from the rename"));
+            Assert.That(message, Does.Contain("undeclaredValue"));
+            Assert.That(message, Does.Not.Contain("errors remain in files the rename rewrote"));
+            Assert.That(workspace.ReadText(PricingRelativePath), Is.EqualTo(originalPricing));
+            Assert.That(workspace.ReadText(CheckoutRelativePath), Is.EqualTo(originalCheckout));
+        });
+    }
+
+    // Batch G R3: after a lift rewrote another file the model re-sent its own call-site edit with the old text. The success summary
+    // quotes the rewritten line and says the call sites are already updated.
+    [Test]
+    public async Task FlagOn_LiftSummary_QuotesTheRewrittenCallerLineAndSaysNotToEditItAgain()
+    {
+        using var _ = LiftRenamesOptions.OverrideForCurrentContext(true);
+        using var workspace = CreateWorkspace();
+
+        var result = await RenameMethodDeclarationOnly(workspace);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var summary = result.SuccessData?.ReplacementResult?.Summary ?? string.Empty;
+        Assert.Multiple(() =>
+        {
+            Assert.That(summary, Does.Contain("Rewritten call sites:"));
+            Assert.That(summary, Does.Contain("OrderCheckout.cs:5  decimal F(OrderPricingCalculator c) => c.CalculateDiscountedTotal(1m);"));
+            Assert.That(summary, Does.Contain("These call sites are already updated; do not edit them again."));
+        });
+    }
 }
