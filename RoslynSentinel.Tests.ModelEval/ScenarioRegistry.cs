@@ -5,8 +5,8 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// </summary>
 public static class ScenarioRegistry
 {
-    // Initially empty; later slices add entries here.
-    private static readonly ScenarioDefinition[] Definitions = [];
+    // Later slices add entries here.
+    private static readonly ScenarioDefinition[] Definitions = [RenameScenarios.CalcDiscRename];
 
     /// <summary>All registered scenarios, in declaration order.</summary>
     public static IReadOnlyList<ScenarioDefinition> All => Definitions;
