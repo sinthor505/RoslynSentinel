@@ -63,14 +63,7 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 [TestFixture]
 public class OrderPricingRefactorChainAgentTests
 {
-    // "Refactor" and "Workspace" are the exact mode strings AddRoslynSentinelToolsBasic checks ->
-    // together they register ApplyDiffTool/BuildTool/ReadFileTool/Search/ListSolutionItemsTool plus
-    // SentinelRefactoringTools (ExtractMethodTool, RenameSymbolTool, ChangeAccessibilityTool,
-    // ModifyModifierTool, SyncInterfaceTool), without pulling in Advanced's larger tool catalog.
-    private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Refactor", "Workspace"
-    };
+    // Tool surface: see ChainEvalToolSurface (shared with the transcript-resume tests).
 
     // Toggle for an isolation experiment: with WriteFileTool blocked, the model must use ApplyDiffTool/
     // ApplyUnifiedDiffTool/RenameSymbolTool/ChangeSignatureTool for every edit, so the rename-desync failure
@@ -124,12 +117,12 @@ public class OrderPricingRefactorChainAgentTests
         {
             mcpBuilder.AddRoslynSentinelToolsAdvanced(
                 services,
-                new HashSet<string>(ActiveModes, StringComparer.OrdinalIgnoreCase) { "EditSnippetsExperiment" },
-                hideTools: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "ReplaceSnippet", "Features", "McpServerStatus" });
+                new HashSet<string>(ChainEvalToolSurface.NewModes(), StringComparer.OrdinalIgnoreCase) { "EditSnippetsExperiment" },
+                hideTools: new HashSet<string>(ChainEvalToolSurface.NewHiddenTools(), StringComparer.OrdinalIgnoreCase) { "ReplaceSnippet" });
         }
         else
         {
-            mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ActiveModes, hideTools: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Features", "McpServerStatus" });
+            mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ChainEvalToolSurface.NewModes(), hideTools: ChainEvalToolSurface.NewHiddenTools());
         }
 
         if (BlockWriteFile)
@@ -258,6 +251,7 @@ public class OrderPricingRefactorChainAgentTests
     // Rung 1 (4 steps): the 3 base steps + inline a trivial single-use local variable.
     // ============================================================================================
 
+    // TODO the prompt templates tell the model not to call ListWorkspaceSolutions/LoadSolution; both tools are now hidden (ChainEvalToolSurface), so those lines could be dropped to save tokens (prompt changes were out of scope for the tool-surface step).
     private const string FourStepUserPromptTemplate = """
         # Task: Four small refactors in FixtureHelpers/OrderPricingCalculator.cs
 

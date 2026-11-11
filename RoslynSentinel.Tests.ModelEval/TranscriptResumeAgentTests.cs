@@ -29,18 +29,13 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// would otherwise hand the next one an already-refactored file.
 ///
 /// Fixture and tool surface are those of <see cref="OrderPricingRefactorChainAgentTests.Model_AppliesTenChainedRefactors"/>
-/// (Advanced engines, modes Refactor/Workspace, Features and McpServerStatus hidden, the acceptance-test file added),
+/// (Advanced engines, tool surface is ChainEvalToolSurface, the acceptance-test file added),
 /// so the transcript must come from that test. The transcript's own SystemPrompt and UserPrompt are used verbatim
 /// except that its fixture directory (a fresh GUID folder per run) is pointed at the new fixture.
 /// </summary>
 [TestFixture]
 public class TranscriptResumeAgentTests
 {
-    private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Refactor", "Workspace"
-    };
-
     [Test]
     [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1 -Test ResumeTranscript")]
     public async Task ResumeFromTranscript_SamplesTheNextTurns()
@@ -210,8 +205,8 @@ public class TranscriptResumeAgentTests
                 new InMemoryMcpTaskStore(),
                 o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
             mcpBuilder.AddRoslynSentinelToolsAdvanced(
-                services, ActiveModes,
-                hideTools: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Features", "McpServerStatus" });
+                services, ChainEvalToolSurface.NewModes(),
+                hideTools: ChainEvalToolSurface.NewHiddenTools());
 
             var hostBuilder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
             hostBuilder.Services.AddLmStudioAgentClient(client =>

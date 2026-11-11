@@ -2625,6 +2625,7 @@ public class MemberRefactoringEngine
                     }
                 }
 
+                // TODO this hint names ApplyDiff and DeleteUnusedSymbol without checking they are active tools (the chain eval hides ApplyDiff); gate it with an isToolActive predicate like CompilerErrorLookupHelper
                 var kindNames = string.Join(", ", typeKindCandidatesForHint.Select(c => c.Kind).Distinct());
                 throw new ToolNotFoundException($"'{memberName}' is a type-level declaration ({kindNames}) that Member(remove) could not delete here. " +
                     "Member(remove) deletes classes, interfaces, structs, records and enums that resolve to a symbol in the loaded solution, " +
