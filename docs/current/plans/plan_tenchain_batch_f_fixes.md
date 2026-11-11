@@ -120,3 +120,7 @@ full build and server restart before live use.
 - Step 1 widens the eval's mode set; confirm it does not change pass criteria that count tools or modes, and that
   batch comparisons note the surface change.
 - Step 4 needs an owner decision (override parameter vs DeleteFile pointer).
+- Step 3 overlaps steps 2-3 of the second slice of `proposals/proposal_semantic_edit_impact_diagnostics.md` (edited-file
+  attribution, local diffing, verdict list on the wire), which were in progress in another session on 2026-11-11 in
+  `EditImpactAnalyzer.cs`, `EditImpactGate` and the ReplaceSnippet paths of `WorkspaceFileEditImpl.cs`. Before step 3,
+  check `Git log` for those files; if that work is still uncommitted, coordinate (peer-coordination skill) first.
