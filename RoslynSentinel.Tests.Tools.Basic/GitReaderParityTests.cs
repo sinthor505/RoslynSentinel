@@ -958,6 +958,24 @@ public class GitReaderParityTests
             return null;
         }
 
+        public IReadOnlyList<BranchRef>? ListBranches(string workingDirectory, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
+        public IReadOnlyList<StashRef>? ListStashes(string workingDirectory, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
+        public int? CountStashes(string workingDirectory, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
         public IReadOnlyList<CommitMessage>? GetCommitMessages(string workingDirectory, TimeSpan cliTimeout)
         {
             Gate();

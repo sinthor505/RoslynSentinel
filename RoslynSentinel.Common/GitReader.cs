@@ -47,6 +47,19 @@ internal enum GitReaderBackend
 }
 
 /// <summary>
+/// One row of <c>git branch --list --all</c> as the Git tool reports it: <see cref="Name"/> is the branch name (a remote-tracking branch without the
+/// "remotes/" prefix), <see cref="IsCurrent"/> is true for the row git marks with "* " (the branch HEAD is on in this working tree).
+/// </summary>
+internal sealed record BranchRef(string Name, bool IsCurrent, bool IsRemote);
+
+/// <summary>
+/// One <c>git stash list</c> row: <see cref="Index"/> is N of stash@{N}, <see cref="ShortSha"/> the stash commit's abbreviation (<c>%h</c>),
+/// <see cref="CommitterDate"/> its strict ISO committer date (<c>%cI</c>) and <see cref="Subject"/> the raw reflog subject (<c>%gs</c>, for example
+/// "WIP on main: abc1234 subject" or "On main: label").
+/// </summary>
+internal sealed record StashRef(int Index, string ShortSha, string CommitterDate, string Subject);
+
+/// <summary>
 /// The typed read-only git probes the server runs on its own behalf (staleness check, build stamp, not-found evidence,
 /// residual-mention scan, doc trailer scan), behind one seam so a libgit2 implementation and the git CLI implementation
 /// can be compared and swapped. Every method takes the directory git would run in (it need not be the repo root, and
@@ -114,6 +127,24 @@ internal interface IGitReader
     /// not a clean repo-relative one. Null when there is no repository.
     /// </summary>
     IReadOnlyList<string>? FindIgnoredPaths(string workingDirectory, IReadOnlyList<string> paths, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// The local and remote-tracking branches (<c>git branch --list --all</c>) in git's order (local branches by name, then remote-tracking ones; byte
+    /// order of the ref name), symbolic rows such as <c>remotes/origin/HEAD -> origin/main</c> left out. The libgit2 reader throws
+    /// <see cref="NotSupportedException"/> for what it cannot reproduce (a detached HEAD, which git lists as a pseudo-branch row, or a configured
+    /// <c>branch.sort</c>). Null when git cannot answer (not a repository, git missing or timed out).
+    /// </summary>
+    IReadOnlyList<BranchRef>? ListBranches(string workingDirectory, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// The stash entries (<c>git stash list --format=%gd%x09%h%x09%cI%x09%gs</c>), newest (stash@{0}) first; empty when there are none. The libgit2 reader
+    /// throws <see cref="NotSupportedException"/> where it cannot reproduce the abbreviation length (see <c>GetLog</c>), but only when there is an entry to
+    /// abbreviate. Null when git cannot answer.
+    /// </summary>
+    IReadOnlyList<StashRef>? ListStashes(string workingDirectory, TimeSpan cliTimeout);
+
+    /// <summary>The number of stash entries (<c>git stash list</c>); null when git cannot answer.</summary>
+    int? CountStashes(string workingDirectory, TimeSpan cliTimeout);
 
     /// <summary>Every commit reachable from HEAD (<c>git log</c> with no range), newest first, with its raw message.</summary>
     IReadOnlyList<CommitMessage>? GetCommitMessages(string workingDirectory, TimeSpan cliTimeout);

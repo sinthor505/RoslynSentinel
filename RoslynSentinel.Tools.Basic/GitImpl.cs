@@ -1082,24 +1082,29 @@ public class GitImpl : IGitOperations
 
     private async Task<GitStashResult> StashListAsync(string gitRoot, int count, CancellationToken cancellationToken)
     {
+        // The typed seam lists in-process (libgit2) where that reproduces git stash list and runs the git CLI otherwise. It blocks, so it runs
+        // off the caller's thread; the token only stops a call that has not started.
+        var listed = await Task.Run(() => _gitReader.ListStashes(gitRoot, GitProcessTimeout), cancellationToken);
+        if (listed is not null)
+            return BuildStashListResult(listed, count);
+
+        // git could not answer: run it once more for its own error text.
         // %gd = stash@{N}, %gs = reflog subject ("On <branch>: <label>" or "WIP on <branch>: <hash> <subject>").
         var raw = await RunGitAsync(gitRoot,
             ["stash", "list", "--format=%gd%x09%h%x09%cI%x09%gs"], cancellationToken);
         if (raw.ExitCode != 0)
             return new GitStashResult { Action = "list", IsError = true, Error = $"git stash list failed: {CleanGitStderr(raw.Stderr)}" };
 
-        var all = new List<GitStashEntry>();
-        foreach (var rawLine in raw.Stdout.Split('\n'))
-        {
-            var line = rawLine.TrimEnd('\r');
-            if (line.Length == 0) continue;
-            var parts = line.Split('\t', 4);
-            if (parts.Length < 4) continue;
-            var refMatch = System.Text.RegularExpressions.Regex.Match(parts[0], @"^stash@\{(\d+)\}$");
-            if (!refMatch.Success) continue;
+        return BuildStashListResult(CliGitReader.ParseStashList(raw.Stdout), count);
+    }
 
+    private static GitStashResult BuildStashListResult(IReadOnlyList<StashRef> stashes, int count)
+    {
+        var all = new List<GitStashEntry>();
+        foreach (var stash in stashes)
+        {
             string? branch = null;
-            var message = parts[3];
+            var message = stash.Subject;
             var subject = System.Text.RegularExpressions.Regex.Match(message, @"^(?:WIP on|On) ([^:]+): (.*)$");
             if (subject.Success)
             {
@@ -1108,9 +1113,9 @@ public class GitImpl : IGitOperations
             }
             all.Add(new GitStashEntry
             {
-                Index = int.Parse(refMatch.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture),
-                Hash = parts[1],
-                Date = parts[2],
+                Index = stash.Index,
+                Hash = stash.ShortSha,
+                Date = stash.CommitterDate,
                 Branch = branch,
                 Message = message,
             });
@@ -1165,10 +1170,9 @@ public class GitImpl : IGitOperations
     /// <summary>Number of stash entries, or -1 when git could not be asked.</summary>
     private async Task<int> StashCountAsync(string gitRoot, CancellationToken cancellationToken)
     {
-        var raw = await RunGitAsync(gitRoot, ["stash", "list", "--format=%gd"], cancellationToken);
-        if (raw.ExitCode != 0)
-            return -1;
-        return raw.Stdout.Split('\n').Count(l => l.Trim().Length > 0);
+        // The seam counts in-process (libgit2) with the git CLI as fallback; null means git could not be asked.
+        var count = await Task.Run(() => _gitReader.CountStashes(gitRoot, GitProcessTimeout), cancellationToken);
+        return count ?? -1;
     }
 
     /// <summary>
@@ -3504,29 +3508,12 @@ public class GitImpl : IGitOperations
         {
             if (string.IsNullOrWhiteSpace(branchName))
             {
-                var listRaw = await RunGitAsync(gitRoot,
-                    ["branch", "--list", "--all"], cancellationToken);
-                if (listRaw.ExitCode != 0)
-                    return new GitBranchResult { IsError = true, Error = CleanGitStderr(listRaw.Stderr) };
-
-                var branches = new List<GitBranchEntry>();
-                foreach (var rawLine in listRaw.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-                {
-                    var line = rawLine.TrimEnd('\r');
-                    if (line.Length == 0) continue;
-                    var isCurrent = line.StartsWith("* ", StringComparison.Ordinal);
-                    var name = (isCurrent ? line[2..] : line[2..]).Trim();
-                    if (name.Contains("->", StringComparison.Ordinal)) continue; // e.g. "remotes/origin/HEAD -> origin/main"
-                    var isRemote = name.StartsWith("remotes/", StringComparison.Ordinal);
-                    branches.Add(new GitBranchEntry
-                    {
-                        Name = isRemote ? name["remotes/".Length..] : name,
-                        IsCurrent = isCurrent,
-                        IsRemote = isRemote,
-                    });
-                }
-
-                return new GitBranchResult { IsError = false, Branches = branches };
+                // The typed seam lists in-process (libgit2) where that reproduces git branch --list --all and runs the git CLI otherwise
+                // (a detached HEAD, branch.sort). It blocks, so it runs off the caller's thread; the token only stops a call that has not started.
+                var listed = await Task.Run(() => _gitReader.ListBranches(gitRoot, GitProcessTimeout), cancellationToken);
+                return listed is null
+                    ? await BranchListViaCliAsync(gitRoot, cancellationToken) // git could not answer: run it once more for its own error text
+                    : new GitBranchResult { IsError = false, Branches = [.. listed.Select(ToBranchEntry)] };
             }
 
             if (deleteBranch)
@@ -3556,6 +3543,19 @@ public class GitImpl : IGitOperations
         {
             return UnexpectedFailure<GitBranchResult>(ex, "branch");
         }
+    }
+
+    private static GitBranchEntry ToBranchEntry(BranchRef branch) =>
+        new() { Name = branch.Name, IsCurrent = branch.IsCurrent, IsRemote = branch.IsRemote };
+
+    /// <summary>The branch listing through the git CLI, with git's own error text; used when the reader could not answer.</summary>
+    private async Task<GitBranchResult> BranchListViaCliAsync(string gitRoot, CancellationToken cancellationToken)
+    {
+        var listRaw = await RunGitAsync(gitRoot, ["branch", "--list", "--all"], cancellationToken);
+        if (listRaw.ExitCode != 0)
+            return new GitBranchResult { IsError = true, Error = CleanGitStderr(listRaw.Stderr) };
+
+        return new GitBranchResult { IsError = false, Branches = [.. CliGitReader.ParseBranchList(listRaw.Stdout).Select(ToBranchEntry)] };
     }
 
     /// <summary>

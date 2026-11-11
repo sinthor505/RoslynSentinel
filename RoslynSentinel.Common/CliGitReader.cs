@@ -166,6 +166,83 @@ internal sealed class CliGitReader : IGitReader
         return ignored;
     }
 
+    public IReadOnlyList<BranchRef>? ListBranches(string workingDirectory, TimeSpan cliTimeout)
+    {
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, "branch", "--list", "--all");
+        return run is { ExitCode: 0 } ? ParseBranchList(run.Value.StdOut) : null;
+    }
+
+    /// <summary>
+    /// Parses <c>git branch --list --all</c>: a two-character marker ("* " current, "+ " checked out in another worktree, "  " otherwise) and the name;
+    /// a row with "->" (a symbolic ref such as remotes/origin/HEAD) is skipped. A detached HEAD row "(HEAD detached at abc)" comes through as a name.
+    /// </summary>
+    internal static List<BranchRef> ParseBranchList(string output)
+    {
+        var branches = new List<BranchRef>();
+        foreach (var rawLine in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = rawLine.TrimEnd('\r');
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            var isCurrent = line.StartsWith("* ", StringComparison.Ordinal);
+            var name = line[2..].Trim();
+            if (name.Contains("->", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var isRemote = name.StartsWith("remotes/", StringComparison.Ordinal);
+            branches.Add(new BranchRef(isRemote ? name["remotes/".Length..] : name, isCurrent, isRemote));
+        }
+
+        return branches;
+    }
+
+    public IReadOnlyList<StashRef>? ListStashes(string workingDirectory, TimeSpan cliTimeout)
+    {
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, "stash", "list", "--format=%gd%x09%h%x09%cI%x09%gs");
+        return run is { ExitCode: 0 } ? ParseStashList(run.Value.StdOut) : null;
+    }
+
+    /// <summary>Parses the tab-separated <c>stash list</c> rows (%gd, %h, %cI, %gs); a row that is not "stash@{N}" plus three more fields is skipped.</summary>
+    internal static List<StashRef> ParseStashList(string output)
+    {
+        var stashes = new List<StashRef>();
+        foreach (var rawLine in output.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r');
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            var parts = line.Split('\t', 4);
+            if (parts.Length < 4)
+            {
+                continue;
+            }
+
+            var match = System.Text.RegularExpressions.Regex.Match(parts[0], @"^stash@\{(\d+)\}$");
+            if (!match.Success)
+            {
+                continue;
+            }
+
+            stashes.Add(new StashRef(int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture), parts[1], parts[2], parts[3]));
+        }
+
+        return stashes;
+    }
+
+    public int? CountStashes(string workingDirectory, TimeSpan cliTimeout)
+    {
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, "stash", "list", "--format=%gd");
+        return run is { ExitCode: 0 } ? run.Value.StdOut.Split('\n').Count(line => line.Trim().Length > 0) : null;
+    }
+
     /// <summary>Runs an ls-files/ls-tree <c>-z</c> listing; the NUL-separated names, each once; null on a non-zero exit (a rejected pathspec, an unborn HEAD).</summary>
     private static IReadOnlyList<string>? ListPathspecMatches(string workingDirectory, TimeSpan cliTimeout, string[] args)
     {

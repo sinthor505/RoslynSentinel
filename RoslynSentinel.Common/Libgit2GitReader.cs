@@ -408,10 +408,7 @@ internal sealed class Libgit2GitReader : IGitReader
         }
 
         // git's strict ISO date: the author's own offset, with a zero offset spelled the way the installed git spells it.
-        var when = author.When;
-        var date = when.Offset == TimeSpan.Zero
-            ? when.ToString("yyyy-MM-dd'T'HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture) + ZeroOffsetDesignator(workingDirectory, cliTimeout, commit.Sha)
-            : when.ToString("yyyy-MM-dd'T'HH:mm:sszzz", System.Globalization.CultureInfo.InvariantCulture);
+        var date = StrictIsoDate(author.When, workingDirectory, cliTimeout, commit.Sha, "%aI");
 
         // ShortenObjectId returns an all-zero id for a full-length request (core.abbrev of 40 or no), where git prints the whole hash.
         var shortSha = abbreviation >= 40 ? commit.Sha : repo.ObjectDatabase.ShortenObjectId(commit, abbreviation);
@@ -731,6 +728,99 @@ internal sealed class Libgit2GitReader : IGitReader
         }
     }
 
+    /// <summary>git's strict ISO date (<c>%aI</c>, <c>%cI</c>): the signature's own offset, a zero offset spelled the way the installed git spells it.</summary>
+    private static string StrictIsoDate(DateTimeOffset when, string workingDirectory, TimeSpan cliTimeout, string sha, string format) =>
+        when.Offset == TimeSpan.Zero
+            ? when.ToString("yyyy-MM-dd'T'HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture) + ZeroOffsetDesignator(workingDirectory, cliTimeout, sha, format)
+            : when.ToString("yyyy-MM-dd'T'HH:mm:sszzz", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Orders ref names by their UTF-8 bytes, as git sorts refs (strcmp), which .NET's UTF-16 ordinal order does not for supplementary characters.</summary>
+    private static readonly Comparer<string> RefNameOrder = Comparer<string>.Create(
+        (left, right) => Encoding.UTF8.GetBytes(left).AsSpan().SequenceCompareTo(Encoding.UTF8.GetBytes(right)));
+
+    public IReadOnlyList<BranchRef>? ListBranches(string workingDirectory, TimeSpan cliTimeout)
+    {
+        using var repo = Open(workingDirectory);
+        if (repo is null)
+        {
+            return null;
+        }
+
+        // A detached HEAD makes git print a "(HEAD detached at <abbreviated sha>)" row, and branch.sort reorders the list: both are git's to answer.
+        if (repo.Info.IsHeadDetached)
+        {
+            throw new NotSupportedException("HEAD is detached, so git adds a pseudo-branch row with an abbreviated hash.");
+        }
+
+        if (repo.Config.Get<string>("branch.sort") is not null)
+        {
+            throw new NotSupportedException("branch.sort is configured, so git orders the list.");
+        }
+
+        const string heads = "refs/heads/";
+        const string remotes = "refs/remotes/";
+        var current = repo.Head.CanonicalName;
+        var rows = new List<(string Canonical, BranchRef Branch)>();
+        foreach (var reference in repo.Refs)
+        {
+            // A symbolic ref (remotes/origin/HEAD -> origin/main) is a row the Git tool skips.
+            if (reference is SymbolicReference)
+            {
+                continue;
+            }
+
+            var canonical = reference.CanonicalName;
+            if (canonical.StartsWith(heads, StringComparison.Ordinal))
+            {
+                rows.Add((canonical, new BranchRef(canonical[heads.Length..], canonical == current, false)));
+            }
+            else if (canonical.StartsWith(remotes, StringComparison.Ordinal))
+            {
+                rows.Add((canonical, new BranchRef(canonical[remotes.Length..], false, true)));
+            }
+        }
+
+        // git sorts by ref name: every refs/heads/ name before every refs/remotes/ one.
+        return [.. rows.OrderBy(row => row.Canonical, RefNameOrder).Select(row => row.Branch)];
+    }
+
+    public IReadOnlyList<StashRef>? ListStashes(string workingDirectory, TimeSpan cliTimeout)
+    {
+        using var repo = Open(workingDirectory);
+        if (repo is null)
+        {
+            return null;
+        }
+
+        var stashes = repo.Stashes.ToList();
+        if (stashes.Count == 0)
+        {
+            return [];
+        }
+
+        // Needed only when there is an entry to abbreviate; a repository whose abbreviation cannot be reproduced (see AbbreviationLength) is git's.
+        var abbreviation = AbbreviationLength(repo);
+        try
+        {
+            return [.. stashes.Select((stash, index) =>
+            {
+                var commit = stash.WorkTree;
+                var shortSha = abbreviation >= 40 ? commit.Sha : repo.ObjectDatabase.ShortenObjectId(commit, abbreviation);
+                return new StashRef(index, shortSha, StrictIsoDate(commit.Committer.When, workingDirectory, cliTimeout, commit.Sha, "%cI"), stash.Message);
+            })];
+        }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            throw new NotSupportedException("A commit date or UTC offset is outside .NET's range, so git answers.", ex);
+        }
+    }
+
+    public int? CountStashes(string workingDirectory, TimeSpan cliTimeout)
+    {
+        using var repo = Open(workingDirectory);
+        return repo?.Stashes.Count();
+    }
+
     /// <summary>Opens the repository containing <paramref name="workingDirectory"/>; null when there is none.</summary>
     private static Repository? Open(string workingDirectory)
     {
@@ -885,7 +975,7 @@ internal sealed class Libgit2GitReader : IGitReader
     /// How the installed git prints a zero UTC offset in <c>%aI</c>: "Z" on current versions, "+00:00" on older ones. Asked of the CLI once per
     /// process (with a commit whose author offset is zero), so the libgit2 path reproduces whichever git the tool would otherwise have run.
     /// </summary>
-    private static string ZeroOffsetDesignator(string workingDirectory, TimeSpan cliTimeout, string sha)
+    private static string ZeroOffsetDesignator(string workingDirectory, TimeSpan cliTimeout, string sha, string format = "%aI")
     {
         var known = Volatile.Read(ref _zeroOffsetDesignator);
         if (known is not null)
@@ -893,7 +983,8 @@ internal sealed class Libgit2GitReader : IGitReader
             return known;
         }
 
-        var run = GitProcess.TryRun(workingDirectory, cliTimeout, "log", "-1", "--format=%aI", sha);
+        // <format> is %aI or %cI, whichever date the commit given has a zero offset in; git spells both the same way.
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, "log", "-1", "--format=" + format, sha);
         var text = run is { ExitCode: 0 } ? run.Value.StdOut.Trim() : null;
         if (text is not null && text.EndsWith('Z'))
         {
