@@ -47,6 +47,16 @@ public sealed class ToolCallContext : IDetachedPayloadSource
     /// <summary>Sequence number at call start.</summary>
     public long StartSeq { get; }
 
+    /// <summary>
+    /// The call id the response echoes as <c>toolCall.toolCallId</c>, once the echo filter has assigned it (see <see cref="AssignToolCallId"/>);
+    /// null before that, when the echo is switched off, or when the host runs no echo filter. Random (48 bits of a v4 GUID), so unique across
+    /// calls and across server instances sharing a working tree.
+    /// </summary>
+    public string? ToolCallId { get; private set; }
+
+    /// <summary>Records the call id the echo filter generated for this call; the first assignment wins.</summary>
+    public void AssignToolCallId(string toolCallId) => ToolCallId ??= toolCallId;
+
     /// <summary>Host session id from the request, or null when the host does not supply one.</summary>
     public string? SessionId { get; init; }
 

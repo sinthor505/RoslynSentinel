@@ -568,6 +568,60 @@ internal sealed class Libgit2GitReader : IGitReader
         return [.. repo.Commits.QueryBy(filter).Select(commit => new CommitMessage(commit.Sha, commit.Message))];
     }
 
+    public string? FindCommitByTrailer(string workingDirectory, string key, string value, int maxCommits, TimeSpan cliTimeout)
+    {
+        using var repo = Open(workingDirectory);
+        var head = repo?.Head.Tip;
+        if (repo is null || head is null)
+        {
+            return null;
+        }
+
+        // Same walk order as GetCommitMessages (git log's default); the first in that order that carries the trailer wins.
+        var filter = new CommitFilter { IncludeReachableFrom = head, SortBy = CommitSortStrategies.Topological | CommitSortStrategies.Time };
+        var wanted = value.Trim();
+        foreach (var commit in repo.Commits.QueryBy(filter).Take(maxCommits))
+        {
+            if (GitCommitTrailers.GetValues(commit.Message, key).Contains(wanted, StringComparer.Ordinal))
+            {
+                return commit.Sha;
+            }
+        }
+
+        return null;
+    }
+
+    public bool? GetBoolConfig(string workingDirectory, string key, TimeSpan cliTimeout)
+    {
+        using var repo = Open(workingDirectory);
+        // Config.Get searches every level in git's precedence order (local over global over system). An unset key is a null entry.
+        // Read as text and parsed here: Get<bool> throws on a non-boolean, which the composite would record as a libgit2 failure.
+        var entry = repo?.Config.Get<string>(key);
+        if (entry is null)
+        {
+            return null;
+        }
+
+        var text = entry.Value;
+
+        // An empty or valueless entry means different things to git ("key=" is false, a bare "key" is true) and libgit2 does not say which: the CLI decides.
+        if (string.IsNullOrEmpty(text))
+        {
+            throw new NotSupportedException($"Cannot tell whether the empty config value of '{key}' is false or a bare true.");
+        }
+
+        switch (text.Trim().ToLowerInvariant())
+        {
+            case "true" or "yes" or "on":
+                return true;
+            case "false" or "no" or "off":
+                return false;
+            default:
+                // git also accepts an integer: zero is false, anything else true; any other text is not a boolean (null, as for the CLI).
+                return int.TryParse(text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var number) ? number != 0 : null;
+        }
+    }
+
     /// <summary>
     /// The pathspecs the two path-matching reads accept: ones git reads the same literally and after its own normalisation. A path git rewrites
     /// ("./x", "a//b", "a/../b", an absolute or drive path, a trailing slash) or rejects (empty, outside the repository) is left to git.

@@ -100,6 +100,12 @@ internal sealed class FallbackGitReader : IGitReader
     public IReadOnlyList<CommitMessage>? GetCommitMessages(string workingDirectory, TimeSpan cliTimeout) =>
         Invoke(reader => reader.GetCommitMessages(workingDirectory, cliTimeout));
 
+    public string? FindCommitByTrailer(string workingDirectory, string key, string value, int maxCommits, TimeSpan cliTimeout) =>
+        Invoke(reader => reader.FindCommitByTrailer(workingDirectory, key, value, maxCommits, cliTimeout));
+
+    public bool? GetBoolConfig(string workingDirectory, string key, TimeSpan cliTimeout) =>
+        Invoke(reader => reader.GetBoolConfig(workingDirectory, key, cliTimeout));
+
     private T Invoke<T>(Func<IGitReader, T> call)
     {
         try

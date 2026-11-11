@@ -3307,30 +3307,43 @@ public class GitImpl : IGitOperations
                 _ => new[] { "-m", message! }
             };
 
-            string[] commitArgs;
-            if (!string.IsNullOrWhiteSpace(paths))
+            // configPrefix (git -c options) is empty unless commit trailers are on.
+            string[] BuildCommitArgs(string[] msgArgs, string[] configPrefix)
             {
-                // When specific files were named, restrict the commit to those paths via --only
-                var filePaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out _);
-                if (filePaths != null && filePaths.Length > 0)
+                if (!string.IsNullOrWhiteSpace(paths))
                 {
-                    var commitBase = new[] { "--literal-pathspecs", "commit" }.Concat(messageArgs).Concat(new[] { "--only", "--" }).ToArray();
-                    commitArgs = commitBase.Concat(filePaths).ToArray();
+                    // When specific files were named, restrict the commit to those paths via --only
+                    var filePaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out _);
+                    if (filePaths != null && filePaths.Length > 0)
+                    {
+                        var commitBase = configPrefix.Concat(new[] { "--literal-pathspecs", "commit" }).Concat(msgArgs).Concat(new[] { "--only", "--" }).ToArray();
+                        return commitBase.Concat(filePaths).ToArray();
+                    }
                 }
-                else
-                {
-                    commitArgs = new[] { "commit" }.Concat(messageArgs).ToArray();
-                }
-            }
-            else
-            {
-                commitArgs = new[] { "commit" }.Concat(messageArgs).ToArray();
+
+                return configPrefix.Concat(new[] { "commit" }).Concat(msgArgs).ToArray();
             }
 
             // Read BEFORE the commit: DeriveNewCommitHashAsync's fallback proves a HEAD is ours by its parent chain.
             var headBefore = await ReadHeadWithParentsAsync(gitRoot, cancellationToken);
+            // A commit that concludes a merge has MERGE_HEAD as its second parent (IsOwnHead's fallback needs to expect it).
+            var mergeHeadBefore = amend ? null : await ReadMergeHeadAsync(gitRoot, cancellationToken);
 
-            var commitRaw = await RunGitAsync(gitRoot, commitArgs, cancellationToken);
+            // Opt-in (git config roslynsentinel.commitTrailers=true): Tool-Call-Id / Tool-Agent trailers, so the commit can be found by id.
+            // Off (the default) passes exactly the arguments of before.
+            var trailerPlan = await PlanCommitTrailersAsync(gitRoot, messageArgs, amend, !string.IsNullOrWhiteSpace(message), cancellationToken);
+            var commitRaw = await RunGitAsync(gitRoot,
+                trailerPlan is { } firstPlan ? BuildCommitArgs(firstPlan.MessageArgs, GitCommitTrailers.ReplaceConfigArgs) : BuildCommitArgs(messageArgs, []),
+                cancellationToken);
+            if (trailerPlan is not null && GitCommitTrailers.IsTrailerOptionUnsupported(commitRaw.ExitCode, commitRaw.Stderr))
+            {
+                // `git commit --trailer` needs git 2.32. Older git fails while parsing options, before anything is committed, so the retry
+                // is safe. Decision: commit without the trailers rather than fail (they are an aid, and the summary-line derivation
+                // below still identifies the commit); the log records it.
+                _logger.LogInformation("git commit does not support --trailer (git older than 2.32); committing without Tool-Call-Id/Tool-Agent trailers.");
+                trailerPlan = null;
+                commitRaw = await RunGitAsync(gitRoot, BuildCommitArgs(messageArgs, []), cancellationToken);
+            }
             if (commitRaw.ExitCode != 0)
             {
                 var detail = string.Join("\n", new[] { commitRaw.Stdout.Trim(), CleanGitStderr(commitRaw.Stderr) }
@@ -3366,7 +3379,14 @@ public class GitImpl : IGitOperations
             // Never `rev-parse HEAD`: another server instance sharing this working tree can commit between the
             // git commit above and any readback, so HEAD may already be that other commit. The hash comes from the
             // commit's own summary line (see DeriveNewCommitHashAsync); empty means it could not be established.
-            var hash = await DeriveNewCommitHashAsync(gitRoot, commitRaw.Stdout, headBefore, amend, cancellationToken);
+            // With trailers on, the new commit is the one in the last few HEAD ancestors that carries this call's id: exact even when
+            // other commits landed meanwhile. Not found (a hook rewrote the message, more than LookupDepth commits landed, the lookup
+            // failed) falls through to the summary-line derivation, whose own fallback is the parent-chain proof.
+            var hash = trailerPlan is { } usedPlan
+                ? await Task.Run(() => _gitReader.FindCommitByTrailer(gitRoot, GitCommitTrailers.ToolCallIdKey, usedPlan.CallId, GitCommitTrailers.LookupDepth, GitProcessTimeout), cancellationToken) ?? ""
+                : "";
+            if (hash.Length == 0)
+                hash = await DeriveNewCommitHashAsync(gitRoot, commitRaw.Stdout, headBefore, amend, mergeHeadBefore, cancellationToken);
 
             // Sanity check, not a correctness fix: a SHA-1 hash is always exactly 40 hex
             // characters. This guards against a suspected (unconfirmed, see
@@ -3493,6 +3513,7 @@ public class GitImpl : IGitOperations
             }
             args.Add(commitHash);
 
+            // TODO revert could carry the Tool-Call-Id trailer via --no-commit + commit
             // Read BEFORE the revert: DeriveNewCommitHashAsync's fallback proves a HEAD is ours by its parent chain.
             var headBefore = noCommit ? null : await ReadHeadWithParentsAsync(gitRoot, cancellationToken);
 
@@ -3525,11 +3546,11 @@ public class GitImpl : IGitOperations
 
     // The "[<branch> <abbrev>] <subject>" summary line `git commit` / `git revert` print on stdout for the commit they
     // just created: "[master 1a2b3c4]", "[master (root-commit) 1a2b3c4]", "[detached HEAD 1a2b3c4]". Everything before the
-    // abbreviation is free text (translated "(root-commit)", branch name), so only its shape is matched: no ']' inside the
-    // bracket, a space, then 4-40 lowercase hex digits closing the bracket. A subject that itself contains "[abc1234]" is
-    // after the first ']' of the line and so never matches.
+    // abbreviation is free text (translated "(root-commit)", a branch name that may itself contain ']'), so the match is anchored on
+    // the END of the bracket: the earliest " <4-40 lowercase hex>]" that is followed by a space or the end of the line. A branch
+    // name has no space, so the earliest such spot is git's own; a subject that itself contains "[abc1234]" comes after it.
     private static readonly System.Text.RegularExpressions.Regex CommitSummaryLine = new(
-        @"^\[[^\]\r\n]*? ([0-9a-f]{4,40})\]",
+        @"^\[[^\r\n]+? ([0-9a-f]{4,40})\](?=[ \t\r\n]|$)",
         System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>
@@ -3553,7 +3574,7 @@ public class GitImpl : IGitOperations
     /// by another session landing in between (or after) changes the chain, so the check then fails rather than
     /// guessing.
     /// </summary>
-    internal static bool IsOwnHead(string[]? before, string[]? after, bool replacesHead)
+    internal static bool IsOwnHead(string[]? before, string[]? after, bool replacesHead, string? mergeHead = null)
     {
         if (after is null || after.Length == 0)
             return false;
@@ -3564,6 +3585,9 @@ public class GitImpl : IGitOperations
                 && after.Skip(1).SequenceEqual(before.Skip(1));
 
         var expectedParents = before is { Length: > 0 } ? new[] { before[0] } : [];
+        // A merge-resolution commit has two parents: the old HEAD and the commit that was being merged (MERGE_HEAD, read before the commit).
+        if (!string.IsNullOrEmpty(mergeHead))
+            expectedParents = [.. expectedParents, mergeHead];
         return (before is null || after[0] != before[0])
             && after.Skip(1).SequenceEqual(expectedParents);
     }
@@ -3595,6 +3619,46 @@ public class GitImpl : IGitOperations
     }
 
     /// <summary>
+    /// The commit trailers for this call, or null for "behave exactly as without them" (the repo's <c>roslynsentinel.commitTrailers</c> is
+    /// not true, or an amend's message cannot be read back). Otherwise the call id to look the new commit up by and the message arguments
+    /// to commit with: <paramref name="messageArgs"/> plus <c>--trailer Tool-Call-Id: &lt;id&gt;</c> and, when the call has an agent id,
+    /// <c>--trailer Tool-Agent: &lt;agent&gt;</c>. The id is the one the response echoes (<see cref="ToolCallContext.ToolCallId"/>); a call
+    /// without one (no echo filter, tests) gets a fresh random id, which still serves the lookup. An amend without a message keeps HEAD's
+    /// message but with its own Tool-Call-Id/Tool-Agent trailers removed first, so a stale agent trailer cannot survive next to the new id
+    /// (the <c>ifexists=replace</c> config only replaces a trailer that is being written again).
+    /// </summary>
+    private async Task<(string CallId, string[] MessageArgs)?> PlanCommitTrailersAsync(
+        string gitRoot, string[] messageArgs, bool amend, bool hasMessage, CancellationToken cancellationToken)
+    {
+        var enabled = await Task.Run(() => _gitReader.GetBoolConfig(gitRoot, GitCommitTrailers.ConfigKey, GitProcessTimeout), cancellationToken);
+        if (enabled != true)
+            return null;
+
+        var context = ToolCallContext.Current;
+        var callId = context?.ToolCallId ?? Guid.NewGuid().ToString("N")[..12];
+        var args = messageArgs;
+        if (amend && !hasMessage)
+        {
+            // Raw %B (no line re-join), so everything but the two trailer lines stays byte-identical.
+            var head = await Task.Run(() => _gitReader.GetCommitHeader(gitRoot, "HEAD", GitProcessTimeout), cancellationToken);
+            if (head is null)
+                return null;
+
+            args = ["--amend", "-m", GitCommitTrailers.StripOwnTrailers(head.Message)];
+        }
+
+        return (callId, [.. args, .. GitCommitTrailers.TrailerArgs(callId, context?.AgentId)]);
+    }
+
+    /// <summary>The full hash MERGE_HEAD names (a merge is waiting to be concluded by the next commit), or null when no merge is in progress.</summary>
+    private async Task<string?> ReadMergeHeadAsync(string gitRoot, CancellationToken cancellationToken)
+    {
+        var raw = await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", "MERGE_HEAD^{commit}"], cancellationToken);
+        var hash = raw.ExitCode == 0 ? raw.Stdout.Trim() : "";
+        return hash.Length > 0 ? hash : null;
+    }
+
+    /// <summary>
     /// The full hash of the commit that <c>git commit</c> / <c>git revert</c> just created, never "whatever HEAD is now":
     /// another server instance sharing the working tree can commit between the git call and any readback. Order:
     /// (1) the summary line git printed for this very commit, expanded with <c>rev-parse --verify</c>; (2) only if that
@@ -3602,15 +3666,20 @@ public class GitImpl : IGitOperations
     /// empty string, meaning "the commit exists but its hash could not be established" - the caller must say so,
     /// and the log carries the detail. Never falls back to an unchecked HEAD.
     /// </summary>
+    internal Task<string> DeriveNewCommitHashAsync(
+        string gitRoot, string commandStdout, string[]? headBefore, bool amend, CancellationToken cancellationToken) =>
+        DeriveNewCommitHashAsync(gitRoot, commandStdout, headBefore, amend, mergeHead: null, cancellationToken);
+
+    /// <summary><see cref="DeriveNewCommitHashAsync(string, string, string[], bool, CancellationToken)"/> for a commit that may conclude a merge: <paramref name="mergeHead"/> is MERGE_HEAD as read before the commit (null when no merge was in progress).</summary>
     internal async Task<string> DeriveNewCommitHashAsync(
-        string gitRoot, string commandStdout, string[]? headBefore, bool amend, CancellationToken cancellationToken)
+        string gitRoot, string commandStdout, string[]? headBefore, bool amend, string? mergeHead, CancellationToken cancellationToken)
     {
         var fromSummary = await ResolveSummaryHashAsync(gitRoot, commandStdout, cancellationToken);
         if (fromSummary is not null)
             return fromSummary;
 
         var headAfter = await ReadHeadWithParentsAsync(gitRoot, cancellationToken);
-        if (IsOwnHead(headBefore, headAfter, replacesHead: amend))
+        if (IsOwnHead(headBefore, headAfter, replacesHead: amend, mergeHead))
         {
             _logger.LogInformation("The commit summary line was unparsable or ambiguous; HEAD {Head} is proven to be the new commit by its parent chain.", headAfter![0]);
             return headAfter[0];

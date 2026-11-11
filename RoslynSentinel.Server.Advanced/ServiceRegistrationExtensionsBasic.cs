@@ -1073,8 +1073,12 @@ public static class RoslynSentinelServiceExtensionsBasic
                 System.Text.Json.Nodes.JsonObject? echo = null;
                 try
                 {
+                    var toolCallId = ToolCallEcho.NewToolCallId();
+                    // The same id reaches the tool (ToolCallContext is set by the identity filter just outside this one), so a commit
+                    // trailer can carry the id the response echoes.
+                    RoslynSentinel.Common.ToolCallContext.Current?.AssignToolCallId(toolCallId);
                     echo = ToolCallEcho.CreateEcho(
-                        ToolCallEcho.NewToolCallId(), context.Params?.Name, context.Params?.Arguments);
+                        toolCallId, context.Params?.Name, context.Params?.Arguments);
                 }
                 catch (Exception ex)
                 {

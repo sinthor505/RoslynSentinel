@@ -329,6 +329,51 @@ internal sealed class CliGitReader : IGitReader
         return run is { ExitCode: 0 } ? ParseMessages(run.Value.StdOut) : null;
     }
 
+    public string? FindCommitByTrailer(string workingDirectory, string key, string value, int maxCommits, TimeSpan cliTimeout)
+    {
+        // git's own trailer parser decides what a trailer is: one record per commit, the matching values one per line.
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, "log", "-n", maxCommits.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            $"--format=%H%x1f%(trailers:key={key},valueonly,unfold)%x1e");
+        if (run is not { ExitCode: 0 })
+        {
+            return null;
+        }
+
+        foreach (var record in run.Value.StdOut.Split('\u001e', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = record.IndexOf('\u001f');
+            if (separator < 0)
+            {
+                continue;
+            }
+
+            var values = record[(separator + 1)..].Split('\n').Select(v => v.Trim());
+            if (values.Contains(value.Trim(), StringComparer.Ordinal))
+            {
+                return record[..separator].Trim();
+            }
+        }
+
+        return null;
+    }
+
+    public bool? GetBoolConfig(string workingDirectory, string key, TimeSpan cliTimeout)
+    {
+        // Exit 1 = unset, 128 = not a boolean or not a repository: all null.
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, "config", "--type=bool", "--get", key);
+        if (run is not { ExitCode: 0 })
+        {
+            return null;
+        }
+
+        return run.Value.StdOut.Trim() switch
+        {
+            "true" => true,
+            "false" => false,
+            _ => null,
+        };
+    }
+
     /// <summary>Parses <c>log -z --name-only --format=%h%x1f%s</c>: NUL-separated tokens, a header (it holds the unit separator) followed by its path tokens.</summary>
     internal static List<ChangedCommit> ParseLog(string output)
     {

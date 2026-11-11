@@ -185,4 +185,18 @@ internal interface IGitReader
 
     /// <summary>Every commit reachable from HEAD (<c>git log</c> with no range), newest first, with its raw message.</summary>
     IReadOnlyList<CommitMessage>? GetCommitMessages(string workingDirectory, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// The full sha of the newest commit among the first <paramref name="maxCommits"/> reachable from HEAD (newest first, as <c>git log -n</c>) whose
+    /// trailer block carries <paramref name="key"/> with exactly <paramref name="value"/> (key case-insensitive, value trimmed). The CLI reader asks
+    /// git itself (<c>%(trailers:key=...,valueonly,unfold)</c>); the libgit2 reader applies <see cref="GitCommitTrailers.GetValues"/>. Null when no
+    /// such commit is in range or git cannot answer (not a repository, unborn HEAD, git missing or timed out): both mean "not found" to the caller.
+    /// </summary>
+    string? FindCommitByTrailer(string workingDirectory, string key, string value, int maxCommits, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// The boolean git config value of <paramref name="key"/> as git resolves it (repo-local over global over system), or null when it is unset, not
+    /// a boolean (<c>git config --type=bool</c> rejects it), or git cannot answer.
+    /// </summary>
+    bool? GetBoolConfig(string workingDirectory, string key, TimeSpan cliTimeout);
 }

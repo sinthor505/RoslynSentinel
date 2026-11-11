@@ -1030,5 +1030,17 @@ public class GitReaderParityTests
             Gate();
             return null;
         }
+
+        public string? FindCommitByTrailer(string workingDirectory, string key, string value, int maxCommits, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
+        public bool? GetBoolConfig(string workingDirectory, string key, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
     }
 }
