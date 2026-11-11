@@ -118,7 +118,7 @@
     OrderPricingRefactorChain7 | OrderPricingRefactorChain8 | OrderPricingRefactorChain9 |
     OrderPricingRefactorChain10 | ResumeTranscript (resume a saved ten-chain transcript and resample
     the next turns; see -ResumeTranscript) | ScoreTranscript (score a saved transcript without calling a
-    model; see -ScoreTranscript). Required. Accepts multiple values (e.g.
+    model; see -ScoreTranscript) | Scenario (run a registered targeted scenario for -Samples samples; see -Scenario). Required. Accepts multiple values (e.g.
     -Test OrderPricingRefactor,OrderPricingRefactorChain4,OrderPricingRefactorChain5) to run
     each one in turn, in the order given, all under the same -HostAddress/-Model/-Repeats -
     this is the supported way to queue a multi-test overnight sequence: it reuses this script's
@@ -193,7 +193,7 @@
     generates turn 4). ROSLYNSENTINEL_MODELEVAL_RESUME_KEEP_TURNS.
 
 .PARAMETER Samples
-    ResumeTranscript only: how many live resamples (default 10). ROSLYNSENTINEL_MODELEVAL_RESUME_SAMPLES.
+    ResumeTranscript and Scenario: how many samples (default 10). ROSLYNSENTINEL_MODELEVAL_RESUME_SAMPLES or ROSLYNSENTINEL_MODELEVAL_SCENARIO_SAMPLES.
 
 .PARAMETER ContinueTurns
     ResumeTranscript only: live turns each sample runs after the resume point (default 3).
@@ -221,6 +221,9 @@
     ScoreTranscript only: the tool whose first call and recovery are scored. Default: ReplaceSnippet
     (ROSLYNSENTINEL_MODELEVAL_SCORE_TOOL).
 
+.PARAMETER Scenario
+    Scenario only (required there): id of a scenario in ScenarioRegistry (RoslynSentinel.Tests.ModelEval). Runs it for -Samples samples, each on a fresh fixture, and writes one scored CSV line per sample to results.csv in the run folder (ROSLYNSENTINEL_MODELEVAL_SCENARIO).
+
 .EXAMPLE
     .\roslynsentinel-modeleval.ps1 -HostAddress 112 -Test SizeThreshold -Size 60
     Sweep size=60 against the .112 GTX 1080 host.
@@ -228,6 +231,10 @@
 .EXAMPLE
     .\roslynsentinel-modeleval.ps1 -HostAddress 113 -Test MinimalGuidance
     Run the symptom-only whole-file-rewrite fix prompt against the .113 RTX 4060 host.
+
+.EXAMPLE
+    .\roslynsentinel-modeleval.ps1 -HostAddress 113 -Test Scenario -Scenario CalcDiscRename -Samples 10
+    Run the registered CalcDiscRename scenario for 10 samples against the .113 RTX 4060 host.
 
 .EXAMPLE
     .\roslynsentinel-modeleval.ps1 112 SizeThreshold 60
@@ -241,7 +248,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript')]
+    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario')]
     [string[]]$Test,
 
     [Parameter(Position = 2)]
@@ -284,7 +291,9 @@ param(
 
     [string]$ScoreCsv,
 
-    [string]$ScoreTool = 'ReplaceSnippet'
+    [string]$ScoreTool = 'ReplaceSnippet',
+
+    [string]$Scenario
 )
 
 $ErrorActionPreference = 'Stop'
@@ -330,6 +339,7 @@ $testNames = @{
     'OrderPricingRefactorChain10'   = 'Model_AppliesTenChainedRefactors'
     'ResumeTranscript'              = 'ResumeFromTranscript_SamplesTheNextTurns'
     'ScoreTranscript'               = 'ScoreSavedTranscript_AppendsOneLine'
+    'Scenario'                      = 'RunScenario_SamplesAndScores'
 }
 
 if ($Test -contains 'ResumeTranscript') {
@@ -357,6 +367,12 @@ if ($Test -contains 'ScoreTranscript') {
         # GetFullPath resolves against the .NET process directory, not PowerShell's location, so anchor relative paths first.
         if (-not [System.IO.Path]::IsPathRooted($ScoreCsv)) { $ScoreCsv = Join-Path (Get-Location).Path $ScoreCsv }
         $ScoreCsv = [System.IO.Path]::GetFullPath($ScoreCsv)
+    }
+}
+
+if ($Test -contains 'Scenario') {
+    if (-not $Scenario) {
+        throw "-Test Scenario needs -Scenario <scenario id> (see ScenarioRegistry in RoslynSentinel.Tests.ModelEval)."
     }
 }
 
@@ -465,6 +481,15 @@ if ($currentTest -eq 'ScoreTranscript') {
 }
 else {
     Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_SCORE_TRANSCRIPT, Env:\ROSLYNSENTINEL_MODELEVAL_SCORE_CSV, Env:\ROSLYNSENTINEL_MODELEVAL_SCORE_TOOL -ErrorAction SilentlyContinue
+}
+
+if ($currentTest -eq 'Scenario') {
+    $env:ROSLYNSENTINEL_MODELEVAL_SCENARIO = $Scenario
+    $env:ROSLYNSENTINEL_MODELEVAL_SCENARIO_SAMPLES = "$Samples"
+    Write-Host "    Scenario=$Scenario samples=$Samples" -ForegroundColor Cyan
+}
+else {
+    Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_SCENARIO, Env:\ROSLYNSENTINEL_MODELEVAL_SCENARIO_SAMPLES -ErrorAction SilentlyContinue
 }
 
 $csproj = Join-Path $repoRoot 'RoslynSentinel.Tests.ModelEval\RoslynSentinel.Tests.ModelEval.csproj'
