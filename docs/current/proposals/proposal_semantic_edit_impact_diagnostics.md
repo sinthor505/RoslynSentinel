@@ -208,7 +208,13 @@ reaches the wire only as `ResultError.Message` text (`EditImpactGate.cs:63`). Re
    plainly, e.g. "applied as RenameSymbol: N call sites in M files", with the files changed. If errors
    remain, reject with the remaining verdicts. Refuse to lift (fall back to the first-slice redirect) when
    pairing is ambiguous or the rename resolves to more than one symbol. A/B by restarting with and without
-   the flag, never by prompt changes.
+   the flag, never by prompt changes. **Built (uncommitted) 2026-11-10 as `--lift-renames`** (env
+   `ROSLYNSENTINEL_LIFT_RENAMES`): `LiftRenamesOptions` (Common), `RenameLifter` (Engines.Basic), shared
+   `TryLiftRenameAsync` in `WorkspaceFileEditImpl` used by both ReplaceSnippet paths; fixture tests in
+   `ReplaceSnippetRenameLiftTests`. Edited files merge by span: the model's replacement spans (baseline coordinates,
+   threaded from both ReplaceSnippet paths) win; renamer changes outside every span are applied on top, so an
+   old-name use the snippet did not reach (own constructor, self-call) is renamed too. A file with no span
+   information keeps the model's text verbatim.
 2. **Edited-file attribution and locals.** Pass the edited spans to the analyzer. A diagnostic in an
    edited file but outside the edited span is attributed like one in an unedited file. Diff locals and
    local functions inside edited members, keyed by (member, name), so a renamed local whose later uses sit

@@ -159,6 +159,37 @@ public class UndoLastApplyConcurrentEditTests
     }
 
     [Test]
+    [Description("ReplaceSnippet on disk returns a ChangeId that names UndoLastApply in its success text and reverts the file")]
+    public async Task ReplaceSnippet_DiskBackedApply_ReturnsChangeIdThatUndoLastApplyReverts()
+    {
+        await SeedAsync();
+
+        var editImpl = new WorkspaceFileEditImpl(
+            _workspaceManager,
+            Battery.Basic.TestTools.WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            NullLogger.Instance,
+            _validationEngine,
+            Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            WriteToolAdviceHelper.WithAllToolsExposed());
+        var apply = await editImpl.ReplaceSnippet(
+            new ToolCallReason("testing replace snippet undo"),
+            ProposedChangeAction.apply,
+            ConsumersPath,
+            "Plain() => new Widget(1, \"a\");",
+            "Plain() => new Widget(2, \"b\");");
+
+        Assert.That(apply.IsError, Is.False, apply.ErrorData?.Message);
+        Assert.That(apply.SuccessData!.ChangeId, Is.Not.Null);
+        Assert.That(apply.SuccessData.ReplacementResult!.Summary, Does.Contain("UndoLastApply"));
+        Assert.That(ReadSeeded(ConsumersPath), Does.Contain("new Widget(2, \"b\")"));
+
+        var undo = await editImpl.UndoLastApply(new ToolCallReason("testing undo of replace snippet"), apply.SuccessData.ChangeId!);
+
+        Assert.That(undo.IsError, Is.False, undo.ErrorData?.Message);
+        Assert.That(ReadSeeded(ConsumersPath), Is.EqualTo(ConsumersSource));
+    }
+
+    [Test]
     [Description("Undo is refused with ScopedLedgerBlocked when an open scoped ledger blocks a file it would revert, and records no undo")]
     public async Task Undo_RefusedByOpenScopedLedger_ReturnsErrorAndSkipsRecordUndo()
     {

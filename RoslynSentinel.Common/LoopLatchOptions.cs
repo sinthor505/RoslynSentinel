@@ -42,7 +42,7 @@ public static class LoopLatchOptions
     /// "--flag=value" gives the value; a bare "--flag" gives "true", except that a following boolean-looking token
     /// (true/false/on/off/yes/no/0/1) is taken as its value. Null when the flag is absent.
     /// </summary>
-    private static string? GetFlagValue(string[] args, string flag)
+    internal static string? GetFlagValue(string[] args, string flag) // internal: LiftRenamesOptions parses its boolean switch the same way
     {
         var inlinePrefix = flag + "=";
         var inline = args.FirstOrDefault(a => a.StartsWith(inlinePrefix, StringComparison.Ordinal));

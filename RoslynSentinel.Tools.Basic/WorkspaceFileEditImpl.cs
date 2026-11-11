@@ -818,6 +818,39 @@ public class WorkspaceFileEditImpl
         return result.Matches.Single();
     }
 
+    /// <summary>
+    /// Rename lifting (experimental, <c>--lift-renames</c>; proposal_semantic_edit_impact_diagnostics.md "Second slice", step 1), shared by
+    /// the single and batch ReplaceSnippet paths. Called only after the compile gate rejected <paramref name="candidateChanges"/>. When
+    /// the flag is on and the edit is one unambiguous rename (<see cref="RenameLifter"/>), re-validates and applies the merged set:
+    /// the model's text for the files it edited plus the RenameSymbol output for every other file. Null means "not lifted": the caller
+    /// keeps the original rejection (the first-slice redirect). Otherwise <c>Result</c> is the merged set's apply result (success, or
+    /// the remaining compiler errors, in which case nothing was written), <c>Changes</c> the merged set and <c>Note</c> the sentence the
+    /// response carries ("Applied as RenameSymbol: ..." on success, an explanation of the remaining errors otherwise).
+    /// <paramref name="editedSpans"/> are the model's replacements per file as spans of the baseline text, so the rename also reaches old-name
+    /// uses the model's snippets did not cover (a constructor or self-call elsewhere in an edited file).
+    /// </summary>
+    private async Task<(ApplyChangesResult Result, Dictionary<FilePathWrapper, string> Changes, string Note)?> TryLiftRenameAsync(
+        Dictionary<FilePathWrapper, string> candidateChanges, IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> editedSpans, CancellationToken cancellationToken)
+    {
+        if (!LiftRenamesOptions.Enabled)
+        {
+            return null;
+        }
+
+        var plan = await RenameLifter.PlanAsync(_workspaceManager, candidateChanges, editedSpans, cancellationToken);
+        if (plan is null)
+        {
+            return null;
+        }
+
+        var lifted = await _workspaceManager.ApplyProposedChangesAsync(plan.Changes, validateChanges: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
+        var note = lifted.IsError
+            ? $"Your edit renames {plan.Rename.OldName} to {plan.Rename.NewName}. It was tried as a RenameSymbol ({plan.CallSiteCount} call site(s) in {plan.RenamedFiles.Count} other file(s)) with your own text kept for the file(s) you edited, and it still leaves compiler errors, so nothing was changed."
+            : $"Applied as RenameSymbol: {plan.Describe()} Files changed: {string.Join(", ", plan.Changes.Keys.Select(k => Path.GetFileName((string)k)))}.";
+        _logger.LogInformation("ReplaceSnippet rename lift of {OldName} -> {NewName}: {Outcome}", plan.Rename.OldName, plan.Rename.NewName, lifted.IsError ? "still rejected" : "applied");
+        return (lifted, plan.Changes, note);
+    }
+
     public async Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippet(
         ToolCallReason reason,
         ProposedChangeAction action,
@@ -1011,6 +1044,11 @@ public class WorkspaceFileEditImpl
                     {
                         [targetPath] = normalizedContent
                     };
+                    // The matched span in the baseline text and its replacement, for rename lifting (same key instance as snippetChanges).
+                    IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> liftSpans = new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>>
+                    {
+                        [snippetChanges.Keys.Single()] = [new TextChange(new TextSpan(match.Start, match.Length), newContent)]
+                    };
 
                     if (action == ProposedChangeAction.validate)
                     {
@@ -1031,6 +1069,17 @@ public class WorkspaceFileEditImpl
                     // TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)
                     if (WriteRefusal.TryMap("ReplaceSnippet", result, out var refusal))
                         return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
+                    // Experimental rename lifting (--lift-renames, off by default): a rejected edit that is one unambiguous rename is
+                    // re-validated as RenameSymbol output merged with this edit's own text; see TryLiftRenameAsync.
+                    string? liftNote = null;
+                    if (result.IsError && result.ValidationResult != null && await TryLiftRenameAsync(snippetChanges, liftSpans, cancellationToken) is { } lift)
+                    {
+                        if (WriteRefusal.TryMap("ReplaceSnippet", lift.Result, out var liftRefusal))
+                            return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = liftRefusal };
+                        result = lift.Result;
+                        snippetChanges = lift.Changes;
+                        liftNote = lift.Note;
+                    }
                     string? untouchedNote = null;
                     string? impactNote = null;
                     var isRepeat = false;
@@ -1052,6 +1101,7 @@ public class WorkspaceFileEditImpl
                             ErrorData = new ResultError(ToolErrorCode.ValidationFailed,
                                 "ReplaceSnippet: the edit matched the target file, but the resulting code introduces new compiler errors - change not applied. " +
                                 repeatNote +
+                                (liftNote is null ? "" : liftNote + " ") +
                                 (untouchedNote is null ? "" : untouchedNote + " ") +
                                 (impactNote is null ? "Fix the issue(s) below and retry:\n" : "Compiler errors caused by this edit:\n") +
                                 "[COMPILER ERROR]\n" +
@@ -1061,7 +1111,8 @@ public class WorkspaceFileEditImpl
                         _rejectedEdits.Forget((string)targetPath);
                     var changeId = Guid.NewGuid().ToString("n")[..8];
                     var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet", result, blobChangeId: changeId, cancellationToken: cancellationToken);
-                    var strippedResult = result with { PreImages = null };
+                    var appliedSummary = liftNote is null ? result.Summary : $"{liftNote} {result.Summary}";
+                    var strippedResult = result with { PreImages = null, Summary = blobWrite.Written ? $"{appliedSummary} Call {ToolCallHint.Call("UndoLastApply", ("changeId", changeId))} to revert." : appliedSummary };
                     string? diffContent = returnDiff
                         ? ValidateAndApplyHelper.BuildDiffFromPreImages(snippetChanges, result.PreImages)
                         : null;
@@ -1183,6 +1234,8 @@ public class WorkspaceFileEditImpl
             .GroupBy(pair => _workspaceManager.ResolveFromWire(pair.edit.FilePath));
 
         var finalContents = new Dictionary<FilePathWrapper, string>();
+        // Per file, each edit's matched span in the baseline text and its replacement, for rename lifting.
+        var liftSpans = new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>>();
         var newContentsByFile = new Dictionary<string, List<(string? OldContent, string NewContent)>>(StringComparer.OrdinalIgnoreCase);
         foreach (var fileGroup in editsByFile)
         {
@@ -1299,6 +1352,7 @@ public class WorkspaceFileEditImpl
                 };
             }
             finalContents[canonicalPath] = normalizedSpliced;
+            liftSpans[canonicalPath] = resolved.Select(r => new TextChange(new TextSpan(r.match.Start, r.match.Length), r.newContent)).ToList();
             newContentsByFile[(string)canonicalPath] = resolved.Select(r => (r.oldContent, r.newContent)).ToList();
         }
 
@@ -1334,6 +1388,16 @@ public class WorkspaceFileEditImpl
             // TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)
             if (WriteRefusal.TryMap("ReplaceSnippet", result, out var refusal))
                 return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
+            // Experimental rename lifting (--lift-renames, off by default); see TryLiftRenameAsync and the single-edit path.
+            string? liftNote = null;
+            if (result.IsError && result.ValidationResult != null && await TryLiftRenameAsync(finalContents, liftSpans, cancellationToken) is { } lift)
+            {
+                if (WriteRefusal.TryMap("ReplaceSnippet", lift.Result, out var liftRefusal))
+                    return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = liftRefusal };
+                result = lift.Result;
+                finalContents = lift.Changes;
+                liftNote = lift.Note;
+            }
             string? untouchedNote = null;
             string? impactNote = null;
             var isRepeat = false;
@@ -1357,6 +1421,7 @@ public class WorkspaceFileEditImpl
                     ErrorData = new ResultError(ToolErrorCode.ValidationFailed,
                         "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors, so nothing was changed; every file is exactly as you last read it. " +
                         repeatNote +
+                        (liftNote is null ? "" : liftNote + " ") +
                         (untouchedNote is null ? "" : untouchedNote + " ") +
                         (impactNote is null ? "Fix the issue(s) below and retry:\n" : "Compiler errors caused by this edit:\n") +
                         "[COMPILER ERROR]\n" +
@@ -1370,7 +1435,8 @@ public class WorkspaceFileEditImpl
             }
             var changeId = Guid.NewGuid().ToString("n")[..8];
             var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet_batch", result, blobChangeId: changeId, cancellationToken: cancellationToken);
-            var strippedResult = result with { PreImages = null };
+            var appliedSummary = liftNote is null ? result.Summary : $"{liftNote} {result.Summary}";
+            var strippedResult = result with { PreImages = null, Summary = blobWrite.Written ? $"{appliedSummary} Call {ToolCallHint.Call("UndoLastApply", ("changeId", changeId))} to revert." : appliedSummary };
             string? diffContent = returnDiff
                 ? ValidateAndApplyHelper.BuildDiffFromPreImages(finalContents, result.PreImages)
                 : null;

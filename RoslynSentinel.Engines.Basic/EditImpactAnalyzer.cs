@@ -148,7 +148,7 @@ public static class EditImpactAnalyzer
         return null;
     }
 
-    private static ISymbol? ResolveOldSymbol(Compilation compilation, SymbolChange change)
+    internal static ISymbol? ResolveOldSymbol(Compilation compilation, SymbolChange change)
     {
         if (change.DeclarationKind is "class" or "struct" or "record" or "record struct" or "interface" or "enum" or "delegate")
         {
@@ -447,7 +447,7 @@ public static class EditImpactAnalyzer
         return diagnostic.StartLine <= lines.Length ? lines[diagnostic.StartLine - 1].Trim() : null;
     }
 
-    private static async Task<string?> DocumentTextAsync(Solution solution, string path, CancellationToken cancellationToken)
+    internal static async Task<string?> DocumentTextAsync(Solution solution, string path, CancellationToken cancellationToken)
     {
         foreach (var id in solution.GetDocumentIdsWithFilePath(path))
         {

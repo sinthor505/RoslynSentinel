@@ -32,6 +32,7 @@ public class ServerHttp
         ReplaceSnippetOptions.Configure(args);
         OrientationBreakerOptions.Configure(args);
         LoopLatchOptions.Configure(args);
+        LiftRenamesOptions.Configure(args);
         ToolCallEchoOptions.Configure(args);
         SchemaOptions.Configure(args);
         EolPolicyOptions.Configure(args);
