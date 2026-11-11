@@ -1,6 +1,6 @@
 # `Git(operation: commit)` returns another session's CommitHash and Message when commits race
 
-**Status:** FIXED 2026-11-10 in <this slice> (commit hash: TODO orchestrator fills in after committing). `CommitHash`/`Message` of commit and `CommitHash` of revert are now derived from the commit itself, not from a HEAD readback.
+**Status:** FIXED 2026-11-10 in commit 7c295b47ad0c643f0bc798567ce846808e20d843. `CommitHash`/`Message` of commit and `CommitHash` of revert are now derived from the commit itself, not from a HEAD readback.
 
 ## Resolution note
 Root cause: `GitImpl.CommitAsync` ran `git commit`, then read HEAD back with `rev-parse HEAD` and
