@@ -120,6 +120,15 @@ Parity tests on `GitTestRepo` fixtures run each probe through both backends and 
 - No bounded wait on the git call path: LibGit2Sharp loads natives in a static type initializer,
   so a racing call blocks on the same initializer, and a failed load is cached as
   `TypeInitializationException`, which the fallback already catches.
+- Short-hash length (owner decision 2026-11-10): git's abbreviation length depends on the repo's
+  packed-object count (7 below 16,384 objects, 8 below 65,536, 9 below 262,144, ...); libgit2 has no
+  such rule and the object count is not portable to compute (multi-pack-index). Probe it with one
+  `git rev-parse --short HEAD` and pass its length as the minimum to `ShortenObjectId`. Cache keyed by
+  the repo's git common dir (worktrees share it); refresh on every `LoadSolution` (part of the second
+  warmup task); probe lazily on first use for a repo reached via `repoPath`. If the probe fails, decline
+  to the CLI. Replaces the fixed-7 `MinimumShortHashLength` and the multi-pack-index decline in
+  `PackedObjectCount`. A fixed minimum of 8 was rejected: it matches this repo only (test fixtures and
+  small repos are 7, large ones 9+).
 - `McpServerStatus` is the only waiter: `WaitAsync` with about 2 s, reporting `"warming"` on
   timeout; a `gitBackend` block shows active backend, libgit2 version and first fallback reason
   (from `FallbackGitReader`'s counters).
