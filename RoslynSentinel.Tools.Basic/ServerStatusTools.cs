@@ -12,17 +12,21 @@ public class ServerStatusTools
     private readonly ToolsetService? _toolsets;
     private readonly SentinelHostOptions? _hostOptions;
     private readonly ToolTelemetry? _toolTelemetry;
+    private readonly GitBackendWarmup _gitBackend;
 
     /// <param name="toolsets">Present only in claude-lean, where McpToolsetControlTool can switch tools on at runtime.</param>
     /// <param name="toolTelemetry">Per-tool call counters; null (tests, hosts without the telemetry filter) omits the toolTelemetry field.</param>
+    /// <param name="gitBackend">Source of the gitBackend block; null uses the process-wide <see cref="GitBackendWarmup.Shared"/> (tests inject one). Not DI-registered, so the optional default applies.</param>
     public ServerStatusTools(
         IWorkspaceManager workspaceManager,
         ActiveToolSurface activeToolSurface,
         StoppedByScriptMarker stoppedByScriptMarker,
         ToolsetService? toolsets = null,
         SentinelHostOptions? hostOptions = null,
-        ToolTelemetry? toolTelemetry = null)
+        ToolTelemetry? toolTelemetry = null,
+        GitBackendWarmup? gitBackend = null)
     {
+        _gitBackend = gitBackend ?? GitBackendWarmup.Shared;
         _toolTelemetry = toolTelemetry;
         _hostOptions = hostOptions;
         _workspaceManager = workspaceManager;
@@ -160,7 +164,9 @@ public class ServerStatusTools
                 LastActivityUtc: ServerActivityTracker.Shared.LastActivityUtc,
                 InFlightCount: ServerActivityTracker.Shared.InFlightCount,
                 LastUnmetGuard: IdleRestartState.LastUnmetGuard,
-                LastCheckedUtc: IdleRestartState.LastCheckedUtc)
+                LastCheckedUtc: IdleRestartState.LastCheckedUtc),
+            // The only waiter on the git backend warmup: bounded (about 2 s), "warming" on timeout, never throws.
+            GitBackend: _gitBackend.Report(GitBackendWarmup.StatusWait)
         )
         };
     }
@@ -274,7 +280,9 @@ public sealed record McpServerStatusResult(
     string? OperatingMode = null,
     string? OperatingModeSource = null,
     string? CallerAgentId = null,
-    McpServerStatusIdleRestart? IdleRestart = null);
+    McpServerStatusIdleRestart? IdleRestart = null,
+    // Libgit2 backend health: active backend, native load, repo probe and the seam's fallback counters (GitBackendWarmup).
+    GitBackendSnapshot? GitBackend = null);
 /// <summary>
 /// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
 /// by McpServerStatusTool's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this

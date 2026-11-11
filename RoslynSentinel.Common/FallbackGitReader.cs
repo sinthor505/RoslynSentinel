@@ -138,7 +138,7 @@ internal sealed class FallbackGitReader : IGitReader
     }
 
     // Stdout carries the MCP JSON-RPC stream, so diagnostics go to stderr only.
-    private static void WriteToStandardError(string line)
+    internal static void WriteToStandardError(string line)
     {
         try
         {

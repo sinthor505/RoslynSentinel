@@ -991,6 +991,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 }
                 terminal = SolutionLoadStatus.Loaded;
                 SweepLargeResultsInBackground(GetSolutionRoot());
+                // Fire-and-forget: the repo probe is never awaited here and the load response does not depend on it (McpServerStatus is its only waiter).
+                GitBackendWarmup.Shared.StartRepoProbe(solutionDirectory);
             }
             finally
             {

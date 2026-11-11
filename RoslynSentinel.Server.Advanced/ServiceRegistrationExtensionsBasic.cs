@@ -370,6 +370,9 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// </summary>
     public static void WarmupAndAutoLoadBasic(this IServiceProvider services, string? solutionPath, ILogger? logger = null, string? baseRepoDirectory = null)
     {
+        // Never awaited and never faulting: loads libgit2's native library in the background (GitBackendWarmup); McpServerStatus is the only waiter.
+        GitBackendWarmup.Shared.Start();
+
         logger?.LogInformation("Pre-warming MSBuildLocator and workspace manager...");
         var warmupStart = System.Diagnostics.Stopwatch.StartNew();
         var workspaceManager = services.GetRequiredService<PersistentWorkspaceManager>();
