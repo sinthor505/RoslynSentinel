@@ -455,6 +455,21 @@ public static class EditImpactAnalyzer
         var primary = ordered[0];
         var nextStep = NextStepOf(primary.Key, primary.Value.Select(u => u.Diagnostic).ToList(), changes, isToolActive, symbolHandleOf);
 
+        // H2 R1: a model whose edit renamed two symbols looped 10 times on a redirect that named only the first. Name every other rename that
+        // the RenameSymbol redirect would also apply to (not locals, not renames onto a taken name), one copyable call each.
+        if (isToolActive("RenameSymbol") && primary.Key.Kind == SymbolChangeKind.Renamed && !EditImpactLocalDiff.IsLocal(primary.Key))
+        {
+            var alsoRenamed = ordered.Skip(1)
+                .Select(kv => kv.Key)
+                .Where(c => c.Kind == SymbolChangeKind.Renamed && !EditImpactLocalDiff.IsLocal(c) && c.NewNameTakenIn is null && !string.IsNullOrEmpty(c.NewName))
+                .ToList();
+            if (alsoRenamed.Count > 0)
+            {
+                nextStep += " The same edit also renames " + string.Join("; ", alsoRenamed.Select(c => $"{c.OldName} to {c.NewName}: use {RenameCallFor(c, symbolHandleOf)}"))
+                    + ". Send one RenameSymbol call per rename, then redo the rest of your edit.";
+            }
+        }
+
         var text = new StringBuilder();
         text.Append("Next step: ").AppendLine(nextStep);
         text.AppendLine("Edit impact (symbols this edit changed that code outside your edit still uses):");
@@ -656,11 +671,7 @@ public static class EditImpactAnalyzer
                         return lead + batch;
                     }
 
-                    // The real project and docCommentId (null when unresolved: the placeholders stay, as before).
-                    var handle = symbolHandleOf?.Invoke(change);
-                    var renameCall = handle is { } h
-                        ? ToolCallHint.Call("RenameSymbol", ("projectName", h.ProjectName), ("docCommentId", h.DocCommentId), ("newName", change.NewName!))
-                        : ToolCallHint.Call("RenameSymbol", ("newName", change.NewName!));
+                    var renameCall = RenameCallFor(change, symbolHandleOf);
                     var rename = lead + $"use {renameCall} instead.";
 
                     // The edit also changed the accessibility: the rename keeps the old one, so name the follow-up (only when callable).
@@ -850,4 +861,13 @@ public static class EditImpactAnalyzer
 
         return false;
     }
+
+    /// <summary>
+    /// The copyable RenameSymbol call for one rename of the edit: the real project and docCommentId when the symbol resolved, else the
+    /// placeholders. Call only when RenameSymbol is active (ToolCallHint.Call records the tool as suggested guidance).
+    /// </summary>
+    private static string RenameCallFor(SymbolChange change, Func<SymbolChange, SymbolHandle?>? symbolHandleOf)
+        => symbolHandleOf?.Invoke(change) is { } h
+            ? ToolCallHint.Call("RenameSymbol", ("projectName", h.ProjectName), ("docCommentId", h.DocCommentId), ("newName", change.NewName!))
+            : ToolCallHint.Call("RenameSymbol", ("newName", change.NewName!));
 }

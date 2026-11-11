@@ -239,6 +239,18 @@ public class RefactoringSignatureImpl
             residualNote = ResidualMentionSummarizer.Note(result.OldName, residualMentions.Count, detailResultId is not null);
         }
 
+        // H2 R3: a model followed a RenameSymbol with an edit of a call site the rename had already rewritten (stale oldContent). Quote the
+        // rewritten lines the way the rename lift summary does (up to 5 per file) and say they are done. RenameSymbol returns anonymous
+        // SuccessData with no summary text, so this is its own field. Not for a dry run: nothing was rewritten.
+        string? callSitesNote = null;
+        if (!apply.DryRun)
+        {
+            // READCHOKEPOINT-CAST: the committed solution still holds the pre-rename texts here (read before the apply above).
+            var rewrittenLines = RenameLifter.DescribeRewrittenLines(
+                await RenameLifter.RewrittenLinesAsync(committedForMoves, result.PendingChanges, cancellationToken));
+            callSitesNote = rewrittenLines.Length == 0 ? null : rewrittenLines + "\n" + RenameLifter.AlreadyUpdatedSentence;
+        }
+
         // Deliberately not wired into ForPossiblyLargeDataAsync: this
         // already returns rich custom SuccessData (oldName/newName/residualMentions/updatedHandle) instead
         // of a bare AppliedChangeSummary, and newName is caller-supplied verbatim -> there is no
@@ -265,7 +277,8 @@ public class RefactoringSignatureImpl
                 residualMentionsNote = residualNote,
                 docCommentIdNote,
                 fileRenamed,
-                fileRenameNote
+                fileRenameNote,
+                callSitesNote
             }
         };
     }

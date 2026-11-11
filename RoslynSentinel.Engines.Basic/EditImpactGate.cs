@@ -39,11 +39,11 @@ public static class EditImpactGate
     /// (<paramref name="liftVerdict"/> first when the edit was tried as a RenameSymbol, then the symbol-diff verdicts) and the compiler diagnostics as two
     /// named lists. Both lists may be empty; the shape does not vary.
     /// </summary>
-    public static List<object> BuildDetail(EditImpactResult? impact, IReadOnlyList<DiagnosticInfo> diagnostics, ImpactVerdict? liftVerdict = null)
+    public static List<object> BuildDetail(EditImpactResult? impact, IReadOnlyList<DiagnosticInfo> diagnostics, IEnumerable<ImpactVerdict>? liftVerdicts = null)
     {
         var verdicts = new List<ImpactVerdict>();
-        if (liftVerdict is not null)
-            verdicts.Add(liftVerdict);
+        if (liftVerdicts is not null)
+            verdicts.AddRange(liftVerdicts);
         if (impact?.Verdicts is { } fromImpact)
             verdicts.AddRange(fromImpact);
         return [new EditImpactDetail(verdicts, diagnostics)];

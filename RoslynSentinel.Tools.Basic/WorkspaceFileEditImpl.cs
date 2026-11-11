@@ -916,7 +916,7 @@ public class WorkspaceFileEditImpl
     /// <paramref name="editedSpans"/> are the model's replacements per file as spans of the baseline text, so the rename also reaches old-name
     /// uses the model's snippets did not cover (a constructor or self-call elsewhere in an edited file).
     /// </summary>
-    private async Task<(ApplyChangesResult Result, Dictionary<FilePathWrapper, string> Changes, string Note, ImpactVerdict Verdict)?> TryLiftRenameAsync(
+    private async Task<(ApplyChangesResult? Result, Dictionary<FilePathWrapper, string>? Changes, string Note, List<ImpactVerdict>? Verdicts)?> TryLiftRenameAsync(
         Dictionary<FilePathWrapper, string> candidateChanges, IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> editedSpans, CancellationToken cancellationToken)
     {
         if (!LiftRenamesOptions.Enabled)
@@ -924,10 +924,12 @@ public class WorkspaceFileEditImpl
             return null;
         }
 
-        var plan = await RenameLifter.PlanAsync(_workspaceManager, candidateChanges, editedSpans, cancellationToken);
+        var (plan, refusal) = await RenameLifter.PlanAsync(_workspaceManager, candidateChanges, editedSpans, cancellationToken);
         if (plan is null)
         {
-            return null;
+            // H2 R1: a refusal used to be silent, so the model could not tell "the server did not try" from "the server could not". Result == null marks it: the
+            // caller keeps the ordinary rejection and prefixes this note. No note when the diff held nothing rename-shaped (refusal is null then).
+            return refusal is null ? null : (null, null, $"Not auto-applied as RenameSymbol: {refusal}.", null);
         }
 
         var lifted = await _workspaceManager.ApplyProposedChangesAsync(plan.Changes, validateChanges: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
@@ -941,17 +943,17 @@ public class WorkspaceFileEditImpl
                 ? $"Your edit renames {plan.DescribeRenames()}. It was tried as a RenameSymbol ({plan.CallSiteCount} call site(s) in {plan.RenamedFiles.Count} other file(s)) with your own text kept for the file(s) you edited, and errors remain in files the rename rewrote, so nothing was changed."
                 : $"Your edit renames {plan.DescribeRenames()}. In a trial the rename itself applied cleanly ({plan.CallSiteCount} call site(s) in {plan.RenamedFiles.Count} other file(s) updated, your own text kept for the file(s) you edited); the remaining errors come from the other text in your edit, not from the rename. Nothing was changed. The remaining errors are listed below."
             : $"Applied as RenameSymbol: {plan.Describe()} Files changed: {string.Join(", ", plan.Changes.Keys.Select(k => Path.GetFileName((string)k)))}."
-                + (rewrittenLines.Length == 0 ? "" : "\n" + rewrittenLines + "\nThese call sites are already updated; do not edit them again.");
+                + (rewrittenLines.Length == 0 ? "" : "\n" + rewrittenLines + "\n" + RenameLifter.AlreadyUpdatedSentence);
         _logger.LogInformation("ReplaceSnippet rename lift of {Renames}: {Outcome}", plan.DescribeRenames(), lifted.IsError ? "still rejected" : "applied");
-        return (lifted, plan.Changes, note, plan.ToVerdict(lifted.IsError));
+        return (lifted, plan.Changes, note, plan.ToVerdicts(lifted.IsError));
     }
 
     /// <summary>
     /// The <c>errorData.structuredDetail</c> of a rejected ReplaceSnippet, single and batch alike: one <see cref="EditImpactDetail"/> holding the verdicts
     /// (the lift attempt first, then the symbol-diff verdicts) and the compiler diagnostics as two named lists. Both lists may be empty; the shape does not vary.
     /// </summary>
-    private static List<object> RejectionDetail(EditImpactResult? impact, ImpactVerdict? liftVerdict, IReadOnlyList<DiagnosticInfo> diagnostics)
-        => EditImpactGate.BuildDetail(impact, diagnostics, liftVerdict);
+    private static List<object> RejectionDetail(EditImpactResult? impact, IEnumerable<ImpactVerdict>? liftVerdicts, IReadOnlyList<DiagnosticInfo> diagnostics)
+        => EditImpactGate.BuildDetail(impact, diagnostics, liftVerdicts);
 
     /// <summary>
     /// What other ReplaceSnippet edits say, for the impact analyzer's unapplied-name rule: full file path to newContent for every file except <paramref name="ownPaths"/>,
@@ -970,10 +972,10 @@ public class WorkspaceFileEditImpl
     /// The findings of a successful ReplaceSnippet: those of the apply, plus one advisory line when the write was a lifted rename (step 3: advisory entries on a
     /// successful write go to <c>findings</c>). The line is <c>edit-impact verdict=lifted kind=renamed ...</c> so a harness can match on it.
     /// </summary>
-    private static List<Finding> WithLiftFinding(IEnumerable<Finding>? findings, ImpactVerdict? liftVerdict)
+    private static List<Finding> WithLiftFinding(IEnumerable<Finding>? findings, IEnumerable<ImpactVerdict>? liftVerdicts)
     {
         var all = findings is null ? [] : findings.ToList();
-        if (liftVerdict is { Verdict: "lifted" } v)
+        foreach (var v in (liftVerdicts ?? []).Where(v => v.Verdict == "lifted"))
             all.Add(new Finding("EditImpact", $"edit-impact verdict={v.Verdict} kind={v.Kind} declaration={v.DeclarationKind} old={v.OldName} new={v.NewName} usesRewritten={v.BrokenUseCount} suggestedTool={v.SuggestedTool}"));
         return all;
     }
@@ -1201,16 +1203,25 @@ public class WorkspaceFileEditImpl
                     // Experimental rename lifting (--lift-renames, off by default): a rejected edit that is one unambiguous rename is
                     // re-validated as RenameSymbol output merged with this edit's own text; see TryLiftRenameAsync.
                     string? liftNote = null;
-                    ImpactVerdict? liftVerdict = null;
+                    string? liftRefusalNote = null;
+                    List<ImpactVerdict>? liftVerdicts = null;
                     if (result.IsError && result.ValidationResult != null && await TryLiftRenameAsync(snippetChanges, liftSpans, cancellationToken) is { } lift)
                     {
-                        if (WriteRefusal.TryMap("ReplaceSnippet", lift.Result, out var liftRefusal))
-                            return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = liftRefusal };
-                        result = lift.Result;
-                        snippetChanges = lift.Changes;
-                        liftNote = lift.Note;
-                        liftVerdict = lift.Verdict;
+                        if (lift.Result is null)
+                        {
+                            liftRefusalNote = lift.Note; // refused: the ordinary rejection stands, with the reason in front
+                        }
+                        else
+                        {
+                            if (WriteRefusal.TryMap("ReplaceSnippet", lift.Result, out var liftRefusal))
+                                return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = liftRefusal };
+                            result = lift.Result;
+                            snippetChanges = lift.Changes!;
+                            liftNote = lift.Note;
+                            liftVerdicts = lift.Verdicts;
+                        }
                     }
+                    var liftText = liftNote ?? liftRefusalNote;
                     string? untouchedNote = null;
                     string? impactNote = null;
                     EditImpactResult? impact = null;
@@ -1237,12 +1248,12 @@ public class WorkspaceFileEditImpl
                             ErrorData = new ResultError(ToolErrorCode.ValidationFailed,
                                 "ReplaceSnippet: the edit matched the target file, but the resulting code introduces new compiler errors - change not applied. " +
                                 repeatNote +
-                                (liftNote is null ? "" : liftNote + " ") +
+                                (liftText is null ? "" : liftText + " ") +
                                 (untouchedNote is null ? "" : untouchedNote + " ") +
                                 (impactNote is null ? "Fix the issue(s) below and retry:\n" : "Compiler errors caused by this edit:\n") +
                                 "[COMPILER ERROR]\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, snippetChanges.Keys.Select(k => (string)k).ToList(), isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
-                                StructuredDetail: RejectionDetail(impact, liftVerdict, result.ValidationResult.Diagnostics))
+                                StructuredDetail: RejectionDetail(impact, liftVerdicts, result.ValidationResult.Diagnostics))
                         };
                     if (!result.IsError)
                     {
@@ -1263,7 +1274,7 @@ public class WorkspaceFileEditImpl
                     {
                         IsError = false,
                         SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent, blobWrite.Written ? changeId : null),
-                        Findings = WithLiftFinding(result.Findings, liftVerdict)
+                        Findings = WithLiftFinding(result.Findings, liftVerdicts)
                     };
                 }
                 catch (Exception ex)
@@ -1536,16 +1547,25 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = refusal };
             // Experimental rename lifting (--lift-renames, off by default); see TryLiftRenameAsync and the single-edit path.
             string? liftNote = null;
-            ImpactVerdict? liftVerdict = null;
+            string? liftRefusalNote = null;
+            List<ImpactVerdict>? liftVerdicts = null;
             if (result.IsError && result.ValidationResult != null && await TryLiftRenameAsync(finalContents, liftSpans, cancellationToken) is { } lift)
             {
-                if (WriteRefusal.TryMap("ReplaceSnippet", lift.Result, out var liftRefusal))
-                    return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = liftRefusal };
-                result = lift.Result;
-                finalContents = lift.Changes;
-                liftNote = lift.Note;
-                liftVerdict = lift.Verdict;
+                if (lift.Result is null)
+                {
+                    liftRefusalNote = lift.Note; // refused: the ordinary rejection stands, with the reason in front
+                }
+                else
+                {
+                    if (WriteRefusal.TryMap("ReplaceSnippet", lift.Result, out var liftRefusal))
+                        return new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = true, ErrorData = liftRefusal };
+                    result = lift.Result;
+                    finalContents = lift.Changes!;
+                    liftNote = lift.Note;
+                    liftVerdicts = lift.Verdicts;
+                }
             }
+            var liftText = liftNote ?? liftRefusalNote;
             string? untouchedNote = null;
             string? impactNote = null;
             EditImpactResult? impact = null;
@@ -1574,12 +1594,12 @@ public class WorkspaceFileEditImpl
                     ErrorData = new ResultError(ToolErrorCode.ValidationFailed,
                         "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors, so nothing was changed; every file is exactly as you last read it. " +
                         repeatNote +
-                        (liftNote is null ? "" : liftNote + " ") +
+                        (liftText is null ? "" : liftText + " ") +
                         (untouchedNote is null ? "" : untouchedNote + " ") +
                         (impactNote is null ? "Fix the issue(s) below and retry:\n" : "Compiler errors caused by this edit:\n") +
                         "[COMPILER ERROR]\n" +
                         await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, finalContents.Keys.Select(k => (string)k).ToList(), isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
-                        StructuredDetail: RejectionDetail(impact, liftVerdict, result.ValidationResult.Diagnostics)),
+                        StructuredDetail: RejectionDetail(impact, liftVerdicts, result.ValidationResult.Diagnostics)),
                 };
             if (!result.IsError)
             {
@@ -1598,7 +1618,7 @@ public class WorkspaceFileEditImpl
             {
                 IsError = false,
                 SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent, blobWrite.Written ? changeId : null),
-                Findings = WithLiftFinding(result.Findings, liftVerdict)
+                Findings = WithLiftFinding(result.Findings, liftVerdicts)
             };
         }
         catch (Exception ex)

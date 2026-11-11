@@ -433,4 +433,110 @@ public class ReplaceSnippetRenameLiftTests
             Assert.That(summary, Does.Contain("These call sites are already updated; do not edit them again."));
         });
     }
+
+    // Two methods with distinct signatures (so the diff pairs each rename by signature) that the caller uses on one line, so each rename has its own broken use.
+    private static InMemoryWorkspace CreateTwoMethodWorkspace() =>
+        InMemoryWorkspace.Create(
+            (PricingRelativePath, """
+                namespace ContosoOrders.Core;
+
+                public class OrderPricingCalculator
+                {
+                    public decimal CalcDisc(decimal a) => a;
+                    public decimal CalcTax(decimal a, decimal rate) => a * rate;
+                }
+                """),
+            (CheckoutRelativePath, """
+                namespace ContosoOrders.Core;
+
+                class OrderCheckout
+                {
+                    decimal F(OrderPricingCalculator c) => c.CalcDisc(1m) + c.CalcTax(1m, 2m);
+                }
+                """));
+
+    // H2 R1: a refused lift used to be silent, so the model could not tell "the server did not try" from "the server could not". The rejection now
+    // opens with why the edit was not applied as a RenameSymbol.
+    [Test]
+    public async Task FlagOn_RefusedLift_RejectionStatesWhyItWasNotAppliedAsARename()
+    {
+        using var _ = LiftRenamesOptions.OverrideForCurrentContext(true);
+        const string overloadedPricing = """
+            namespace ContosoOrders.Core;
+
+            public class OrderPricingCalculator
+            {
+                public decimal CalcDisc(decimal a) => a;
+                public decimal CalcDisc(decimal a, decimal b) => a + b;
+            }
+            """;
+        using var workspace = InMemoryWorkspace.Create((PricingRelativePath, overloadedPricing), (CheckoutRelativePath, CheckoutSource));
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "rename one overload on its declaration only",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(PricingRelativePath),
+            oldContent: "CalcDisc(decimal a)",
+            newContent: "CalculateDiscountedTotal(decimal a)");
+
+        Assert.That(result.IsError, Is.True);
+        var message = result.ErrorData?.Message ?? string.Empty;
+        Assert.That(message, Does.Contain("Not auto-applied as RenameSymbol: method CalcDisc does not resolve to exactly one symbol"));
+    }
+
+    // H2 R1: the redirect named only the first of two renames and the model looped 10 times. It now carries one copyable RenameSymbol call per rename.
+    [Test]
+    public async Task FlagOff_TwoMethodsRenamedInOneEdit_RedirectNamesBothRenamesWithOneCallEach()
+    {
+        using var _ = LiftRenamesOptions.OverrideForCurrentContext(false);
+        using var workspace = CreateTwoMethodWorkspace();
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "rename both methods in one edit",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(PricingRelativePath),
+            oldContent: "public decimal CalcDisc(decimal a) => a;\n    public decimal CalcTax(decimal a, decimal rate) => a * rate;",
+            newContent: "public decimal CalculateDiscountedTotal(decimal a) => a;\n    public decimal ComputeTax(decimal a, decimal rate) => a * rate;");
+
+        Assert.That(result.IsError, Is.True);
+        var message = result.ErrorData?.Message ?? string.Empty;
+        var start = message.IndexOf("Next step:", StringComparison.OrdinalIgnoreCase);
+        Assert.That(start, Is.GreaterThanOrEqualTo(0), message);
+        var nextStep = message[start..].Split('\n')[0];
+        Assert.Multiple(() =>
+        {
+            Assert.That(System.Text.RegularExpressions.Regex.Matches(nextStep, @"RenameSymbol\(").Count, Is.EqualTo(2), nextStep);
+            Assert.That(nextStep, Does.Contain("CalculateDiscountedTotal"));
+            Assert.That(nextStep, Does.Contain("ComputeTax"));
+            Assert.That(nextStep, Does.Contain("one RenameSymbol call per rename"));
+        });
+    }
+
+    // H2(c): the lift's wire verdict covers every rename (it used to carry only the first), each with its own rewritten-use count.
+    [Test]
+    public async Task FlagOn_TwoMethodsRenamedInOneEdit_BothLiftedWithOneVerdictEach()
+    {
+        using var _ = LiftRenamesOptions.OverrideForCurrentContext(true);
+        using var workspace = CreateTwoMethodWorkspace();
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "rename both methods in one edit",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(PricingRelativePath),
+            oldContent: "public decimal CalcDisc(decimal a) => a;\n    public decimal CalcTax(decimal a, decimal rate) => a * rate;",
+            newContent: "public decimal CalculateDiscountedTotal(decimal a) => a;\n    public decimal ComputeTax(decimal a, decimal rate) => a * rate;");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var verdicts = result.Findings.Select(f => f.Message).Where(m => m.Contains("verdict=lifted")).ToList();
+        Assert.Multiple(() =>
+        {
+            Assert.That(workspace.ReadText(CheckoutRelativePath), Does.Contain("c.CalculateDiscountedTotal(1m) + c.ComputeTax(1m, 2m)"));
+            Assert.That(verdicts, Has.Count.EqualTo(2), string.Join("\n", verdicts));
+            Assert.That(verdicts.Any(v => v.Contains("old=CalcDisc new=CalculateDiscountedTotal usesRewritten=1")), Is.True, string.Join("\n", verdicts));
+            Assert.That(verdicts.Any(v => v.Contains("old=CalcTax new=ComputeTax usesRewritten=1")), Is.True, string.Join("\n", verdicts));
+        });
+    }
 }

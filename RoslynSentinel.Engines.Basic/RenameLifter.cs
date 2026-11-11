@@ -17,17 +17,16 @@ namespace RoslynSentinel.Engines.Basic;
 /// <param name="CallSiteCount">Number of text changes the rename made in <paramref name="RenamedFiles"/>.</param>
 /// <param name="EditedFileUseCount">Number of old-name uses the rename rewrote inside the files the model edited, outside its edited spans (for example the class's own constructor).</param>
 /// <param name="RewrittenLines">Per file in <paramref name="RenamedFiles"/>, the rewritten lines as <c>File.cs:12  trimmed source line</c> (one per changed line, in file order); null when not collected.</param>
+/// <param name="UsesPerRename">Per entry of <paramref name="Renames"/>, how many uses outside the model's edited spans that rename rewrote (other files plus edited files); null when not collected.</param>
 public sealed record RenameLiftResult(
     IReadOnlyList<SymbolChange> Renames,
     Dictionary<FilePathWrapper, string> Changes,
     IReadOnlyList<string> RenamedFiles,
     int CallSiteCount,
     int EditedFileUseCount = 0,
-    IReadOnlyDictionary<string, IReadOnlyList<string>>? RewrittenLines = null)
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? RewrittenLines = null,
+    IReadOnlyList<int>? UsesPerRename = null)
 {
-    /// <summary>The first rename of <see cref="Renames"/>; the single wire verdict of the lift (<see cref="ToVerdict"/>) describes this one.</summary>
-    public SymbolChange Rename => Renames[0];
-
     /// <summary>Each rename as "class A -> B, method C -> D".</summary>
     public string DescribeRenames() => string.Join(", ", Renames.Select(r => $"{r.DeclarationKind} {r.OldName} -> {r.NewName}"));
 
@@ -35,25 +34,7 @@ public sealed record RenameLiftResult(
     /// The lines the lift rewrote in the other files, at most <paramref name="maxPerFile"/> per file and then "+N more", so the model
     /// sees its call sites are already updated (batch G R3: it re-sent its own call-site edit with the old text). Empty when none were collected.
     /// </summary>
-    public string DescribeRewrittenLines(int maxPerFile = 5)
-    {
-        if (RewrittenLines is null || RewrittenLines.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        var rows = new List<string>();
-        foreach (var (file, lines) in RewrittenLines)
-        {
-            rows.AddRange(lines.Take(maxPerFile).Select(l => "  " + l));
-            if (lines.Count > maxPerFile)
-            {
-                rows.Add($"  {file}: +{lines.Count - maxPerFile} more");
-            }
-        }
-
-        return rows.Count == 0 ? string.Empty : "Rewritten call sites:\n" + string.Join("\n", rows);
-    }
+    public string DescribeRewrittenLines(int maxPerFile = 5) => RenameLifter.DescribeRewrittenLines(RewrittenLines, maxPerFile);
 
     /// <summary>One sentence for the response: what was renamed and how many uses in how many other files the lift rewrote.</summary>
     public string Describe()
@@ -63,13 +44,16 @@ public sealed record RenameLiftResult(
                 : "while your edit's own text was kept for the file(s) you edited.");
 
     /// <summary>
-    /// The wire verdict for this lift: "lifted" when the merged set applied, "liftRejected" when it was tried and still had errors.
-    /// <see cref="ImpactVerdict.BrokenUseCount"/> carries the uses the rename rewrote (call sites in other files plus uses elsewhere in the edited files).
+    /// The wire verdicts for this lift, one per rename: "lifted" when the merged set applied, "liftRejected" when it was tried and still had errors.
+    /// <see cref="ImpactVerdict.BrokenUseCount"/> carries the uses that rename rewrote (call sites in other files plus uses elsewhere in the edited files);
+    /// without per-rename counts the total sits on the first entry.
     /// </summary>
-    public ImpactVerdict ToVerdict(bool rejectedAfterLift)
-        => new("renamed", Rename.DeclarationKind, Rename.Container, Rename.OldName, Rename.NewName,
-            Rename.File is null ? null : Rename.Line > 0 ? $"{Rename.File}:{Rename.Line}" : Rename.File,
-            rejectedAfterLift ? "liftRejected" : "lifted", CallSiteCount + EditedFileUseCount, [], "RenameSymbol", null);
+    public List<ImpactVerdict> ToVerdicts(bool rejectedAfterLift)
+        => Renames.Select((r, i) => new ImpactVerdict("renamed", r.DeclarationKind, r.Container, r.OldName, r.NewName,
+            r.File is null ? null : r.Line > 0 ? $"{r.File}:{r.Line}" : r.File,
+            rejectedAfterLift ? "liftRejected" : "lifted",
+            UsesPerRename is not null && i < UsesPerRename.Count ? UsesPerRename[i] : i == 0 ? CallSiteCount + EditedFileUseCount : 0,
+            [], "RenameSymbol", null)).ToList();
 }
 
 /// <summary>
@@ -86,7 +70,8 @@ public static class RenameLifter
     /// <see cref="SymbolChangeKind.Renamed"/> entries (two added members of one shape leave the diff with no rename at all),
     /// an edited file the baseline does not contain, an old name that resolves to more than one symbol (several
     /// declarations in the solution, or an overloaded method name), a rename failure, or a rename that touches no
-    /// other file.
+    /// other file. Null then comes with a one-line <c>Refusal</c> for the response whenever the diff held at least one rename (the lift is
+    /// silent only when there was nothing rename-shaped to lift), so a refusal is never mistaken for "the server did not try".
     /// </summary>
     /// <param name="workspaceManager">Supplies the committed (baseline) solution and the solution root.</param>
     /// <param name="changes">Edited files with the model's proposed text (the dictionary the gate rejected).</param>
@@ -95,7 +80,7 @@ public static class RenameLifter
     /// the ReplaceSnippet paths resolved them. With them, old-name uses elsewhere in an edited file (its own constructor, a self-call)
     /// are renamed too; without an entry the file keeps the model's text verbatim.
     /// </param>
-    public static async Task<RenameLiftResult?> PlanAsync(
+    public static async Task<(RenameLiftResult? Plan, string? Refusal)> PlanAsync(
         IWorkspaceManager workspaceManager,
         IReadOnlyDictionary<FilePathWrapper, string> changes,
         IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? editedSpans = null,
@@ -111,7 +96,7 @@ public static class RenameLifter
                 // A file the baseline lacks is a created file: not an edit of existing declarations, so nothing to lift.
                 if (await EditImpactAnalyzer.DocumentTextAsync(baseline, path.ToString(), cancellationToken) is not { } before)
                 {
-                    return null;
+                    return (null, "an edited file is a new file, and only edits of existing files are lifted");
                 }
 
                 baselineTexts[path.ToString()] = before;
@@ -121,7 +106,7 @@ public static class RenameLifter
             var renames = EditImpactAnalyzer.DiffSymbols(baselineTexts, candidateTexts).Where(c => c.Kind == SymbolChangeKind.Renamed).ToList();
             if (renames.Count == 0 || renames.Any(r => string.IsNullOrEmpty(r.NewName)))
             {
-                return null;
+                return (null, null); // nothing rename-shaped: stay silent
             }
 
             // Every entry must resolve to exactly one symbol; one that does not (ambiguous, overloaded, declared twice) refuses the whole
@@ -131,7 +116,7 @@ public static class RenameLifter
             {
                 if (await ResolveUniqueOldSymbolAsync(baseline, renameEntry, cancellationToken) is not { } resolved)
                 {
-                    return null;
+                    return (null, $"{renameEntry.DeclarationKind} {renameEntry.OldName} does not resolve to exactly one symbol in the solution (it is overloaded, declared in more than one place, or was not found), and a lift needs every rename of the edit to be unambiguous");
                 }
 
                 symbols.Add(resolved);
@@ -143,7 +128,7 @@ public static class RenameLifter
             // Each rename runs on its own against the baseline (H1 R5 T3/T4: one whole-file edit renamed a class and its method, and only the
             // class had callers outside the file). Their text changes are unioned per document in baseline coordinates; a change that overlaps
             // one already taken is dropped. A rename with no use outside the model's edit adds nothing here. The compile gate then validates.
-            var renamerChanges = new Dictionary<DocumentId, List<TextChange>>();
+            var renamerChanges = new Dictionary<DocumentId, List<(TextChange Change, int Rename)>>();
             for (var i = 0; i < symbols.Count; i++)
             {
                 var renamed = await Renamer.RenameSymbolAsync(baseline, symbols[i], renameOptions, renames[i].NewName!, cancellationToken);
@@ -163,9 +148,9 @@ public static class RenameLifter
 
                         foreach (var change in await newDocument.GetTextChangesAsync(oldDocument, cancellationToken))
                         {
-                            if (!taken.Any(existing => Overlaps(existing.Span, change.Span)))
+                            if (!taken.Any(existing => Overlaps(existing.Change.Span, change.Span)))
                             {
-                                taken.Add(change);
+                                taken.Add((change, i));
                             }
                         }
                     }
@@ -187,6 +172,7 @@ public static class RenameLifter
             var renamedFiles = new List<string>();
             var callSites = 0;
             var editedFileUses = 0;
+            var usesPerRename = new int[renames.Count];
             var rewrittenLines = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
             var mergedEditedPaths = new HashSet<FilePathWrapper>();
             foreach (var (documentId, documentChanges) in renamerChanges)
@@ -205,7 +191,11 @@ public static class RenameLifter
                         && await MergeIntoEditedFileAsync(workspaceManager, editedPath, oldDocument, documentChanges, spans, cancellationToken) is { } mergedFile)
                     {
                         merged[editedPath] = mergedFile.Text;
-                        editedFileUses += mergedFile.Uses;
+                        editedFileUses += mergedFile.SurvivingRenames.Count;
+                        foreach (var renameIndex in mergedFile.SurvivingRenames)
+                        {
+                            usesPerRename[renameIndex]++;
+                        }
                     }
 
                     continue;
@@ -217,7 +207,12 @@ public static class RenameLifter
                     continue; // a linked file reached through a second project
                 }
 
-                var orderedChanges = documentChanges.OrderBy(c => c.Span.Start).ToList();
+                foreach (var (_, renameIndex) in documentChanges)
+                {
+                    usesPerRename[renameIndex]++;
+                }
+
+                var orderedChanges = documentChanges.Select(c => c.Change).OrderBy(c => c.Span.Start).ToList();
                 var newText = (await oldDocument.GetTextAsync(cancellationToken)).WithChanges(orderedChanges);
                 merged[wrapper] = newText.ToString();
                 callSites += orderedChanges.Count;
@@ -225,13 +220,15 @@ public static class RenameLifter
                 rewrittenLines[Path.GetFileName(filePath)] = RewrittenLinesOf(Path.GetFileName(filePath), newText, orderedChanges);
             }
 
-            return renamedFiles.Count == 0 && editedFileUses == 0 ? null : new RenameLiftResult(renames, merged, renamedFiles, callSites, editedFileUses, rewrittenLines);
+            return renamedFiles.Count == 0 && editedFileUses == 0
+                ? (null, "the renames change nothing outside your edit, so applying them as RenameSymbol would not fix the errors")
+                : (new RenameLiftResult(renames, merged, renamedFiles, callSites, editedFileUses, rewrittenLines, usesPerRename), null);
         }
         // The lift is an optional extra on a rejection that is already being reported: any Roslyn or workspace failure falls
         // back to the first-slice redirect instead of masking the real compiler errors with a second error.
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return null;
+            return (null, "the renames could not be computed on the current solution");
         }
     }
 
@@ -269,12 +266,12 @@ public static class RenameLifter
     /// shifting each surviving change by the length delta of the edited spans before it. Line endings are then normalised the way the
     /// ReplaceSnippet paths normalise the candidate. Null when the renamer has no surviving change in this file.
     /// </summary>
-    private static async Task<(string Text, int Uses)?> MergeIntoEditedFileAsync(
-        IWorkspaceManager workspaceManager, FilePathWrapper path, Document baselineDocument, IReadOnlyList<TextChange> renamerChanges,
+    private static async Task<(string Text, IReadOnlyList<int> SurvivingRenames)?> MergeIntoEditedFileAsync(
+        IWorkspaceManager workspaceManager, FilePathWrapper path, Document baselineDocument, IReadOnlyList<(TextChange Change, int Rename)> renamerChanges,
         IReadOnlyList<TextChange> modelEdits, CancellationToken cancellationToken)
     {
         var surviving = renamerChanges
-            .Where(c => !modelEdits.Any(e => c.Span.Start < e.Span.End && c.Span.End > e.Span.Start))
+            .Where(c => !modelEdits.Any(e => c.Change.Span.Start < e.Span.End && c.Change.Span.End > e.Span.Start))
             .ToList();
         if (surviving.Count == 0)
         {
@@ -283,12 +280,12 @@ public static class RenameLifter
 
         var baselineText = (await baselineDocument.GetTextAsync(cancellationToken)).ToString();
         var text = baselineText;
-        foreach (var change in modelEdits.Concat(surviving).OrderByDescending(c => c.Span.Start).ThenByDescending(c => c.Span.End))
+        foreach (var change in modelEdits.Concat(surviving.Select(s => s.Change)).OrderByDescending(c => c.Span.Start).ThenByDescending(c => c.Span.End))
         {
             text = text.Remove(change.Span.Start, change.Span.Length).Insert(change.Span.Start, change.NewText ?? string.Empty);
         }
 
-        return (EolUtilities.NormalizeEol(text, workspaceManager.ResolveEol((string)path, baselineText)), surviving.Count);
+        return (EolUtilities.NormalizeEol(text, workspaceManager.ResolveEol((string)path, baselineText)), surviving.Select(s => s.Rename).ToList());
     }
 
     /// <summary>
@@ -329,5 +326,81 @@ public static class RenameLifter
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// "Rewritten call sites:" plus the lines, at most <paramref name="maxPerFile"/> per file and then "+N more", so the model sees its call
+    /// sites are already updated (batch G R3, H2 R3: it re-sent a call-site edit with the old text). Empty when there are none. Shared by
+    /// the rename lift summary and RenameSymbol's own success result so the two read alike.
+    /// </summary>
+    public static string DescribeRewrittenLines(IReadOnlyDictionary<string, IReadOnlyList<string>>? rewrittenLines, int maxPerFile = 5)
+    {
+        if (rewrittenLines is null || rewrittenLines.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var rows = new List<string>();
+        foreach (var (file, lines) in rewrittenLines)
+        {
+            rows.AddRange(lines.Take(maxPerFile).Select(l => "  " + l));
+            if (lines.Count > maxPerFile)
+            {
+                rows.Add($"  {file}: +{lines.Count - maxPerFile} more");
+            }
+        }
+
+        return rows.Count == 0 ? string.Empty : "Rewritten call sites:\n" + string.Join("\n", rows);
+    }
+
+    /// <summary>The sentence that follows the rewritten lines: tells the model not to edit them again.</summary>
+    public const string AlreadyUpdatedSentence = "These call sites are already updated; do not edit them again.";
+
+    /// <summary>
+    /// The lines a finished rename rewrote, per file name (no directory), as <c>File.cs:12  trimmed source line</c>: each changed document's
+    /// new text diffed against the document in <paramref name="baseline"/>. For RenameSymbol's own result; the lift collects the same rows
+    /// from the renamer's text changes while it plans. A path with no baseline document (a new file) is skipped.
+    /// </summary>
+    public static async Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> RewrittenLinesAsync(
+        Solution baseline, IReadOnlyDictionary<FilePathWrapper, string> changes, CancellationToken cancellationToken)
+    {
+        var rewritten = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (path, newContent) in changes)
+        {
+            if (await EditImpactAnalyzer.DocumentTextAsync(baseline, path.ToString(), cancellationToken) is not { } before)
+            {
+                continue;
+            }
+
+            var fileName = Path.GetFileName(path.ToString());
+            var oldLines = before.Split('\n');
+            var newLines = newContent.Split('\n');
+            List<string> lines;
+            if (oldLines.Length == newLines.Length)
+            {
+                // A rename does not add or remove lines, so compare line by line: the hunks SourceText.GetTextChanges returns can be much
+                // coarser than the renamed identifiers (they quoted the file's first line).
+                lines = [];
+                for (var i = 0; i < newLines.Length; i++)
+                {
+                    if (!string.Equals(oldLines[i], newLines[i], StringComparison.Ordinal))
+                    {
+                        lines.Add($"{fileName}:{i + 1}  {newLines[i].Trim()}");
+                    }
+                }
+            }
+            else
+            {
+                var newText = SourceText.From(newContent);
+                lines = RewrittenLinesOf(fileName, newText, newText.GetTextChanges(SourceText.From(before)).OrderBy(c => c.Span.Start).ToList());
+            }
+
+            if (lines.Count > 0)
+            {
+                rewritten[fileName] = lines;
+            }
+        }
+
+        return rewritten;
     }
 }

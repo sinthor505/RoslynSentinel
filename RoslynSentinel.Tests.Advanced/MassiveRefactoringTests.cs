@@ -160,4 +160,32 @@ namespace MyApp.Services
         var json = System.Text.Json.JsonSerializer.Serialize(result);
         Assert.That(json, Contains.Substring($"NewM{id}"));
     }
+
+    // H2 R3: a model edited a call site that a RenameSymbol had just rewritten (stale oldContent). The success result quotes the rewritten
+    // lines the way the rename lift summary does and says not to edit them again.
+    [Test]
+    [Category("RefactoringSignatureTools")]
+    public async Task RenameSymbol_Success_QuotesTheRewrittenCallSitesAndSaysNotToEditThemAgain()
+    {
+        var source = "public class Cq\r\n{\r\n    public void OldQ() { }\r\n    public void U() { OldQ(); }\r\n    public void V() { OldQ(); }\r\n}\r\n";
+        var path = PathOf("Cq.cs");
+        File.WriteAllText(path, source);
+        SetSource(source, path);
+        var symbolNavEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var handle = (await symbolNavEngine.LocateSymbolAsync("OldQ")).Single();
+
+        var result = await _refactoringSignatureTools.RenameSymbolTool(
+            reason: "test message", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!, newName: "NewQ");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var note = result.SuccessData?.GetType().GetProperty("callSitesNote")?.GetValue(result.SuccessData) as string;
+        Assert.That(note, Is.Not.Null, "RenameSymbol's success data must carry callSitesNote");
+        Assert.Multiple(() =>
+        {
+            Assert.That(note, Does.StartWith("Rewritten call sites:"));
+            Assert.That(note, Does.Contain("Cq.cs:4  public void U() { NewQ(); }"));
+            Assert.That(note, Does.Contain("Cq.cs:5  public void V() { NewQ(); }"));
+            Assert.That(note, Does.EndWith("These call sites are already updated; do not edit them again."));
+        });
+    }
 }

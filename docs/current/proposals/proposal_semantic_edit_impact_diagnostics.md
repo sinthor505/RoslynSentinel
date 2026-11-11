@@ -221,6 +221,13 @@ reaches the wire only as `ResultError.Message` text (`EditImpactGate.cs:63`). Re
    to exactly one symbol (any entry that is not refuses the whole lift) and renamed independently on the baseline; the
    changes are unioned per document in baseline coordinates (overlaps dropped), the model's spans still win, and the gate
    validates. The summary lists each rename ("class A -> B, method C -> D") and keeps the rewritten-line quote.
+   **H2 follow-ups (2026-11-11, uncommitted):** (a) a refused lift is no longer silent: with the flag on and at least one
+   `Renamed` entry, the rejection opens with "Not auto-applied as RenameSymbol: <reason>." (`RenameLifter.PlanAsync`
+   returns `(Plan, Refusal)`), and the first-slice redirect names every other attributed rename with one copyable
+   `RenameSymbol` call each ("The same edit also renames ..."); (b) `RenameSymbol`'s success data carries `callSitesNote`
+   (its success data is an anonymous object with no summary text, so it is a new field): the rewritten lines, up to 5 per
+   file, then "These call sites are already updated; do not edit them again." (shared `RenameLifter.DescribeRewrittenLines`);
+   (c) the lift's wire verdicts and findings are one per rename (`ToVerdicts`), each with its own rewritten-use count.
 2. **Edited-file attribution and locals.** Pass the edited spans to the analyzer. A diagnostic in an
    edited file but outside the edited span is attributed like one in an unedited file. Diff locals and
    local functions inside edited members, keyed by (member, name), so a renamed local whose later uses sit
