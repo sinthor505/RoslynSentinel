@@ -49,6 +49,15 @@ namespace RoslynSentinel.Common;
 ///     after 2,000 commits examined. A custom GIT_OBJECT_DIRECTORY or GIT_ALTERNATE_OBJECT_DIRECTORIES is declined.
 ///     The short branch name follows git's ambiguity rule for the common cases (a tag, remote or refs/ entry of the same name gives "heads/name").
 ///     A path containing a line feed is returned verbatim here; the Git tool's old CLI path re-joined it with the platform newline.
+/// (10) extensions.relativeWorktrees (checked 2026-11-11 against libgit2 1.8.6 in LibGit2Sharp 0.32.0, git 2.55): git 2.48+ writes it into the main
+///     repository's config (and core.repositoryformatversion = 1) when a worktree is added with worktree.useRelativePaths=true or --relative-paths.
+///     libgit2 1.8.6 does not know the extension and refuses to open the repository, for the main working tree and for every linked worktree alike:
+///     <c>new Repository(path)</c> throws <see cref="LibGit2SharpException"/> "unsupported extension name extensions.relativeworktrees"
+///     (<see cref="Repository.Discover"/> still succeeds, since only the open checks extensions). It surfaces from <see cref="Open"/> in every method here,
+///     so <see cref="FallbackGitReader"/> answers every call from the CLI (first fallback reason, counters and one stderr line name the extension) and
+///     GitBackendWarmup's repo probe reports "fallback: LibGit2SharpException: ...". Relative gitdir/commondir files WITHOUT the extension flag open fine
+///     (<c>CommonDirectory</c> resolves the relative commondir against the absolute git directory libgit2 reports). Pinned by GitRelativeWorktreeTests;
+///     a libgit2 upgrade that learns the extension makes its "rejects" tests fail on purpose, to be re-pinned to parity.
 /// </para>
 /// </summary>
 internal sealed class Libgit2GitReader : IGitReader
@@ -267,6 +276,9 @@ internal sealed class Libgit2GitReader : IGitReader
             ? Path.GetFullPath(Path.Combine(gitDirectory, File.ReadAllText(commonFile).Trim()))
             : gitDirectory;
     }
+
+    /// <summary>True when <paramref name="repo"/> was opened through a linked worktree (its per-worktree git directory has a commondir file).</summary>
+    private static bool IsLinkedWorktree(Repository repo) => File.Exists(Path.Combine(repo.Info.Path, "commondir"));
 
     /// <summary>
     /// The hex length git's <c>%h</c> starts from for this repository: what <c>git rev-parse --short HEAD</c> printed (see <see cref="ShortHashLengths"/>:
@@ -594,6 +606,15 @@ internal sealed class Libgit2GitReader : IGitReader
     public bool? GetBoolConfig(string workingDirectory, string key, TimeSpan cliTimeout)
     {
         using var repo = Open(workingDirectory);
+        // libgit2 1.8.6 reads a linked worktree's "local" config from its per-worktree git directory only, so the main repository's .git/config is
+        // missing there (probed 2026-11-11: worktree.useRelativePaths, core.bare, core.repositoryformatversion all null in a linked worktree, absolute or
+        // relative paths alike, while the CLI resolves them). A null here would be a wrong "unset", so the CLI answers for a linked worktree.
+        // TODO the same missing common config probably affects other config-dependent reads in a linked worktree (status EOL handling reads core.autocrlf, ignore case, filemode); verify with a repo-local-only setting before trusting libgit2 there
+        if (repo is not null && IsLinkedWorktree(repo))
+        {
+            throw new NotSupportedException("libgit2 does not read the main repository's config from a linked worktree, so git answers.");
+        }
+
         // Config.Get searches every level in git's precedence order (local over global over system). An unset key is a null entry.
         // Read as text and parsed here: Get<bool> throws on a non-boolean, which the composite would record as a libgit2 failure.
         var entry = repo?.Config.Get<string>(key);
