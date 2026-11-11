@@ -318,6 +318,7 @@ public static class EditImpactAnalyzer
         {
             case SymbolChangeKind.Renamed:
                 {
+                    // TODO when the same edit also has a CS0101 duplicate-type error, this rename headline leads and buries it (eval run 20261111-061005-246 T12); lead with the duplicate instead
                     var lead = $"This edit renames {name} to {change.NewName} and {files} file(s) still use {name}: ";
                     // Built only when active: ToolCallHint.Call records the tool as suggested guidance.
                     if (!isToolActive("RenameSymbol"))

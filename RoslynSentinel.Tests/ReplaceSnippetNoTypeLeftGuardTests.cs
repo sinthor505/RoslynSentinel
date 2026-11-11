@@ -65,6 +65,7 @@ public class ReplaceSnippetNoTypeLeftGuardTests
         {
             Assert.That(result.IsError, Is.True, "an edit that leaves a type-less file must be refused");
             Assert.That(result.ErrorData?.Message, Does.Contain("no type declaration"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("memberName: "), "the Member remove hint must name memberName (eval run 20261111-061005-246)");
             Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
             Assert.That(result.ErrorData?.Message, Does.Contain("IOrderPricingCalculator.cs"));
             Assert.That(result.ErrorData?.Message, Does.Not.Contain(workspace.PathOf(InterfaceRelativePath)), "the refusal names the workspace-relative path, not an absolute one");

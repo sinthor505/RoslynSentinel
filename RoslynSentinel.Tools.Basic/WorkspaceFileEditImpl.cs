@@ -728,6 +728,8 @@ public class WorkspaceFileEditImpl
 
     // 10-chain batch E run R2 (2026-11-10): a whole-file oldContent with empty newContent emptied an interface file and no tool could recover it.
     /// <summary>
+    // TODO ReplaceSnippet silently applies an edit that strips only the file-scoped namespace line (its types move to the global namespace); flag it like this check does
+    // TODO pre-check whether an edit's new text declares a type that already exists in another file, ahead of compile validation
     /// Refuses an edit that leaves a .cs file with no type declaration when it had one before (empty, whitespace or only
     /// usings/namespace/comments). Returns the refusal message, or null when the edit may proceed.
     /// </summary>
@@ -744,10 +746,22 @@ public class WorkspaceFileEditImpl
             return null;
         }
 
+        static string TypeNameHint(string text)
+        {
+            var names = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(text).GetRoot().DescendantNodes()
+                .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.BaseTypeDeclarationSyntax>()
+                .Select(type => type.Identifier.Text)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            return names.Count == 1 ? names[0] : "<TypeName>";
+        }
+
         bool Callable(string tool) => _activeToolSurface is null || _activeToolSurface.IsCallable(tool);
         var steps = new List<string>();
         if (Callable("DeleteFile")) steps.Add($"To delete the file, use {ToolCallHint.Call("DeleteFile")}.");
-        if (Callable("Member")) steps.Add($"To remove one type, use {ToolCallHint.Call("Member", ("operation", "remove"))}.");
+        // memberName is optional in Member's schema, so Call adds no placeholder for it: name it explicitly (eval run
+        // 20261111-061005-246 followed this hint without memberName twice).
+        if (Callable("Member")) steps.Add($"To remove one type, use {ToolCallHint.Call("Member", ("operation", "remove"), ("memberName", TypeNameHint(before)))}.");
         if (Callable("WriteFile")) steps.Add($"To replace the whole file, use {ToolCallHint.Call("WriteFile", ("operation", "ReplaceFile"))}.");
 
         var prefix = batch ? "ReplaceSnippet batch: " : "ReplaceSnippet: ";

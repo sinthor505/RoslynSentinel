@@ -43,6 +43,29 @@ public static class CompilerErrorLookupHelper
         // callSiteFixups value) otherwise reads as N separate problems. GroupBy preserves the
         // first-occurrence order of keys, so output order stays stable relative to the report.
         var parts = new List<string>();
+
+        // A CS0111 inside a type that a CS0101 in the same report says is declared twice follows from that duplicate type; the
+        // wrong-path advice of DescribeDuplicateDefinitionAsync misleads there (eval run 20261111-061005-246 T12), so point at
+        // the duplicate type instead.
+        var duplicatedTypes = report.Diagnostics
+            .Where(d => d.Id == "CS0101")
+            .Select(d => Cs0101DuplicateNamespaceMemberRegex.Match(d.Message))
+            .Where(m => m.Success)
+            .Select(m => m.Groups[2].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        async Task<string?> HintAsync(DiagnosticInfo diagnostic)
+        {
+            if (diagnostic.Id == "CS0111"
+                && Cs0111DuplicateMemberRegex.Match(diagnostic.Message) is { Success: true } cs0111
+                && cs0111.Groups[1].Value.Split('.').Last() is var typeName
+                && duplicatedTypes.Contains(typeName))
+            {
+                return $"  This follows from '{typeName}' being declared twice (see its CS0101); removing the extra '{typeName}' declaration fixes this too.";
+            }
+
+            return await DescribeHintAsync(diagnostic, symbolNavigationEngine, cancellationToken, editedFilePaths);
+        }
         foreach (var group in report.Diagnostics.GroupBy(d => (d.Id, d.Message)))
         {
             var items = group.ToList();
@@ -50,7 +73,7 @@ public static class CompilerErrorLookupHelper
             if (items.Count == 1)
             {
                 var single = $"{first.Id} at {first.FilePath}:{first.StartLine}: {first.Message}" + (string.IsNullOrEmpty(first.SourceLine) ? string.Empty : "\n    > " + first.SourceLine);
-                var singleHint = await DescribeHintAsync(first, symbolNavigationEngine, cancellationToken, editedFilePaths);
+                var singleHint = await HintAsync(first);
                 parts.Add(singleHint == null ? single : single + "\n" + singleHint);
                 continue;
             }
@@ -59,7 +82,7 @@ public static class CompilerErrorLookupHelper
             var shown = string.Join(", ", locations.Take(MaxGroupedLocations));
             var more = locations.Count > MaxGroupedLocations ? $" (+{locations.Count - MaxGroupedLocations} more)" : string.Empty;
             var header = $"{first.Id} (x{items.Count}): {first.Message} at: {shown}{more}" + (string.IsNullOrEmpty(first.SourceLine) ? string.Empty : "\n    > " + first.SourceLine);
-            var hint = await DescribeHintAsync(first, symbolNavigationEngine, cancellationToken, editedFilePaths);
+            var hint = await HintAsync(first);
             parts.Add(hint == null ? header : header + "\n" + hint);
         }
 
@@ -538,12 +561,12 @@ public static class CompilerErrorLookupHelper
         if (!diagnosticEdited && otherNote.Length > 0)
         {
             // The edit's file first, then the unedited file the compiler pointed at.
-            return $"  {what} is now declared twice: in {othersShown}{otherNote} and in {diagnosticShown}. Keep one declaration: remove it from this edit if {diagnosticShown} already has it.";
+            return $"  {what} is now declared twice: in {othersShown}{otherNote} and in {diagnosticShown}. Keep one declaration: {diagnosticShown} already declares it, so remove the '{name}' declaration from your edit.";
         }
 
         var editedClause = diagnosticEdited ? " (changed by this edit)" : string.Empty;
         return $"  {what} is now declared twice: in {diagnosticShown}{editedClause} and in {othersShown}. Keep one declaration"
-            + (diagnosticEdited ? $": remove it from this edit if {othersShown} already has it." : ".");
+            + (diagnosticEdited ? $": {othersShown} already declares it, so remove the '{name}' declaration from your edit." : ".");
     }
 
     /// <summary>

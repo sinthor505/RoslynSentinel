@@ -332,7 +332,7 @@ public class CompilerErrorLookupHelperTests
             new DiagnosticReport(true, [cs0101]), _symbolNavigationEngine, editedFilePaths: [editedFile]);
 
         Assert.That(description, Does.Contain(
-            $"'IOrderPricingCalculator' is now declared twice: in {editedFile} (changed by this edit) and in {diagnosticFile}. Keep one declaration: remove it from this edit if {diagnosticFile} already has it."));
+            $"'IOrderPricingCalculator' is now declared twice: in {editedFile} (changed by this edit) and in {diagnosticFile}. Keep one declaration: {diagnosticFile} already declares it, so remove the 'IOrderPricingCalculator' declaration from your edit."));
     }
 
     [Test]
@@ -349,7 +349,7 @@ public class CompilerErrorLookupHelperTests
             new DiagnosticReport(true, [cs0101]), _symbolNavigationEngine, editedFilePaths: [diagnosticFile]);
 
         Assert.That(description, Does.Contain(
-            $"'IOrderPricingCalculator' is now declared twice: in {diagnosticFile} (changed by this edit) and in {otherFile}. Keep one declaration: remove it from this edit if {otherFile} already has it."));
+            $"'IOrderPricingCalculator' is now declared twice: in {diagnosticFile} (changed by this edit) and in {otherFile}. Keep one declaration: {otherFile} already declares it, so remove the 'IOrderPricingCalculator' declaration from your edit."));
     }
 
     [Test]
@@ -364,6 +364,25 @@ public class CompilerErrorLookupHelperTests
 
         Assert.That(description, Does.Contain("IOrderPricingCalculator.cs").And.Contain("Duplicate.cs").And.Contain("is now declared twice"));
         Assert.That(description, Does.Contain("Keep one declaration"));
+    }
+
+    /// <summary>
+    /// Eval run 20261111-061005-246 T12: a CS0111 inside a type that a CS0101 says is declared twice got the wrong-path
+    /// "did you mean to ReadFile/ApplyDiff" advice; it now points at the duplicate type.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_Cs0111InsideDuplicatedType_PointsAtTheDuplicateTypeAsync()
+    {
+        const string interfaceWithMember = "namespace TestProj;\r\n\r\npublic interface IOrderPricingCalculator\r\n{\r\n    decimal Total(decimal amount);\r\n}\r\n";
+        var report = await CompileAndGetErrorsAsync(
+            ("IOrderPricingCalculator.cs", interfaceWithMember),
+            ("Duplicate.cs", interfaceWithMember));
+        Assert.That(report.Diagnostics.Select(d => d.Id), Does.Contain("CS0101").And.Contain("CS0111"), "fixture must produce CS0101 and CS0111");
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, editedFilePaths: ["Duplicate.cs"]);
+
+        Assert.That(description, Does.Contain("This follows from 'IOrderPricingCalculator' being declared twice"));
+        Assert.That(description, Does.Not.Contain("did you mean to ReadFile"));
     }
 
     [Test]
