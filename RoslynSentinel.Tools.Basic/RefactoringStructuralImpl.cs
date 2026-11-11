@@ -761,7 +761,7 @@ public class RefactoringStructuralImpl
             return new SentinelCallToolResult<object> { IsError = false, SuccessData = AppliedChangeSummary.From(enumRemoveApply, [filePathResolved], $"Removed '{memberName}' from enum '{removeEnumName}' in {Path.GetFileName(filePathResolved)}.", validated: false, workspaceVersion: _workspaceManager.WorkspaceVersion) };
         }
 
-        var result = await _memberRefactoringEngine.RemoveMemberAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken: cancellationToken);
+        var result = await _memberRefactoringEngine.RemoveMemberAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable, cancellationToken: cancellationToken);
 
         var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
         var apply = await ValidateAndApplyAsync(changes, $"Remove member '{memberName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);

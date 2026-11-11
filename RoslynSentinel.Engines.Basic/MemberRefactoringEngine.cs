@@ -2551,7 +2551,7 @@ public class MemberRefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveMemberAsync(FilePathWrapper filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containerName = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveMemberAsync(FilePathWrapper filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containerName = null, Func<string, bool>? isToolActive = null, CancellationToken cancellationToken = default)
     {
         // excludeInterfaceMembers: false -- remove must be able to target an interface's own
         // member declaration, not just implementers. Same rationale as ReplaceMemberAsync above.
@@ -2625,13 +2625,21 @@ public class MemberRefactoringEngine
                     }
                 }
 
-                // TODO this hint names ApplyDiff and DeleteUnusedSymbol without checking they are active tools (the chain eval hides ApplyDiff); gate it with an isToolActive predicate like CompilerErrorLookupHelper
                 var kindNames = string.Join(", ", typeKindCandidatesForHint.Select(c => c.Kind).Distinct());
+                var typeRemovalHints = new List<string>();
+                if (isToolActive?.Invoke("DeleteUnusedSymbol") == true)
+                    typeRemovalHints.Add($"use {ToolCallHint.Call("DeleteUnusedSymbol")}");
+                if (isToolActive?.Invoke("ReplaceSnippet") == true)
+                    typeRemovalHints.Add($"edit the file's raw text with {ToolCallHint.Call("ReplaceSnippet")} as a last resort");
+                if (isToolActive?.Invoke("ApplyDiff") == true)
+                    typeRemovalHints.Add($"edit the file's raw text with {ToolCallHint.Call("ApplyDiff")} as a last resort");
+                var typeRemovalHint = typeRemovalHints.Count == 0
+                    ? "To remove an unreferenced type declaration, edit the file directly with the tools available to you, then confirm the solution still compiles."
+                    : $"To remove an unreferenced type declaration, {string.Join(" or ", typeRemovalHints)}.";
                 throw new ToolNotFoundException($"'{memberName}' is a type-level declaration ({kindNames}) that Member(remove) could not delete here. " +
                     "Member(remove) deletes classes, interfaces, structs, records and enums that resolve to a symbol in the loaded solution, " +
                     $"but it cannot delete an enum member through this route: remove one with {ToolCallHint.Call("ModifyEnum")} instead. " +
-                    $"To remove an unreferenced type declaration another way, use {ToolCallHint.Call("DeleteUnusedSymbol")}; " +
-                    $"edit the file's raw text with {ToolCallHint.Call("ReplaceSnippet")} or {ToolCallHint.Call("ApplyDiff")} only as a last resort.", "member", memberName); // hint-ok: Member(remove) in the message above is prose describing the operation, not a call to make
+                    typeRemovalHint, "member", memberName); // hint-ok: Member(remove) in the message above is prose describing the operation, not a call to make
             }
 
             throw new ToolNotFoundException(await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken), "member", memberName);

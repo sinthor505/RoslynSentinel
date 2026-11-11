@@ -3667,4 +3667,34 @@ public class Calc
         Assert.That(ex!.Message, Does.Contain("no statement is there"));
         Assert.That(ex.Message, Does.Contain("FieldDeclaration"));
     }
+
+    [Test]
+    public async Task RemoveMember_TypeDeclarationHint_NamesNoToolWhenNoneActive()
+    {
+        // Arrange
+        SetSource("public enum Color { Red, Green }", "Colors.cs");
+
+        // Act
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(() => _memberRefactoringEngine.RemoveMemberAsync("Colors.cs", "Red", isToolActive: _ => false));
+
+        // Assert
+        Assert.That(ex!.Message, Does.Not.Contain("DeleteUnusedSymbol"));
+        Assert.That(ex.Message, Does.Not.Contain("ApplyDiff"));
+        Assert.That(ex.Message, Does.Not.Contain("ReplaceSnippet"));
+        Assert.That(ex.Message, Does.Contain("edit the file directly with the tools available to you"));
+    }
+
+    [Test]
+    public async Task RemoveMember_TypeDeclarationHint_NamesActiveToolsOnly()
+    {
+        // Arrange
+        SetSource("public enum Color { Red, Green }", "Colors.cs");
+
+        // Act
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(() => _memberRefactoringEngine.RemoveMemberAsync("Colors.cs", "Red", isToolActive: _ => true));
+
+        // Assert
+        Assert.That(ex!.Message, Does.Contain("DeleteUnusedSymbol"));
+        Assert.That(ex.Message, Does.Contain("ApplyDiff"));
+    }
 }
