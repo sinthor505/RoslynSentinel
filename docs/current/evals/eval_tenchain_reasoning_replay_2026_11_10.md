@@ -449,6 +449,62 @@ result, excluded from the table; retry of the 2 missing runs not done (host stil
 - Sample is 3 runs on a shortened path (whole-file edit, one lift, then fix-ups from RunTest); compare with the 5-run
   batches only as an indication. Turn counts per tool call in the analyst's output use sub-indexes (T3.0, T3.1) for parallel calls.
 
+## Batch H4: master 727ade36, rename lifting ON, 4/5 (2026-11-11)
+
+**Setup.** Host 113 after an update restart, `qwen3.5-9b-coder` reloaded by the owner: loaded config context_length
+**70144** (F-H3: 60160), parallel 4, `reasoning_budget_message` listed with no budget value, as in F (not re-verified
+beyond that). Worktree `C:\tmp\rs_eval_h4` (branch `eval/h4`) at master 727ade36: H3 plus 1e315a2c (refused lifts say why,
+redirect names every rename, RenameSymbol quotes rewritten call sites), 583aad0e (`RewrittenLineMemory` note for a stale
+oldContent; narrower "These lines already use the new name; do not repeat the rename on them (other changes to them
+are fine)."), 727ade36 (FileNotFound with no name match says the file does not exist yet and names CreateFile).
+`ROSLYNSENTINEL_LIFT_RENAMES=1`, same command as H1 with `-Repeats 5`. L2. Archive
+`C:\tmp\rs_eval_h4\ModelTestingResults\113\Model_AppliesTenChainedRefactors\`, runs `20261111-193910-723`,
+`195232-426`, `195928-543`, `200617-585`, `201146-366` (folder stamps are host-UTC; the other batches' stamps were local).
+
+| Run | Folder | Result | Turns | Failed | Lifted (turns) | Lift refused | Redirected | Model RenameSymbol | RunTest (turn: result) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| R1 | 193910-723 | FAIL per-tool budget (ReplaceSnippet 10 > 5; total 11 <= 12) | 20 | 11 | 2 (T7 method, T10 class) | 3 (T4) | 0 | 0 | T14 fail (Steps 3, 7), T17 pass 8/8 |
+| R2 | 195232-426 | pass | 21 | 2 | 1 (T6 method) | 2 (T2, T4) | 0 | T8 ok | T15 fail (Step 7), T19 pass |
+| R3 | 195928-543 | pass | 21 | 2 | 1 (T3 method) | 0 | 0 | T8 ok | T17 fail (Step 7), T19 pass |
+| R4 | 200617-585 | pass | 20 | 2 | 2 (T3 method, T8 class) | 0 | 0 | T6 err | T14 fail (Step 3), T18 pass |
+| R5 | 201146-366 | pass | 10 | 1 | 1 (T4 class + method) | 0 | 0 | 0 | T9 pass |
+
+| Measure | F off | G | H1 | H2 | H3 (3 valid) | H4 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Pass | 8/10 | 8/10 | 4/5 | 4/5 | 3/3 | 4/5 |
+| Mean turns | 24.0 | 19.7 | 18.6 | 19.4 | 11.7 | 18.4 |
+| Mean failed calls | 6.9 | 3.7 | 2.8 | 3.8 | 1.0 | 3.6 |
+| Lifts per run (renames lifted of 2) | 0 | 1.4 | 1.6 | 1.4 | 1.0 (2 of 2) | 1.4 (8 of 10) |
+| Redirects per run | 1.9 | 0.6 | 0.6 | 2.4 | 0 | 0 |
+| Longest identical consecutive call | 1 | 2 | 2 | 10 | 1 | 3 (R1 T4, same turn) |
+| Stale oldContent right after a lift | n/a | 2 of 14 | 2 of 8 | 0 of 7 | 1 of 3 | 0 of 7 |
+
+- **New-item results.** (1) The `RewrittenLineMemory` note ("was rewritten by ... earlier: it now reads") fired **0
+  times**: no stale oldContent followed a lift or RenameSymbol on a lifted line, so it had no chance to prove itself. The 3
+  oldContent NotFound errors in R1 (T7.2, T16.3, T16.4) were same-turn twins of edits that had just succeeded (below). (2)
+  The narrowed sentence appeared in 9 lift results; no run refused a legitimate edit on a lifted line and none repeated a
+  rename on them. (3) The CreateFile hint fired once (R5 T1.3, "It does not exist yet: if your task is to create it, call
+  CreateFile(...) instead of reading it"); the model went ListSolutionItems (T2) then CreateFile (T3), because the same
+  message also says "You MUST call ListSolutionItems ... next". Step 1 check: no RunTest reported it (Steps 3 and 7 failed
+  in R1-R4 and were fixed by the next RunTest).
+- **R1 (`193910-723`) failed the per-tool budget on twin calls, not a thrash.** Failures at T2 (x2 `'filePath' is
+  required`), T4 (x3 CS0246 on `IOrderPricingCalculator`, interface not yet created), T7, T9 (x2 CS0246
+  `StandardOrderPricingCalculator`, OrderCheckout.cs:5), T16 (x2): in T2, T4, T7, T9 and T16 the model sent the same edit twice in
+  one turn, once with `action: "replace"` and once with `"apply"`; the twin fails NotFound ("oldContent was not found",
+  T7.2, T16.3, T16.4) because its sibling already landed. The model's reasoning at T10/T16 says the server "keeps
+  mangling the action parameter" and quotes "params.action is not one of enum values: apply,validate", a string in no recorded
+  result (hypothesis: model-side). Source: the schema enum is `apply|validate`, `ToolArgumentValidator.cs:711` (main
+  tree) silently aliases `replace` to `apply`, so both spellings succeed and the hedge is never punished; same hedge as batch F R1. Counting
+  each distinct (file, error, state) once, R1 has about 5 failures.
+- **Refused lifts read as "the rename may have persisted".** R1 T4.1-4.3 and R2 T2.1, T4.1 got `liftRejected` ("tried as a
+  RenameSymbol ... Nothing was changed"; the "Not auto-applied as RenameSymbol: <reason>" opening never appeared); R1 T7
+  reasoning "the trial rename didn't persist. The files are back to original state", R2 T7 "The tool also renamed the
+  class ... wait, it didn't!", R3 T6 "the class rename didn't persist". Misreading, cost one turn each.
+- **R4 T6.1:** RenameSymbol with `docCommentId` `0cbca485@...` (the `changeId` from the lift summary's "Call
+  UndoLastApply(changeId: ...)" hint) -> "Symbol '0cbca485@...' no longer resolves - may have been renamed, moved, or
+  removed" (`PersistentWorkspaceManager.cs:3564`, main tree).
+- **Step 7 ordering:** R2 and R3 failed Step 7 at RunTest (field left as the concrete type after the lift rewrote it); both fixed it next turn.
+
 ## Out of scope
 
 - Batch C ran before 31b206a6 and 28391d8c; their effect is unmeasured.
