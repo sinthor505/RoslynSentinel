@@ -505,6 +505,54 @@ are fine)."), 727ade36 (FileNotFound with no name match says the file does not e
   removed" (`PersistentWorkspaceManager.cs:3564`, main tree).
 - **Step 7 ordering:** R2 and R3 failed Step 7 at RunTest (field left as the concrete type after the lift rewrote it); both fixed it next turn.
 
+## Batch V: plan_tenchain_batch_f_fixes validation, e9d16dfd, rename lifting OFF, 6/10 (2026-11-11)
+
+**Setup.** The validation batch of [plan_tenchain_batch_f_fixes](../plans/closed/plan_tenchain_batch_f_fixes.md): F's
+settings at e9d16dfd (= 792a95c3, all six plan steps, plus an eval-doc commit). Host 113 after the update restart, context
+**70144** (F: 60160, not reloaded), parallel 4, budget as in H4. `ROSLYNSENTINEL_LIFT_RENAMES` and `LOOP_LATCH` unset.
+Worktree `C:\tmp\rs_eval_h1` (H1's, reused), `-Repeats 10`. L1. Archive
+`C:\tmp\rs_eval_h1\ModelTestingResults\113\Model_AppliesTenChainedRefactors\`, runs `20261111-202255-553` to
+`215419-218` (host-UTC stamps). Extraction by model-eval-log-analyst; causes below are not yet root-caused.
+
+| Run | Folder | Result | Turns | Failed calls |
+| --- | --- | --- | --- | --- |
+| R1 | 202255-553 | FAIL Step 10 (literal 1 and 2 kept; model claimed done) | 17 | 4 |
+| R2 | 202840-144 | FAIL Step 10 (literal 1 kept "per task constraint", no such constraint) | 42 | 3 |
+| R3 | 204512-053 | pass | 16 | 1 |
+| R4 | 204950-190 | FAIL RepeatedToolFailure (ReplaceSnippet x10 same signature, T22-T31) | 31 | 23 |
+| R5 | 210443-992 | pass | 26 | 5 |
+| R6 | 211241-945 | pass | 17 | 2 |
+| R7 | 211740-975 | pass | 28 | 2 |
+| R8 | 212913-120 | FAIL per-tool budget (ReplaceSnippet 7 > 5) | 42 | 9 |
+| R9 | 214031-247 | pass | 36 | 7 |
+| R10 | 215419-218 | pass | 24 | 3 |
+
+| Measure | F off | V off |
+| --- | --- | --- |
+| Pass | 8/10 | 6/10 |
+| Mean turns | 24.0 | 27.9 |
+| Mean failed calls | 6.9 | 5.9 |
+| ContextExhausted stops | n/a | 0 (closest: R5 T8 89%, R4 T31 86%) |
+
+- **Not a clean comparison.** Context 70144 vs 60160 and ten runs per batch; 6/10 vs 8/10 is within noise.
+- **F's failure modes are gone.** No duplicate-file deadlock (F R8), no `action: replace` pairs (F R1), no Git or
+  project-tool calls (step 1 surface), no context-exhausted finish (step 6).
+- **R1, R2: Step 10 half-done with a success claim.** Every tool call succeeded; the final messages claim step 10 done.
+  The fixture's own tests passed 7/7 in runs that verified, so they do not cover Step 10 (hypothesis: R10's final message
+  says they cover steps 3, 7 and 9; unchecked against the fixture).
+- **R4: reasoning names RenameSymbol, call is ReplaceSnippet.** The CS1061 rejection named
+  `RenameSymbol(docCommentId: "M:...CalcDisc(...)", newName: "CalculateDiscountedTotal")`; T17-T19 reasoning "Let me
+  actually call RenameSymbol directly", then 15 identical ReplaceSnippet calls (T16-T20, T22-T31) despite "You already sent
+  this exact edit". RenameSymbol never called. This is the failure rename lifting targets (no lift-on batch had it).
+- **R8: NotFound with a wrong matchLine.** T29, T32 "oldContent was found (1 match(es)), but not at the matchLine you
+  supplied"; T26, T28 NotFound on the renamed file. The harness counted 7 ReplaceSnippet failures, the transcript shows 8
+  plus one "guardrail redirect" found only in the console summary (unresolved).
+- **Smaller:** R5 T8 ModifyModifier `modifier: "internal"` ("Valid values are: virtual, abstract, ..."); the model
+  called ChangeAccessibility in the same turn. R9 T21 CreateFile on an existing file. Stale-path ReadFile in R1, R4, R5,
+  R8, R9.
+- **Token fields (plan step 6):** `InputTokens`/`OutputTokens` are populated; `CachedInputTokens`/`ReasoningTokens`
+  are absent (hypothesis: LM Studio does not report them).
+
 ## Out of scope
 
 - Batch C ran before 31b206a6 and 28391d8c; their effect is unmeasured.
