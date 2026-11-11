@@ -121,8 +121,11 @@ public class CallableToolHintTests
         var unchanged = WorkspaceReadNavigationImpl.BuildFileNotFoundError(solution, "C:\\x\\Missing.cs");
         Assert.That(unchanged.Message, Does.Contain("You MUST call ListSolutionItems("));
 
+        Assert.That(unchanged.Message, Does.Contain("CreateFile("), "every tool callable: the not-yet-created hint is shown");
+
         var onlyListing = WorkspaceReadNavigationImpl.BuildFileNotFoundError(solution, "C:\\x\\Missing.cs", name => name == "ListSolutionItems");
-        Assert.That(onlyListing.Message, Is.EqualTo(unchanged.Message));
+        Assert.That(onlyListing.Message, Does.Contain("You MUST call ListSolutionItems("));
+        Assert.That(onlyListing.Message, Does.Not.Contain("CreateFile"), "CreateFile is not callable, so it is not named");
     }
 
     // ---- WorkspaceFileEditImpl.BuildFileNotFoundError (ReadFile) ----

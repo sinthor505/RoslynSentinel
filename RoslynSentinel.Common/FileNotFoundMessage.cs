@@ -54,6 +54,9 @@ public static class FileNotFoundMessage
         }
 
         var notFound = declaring + $"File '{requestedPath}' was not found anywhere in the loaded solution (searched {searchedProjectCount} project(s), no file-name match; path comparison ignores case, so casing is not the cause). ";
+        // Batch H3 R2/R3 T1: the model read a file its task asks it to create later. Say so before the listing advice.
+        if (Callable(isCallable, "CreateFile"))
+            notFound += $"It does not exist yet: if your task is to create it, call {ToolCallHint.Call("CreateFile")} instead of reading it. ";
         return Callable(isCallable, "ListSolutionItems")
             ? notFound + $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path."
             : notFound + "Retry with a path you have already seen in an earlier result; do not guess another one.";
