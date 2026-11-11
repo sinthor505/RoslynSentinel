@@ -185,7 +185,27 @@ namespace MyApp.Services
             Assert.That(note, Does.StartWith("Rewritten call sites:"));
             Assert.That(note, Does.Contain("Cq.cs:4  public void U() { NewQ(); }"));
             Assert.That(note, Does.Contain("Cq.cs:5  public void V() { NewQ(); }"));
-            Assert.That(note, Does.EndWith("These call sites are already updated; do not edit them again."));
+            Assert.That(note, Does.EndWith("These lines already use the new name; do not repeat the rename on them (other changes to them are fine)."));
         });
+    }
+
+    // H3: RenameSymbol remembers the lines it rewrote, so a later ReplaceSnippet with the old text of one of them can be told what happened.
+    [Test]
+    [Category("RefactoringSignatureTools")]
+    public async Task RenameSymbol_Success_RemembersTheRewrittenLinesForALaterStaleEdit()
+    {
+        var source = "public class Cr\r\n{\r\n    public void OldR() { }\r\n    public void U() { OldR(); }\r\n}\r\n";
+        var path = PathOf("Cr.cs");
+        File.WriteAllText(path, source);
+        SetSource(source, path);
+        var symbolNavEngine = Battery.Basic.TestEngines.SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var handle = (await symbolNavEngine.LocateSymbolAsync("OldR")).Single();
+
+        var result = await _refactoringSignatureTools.RenameSymbolTool(
+            reason: "test message", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!, newName: "NewR");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var note = RewrittenLineMemory.Shared.Explain(path, "public void U() { OldR(); }", File.ReadAllText(path));
+        Assert.That(note, Is.EqualTo("Cr.cs:4 was rewritten by RenameSymbol earlier: it now reads 'public void U() { NewR(); }'. Re-read the file or use the new text."));
     }
 }

@@ -430,7 +430,7 @@ public class ReplaceSnippetRenameLiftTests
         {
             Assert.That(summary, Does.Contain("Rewritten call sites:"));
             Assert.That(summary, Does.Contain("OrderCheckout.cs:5  decimal F(OrderPricingCalculator c) => c.CalculateDiscountedTotal(1m);"));
-            Assert.That(summary, Does.Contain("These call sites are already updated; do not edit them again."));
+            Assert.That(summary, Does.Contain("These lines already use the new name; do not repeat the rename on them (other changes to them are fine)."));
         });
     }
 
@@ -538,5 +538,44 @@ public class ReplaceSnippetRenameLiftTests
             Assert.That(verdicts.Any(v => v.Contains("old=CalcDisc new=CalculateDiscountedTotal usesRewritten=1")), Is.True, string.Join("\n", verdicts));
             Assert.That(verdicts.Any(v => v.Contains("old=CalcTax new=ComputeTax usesRewritten=1")), Is.True, string.Join("\n", verdicts));
         });
+    }
+
+    // H3 R3 T3.1 / H1 R4 T5 / G R3 T8: after a lift rewrote the caller, the model sent an oldContent with the caller's OLD line and got a bare "not found".
+    // The error now says which line the lift rewrote and what it reads now. A later successful write of that file drops the memory.
+    [Test]
+    public async Task FlagOn_StaleOldContentAfterALift_NamesTheRewrittenLineAndWhatItReadsNow()
+    {
+        using var _ = LiftRenamesOptions.OverrideForCurrentContext(true);
+        using var workspace = CreateWorkspace();
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+        Assert.That((await RenameMethodDeclarationOnly(workspace)).IsError, Is.False);
+        const string staleOld = "decimal F(OrderPricingCalculator c) => c.CalcDisc(1m);";
+
+        var stale = await tools.ReplaceSnippetTool(
+            reason: "edit the caller line with its old text",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(CheckoutRelativePath),
+            oldContent: staleOld,
+            newContent: "decimal F(OrderPricingCalculator c) => c.CalculateDiscountedTotal(2m);");
+
+        Assert.That(stale.IsError, Is.True);
+        Assert.That(stale.ErrorData?.Message, Does.Contain("OrderCheckout.cs:5 was rewritten by the rename lift earlier: it now reads 'decimal F(OrderPricingCalculator c) => c.CalculateDiscountedTotal(1m);'. Re-read the file or use the new text."));
+
+        // A later successful write of the file forgets the rows: the same stale text then gets the plain not-found error.
+        var write = await tools.ReplaceSnippetTool(
+            reason: "edit the caller line using its current text",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(CheckoutRelativePath),
+            oldContent: "c.CalculateDiscountedTotal(1m)",
+            newContent: "c.CalculateDiscountedTotal(2m)");
+        Assert.That(write.IsError, Is.False, write.ErrorData?.Message);
+        var again = await tools.ReplaceSnippetTool(
+            reason: "send the stale text again",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(CheckoutRelativePath),
+            oldContent: staleOld,
+            newContent: "decimal F(OrderPricingCalculator c) => c.CalculateDiscountedTotal(3m);");
+        Assert.That(again.IsError, Is.True);
+        Assert.That(again.ErrorData?.Message, Does.Not.Contain("was rewritten by"));
     }
 }

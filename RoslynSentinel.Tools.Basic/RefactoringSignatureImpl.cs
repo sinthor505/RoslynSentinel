@@ -249,6 +249,13 @@ public class RefactoringSignatureImpl
             var rewrittenLines = RenameLifter.DescribeRewrittenLines(
                 await RenameLifter.RewrittenLinesAsync(committedForMoves, result.PendingChanges, cancellationToken));
             callSitesNote = rewrittenLines.Length == 0 ? null : rewrittenLines + "\n" + RenameLifter.AlreadyUpdatedSentence;
+
+            // H3: remember the old and new text of each rewritten line, so a later ReplaceSnippet whose oldContent still has the old text is told so.
+            // The written files' older rows are stale now (this write replaced them), so forget them first.
+            foreach (var writtenPath in result.PendingChanges.Keys)
+                RewrittenLineMemory.Shared.Forget(writtenPath.ToString());
+            RewrittenLineMemory.Shared.Remember("RenameSymbol",
+                await RenameLifter.RewrittenLinePairsAsync(committedForMoves, result.PendingChanges, cancellationToken));
         }
 
         // Deliberately not wired into ForPossiblyLargeDataAsync: this

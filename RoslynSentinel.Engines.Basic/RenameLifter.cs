@@ -353,8 +353,11 @@ public static class RenameLifter
         return rows.Count == 0 ? string.Empty : "Rewritten call sites:\n" + string.Join("\n", rows);
     }
 
-    /// <summary>The sentence that follows the rewritten lines: tells the model not to edit them again.</summary>
-    public const string AlreadyUpdatedSentence = "These call sites are already updated; do not edit them again.";
+    /// <summary>
+    /// The sentence that follows the rewritten lines. Scoped to the rename on purpose: H3 run 2 T5 read "do not edit them again" as covering the
+    /// whole file, while a later step of its chain legitimately had to change one of those lines.
+    /// </summary>
+    public const string AlreadyUpdatedSentence = "These lines already use the new name; do not repeat the rename on them (other changes to them are fine).";
 
     /// <summary>
     /// The lines a finished rename rewrote, per file name (no directory), as <c>File.cs:12  trimmed source line</c>: each changed document's
@@ -402,5 +405,46 @@ public static class RenameLifter
         }
 
         return rewritten;
+    }
+
+    /// <summary>
+    /// The lines a finished rename rewrote as (1-based line, old trimmed text, new trimmed text), keyed by full file path: each changed document's
+    /// new text compared line by line with the document in <paramref name="baseline"/>. For the rewrite memory (H3: a later "oldContent was not
+    /// found" can then say which line was rewritten and what it reads now). A file whose line count changed, or with no baseline document, is skipped.
+    /// </summary>
+    public static async Task<IReadOnlyDictionary<string, IReadOnlyList<(int Line, string OldText, string NewText)>>> RewrittenLinePairsAsync(
+        Solution baseline, IReadOnlyDictionary<FilePathWrapper, string> changes, CancellationToken cancellationToken)
+    {
+        var pairs = new Dictionary<string, IReadOnlyList<(int Line, string OldText, string NewText)>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (path, newContent) in changes)
+        {
+            if (await EditImpactAnalyzer.DocumentTextAsync(baseline, path.ToString(), cancellationToken) is not { } before)
+            {
+                continue;
+            }
+
+            var oldLines = before.Split('\n');
+            var newLines = newContent.Split('\n');
+            if (oldLines.Length != newLines.Length)
+            {
+                continue;
+            }
+
+            var rows = new List<(int Line, string OldText, string NewText)>();
+            for (var i = 0; i < newLines.Length; i++)
+            {
+                if (!string.Equals(oldLines[i], newLines[i], StringComparison.Ordinal))
+                {
+                    rows.Add((i + 1, oldLines[i].Trim(), newLines[i].Trim()));
+                }
+            }
+
+            if (rows.Count > 0)
+            {
+                pairs[path.ToString()] = rows;
+            }
+        }
+
+        return pairs;
     }
 }

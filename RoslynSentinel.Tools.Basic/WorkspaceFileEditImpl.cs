@@ -916,7 +916,7 @@ public class WorkspaceFileEditImpl
     /// <paramref name="editedSpans"/> are the model's replacements per file as spans of the baseline text, so the rename also reaches old-name
     /// uses the model's snippets did not cover (a constructor or self-call elsewhere in an edited file).
     /// </summary>
-    private async Task<(ApplyChangesResult? Result, Dictionary<FilePathWrapper, string>? Changes, string Note, List<ImpactVerdict>? Verdicts)?> TryLiftRenameAsync(
+    private async Task<(ApplyChangesResult? Result, Dictionary<FilePathWrapper, string>? Changes, string Note, List<ImpactVerdict>? Verdicts, IReadOnlyDictionary<string, IReadOnlyList<(int Line, string OldText, string NewText)>>? Rewrites)?> TryLiftRenameAsync(
         Dictionary<FilePathWrapper, string> candidateChanges, IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> editedSpans, CancellationToken cancellationToken)
     {
         if (!LiftRenamesOptions.Enabled)
@@ -929,9 +929,15 @@ public class WorkspaceFileEditImpl
         {
             // H2 R1: a refusal used to be silent, so the model could not tell "the server did not try" from "the server could not". Result == null marks it: the
             // caller keeps the ordinary rejection and prefixes this note. No note when the diff held nothing rename-shaped (refusal is null then).
-            return refusal is null ? null : (null, null, $"Not auto-applied as RenameSymbol: {refusal}.", null);
+            return refusal is null ? null : (null, null, $"Not auto-applied as RenameSymbol: {refusal}.", null, null);
         }
 
+        // H3: the old and new text of the lines the rename rewrote in files the model did not edit, for RewrittenLineMemory. Read from the committed solution
+        // BEFORE the apply replaces it; kept only when the lift applied (the caller remembers them after its own forget of the written files).
+        // READCHOKEPOINT-CAST: read the committed solution through the reader view of the workspace manager.
+        var baselineSolution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var rewrites = await RenameLifter.RewrittenLinePairsAsync(
+            baselineSolution, plan.Changes.Where(kv => !candidateChanges.ContainsKey(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value), cancellationToken);
         var lifted = await _workspaceManager.ApplyProposedChangesAsync(plan.Changes, validateChanges: true, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
         var rewrittenLines = plan.DescribeRewrittenLines();
         // Batch G R3 T2: the model blamed the rename for errors that came from the other text of its edit. When no remaining error sits in a file the
@@ -945,7 +951,7 @@ public class WorkspaceFileEditImpl
             : $"Applied as RenameSymbol: {plan.Describe()} Files changed: {string.Join(", ", plan.Changes.Keys.Select(k => Path.GetFileName((string)k)))}."
                 + (rewrittenLines.Length == 0 ? "" : "\n" + rewrittenLines + "\n" + RenameLifter.AlreadyUpdatedSentence);
         _logger.LogInformation("ReplaceSnippet rename lift of {Renames}: {Outcome}", plan.DescribeRenames(), lifted.IsError ? "still rejected" : "applied");
-        return (lifted, plan.Changes, note, plan.ToVerdicts(lifted.IsError));
+        return (lifted, plan.Changes, note, plan.ToVerdicts(lifted.IsError), lifted.IsError ? null : rewrites);
     }
 
     /// <summary>
@@ -1155,6 +1161,11 @@ public class WorkspaceFileEditImpl
                         // Same error and code; only the text grows, so callers branching on NotFound are unaffected.
                         throw new ToolNotFoundException(notFound.Message + " " + RejectedOriginNote, notFound.MissingTargetKind, notFound.MissingTargetName, notFound.Snippet, notFound.Candidates);
                     }
+                    catch (ToolNotFoundException notFound) when (RewrittenLineMemory.Shared.Explain((string)(document.FilePath ?? filePathResolved), oldContent, oldText.ToString()) is { } rewriteNote)
+                    {
+                        // H3: the oldContent holds the old text of a line the server rewrote (a lifted rename or RenameSymbol) earlier.
+                        throw new ToolNotFoundException(notFound.Message + " " + rewriteNote, notFound.MissingTargetKind, notFound.MissingTargetName, notFound.Snippet, notFound.Candidates);
+                    }
                     var newFileContent = oldText.ToString().Remove(match.Start, match.Length).Insert(match.Start, newContent);
                     var targetPath = document.FilePath ?? filePathResolved;
                     var targetEol = _workspaceManager.ResolveEol((string)targetPath, oldText.ToString());
@@ -1204,6 +1215,7 @@ public class WorkspaceFileEditImpl
                     // re-validated as RenameSymbol output merged with this edit's own text; see TryLiftRenameAsync.
                     string? liftNote = null;
                     string? liftRefusalNote = null;
+                    IReadOnlyDictionary<string, IReadOnlyList<(int Line, string OldText, string NewText)>>? liftRewrites = null;
                     List<ImpactVerdict>? liftVerdicts = null;
                     if (result.IsError && result.ValidationResult != null && await TryLiftRenameAsync(snippetChanges, liftSpans, cancellationToken) is { } lift)
                     {
@@ -1219,6 +1231,7 @@ public class WorkspaceFileEditImpl
                             snippetChanges = lift.Changes!;
                             liftNote = lift.Note;
                             liftVerdicts = lift.Verdicts;
+                            liftRewrites = lift.Rewrites;
                         }
                     }
                     var liftText = liftNote ?? liftRefusalNote;
@@ -1257,11 +1270,14 @@ public class WorkspaceFileEditImpl
                         };
                     if (!result.IsError)
                     {
-                        _rejectedEdits.Forget((string)targetPath);
+                        ForgetFileMemories((string)targetPath);
                         // A lifted rename also wrote other files (snippetChanges is the merged set then): an earlier rejected edit of one of them
                         // must not make the "file still has the old text" note fire, because the lift rewrote that file (batch G R3).
                         foreach (var writtenFile in snippetChanges.Keys)
-                            _rejectedEdits.Forget((string)writtenFile);
+                            ForgetFileMemories((string)writtenFile);
+                        // After the forget: the lift's own rewrites of the other files are what a later stale oldContent should be told about.
+                        if (liftRewrites is not null)
+                            RewrittenLineMemory.Shared.Remember("the rename lift", liftRewrites);
                     }
                     var changeId = Guid.NewGuid().ToString("n")[..8];
                     var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet", result, blobChangeId: changeId, cancellationToken: cancellationToken);
@@ -1452,6 +1468,9 @@ public class WorkspaceFileEditImpl
                     var rejectedOriginNote = toolEx is ToolNotFoundException && _rejectedEdits.Explains((string)canonicalPath, edit.OldContent, originalString)
                         ? " " + RejectedOriginNote
                         : "";
+                    // H3: or the oldContent holds the old text of a line the server rewrote earlier (a lifted rename or RenameSymbol).
+                    if (rejectedOriginNote.Length == 0 && toolEx is ToolNotFoundException && RewrittenLineMemory.Shared.Explain((string)canonicalPath, edit.OldContent, originalString) is { } rewriteNote)
+                        rejectedOriginNote = " " + rewriteNote;
                     perEditErrors.Add($"batchEdits[{index}] ({filePathResolved}): {toolEx.Message}{rejectedOriginNote}"); failureCodes.Add(toolEx.ErrorCode);
                 }
             }
@@ -1548,6 +1567,7 @@ public class WorkspaceFileEditImpl
             // Experimental rename lifting (--lift-renames, off by default); see TryLiftRenameAsync and the single-edit path.
             string? liftNote = null;
             string? liftRefusalNote = null;
+            IReadOnlyDictionary<string, IReadOnlyList<(int Line, string OldText, string NewText)>>? liftRewrites = null;
             List<ImpactVerdict>? liftVerdicts = null;
             if (result.IsError && result.ValidationResult != null && await TryLiftRenameAsync(finalContents, liftSpans, cancellationToken) is { } lift)
             {
@@ -1563,6 +1583,7 @@ public class WorkspaceFileEditImpl
                     finalContents = lift.Changes!;
                     liftNote = lift.Note;
                     liftVerdicts = lift.Verdicts;
+                    liftRewrites = lift.Rewrites;
                 }
             }
             var liftText = liftNote ?? liftRefusalNote;
@@ -1605,7 +1626,10 @@ public class WorkspaceFileEditImpl
             {
                 // finalContents is the merged set after a lift, so this also forgets the files the lift wrote (batch G R3), not only the edited ones.
                 foreach (var writtenPath in newContentsByFile.Keys.Concat(finalContents.Keys.Select(k => (string)k)))
-                    _rejectedEdits.Forget(writtenPath);
+                    ForgetFileMemories(writtenPath);
+                // After the forget: the lift's own rewrites of the other files are what a later stale oldContent should be told about.
+                if (liftRewrites is not null)
+                    RewrittenLineMemory.Shared.Remember("the rename lift", liftRewrites);
             }
             var changeId = Guid.NewGuid().ToString("n")[..8];
             var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet_batch", result, blobChangeId: changeId, cancellationToken: cancellationToken);
@@ -1759,5 +1783,12 @@ public class WorkspaceFileEditImpl
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "CreateFile")
             };
         }
+    }
+
+    /// <summary>A successful write of <paramref name="path"/> makes both per-file memories stale: the rejected-edit rows and the server-side rewrite rows (<see cref="RewrittenLineMemory"/>).</summary>
+    private void ForgetFileMemories(string path)
+    {
+        _rejectedEdits.Forget(path);
+        RewrittenLineMemory.Shared.Forget(path);
     }
 }
