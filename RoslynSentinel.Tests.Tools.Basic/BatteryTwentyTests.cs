@@ -1096,6 +1096,72 @@ public class Order
         Assert.That(workspace.ReadText("TestProj/Test.cs"), Does.Not.Contain("BuildInternalDebugLabel"));
     }
 
+    [Test]
+    public async Task DeleteUnusedSymbol_DocCommentIdWithoutProjectName_NamesTheRequiredProjectAndDeclaringProject()
+    {
+        using var workspace = InMemoryWorkspace.Create(("TestProj/Test.cs", DeadMethodSource));
+        var tools = BuildInMemoryTools(workspace.Manager);
+
+        var result = await tools.DeleteUnusedSymbolTool(reason: "test message", workspace.PathOf("TestProj/Test.cs"), docCommentId: "M:TestProj.Order.BuildInternalDebugLabel");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.Message, Does.Contain("projectName is required with docCommentId").And.Contain("InMemoryProject"));
+        Assert.That(workspace.ReadText("TestProj/Test.cs"), Does.Contain("BuildInternalDebugLabel"));
+    }
+
+    [Test]
+    public async Task DeleteUnusedSymbol_ProjectNameWithoutDocCommentId_SaysDocCommentIdIsRequired()
+    {
+        using var workspace = InMemoryWorkspace.Create(("TestProj/Test.cs", DeadMethodSource));
+        var tools = BuildInMemoryTools(workspace.Manager);
+
+        var result = await tools.DeleteUnusedSymbolTool(reason: "test message", workspace.PathOf("TestProj/Test.cs"), projectName: "InMemoryProject");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.Message, Does.Contain("docCommentId is required with projectName"));
+    }
+
+    [Test]
+    public async Task DeleteUnusedSymbol_LineWithoutColumn_SaysColumnIsRequired()
+    {
+        using var workspace = InMemoryWorkspace.Create(("TestProj/Test.cs", DeadMethodSource));
+        var tools = BuildInMemoryTools(workspace.Manager);
+
+        var result = await tools.DeleteUnusedSymbolTool(reason: "test message", workspace.PathOf("TestProj/Test.cs"), line: 5);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.Message, Does.Contain("column is required with line"));
+    }
+
+    [Test]
+    public async Task DeleteUnusedSymbol_ColumnWithoutLine_SaysLineIsRequired()
+    {
+        using var workspace = InMemoryWorkspace.Create(("TestProj/Test.cs", DeadMethodSource));
+        var tools = BuildInMemoryTools(workspace.Manager);
+
+        var result = await tools.DeleteUnusedSymbolTool(reason: "test message", workspace.PathOf("TestProj/Test.cs"), column: 5);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.Message, Does.Contain("line is required with column"));
+    }
+
+    [Test]
+    public async Task DeleteUnusedSymbol_NoIdentifyingParameters_KeepsGenericRequiresOneOfMessage()
+    {
+        using var workspace = InMemoryWorkspace.Create(("TestProj/Test.cs", DeadMethodSource));
+        var tools = BuildInMemoryTools(workspace.Manager);
+
+        var result = await tools.DeleteUnusedSymbolTool(reason: "test message", workspace.PathOf("TestProj/Test.cs"));
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.Message, Does.Contain("requires one of"));
+    }
+
     // --- CreateProjectTool ---
 
     [Test]

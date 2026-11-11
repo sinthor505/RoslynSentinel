@@ -835,6 +835,41 @@ public class WorkspaceProjectManagementImpl
         }
     }
 
+    /// <summary>
+    /// Names each parameter combination DeleteUnusedSymbol cannot use when no resolution strategy was complete, so
+    /// the agent can fix the call in one retry. Returns null when none applies (the caller keeps the generic message).
+    /// </summary>
+    private async Task<string?> DescribeMissingParameterAsync(FilePathWrapper filePathResolved, string projectName, string docCommentId, int line, int column, CancellationToken cancellationToken)
+    {
+        var problems = new List<string>();
+        if (!string.IsNullOrEmpty(docCommentId) && string.IsNullOrEmpty(projectName))
+        {
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            var declaringProjects = solution is null
+                ? new List<string>()
+                : solution.GetDocumentIdsWithFilePath(filePathResolved)
+                    .Select(id => solution.GetProject(id.ProjectId)?.Name)
+                    .OfType<string>().Distinct().ToList();
+            var sentence = "projectName is required with docCommentId.";
+            if (declaringProjects.Count == 1)
+                sentence += $" The file declares in project '{declaringProjects[0]}'; retry with projectName: \"{declaringProjects[0]}\" and the same docCommentId.";
+            else if (declaringProjects.Count > 1)
+                sentence += $" The file declares in projects {string.Join(", ", declaringProjects.Select(p => $"'{p}'"))}; retry with projectName set to one of them and the same docCommentId.";
+            problems.Add(sentence);
+        }
+
+        if (!string.IsNullOrEmpty(projectName) && string.IsNullOrEmpty(docCommentId))
+            problems.Add("docCommentId is required with projectName (a project name alone does not identify a symbol). Get the docCommentId from " + ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "<name>")) + ", or pass symbolName, or line and column.");
+
+        if (line > 0 && column <= 0)
+            problems.Add($"column is required with line (got line {line}, column {column}). Pass the 1-based column of the declaration, or use symbolName instead.");
+
+        if (column > 0 && line <= 0)
+            problems.Add($"line is required with column (got column {column}, line {line}). Pass the 1-based line of the declaration, or use symbolName instead.");
+
+        return problems.Count == 0 ? null : string.Join(" ", problems);
+    }
+
     public async Task<SentinelCallToolResult<object>> DeleteUnusedSymbol(ToolCallReason reason, string filePath,
         string projectName = "", string docCommentId = "", string? symbolName = null,
         string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null,
@@ -903,7 +938,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "DeleteUnusedSymbol requires one of: (projectName, docCommentId) for handle-based resolution, (symbolName, optionally with contextSnippet/lineBefore/lineAfter) for name-based resolution, or (line, column) for legacy line/column-based resolution.")
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, await DescribeMissingParameterAsync(filePathResolved, projectName, docCommentId, line, column, cancellationToken) ?? "DeleteUnusedSymbol requires one of: (projectName, docCommentId) for handle-based resolution, (symbolName, optionally with contextSnippet/lineBefore/lineAfter) for name-based resolution, or (line, column) for legacy line/column-based resolution.")
             };
         }
         catch (Exception ex)
