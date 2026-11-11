@@ -2626,11 +2626,10 @@ public class MemberRefactoringEngine
                 }
 
                 var kindNames = string.Join(", ", typeKindCandidatesForHint.Select(c => c.Kind).Distinct());
-                throw new ToolNotFoundException($"'{memberName}' is a type-level declaration ({kindNames}), not a class member. " +
-                    "Member(remove) only removes class-level members (methods, properties, fields, constructors, " +
-                    "events, indexers) -- it does not support removing type declarations (classes, interfaces, " +
-                    "structs, records, enums, or enum members), and skipPrecheck does not change this. " +
-                    $"To remove an unreferenced type declaration, use {ToolCallHint.Call("DeleteUnusedSymbol")}. If it still has callers, update or remove those callers first and then use {ToolCallHint.Call("DeleteUnusedSymbol")}; " +
+                throw new ToolNotFoundException($"'{memberName}' is a type-level declaration ({kindNames}) that Member(remove) could not delete here. " +
+                    "Member(remove) deletes classes, interfaces, structs, records and enums that resolve to a symbol in the loaded solution, " +
+                    $"but it cannot delete an enum member through this route: remove one with {ToolCallHint.Call("ModifyEnum")} instead. " +
+                    $"To remove an unreferenced type declaration another way, use {ToolCallHint.Call("DeleteUnusedSymbol")}; " +
                     $"edit the file's raw text with {ToolCallHint.Call("ReplaceSnippet")} or {ToolCallHint.Call("ApplyDiff")} only as a last resort.", "member", memberName); // hint-ok: Member(remove) in the message above is prose describing the operation, not a call to make
             }
 
@@ -2664,6 +2663,38 @@ public class MemberRefactoringEngine
             Message = "// Member removed.",
             UpdatedText = await RoslynFormattingHelper.RemoveNodePreservingTriviaAsync(document, root, member, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken: cancellationToken)
         };
+    }
+
+    /// <summary>
+    /// True when RemoveMemberAsync would route <paramref name="memberName"/> to StructuralRefinementEngine.SafeDeleteSymbolAsync:
+    /// no class-level member candidate survives the same filtering RemoveMemberAsync applies, and at least one
+    /// Class/Interface/Struct/Record/Enum declaration of that name does. The tool layer uses this to skip its member-oriented
+    /// caller/implementation precheck, since the type route has its own usage check. Never throws; false when the file or name does not resolve.
+    /// </summary>
+    public async Task<bool> IsTypeRemovalTargetAsync(FilePathWrapper filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containerName = null, CancellationToken cancellationToken = default)
+    {
+        // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
+        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var document = DocumentLookup.FindDocumentOrNull(solution, filePath);
+        if (document == null)
+            return false;
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+            return false;
+
+        var allNameCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken);
+        var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(allNameCandidates
+            .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember))
+            .ToList());
+        // TODO Member remove of a type that declares its own constructor resolves the name to the constructor (a ConstructorDeclaration shares the type's name), so the type itself is not removed and the precheck/usage refusal talks about the constructor; consider preferring the type when a constructor candidate is in the type named memberName (candidate for the R8 'has 1 usages' report).
+        if (SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName).Count > 0)
+            return false;
+
+        var deletableTypeCandidates = allNameCandidates
+            .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+            .ToList();
+        return SyntaxTargetResolver.FilterByContainingType(deletableTypeCandidates, containerName).Count > 0;
     }
 
     /// <summary>

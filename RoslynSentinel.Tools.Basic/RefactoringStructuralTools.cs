@@ -132,7 +132,7 @@ public class RefactoringStructuralTools
         // No [Description] on the two anchor names by design (owner ruling): the names say they are member names, not line numbers.
         [ExternalInputRequired(DataTag.SymbolName, required: false)] string? insertAfterMemberName = null,
         [ExternalInputRequired(DataTag.SymbolName, required: false)] string? insertBeforeMemberName = null,
-        [Description("Forcefully removes the member, skipping any precheck for callers or implementations.")] bool skipPrecheck = false,
+        [Description("Skips the tool-level caller/implementation precheck for a member. The engine's own usage check and the compile check still apply. Not needed for type declarations.")] bool skipPrecheck = false,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,

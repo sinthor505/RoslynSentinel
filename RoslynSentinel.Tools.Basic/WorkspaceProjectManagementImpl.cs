@@ -865,7 +865,8 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
-                SuccessData = /* ApplyChangesResult has no ApplyOutcome, so From cannot take the change id: set it with 'with'. */ AppliedChangeSummary.From(new List<FileLineChange> { FileLineChange.Compute(filePathResolved, apply.PreImages != null && apply.PreImages.TryGetValue(filePathResolved, out var before) ? before : null, result.UpdatedText) }, apply.Findings, [filePathResolved], $"Deleted unused symbol in {Path.GetFileName(filePathResolved)}.", dryRun: false) with { ChangeId = changeId }
+                SuccessData = /* ApplyChangesResult has no ApplyOutcome, so From cannot take the change id: set it with 'with'. */ AppliedChangeSummary.From(new List<FileLineChange> { FileLineChange.Compute(filePathResolved, apply.PreImages != null && apply.PreImages.TryGetValue(filePathResolved, out var before) ? before : null, result.UpdatedText) }, apply.Findings, [filePathResolved], $"Deleted unused symbol in {Path.GetFileName(filePathResolved)}.", dryRun: false) with { ChangeId = changeId },
+                WarningDetails = result.Warnings is { Count: > 0 } ? string.Join(" ", result.Warnings) : null
             };
         }
 

@@ -713,7 +713,10 @@ public class RefactoringStructuralImpl
         if (string.IsNullOrEmpty(memberName))
             return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "Member: memberName is required for operation 'remove'.") };
 
-        if (!skipPrecheck)
+        // A type declaration (class/interface/struct/record/enum) is removed through SafeDeleteSymbolAsync, which has its own usage check
+        // that ignores references inside the type's own span; the caller/implementation precheck below is member-oriented and would count those self-references.
+        var isTypeTarget = !skipPrecheck && await _memberRefactoringEngine.IsTypeRemovalTargetAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
+        if (!skipPrecheck && !isTypeTarget)
         {
             var callers = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, memberName, contextSnippet: contextSnippet, lineBefore: lineBefore, lineAfter: lineAfter, cancellationToken: cancellationToken);
             var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, memberName, contextSnippet: contextSnippet, lineBefore: lineBefore, lineAfter: lineAfter, cancellationToken: cancellationToken);
@@ -765,6 +768,9 @@ public class RefactoringStructuralImpl
         if (apply.Error is not null)
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
         var removeMessage = $"Removed '{memberName}' from {Path.GetFileName(filePathResolved)}.";
+        var engineWarning = result.Warnings is { Count: > 0 } ? string.Join(" ", result.Warnings) : null;
+        if (engineWarning != null)
+            removeMessage += " " + engineWarning;
         string? removeWarning = null;
         if (!apply.DryRun)
         {
@@ -779,7 +785,7 @@ public class RefactoringStructuralImpl
                 removeMessage += " " + removeWarning;
             }
         }
-        return new SentinelCallToolResult<object> { IsError = false, SuccessData = AppliedChangeSummary.From(apply, [filePathResolved], removeMessage, validated: false, workspaceVersion: _workspaceManager.WorkspaceVersion), WarningDetails = removeWarning };
+        return new SentinelCallToolResult<object> { IsError = false, SuccessData = AppliedChangeSummary.From(apply, [filePathResolved], removeMessage, validated: false, workspaceVersion: _workspaceManager.WorkspaceVersion), WarningDetails = engineWarning is null ? removeWarning : removeWarning is null ? engineWarning : engineWarning + " " + removeWarning };
     }
 
     // Used by the addMember / addTopLevelType paths of Member (a generated typed property/field is the TypedMember tool).

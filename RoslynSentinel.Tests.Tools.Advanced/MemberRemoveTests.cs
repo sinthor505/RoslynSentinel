@@ -221,13 +221,12 @@ public sealed class MemberRemoveTests
 
     [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
-    public async Task RemoveMember_OnNamespaceLevelRecord_SkipPrecheckTrue_ReferencedRecord_ReturnsSafeDeleteRefusal()
+    public async Task RemoveMember_OnNamespaceLevelRecord_ReferencedRecord_RefusedBySafeDeleteWithoutSkipPrecheck()
     {
         // Regression test for blocking_error_member_remove_skipprecheck_targetnotfound_ambiguous_symbol.md.
-        // MemberTool(remove) routes type-level declarations to StructuralRefinementEngine.SafeDeleteSymbolAsync.
-        // Without skipPrecheck, a record with callers is refused first by the tool-level precheck
-        // (FindCallersAsync) with a caller list. With skipPrecheck: true, that precheck is bypassed and
-        // SafeDeleteSymbolAsync's own usage check refuses the still-referenced record.
+        // MemberTool(remove) routes type-level declarations to StructuralRefinementEngine.SafeDeleteSymbolAsync, and the
+        // member-oriented tool-level precheck (callers/implementations) is skipped for types, so a record with a real
+        // caller is refused by SafeDeleteSymbolAsync's own usage check with no skipPrecheck needed (or advertised).
         using var workspace = InMemoryWorkspace.Create(
             ("Chain.cs", Crlf("""
                 namespace TestProj;
@@ -244,15 +243,101 @@ public sealed class MemberRemoveTests
                 """)));
         var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
 
-        var withPrecheck = await tools.MemberTool(reason: "test message", workspace.PathOf("Chain.cs"), MemberAction.remove, memberName: "CircularDependencyChain");
-        Assert.That(withPrecheck.IsError, Is.True, "A record with a real caller must be refused by the default precheck.");
-        Assert.That(withPrecheck.ErrorData!.Message, Does.Contain("caller"), "Default refusal must come from the tool-level precheck, listing the caller.");
+        var refused = await tools.MemberTool(reason: "test message", workspace.PathOf("Chain.cs"), MemberAction.remove, memberName: "CircularDependencyChain");
+        Assert.That(refused.IsError, Is.True, "A record with a real caller must be refused.");
+        Assert.That(refused.ErrorData!.Message, Does.Contain("usages").Or.Contain("cannot be safely deleted"), "The refusal must come from SafeDeleteSymbolAsync's usage check, not a generic 'Member not found' or the member precheck.");
+        Assert.That(refused.ErrorData!.Message, Does.Not.Contain("skipPrecheck"), "A type removal refusal must not advertise skipPrecheck.");
         Assert.That(workspace.ReadText("Chain.cs"), Does.Contain("record CircularDependencyChain"));
 
+        // skipPrecheck: true gives the same engine refusal (it never bypassed SafeDeleteSymbolAsync).
         var skipPrecheck = await tools.MemberTool(reason: "test message", workspace.PathOf("Chain.cs"), MemberAction.remove, memberName: "CircularDependencyChain", skipPrecheck: true);
         Assert.That(skipPrecheck.IsError, Is.True, "Member(remove) with skipPrecheck must still refuse a referenced type declaration.");
-        Assert.That(skipPrecheck.ErrorData!.Message, Does.Contain("usages").Or.Contain("cannot be safely deleted"), "The refusal must come from SafeDeleteSymbolAsync's usage check, not a generic 'Member not found'.");
+        Assert.That(skipPrecheck.ErrorData!.Message, Does.Contain("usages").Or.Contain("cannot be safely deleted"));
         Assert.That(workspace.ReadText("Chain.cs"), Does.Contain("record CircularDependencyChain"));
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task RemoveMember_OnClassReferencedOnlyFromStringLiterals_RemovesAndWarnsWithLocations()
+    {
+        using var workspace = InMemoryWorkspace.Create(
+            ("Legacy.cs", Crlf("""
+                namespace TestProj;
+
+                public class Legacy
+                {
+                }
+                """)),
+            ("Loader.cs", Crlf("""
+                namespace TestProj;
+
+                public static class Loader
+                {
+                    public static string A() => "Legacy";
+                    public static string B() => "Legacy";
+                }
+                """)));
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
+
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Legacy.cs"), MemberAction.remove, memberName: "Legacy");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(AllText(workspace), Does.Not.Contain("class Legacy"), "A type referenced only from string literals is removed (warn, not block).");
+        Assert.That(result.WarningDetails, Does.Contain("Loader.cs:5").And.Contain("Loader.cs:6"), "The warning names each matching literal as file:line.");
+        Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("Loader.cs:5"), "The success message carries the warning too, for a caller that reads only the message.");
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task RemoveMember_OnSelfReferencingClass_RemovesWithoutSkipPrecheck()
+    {
+        // Every reference to Node sits inside its own declaration, so the tool-level member precheck must not count them.
+        using var workspace = InMemoryWorkspace.Create(
+            ("Node.cs", Crlf("""
+                namespace TestProj;
+
+                public class Node
+                {
+                    public Node Next;
+
+                    public int Depth() => Next == null ? 1 : 1 + Next.Depth();
+
+                    public static Node Make() => new Node();
+                }
+                """)));
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
+
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Node.cs"), MemberAction.remove, memberName: "Node");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(AllText(workspace), Does.Not.Contain("class Node"));
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task DeleteUnusedSymbol_OnClassReferencedOnlyFromStringLiteral_DeletesAndWarnsWithLocation()
+    {
+        // Same engine as Member(remove) for a type, so the string-literal warning must surface here as well.
+        using var workspace = InMemoryWorkspace.Create(
+            ("Legacy.cs", Crlf("""
+                namespace TestProj;
+
+                public class Legacy
+                {
+                }
+                """)),
+            ("Loader.cs", Crlf("""
+                namespace TestProj;
+
+                public static class Loader
+                {
+                    public static string A() => "Legacy";
+                }
+                """)));
+        var workspaceTools = RoslynSentinel.Tests.Battery.Basic.TestTools.WorkspaceTools(workspace.Manager);
+
+        var result = await workspaceTools.DeleteUnusedSymbolTool(reason: "test message", filePath: workspace.PathOf("Legacy.cs"), symbolName: "Legacy");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(AllText(workspace), Does.Not.Contain("class Legacy"));
+        Assert.That(result.WarningDetails, Does.Contain("Loader.cs:5"));
     }
 
     [Test]
