@@ -123,24 +123,22 @@ public class StructuralRefinementEngine
         }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
-        if (references.Any(r => r.Locations.Any()))
+        var externalLocations = ExternalReferenceLocations(references, symbol, document.FilePath ?? string.Empty);
+        if (externalLocations.Count > 0)
         {
-            var firstLocations = references.SelectMany(r => r.Locations.Select(l => l.Location)).Take(3)
+            var firstLocations = externalLocations.Take(3)
                 .Select(l => $"{Path.GetFileName(l.SourceTree?.FilePath ?? string.Empty)}:{l.GetLineSpan().StartLinePosition.Line + 1}");
-            throw new ToolTargetIneligibleException($"Symbol '{symbol.Name}' has {references.Sum(r => r.Locations.Count())} usages and cannot be safely deleted. First locations: {string.Join(", ", firstLocations)}. Next: {ToolCallHint.Call("Search", ("mode", "references"))} to review them.", ToolCallHint.Call("Search", ("mode", "references")));
+            throw new ToolTargetIneligibleException($"Symbol '{symbol.Name}' has {externalLocations.Count} usages and cannot be safely deleted. First locations: {string.Join(", ", firstLocations)}. Next: {ToolCallHint.Call("Search", ("mode", "references"))} to review them.", ToolCallHint.Call("Search", ("mode", "references")));
         }
 
-        var reflectionRisk = await CheckReflectionRiskAsync(solution, filePath, symbol, cancellationToken);
-        if (reflectionRisk != null)
-        {
-            return reflectionRisk;
-        }
+        var warnings = await FindStringLiteralMatchWarningAsync(solution, symbol, filePath, cancellationToken);
 
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root!, node!, SyntaxRemoveOptions.KeepUnbalancedDirectives, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root!, node!, SyntaxRemoveOptions.KeepUnbalancedDirectives, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
+            Warnings = warnings
         };
     }
 
@@ -225,29 +223,78 @@ public class StructuralRefinementEngine
     };
 
     /// <summary>
-    /// Scans every document in the solution for a string literal matching <paramref name="symbol"/>'s
+    /// Scans every document in the solution for string literals whose value equals <paramref name="symbol"/>'s
     /// name -> a likely sign of reflection/<c>nameof</c>-adjacent dynamic usage that <see cref="SymbolFinder"/>
     /// would not catch (ported from the dead <c>BasicRefactoringEngine.SafeDeleteSymbolAsync</c> copy -> see
-    /// docs/TODO.md's "Duplicate/dead SafeDeleteSymbolAsync" entry). Returns a blocking
-    /// <see cref="DocumentEditResult"/> if a match is found anywhere, otherwise null.
+    /// docs/TODO.md's "Duplicate/dead SafeDeleteSymbolAsync" entry). Non-blocking: returns a single warning
+    /// listing every match, or null when nothing matches. The delete is not refused. Literals inside the
+    /// symbol's own declaration in the target file are skipped because they are deleted with it.
     /// </summary>
-    private static async Task<DocumentEditResult?> CheckReflectionRiskAsync(Solution solution, FilePathWrapper filePath, ISymbol symbol, CancellationToken cancellationToken = default)
+    private static async Task<IReadOnlyList<string>?> FindStringLiteralMatchWarningAsync(Solution solution, ISymbol symbol, FilePathWrapper filePath, CancellationToken cancellationToken)
     {
+        var targetPath = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault()?.FilePath;
+        var locations = new List<string>();
+
         foreach (var proj in solution.Projects)
         {
             foreach (var doc in proj.Documents)
             {
                 var docRoot = await doc.GetSyntaxRootAsync(cancellationToken);
-                var hasMatchingLiteral = docRoot?.DescendantNodes().OfType<LiteralExpressionSyntax>()
-                    .Any(l => l.IsKind(SyntaxKind.StringLiteralExpression) && l.Token.ValueText == symbol.Name) ?? false;
-                if (hasMatchingLiteral)
+                if (docRoot == null)
                 {
-                    throw new ToolTargetIneligibleException($"Potential reflection risk: symbol '{symbol.Name}' is referenced by a string literal in {doc.Name}, possible reflection/dynamic usage. Delete manually after verifying.", ToolCallHint.Call("Search", ("mode", "text")));
+                    continue;
+                }
+
+                foreach (var literal in docRoot.DescendantNodes().OfType<LiteralExpressionSyntax>())
+                {
+                    if (!literal.IsKind(SyntaxKind.StringLiteralExpression) || literal.Token.ValueText != symbol.Name)
+                    {
+                        continue;
+                    }
+
+                    var isOwnDeclaration = symbol.DeclaringSyntaxReferences.Any(d =>
+                        string.Equals(d.SyntaxTree.FilePath, targetPath, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(doc.FilePath, targetPath, StringComparison.OrdinalIgnoreCase)
+                        && d.Span.Contains(literal.SpanStart));
+                    if (isOwnDeclaration)
+                    {
+                        continue;
+                    }
+
+                    locations.Add($"{doc.Name}:{literal.GetLocation().GetLineSpan().StartLinePosition.Line + 1}");
                 }
             }
         }
 
-        return null;
+        if (locations.Count == 0)
+        {
+            return null;
+        }
+
+        return new List<string>
+        {
+            $"Symbol '{symbol.Name}' matches a string literal at {string.Join(", ", locations)}. If any of these is reflection or dynamic use, it will fail at runtime after this delete (the compile check cannot catch it); review them."
+        };
+    }
+
+    /// <summary>
+    /// Returns the reference locations of <paramref name="symbol"/> that are not inside its own declaration
+    /// in the target file. A type that refers to itself (its constructor, a self-typed member, a recursive
+    /// call) is deleted with the declaration, so those locations are not usages that block the delete.
+    /// </summary>
+    private static List<Location> ExternalReferenceLocations(IEnumerable<ReferencedSymbol> references, ISymbol symbol, string targetFilePath)
+    {
+        var ownSpans = symbol.DeclaringSyntaxReferences
+            .Where(d => string.Equals(d.SyntaxTree.FilePath, targetFilePath, StringComparison.OrdinalIgnoreCase))
+            .Select(d => d.Span)
+            .ToList();
+
+        return references
+            .SelectMany(r => r.Locations.Select(l => l.Location))
+            .Where(l => !(l.SourceTree != null
+                && string.Equals(l.SourceTree.FilePath, targetFilePath, StringComparison.OrdinalIgnoreCase)
+                && ownSpans.Any(s => s.Contains(l.SourceSpan))))
+            .ToList();
     }
 
     /// <summary>
@@ -274,18 +321,15 @@ public class StructuralRefinementEngine
         }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
-        if (references.Any(r => r.Locations.Any()))
+        var externalLocations = ExternalReferenceLocations(references, symbol, document.FilePath ?? string.Empty);
+        if (externalLocations.Count > 0)
         {
-            var firstLocations = references.SelectMany(r => r.Locations.Select(l => l.Location)).Take(3)
+            var firstLocations = externalLocations.Take(3)
                 .Select(l => $"{Path.GetFileName(l.SourceTree?.FilePath ?? string.Empty)}:{l.GetLineSpan().StartLinePosition.Line + 1}");
-            throw new ToolTargetIneligibleException($"Symbol '{symbol.Name}' has {references.Sum(r => r.Locations.Count())} usages and cannot be safely deleted. First locations: {string.Join(", ", firstLocations)}. Next: {ToolCallHint.Call("Search", ("mode", "references"))} to review them.", ToolCallHint.Call("Search", ("mode", "references")));
+            throw new ToolTargetIneligibleException($"Symbol '{symbol.Name}' has {externalLocations.Count} usages and cannot be safely deleted. First locations: {string.Join(", ", firstLocations)}. Next: {ToolCallHint.Call("Search", ("mode", "references"))} to review them.", ToolCallHint.Call("Search", ("mode", "references")));
         }
 
-        var reflectionRisk = await CheckReflectionRiskAsync(solution, filePath, symbol, cancellationToken);
-        if (reflectionRisk != null)
-        {
-            return reflectionRisk;
-        }
+        var warnings = await FindStringLiteralMatchWarningAsync(solution, symbol, filePath, cancellationToken);
 
         // Find the node that declares this symbol in the document
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -306,7 +350,8 @@ public class StructuralRefinementEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, node, SyntaxRemoveOptions.KeepUnbalancedDirectives, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, node, SyntaxRemoveOptions.KeepUnbalancedDirectives, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
+            Warnings = warnings
         };
     }
 }

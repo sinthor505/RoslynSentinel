@@ -75,7 +75,7 @@ public class Service {
 
     [Test]
     [Category("StructuralRefinementEngine")] // sentinel:auto-category
-    public async Task SafeDelete_ShouldBlockOnReflectionRisk()
+    public async Task SafeDelete_StringLiteralMatch_DeletesAndWarnsWithEachLocation()
     {
         // Arrange
         SetSource("public class Target { public void DeadMethod() {} }", "Target.cs", "Proj");
@@ -83,17 +83,46 @@ public class Service {
         var currentSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
         var projectId = currentSolution?.ProjectIds[0] ?? throw new InvalidOperationException("No project found.");
         var callerDocId = DocumentId.CreateNewId(projectId);
-        var solution = currentSolution!.AddDocument(callerDocId, "Caller.cs", "public class Caller { void M() { var name = \"DeadMethod\"; } }");
+        var solution = currentSolution!.AddDocument(callerDocId, "Caller.cs", "class Caller { void M() { var a = \"DeadMethod\"; } }\nclass Caller2 { void N() { var b = \"DeadMethod\"; } }");
         _workspaceManager.SetTestSolution(solution);
 
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
-        {
-            await _structuralRefinementEngine.SafeDeleteSymbolAsync("Target.cs", "DeadMethod", "public void DeadMethod()", null, null);
-        });
+        // Act
+        var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync("Target.cs", "DeadMethod", "public void DeadMethod()", null, null);
 
-        Assert.That(ex.Message, Does.Contain("reflection"));
-        Assert.That(ex.Message, Does.Contain("Caller.cs"));
+        // Assert
+        Assert.That(result.UpdatedText, Does.Not.Contain("DeadMethod"));
+        Assert.That(result.Warnings, Is.Not.Null);
+        Assert.That(result.Warnings!.Count, Is.EqualTo(1));
+        Assert.That(result.Warnings[0], Does.Contain("Caller.cs:1"));
+        Assert.That(result.Warnings[0], Does.Contain("Caller.cs:2"));
+    }
+
+    [Test]
+    [Category("StructuralRefinementEngine")] // sentinel:auto-category
+    public async Task SafeDelete_ClassWhoseOnlyReferenceIsItsOwnConstructor_IsDeleted()
+    {
+        // Arrange
+        SetSource("public class Widget { public Widget() {} }", "Target.cs", "Proj");
+
+        // Act
+        var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync("Target.cs", "Widget", "public class Widget", null, null);
+
+        // Assert
+        Assert.That(result.UpdatedText, Does.Not.Contain("Widget"));
+    }
+
+    [Test]
+    [Category("StructuralRefinementEngine")] // sentinel:auto-category
+    public async Task SafeDelete_ClassWithSelfTypedMemberAndRecursiveCall_IsDeleted()
+    {
+        // Arrange
+        SetSource("public class Node { public Node Next; public int Depth() => Next == null ? 0 : 1 + Next.Depth(); }", "Target.cs", "Proj");
+
+        // Act
+        var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync("Target.cs", "Node", "public class Node", null, null);
+
+        // Assert
+        Assert.That(result.UpdatedText, Does.Not.Contain("Node"));
     }
 
     [Test]
