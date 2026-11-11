@@ -43,6 +43,7 @@ public sealed class ModelAgentRunner
     private readonly int _maxTokensPerTurn;
     private readonly int _repeatedFailureLimit;
     private readonly ILogger<ModelAgentRunner> _logger;
+    private readonly LoopAssistOptions _loopAssist;
 
     /// <param name="repeatedFailureLimit">
     /// How many <em>consecutive</em> identically-failing tool calls end the run with
@@ -67,6 +68,10 @@ public sealed class ModelAgentRunner
     /// per call site: a step expecting substantial up-front reasoning before its first tool call
     /// needs more headroom than a fixture expecting a quick, simple turn.
     /// </param>
+    /// <param name="loopAssist">
+    /// Loop-assist switches (collapse of repeated rejected calls in the replayed history, plus a fact-only
+    /// injection). Null reads ROSLYNSENTINEL_MODELEVAL_LOOP_ASSIST / _ROLE from the environment; off unless set.
+    /// </param>
     public ModelAgentRunner(
         LmStudioAgentClient llm,
         McpClient mcpClient,
@@ -74,7 +79,8 @@ public sealed class ModelAgentRunner
         int maxTokensPerTurn,
         int turnCap = 25,
         TimeSpan? wallClockCap = null,
-        ILogger<ModelAgentRunner>? logger = null)
+        ILogger<ModelAgentRunner>? logger = null,
+        LoopAssistOptions? loopAssist = null)
     {
         if (repeatedFailureLimit < 1)
         {
@@ -91,6 +97,7 @@ public sealed class ModelAgentRunner
         _wallClockCap = wallClockCap ?? TimeSpan.FromMinutes(10);
         _maxTokensPerTurn = maxTokensPerTurn;
         _logger = logger ?? NullLogger<ModelAgentRunner>.Instance;
+        _loopAssist = loopAssist ?? LoopAssistOptions.FromEnvironment();
     }
 
     /// <param name="runId">
@@ -136,6 +143,13 @@ public sealed class ModelAgentRunner
         _logger.LogInformation("RunId: {RunId}", runId);
 
         var transcript = new AgentTranscript { RunId = runId, SystemPrompt = systemPrompt, UserPrompt = userPrompt };
+        transcript.Tools.AddRange(toolDefinitions.Select(t => t.Name));
+        var assistTracker = new LoopAssistTracker(_loopAssist);
+        if (assistTracker.Enabled)
+        {
+            transcript.AssistCount = 0;
+        }
+
         await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
         var overallStopwatch = Stopwatch.StartNew();
         var stopReason = AgentStopReason.TurnCapExceeded;
@@ -167,7 +181,11 @@ public sealed class ModelAgentRunner
             turnNumber++;
             var turnStartedAt = DateTimeOffset.Now;
             var turnStopwatch = Stopwatch.StartNew();
-            var modelMessage = await _llm.CompleteAsync(messages, toolDefinitions, _maxTokensPerTurn, cancellationToken);
+            // With loop assist off, replayMessages is `messages` itself: the request is unchanged. On, repeated
+            // rejected calls are collapsed in this replay copy only; `messages` and the transcript keep every turn.
+            var turnAssists = new List<AgentAssist>();
+            var replayMessages = assistTracker.CollapseForReplay(messages, turnAssists);
+            var modelMessage = await _llm.CompleteAsync(replayMessages, toolDefinitions, _maxTokensPerTurn, cancellationToken);
             turnStopwatch.Stop();
             var turnCompletedAt = DateTimeOffset.Now;
 
@@ -186,6 +204,7 @@ public sealed class ModelAgentRunner
                 CompletedAt = turnCompletedAt,
             };
             transcript.Turns.Add(turnRecord);
+            RecordAssists(transcript, turnRecord, turnAssists);
             messages.Add(modelMessage);
             await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
 
@@ -232,6 +251,9 @@ public sealed class ModelAgentRunner
             }
 
             var callIndexInTurn = 0;
+            // Injections wait until every tool result of this turn is in `messages`: a message between a call and
+            // its result would break the call/result pairing.
+            var pendingInjections = new List<AgentAssist>();
             foreach (var toolCall in modelMessage.ToolCalls)
             {
                 callIndexInTurn++;
@@ -275,6 +297,12 @@ public sealed class ModelAgentRunner
                 });
                 await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
 
+                var injection = assistTracker.Observe(toolCall, resultJson, isError);
+                if (injection is not null)
+                {
+                    pendingInjections.Add(injection);
+                }
+
                 if (!isError)
                 {
                     lastFailureSignature = null;
@@ -311,13 +339,28 @@ public sealed class ModelAgentRunner
                 }
             }
 
+            if (pendingInjections.Count > 0)
+            {
+                foreach (var pending in pendingInjections)
+                {
+                    messages.Add(assistTracker.CreateAssistMessage(pending.Text));
+                }
+
+                RecordAssists(transcript, turnRecord, pendingInjections);
+                await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
+            }
+
             if (stopReason == AgentStopReason.RepeatedToolFailure)
             {
                 break;
             }
         }
 
-        _logger.LogInformation("Agent run finished: {StopReason} after {TurnCount} turn(s), {Elapsed}.", stopReason, turnNumber, overallStopwatch.Elapsed);
+        // The outcome sentence is added only when loop assist is on, so the off-path line is unchanged.
+        var assistOutcome = assistTracker.Enabled
+            ? " " + LoopAssistTracker.DescribeRunOutcome(stopReason == AgentStopReason.ModelFinished, transcript.AssistCount ?? 0)
+            : "";
+        _logger.LogInformation("Agent run finished: {StopReason} after {TurnCount} turn(s), {Elapsed}.{AssistOutcome}", stopReason, turnNumber, overallStopwatch.Elapsed, assistOutcome);
 
         var transcriptPath = await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
 
@@ -329,6 +372,29 @@ public sealed class ModelAgentRunner
             TurnCount = turnNumber,
             RepeatedFailure = repeatedFailure,
         };
+    }
+
+    /// <summary>
+    /// Stamps <paramref name="assists"/> on <paramref name="turn"/> (Assists), adds them to the run's AssistCount and
+    /// logs one agent.log line each. No-op for an empty list, so a turn that got no assist keeps Assists null.
+    /// The log lines start "Turn N: loop assist" and match none of Parse-AgentLog.ps1's record patterns.
+    /// </summary>
+    private void RecordAssists(AgentTranscript transcript, AgentTranscriptTurn turn, List<AgentAssist> assists)
+    {
+        if (assists.Count == 0)
+        {
+            return;
+        }
+
+        turn.Assists ??= [];
+        turn.Assists.AddRange(assists);
+        transcript.AssistCount = (transcript.AssistCount ?? 0) + assists.Count;
+        foreach (var assist in assists)
+        {
+            _logger.LogInformation(
+                "Turn {Turn}: loop assist ({Kind}) for {Tool}, repeat count {RepeatCount}: {Text}",
+                turn.TurnNumber, assist.Kind, assist.ToolName, assist.RepeatCount, assist.Text);
+        }
     }
 
     /// <summary>

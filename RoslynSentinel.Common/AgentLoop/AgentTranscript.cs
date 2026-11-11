@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace RoslynSentinel.Common.AgentLoop;
 
 /// <summary>
@@ -19,6 +21,22 @@ public sealed class AgentTranscript
 
     /// <summary>The user prompt the run was seeded with -> set once, before any turn runs.</summary>
     public string UserPrompt { get; set; } = "";
+
+    /// <summary>
+    /// Names of the tools offered to the model for this run, in the order sent in the request's tools array. Always
+    /// written, so "was tool X available in this run" is answerable from any transcript.
+    /// </summary>
+    public List<string> Tools { get; } = [];
+
+    /// <summary>
+    /// How many assists (collapse or injection, see <see cref="AgentAssist"/>) the run's turns received. Null, and so
+    /// omitted from the JSON, unless loop assist was on; 0 then means it was on and never needed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? AssistCount
+    {
+        get; set;
+    }
 
     public List<AgentTranscriptTurn> Turns { get; } = [];
 
@@ -81,6 +99,13 @@ public sealed class AgentTranscriptTurn
     }
 
     public List<AgentToolCallRecord> ToolCalls { get; init; } = [];
+
+    /// <summary>The loop-assist assists this turn received; null, and so omitted from the JSON, when none.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<AgentAssist>? Assists
+    {
+        get; set;
+    }
 }
 
 public sealed class AgentToolCallRecord

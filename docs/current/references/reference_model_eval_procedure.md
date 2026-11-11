@@ -65,6 +65,7 @@ if it's not already recorded here or hasn't been reconfirmed recently.
 | `ROSLYNSENTINEL_MODELEVAL_PROMPT_VARIANT` | `Model_SizeThresholdSweep` only: `SingleStep` (default) or `TwoStep` | `SingleStep` |
 | `ROSLYNSENTINEL_MODELEVAL_REPLAY_TRANSCRIPT` | `TranscriptReplayTests` only: path to a saved `transcript.json` to replay | none |
 | `ROSLYNSENTINEL_MODELEVAL_REPLAY_SIZE` | `TranscriptReplayTests` only: override when the path doesn't carry the size | none |
+| `ROSLYNSENTINEL_MODELEVAL_LOOP_ASSIST` (+ `_ROLE`) | Any `ModelAgentRunner` run: truthy (`1`/`true`/`yes`/`on`) collapses repeated identical rejected calls in the replayed history and injects a fact-only message on the 2nd+ repeat; `_ROLE` = `user` or `assistant` sets the injected message's role. Assists are recorded as `Assists` on the turn and `AssistCount` in the `transcript.json` header | off, role `user` |
 
 `--llm-*` CLI args (`--llm-base-url`, `--llm-model`, `--llm-timeout-seconds`,
 `--llm-parallelism`) take precedence over the env vars above, but the test harness

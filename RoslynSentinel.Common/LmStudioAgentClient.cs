@@ -446,7 +446,7 @@ public sealed class LmStudioAgentClient
 
     private static List<object> BuildInputItems(IReadOnlyList<AgentChatMessage> messages)
     {
-        var assistantIndexes = messages.Select((m, i) => (m, i)).Where(x => x.m.Role == "assistant").Select(x => x.i).ToList();
+        var assistantIndexes = messages.Select((m, i) => (m, i)).Where(x => x.m.Role == "assistant" && !x.m.IsLoopAssistNote).Select(x => x.i).ToList();
         var firstReplayed = assistantIndexes.Count > ReasoningReplayTurns
             ? assistantIndexes[assistantIndexes.Count - ReasoningReplayTurns]
             : 0;
@@ -484,7 +484,7 @@ public sealed class LmStudioAgentClient
                 });
             }
 
-            if (!string.IsNullOrEmpty(message.Content) || message.ToolCalls.Count == 0)
+            if (!string.IsNullOrEmpty(message.Content) || (message.ToolCalls.Count == 0 && !message.CollapsedToolCalls))
             {
                 items.Add(new InputMessageItem { Role = message.Role, Content = message.Content ?? "" });
             }
@@ -745,6 +745,24 @@ public sealed class AgentChatMessage
     /// pressure (see ModelAgentRunner.RunAsync) must fall back to PromptTokenEstimator when null.
     /// </summary>
     public int? TotalTokens
+    {
+        get; init;
+    }
+
+    /// <summary>
+    /// True for a message the loop-assist feature synthesized (an injection or a collapse note). Replay-only and
+    /// internal, so never serialized; such a message does not count as a model turn for the reasoning-replay cap.
+    /// </summary>
+    internal bool IsLoopAssistNote
+    {
+        get; init;
+    }
+
+    /// <summary>
+    /// True for a replay copy of an assistant turn whose repeated tool calls were collapsed away. Internal and
+    /// never serialized; it stops a turn left with no calls and no text from replaying as an empty message.
+    /// </summary>
+    internal bool CollapsedToolCalls
     {
         get; init;
     }
