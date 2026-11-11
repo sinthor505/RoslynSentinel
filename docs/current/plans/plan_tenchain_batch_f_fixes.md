@@ -62,6 +62,10 @@ full build and server restart before live use.
 
 - Files: `RoslynSentinel.Engines.Basic/EditImpactAnalyzer.cs` (`NextStepFor`, Renamed case ~line 321);
   `RoslynSentinel.Engines.Basic/CompilerErrorLookupHelper.cs` (~line 541, CS0101 text).
+- Already landed (3d4120b0, another session): the CS0101 hint now names the file that already declares the type and
+  says to remove the declaration from the edit; CS0111 inside a CS0101-duplicated type points at the duplicate. That
+  commit left a TODO in `NextStepFor` ("rename headline buries a co-occurring CS0101") - this step resolves it; re-read
+  both files and extend the new wording rather than replacing it.
 - Change: in `NextStepFor`, when the edit's diagnostics include CS0101 or CS0111 naming `NewName` (or the name
   already resolves in the namespace), do not suggest RenameSymbol; say the name is already taken and name the
   declaring file. In the CS0101 helper text add "or delete the superseded file (DeleteFile)".
@@ -72,6 +76,10 @@ full build and server restart before live use.
 
 - Files: `RoslynSentinel.Engines.Basic/StructuralRefinementEngine.cs` (~line 245, reflection-risk refusal);
   `RoslynSentinel.Tools.Basic/RefactoringStructuralImpl.cs` (~line 729, "Pass skipPrecheck: true to remove anyway").
+- Already landed (3d4120b0): ReplaceSnippet's no-type-left refusal now includes `memberName` in its Member remove
+  hint (R8 T8's "memberName is required"). Still open here: the reflection-risk refusal and the `skipPrecheck` claim.
+  The same commit left TODOs above `DescribeNoTypeLeft` (namespace-only strip unflagged; no cross-file duplicate-type
+  precheck) - out of scope for this step.
 - Change: replace "Delete manually after verifying" with an actionable route: the string-literal locations found, plus
   either an explicit override parameter that actually bypasses the reflection check, or `DeleteFile` when the type is
   the file's only declaration. Stop advertising `skipPrecheck` for type removal (R8 T11: with it, still "has 1 usages
