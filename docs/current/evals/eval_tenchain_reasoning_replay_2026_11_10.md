@@ -298,6 +298,51 @@ code is 98a55ad5 (F: 69606748). L2 (harness only: worktree, env var, harness che
 - The tool list is not recorded in the run artifacts (as noted for E); the G build still offered Git and had no
   DeleteFile, so R4 T25 may not reproduce under the current surface.
 
+## Batch H1: master e9d16dfd, rename lifting ON, 4/5 (2026-11-11)
+
+**Setup.** Host 113, `qwen3.5-9b-coder`, 60160 context, parallel 4, reasoning budget as in F/G (not re-verified from the
+host). Worktree `C:\tmp\rs_eval_h1` (branch `eval/h1`) at master e9d16dfd (includes the CodingAgent prompt bbbe08a7, the
+batch F fixes plan, edit-impact steps 2-3 and the harness fix 25482ef4). `ROSLYNSENTINEL_LIFT_RENAMES=1`, command
+`roslynsentinel-modeleval.ps1 -HostAddress 113 -Test OrderPricingRefactorChain10 -Repeats 5 -Model qwen3.5-9b-coder`. L2.
+Archive `C:\tmp\rs_eval_h1\ModelTestingResults\113\Model_AppliesTenChainedRefactors\`, runs `20261111-085719-805` to
+`20261111-092200-526`. Flag live in run 1 (2 lifts, 0 redirects).
+
+| Run | Folder | Result | Turns | Failed | Lifted (turns) | Redirected | Model RenameSymbol |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| R1 | 085719-805 | pass | 19 | 2 | 2 (2, 7) | 0 | none |
+| R2 | 090347-949 | pass | 21 | 3 | 1 (11) | 1 (2) | T5 ok, T7 NotFound |
+| R3 | 091124-427 | pass | 15 | 5 | 2 (2, 2) | 0 | none |
+| R4 | 091734-747 | pass | 15 | 1 | 2 (2, 5) | 0 | none |
+| R5 | 092200-526 | FAIL final assertion | 23 | 3 | 1 (9) | 2 (3, 4) | T6 ok |
+
+| Measure | G (10 runs) | H1 (5 runs) |
+| --- | --- | --- |
+| Pass | 8/10 | 4/5 |
+| Mean turns | 19.7 | 18.6 |
+| Mean failed calls | 3.7 | 2.8 |
+| Lifted per run (of 2 renames) | 1.4 | 1.6 |
+| Redirects per run | 0.6 | 0.6 |
+| Longest identical consecutive call | 2 (R4 ReplaceSnippet) | 2 (R5 ReadFile T15-16) |
+
+- **R5 (`092200-526`) T23, final assertion** (`OrderPricingRefactorChainAgentTests.cs:1686-1690`, `AssertThreeBaseStepsApplied`):
+  "The 'amount * rate' discount calculation should be extracted into a shared method, not repeated inline in both
+  branches (found 2 occurrences in code)". T9 (whole-file edit, lifted) extracted `Multiply(decimal amount, decimal rate)`
+  for the standard branch only; the preferred branch stayed `amount * discountRate * 1.1m` (T16, T22 re-reads show it).
+  T21 RunTest 7/7; T23 claimed "called by both branches". Hypothesis: the in-fixture `RefactorAcceptanceTests`
+  (same file, ~1306-1340) check steps 3, 7, 9 and only that a helper of shape `decimal Helper(decimal, decimal)` exists
+  (Step3 test), so RunTest cannot fail on a step-1 half-extraction.
+- **Stale oldContent after a lift, again (R3 T4, R4 T5; with G R2 T3 and R3 T8 that is 4 of 22 lifts).** R4 T5 sent an
+  edit to `OrderCheckout.cs` in the same turn as the lifted class rename: "oldContent was not found: it matches nothing at
+  any whitespace tolerance probed" (oldContent `private readonly OrderPricingCalculator `); T6 "The first edit succeeded and
+  auto-updated OrderCheckout.cs". Cost one failed call each; all four runs recovered or were unaffected.
+- **R5 T3-T4: redirect twice, not lifted.** T4's message listed only CS0246 at OrderCheckout.cs:5 yet the rename was not
+  lifted (T3 also carried CS0103 'rate' at OrderPricingCalculator.cs:24 from the model's own text). Unexplained;
+  hypothesis: the lift's pairing/other-edit guards in `TryLiftRenameAsync` refused. Not traced.
+- **R2 T7:** the model's own RenameSymbol reused the pre-rename docCommentId: "Symbol 'T:...OrderPricingCalculator' no
+  longer resolves - may have been renamed, moved, or removed"; T7 reasoning "The rename didn't update the file content".
+- **R3 T2:** three failures in one turn ('oldContent' is required; CS0246; file IOrderPricingCalculator.cs not found
+  anywhere in the loaded solution) in a turn that sent several calls at once; R3 still passed in 15 turns.
+
 ## Out of scope
 
 - Batch C ran before 31b206a6 and 28391d8c; their effect is unmeasured.
