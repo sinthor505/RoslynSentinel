@@ -32,7 +32,6 @@ public static class CompilerErrorLookupHelper
     private static readonly Regex Cs0737NotPublicRegex = new(@"'([^']+)' cannot implement an interface member because it is not public", RegexOptions.Compiled);
 
     // TODO pass editedFilePaths to DescribeAsync at the remaining callers
-    // TODO pass isToolActive (ActiveToolSurface.IsCallable) at the callers that do not yet: WholeFileWriteTools (WriteFile, ApplyDiff x2, ApplyUnifiedDiff), CoreRefactoringTools, AdvancedRefactoringTools, GenerationTools, RefactoringExtractionDocsImpl, RefactoringSignatureImpl, RefactoringStructuralImpl
     // isToolActive: whether a tool may be named to the caller (ActiveToolSurface.IsCallable); null names no tool, so existing callers keep today's text.
     public static async Task<string> DescribeAsync(
         DiagnosticReport report,

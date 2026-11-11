@@ -87,7 +87,7 @@ public class WholeFileWriteTools
                     IsError = true,
                     ErrorData = await EditImpactGate.RejectionAsync(_workspaceManager, changes, result.ValidationResult, _activeToolSurface,
                         "WriteFile: this content would introduce new compiler errors - not written to disk. Fix the issue(s) below and retry:\n",
-                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken)
+                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable), cancellationToken)
                 };
             }
 
@@ -425,7 +425,7 @@ public class WholeFileWriteTools
                             IsError = true,
                             ErrorData = await EditImpactGate.RejectionAsync(_workspaceManager, normalizedChanges, result.ValidationResult, _activeToolSurface,
                                 "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n",
-                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken)
+                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable), cancellationToken)
                         };
                     if (result.IsError)
                         return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(result.RefusalCode ?? ToolErrorCode.Exception, $"ApplyDiff failed to apply the change set: {result.Summary}") };
@@ -564,7 +564,7 @@ public class WholeFileWriteTools
                                 IsError = true,
                                 ErrorData = await EditImpactGate.RejectionAsync(_workspaceManager, diffChanges, result.ValidationResult, _activeToolSurface,
                                     "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n",
-                                    await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken)
+                                    await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable), cancellationToken)
                             };
                         await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result, cancellationToken: cancellationToken);
                         var strippedDiffResult = result with { PreImages = null };
@@ -703,7 +703,7 @@ public class WholeFileWriteTools
                             IsError = true,
                             ErrorData = await EditImpactGate.RejectionAsync(_workspaceManager, diffChanges, result.ValidationResult, _activeToolSurface,
                                 "ApplyUnifiedDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n",
-                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken)
+                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable), cancellationToken)
                         };
                     await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_unified_diff", result, cancellationToken: cancellationToken);
                     var strippedDiffResult = result with { PreImages = null };
