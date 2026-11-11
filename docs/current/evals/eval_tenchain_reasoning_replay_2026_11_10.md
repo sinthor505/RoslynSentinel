@@ -581,6 +581,65 @@ literal escape sequences in oldContent and say "send real newlines"; (3) RunTest
 applies with a note (selector semantics change: proposal first); (5) matchLine description: "only when oldContent matches
 more than once; omit otherwise" (`ToolParams.cs:63`).
 
+## Batch H5: master a9ddcbc4, rename lifting ON, 4/5 (2026-11-11)
+
+**Setup.** Host 113 unchanged since H4: `qwen3.5-9b-coder` context_length **70144**, parallel 4, `reasoning_budget_message`
+listed with no budget value (as in F; not re-verified beyond that). Worktree `C:\tmp\rs_eval_h5` (branch `eval/h5`) at master
+a9ddcbc4: H4 plus 000af724/59738c51 (same-file CS0111 hint), 68fef93b (`AppliedEditMemory` no-op success for an
+identical resent ReplaceSnippet; failed-lift note opens "The trial was rolled back"; a docCommentId without a kind
+prefix says "is not a documentation-comment ID"). `ROSLYNSENTINEL_LIFT_RENAMES=1`, same command as H1 with `-Repeats 5`.
+L2. Archive `C:\tmp\rs_eval_h5\ModelTestingResults\113\Model_AppliesTenChainedRefactors\`, runs `20261111-220311-294`,
+`220850-460`, `221653-692`, `222523-912`, `223133-011` (host-UTC stamps).
+
+| Run | Folder | Result | Turns | Failed | Lifted (turns) | Lift refused | Redirected | Model RenameSymbol | RunTest (turn: result) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| R1 | 220311-294 | pass | 17 | 4 | 1 (T2 method) | 0 | 0 | T6 err, T8 ok | T14, T15 pass |
+| R2 | 220850-460 | pass | 20 | 2 | 2 (T2 method, T9 class) | 0 | 0 | 0 | T16 fail (Step 7), T19 pass |
+| R3 | 221653-692 | pass | 17 | 1 | 2 (T2 method, T5 class) | 0 | 0 | 0 | T16, T17 pass |
+| R4 | 222523-912 | pass | 11 | 1 | 1 (T4 class + method) | 0 | 0 | 0 | T10 pass |
+| R5 | 223133-011 | FAIL per-tool budget (ReplaceSnippet 8 > 5) | 44 | 8 | 2 (T19 method, T28 class) | 7 (T4, T8, T10, T12, T14, T16, T17) | 0 | 0 | T39 fail (Step 7), T43 pass 8/8 |
+
+| Measure | F off | G | H1 | H2 | H3 (3 valid) | H4 | H5 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Pass | 8/10 | 8/10 | 4/5 | 4/5 | 3/3 | 4/5 | 4/5 |
+| Mean turns | 24.0 | 19.7 | 18.6 | 19.4 | 11.7 | 18.4 | 21.8 (R1-R4: 16.3) |
+| Mean failed calls | 6.9 | 3.7 | 2.8 | 3.8 | 1.0 | 3.6 | 3.2 |
+| Lifts per run (renames lifted of 2) | 0 | 1.4 | 1.6 | 1.4 | 1.0 (2 of 2) | 1.4 (8 of 10) | 1.6 (9 of 10) |
+| Redirects per run | 1.9 | 0.6 | 0.6 | 2.4 | 0 | 0 | 0 |
+| Longest identical consecutive call | 1 | 2 | 2 | 10 | 1 | 3 (same turn) | 2 (R5 T16-17) |
+| Stale oldContent right after a lift | n/a | 2 of 14 | 2 of 8 | 0 of 7 | 1 of 3 | 0 of 7 | 2 of 8, both carried the new note |
+
+- **Tracked items.** (1) No-op success ("No change: this exact edit was already applied"): **0 firings, untested**; H5 had no
+  same-turn replace/apply twin at all (R2 T2.2 and R3 T2.2 are two different files, not twins), so H4's failure class did not recur. R5's
+  identical resends (T12, T14, T16, T17) were rejected edits, which the no-op does not cover (`AppliedEditMemory`
+  remembers successful edits only, `WorkspaceFileEditImpl.cs:209`, main tree) and got the repeat note (`:63`). (2) The
+  failed-lift note: 7 refusals, all in R5; the "trial was rolled back" sentence is the second sentence of the message (after "the edit matched the
+  target file ... change not applied"); no model message implied the rename persisted (R5 T5 "The tool rolled back because I
+  renamed parameters ..."). (3) "is not a documentation-comment ID" fired once, R1 T6.1 (`docCommentId` a GUID,
+  "57d014b0-..."); T7 Search(mode: symbol), T8 RenameSymbol ok: recovered in two calls. Second run in two batches that
+  passes an id-shaped string (H4 R4 T6.1). (4) **`RewrittenLineMemory` note fired twice and worked:** R2 T2.2 and R3 T2.2
+  (the second call of a same-turn pair, a different file from the lifted one) got "... was rewritten by ... earlier: it now
+  reads ..."; R2 T3 "The rename tool already updated the call site", R3 T3 re-read the file. CreateFile hint:
+  fired on ReadFile, not as intended (below).
+- **R5 (`223133-011`): not a thrash of one edit, one environment gap, plus 3 one-offs.** T2 InvalidArgument ("supply either
+  filePath/oldContent/newContent or 'batchEdits', not both"), T8 CS0103 `discount`, T10 CS0136 `discount` (the model's own
+  body). T4, T12, T14, T16, T17: the same signature-only edit (`CalcDisc(..., rate, ...)` ->
+  `CalculateDiscountedTotal(..., discountRate, ...)`, body still using `rate`) rejected with CS0103 "The name 'rate' does not
+  exist" at lines 26 and 30. Traced (failure-root-cause-analyst): the lift saw the method rename but not the parameter
+  rename (`EditImpactSymbolDiff.cs:223`: parameter names are "free to differ"), the CS0103 hint says "No symbol named 'rate' was
+  found anywhere in the solution. This is likely a typo, or the member genuinely doesn't exist yet"
+  (`CompilerErrorLookupHelper.cs:273`, main tree), which is wrong here (`rate` is the old parameter name the edit
+  renames), and the lift note says only that the errors come from the other text. The model diagnosed it at T13 ("update both declaration AND
+  body together") yet T14, T16, T17 resent the signature-only edit (their `reason` says "AND update body", the arguments do not carry it),
+  ignoring "sending it again cannot succeed"; recovered T19 with a whole-method edit. Final RunTest 8/8: it failed only the per-tool cap.
+- **Misdirecting CreateFile hint (R1 T11.1, T16.1).** After the class rename moved `OrderPricingCalculator.cs`, a ReadFile of the
+  old path got "was not found anywhere ..." with the new "It does not exist yet: if your task is to create it, call CreateFile
+  ... instead of reading it" (`FileNotFoundMessage.cs:59`, main tree). The file had been renamed, not never created; the model read the new file next (T11.2) and recovered.
+- **Smaller:** R2 T3.1 ModifyModifier `'internal' is not a valid value for parameter 'modifier'`; R4 T7.1 CS0144 on the interface field; N4 (same-file CS0111 hint) did not appear.
+- Pass rate by batch: 8/10, 8/10, 4/5, 4/5, 3/3 (valid), 4/5, 4/5. Each batch's single failure had a different cause
+  (twins, whole-file two-rename, half-extraction, parameter rename), so the fixes have been landing on real defects but
+  the rate stays about 80% at this sample size.
+
 ## Out of scope
 
 - Batch C ran before 31b206a6 and 28391d8c; their effect is unmeasured.
