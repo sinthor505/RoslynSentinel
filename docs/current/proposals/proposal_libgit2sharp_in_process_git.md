@@ -24,6 +24,18 @@
   magic falls back to the CLI; `GitWorktreeManager.RunGit` gained a 10-minute timeout.
 - Fallback observability: first fallback per exception type is logged to stderr; `FallbackGitReader`
   exposes backend counters, and tests fail on a silent fallback.
+- Later the same day: win-x64-only natives `23bcaa73` (`Directory.Build.targets`; 21.4 MB to 1.9 MB
+  per output); stage 2 `991ce300` (status), `84f179f6` (log), `2c45fa49` (path classification),
+  `654308b3` (branch/stash lists), `1421be4a` (diff/show nameOnly); step 3b warmup `bb00f4bb`;
+  short-hash probe `b1cdb0cd`; commit-hash race fix `7c295b47`. Full suite green at `bb00f4bb`.
+- Stage 2 outcome: libgit2 serves status, log (plain/paths/count), path classification, branch and
+  stash lists, diff/show nameOnly for staged and `refA..refB`, show header. CLI keeps tag and
+  worktree lists (too many decline rules), working-tree diffs (`core.autocrlf` EOL semantics differ),
+  stat and patch text (not byte-identical), pickaxe/follow, and all mutations.
+- Measured: `Git(status)` 216 ms CLI to 43 ms; `check-ignore` for 20 paths 1120 ms to 7 ms; stash
+  list 55 ms to 4-7 ms. Live server after restart: `gitBackend` reports `Libgit2`, native load and
+  repo probe ok, `shortHashLength` 8, zero CLI fallbacks. The bundled libgit2 build reports Https
+  and Ssh support.
 - Risk not yet tested: `worktree.useRelativePaths=true` (git 2.48+) writes
   `extensions.relativeWorktrees`, which libgit2 1.8.6 probably rejects; reads would fall back.
 
