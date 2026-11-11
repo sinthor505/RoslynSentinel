@@ -622,15 +622,27 @@ public static class CompilerErrorLookupHelper
             candidates = [];
         }
 
-        // TODO Same-file duplicates (an edit re-declaring a member already in the file) are dropped here, so the hint
-        // says "may be a genuine duplicate" and the model re-sends it (batch G R4, CS0111 at T12-T24). When only
-        // same-file candidates exist, say "'X' is already declared at file:line; your newContent declares it again."
         var realLocation = candidates.FirstOrDefault(c =>
             !string.IsNullOrEmpty(c.FilePath) &&
             !string.Equals(c.FilePath, diagnostic.FilePath.ToString(), StringComparison.OrdinalIgnoreCase));
 
         if (realLocation == null)
         {
+            // Same-file duplicate: an edit re-declared a member the file already has. Name the existing line, preferring a
+            // candidate other than the reported one; without this the hint said "could not be found" and the model re-sent
+            // the same edit four times (batch G R4, run 20261111-074907-352, T12-T24).
+            var diagnosticFile = diagnostic.FilePath.ToString();
+            var sameFile = candidates
+                .Where(c => !string.IsNullOrEmpty(c.FilePath) && SamePath(NormalizePath(c.FilePath), NormalizePath(diagnosticFile)))
+                .OrderBy(c => c.Line == diagnostic.StartLine ? 1 : 0)
+                .FirstOrDefault();
+            if (sameFile != null)
+            {
+                var owner = typeName is null ? "This file" : $"'{typeName}'";
+                return $"  {owner} already declares '{memberName}' with these parameter types at line {sameFile.Line} of this file; your edit declares it again. " +
+                    "If your task asked for this member, it is already there: keep the existing declaration and drop the new one. An overload needs different parameter types.";
+            }
+
             return $"  '{memberName}' collides with an existing declaration, but its real location could not be found - this may be a genuine duplicate rather than a wrong-path new file.";
         }
 

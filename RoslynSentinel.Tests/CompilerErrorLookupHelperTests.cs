@@ -429,6 +429,23 @@ public class CompilerErrorLookupHelperTests
         Assert.That(description, Does.Not.Contain("did you mean to ReadFile"));
     }
 
+    /// <summary>
+    /// Batch G R4 (run 20261111-074907-352): an edit re-declared an interface member already in the same file; the CS0111 hint
+    /// said the real location could not be found and the model re-sent the edit four times. It now names the existing line.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_Cs0111DuplicateInSameFile_NamesTheExistingLineAsync()
+    {
+        const string interfaceWithDuplicate = "namespace TestProj;\r\n\r\npublic interface IOrderPricingCalculator\r\n{\r\n    string DescribeOrder(int id, string label);\r\n    string DescribeOrder(int id, string label);\r\n}\r\n";
+        var report = await CompileAndGetErrorsAsync(("IOrderPricingCalculator.cs", interfaceWithDuplicate));
+        var cs0111 = report.Diagnostics.First(d => d.Id == "CS0111");
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(new DiagnosticReport(true, [cs0111]), _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("'IOrderPricingCalculator' already declares 'DescribeOrder' with these parameter types at line 5 of this file"));
+        Assert.That(description, Does.Not.Contain("could not be found"));
+    }
+
     [Test]
     public async Task DescribeAsync_Cs0101OtherLocationNotResolvable_GivesTheShortFormAsync()
     {
