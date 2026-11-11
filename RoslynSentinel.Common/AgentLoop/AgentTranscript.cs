@@ -172,6 +172,12 @@ public enum AgentStopReason
     /// letting it burn turns to <see cref="RepeatedToolFailure"/>.
     /// </summary>
     LoopLatchIgnored,
+
+    /// <summary>
+    /// A tool-less turn whose backend-reported TotalTokens reached the model's context window. The model's reply was likely
+    /// cut short or empty because the window is full, so this is NOT a genuine finish.
+    /// </summary>
+    ContextExhausted,
 }
 
 /// <summary>
@@ -219,6 +225,6 @@ public sealed class AgentRunResult
         get; init;
     }
 
-    /// <summary>True only when the model stopped on its own (no more tool calls) within the caps -> says nothing about whether the task was actually done correctly.</summary>
+    /// <summary>True only when the model stopped on its own (no more tool calls) within the caps -> says nothing about whether the task was actually done correctly. A <see cref="AgentStopReason.ContextExhausted"/> stop is therefore not converged.</summary>
     public bool Converged => StopReason == AgentStopReason.ModelFinished;
 }

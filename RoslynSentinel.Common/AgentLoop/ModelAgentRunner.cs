@@ -256,8 +256,21 @@ public sealed class ModelAgentRunner
 
             if (modelMessage.ToolCalls.Count == 0)
             {
-                stopReason = AgentStopReason.ModelFinished;
-                _logger.LogInformation("Turn {Turn}: model made no tool calls, treating as finished.", turnNumber);
+                // Token-based only: the Responses API gives no finish_reason, so a full window is the one signal we have.
+                if (contextLength > 0 && cumulativeTokens >= contextLength)
+                {
+                    stopReason = AgentStopReason.ContextExhausted;
+                    _logger.LogWarning(
+                        "Turn {Turn}: model made no tool calls with {Cumulative} of {ContextLength} context tokens used - " +
+                        "context window exhausted, not a genuine finish.",
+                        turnNumber, cumulativeTokens, contextLength);
+                }
+                else
+                {
+                    stopReason = AgentStopReason.ModelFinished;
+                    _logger.LogInformation("Turn {Turn}: model made no tool calls, treating as finished.", turnNumber);
+                }
+
                 break;
             }
 
