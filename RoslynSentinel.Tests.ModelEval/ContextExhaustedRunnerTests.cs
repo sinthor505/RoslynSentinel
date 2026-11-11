@@ -140,6 +140,61 @@ public class ContextExhaustedRunnerTests
         });
     }
 
+    [Test]
+    public async Task RunWithStamp_TranscriptCarriesCommitAndDirtyFlag()
+    {
+        var runner = NewRunner(contextLength: 4096, totalTokens: 1000);
+
+        ModelAgentRunner.ProcessStamp = ("abc123", true);
+        try
+        {
+            var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+            using var json = JsonDocument.Parse(await File.ReadAllTextAsync(result.TranscriptPath));
+            Assert.Multiple(() =>
+            {
+                Assert.That(result.Transcript.CommitHash, Is.EqualTo("abc123"));
+                Assert.That(result.Transcript.WorkingTreeDirty, Is.EqualTo(true));
+                Assert.That(json.RootElement.TryGetProperty("CommitHash", out _), Is.True);
+                Assert.That(json.RootElement.TryGetProperty("WorkingTreeDirty", out _), Is.True);
+            });
+        }
+        finally
+        {
+            ModelAgentRunner.ProcessStamp = null;
+        }
+    }
+
+    [Test]
+    public async Task RunWithoutStamp_TranscriptOmitsCommitAndDirtyFlag()
+    {
+        var runner = NewRunner(contextLength: 4096, totalTokens: 1000);
+
+        ModelAgentRunner.ProcessStamp = null;
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        using var json = JsonDocument.Parse(await File.ReadAllTextAsync(result.TranscriptPath));
+        Assert.Multiple(() =>
+        {
+            Assert.That(json.RootElement.TryGetProperty("CommitHash", out _), Is.False);
+            Assert.That(json.RootElement.TryGetProperty("WorkingTreeDirty", out _), Is.False);
+        });
+    }
+
+    [Test]
+    public void Transcript_WithoutStampProperties_Deserializes()
+    {
+        var transcript = JsonSerializer.Deserialize<AgentTranscript>("{\"RunId\":\"r1\"}");
+
+        Assert.That(transcript, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(transcript!.RunId, Is.EqualTo("r1"));
+            Assert.That(transcript.CommitHash, Is.Null);
+            Assert.That(transcript.WorkingTreeDirty, Is.Null);
+        });
+    }
+
     private ModelAgentRunner NewRunner(int? contextLength, int totalTokens)
     {
         LlmOptions.Configure(["--llm-model", ModelId]);

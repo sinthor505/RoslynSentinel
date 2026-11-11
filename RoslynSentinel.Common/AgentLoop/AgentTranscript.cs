@@ -38,6 +38,26 @@ public sealed class AgentTranscript
         get; set;
     }
 
+    /// <summary>
+    /// Git HEAD of the working tree under test, stamped by the ModelEval assembly setup (see <see cref="ModelAgentRunner.ProcessStamp"/>).
+    /// Null means the run was not stamped (PlanStepRunner and sub-agent runs), so the property is omitted from the JSON.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CommitHash
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// True when the working tree under test had uncommitted changes at stamp time. Null means the run was not stamped
+    /// (PlanStepRunner and sub-agent runs), so the property is omitted from the JSON.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? WorkingTreeDirty
+    {
+        get; set;
+    }
+
     public List<AgentTranscriptTurn> Turns { get; } = [];
 
     // Models that emit reasoning inline wrap it in think tags; an unclosed or bare tag is not an answer either.

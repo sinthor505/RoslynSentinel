@@ -36,6 +36,16 @@ public sealed class ModelAgentRunner
     /// </summary>
     private const double ContextUsageWarningFraction = 0.8;
 
+    /// <summary>
+    /// Process-wide value set once by the ModelEval assembly setup; RunAsync copies it into each new transcript.
+    /// Null everywhere else (PlanStepRunner and sub-agent runs), so their transcripts omit the stamp.
+    /// </summary>
+    // Intentional deviation: a mutable static. One stamp per test process, set before any run.
+    public static (string CommitHash, bool Dirty)? ProcessStamp
+    {
+        get; set;
+    }
+
     private readonly LmStudioAgentClient _llm;
     private readonly McpClient _mcpClient;
     private readonly int _turnCap;
@@ -153,6 +163,11 @@ public sealed class ModelAgentRunner
         _logger.LogInformation("RunId: {RunId}", runId);
 
         var transcript = new AgentTranscript { RunId = runId, SystemPrompt = systemPrompt, UserPrompt = userPrompt };
+        if (ProcessStamp is { } stamp)
+        {
+            transcript.CommitHash = stamp.CommitHash;
+            transcript.WorkingTreeDirty = stamp.Dirty;
+        }
         transcript.Tools.AddRange(toolDefinitions.Select(t => t.Name));
         var assistTracker = new LoopAssistTracker(_loopAssist);
         if (assistTracker.Enabled)
