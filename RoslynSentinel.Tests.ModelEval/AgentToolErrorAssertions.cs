@@ -2,6 +2,27 @@ using RoslynSentinel.Common.AgentLoop;
 
 namespace RoslynSentinel.Tests.ModelEval;
 
+/// <summary>Coarse class of one failed tool call; see <see cref="AgentToolErrorAssertions.ClassifyError"/>.</summary>
+public enum ToolErrorClass
+{
+    /// <summary>The call was not an error.</summary>
+    None,
+    /// <summary>A compile-gate rejection whose next step names the right tool.</summary>
+    GuardrailRedirect,
+    /// <summary>A compile-gate rejection that is not a guardrail redirect.</summary>
+    CompileGateRejection,
+    /// <summary>The target was not found.</summary>
+    NotFound,
+    /// <summary>The arguments were rejected as invalid.</summary>
+    InvalidArgument,
+    /// <summary>The tool raised an exception.</summary>
+    Exception,
+    /// <summary>An error code not covered by the classes above.</summary>
+    OtherCode,
+    /// <summary>An error envelope that carries no error code.</summary>
+    NoCode,
+}
+
 /// <summary>
 /// Shared by every agent test that caps failed tool calls (<see cref="WholeFileRewriteAgentTests"/>
 /// via its shared AssertFixApplied, <see cref="PlanImplementVerifyAgentTests"/>,
@@ -44,6 +65,72 @@ public static class AgentToolErrorAssertions
             .OrderByDescending(t => t.Count)
             .ToList();
         return new ToolErrorSummary(errorTools.Count, byTool, redirects);
+    }
+
+    // TODO merge with ModelAgentRunner.TryReadStringProperty (private, in the Common AgentLoop folder) once that file is free: another session has uncommitted edits in it
+    /// <summary>
+    /// Reads the error code nested under errorData, the same value ModelAgentRunner.BuildFailureSignature keys on.
+    /// Falls back to a top-level errorCode only; never walks deeper, because the envelope echoes the call arguments.
+    /// Returns null when the call was not an error, the result is blank or unparseable, or it carries no code.
+    /// </summary>
+    public static string? ErrorCodeOf(AgentToolCallRecord call)
+    {
+        if (!call.IsError || string.IsNullOrWhiteSpace(call.ResultJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(call.ResultJson);
+            var root = doc.RootElement;
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            if (root.TryGetProperty("errorData", out var errorData) && errorData.ValueKind == System.Text.Json.JsonValueKind.Object
+                && errorData.TryGetProperty("errorCode", out var nested) && nested.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                return nested.GetString();
+            }
+
+            if (root.TryGetProperty("errorCode", out var topLevel) && topLevel.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                return topLevel.GetString();
+            }
+
+            return null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Classifies one failed call by its error code. A ValidationFailed whose text matches
+    /// <see cref="GuardrailRedirect"/> is a GuardrailRedirect (the redirect refines the code's class), any other
+    /// ValidationFailed is a CompileGateRejection, and an IsError call with no code is NoCode.
+    /// </summary>
+    public static ToolErrorClass ClassifyError(AgentToolCallRecord call)
+    {
+        if (!call.IsError)
+        {
+            return ToolErrorClass.None;
+        }
+
+        var code = ErrorCodeOf(call);
+        return code switch
+        {
+            null => ToolErrorClass.NoCode,
+            "ValidationFailed" when call.ResultJson is { } r && GuardrailRedirect.IsMatch(r) => ToolErrorClass.GuardrailRedirect,
+            "ValidationFailed" => ToolErrorClass.CompileGateRejection,
+            "NotFound" => ToolErrorClass.NotFound,
+            "InvalidArgument" => ToolErrorClass.InvalidArgument,
+            "Exception" => ToolErrorClass.Exception,
+            _ => ToolErrorClass.OtherCode,
+        };
     }
 
     /// <summary>
