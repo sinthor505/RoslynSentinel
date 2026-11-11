@@ -11,5 +11,6 @@ namespace RoslynSentinel.Common;
 public record ReplaceSnippetResult(
     ApplyChangesResult? ReplacementResult,
     DiagnosticReport? ValidationReport,
-    string? DiffContent
+    string? DiffContent,
+    string? ChangeId = null
 );

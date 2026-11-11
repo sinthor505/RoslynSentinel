@@ -93,6 +93,33 @@ public class ReplaceSnippetCrossFileRejectionTests
         });
     }
 
+    // Repeat means the same oldContent AND newContent. The same newContent under a different oldContent is a new edit.
+    [Test]
+    public async Task ReplaceSnippet_SameNewContentDifferentOldContent_IsNotReportedAsRepeat()
+    {
+        using var workspace = CreateWorkspace();
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+
+        var first = await tools.ReplaceSnippetTool(
+            reason: "rename the discount method on its declaration only",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(PricingRelativePath),
+            oldContent: "CalcDisc(decimal a)",
+            newContent: "CalculateDiscountedTotal(decimal a)");
+        var second = await tools.ReplaceSnippetTool(
+            reason: "retry with a different oldContent but the same newContent",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(PricingRelativePath),
+            oldContent: "decimal CalcDisc(decimal a)",
+            newContent: "CalculateDiscountedTotal(decimal a)");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first.IsError && second.IsError, Is.True);
+            Assert.That(second.ErrorData?.Message, Does.Not.Contain("You already sent this exact edit"));
+        });
+    }
+
     // A rejection whose errors all sit inside the edited file gets no edit-impact Next step, so the repeat note must not point at one.
     [Test]
     public async Task ReplaceSnippet_SameRejectedEditTwiceWithoutNextStep_RepeatNoteSaysChangeApproach()
@@ -165,5 +192,25 @@ public class ReplaceSnippetCrossFileRejectionTests
             Assert.That(workspace.ReadText(PricingRelativePath), Does.Contain("CalculateDiscountedTotal(decimal a)"));
             Assert.That(workspace.ReadText(CheckoutRelativePath), Does.Contain("c.CalculateDiscountedTotal(1m)"));
         });
+    }
+
+    // A successful apply must hand back the change id that UndoLastApply(changeId: ...) accepts.
+    [Test]
+    public async Task ReplaceSnippet_SuccessfulApplyOnInMemoryWorkspace_ChangeIdIsNullBecauseNoBlobIsOwed()
+    {
+        using var workspace = CreateWorkspace();
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "rename the declaration and its caller in one batch call",
+            ProposedChangeAction.apply,
+            batchEdits:
+            [
+                new SnippetEdit { FilePath = workspace.PathOf(PricingRelativePath), OldContent = "CalcDisc(decimal a)", NewContent = "CalculateDiscountedTotal(decimal a)" },
+                new SnippetEdit { FilePath = workspace.PathOf(CheckoutRelativePath), OldContent = "c.CalcDisc(1m)", NewContent = "c.CalculateDiscountedTotal(1m)" },
+            ]);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(result.SuccessData?.ChangeId, Is.Null);
     }
 }

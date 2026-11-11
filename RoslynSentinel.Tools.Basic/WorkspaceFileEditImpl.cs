@@ -94,7 +94,7 @@ public class WorkspaceFileEditImpl
     private sealed class RejectedEditMemory
     {
         private const int MaxEntriesPerFile = 3;
-        private readonly Dictionary<string, List<string>> _byFile = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<(string? OldContent, string NewContent)>> _byFile = new(StringComparer.OrdinalIgnoreCase);
         private readonly object _gate = new();
 
         private static string Key(string path)
@@ -114,7 +114,7 @@ public class WorkspaceFileEditImpl
         private static IEnumerable<string> TrimmedLines(string text)
             => NormalizeEol(text).Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0);
 
-        public void Remember(string path, string? newContent)
+        public void Remember(string path, string? oldContent, string? newContent)
         {
             // A pure deletion leaves nothing the model could mistake for file text.
             if (string.IsNullOrWhiteSpace(newContent))
@@ -124,7 +124,7 @@ public class WorkspaceFileEditImpl
                 var key = Key(path);
                 if (!_byFile.TryGetValue(key, out var entries))
                     _byFile[key] = entries = [];
-                entries.Add(newContent);
+                entries.Add((oldContent, newContent));
                 while (entries.Count > MaxEntriesPerFile)
                     entries.RemoveAt(0);
             }
@@ -136,14 +136,19 @@ public class WorkspaceFileEditImpl
                 _byFile.Remove(Key(path));
         }
 
-        /// <summary>True when <paramref name="newContent"/> equals (ignoring line endings) a remembered rejected newContent for the file.</summary>
-        public bool IsRepeat(string path, string? newContent)
+        /// <summary>
+        /// True when the edit equals a remembered rejected edit for the file: same oldContent AND same newContent, ignoring
+        /// line endings. The same newContent under a different oldContent is a different edit, not a repeat.
+        /// </summary>
+        public bool IsRepeat(string path, string? oldContent, string? newContent)
         {
             if (string.IsNullOrWhiteSpace(newContent))
                 return false;
-            var normalized = NormalizeEol(newContent);
+            var normalizedOld = NormalizeEol(oldContent ?? "");
+            var normalizedNew = NormalizeEol(newContent);
             lock (_gate)
-                return _byFile.TryGetValue(Key(path), out var entries) && entries.Any(e => NormalizeEol(e) == normalized);
+                return _byFile.TryGetValue(Key(path), out var entries)
+                    && entries.Any(e => NormalizeEol(e.OldContent ?? "") == normalizedOld && NormalizeEol(e.NewContent) == normalizedNew);
         }
 
         /// <summary>
@@ -158,7 +163,7 @@ public class WorkspaceFileEditImpl
             {
                 if (!_byFile.TryGetValue(Key(path), out var entries) || entries.Count == 0)
                     return false;
-                remembered = [.. entries];
+                remembered = entries.Select(e => e.NewContent).ToList();
             }
 
             var fileLines = new HashSet<string>(TrimmedLines(fileText), StringComparer.Ordinal);
@@ -741,9 +746,9 @@ public class WorkspaceFileEditImpl
 
         bool Callable(string tool) => _activeToolSurface is null || _activeToolSurface.IsCallable(tool);
         var steps = new List<string>();
-        if (Callable("DeleteFile")) steps.Add("To delete the file, use DeleteFile.");
-        if (Callable("Member")) steps.Add("To remove one type, use Member(operation: remove).");
-        if (Callable("WriteFile")) steps.Add("To replace the whole file, use WriteFile(operation: ReplaceFile).");
+        if (Callable("DeleteFile")) steps.Add($"To delete the file, use {ToolCallHint.Call("DeleteFile")}.");
+        if (Callable("Member")) steps.Add($"To remove one type, use {ToolCallHint.Call("Member", ("operation", "remove"))}.");
+        if (Callable("WriteFile")) steps.Add($"To replace the whole file, use {ToolCallHint.Call("WriteFile", ("operation", "ReplaceFile"))}.");
 
         var prefix = batch ? "ReplaceSnippet batch: " : "ReplaceSnippet: ";
         var suffix = batch ? "; nothing in the batch was written" : "";
@@ -770,11 +775,11 @@ public class WorkspaceFileEditImpl
 
         if (Callable("CreateFile"))
         {
-            steps.Add("To write new content, use CreateFile with the file's full content" + (Callable("WriteFile") ? ", or WriteFile(operation: ReplaceFile)." : "."));
+            steps.Add($"To write new content, use {ToolCallHint.Call("CreateFile")} with the file's full content" + (Callable("WriteFile") ? $", or {ToolCallHint.Call("WriteFile", ("operation", "ReplaceFile"))}." : "."));
         }
         else if (Callable("WriteFile"))
         {
-            steps.Add("To write new content, use WriteFile(operation: ReplaceFile).");
+            steps.Add($"To write new content, use {ToolCallHint.Call("WriteFile", ("operation", "ReplaceFile"))}.");
         }
 
         var head = $"ReplaceSnippet: '{relativePath}' is empty, so there is no text for oldContent to match.";
@@ -1031,8 +1036,8 @@ public class WorkspaceFileEditImpl
                     var isRepeat = false;
                     if (result.IsError && result.ValidationResult != null)
                     {
-                        isRepeat = _rejectedEdits.IsRepeat((string)targetPath, newContent);
-                        _rejectedEdits.Remember((string)targetPath, newContent);
+                        isRepeat = _rejectedEdits.IsRepeat((string)targetPath, oldContent, newContent);
+                        _rejectedEdits.Remember((string)targetPath, oldContent, newContent);
                         // The edit-impact report, when it can attribute the errors to unedited files, replaces the generic
                         // untouched-file sentence (it already covers it); null keeps that sentence.
                         impactNote = await EditImpactGate.DescribeAsync(_workspaceManager, snippetChanges, result.ValidationResult, _activeToolSurface, cancellationToken: cancellationToken);
@@ -1054,7 +1059,8 @@ public class WorkspaceFileEditImpl
                         };
                     if (!result.IsError)
                         _rejectedEdits.Forget((string)targetPath);
-                    await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet", result, cancellationToken: cancellationToken);
+                    var changeId = Guid.NewGuid().ToString("n")[..8];
+                    var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet", result, blobChangeId: changeId, cancellationToken: cancellationToken);
                     var strippedResult = result with { PreImages = null };
                     string? diffContent = returnDiff
                         ? ValidateAndApplyHelper.BuildDiffFromPreImages(snippetChanges, result.PreImages)
@@ -1062,7 +1068,7 @@ public class WorkspaceFileEditImpl
                     return new SentinelCallToolResult<ReplaceSnippetResult>()
                     {
                         IsError = false,
-                        SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent),
+                        SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent, blobWrite.Written ? changeId : null),
                         Findings = result.Findings ?? []
                     };
                 }
@@ -1177,7 +1183,7 @@ public class WorkspaceFileEditImpl
             .GroupBy(pair => _workspaceManager.ResolveFromWire(pair.edit.FilePath));
 
         var finalContents = new Dictionary<FilePathWrapper, string>();
-        var newContentsByFile = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var newContentsByFile = new Dictionary<string, List<(string? OldContent, string NewContent)>>(StringComparer.OrdinalIgnoreCase);
         foreach (var fileGroup in editsByFile)
         {
             var filePathResolved = fileGroup.Key;
@@ -1216,7 +1222,7 @@ public class WorkspaceFileEditImpl
             // edit's output within this same batch. This is what removes the sequencing hazard a
             // series of single ReplaceSnippetTool calls has: every edit here is anchored against one
             // fixed snapshot, not a chain of intermediate results the model never sees.
-            var resolved = new List<(int index, SnippetMatch match, string newContent)>();
+            var resolved = new List<(int index, SnippetMatch match, string? oldContent, string newContent)>();
             foreach (var (edit, index) in fileGroup)
             {
                 var leakedMarkup = DescribeLeakedNewContentMarkup(edit.NewContent, () => originalString);
@@ -1232,7 +1238,7 @@ public class WorkspaceFileEditImpl
                     var match = ResolveEditMatch(
                         originalText, edit.OldContent, edit.LineBefore, edit.LineAfter, memberNameAt: memberNameAt,
                         withinMember: edit.WithinMember, matchLine: edit.MatchLine);
-                    resolved.Add((index, match, edit.NewContent));
+                    resolved.Add((index, match, edit.OldContent, edit.NewContent));
                 }
                 catch (ToolException toolEx)
                 {
@@ -1276,7 +1282,7 @@ public class WorkspaceFileEditImpl
             // later match's offset -> every position was already computed against originalString above,
             // so no running correction term is needed the way DiffEngine's forward hunk application uses.
             var spliced = originalString;
-            foreach (var (_, match, newContent) in byStart.OrderByDescending(r => r.match.Start))
+            foreach (var (_, match, _, newContent) in byStart.OrderByDescending(r => r.match.Start))
             {
                 spliced = spliced.Remove(match.Start, match.Length).Insert(match.Start, newContent);
             }
@@ -1293,7 +1299,7 @@ public class WorkspaceFileEditImpl
                 };
             }
             finalContents[canonicalPath] = normalizedSpliced;
-            newContentsByFile[(string)canonicalPath] = resolved.Select(r => r.newContent).ToList();
+            newContentsByFile[(string)canonicalPath] = resolved.Select(r => (r.oldContent, r.newContent)).ToList();
         }
 
         if (perEditErrors.Count > 0)
@@ -1333,10 +1339,10 @@ public class WorkspaceFileEditImpl
             var isRepeat = false;
             if (result.IsError && result.ValidationResult != null)
             {
-                isRepeat = newContentsByFile.All(kv => kv.Value.All(c => _rejectedEdits.IsRepeat(kv.Key, c)));
-                foreach (var (rejectedPath, rejectedNewContents) in newContentsByFile)
-                    foreach (var rejectedNewContent in rejectedNewContents)
-                        _rejectedEdits.Remember(rejectedPath, rejectedNewContent);
+                isRepeat = newContentsByFile.All(kv => kv.Value.All(c => _rejectedEdits.IsRepeat(kv.Key, c.OldContent, c.NewContent)));
+                foreach (var (rejectedPath, rejectedEdits) in newContentsByFile)
+                    foreach (var rejectedEdit in rejectedEdits)
+                        _rejectedEdits.Remember(rejectedPath, rejectedEdit.OldContent, rejectedEdit.NewContent);
                 // The edit-impact report, when it can attribute the errors to unedited files, replaces the generic
                 // untouched-file sentence (it already covers it); null keeps that sentence.
                 impactNote = await EditImpactGate.DescribeAsync(_workspaceManager, finalContents, result.ValidationResult, _activeToolSurface, cancellationToken: cancellationToken);
@@ -1362,7 +1368,8 @@ public class WorkspaceFileEditImpl
                 foreach (var writtenPath in newContentsByFile.Keys)
                     _rejectedEdits.Forget(writtenPath);
             }
-            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet_batch", result, cancellationToken: cancellationToken);
+            var changeId = Guid.NewGuid().ToString("n")[..8];
+            var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet_batch", result, blobChangeId: changeId, cancellationToken: cancellationToken);
             var strippedResult = result with { PreImages = null };
             string? diffContent = returnDiff
                 ? ValidateAndApplyHelper.BuildDiffFromPreImages(finalContents, result.PreImages)
@@ -1370,7 +1377,7 @@ public class WorkspaceFileEditImpl
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
                 IsError = false,
-                SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent),
+                SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent, blobWrite.Written ? changeId : null),
                 Findings = result.Findings ?? []
             };
         }
