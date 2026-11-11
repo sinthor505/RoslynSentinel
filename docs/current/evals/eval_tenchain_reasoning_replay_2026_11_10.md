@@ -82,6 +82,82 @@ only way forward depends on the weakest model behaviour seen tonight: switching 
 4. **(open) Chat template:** literal `</think>` tags appear in message content with the new template (host 112 run
    20261110-074310-120 T2, T3, T5, T7); the harness now replays content, so they reach the model again.
 
+## Batch D: unsloth/qwen3.5-9b on a918d07d, 10/10
+
+**Setup.** Runs `20261110-192956-615` to `20261110-210942-294`, host 113, `unsloth/qwen3.5-9b` at 80128 context
+(parallel 1), code a918d07d = batch C + 31b206a6 (exact-repeat note) + 28391d8c (CS0144 hint) + a918d07d (no "Fix the
+issue(s) below and retry" after a Next step; errors introduced as "Compiler errors caused by this edit:"). Archive:
+`ModelTestingResults\113\Model_AppliesTenChainedRefactors\`. No intervention (L1); 10 result folders.
+
+**Result.** 10/10 by test outcome (the same metric as batches A-C), stop reason ModelFinished in all; 21-45 turns,
+1-7 failed calls, 6-16 min per run.
+
+- **Rename loop gone.** Every run got at least one "use RenameSymbol" redirect, and every run then called
+  RenameSymbol. Identical resends: at most one or two per run (192956 T9, 204705 T4, 210942 T5/T7, 202809 T29), each
+  answered by the repeat note; no loop. Typical recovery: redirect, then LocateSymbol or Search, then RenameSymbol.
+- **Weakest pass:** 210942 never used RenameSymbol for the CalcDisc rename and ended on an empty message (T22).
+- **Template/tool flaws (lower rate than C):** literal `</think>` in message content in 2/10 (201124 T35, 202809
+  T16/T18/T22); one invalid enum (204705 T3, `action: "replace"`); about 5 turns whose reasoning names one tool while the
+  call is another, each recovered within 1-2 turns. No malformed JSON, no context overflow.
+- **Defect found:** the repeat note said "Do what the next step below says instead" with no Next step present
+  (202809 T29). Fixed in 8b73a4f5.
+
+**Attribution: model and code changed together, so the gain cannot be split yet.** Evidence that the model carries most
+of it: unsloth runs on the OLD code (113 run `20261110-181529-141`, pass, 0 resends; 112 run `20261110-191206-217`, 0
+resends, old "retry" wording) also switched to RenameSymbol without looping. Batch E (qwen3.5-9b-coder, default
+template, 60160 context, worktree pinned at a918d07d) isolates the code change on the coder model.
+
+**Other runs on 2026-11-10 evening (not part of D):**
+- 113 `172948-175`, `174156-681`: harness error `model_not_found` (model not loaded); `191049-890`, `192256-540` and
+  112 `191206-217`, `192305-716` ended without a stop reason at the same moments on both hosts (12:15 and 12:24 log
+  time): operator restarts, not a harness defect (hypothesis, not verified).
+- 112 `192615-954`: `unsloth/qwen3.5-9b`, pass, 31 turns, two different (not identical) redirected edits, then
+  RenameSymbol; no `</think>` leak on 112.
+- Unexplained `LM Studio streaming: OutOfRangeException` lines near the end of D runs 194407 and 195503 (both passed).
+
+## Batch E: qwen3.5-9b-coder on a918d07d, 7/10
+
+**Setup.** Host 113, `qwen3.5-9b-coder` with its DEFAULT chat template (C used the fixed template), 60160 context,
+parallel 4. Code pinned at a918d07d in a separate worktree (`C:\tmp\rs_eval_a918`, branch `eval/batch-e-a918d07d`) so
+edits to the main tree during the run could not leak in. Archive: `C:\tmp\rs_eval_a918\ModelTestingResults\113\
+Model_AppliesTenChainedRefactors\`, runs `20261110-215536-336` to `20261110-232308-397`. L2 (coordinator made the
+worktree); no other intervention.
+
+| Run | Folder | Result | Turns | Failed calls |
+| --- | --- | --- | --- | --- |
+| R1 | 215536-336 | pass | 27 | 4 |
+| R2 | 220441-748 | FAIL RepeatedToolFailure | 47 | 33 |
+| R3 | 222036-157 | pass | 27 | 5 |
+| R4 | 222844-494 | pass | 25 | 4 |
+| R5 | 223843-222 | pass | 24 | 5 |
+| R6 | 225141-025 | pass | 23 | 5 |
+| R7 | 225942-918 | FAIL error budget (13 > 12) | 36 | 13 |
+| R8 | 231353-986 | pass | 18 | 3 |
+| R9 | 231957-659 | FAIL RepeatedToolFailure | 11 | 10 |
+| R10 | 232308-397 | pass | 25 | 3 |
+
+- **Rename loop: 1/10 (R9), down from 4/10 in C on the same model.** Nine runs switched to RenameSymbol on the next
+  turn or after one Search. R9 resent the identical ReplaceSnippet T3-T11, each answered by the repeat note and the
+  redirect; its reasoning every turn: "The error message tells me to use `RenameSymbol`. Let me use that for step 2."
+  So the code changes reduce the loop on the coder model but do not remove it; rename lifting (second slice, step 1 of
+  `proposals/proposal_semantic_edit_impact_diagnostics.md`) is still justified.
+- **R2: emptied file, no recovery.** T21 a ReplaceSnippet with whole-file oldContent and empty newContent emptied
+  `IOrderPricingCalculator.cs`; then CreateFile "already exists", Member parse/not-found errors, and 10 alternating
+  "'oldContent' is required" / "'newContent' is required" failures with no next step. Fixed after E: ReplaceSnippet
+  refuses an edit that leaves no type declaration; ReplaceSnippet on an empty file and CreateFile on an existing empty
+  file now recover (UndoLastApply, CreateFile).
+- **R7: content correct, error budget exceeded.** RunTest 7/7 at T34; failures were 2 redirects, CS0266, five
+  "More than one protection modifier" (`private internal`, step 3), four oldContent not found, two CS0103.
+- **Template/tool flaws with the default template:** no `</think>` leak, no malformed calls; one invalid enum (R2 T20
+  `Git` operation `rm`).
+- **Smaller findings:** the repeat note fired on R7 T11 although only newContent matched (oldContent differed), so
+  "this exact edit" overstates it; the tool list a run had is not recorded in `transcript.json` or `agent.log`, so
+  tool availability (WriteFile, UndoLastApply) cannot be checked from artifacts.
+
+**Prompt changes after D (8b73a4f5).** Three step-order statements runs hesitated at were clarified in the 10-step
+template (helper private then internal; preferred-customer `discount` local "as step 1 left it"; the class name until
+step 8). Batches after 8b73a4f5 are not strictly comparable with A-E.
+
 ## Out of scope
 
 - Batch C ran before 31b206a6 and 28391d8c; their effect is unmeasured.

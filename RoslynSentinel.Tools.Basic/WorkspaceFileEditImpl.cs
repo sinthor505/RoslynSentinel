@@ -721,6 +721,66 @@ public class WorkspaceFileEditImpl
         return exceeded;
     }
 
+    // 10-chain batch E run R2 (2026-11-10): a whole-file oldContent with empty newContent emptied an interface file and no tool could recover it.
+    /// <summary>
+    /// Refuses an edit that leaves a .cs file with no type declaration when it had one before (empty, whitespace or only
+    /// usings/namespace/comments). Returns the refusal message, or null when the edit may proceed.
+    /// </summary>
+    private string? DescribeNoTypeLeft(string path, string before, string after, bool batch)
+    {
+        static bool HasTypeContent(string text) =>
+            Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(text).GetRoot().DescendantNodes().Any(node =>
+                node is Microsoft.CodeAnalysis.CSharp.Syntax.BaseTypeDeclarationSyntax
+                    or Microsoft.CodeAnalysis.CSharp.Syntax.DelegateDeclarationSyntax
+                    or Microsoft.CodeAnalysis.CSharp.Syntax.GlobalStatementSyntax);
+
+        if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) || !HasTypeContent(before) || HasTypeContent(after))
+        {
+            return null;
+        }
+
+        bool Callable(string tool) => _activeToolSurface is null || _activeToolSurface.IsCallable(tool);
+        var steps = new List<string>();
+        if (Callable("DeleteFile")) steps.Add("To delete the file, use DeleteFile.");
+        if (Callable("Member")) steps.Add("To remove one type, use Member(operation: remove).");
+        if (Callable("WriteFile")) steps.Add("To replace the whole file, use WriteFile(operation: ReplaceFile).");
+
+        var prefix = batch ? "ReplaceSnippet batch: " : "ReplaceSnippet: ";
+        var suffix = batch ? "; nothing in the batch was written" : "";
+        var message = $"{prefix}this edit would leave '{path}' with no type declaration (the result is empty or only usings/comments) - not applied{suffix}.";
+        return steps.Count == 0 ? message : message + " " + string.Join(" ", steps);
+    }
+
+    // 10-chain batch E run R2 (2026-11-10): refusals must name the file without an absolute path; an in-memory file has no Relative, so fall back to its file name (keeps the .cs extension for the guard).
+    private static string DisplayPath(FilePathWrapper filePath) =>
+        string.IsNullOrEmpty(filePath.Relative) ? Path.GetFileName(filePath.Absolute) : filePath.Relative;
+
+    // 10-chain batch E run R2 (2026-11-10): after a file was emptied, ReplaceSnippet and CreateFile both refused and the model never recovered.
+    /// <summary>
+    /// Refusal text for ReplaceSnippet on an empty file. Names only the recovery tools this server can call.
+    /// </summary>
+    private string DescribeEmptyFile(string relativePath)
+    {
+        bool Callable(string tool) => _activeToolSurface is null || _activeToolSurface.IsCallable(tool);
+        var steps = new List<string>();
+        if (Callable("UndoLastApply"))
+        {
+            steps.Add($"If an earlier edit emptied it, UndoLastApply restores the previous content: {ToolCallHint.Call("UndoLastApply")}, with the changeId from the response of that edit.");
+        }
+
+        if (Callable("CreateFile"))
+        {
+            steps.Add("To write new content, use CreateFile with the file's full content" + (Callable("WriteFile") ? ", or WriteFile(operation: ReplaceFile)." : "."));
+        }
+        else if (Callable("WriteFile"))
+        {
+            steps.Add("To write new content, use WriteFile(operation: ReplaceFile).");
+        }
+
+        var head = $"ReplaceSnippet: '{relativePath}' is empty, so there is no text for oldContent to match.";
+        return steps.Count == 0 ? head : head + " " + string.Join(" ", steps);
+    }
+
     /// <summary>
     /// Builds the delegate that lets an ambiguity error name the member enclosing each match.
     /// Returns null for a document with no syntax tree (e.g. a non-C# file), in which case the
@@ -834,6 +894,17 @@ public class WorkspaceFileEditImpl
                 };
             }
 
+            // 10-chain batch E run R2 (2026-11-10): after a file was emptied, ReplaceSnippet and CreateFile both refused and the model never recovered.
+            var emptyLookup = await _workspaceManager.GetDocumentAsync(filePathResolved, ReadSource.Committed, cancellationToken);
+            if (emptyLookup.TryGetDocument(out var emptyDocument) && string.IsNullOrWhiteSpace((await emptyDocument.GetTextAsync(cancellationToken)).ToString()))
+            {
+                return new SentinelCallToolResult<ReplaceSnippetResult>()
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(string.IsNullOrEmpty(oldContent) ? ToolErrorCode.InvalidArgument : ToolErrorCode.NotFound, DescribeEmptyFile(DisplayPath(filePathResolved)))
+                };
+            }
+
             if (string.IsNullOrEmpty(oldContent))
             {
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
@@ -921,6 +992,16 @@ public class WorkspaceFileEditImpl
                     var targetPath = document.FilePath ?? filePathResolved;
                     var targetEol = _workspaceManager.ResolveEol((string)targetPath, oldText.ToString());
                     var normalizedContent = EolUtilities.NormalizeEol(newFileContent, targetEol);
+                    var noTypeLeft = DescribeNoTypeLeft(DisplayPath(filePathResolved), oldText.ToString(), normalizedContent, batch: false);
+                    if (noTypeLeft is not null)
+                    {
+                        return new SentinelCallToolResult<ReplaceSnippetResult>()
+                        {
+                            IsError = true,
+                            ErrorData = new ResultError(ToolErrorCode.TargetIneligible, noTypeLeft)
+                        };
+                    }
+
                     var snippetChanges = new Dictionary<FilePathWrapper, string>
                     {
                         [targetPath] = normalizedContent
@@ -1202,6 +1283,15 @@ public class WorkspaceFileEditImpl
 
             var targetEol = _workspaceManager.ResolveEol((string)canonicalPath, originalString);
             var normalizedSpliced = EolUtilities.NormalizeEol(spliced, targetEol);
+            var noTypeLeft = DescribeNoTypeLeft(DisplayPath(filePathResolved), originalString, normalizedSpliced, batch: true);
+            if (noTypeLeft is not null)
+            {
+                return new SentinelCallToolResult<ReplaceSnippetResult>()
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.TargetIneligible, noTypeLeft)
+                };
+            }
             finalContents[canonicalPath] = normalizedSpliced;
             newContentsByFile[(string)canonicalPath] = resolved.Select(r => r.newContent).ToList();
         }
@@ -1321,7 +1411,9 @@ public class WorkspaceFileEditImpl
                 };
             }
 
-            if (File.Exists(filePathResolved.Absolute))
+            // 10-chain batch E run R2 (2026-11-10): after a file was emptied, ReplaceSnippet and CreateFile both refused and the model never recovered.
+            var existedEmpty = File.Exists(filePathResolved.Absolute) && string.IsNullOrWhiteSpace(await File.ReadAllTextAsync(filePathResolved.Absolute, cancellationToken));
+            if (File.Exists(filePathResolved.Absolute) && !existedEmpty)
             {
                 return new SentinelCallToolResult<object>()
                 {
@@ -1406,7 +1498,9 @@ public class WorkspaceFileEditImpl
             {
                 IsError = false,
                 SuccessData = strippedResult,
-                Findings = createFileFindings
+                Findings = createFileFindings,
+                // 10-chain batch E run R2 (2026-11-10): after a file was emptied, ReplaceSnippet and CreateFile both refused and the model never recovered.
+                StatusMessage = existedEmpty ? $"'{DisplayPath(filePathResolved)}' already existed but was empty; its content was written." : null
             };
         }
         catch (Exception ex)

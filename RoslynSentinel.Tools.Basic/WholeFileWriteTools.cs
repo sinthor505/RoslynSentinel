@@ -553,6 +553,7 @@ public class WholeFileWriteTools
                         {
                             [targetPath] = newContent
                         };
+                        // TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)
                         var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges, validateChanges: validateOnApply, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
                         // TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)
                         if (WriteRefusal.TryMap("ApplyDiff", result, out var refusal))
@@ -691,6 +692,7 @@ public class WholeFileWriteTools
                     {
                         [targetPath] = newContent
                     };
+                    // TODO no shrink/no-type-left guard here (ApplyDiff files format has LargeShrinkRejectionThreshold; ReplaceSnippet has the no-type-left guard)
                     var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges, validateChanges: validateOnApply, staleReadPolicy: StaleReadPolicy.RefuseIfObservedStale);
                     // TODO a non-mapped, non-validation refusal (IsError without ValidationResult) falls through to IsError = false below; map it once decided (plan_stale_read_guard_followups open decision 9)
                     if (WriteRefusal.TryMap("ApplyUnifiedDiff", result, out var refusal))
