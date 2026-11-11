@@ -105,6 +105,12 @@ public static class AgentSystemPrompts
         as described, say so explicitly in your final response. Do not guess, invent a
         plausible-sounding answer, or declare success prematurely.
 
+        When a tool returns an error, follow the recovery step the error names. If the task
+        cannot be completed as asked (a named file or symbol does not exist and the error
+        offers no match, or the same call has failed twice), stop: do not guess and do not work
+        around it with a different edit. Begin your final message with `BLOCKED:` followed by
+        what you tried and the error you received.
+
         ## Example
 
         The example below shows the pattern of a correct fix. It is not your task: the file, code,
