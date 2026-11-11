@@ -58,6 +58,14 @@ namespace RoslynSentinel.Common;
 ///     GitBackendWarmup's repo probe reports "fallback: LibGit2SharpException: ...". Relative gitdir/commondir files WITHOUT the extension flag open fine
 ///     (<c>CommonDirectory</c> resolves the relative commondir against the absolute git directory libgit2 reports). Pinned by GitRelativeWorktreeTests;
 ///     a libgit2 upgrade that learns the extension makes its "rejects" tests fail on purpose, to be re-pinned to parity.
+/// (11) Repo-local config read from a linked worktree (checked 2026-11-11, same versions): settings live in the MAIN repository's .git/config, but
+///     LibGit2Sharp's <c>repo.Config</c> in a linked worktree reads only the per-worktree git directory's config, and once touched it makes libgit2's later
+///     native lookups on that handle (core.abbrev, ...) miss the main config too. Every config read here therefore goes through <c>ConfigValue</c>, which
+///     reads <c>&lt;commondir&gt;/config</c> through a separate <see cref="Configuration"/> for a linked worktree. With that, libgit2 and the CLI agree for
+///     core.autocrlf, filemode, symlinks, ignorecase, safecrlf, excludesFile, quotepath and eol in the main tree and in a linked worktree, and the settings
+///     that change the answer (core.abbrev below 7, branch.sort, diff.renames / status.renames other than true, diff.orderFile) decline in both places.
+///     No method declines merely because the directory is a linked worktree. Not covered: extensions.worktreeConfig (per-worktree config overrides).
+///     Pinned by GitWorktreeRepoLocalConfigTests.
 /// </para>
 /// </summary>
 internal sealed class Libgit2GitReader : IGitReader
@@ -188,6 +196,16 @@ internal sealed class Libgit2GitReader : IGitReader
             throw new NotSupportedException("The repository has submodules; libgit2's submodule status is not reproduced.");
         }
 
+        // git status follows status.renames (and diff.renames): "false" lists a rename as a delete and an add, "copies" also reports copies. This reader always detects
+        // renames only, so any value but a true-like one is git's to answer (found 2026-11-11: with diff.renames=false the rows differ from git's, in the main tree too).
+        foreach (var key in new[] { "status.renames", "diff.renames" })
+        {
+            if (ConfigValue(repo, key) is { } renames && renames.Trim().ToLowerInvariant() is not ("true" or "yes" or "on" or "1"))
+            {
+                throw new NotSupportedException($"{key} is configured as '{renames}', so git decides how renames are listed.");
+            }
+        }
+
         var options = new StatusOptions
         {
             Show = StatusShowOption.IndexAndWorkDir,
@@ -281,6 +299,25 @@ internal sealed class Libgit2GitReader : IGitReader
     private static bool IsLinkedWorktree(Repository repo) => File.Exists(Path.Combine(repo.Info.Path, "commondir"));
 
     /// <summary>
+    /// The value of a config key as git resolves it (local over global over system), null when unset. Never use <c>repo.Config</c> for this: opened through a linked worktree,
+    /// LibGit2Sharp's <c>Repository.Config</c> reads only the per-worktree git directory's config (the main repository's <c>.git/config</c>, where repo-local settings live, is
+    /// missing) and, once touched, makes libgit2's own later lookups on that <see cref="Repository"/> miss it too (probed 2026-11-11: <c>core.abbrev=4</c> repo-local, then
+    /// <c>repo.Config.Get</c>, then <c>ShortenObjectId(.., 4)</c> returns 7 characters in a worktree, 4 when the managed config was not touched first). A linked worktree is therefore
+    /// read through a separate <see cref="Configuration"/> built on the common directory's config file, which leaves the repository's native config alone.
+    /// Not covered: <c>extensions.worktreeConfig</c> (<c>config.worktree</c>), which no repository this server meets uses.
+    /// </summary>
+    private static string? ConfigValue(Repository repo, string key)
+    {
+        if (!IsLinkedWorktree(repo))
+        {
+            return repo.Config.Get<string>(key)?.Value;
+        }
+
+        using var config = Configuration.BuildFrom(Path.Combine(CommonDirectory(repo), "config"));
+        return config.Get<string>(key)?.Value;
+    }
+
+    /// <summary>
     /// The hex length git's <c>%h</c> starts from for this repository: what <c>git rev-parse --short HEAD</c> printed (see <see cref="ShortHashLengths"/>:
     /// cached per git common directory, refreshed on every LoadSolution, probed lazily here for a repository reached another way). It covers
     /// <c>core.abbrev</c> (a number, a false-like value, <c>auto</c>), the object count, a multi-pack-index and alternates alike. The caller makes the
@@ -308,7 +345,7 @@ internal sealed class Libgit2GitReader : IGitReader
             return target.Sha;
         }
 
-        if (!string.Equals(repo.Config.Get<string>("core.abbrev")?.Value, "auto", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(ConfigValue(repo, "core.abbrev"), "auto", StringComparison.OrdinalIgnoreCase))
         {
             return repo.ObjectDatabase.ShortenObjectId(target, length);
         }
@@ -550,6 +587,7 @@ internal sealed class Libgit2GitReader : IGitReader
         }
 
         // ls-files lists the index under the working directory, relative to it; .gitignore plays no part.
+        // TODO with core.ignorecase=true (git init's default on Windows) libgit2 enumerates a mixed-case index case-insensitively ("a.txt" before "Case.txt") where git lists byte order ("Case.txt" first); found 2026-11-11 in main and worktree alike, config-independent. Not checked whether a caller (ResidualMentionScanner) depends on the order; sort Ordinal here if one does.
         var prefix = RelativeToWorkdir(repo, workingDirectory);
         var leading = prefix.Length == 0 ? string.Empty : prefix + "/";
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -606,24 +644,13 @@ internal sealed class Libgit2GitReader : IGitReader
     public bool? GetBoolConfig(string workingDirectory, string key, TimeSpan cliTimeout)
     {
         using var repo = Open(workingDirectory);
-        // libgit2 1.8.6 reads a linked worktree's "local" config from its per-worktree git directory only, so the main repository's .git/config is
-        // missing there (probed 2026-11-11: worktree.useRelativePaths, core.bare, core.repositoryformatversion all null in a linked worktree, absolute or
-        // relative paths alike, while the CLI resolves them). A null here would be a wrong "unset", so the CLI answers for a linked worktree.
-        // TODO the same missing common config probably affects other config-dependent reads in a linked worktree (status EOL handling reads core.autocrlf, ignore case, filemode); verify with a repo-local-only setting before trusting libgit2 there
-        if (repo is not null && IsLinkedWorktree(repo))
-        {
-            throw new NotSupportedException("libgit2 does not read the main repository's config from a linked worktree, so git answers.");
-        }
-
-        // Config.Get searches every level in git's precedence order (local over global over system). An unset key is a null entry.
-        // Read as text and parsed here: Get<bool> throws on a non-boolean, which the composite would record as a libgit2 failure.
-        var entry = repo?.Config.Get<string>(key);
-        if (entry is null)
+        // ConfigValue searches every level in git's precedence order (local over global over system), through the main repository's config in a linked worktree.
+        // An unset key is null. Read as text and parsed here: Get<bool> throws on a non-boolean, which the composite would record as a libgit2 failure.
+        var text = repo is null ? null : ConfigValue(repo, key);
+        if (text is null)
         {
             return null;
         }
-
-        var text = entry.Value;
 
         // An empty or valueless entry means different things to git ("key=" is false, a bare "key" is true) and libgit2 does not say which: the CLI decides.
         if (string.IsNullOrEmpty(text))
@@ -815,7 +842,7 @@ internal sealed class Libgit2GitReader : IGitReader
             throw new NotSupportedException("HEAD is detached, so git adds a pseudo-branch row with an abbreviated hash.");
         }
 
-        if (repo.Config.Get<string>("branch.sort") is not null)
+        if (ConfigValue(repo, "branch.sort") is not null)
         {
             throw new NotSupportedException("branch.sort is configured, so git orders the list.");
         }
@@ -1109,7 +1136,7 @@ internal sealed class Libgit2GitReader : IGitReader
 
         foreach (var key in new[] { "diff.renames", "diff.orderfile" })
         {
-            if (repo.Config.Get<string>(key) is not null)
+            if (ConfigValue(repo, key) is not null)
             {
                 throw new NotSupportedException($"{key} is configured, so git decides rename handling and order.");
             }

@@ -330,10 +330,11 @@ public class GitRelativeWorktreeTests
     }
 
     [Test]
-    public void RelativeGitdirWithoutTheExtension_GetBoolConfig_InTheLinkedWorktreeIsAnsweredByTheCli_NotAWrongUnsetFromLibgit2()
+    public void RelativeGitdirWithoutTheExtension_GetBoolConfig_InTheLinkedWorktreeIsAnsweredByLibgit2_FromTheMainRepositorysConfig()
     {
-        // libgit2 1.8.6 does not read the main repository's .git/config from a linked worktree (it answers null for a key that is set there), so the
-        // reader declines for a linked worktree; the main working tree is still served by libgit2.
+        // libgit2 1.8.6 does not read the main repository's .git/config through a linked worktree's Repository.Config (it would answer null for a key that is set there);
+        // Libgit2GitReader.ConfigValue reads <commondir>/config explicitly, so libgit2 serves the linked worktree and gives the CLI's answer
+        // (see GitWorktreeRepoLocalConfigTests for the per-setting matrix).
         DropExtensionFlagKeepRelativePaths();
         var cli = new CliGitReader();
         var inMain = new FallbackGitReader(new Libgit2GitReader(), cli, _ => { });
@@ -347,8 +348,8 @@ public class GitRelativeWorktreeTests
             Assert.That(main, Is.True);
             Assert.That(inMain.LastBackend, Is.EqualTo(GitReaderBackend.Libgit2));
             Assert.That(linked, Is.True, "the key is set in the main repository's config, which a linked worktree shares");
-            Assert.That(inLinked.LastBackend, Is.EqualTo(GitReaderBackend.Cli));
-            Assert.That(inLinked.FirstFallbackReason, Does.StartWith("NotSupportedException"));
+            Assert.That(inLinked.LastBackend, Is.EqualTo(GitReaderBackend.Libgit2), inLinked.FirstFallbackReason);
+            Assert.That(inLinked.CliFallbackCount, Is.Zero);
         });
     }
 
