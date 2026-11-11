@@ -27,6 +27,10 @@ public class ModelEvalAssemblySetUp
     public async Task OneTimeSetUp()
     {
         LlmOptions.Configure([]);
+        // The in-process eval server never runs ServerStdio/ServerHttp, so read the experimental server flags'
+        // env vars here (ROSLYNSENTINEL_LIFT_RENAMES, ROSLYNSENTINEL_LOOP_LATCH); unset leaves them off.
+        LiftRenamesOptions.Configure([]);
+        LoopLatchOptions.Configure([]);
 
         if (string.IsNullOrEmpty(LlmOptions.Model))
         {
