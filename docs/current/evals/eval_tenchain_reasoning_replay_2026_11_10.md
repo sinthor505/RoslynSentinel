@@ -399,6 +399,56 @@ run 2 (2 lifts, 0 redirects): the flag was live and run 1 was a lift refusal.
 - **Smaller:** R4 T16 CS0111 (re-declared member), R5 T4 CS0103 `LocalZone`, R3 T2 three failures in one turn (all
   recovered). Cached/reasoning token fields are present in the transcript (14 occurrences in run 1).
 
+## Batch H3: master 770dc3c1, rename lifting ON, 3/3 valid runs (2 of 5 lost to host 113 outage) (2026-11-11)
+
+**Setup.** Host 113, `qwen3.5-9b-coder`, 60160 context, parallel 4, reasoning budget as before (not re-verified from the
+host). Worktree `C:\tmp\rs_eval_h3` (branch `eval/h3`) at master 770dc3c1: H2 plus 2ef7d88e (multi-rename lift) and
+a3900e6f (in-fixture `Step1_BothBranchesUseTheExtractedHelper`; prompt says the file checks steps 1, 3, 7, 9).
+`ROSLYNSENTINEL_LIFT_RENAMES=1`, same command as H1 with `-Repeats 5`. L2. Archive
+`C:\tmp\rs_eval_h3\ModelTestingResults\113\Model_AppliesTenChainedRefactors\`: valid runs `20261111-101723-125`,
+`102046-095`, `102518-699`. **Infrastructure loss:** run 4 (`102821-543`, 1 turn) died with `HttpRequestException`
+(socket 10060, 192.168.1.113:1234 timed out) and run 5 was skipped at setup ("LLM server ... did not respond within
+5s"); ping to 113 showed 100% loss and `/v1/models` returned no response from about 10:28 to 10:43 local while host 112 answered. Not a model
+result, excluded from the table; retry of the 2 missing runs not done (host still down when the wait ended).
+
+| Run | Folder | Result | Turns | Failed | Lifted | Redirected | Model RenameSymbol | RunTest (turn: result) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| R1 | 101723-125 | pass | 9 | 0 | 1 (T3, class + method) | 0 | 0 | T5 fail (Step 7), T7 pass 8/0 |
+| R2 | 102046-095 | pass | 15 | 1 | 1 (T3, class + method) | 0 | 0 | T7 fail (Steps 1, 7, 3), T13 pass 8/0 |
+| R3 | 102518-699 | pass | 11 | 2 | 1 (T3, class + method) | 0 | 0 | T6 fail (Steps 7, 3), T9 pass 8/0 |
+
+| Measure | G (10) | H1 (5) | H2 (5) | H3 (3 valid) |
+| --- | --- | --- | --- | --- |
+| Pass | 8/10 | 4/5 | 4/5 | 3/3 |
+| Mean turns | 19.7 | 18.6 | 19.4 | 11.7 |
+| Mean failed calls | 3.7 | 2.8 | 3.8 | 1.0 |
+| Lifts per run (renames lifted, of 2) | 1.4 | 1.6 | 1.4 | 1.0 lift, 2 of 2 renames |
+| Redirects per run | 0.6 | 0.6 | 2.4 | 0 |
+| Longest identical consecutive call | 2 | 2 | 10 | 1 |
+| Stale oldContent right after a lift | 2 of 14 | 2 of 8 | 0 of 7 | 1 of 3 |
+
+- **Two-rename whole-file edits are lifted: 3 of 3.** Each run's T3 whole-file edit drew "Applied as RenameSymbol: class
+  OrderPricingCalculator -> StandardOrderPricingCalculator, method CalcDisc -> CalculateDiscountedTotal: 2 call site(s) in
+  1 other file(s) (OrderCheckout.cs), while your edit's own text was kept ..." plus the rewritten lines and "These call
+  sites are already updated; do not edit them again." No redirect in any run. This is the case that sank H2 R1.
+- **Step 1 in in-run RunTest:** R2 T7 failed it ("The 'amount * rate' discount calculation should be extracted into a
+  shared method, not repeated inline in both branches (found 2 occurrences in code)"); the model made the helper
+  internal (T9), pointed the preferred branch at it (T10) and T13 passed 8/0. R1 and R3 never failed Step 1. So the
+  half-extraction that survived H1 R5 now surfaces before the end and was fixed.
+- **Stale oldContent after a lift: R3 T3.1.** ReplaceSnippet on `OrderCheckout.cs` in the same turn as the lift (T3.0)
+  failed "oldContent was not found: it matches nothing at any whitespace tolerance probed" (oldContent still had
+  `OrderPricingCalculator _calculator`); T4: "The first edit succeeded and the RenameSymbol tool already updated
+  OrderCheckout. The second edit failed because the file was already changed." One failed call, recovered next turn. This is
+  the parallel-call-in-one-turn case (as G R3 T7-T8, H1 R4 T5), which no summary text can pre-empt because both calls
+  are sent before either result is seen.
+- **"Do not edit them again" vs step 7.** Step 7 requires retyping the very `_calculator` field line the lift rewrote
+  (R1 T6, R2 T10, R3 T7); each run did it after a failed RunTest, and R2 T5 read the warning as covering the whole file
+  ("OrderCheckout.cs is already updated"). No harm seen; the wording is broader than the intent.
+- **Other failed calls:** R2 T1 and R3 T1 ReadFile of `IOrderPricingCalculator.cs` before it exists ("was not found
+  anywhere in the loaded solution (searched 2 project(s)..."), then CreateFile at T2.
+- Sample is 3 runs on a shortened path (whole-file edit, one lift, then fix-ups from RunTest); compare with the 5-run
+  batches only as an indication. Turn counts per tool call in the analyst's output use sub-indexes (T3.0, T3.1) for parallel calls.
+
 ## Out of scope
 
 - Batch C ran before 31b206a6 and 28391d8c; their effect is unmeasured.
