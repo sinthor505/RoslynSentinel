@@ -94,9 +94,11 @@ public static class ValidateAndApplyHelper
         // observed-then-changed target but does not add the "not read first" finding, because engine
         // tools edit many files.
         StaleReadPolicy staleReadPolicy = StaleReadPolicy.RefuseIfObservedStaleQuiet,
-        // Edit-impact report (EditImpactGate.Describer in Engines.Basic; Common cannot call an engine). A non-null text
+        // Edit-impact report (EditImpactGate.Describer in Engines.Basic; Common cannot call an engine). A non-null Text
         // replaces the untouched-file sentence, which it already covers; null keeps DescribeUntouchedFileErrors as the fallback.
-        Func<DiagnosticReport, CancellationToken, Task<string?>>? describeEditImpact = null)
+        // StructuredDetail (untyped items, because Common cannot name the engine's EditImpactDetail) becomes
+        // errorData.structuredDetail of the rejection; null keeps the compiler diagnostics there, as before.
+        Func<DiagnosticReport, CancellationToken, Task<(string? Text, IReadOnlyList<object>? StructuredDetail)>>? describeEditImpact = null)
     {
         // The pre-images feed the per-file changed-line counts and the collateral-change tripwire below.
         // EOL conversion is done by the chokepoint (PersistentWorkspaceManager.ApplyProposedChangesAsync).
@@ -172,7 +174,7 @@ public static class ValidateAndApplyHelper
         if (validation.IsError)
         {
             var detail = validation.Diagnostics;
-            var impactText = describeEditImpact != null ? await describeEditImpact(validation, cancellationToken) : null;
+            var (impactText, impactDetail) = describeEditImpact != null ? await describeEditImpact(validation, cancellationToken) : (null, null);
             var untouchedText = impactText ?? DescribeUntouchedFileErrors(changes.Keys.Select(k => (string)k), detail.Select(d => d.FilePath.ToString()));
             var detailString = describeValidationFailure != null
                 ? await describeValidationFailure(validation, cancellationToken)
@@ -183,7 +185,7 @@ public static class ValidateAndApplyHelper
                 (impactText is null ? (untouchedText is null ? "" : untouchedText + " ") : impactText.TrimEnd()) +
                 (impactText is null ? "Fix the issue(s) below and retry." : ""),
                 detailString,
-                detail.Cast<object>().ToList());
+                impactDetail ?? detail.Cast<object>().ToList());
             // Foreign-agent findings for the files that failed the compile gate; null when there are none so single-agent output is unchanged.
             var validationFindings = EditAttributionFindings.ForCurrentCaller(
                 workspaceManager, detail.Select(d => d.FilePath.ToString()));

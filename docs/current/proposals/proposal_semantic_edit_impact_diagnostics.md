@@ -237,8 +237,12 @@ reaches the wire only as `ResultError.Message` text (`EditImpactGate.cs:63`). Re
    oldName, newName, location, verdict `valid`/`breaksUses`/`lifted`/`liftRejected`, brokenUseCount, brokenUses (DiagnosticInfo, capped 5),
    suggestedTool, nextStep; max 20, added declarations left out). Both ReplaceSnippet rejections carry it as one typed item `EditImpactDetail {verdicts, diagnostics}` (the only element of
    `structuredDetail`; verdicts empty when nothing was attributable; the lift attempt comes first). Revised 2026-11-11: this replaced the first-built mixed list. A lifted write adds an `EditImpact` finding `edit-impact verdict=lifted ...`.
-   `EditImpactGate.AnalyzeAsync` returns the structured result; `DescribeAsync` delegates. Not wired: the `ValidateAndApplyHelper` tools,
-   WriteFile/ApplyDiff/CreateFile (TODO in `EditImpactGate`).
+   `EditImpactGate.AnalyzeAsync` returns the structured result; `DescribeAsync` delegates. **Wired everywhere 2026-11-11 (uncommitted):** the
+   `ValidateAndApplyHelper` tools (`describeEditImpact` callback now returns `(Text, StructuredDetail)`; `EditImpactGate.Describer` fills it) and
+   WriteFile/ApplyDiff/ApplyUnifiedDiff/CreateFile (`EditImpactGate.RejectionAsync`, replaces `PrependAsync`) all carry `structuredDetail[0] = EditImpactDetail`,
+   built by the shared `EditImpactGate.BuildDetail`; message text unchanged. The detail is present even when no verdict is attributable (empty verdicts,
+   diagnostics only), so for the helper tools `structuredDetail` is now an `EditImpactDetail`, not the bare diagnostic list, whenever the edit-impact callback is wired. Tests: `EditImpactGateWiringTests`.
+   A created file only adds declarations, so CreateFile never yields a `breaksUses` verdict from the symbol diff.
 4. **Pairing for pattern C.** When a removed member ties with two added members of the same shape, pair it
    with the added member that calls the other one (the renamed method calls the extracted helper). Verify
    against run 309 before building; hypothesis.

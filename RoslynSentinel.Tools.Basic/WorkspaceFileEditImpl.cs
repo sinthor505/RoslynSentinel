@@ -943,14 +943,7 @@ public class WorkspaceFileEditImpl
     /// (the lift attempt first, then the symbol-diff verdicts) and the compiler diagnostics as two named lists. Both lists may be empty; the shape does not vary.
     /// </summary>
     private static List<object> RejectionDetail(EditImpactResult? impact, ImpactVerdict? liftVerdict, IReadOnlyList<DiagnosticInfo> diagnostics)
-    {
-        var verdicts = new List<ImpactVerdict>();
-        if (liftVerdict is not null)
-            verdicts.Add(liftVerdict);
-        if (impact?.Verdicts is { } fromImpact)
-            verdicts.AddRange(fromImpact);
-        return [new EditImpactDetail(verdicts, diagnostics)];
-    }
+        => EditImpactGate.BuildDetail(impact, diagnostics, liftVerdict);
 
     /// <summary>
     /// What other ReplaceSnippet edits say, for the impact analyzer's unapplied-name rule: full file path to newContent for every file except <paramref name="ownPaths"/>,
@@ -1693,10 +1686,10 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.ValidationFailed,
+                    ErrorData = await EditImpactGate.RejectionAsync(_workspaceManager, changes, result.ValidationResult, _activeToolSurface,
                         "CreateFile: this content would introduce new compiler errors - not written to disk. Fix the issue(s) below and retry:\n" +
-                        "[COMPILER ERROR]\n" +
-                        await EditImpactGate.PrependAsync(_workspaceManager, changes, result.ValidationResult, _activeToolSurface, await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken))
+                        "[COMPILER ERROR]\n",
+                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken)
                 };
             }
 

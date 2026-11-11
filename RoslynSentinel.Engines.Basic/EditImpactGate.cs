@@ -12,10 +12,6 @@ namespace RoslynSentinel.Engines.Basic;
 /// </summary>
 public static class EditImpactGate
 {
-    // TODO the verdict list reaches the wire only on a rejected ReplaceSnippet (single and batch): WorkspaceFileEditImpl.RejectionDetail builds one EditImpactDetail {verdicts, diagnostics}
-    // from AnalyzeAsync and puts it in ResultError.StructuredDetail. Still text only: Describer (its callback in ValidateAndApplyHelper.ValidateAndApplyAsync(describeEditImpact:) returns string?,
-    // so it needs a structured return; used by the refactoring tools in RefactoringStructuralImpl, RefactoringSignatureImpl, RefactoringExtractionDocsImpl and Tools.Advanced GenerationTools)
-    // and PrependAsync (WriteFile, ApplyDiff, ApplyUnifiedDiff, CreateFile in WholeFileWriteTools and WorkspaceFileEditImpl.CreateFile). Move them to AnalyzeAsync and EditImpactDetail.
     /// <summary>
     /// The callback shape <c>ValidateAndApplyHelper.ValidateAndApplyAsync(describeEditImpact:)</c> takes, closing over the
     /// change set the gate validates.
@@ -25,29 +21,52 @@ public static class EditImpactGate
     /// <param name="activeToolSurface">Decides which tools the next step may name; null (unit tests, hosts without a surface) treats every tool as callable.</param>
     /// <param name="removePaths">Files the edit moves away (a rename's old path); their declarations count as removed.</param>
     /// <param name="deletePaths">Files the edit deletes; their declarations count as removed.</param>
-    public static Func<DiagnosticReport, CancellationToken, Task<string?>> Describer(
+    public static Func<DiagnosticReport, CancellationToken, Task<(string? Text, IReadOnlyList<object>? StructuredDetail)>> Describer(
         IWorkspaceManager workspaceManager,
         IReadOnlyDictionary<FilePathWrapper, string> changes,
         ActiveToolSurface? activeToolSurface,
         IReadOnlyCollection<FilePathWrapper>? removePaths = null,
         IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
-        => (report, ct) => DescribeAsync(workspaceManager, changes, report, activeToolSurface, removePaths, deletePaths, ct);
+        => async (report, ct) =>
+        {
+            var impact = await AnalyzeAsync(workspaceManager, changes, report, activeToolSurface, removePaths, deletePaths, ct);
+            // The detail is built even when nothing is attributable, so the shape never varies (same as a rejected ReplaceSnippet).
+            return (impact?.Text, BuildDetail(impact, report.Diagnostics));
+        };
 
     /// <summary>
-    /// For the sites that build their own rejection text (WriteFile, ApplyDiff, ApplyUnifiedDiff): the analyzer's report
-    /// followed by <paramref name="existingText"/>, or <paramref name="existingText"/> unchanged when nothing is attributable.
+    /// The <c>errorData.structuredDetail</c> of a rejected edit, shared by every compile-gate site: one <see cref="EditImpactDetail"/> holding the verdicts
+    /// (<paramref name="liftVerdict"/> first when the edit was tried as a RenameSymbol, then the symbol-diff verdicts) and the compiler diagnostics as two
+    /// named lists. Both lists may be empty; the shape does not vary.
+    /// </summary>
+    public static List<object> BuildDetail(EditImpactResult? impact, IReadOnlyList<DiagnosticInfo> diagnostics, ImpactVerdict? liftVerdict = null)
+    {
+        var verdicts = new List<ImpactVerdict>();
+        if (liftVerdict is not null)
+            verdicts.Add(liftVerdict);
+        if (impact?.Verdicts is { } fromImpact)
+            verdicts.AddRange(fromImpact);
+        return [new EditImpactDetail(verdicts, diagnostics)];
+    }
+
+    /// <summary>
+    /// For the sites that build their own rejection text (WriteFile, ApplyDiff, ApplyUnifiedDiff, CreateFile): the whole ValidationFailed error. The message is
+    /// <paramref name="messagePrefix"/>, then the analyzer's report followed by <paramref name="existingText"/> (or <paramref name="existingText"/> alone when
+    /// nothing is attributable); <c>structuredDetail[0]</c> is the <see cref="EditImpactDetail"/> (see <see cref="BuildDetail"/>), always present.
     /// Those sites add no untouched-file sentence, so nothing is duplicated.
     /// </summary>
-    public static async Task<string> PrependAsync(
+    public static async Task<ResultError> RejectionAsync(
         IWorkspaceManager workspaceManager,
         IReadOnlyDictionary<FilePathWrapper, string> changes,
         DiagnosticReport report,
         ActiveToolSurface? activeToolSurface,
+        string messagePrefix,
         string existingText,
         CancellationToken cancellationToken = default)
     {
-        var impact = await DescribeAsync(workspaceManager, changes, report, activeToolSurface, cancellationToken: cancellationToken);
-        return impact is null ? existingText : impact + "\n" + existingText;
+        var impact = await AnalyzeAsync(workspaceManager, changes, report, activeToolSurface, cancellationToken: cancellationToken);
+        var text = impact is null ? existingText : impact.Text + "\n" + existingText;
+        return new ResultError(ToolErrorCode.ValidationFailed, messagePrefix + text, StructuredDetail: BuildDetail(impact, report.Diagnostics));
     }
 
     /// <summary>The analyzer's report for a rejected edit, or null when no error in an unedited file can be attributed.</summary>
