@@ -52,7 +52,8 @@ public class PathCaseLookupRegressionTests
         // blocker's exact repro (workspace document paths are lowercased). Elsewhere a lowercased
         // path would not exist, so load the real one and rely on the mixed-case spelling alone.
         var loadPath = OperatingSystem.IsWindows() ? fixture.SolutionPath.ToLowerInvariant() : fixture.SolutionPath;
-        await workspace.LoadSolutionAsync(loadPath);
+        // Full/parallel runs contend on MSBuild loads and the 30 s default flakes under load, so use the fixture's 120 s timeout.
+        await workspace.LoadSolutionAsync(loadPath, null, TestSolutionFixture.LoadTimeout);
 
         var tools = TestTools.WorkspaceTools(workspace);
         var writeTools = TestTools.WholeFileWriteTools(workspace, tools);

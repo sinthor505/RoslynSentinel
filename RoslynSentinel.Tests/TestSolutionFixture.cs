@@ -15,6 +15,10 @@ public sealed class TestSolutionFixture : IDisposable
 {
     private static readonly string[] SourceExtensions = [".sln", ".csproj", ".cs", ".md"];
 
+    // Full/parallel test runs contend on MSBuild loads; the 30 s default of PersistentWorkspaceManager.LoadSolutionAsync
+    // flakes with SolutionLoadTimeoutException under that load, so fixtures that load a solution use this instead.
+    public static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(120);
+
     public string SolutionPath { get; }
 
     public string SolutionDirectory { get; }
@@ -90,7 +94,7 @@ public sealed class TestSolutionFixture : IDisposable
 
         if (reloadSolution)
         {
-            await workspaceManager.LoadSolutionAsync(SolutionPath, cancellationToken);
+            await workspaceManager.LoadSolutionAsync(SolutionPath, null, LoadTimeout, cancellationToken);
             workspaceManager.ClearExternalFileChanges();
         }
     }
@@ -113,7 +117,7 @@ public sealed class TestSolutionFixture : IDisposable
 
         if (reloadSolution)
         {
-            await workspaceManager.LoadSolutionAsync(SolutionPath, cancellationToken);
+            await workspaceManager.LoadSolutionAsync(SolutionPath, null, LoadTimeout, cancellationToken);
             workspaceManager.ClearExternalFileChanges();
         }
     }
@@ -136,7 +140,7 @@ public sealed class TestSolutionFixture : IDisposable
 
         if (reloadSolution)
         {
-            await workspaceManager.LoadSolutionAsync(SolutionPath, cancellationToken);
+            await workspaceManager.LoadSolutionAsync(SolutionPath, null, LoadTimeout, cancellationToken);
             workspaceManager.ClearExternalFileChanges();
         }
     }
