@@ -122,8 +122,17 @@ public class StructuralRefinementEngine
             throw new ToolNotFoundException($"No symbol found at line {line}, column {column} of '{filePath}'. Next: {ToolCallHint.Call("ReadFile")} the line to confirm the position.", "symbol");
         }
 
-        // TODO this overload removes 'node', which may be a reference expression rather than the declaration; not fixed in this slice.
         RequireDeletableDeclaration(symbol);
+
+        // The position may sit on a usage; remove the symbol's declaration, not the reference node.
+        var declaringReference = symbol.DeclaringSyntaxReferences.FirstOrDefault(r => r.SyntaxTree == root!.SyntaxTree);
+        if (declaringReference == null)
+        {
+            var declaringPath = symbol.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree.FilePath ?? string.Empty;
+            throw new ToolTargetIneligibleException($"'{symbol.Name}' is declared in {Path.GetFileName(declaringPath)}, not in '{filePath}'. Next: {ToolCallHint.Call("DeleteUnusedSymbol", ("filePath", declaringPath))}", ToolCallHint.Call("DeleteUnusedSymbol", ("filePath", declaringPath)));
+        }
+
+        var declarationNode = await declaringReference.GetSyntaxAsync(cancellationToken);
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
         var externalLocations = ExternalReferenceLocations(references, symbol, document.FilePath ?? string.Empty);
@@ -140,7 +149,7 @@ public class StructuralRefinementEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root!, node!, SyntaxRemoveOptions.KeepUnbalancedDirectives, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
+            UpdatedText = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root!, declarationNode, SyntaxRemoveOptions.KeepUnbalancedDirectives, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken),
             Warnings = warnings
         };
     }

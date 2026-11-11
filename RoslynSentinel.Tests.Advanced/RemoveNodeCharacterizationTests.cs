@@ -356,6 +356,50 @@ public class RemoveNodeCharacterizationTests
 
     [TestCase(false)]
     [TestCase(true)]
+    public async Task SafeDelete_ByLineColumn_AtSelfRecursiveCall_RemovesDeclarationNotCall(bool crlf)
+    {
+        SetSource(Src(crlf,
+            "public class C",
+            "{",
+            "    public void A() { }",
+            "",
+            "    private void Rec() { Rec(); }",
+            "",
+            "    public void B() { }",
+            "}"));
+
+        // Line 5, column 26 is the inner call "Rec" in "Rec();", not the declaration.
+        var result = await _refinementEngine.SafeDeleteSymbolAsync("Test.cs", 5, 26);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), result.Message);
+        Assert.That(result.UpdatedText, Is.EqualTo(Src(crlf,
+            "public class C",
+            "{",
+            "    public void A() { }",
+            "",
+            "    public void B() { }",
+            "}")));
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task SafeDelete_ByLineColumn_AtUsageOfUsedMethod_IsRefusedAndNothingRemoved(bool crlf)
+    {
+        SetSource(Src(crlf,
+            "public class C",
+            "{",
+            "    private void Used() { }",
+            "",
+            "    public void Caller() { Used(); }",
+            "}"));
+
+        // Line 5, column 28 is the call "Used" inside Caller. The usage refusal must fire before any removal.
+        await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+            await _refinementEngine.SafeDeleteSymbolAsync("Test.cs", 5, 28));
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
     public async Task SafeDelete_UnusedMethodInsideIfDirective_KeepsUnbalancedDirective_ByteExact(bool crlf)
     {
         SetSource(Src(crlf,
