@@ -2575,6 +2575,7 @@ public class MemberRefactoringEngine
         var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(allNameCandidates
             .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember))
             .ToList());
+        memberCandidates = ExcludeSameNamedConstructors(allNameCandidates, memberCandidates, memberName, containerName);
         memberCandidates = SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName);
         member = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
             (candidates, matches, failureMode) => SyntaxTargetResolver.BuildOverloadHintForCandidates(candidates, matches, failureMode, sourceText, document.FilePath ?? string.Empty, "remove", memberName))?.Node;
@@ -2696,7 +2697,8 @@ public class MemberRefactoringEngine
         var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(allNameCandidates
             .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember))
             .ToList());
-        // TODO Member remove of a type that declares its own constructor resolves the name to the constructor (a ConstructorDeclaration shares the type's name), so the type itself is not removed and the precheck/usage refusal talks about the constructor; consider preferring the type when a constructor candidate is in the type named memberName (candidate for the R8 'has 1 usages' report).
+        // Same-named constructors are dropped by ExcludeSameNamedConstructors, shared with RemoveMemberAsync.
+        memberCandidates = ExcludeSameNamedConstructors(allNameCandidates, memberCandidates, memberName, containerName);
         if (SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName).Count > 0)
             return false;
 
@@ -5567,5 +5569,29 @@ public class MemberRefactoringEngine
             UpdatedText = updatedText,
             AppliedEditIndexes = appliedIndexes
         };
+    }
+
+    /// <summary>
+    /// A bare type name also matches its own constructor (a ConstructorDeclaration shares the type's name).
+    /// When a type of that name is declared and containerName does not name that type itself, the type is
+    /// the target, so its constructor candidates are dropped. Returns memberCandidates unchanged otherwise.
+    /// </summary>
+    private static List<SyntaxNodeCandidate> ExcludeSameNamedConstructors(List<SyntaxNodeCandidate> allNameCandidates, List<SyntaxNodeCandidate> memberCandidates, string memberName, string? containerName)
+    {
+        if (containerName is not null)
+        {
+            var containerTypeName = containerName;
+            var genericStart = containerTypeName.IndexOf('<');
+            if (genericStart >= 0)
+                containerTypeName = containerTypeName[..genericStart];
+            var lastDot = containerTypeName.LastIndexOf('.');
+            if (lastDot >= 0)
+                containerTypeName = containerTypeName[(lastDot + 1)..];
+            if (string.Equals(containerTypeName, memberName, StringComparison.Ordinal))
+                return memberCandidates;
+        }
+
+        var hasType = allNameCandidates.Any(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum);
+        return hasType ? memberCandidates.Where(c => c.Kind != CandidateKind.Constructor).ToList() : memberCandidates;
     }
 }

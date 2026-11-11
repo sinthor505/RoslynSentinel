@@ -313,6 +313,65 @@ public sealed class MemberRemoveTests
 
     [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task RemoveMember_OnClassDeclaringItsOwnConstructor_RemovesTheClassNotTheConstructor()
+    {
+        // Member remove with the type's own name must prefer the type over its same-named constructor.
+        using var workspace = InMemoryWorkspace.Create(
+            ("Foo.cs", Crlf("""
+                namespace TestProj;
+
+                public class Foo
+                {
+                    public Foo() { }
+
+                    public int X;
+                }
+
+                public class Other
+                {
+                    public int Y;
+                }
+                """)));
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
+
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Foo.cs"), MemberAction.remove, memberName: "Foo");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(AllText(workspace), Does.Not.Contain("class Foo"));
+        Assert.That(AllText(workspace), Does.Contain("class Other"));
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")]
+    public async Task RemoveMember_OnConstructorWithContainerNameOfItsType_RemovesOnlyTheConstructor()
+    {
+        // With containerName naming the type, the same-named constructor stays reachable and is the target.
+        using var workspace = InMemoryWorkspace.Create(
+            ("Foo.cs", Crlf("""
+                namespace TestProj;
+
+                public class Foo
+                {
+                    public Foo() { }
+
+                    public int X;
+                }
+
+                public class Other
+                {
+                    public int Y;
+                }
+                """)));
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
+
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Foo.cs"), MemberAction.remove, memberName: "Foo", containerName: "Foo");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(AllText(workspace), Does.Contain("class Foo"));
+        Assert.That(AllText(workspace), Does.Contain("class Other"));
+        Assert.That(AllText(workspace), Does.Not.Contain("public Foo()"));
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task DeleteUnusedSymbol_OnClassReferencedOnlyFromStringLiteral_DeletesAndWarnsWithLocation()
     {
         // Same engine as Member(remove) for a type, so the string-literal warning must surface here as well.
