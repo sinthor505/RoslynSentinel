@@ -1233,7 +1233,7 @@ public class WorkspaceFileEditImpl
                                 (untouchedNote is null ? "" : untouchedNote + " ") +
                                 (impactNote is null ? "Fix the issue(s) below and retry:\n" : "Compiler errors caused by this edit:\n") +
                                 "[COMPILER ERROR]\n" +
-                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, snippetChanges.Keys.Select(k => (string)k).ToList()),
+                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, snippetChanges.Keys.Select(k => (string)k).ToList(), isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
                                 StructuredDetail: RejectionDetail(impact, liftVerdict, result.ValidationResult.Diagnostics))
                         };
                     if (!result.IsError)
@@ -1564,7 +1564,7 @@ public class WorkspaceFileEditImpl
                         (untouchedNote is null ? "" : untouchedNote + " ") +
                         (impactNote is null ? "Fix the issue(s) below and retry:\n" : "Compiler errors caused by this edit:\n") +
                         "[COMPILER ERROR]\n" +
-                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, finalContents.Keys.Select(k => (string)k).ToList()),
+                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, finalContents.Keys.Select(k => (string)k).ToList(), isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
                         StructuredDetail: RejectionDetail(impact, liftVerdict, result.ValidationResult.Diagnostics)),
                 };
             if (!result.IsError)
@@ -1689,7 +1689,7 @@ public class WorkspaceFileEditImpl
                     ErrorData = await EditImpactGate.RejectionAsync(_workspaceManager, changes, result.ValidationResult, _activeToolSurface,
                         "CreateFile: this content would introduce new compiler errors - not written to disk. Fix the issue(s) below and retry:\n" +
                         "[COMPILER ERROR]\n",
-                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken), cancellationToken)
+                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable), cancellationToken)
                 };
             }
 

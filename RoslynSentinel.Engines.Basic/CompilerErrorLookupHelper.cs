@@ -32,11 +32,14 @@ public static class CompilerErrorLookupHelper
     private static readonly Regex Cs0737NotPublicRegex = new(@"'([^']+)' cannot implement an interface member because it is not public", RegexOptions.Compiled);
 
     // TODO pass editedFilePaths to DescribeAsync at the remaining callers
+    // TODO pass isToolActive (ActiveToolSurface.IsCallable) at the callers that do not yet: WholeFileWriteTools (WriteFile, ApplyDiff x2, ApplyUnifiedDiff), CoreRefactoringTools, AdvancedRefactoringTools, GenerationTools, RefactoringExtractionDocsImpl, RefactoringSignatureImpl, RefactoringStructuralImpl
+    // isToolActive: whether a tool may be named to the caller (ActiveToolSurface.IsCallable); null names no tool, so existing callers keep today's text.
     public static async Task<string> DescribeAsync(
         DiagnosticReport report,
         SymbolNavigationEngine symbolNavigationEngine,
         CancellationToken cancellationToken = default,
-        IReadOnlyCollection<string>? editedFilePaths = null)
+        IReadOnlyCollection<string>? editedFilePaths = null,
+        Func<string, bool>? isToolActive = null)
     {
         // Identical diagnostics (same Id AND same Message text) collapse into one line: a single
         // root cause repeated at N sites (e.g. 86 identical CS7036s from one bad MoveMember
@@ -64,7 +67,7 @@ public static class CompilerErrorLookupHelper
                 return $"  This follows from '{typeName}' being declared twice (see its CS0101); removing the extra '{typeName}' declaration fixes this too.";
             }
 
-            return await DescribeHintAsync(diagnostic, symbolNavigationEngine, cancellationToken, editedFilePaths);
+            return await DescribeHintAsync(diagnostic, symbolNavigationEngine, cancellationToken, editedFilePaths, isToolActive);
         }
         foreach (var group in report.Diagnostics.GroupBy(d => (d.Id, d.Message)))
         {
@@ -104,7 +107,8 @@ public static class CompilerErrorLookupHelper
         DiagnosticInfo diagnostic,
         SymbolNavigationEngine symbolNavigationEngine,
         CancellationToken cancellationToken,
-        IReadOnlyCollection<string>? editedFilePaths)
+        IReadOnlyCollection<string>? editedFilePaths,
+        Func<string, bool>? isToolActive)
     {
         if (diagnostic.Id == "CS0103")
         {
@@ -123,7 +127,7 @@ public static class CompilerErrorLookupHelper
 
         if (diagnostic.Id is "CS0101" or "CS0102")
         {
-            return await DescribeDuplicateDeclarationAsync(diagnostic, symbolNavigationEngine, cancellationToken, editedFilePaths);
+            return await DescribeDuplicateDeclarationAsync(diagnostic, symbolNavigationEngine, cancellationToken, editedFilePaths, isToolActive);
         }
 
         if (diagnostic.Id == "CS0111")
@@ -493,7 +497,8 @@ public static class CompilerErrorLookupHelper
         DiagnosticInfo diagnostic,
         SymbolNavigationEngine symbolNavigationEngine,
         CancellationToken cancellationToken,
-        IReadOnlyCollection<string>? editedFilePaths)
+        IReadOnlyCollection<string>? editedFilePaths,
+        Func<string, bool>? isToolActive)
     {
         string? containerName = null;
         string? name = null;
@@ -561,12 +566,12 @@ public static class CompilerErrorLookupHelper
         if (!diagnosticEdited && otherNote.Length > 0)
         {
             // The edit's file first, then the unedited file the compiler pointed at.
-            return $"  {what} is now declared twice: in {othersShown}{otherNote} and in {diagnosticShown}. Keep one declaration: {diagnosticShown} already declares it, so remove the '{name}' declaration from your edit.";
+            return $"  {what} is now declared twice: in {othersShown}{otherNote} and in {diagnosticShown}. Keep one declaration: {diagnosticShown} already declares it, so remove the '{name}' declaration from your edit.{(isToolActive?.Invoke("DeleteFile") == true ? $" Or, if {diagnosticShown} is the superseded copy, delete that file with {ToolCallHint.Call("DeleteFile", ("filePath", diagnosticFile))}." : string.Empty)}";
         }
 
         var editedClause = diagnosticEdited ? " (changed by this edit)" : string.Empty;
         return $"  {what} is now declared twice: in {diagnosticShown}{editedClause} and in {othersShown}. Keep one declaration"
-            + (diagnosticEdited ? $": {othersShown} already declares it, so remove the '{name}' declaration from your edit." : ".");
+            + (diagnosticEdited ? $": {othersShown} already declares it, so remove the '{name}' declaration from your edit." + (isToolActive?.Invoke("DeleteFile") == true ? $" Or, if {Show(others[0])} is the superseded copy, delete that file with {ToolCallHint.Call("DeleteFile", ("filePath", others[0]))}." : string.Empty) : ".");
     }
 
     /// <summary>

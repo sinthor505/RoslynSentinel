@@ -335,6 +335,50 @@ public class CompilerErrorLookupHelperTests
             $"'IOrderPricingCalculator' is now declared twice: in {editedFile} (changed by this edit) and in {diagnosticFile}. Keep one declaration: {diagnosticFile} already declares it, so remove the 'IOrderPricingCalculator' declaration from your edit."));
     }
 
+    /// <summary>
+    /// With DeleteFile callable, the CS0101 hint also offers deleting the unedited file when it is the superseded copy.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_Cs0101_DeleteFileActive_OffersDeletingTheUneditedFileAsync()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("IOrderPricingCalculator.cs", InterfaceI),
+            ("OrderPricingCalculator.cs", InterfaceI + "\r\npublic class OrderPricingCalculator : IOrderPricingCalculator\r\n{\r\n}\r\n"));
+        var cs0101 = report.Diagnostics.First(d => d.Id == "CS0101");
+        var diagnosticFile = FileName(cs0101);
+        var editedFile = diagnosticFile == "OrderPricingCalculator.cs" ? "IOrderPricingCalculator.cs" : "OrderPricingCalculator.cs";
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(
+            new DiagnosticReport(true, [cs0101]), _symbolNavigationEngine, editedFilePaths: [editedFile], isToolActive: name => name == "DeleteFile");
+
+        Assert.That(description, Does.Contain($"Keep one declaration: {diagnosticFile} already declares it, so remove the 'IOrderPricingCalculator' declaration from your edit."));
+        Assert.That(description, Does.Contain($"Or, if {diagnosticFile} is the superseded copy, delete that file with "));
+        Assert.That(description, Does.Contain("DeleteFile"));
+    }
+
+    /// <summary>
+    /// With DeleteFile not callable (or the parameter omitted), the CS0101 hint names no tool.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_Cs0101_DeleteFileNotActive_NamesNoToolAsync()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("IOrderPricingCalculator.cs", InterfaceI),
+            ("OrderPricingCalculator.cs", InterfaceI + "\r\npublic class OrderPricingCalculator : IOrderPricingCalculator\r\n{\r\n}\r\n"));
+        var cs0101 = report.Diagnostics.First(d => d.Id == "CS0101");
+        var diagnosticFile = FileName(cs0101);
+        var editedFile = diagnosticFile == "OrderPricingCalculator.cs" ? "IOrderPricingCalculator.cs" : "OrderPricingCalculator.cs";
+        var diagnostics = new DiagnosticReport(true, [cs0101]);
+
+        var notActive = await CompilerErrorLookupHelper.DescribeAsync(
+            diagnostics, _symbolNavigationEngine, editedFilePaths: [editedFile], isToolActive: _ => false);
+        var omitted = await CompilerErrorLookupHelper.DescribeAsync(
+            diagnostics, _symbolNavigationEngine, editedFilePaths: [editedFile]);
+
+        Assert.That(notActive, Does.Not.Contain("DeleteFile"));
+        Assert.That(omitted, Does.Not.Contain("DeleteFile"));
+    }
+
     [Test]
     public async Task DescribeAsync_Cs0101DiagnosticInEditedFile_NamesItAsEditedAndTheCommittedOtherFileAsync()
     {
