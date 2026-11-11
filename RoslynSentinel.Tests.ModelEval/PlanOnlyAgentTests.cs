@@ -32,12 +32,11 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// this test alone can't confirm).
 /// </summary>
 [TestFixture]
-[TestFixture]
 public class PlanOnlyAgentTests
 {
     // Same task framing as WholeFileRewriteAgentTests.DisambiguatedMinimalGuidanceUserPromptTemplate,
     // but asks for a plan instead of a fix, and is explicit that no edit tools exist -> without this,
-    // the shared AgentSystemPrompts.CodingAgent's workflow step 5 ("report what you changed") plus the
+    // the shared AgentSystemPrompts.CodingAgent's final workflow step ("report what you changed") plus the
     // model's own instinct to just try ApplyDiffTool would otherwise produce confused turns where it
     // repeatedly attempts a blocked tool instead of answering the question actually being asked here.
     private const string PlanOnlyUserPromptTemplate = """
