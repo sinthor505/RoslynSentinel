@@ -165,6 +165,13 @@ public enum AgentStopReason
     /// reported as the latter when it was really the former for its last 23 turns.
     /// </summary>
     RepeatedToolFailure,
+
+    /// <summary>
+    /// The model kept calling a tool the server's loop latch had disabled: after the first refusal it called the same tool
+    /// <see cref="LoopLatchOptions.IgnoredRefusalLimit"/> more times. The model is past recovery; stopping here instead of
+    /// letting it burn turns to <see cref="RepeatedToolFailure"/>.
+    /// </summary>
+    LoopLatchIgnored,
 }
 
 /// <summary>

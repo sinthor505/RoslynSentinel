@@ -154,6 +154,15 @@ worktree); no other intervention.
   "this exact edit" overstates it; the tool list a run had is not recorded in `transcript.json` or `agent.log`, so
   tool availability (WriteFile, UndoLastApply) cannot be checked from artifacts.
 
+## R9 resample: loop assist at the moment the loop starts (2026-11-11)
+
+Batch E run R9 resumed from its own history with the harness from cf88ab97, so every sample starts from the same stuck
+state (two identical rejected ReplaceSnippet calls seeded, K=4). qwen3.5-9b-coder, 10 samples per arm: assist off 2/10
+reached RenameSymbol (7/10 repeated the rejected call first); assist with a user-role injection 10/10 (1/10 repeated);
+assist with an assistant-role injection 5/10 (9/10 repeated, and half the samples echoed the injected text as their own
+output). unsloth/qwen3.5-9b on host 112 (K=3, 3 samples per arm, indicative) escaped in every sample without assist.
+Details and the role analysis: `proposals/proposal_first_person_turn_injection.md`, "Result: R9 resample".
+
 **Prompt changes after D (8b73a4f5).** Three step-order statements runs hesitated at were clarified in the 10-step
 template (helper private then internal; preferred-customer `discount` local "as step 1 left it"; the class name until
 step 8). Batches after 8b73a4f5 are not strictly comparable with A-E.

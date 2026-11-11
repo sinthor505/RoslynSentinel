@@ -178,6 +178,10 @@ public sealed class ModelAgentRunner
         var firstFailureTurn = 0;
         RepeatedFailureDetail? repeatedFailure = null;
 
+        // Server loop-latch refusals per tool since the last successful call (the server releases the latch on any success, so
+        // the count restarts then). The model calling a refused tool again after the first refusal is the LoopLatchIgnored stop.
+        var latchRefusals = new Dictionary<string, int>(StringComparer.Ordinal);
+
         // Cumulative context tracking (see ContextUsageWarningFraction). contextLength is resolved
         // once and cached (-1 if LM Studio couldn't report one, e.g. an older server) so a slow/down
         // context-length lookup never adds latency to every turn.
@@ -322,7 +326,24 @@ public sealed class ModelAgentRunner
                 {
                     lastFailureSignature = null;
                     consecutiveFailures = 0;
+                    latchRefusals.Clear();
                     continue;
+                }
+
+                if (ToolLoopLatch.RefusalMessage(toolCall.Name, resultJson) is { } refusalMessage)
+                {
+                    var refusalCount = latchRefusals.GetValueOrDefault(toolCall.Name) + 1;
+                    latchRefusals[toolCall.Name] = refusalCount;
+                    RecordAssists(transcript, turnRecord, [new AgentAssist(AgentAssist.LatchKind, toolCall.Name, refusalCount, refusalMessage)]);
+                    await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
+                    if (refusalCount > LoopLatchOptions.IgnoredRefusalLimit)
+                    {
+                        stopReason = AgentStopReason.LoopLatchIgnored;
+                        _logger.LogWarning(
+                            "Turn {Turn}: {Tool} was refused by the server loop latch {Count} times and the model kept calling it (limit: {Limit} calls after the first refusal) - stopping the run.",
+                            turnNumber, toolCall.Name, refusalCount, LoopLatchOptions.IgnoredRefusalLimit);
+                        break;
+                    }
                 }
 
                 var signature = BuildFailureSignature(toolCall.Name, toolCall.ArgumentsJson, resultJson);
@@ -365,7 +386,7 @@ public sealed class ModelAgentRunner
                 await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
             }
 
-            if (stopReason == AgentStopReason.RepeatedToolFailure)
+            if (stopReason is AgentStopReason.RepeatedToolFailure or AgentStopReason.LoopLatchIgnored)
             {
                 break;
             }

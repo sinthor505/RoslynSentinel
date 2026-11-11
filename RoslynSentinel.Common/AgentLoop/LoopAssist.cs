@@ -9,7 +9,7 @@ namespace RoslynSentinel.Common.AgentLoop;
 /// calls in the replayed history, or an injected fact-only message. Recorded on the transcript turn
 /// that received it so a run's assists can be counted and located without text search.
 /// </summary>
-/// <param name="Kind"><see cref="CollapseKind"/> or <see cref="InjectionKind"/>; a string so the transcript stays readable and a new kind needs no converter.</param>
+/// <param name="Kind"><see cref="CollapseKind"/>, <see cref="InjectionKind"/> or <see cref="LatchKind"/>; a string so the transcript stays readable and a new kind needs no converter.</param>
 /// <param name="ToolName">The tool whose repeated call triggered the assist.</param>
 /// <param name="RepeatCount">Injection: how many times the identical rejected call has been sent. Collapse: how many repeats were replaced by the note.</param>
 /// <param name="Text">The injected message or the collapse note, exactly as sent to the model.</param>
@@ -17,6 +17,9 @@ public sealed record AgentAssist(string Kind, string ToolName, int RepeatCount, 
 {
     public const string CollapseKind = "collapse";
     public const string InjectionKind = "injection";
+
+    /// <summary>A server loop-latch refusal (ToolLoopLatch): the call was not executed. RepeatCount counts this tool's refusals in the run so far; Text is the refusal message.</summary>
+    public const string LatchKind = "latch";
 }
 
 /// <summary>
@@ -193,7 +196,8 @@ public sealed class LoopAssistTracker(LoopAssistOptions options)
     /// </summary>
     internal static string BuildInjectionText(string toolName, int repeatCount, string? nextStep)
     {
-        var next = nextStep is null ? "" : $" The error's next step says: {WithSentenceEnd(nextStep)}";
+        var step = nextStep is null ? null : StripPlaceholderReason(nextStep);
+        var next = string.IsNullOrWhiteSpace(step) ? "" : $" The error's next step says: {WithSentenceEnd(step)}";
         if (repeatCount <= 2)
         {
             return $"I have sent the same {toolName} call {repeatCount} times and it was rejected the same way each time.{next} My next call must be a different tool.";
@@ -220,6 +224,20 @@ public sealed class LoopAssistTracker(LoopAssistOptions options)
     }
 
     private static string WithSentenceEnd(string text) => text[^1] is '.' or '!' or '?' ? text : text + ".";
+
+    /// <summary>
+    /// Drops the server's placeholder reason argument from a quoted next step. The error text quotes an example
+    /// call, and models copy the placeholder into their next call; reason is not part of the edit, so it goes.
+    /// </summary>
+    internal static string StripPlaceholderReason(string step)
+    {
+        const string followed = "reason: \"<why you call this>\", ";
+        const string preceded = ", reason: \"<why you call this>\"";
+        const string only = "reason: \"<why you call this>\"";
+        return step.Replace(followed, "", StringComparison.Ordinal)
+            .Replace(preceded, "", StringComparison.Ordinal)
+            .Replace(only, "", StringComparison.Ordinal);
+    }
 
     private static string Ordinal(int n) =>
         n % 100 is >= 11 and <= 13
@@ -275,7 +293,20 @@ public sealed class LoopAssistTracker(LoopAssistOptions options)
 
         try
         {
-            return JsonNode.Parse(argumentsJson)?.ToJsonString() ?? argumentsJson.Trim();
+            var node = JsonNode.Parse(argumentsJson);
+            if (node is JsonObject arguments)
+            {
+                arguments.Remove("reason");
+                if (arguments["batchEdits"] is JsonArray batch)
+                {
+                    foreach (var item in batch.OfType<JsonObject>())
+                    {
+                        item.Remove("reason");
+                    }
+                }
+            }
+
+            return node?.ToJsonString() ?? argumentsJson.Trim();
         }
         catch (JsonException)
         {

@@ -96,7 +96,7 @@ fills the budget; a given `limit` is an upper bound.
 ### Call-tool filters
 
 First added is outermost (csharp-sdk `McpServerImpl.BuildFilterPipeline` folds from the last filter inward). The order is
-the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (13 filters), pinned by
+the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (14 filters; the loop latch is listed as 3a to keep the older item numbers), pinned by
 `ToolTelemetryFilterOrderTests` via `CallToolFilterNames`. In registration order:
 
 1. `AddAgentIdentityFilter` (`Server.Advanced/AgentIdentityCapture.cs`): strips `_agentId`/`_agentType`/`_sessionId` from the
@@ -108,6 +108,14 @@ the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationE
    tool (success / error / error code / duration) for `McpServerStatus.toolTelemetry`. Third on purpose, so it wraps the
    argument-validation and breaker refusals and sees the `IsError` that the ToolError filter (item 7) copied from the body.
    Records after `next` returns, so a status call is counted only from the following call on.
+3a. `AddLoopLatchFilter` (`Server.Advanced/LoopLatchFilter.cs`, state `Common/ToolLoopLatch.cs`, flag `--loop-latch`, off by
+   default and then a pure pass-through): when the same tool fails the same way twice (same tool + `errorData.errorCode` + first
+   diagnostic id for a compile-gate rejection; arguments not part of the key) with no successful call in between, refuses that
+   tool's next call WITHOUT running it, for that caller agent id only (no id = one shared `default` key), as a `TargetIneligible`
+   failure body whose message starts "{Tool} is DISABLED until another tool succeeds". Any successful call releases the agent's
+   latch. Sits fourth, outside argument validation, so plain-text validation rejections count and the refusal precedes them.
+   `McpServerStatus.loopLatch` lists latched tools per agent (only while the flag is on). Harness side: `ModelAgentRunner` records a
+   refusal as a `latch` assist and stops with `AgentStopReason.LoopLatchIgnored` after the model calls the refused tool twice more.
 4. `AddArgumentValidationFilter` (`Server.Advanced/ToolArgumentValidator.cs`): repairs parameter-name case,
    rejects unknown/missing parameters before the SDK binder runs.
 5. `AddHaltStampFilter` (`Server.Advanced/HaltStamp.cs`): while any breaker is tripped or the drift latch is set, inserts

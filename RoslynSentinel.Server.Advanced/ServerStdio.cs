@@ -43,6 +43,7 @@ namespace RoslynSentinel.Server.Advanced
             LlmOptions.Configure(args);
             ReplaceSnippetOptions.Configure(args);
             OrientationBreakerOptions.Configure(args);
+            LoopLatchOptions.Configure(args);
             ToolCallEchoOptions.Configure(args);
             SchemaOptions.Configure(args);
             EolPolicyOptions.Configure(args);

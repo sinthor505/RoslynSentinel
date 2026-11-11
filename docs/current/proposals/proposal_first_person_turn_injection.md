@@ -262,8 +262,31 @@ T3 (the interrogate script, `references/reference_interrogate_script.md`) and sa
 only, collapse + injection. Metric: share of samples whose next call is not the rejected ReplaceSnippet, and share
 that reach RenameSymbol within 2 turns.
 
-**Open (this slice).** Message role of the injection (synthetic assistant vs user) under the qwen3.5 templates: test
-both in the R9 resample before choosing. Whether collapse alone is enough.
+**Built.** 029800d5 (collapse, injection, transcript Assists/AssistCount/Tools), cf88ab97 (resume-from-transcript
+harness, `-Test ResumeTranscript`).
+
+**Result: R9 resample, 2026-11-11** (qwen3.5-9b-coder, host 113, `-ResumeKeepTurns 4 -Samples 10 -ContinueTurns 3`;
+`ModelTestingResults\113\ResumeFromTranscript_SamplesTheNextTurns\` `20261111-014050-980` off,
+`-014912-033` user, `-015555-638` assistant). K=4 because R9's T2 (batchEdits) and T3 (flat) are different calls; the
+first resample at K=3 had no seeded repeat and is not evidence either way.
+
+| Arm | T5 repeats the rejected call | Reached RenameSymbol within 3 turns |
+| --- | --- | --- |
+| off | 7/10 | 2/10 |
+| assist, role user | 1/10 | 10/10 |
+| assist, role assistant | 9/10 | 5/10 |
+
+- **Role decided: user.** User-role sample-01 T5 reasoning: "The error message explicitly tells me to use
+  `RenameSymbol` instead. The docCommentId is `M:...CalcDisc(...)`", then RenameSymbol succeeded.
+- **Assistant role is harmful (kept for research only).** Assistant-role sample-01 T5 has no reasoning, content
+  " I'll use RenameSymbol." (leading space) and then the same rejected ReplaceSnippet; 5/10 samples ended in a ~70k-char
+  message with no tool call that echoes the collapse and injection text as the model's own words. Hypothesis: a
+  synthetic assistant message last in the history acts as a prefill - the model continues that message instead of
+  opening a new turn, so the template's thinking block is skipped and the text is copied, not acted on. This revises
+  the premise of this proposal for qwen3.5: first-person text helps when it arrives in the user role.
+- **Follow-ups (approved 2026-11-11):** repeat key ignores `reason`; the quoted next step drops the
+  `reason: "<why you call this>"` placeholder.
+- Sample size is 10 per arm from one stuck state: strong evidence, not proof. Collapse alone was not tested.
 
 ## Status
 

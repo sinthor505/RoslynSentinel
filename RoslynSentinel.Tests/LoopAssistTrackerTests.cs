@@ -119,6 +119,66 @@ public class LoopAssistTrackerTests
         Assert.That(third!.RepeatCount, Is.EqualTo(2));
     }
 
+    [Test]
+    public void Observe_RejectedCallsDifferingOnlyInReason_CountAsARepeat()
+    {
+        var tracker = On();
+
+        var first = tracker.Observe(Call("c1", args: """{"filePath":"a.cs","oldContent":"x","reason":"first wording of why"}"""), Rejection("c1", RenameRejection), isError: true);
+        var second = tracker.Observe(Call("c2", args: """{"filePath":"a.cs","oldContent":"x","reason":"a reworded reason"}"""), Rejection("c2", RenameRejection), isError: true);
+
+        Assert.That(first, Is.Null);
+        Assert.That(second, Is.Not.Null);
+        Assert.That(second!.RepeatCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Observe_BatchEditsCallAndFlatCallWithTheSameEdit_AreNotARepeat()
+    {
+        var tracker = On();
+
+        var batch = tracker.Observe(Call("c1", args: """{"batchEdits":[{"filePath":"a.cs","oldContent":"x","newContent":"y"}]}"""), Rejection("c1", RenameRejection), isError: true);
+        var flat = tracker.Observe(Call("c2", args: """{"filePath":"a.cs","oldContent":"x","newContent":"y"}"""), Rejection("c2", RenameRejection), isError: true);
+
+        Assert.That(batch, Is.Null);
+        Assert.That(flat, Is.Null);
+    }
+
+    [Test]
+    public void Observe_RunR9ShapedSequence_InjectsOnlyAfterTheSecondIdenticalFlatRejection()
+    {
+        // 10-chain batch E run R9: T2 is a batchEdits rejection, T3 and T4 are the same flat call rejected identically.
+        var tracker = On();
+        var batchArgs = """{"batchEdits":[{"filePath":"a.cs","oldContent":"x","newContent":"y"}]}""";
+
+        var t2 = tracker.Observe(Call("t2", args: batchArgs), "{\"isError\":true,\"errorData\":{\"message\":\"ReplaceSnippet batch: edit 1 not applied.\"}}", isError: true);
+        var t3 = tracker.Observe(Call("t3"), Rejection("t3", RenameRejection), isError: true);
+        var t4 = tracker.Observe(Call("t4"), Rejection("t4", RenameRejection), isError: true);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(t2, Is.Null);
+            Assert.That(t3, Is.Null);
+            Assert.That(t4, Is.Not.Null);
+            Assert.That(t4!.RepeatCount, Is.EqualTo(2));
+        });
+    }
+
+    [Test]
+    public void Observe_NextStepQuotingThePlaceholderReason_DropsThatArgumentFromTheInjection()
+    {
+        var tracker = On();
+        var error = """ReplaceSnippet: not applied. Next step: use RenameSymbol(reason: "<why you call this>", projectName: P) instead.""";
+
+        tracker.Observe(Call("c1"), Rejection("c1", error), isError: true);
+        var second = tracker.Observe(Call("c2"), Rejection("c2", error), isError: true);
+
+        Assert.That(second!.Text, Is.EqualTo(
+            "I have sent the same ReplaceSnippet call 2 times and it was rejected the same way each time. " +
+            "The error's next step says: use RenameSymbol(projectName: P) instead. My next call must be a different tool."));
+        Assert.That(second.Text, Does.Not.Contain("<why you call this>"));
+    }
+
     // ---- injection text ----
 
     [Test]

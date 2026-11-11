@@ -1,6 +1,6 @@
 # Loop latch: disable a tool that keeps failing the same way until another tool succeeds
 
-**Status:** PROPOSED 2026-11-10. Approved in principle; build after the harness loop-breaking slice of proposal_first_person_turn_injection.
+**Status:** IMPLEMENTED (uncommitted) 2026-11-11. Open questions settled by the owner 2026-11-11: trip at 2 same-way failures (same tool + error code + first compile-gate diagnostic id, arguments not part of the key); per caller agent id (no id = shared `default` key); only the looping tool is refused, read-only calls included; K = 2 further calls after the first refusal stop the run (`LoopLatchIgnored`); flag `--loop-latch` (env `ROSLYNSENTINEL_LOOP_LATCH`), off by default; `McpServerStatus.loopLatch` shows latched tools per agent while on. Code: `Common/ToolLoopLatch.cs`, `Common/LoopLatchOptions.cs`, `Server.Advanced/LoopLatchFilter.cs` (filter 4, before argument validation), harness in `Common/AgentLoop/ModelAgentRunner.cs`. Tests: `Tests.Server/LoopLatchTests.cs`, `Tests.ModelEval/LoopLatchRunnerTests.cs`. Deviation from the Restrict text above: the refusal says "You MUST do the next step now: {the Next step sentence verbatim}" rather than building a call.
 
 ## Motivation
 

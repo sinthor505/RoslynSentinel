@@ -56,6 +56,9 @@ public static class RoslynSentinelServiceExtensionsBasic
         // first use) so ServerStartedUtc is the server's start. Shared by both flavors: Advanced calls this method.
         services.TryAddSingleton(new ToolTelemetry());
 
+        // Per-agent loop latch state (proposal_loop_latch.md). Always registered; the filter is a pass-through unless --loop-latch is on.
+        services.TryAddSingleton(sp => new ToolLoopLatch(LoopLatchOptions.TripThreshold, sp.GetService<ILoggerFactory>()?.CreateLogger<ToolLoopLatch>()));
+
         // Persists the counters to server-telemetry_<instanceId>.json (explicit --working-dir only; otherwise a no-op) every 60 s
         // when changed and once more on graceful host stop. A hosted service starts under both hosts (stdio Generic Host, HTTP
         // WebApplication) and is inert in the tool-manifest ServiceCollection used by --list-tools.
@@ -93,6 +96,9 @@ public static class RoslynSentinelServiceExtensionsBasic
         ("AgentIdentity", AddAgentIdentityFilter),
         ("ToolCallEcho", AddToolCallEchoFilter),
         ("ToolTelemetry", AddToolTelemetryFilter),
+        // Fourth, outside argument validation, so it sees (and can refuse before) the plain-text validation rejections that
+        // make up the alternating-argument-error loops, and inside telemetry, so a refusal is counted like any error.
+        ("LoopLatch", AddLoopLatchFilter),
         ("ArgumentValidation", AddArgumentValidationFilter),
         ("HaltStamp", AddHaltStampFilter),
         ("WorkspaceStaleStamp", AddWorkspaceStaleStampFilter),
@@ -1091,6 +1097,42 @@ public static class RoslynSentinelServiceExtensionsBasic
                 }
 
                 return result;
+            }));
+    }
+
+    /// <summary>
+    /// Registers the loop-latch filter: with <c>--loop-latch</c> on, a tool that failed the same way twice with no other tool
+    /// succeeding in between is refused (not executed) until another tool succeeds, per caller agent id. Logic and semantics:
+    /// <see cref="LoopLatchFilter"/>, <see cref="ToolLoopLatch"/>. The refusal names only callable tools, resolved from
+    /// <see cref="ActiveToolSurface"/> as the orientation breaker does. Off: a pure pass-through.
+    /// </summary>
+    private static void AddLoopLatchFilter(IMcpRequestFilterBuilder filters)
+    {
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            async (context, cancellationToken) =>
+            {
+                if (!LoopLatchOptions.Enabled)
+                {
+                    return await next(context, cancellationToken);
+                }
+
+                ToolLoopLatch? latch = null;
+                Func<string, bool>? isCallable = null;
+                try
+                {
+                    latch = context.Server.Services?.GetService<ToolLoopLatch>();
+                    var surface = context.Server.Services?.GetService<ActiveToolSurface>();
+                    isCallable = surface is null ? null : surface.IsCallable;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Loop latch lookup failed: {ex}");
+                }
+
+                return await LoopLatchFilter.InvokeAsync(
+                    latch, ToolCallContext.Current?.AgentId, context.Params?.Name, isCallable, () => next(context, cancellationToken));
             }));
     }
 

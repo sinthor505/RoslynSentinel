@@ -13,10 +13,12 @@ public class ServerStatusTools
     private readonly SentinelHostOptions? _hostOptions;
     private readonly ToolTelemetry? _toolTelemetry;
     private readonly GitBackendWarmup _gitBackend;
+    private readonly ToolLoopLatch? _loopLatch;
 
     /// <param name="toolsets">Present only in claude-lean, where McpToolsetControlTool can switch tools on at runtime.</param>
     /// <param name="toolTelemetry">Per-tool call counters; null (tests, hosts without the telemetry filter) omits the toolTelemetry field.</param>
     /// <param name="gitBackend">Source of the gitBackend block; null uses the process-wide <see cref="GitBackendWarmup.Shared"/> (tests inject one). Not DI-registered, so the optional default applies.</param>
+    /// <param name="loopLatch">Per-agent loop latch state (proposal_loop_latch.md); reported as loopLatch only while --loop-latch is on. Null (tests, hosts without it) omits the field.</param>
     public ServerStatusTools(
         IWorkspaceManager workspaceManager,
         ActiveToolSurface activeToolSurface,
@@ -24,8 +26,10 @@ public class ServerStatusTools
         ToolsetService? toolsets = null,
         SentinelHostOptions? hostOptions = null,
         ToolTelemetry? toolTelemetry = null,
-        GitBackendWarmup? gitBackend = null)
+        GitBackendWarmup? gitBackend = null,
+        ToolLoopLatch? loopLatch = null)
     {
+        _loopLatch = loopLatch;
         _gitBackend = gitBackend ?? GitBackendWarmup.Shared;
         _toolTelemetry = toolTelemetry;
         _hostOptions = hostOptions;
@@ -166,7 +170,9 @@ public class ServerStatusTools
                 LastUnmetGuard: IdleRestartState.LastUnmetGuard,
                 LastCheckedUtc: IdleRestartState.LastCheckedUtc),
             // The only waiter on the git backend warmup: bounded (about 2 s), "warming" on timeout, never throws.
-            GitBackend: _gitBackend.Report(GitBackendWarmup.StatusWait)
+            GitBackend: _gitBackend.Report(GitBackendWarmup.StatusWait),
+            // Beside the orientation breaker's state, but only while the latch is switched on (null = field omitted from the wire).
+            LoopLatch: LoopLatchOptions.Enabled && _loopLatch is not null ? _loopLatch.Snapshot() : null
         )
         };
     }
@@ -282,7 +288,9 @@ public sealed record McpServerStatusResult(
     string? CallerAgentId = null,
     McpServerStatusIdleRestart? IdleRestart = null,
     // Libgit2 backend health: active backend, native load, repo probe and the seam's fallback counters (GitBackendWarmup).
-    GitBackendSnapshot? GitBackend = null);
+    GitBackendSnapshot? GitBackend = null,
+    // Latched tools per agent (empty = none latched); present only while --loop-latch is on.
+    IReadOnlyList<LoopLatchAgentState>? LoopLatch = null);
 /// <summary>
 /// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
 /// by McpServerStatusTool's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this

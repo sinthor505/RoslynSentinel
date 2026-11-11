@@ -65,7 +65,7 @@ if it's not already recorded here or hasn't been reconfirmed recently.
 | `ROSLYNSENTINEL_MODELEVAL_PROMPT_VARIANT` | `Model_SizeThresholdSweep` only: `SingleStep` (default) or `TwoStep` | `SingleStep` |
 | `ROSLYNSENTINEL_MODELEVAL_REPLAY_TRANSCRIPT` | `TranscriptReplayTests` only: path to a saved `transcript.json` to replay | none |
 | `ROSLYNSENTINEL_MODELEVAL_REPLAY_SIZE` | `TranscriptReplayTests` only: override when the path doesn't carry the size | none |
-| `ROSLYNSENTINEL_MODELEVAL_LOOP_ASSIST` (+ `_ROLE`) | Any `ModelAgentRunner` run: truthy (`1`/`true`/`yes`/`on`) collapses repeated identical rejected calls in the replayed history and injects a fact-only message on the 2nd+ repeat; `_ROLE` = `user` or `assistant` sets the injected message's role. Assists are recorded as `Assists` on the turn and `AssistCount` in the `transcript.json` header | off, role `user` |
+| `ROSLYNSENTINEL_MODELEVAL_LOOP_ASSIST` (+ `_ROLE`) | Any `ModelAgentRunner` run: truthy (`1`/`true`/`yes`/`on`) collapses repeated identical rejected calls in the replayed history and injects a fact-only message on the 2nd+ repeat; `_ROLE` = `user` or `assistant` sets the injected message's role. Assists are recorded as `Assists` on the turn and `AssistCount` in the `transcript.json` header. `ROSLYNSENTINEL_MODELEVAL_LOOP_ASSIST_ROLE=assistant` is kept for research only: in the R9 resample (2026-11-11) it made the model repeat the rejected call in 9/10 samples and echo the injected text as its own output; use the default user role. | off, role `user` |
 
 `--llm-*` CLI args (`--llm-base-url`, `--llm-model`, `--llm-timeout-seconds`,
 `--llm-parallelism`) take precedence over the env vars above, but the test harness
@@ -199,13 +199,13 @@ batch. The test (`TranscriptResumeAgentTests`, [Explicit]) keeps turns 1..K of a
 ContosoOrders fixture, seeds the conversation with those turns (loop assist observes them too), and lets the live model
 generate `-ContinueTurns` more turns, `-Samples` times, each sample on its own fixture. It asserts nothing about the
 model; it fails only if every sample harness-errored. The fixture GUID folder in the transcript is rewritten to the new
-fixture; everything else in the prompts and history is verbatim.
+fixture; everything else in the prompts and history is verbatim. Choose -ResumeKeepTurns so the kept turns end with two identical rejected calls (same tool, same arguments apart from reason, same error); for 10-chain batch E run R9 that is 4, because T2 (batchEdits) and T3 (flat) differ.
 
 ```powershell
-# 10-chain run R9 (T2 and T3 are the identical rejected ReplaceSnippet; K=3 makes the model produce T4)
+# 10-chain run R9 (T3 and T4 are the identical rejected ReplaceSnippet; K=4 makes the model produce T5)
 $t = 'ModelTestingResults\113\Model_AppliesTenChainedRefactors\20261110-231957-659\transcript.json'
-.\scripts\roslynsentinel-modeleval.ps1 113 ResumeTranscript -ResumeTranscript $t -ResumeKeepTurns 3 -Samples 10 -ContinueTurns 3
-.\scripts\roslynsentinel-modeleval.ps1 113 ResumeTranscript -ResumeTranscript $t -ResumeKeepTurns 3 -Samples 10 -ContinueTurns 3 -LoopAssist
+.\scripts\roslynsentinel-modeleval.ps1 113 ResumeTranscript -ResumeTranscript $t -ResumeKeepTurns 4 -Samples 10 -ContinueTurns 3
+.\scripts\roslynsentinel-modeleval.ps1 113 ResumeTranscript -ResumeTranscript $t -ResumeKeepTurns 4 -Samples 10 -ContinueTurns 3 -LoopAssist
 ```
 
 Results land in `ModelTestingResults\<host>\ResumeFromTranscript_SamplesTheNextTurns\<timestamp>\`: `results.csv` (one row
