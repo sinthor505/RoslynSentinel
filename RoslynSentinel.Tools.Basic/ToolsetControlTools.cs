@@ -76,7 +76,7 @@ public class ToolsetControlTools
 
         if (change.Changed)
         {
-            summary += " A client that does not refresh its tool list after this call needs a /mcp reconnect, or a startup surface that already includes the tool (--toolsets=<set> adds a set at startup).";
+            summary += " A client that does not refresh its tool list after this call needs a /mcp reconnect, or a startup surface that already includes the tool (--toolsets=<set> adds a set at startup). The reconnect resets enabled toolsets, so make this same call again after it; restarting the server instead does not refresh the client's list.";
         }
 
         return new SentinelCallToolResult<object>

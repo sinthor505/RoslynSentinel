@@ -50,7 +50,8 @@ The tool surface is gated to save prompt tokens, so a tool you expect but cannot
 not missing. Before concluding it is missing or building a duplicate, call
 `McpServerStatus(toolListing: inactive)` (optional `toolNameFilter`): it lists every tool with
 `activeForThisMode` and `enabledBy`. If `enabledBy` names a `McpToolsetControl(toolSet:, enabled: true)`
-call, make it yourself. If it names a mode or flag, stop and report the tool and hint (a configuration
+call, make it yourself; if the tool is still missing from ToolSearch, ask the user for `/mcp` reconnect, then
+enable again (the reconnect resets toolsets; a server restart does not help). If it names a mode or flag, stop and report the tool and hint (a configuration
 decision for the user, not a blocker). Only if the listing is empty, try `Search(mode: "text", query: "Name = \"ToolName\"")`.
 
 ## Subagents
