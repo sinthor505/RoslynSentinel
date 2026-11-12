@@ -2,7 +2,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 
 /// <summary>
 /// One targeted model-eval scenario: staged files, a prompt, a turn cap, a declared expected outcome and a final-state check.
-/// Plan: plan_targeted_tool_scenario_evals. Resume scenarios (types 2 and 4) are added by a later step; types 1 and 3 need no seeded history.
+/// Plan: plan_targeted_tool_scenario_evals. Types 1 and 3 are cold-start (no seeded history); types 2 and 4 are resume scenarios seeded from ResumeTranscript.
 /// </summary>
 /// <param name="Id">Unique scenario id, selected with ROSLYNSENTINEL_MODELEVAL_SCENARIO (case-insensitive).</param>
 /// <param name="ScenarioType">1 cold-start clean, 2 resume clean, 3 cold-start faulted, 4 resume faulted.</param>
@@ -17,6 +17,8 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <param name="SourceRun">Provenance: the run and turn where the failure was seen; "" when none.</param>
 /// <param name="ReproducesAt">Provenance: commit and rate where the failure reproduces, or "not measured".</param>
 /// <param name="FixedBy">Provenance: commit that fixed it; "" when not fixed or not applicable.</param>
+/// <param name="ResumeTranscript">File name inside RoslynSentinel.Tests.ModelEval/ResumeTranscripts to seed history from; null for a cold-start scenario. For a resume scenario (types 2 and 4) the system and user prompt come from the transcript and PromptTemplate is unused.</param>
+/// <param name="ResumeKeepTurns">Turns 1..K of ResumeTranscript seeded as history; 0 for cold-start. TurnCap then counts the live turns after the seeded ones.</param>
 public sealed record ScenarioDefinition(
     string Id,
     int ScenarioType,
@@ -30,4 +32,6 @@ public sealed record ScenarioDefinition(
     Func<string, CancellationToken, Task<FinalStateVerdict>> CheckFinalState,
     string SourceRun,
     string ReproducesAt,
-    string FixedBy);
+    string FixedBy,
+    string? ResumeTranscript = null,
+    int ResumeKeepTurns = 0);
