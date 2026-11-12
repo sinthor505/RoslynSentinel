@@ -280,6 +280,9 @@ C#; none in `agent.log` or `test-result.txt`).
     difference and the capture commit. Description-only difference (tool or parameter): `schemaDrift`.
     A transcript with no recorded schemas is Inconclusive.
   - Done when: unit tests cover structural, description-only, identical and missing.
+  - Done: 27f6dc33715af78e32282aff6cf5726c577b8f95, 94c82dcd8c61950a8934ce768247a416ef20c79a
+    (`ToolSchemaComparer.Compare`; `ResumeSource` reads `CommitHash`, `ToolDescriptions`, `ToolSchemas`).
+    `description` is stripped only when it is a string, so a parameter named `description` is compared.
 - **8b - replay gate**
   - Files: `TranscriptResume.cs`, `TranscriptReplayHelper.cs`, one test file.
   - Change: a replayed call whose `IsError` differs from the recording is only counted and logged today
@@ -287,12 +290,17 @@ C#; none in `agent.log` or `test-result.txt`).
     `int` that `TranscriptResumeTests.cs:169-195,315` depend on, so add a new member that returns the
     mismatches and the replayed result text; a scenario with any mismatch is Inconclusive.
   - Done when: a unit test with a doctored transcript yields the mismatch; existing resume tests pass.
+  - Done: 5468ffb4f6b1c77cac8683b785911f28de4b6bed (`ReplayKeptCallsDetailedAsync` returns `ReplayedCall`
+    per call; `ReplayMismatchReason` is the gate text; `ReplayKeptCallsAsync` unchanged, TODO to delegate).
 - **8c - result drift**
   - Files: `TranscriptResume.cs`, one test file.
   - Change: the model is shown the saved result text (`RewriteTurns`, `TranscriptResume.cs:189`).
     Compare it with the replayed text from 8b after normalising the fixture directory and volatile
     fields (call ids, timings); count differences into `resultDrift`.
   - Done when: unit tests show a wording change counted and a call-id change ignored.
+  - Done: 826abe508e0e6c3398e5c56ba3201a31e5f6a888 (`NormalizeResultText`, `CountResultDrift`). Volatile
+    keys found by surveying one 10-chain transcript: toolCallId, changeId, resultId, duration, sizeBytes,
+    sizeChars, workspaceVersion, plus fixture path, ISO timestamps and TimeSpan text.
 - **8d - capture, tracked folder, first scenario**
   - Files: a tracked transcript folder under `RoslynSentinel.Tests.ModelEval/` read through the repo-root
     walk (the project has no content items; none needed); scenario definition.

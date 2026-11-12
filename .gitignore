@@ -32,6 +32,10 @@ ClaudeFiles/
 !RoslynSentinel.Tests.Server/Resources/Golden/
 !RoslynSentinel.Tests.Server/Resources/Golden/*.json
 
+# Trimmed transcripts the resume scenarios (plan_targeted_tool_scenario_evals step 8d) seed from; tracked so a clean clone can run them.
+!RoslynSentinel.Tests.ModelEval/ResumeTranscripts/
+!RoslynSentinel.Tests.ModelEval/ResumeTranscripts/*.json
+
 *.trx
 
 TestResults/
