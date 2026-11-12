@@ -123,48 +123,40 @@ public class GitInProcessCommitRouteTests
         Assert.That(result.CommitHash, Is.EqualTo(Head(directory)), "the reported hash is `git rev-parse HEAD`");
     }
 
-    /// <summary>The route handed exactly one commit to the CLI and made none itself; its reason names <paramref name="fragment"/>. With <paramref name="directory"/>, the last commit-route log line is a declined line with that reason and a kind (equal to <paramref name="expectedKind"/> when given).</summary>
-    private static void AssertDeclined(InProcessCommitRoute route, string fragment, string? directory = null, string? expectedKind = null)
+    /// <summary>The route handed exactly one commit to the CLI and made none itself; its reason names <paramref name="fragment"/>. The last commit-route log line is a declined line with that reason and a kind (equal to <paramref name="expectedKind"/> when given).</summary>
+    private static void AssertDeclined(InProcessCommitRoute route, string fragment, string directory, string? expectedKind = null)
     {
-        // TODO Step 4b: make directory required
-        using var logged = directory is null ? null : JsonDocument.Parse(ReadCommitRouteLog(directory)[^1]);
+        using var logged = JsonDocument.Parse(ReadCommitRouteLog(directory)[^1]);
         Assert.Multiple(() =>
         {
             Assert.That(route.TakenCount, Is.Zero, "nothing was committed in process");
             Assert.That(route.DeclineCount, Is.EqualTo(1), "last decline: " + route.LastDeclineReason);
             Assert.That(route.LastDeclineReason, Does.Contain(fragment).IgnoreCase);
-            if (logged is not null)
+            var root = logged.RootElement;
+            Assert.That(root.GetProperty("outcome").GetString(), Is.EqualTo("declined"), "the log line is a decline");
+            Assert.That(root.GetProperty("reason").GetString(), Does.Contain(fragment).IgnoreCase, "the logged reason");
+            Assert.That(root.TryGetProperty("kind", out var kind), Is.True, "the line carries kind");
+            if (expectedKind is not null && kind.ValueKind == JsonValueKind.String)
             {
-                var root = logged.RootElement;
-                Assert.That(root.GetProperty("outcome").GetString(), Is.EqualTo("declined"), "the log line is a decline");
-                Assert.That(root.GetProperty("reason").GetString(), Does.Contain(fragment).IgnoreCase, "the logged reason");
-                Assert.That(root.TryGetProperty("kind", out var kind), Is.True, "the line carries kind");
-                if (expectedKind is not null && kind.ValueKind == JsonValueKind.String)
-                {
-                    Assert.That(kind.GetString(), Is.EqualTo(expectedKind), "the logged kind");
-                }
+                Assert.That(kind.GetString(), Is.EqualTo(expectedKind), "the logged kind");
             }
         });
     }
 
-    /// <summary>The route committed in process and declined nothing. With <paramref name="directory"/>, the last commit-route log line is a taken line with a kind (equal to <paramref name="expectedKind"/> when given).</summary>
-    private static void AssertTaken(InProcessCommitRoute route, string? directory = null, string? expectedKind = null)
+    /// <summary>The route committed in process and declined nothing. The last commit-route log line is a taken line with a kind (equal to <paramref name="expectedKind"/> when given).</summary>
+    private static void AssertTaken(InProcessCommitRoute route, string directory, string? expectedKind = null)
     {
-        // TODO Step 4b: make directory required
-        using var logged = directory is null ? null : JsonDocument.Parse(ReadCommitRouteLog(directory)[^1]);
+        using var logged = JsonDocument.Parse(ReadCommitRouteLog(directory)[^1]);
         Assert.Multiple(() =>
         {
             Assert.That(route.TakenCount, Is.EqualTo(1), "the route should have committed (last decline: " + route.LastDeclineReason + ")");
             Assert.That(route.DeclineCount, Is.Zero, "last decline: " + route.LastDeclineReason);
-            if (logged is not null)
+            var root = logged.RootElement;
+            Assert.That(root.GetProperty("outcome").GetString(), Is.EqualTo("taken"), "the log line is a taken commit");
+            Assert.That(root.TryGetProperty("kind", out var kind), Is.True, "the line carries kind");
+            if (expectedKind is not null && kind.ValueKind == JsonValueKind.String)
             {
-                var root = logged.RootElement;
-                Assert.That(root.GetProperty("outcome").GetString(), Is.EqualTo("taken"), "the log line is a taken commit");
-                Assert.That(root.TryGetProperty("kind", out var kind), Is.True, "the line carries kind");
-                if (expectedKind is not null && kind.ValueKind == JsonValueKind.String)
-                {
-                    Assert.That(kind.GetString(), Is.EqualTo(expectedKind), "the logged kind");
-                }
+                Assert.That(kind.GetString(), Is.EqualTo(expectedKind), "the logged kind");
             }
         });
     }
@@ -293,7 +285,7 @@ public class GitInProcessCommitRouteTests
             Assert.That(viaCli.Route.LastDeclineReason, Is.Null);
             if (expectTaken == true)
             {
-                AssertTaken(viaRoute.Route);
+                AssertTaken(viaRoute.Route, viaRoute.Directory);
             }
         });
         AssertFsckClean(viaRoute.Directory);
@@ -312,7 +304,7 @@ public class GitInProcessCommitRouteTests
         var result = await NewImpl(route).CommitAsync(directory, "reflog subject\n\nbody", null, null, amend: false, CancellationToken.None);
 
         AssertCommitted(directory, result);
-        AssertTaken(route);
+        AssertTaken(route, directory);
         Assert.Multiple(() =>
         {
             Assert.That(CasCommitTestSupport.Reflog(directory, "HEAD")[0], Is.EqualTo("Test|test@example.com|commit: reflog subject"));
@@ -416,7 +408,7 @@ public class GitInProcessCommitRouteTests
             result = await impl.CommitAsync(directory, "no process", listed ? GitStageScope.listed : null, listed ? "a.txt" : null, amend: false, CancellationToken.None));
 
         AssertCommitted(directory, result!);
-        AssertTaken(route);
+        AssertTaken(route, directory);
         Assert.That(spawned, Is.Empty, "every read, stage and the commit itself are answered in process");
     }
 
@@ -433,7 +425,7 @@ public class GitInProcessCommitRouteTests
         var result = await NewImpl(route).CommitAsync(directory, "with a post-commit hook", null, null, amend: false, CancellationToken.None);
 
         AssertCommitted(directory, result);
-        AssertTaken(route);
+        AssertTaken(route, directory);
         var marker = Path.Combine(directory, ".git", "post-commit-marker");
         Assert.That(SpinWait.SpinUntil(() => File.Exists(marker), TimeSpan.FromSeconds(15)), Is.True, "the post-commit hook did not run within 15 seconds");
     }
@@ -550,7 +542,7 @@ public class GitInProcessCommitRouteTests
         var result = await NewImpl(route).CommitAsync(directory, "crlf file", GitStageScope.listed, "a.txt", amend: false, CancellationToken.None);
 
         AssertCommitted(directory, result);
-        AssertTaken(route);
+        AssertTaken(route, directory);
         Assert.Multiple(() =>
         {
             Assert.That(RunGitRaw(directory, "cat-file", "-p", "HEAD:a.txt").StdOut.ReplaceLineEndings("\n"), Is.EqualTo("one\ntwo\n"), "git stores the LF blob");
@@ -716,7 +708,7 @@ public class GitInProcessCommitRouteTests
         var result = await NewImpl(route).CommitAsync(directory, "only paths line", GitStageScope.listed, "a.txt", amend: false, CancellationToken.None);
 
         AssertCommitted(directory, result);
-        AssertTaken(route);
+        AssertTaken(route, directory);
         var lines = ReadCommitRouteLog(directory);
         Assert.That(lines, Has.Length.EqualTo(1));
         using var json = System.Text.Json.JsonDocument.Parse(lines[0]);
@@ -744,7 +736,7 @@ public class GitInProcessCommitRouteTests
         var result = await NewImpl(route).CommitAsync(directory, "plain line", null, null, amend: false, CancellationToken.None);
 
         AssertCommitted(directory, result);
-        AssertTaken(route);
+        AssertTaken(route, directory);
         var lines = ReadCommitRouteLog(directory);
         Assert.That(lines, Has.Length.EqualTo(1));
         using var json = System.Text.Json.JsonDocument.Parse(lines[0]);
@@ -775,7 +767,7 @@ public class GitInProcessCommitRouteTests
         var result = await NewImpl(route).CommitAsync(directory, "many listed", GitStageScope.listed, string.Join(",", names), amend: false, CancellationToken.None);
 
         AssertCommitted(directory, result);
-        AssertTaken(route);
+        AssertTaken(route, directory);
         var lines = ReadCommitRouteLog(directory);
         Assert.That(lines, Has.Length.EqualTo(1));
         using var json = System.Text.Json.JsonDocument.Parse(lines[0]);
@@ -797,7 +789,7 @@ public class GitInProcessCommitRouteTests
         var result = await NewImpl(route).CommitAsync(directory, "amended subject", GitStageScope.all, null, amend: true, CancellationToken.None);
 
         AssertCommitted(directory, result);
-        AssertDeclined(route, "amend");
+        AssertDeclined(route, "amend", directory);
         var lines = ReadCommitRouteLog(directory);
         Assert.That(lines, Has.Length.EqualTo(1));
         using var json = System.Text.Json.JsonDocument.Parse(lines[0]);
