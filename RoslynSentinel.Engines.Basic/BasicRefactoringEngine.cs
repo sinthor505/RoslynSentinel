@@ -248,7 +248,9 @@ public class BasicRefactoringEngine
                 return Refuse($"'{methodName}' is a type with a primary constructor, and ChangeSignature does not edit primary constructors (there is no constructor declaration to rewrite or to put a wrapper beside). Nothing was changed. Edit the type's parameter list and its construction sites directly, or add an ordinary constructor and change that one."); // hint-ok: names the tool in prose, not a call to make
             }
 
-            return Refuse($"Method or constructor '{methodName}' was not found in '{filePath}' (a constructor is matched by its class name). Nothing was changed.");
+            var fileMethodNames = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(methodNode => methodNode.Identifier.Text);
+            var fileCtorNames = root.DescendantNodes().OfType<ConstructorDeclarationSyntax>().Select(ctorNode => ctorNode.Identifier.Text);
+            return Refuse($"Method or constructor '{methodName}' was not found in '{filePath}' (a constructor is matched by its class name). Nothing was changed. " + DeclarationNotFoundDetail.Build("method or constructor", "methodName", methodName, fileMethodNames.Concat(fileCtorNames), filePath.ToString()));
         }
 
         // ChangeSignature only edits the single symbol it's invoked on - it never walks to/from
@@ -1497,7 +1499,8 @@ public class BasicRefactoringEngine
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new List<ClassDeclarationSyntax>(), "Class", className);
         if (classNode == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'.", "class", className);
+            var fileClassNames = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(classNode2 => classNode2.Identifier.Text) ?? Enumerable.Empty<string>();
+            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. " + DeclarationNotFoundDetail.Build("class", "className", className, fileClassNames, filePath.ToString()), "class", className);
         }
 
         // Extract public instance methods (exclude static, constructors)
@@ -1748,7 +1751,7 @@ public class BasicRefactoringEngine
         var indexer = root?.DescendantNodes().OfType<IndexerDeclarationSyntax>().FirstOrDefault();
         if (indexer == null)
         {
-            throw new ToolNotFoundException("Indexer not found.");
+            throw new ToolNotFoundException("Indexer not found. " + DeclarationNotFoundDetail.BuildNoneDeclared("indexer", filePath.ToString()));
         }
 
         var blockBody = indexer.AccessorList?.Accessors.FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration))?.Body;
