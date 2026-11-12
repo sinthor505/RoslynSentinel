@@ -99,7 +99,7 @@ public sealed class ScenarioSampleCsvTests
     [Test]
     public void HeaderColumnCountMatchesEveryRow()
     {
-        Assert.That(ScenarioSampleCsv.Header.Split(',').Length, Is.EqualTo(30));
+        Assert.That(ScenarioSampleCsv.Header.Split(',').Length, Is.EqualTo(31));
 
         // Parse rejects any row whose column count differs from Header, so a clean parse proves the count.
         Assert.That(() => ScenarioSampleCsv.Parse(ScenarioSampleCsv.ToCsvLine(FullSample)), Throws.Nothing);
@@ -111,7 +111,7 @@ public sealed class ScenarioSampleCsvTests
     {
         var columns = ScenarioSampleCsv.Header.Split(',');
 
-        Assert.That(columns, Has.Length.EqualTo(30));
+        Assert.That(columns, Has.Length.EqualTo(31));
         Assert.That(columns[17], Is.EqualTo("passed"));
         Assert.That(columns[18], Is.EqualTo("finalStateVerdict"));
         Assert.That(columns[19], Is.EqualTo("turnCapHit"));
@@ -152,5 +152,87 @@ public sealed class ScenarioSampleCsvTests
         Assert.That(
             () => ScenarioSampleCsv.Parse("rename-after-error,3,ParameterRename"),
             Throws.TypeOf<FormatException>());
+    }
+
+    [Test]
+    public void Header_EndsWithLiveTurnsToTargetAndHasThirtyOneColumns()
+    {
+        Assert.That(ScenarioSampleCsv.Header, Does.EndWith(",liveTurnsToTarget"));
+        Assert.That(ScenarioSampleCsv.Header.Split(',').Length, Is.EqualTo(31));
+        Assert.That(ScenarioSampleCsv.LegacyColumnCount, Is.EqualTo(30));
+    }
+
+    [Test]
+    public void LiveTurnsToTarget_RoundTripsThroughCsvLine()
+    {
+        var sample = FullSample with { LiveTurnsToTarget = 4 };
+
+        var parsed = ScenarioSampleCsv.Parse(ScenarioSampleCsv.ToCsvLine(sample));
+
+        Assert.That(parsed.LiveTurnsToTarget, Is.EqualTo(4));
+        Assert.That(parsed, Is.EqualTo(sample));
+    }
+
+    [Test]
+    public void LiveTurnsToTarget_NullRoundTripsWithEmptyLastField()
+    {
+        var line = ScenarioSampleCsv.ToCsvLine(FullSample with { LiveTurnsToTarget = null });
+
+        var parsed = ScenarioSampleCsv.Parse(line);
+
+        Assert.That(parsed.LiveTurnsToTarget, Is.Null);
+        Assert.That(line[(line.LastIndexOf(',') + 1)..], Is.Empty);
+    }
+
+    [Test]
+    public void LegacyThirtyColumnRow_ParsesWithNullLiveTurnsToTarget()
+    {
+        // Drop the last field (",<liveTurnsToTarget>") to produce a row written before the column existed.
+        var line = ScenarioSampleCsv.ToCsvLine(FullSample with { LiveTurnsToTarget = 4 });
+        var legacy = line[..line.LastIndexOf(',')];
+
+        var parsed = ScenarioSampleCsv.Parse(legacy);
+
+        Assert.That(parsed.LiveTurnsToTarget, Is.Null);
+        Assert.That(parsed, Is.EqualTo(FullSample));
+    }
+
+    [Test]
+    public void ParseThrowsFormatExceptionForTwentyNineColumns()
+    {
+        // 28 commas make 29 empty fields: neither the 30- nor the 31-column layout.
+        Assert.That(
+            () => ScenarioSampleCsv.Parse(new string(',', 28)),
+            Throws.TypeOf<FormatException>().With.Message.Contains("Expected 30 or 31 CSV columns, found 29."));
+    }
+
+    [Test]
+    public void LiveTurnsFor_ColdStartCountsEveryTurn()
+    {
+        Assert.That(FaultScenarios.RenameSymbolNoSuchMethod.LiveTurnsFor(5), Is.EqualTo(5));
+    }
+
+    [Test]
+    public void LiveTurnsFor_ResumeScenarioExcludesKeptTurns()
+    {
+        Assert.That(ResumeScenarios.StaleCallerEditAfterRename.LiveTurnsFor(14), Is.EqualTo(3));
+    }
+
+    [Test]
+    public void LiveTurnsFor_SeededResumeScenarioExcludesKeptTurnsAndFaultTurn()
+    {
+        Assert.That(ResumeScenarios.FailedLastCallStaleOldContent.LiveTurnsFor(14), Is.EqualTo(2));
+    }
+
+    [Test]
+    public void LiveTurnsFor_AuthoredOnlySeedExcludesFaultTurn()
+    {
+        Assert.That(FaultScenarios.RenameSymbolTypo.LiveTurnsFor(4), Is.EqualTo(3));
+    }
+
+    [Test]
+    public void LiveTurnsFor_ClampsAtZero()
+    {
+        Assert.That(FaultScenarios.RenameSymbolTypo.LiveTurnsFor(0), Is.EqualTo(0));
     }
 }

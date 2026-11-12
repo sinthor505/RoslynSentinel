@@ -20,6 +20,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <param name="ResultDrift">Result-drift count for the sample.</param>
 /// <param name="InconclusiveReason">Why the sample did not run; "" when it ran.</param>
 /// <param name="TranscriptPath">Path of the saved transcript for the sample.</param>
+/// <param name="LiveTurnsToTarget">Live turns the model took (see ScenarioDefinition.LiveTurnsFor); null for an inconclusive sample or an old CSV row without the column.</param>
 public sealed record ScenarioSample(
     string ScenarioId,
     int ScenarioType,
@@ -32,7 +33,8 @@ public sealed record ScenarioSample(
     bool SchemaDrift,
     int ResultDrift,
     string InconclusiveReason,
-    string TranscriptPath)
+    string TranscriptPath,
+    int? LiveTurnsToTarget = null)
 {
     /// <summary>True when the sample did not run; see InconclusiveReason.</summary>
     public bool IsInconclusive => InconclusiveReason.Length > 0;
@@ -43,7 +45,10 @@ public static class ScenarioSampleCsv
 {
     /// <summary>Column names, in the order ToCsvLine writes them.</summary>
     public const string Header =
-        "scenarioId,scenarioType,faultKind,sampleIndex,commit,dirty,liftRenames,firstCallSucceeded,firstErrorCode,firstErrorClass,recovered,callsToRecover,recoveryUsedExpectedTool,markerPresent,turnCount,stopReason,failureClass,passed,finalStateVerdict,turnCapHit,callsAfterFirstError,turnsAfterFirstError,outputCharsAfterFirstError,maxIdenticalCallRepeat,identicalReasoningBlocks,retryPhraseCount,schemaDrift,resultDrift,inconclusiveReason,transcriptPath";
+        "scenarioId,scenarioType,faultKind,sampleIndex,commit,dirty,liftRenames,firstCallSucceeded,firstErrorCode,firstErrorClass,recovered,callsToRecover,recoveryUsedExpectedTool,markerPresent,turnCount,stopReason,failureClass,passed,finalStateVerdict,turnCapHit,callsAfterFirstError,turnsAfterFirstError,outputCharsAfterFirstError,maxIdenticalCallRepeat,identicalReasoningBlocks,retryPhraseCount,schemaDrift,resultDrift,inconclusiveReason,transcriptPath,liveTurnsToTarget";
+
+    /// <summary>Column count of rows written before liveTurnsToTarget existed; Parse still accepts them.</summary>
+    public const int LegacyColumnCount = 30;
 
     /// <summary>One CSV line (no line terminator). Score columns are all empty when Score is null.</summary>
     public static string ToCsvLine(ScenarioSample sample)
@@ -80,17 +85,21 @@ public static class ScenarioSampleCsv
             Bool(sample.SchemaDrift),
             Int(sample.ResultDrift),
             Csv(sample.InconclusiveReason),
-            Csv(sample.TranscriptPath));
+            Csv(sample.TranscriptPath),
+            NullableInt(sample.LiveTurnsToTarget));
     }
 
-    /// <summary>Parses one CSV line written by ToCsvLine. Throws FormatException when the column count differs from Header.</summary>
+    /// <summary>
+    /// Parses one CSV line written by ToCsvLine. Accepts Header's column count or LegacyColumnCount (rows written before
+    /// liveTurnsToTarget existed; LiveTurnsToTarget is null for those). Throws FormatException for any other count.
+    /// </summary>
     public static ScenarioSample Parse(string csvLine)
     {
         var f = SplitFields(csvLine);
         var expected = Header.Split(',').Length;
-        if (f.Count != expected)
+        if (f.Count != expected && f.Count != LegacyColumnCount)
         {
-            throw new FormatException($"Expected {expected} CSV columns, found {f.Count}.");
+            throw new FormatException($"Expected {LegacyColumnCount} or {expected} CSV columns, found {f.Count}.");
         }
 
         ScoreResult? score = f[14].Length == 0 ? null : new ScoreResult(
@@ -126,7 +135,8 @@ public static class ScenarioSampleCsv
             ParseBool(f[26]),
             ParseInt(f[27]),
             f[28],
-            f[29]);
+            f[29],
+            f.Count == expected ? ParseNullableInt(f[30]) : null);
     }
 
     /// <summary>Appends one row, writing Header first when the file is missing or empty. Not thread-safe: one writer per run.</summary>

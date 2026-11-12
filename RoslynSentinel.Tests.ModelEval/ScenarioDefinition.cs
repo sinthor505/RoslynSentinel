@@ -59,6 +59,14 @@ public sealed record ScenarioDefinition(
     public int ResumeTurnCap => ResumeKeepTurns + (ResumeFaultSeeded ? 1 : 0) + TurnCap;
 
     /// <summary>
+    /// Live turns the model itself took: excludes kept turns and the authored fault turn. For a sample that ended with
+    /// AgentStopReason.TargetReached this is the live turns to target. Clamped at 0.
+    /// </summary>
+    /// <param name="transcriptTurnCount">Total turns the sample took, including the seeded ones.</param>
+    public int LiveTurnsFor(int transcriptTurnCount) =>
+        Math.Max(0, transcriptTurnCount - ResumeKeepTurns - (ResumeFaultSeeded ? 1 : 0));
+
+    /// <summary>
     /// Builds the live-sample stop predicate for this scenario. Returns null when EndOnCorrectFinalState is false.
     /// Otherwise the predicate runs CheckFinalState on the fixture directory and is true only for FinalStateVerdict.Correct.
     /// It deliberately does not catch exceptions: the runner treats a throwing predicate as false.
