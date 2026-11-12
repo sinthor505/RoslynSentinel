@@ -320,16 +320,19 @@ internal sealed partial class Libgit2GitReader : IGitReader
     /// <c>repo.Config.Get</c>, then <c>ShortenObjectId(.., 4)</c> returns 7 characters in a worktree, 4 when the managed config was not touched first). A linked worktree is therefore
     /// read through a separate <see cref="Configuration"/> built on the common directory's config file, which leaves the repository's native config alone.
     /// <c>extensions.worktreeConfig</c> (<c>config.worktree</c>) is not read here either: <see cref="Open"/> declines such a worktree before any config is read (<see cref="RequireNoPerWorktreeConfig"/>).
+    /// A valueless entry (a bare <c>key</c> line) comes back as the empty string, not null: libgit2 reports its value as null, and null means unset to every caller.
     /// </summary>
     private static string? ConfigValue(Repository repo, string key)
     {
         if (!IsLinkedWorktree(repo))
         {
-            return repo.Config.Get<string>(key)?.Value;
+            var entry = repo.Config.Get<string>(key);
+            return entry is null ? null : entry.Value ?? string.Empty;
         }
 
         using var config = Configuration.BuildFrom(Path.Combine(CommonDirectory(repo), "config"));
-        return config.Get<string>(key)?.Value;
+        var linkedEntry = config.Get<string>(key);
+        return linkedEntry is null ? null : linkedEntry.Value ?? string.Empty;
     }
 
     /// <summary>

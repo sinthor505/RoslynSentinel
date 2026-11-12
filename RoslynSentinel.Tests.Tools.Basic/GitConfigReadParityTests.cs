@@ -175,7 +175,6 @@ public class GitConfigReadParityTests
     }
 
     [Test]
-    [Explicit("Finding, not fixed: libgit2 did not throw NotSupportedException for a valueless key (filtered run); ConfigValue reads it as unset, so the reader does not decline.")]
     public void ValuelessKey_IsDeclinedByLibgit2AndTheCliAnswers()
     {
         File.AppendAllText(Path.Combine(_repo, ".git", "config"), "[sentinel]\n\tprobe\n");
