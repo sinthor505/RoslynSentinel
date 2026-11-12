@@ -1,6 +1,6 @@
 # Plan: LibGit2Sharp follow-ups - route trial evidence, audit, default-on, config operation, patch text
 
-**Status:** IN PROGRESS 2026-11-12. Steps 1-6 and 9 done (6a58ffd6..b262bccf). Approved 2026-11-12. Follow-ups to proposal_libgit2sharp_in_process_git; decisions recorded; Steps 22-23 (lists) skipped unless a caller shows cost.
+**Status:** IN PROGRESS 2026-11-12. Steps 1-12 done (6a58ffd6..dc8c2520). Approved 2026-11-12. Follow-ups to proposal_libgit2sharp_in_process_git; decisions recorded; Steps 22-23 (lists) skipped unless a caller shows cost.
 
 ## Problem
 
@@ -106,6 +106,12 @@ Text-neutral steps run first; the 3-day trial gate overlaps with them; behaviour
   `Warning` are byte-identical to the CLI's; decline the rest. Stop after the Step 11 measurement if the saving is
   under about 30 ms per call (Step 12 is that gate). Steps 22-23 (tag list, worktree list) are SKIPPED-UNLESS a
   caller shows real cost; they are kept in the plan, not deleted.
+- **2026-11-12, Step 12 gate (patch text): PROCEED, BROAD DECLINE.** Measured saving (11b, staged, median of 10):
+  1 file 71.7 -> 4.2 ms, 20 files 91.9 -> 23.9 ms. Steps 13 and 21 route staged and `refA..refB` patch text through
+  libgit2 and decline to the CLI on: a rename, an empty-file add/delete, a non-ASCII path, a typechange; and on ANY
+  `diff.*` or `color.*` key, or `core.whitespace`, unless it is on the verified-identical list (`diff.algorithm`,
+  `diff.indentHeuristic`, `diff.noprefix`, `diff.mnemonicPrefix`, `diff.renames=false`, `diff.wsErrorHighlight`,
+  `core.whitespace`), widened only by a new corpus scenario. An untested key goes to git.
 
 ### Main-session technical defaults (2026-11-12; planner-adopted, not owner decisions)
 
@@ -327,6 +333,8 @@ edits the Seam and Reads test files that Steps 16 and 17 also edit (7 before 16/
 - Size: D1 (1-2 files).
 
 ### Step 7 (C) - promote `AddLinkedWorktree` into `GitTestRepo`
+
+- Done: ac573324
 - Files: `RoslynSentinel.Tests.Support.Basic/GitTestRepo.cs`, `RoslynSentinel.Tests.Tools.Basic/GitCommitSeamParityTests.cs`
   (private copy at `:122`), `RoslynSentinel.Tests.Tools.Basic/GitCommitReadsParityTests.cs` (private copy at `:113`)
 - Depends on: none
@@ -338,6 +346,8 @@ edits the Seam and Reads test files that Steps 16 and 17 also edit (7 before 16/
 - Size: D0 (3 files, about 4 edits).
 
 ### Step 8 (C) - route-level second-setup tests
+
+- Done: 3b42858a
 - Files: `RoslynSentinel.Tests.Tools.Basic/GitInProcessCommitRouteSetupTests.cs` (new)
 - Depends on: 3 (log field assertions), 7
 - Effect: text-neutral (tests only)
@@ -411,6 +421,10 @@ does not, fix `ConfigValue`. Leave `// TODO fold EffectiveConfigValue into Confi
   - Size: D1 (test-writer).
 
 ### Step 10 (E) - config operation in `GitImpl`: result type, read, write
+
+- Done: 10a 32aa50f9 (new `GitConfigResult` with a NEW-DTO justification), 10b 1d1ed3a5 and f9ef1ee4 (hint call
+  literals removed until Step 20 adds the enum value), 10c 4fc91608. `ConfigAsync` takes `action` as a string until
+  Step 20 adds `GitAction` members.
 Result type: the `dto-conventions` skill applies; the implementer loads it and first checks whether an existing
 result can carry key/value/previous value/changed before adding a new type (owner decision E6, guidance).
 
@@ -444,6 +458,8 @@ result can carry key/value/previous value/changed before adding a new type (owne
   - Size: D1 (test-writer).
 
 ### Step 11 (F) - patch parity corpus and measurement (measure before building)
+
+- Done: 11a fa85eacb, 11b dc8c2520. Outcome table and gate result: Decision, "Step 12 gate".
 Anchor, verified: what the tool returns today for a patch is `RejoinLines(utf8-decode(stdout))` (`RunGitAsync`
 `GitImpl.cs:1765` calls `RejoinLines` `:1727`: every line re-terminated with `Environment.NewLine`, a missing final
 newline added, a lone CR also a line break), then `CapToUtf8Bytes`, `CountChangedFiles`,
@@ -504,6 +520,8 @@ a one-file staged diff and a 20-file staged diff: CLI patch (the exact command `
   as an `[Explicit]` or asserted-different test with its reason, so the corpus is not silently shrunk.
 
 ### Step 12 (F) - gate: is the saving worth building (owner decision, no code)
+
+- Done: owner 2026-11-12, proceed with broad decline (Decision).
 - Depends on: 11a, 11b
 - Rule (owner 2026-11-12): if the measured saving per call (CLI median minus libgit2 median) is under about 30 ms,
   stop: mark Steps 13 and 21 SKIPPED and record the numbers here. Otherwise continue with 13 and 21, routing only
