@@ -102,7 +102,7 @@ public static class ScenarioSampleLoop
                         scenario.Expected,
                         scenario.ExpectedRecoveryTool,
                         outcome.Verdict,
-                        result.StopReason);
+                        result.StopReason, seededTurns: scenario.ResumeKeepTurns);
                     sample = new ScenarioSample(
                         scenario.Id,
                         scenario.ScenarioType,

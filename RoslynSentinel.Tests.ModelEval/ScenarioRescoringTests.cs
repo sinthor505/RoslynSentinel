@@ -103,6 +103,57 @@ public class ScenarioRescoringTests
     }
 
     [Test]
+    public async Task RescoreRunFolder_ResumeScenario_IgnoresSeededTurnErrors()
+    {
+        WriteResults(Row(
+            ("scenarioId", "S1"),
+            ("scenarioType", "3"),
+            ("sampleIndex", "1"),
+            ("commit", "abc"),
+            ("dirty", "false"),
+            ("liftRenames", "off"),
+            ("schemaDrift", "false"),
+            ("resultDrift", "0"),
+            ("transcriptPath", "x")));
+
+        var sampleFolder = Path.Combine(_folder, "sample-01");
+        Directory.CreateDirectory(sampleFolder);
+
+        var failedCall = new AgentToolCallRecord
+        {
+            ToolName = Tool,
+            ArgumentsJson = "{}",
+            ResultJson = "{\"isError\":true,\"errorData\":{\"errorCode\":\"NotFound\"}}",
+            IsError = true,
+            Latency = TimeSpan.Zero,
+            StartedAt = DateTimeOffset.UnixEpoch,
+            CompletedAt = DateTimeOffset.UnixEpoch,
+            ToolCallId = "seeded",
+        };
+        var transcript = new AgentTranscript();
+        transcript.Turns.Add(Turn(1, failedCall));
+        transcript.Turns.Add(Turn(2, Call(Tool, "{\"a\":2}")));
+        File.WriteAllText(Path.Combine(sampleFolder, "transcript.json"), JsonSerializer.Serialize(transcript));
+
+        var scenario = Scenario("S1") with { ResumeTranscript = "x.json", ResumeKeepTurns = 1 };
+        var outputCsv = Path.Combine(_folder, "rescored.csv");
+
+        var samples = await ScenarioRescoring.RescoreRunFolderAsync(
+            _folder,
+            id => id == "S1" ? scenario : null,
+            (s, folder, ct) => Task.FromResult<FinalStateVerdict?>(FinalStateVerdict.Correct),
+            outputCsv,
+            CancellationToken.None);
+
+        Assert.That(samples, Has.Count.EqualTo(1));
+        var score = samples[0].Score;
+        Assert.That(score, Is.Not.Null);
+        Assert.That(score!.FirstErrorCode, Is.Null);
+        Assert.That(score.Recovered, Is.False);
+        Assert.That(score.FirstCallSucceeded, Is.True);
+    }
+
+    [Test]
     public async Task RescoreRunFolder_KeepsInconclusiveRowsInconclusive()
     {
         WriteResults(Row(
