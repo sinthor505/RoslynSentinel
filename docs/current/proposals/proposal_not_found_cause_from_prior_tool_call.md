@@ -1,6 +1,6 @@
 # Not-found errors name the prior tool call that renamed, moved or removed the target
 
-**Status:** IN PROGRESS 2026-11-12. v1 slices 1-4 done (d5667196, 3a246d60, e000f0cf, a7385d44) and live-checked PASS for rename, dry-run rename and undo; follow-up slices A-D approved by the owner (see "Follow-ups after the live check"), E held. v2 (generic-edit symbol diff) not built.
+**Status:** IN PROGRESS 2026-11-12. v1 slices 1-4 done (d5667196, 3a246d60, e000f0cf, a7385d44) and live-checked PASS for rename, dry-run rename and undo; follow-ups C (b9614e86) and D (67113f98) done; A and the Search/InspectSymbol half of B deferred (PEER-HOLD: they change ReadFile/LocateSymbol/Search not-found output during the error-policy A/B run); E held (design above). v2 (generic-edit symbol diff) not built.
 
 ## Motivation
 
@@ -167,7 +167,10 @@ block). The speculative sentence is swapped where the fact is computed.
   place (`NotFoundEvidence.ForCurrentCall`, which already runs once per not-found error and now knows whether an effect note exists)
   swaps the marked part out when `EditEffectEvidence` produced a note. Builders then never need to know about effects.
 - `NotFoundEvidence` also sets a flag on `ToolCallContext` (e.g. `HasEditEffectFact`) so the error-policy filter can skip its
-  policy suffix when the fact is present; needs `ToolCallContext.cs`, held by the `plan_error_policy_pointer` run.
+  policy suffix when the fact is present; needs `ToolCallContext.cs`, held by the `plan_error_policy_pointer` run. That run adds
+  `ToolCallContext.HasEditEffectFact` (settable bool, default false) and its ErrorPolicyFilter check after its A/B and sends the hash
+  with RELEASE; our part afterwards is one line: `NotFoundEvidence` sets `ToolCallContext.Current.HasEditEffectFact = true` whenever
+  it attaches an EditEffect finding.
 - Order: coordinate with f1 (builders) before touching any builder file; the marker lands in the builders first (text-neutral), the
   swap lands in `NotFoundEvidence` second.
 
