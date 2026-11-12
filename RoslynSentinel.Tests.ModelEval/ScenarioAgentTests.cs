@@ -148,6 +148,9 @@ public class ScenarioAgentTests
         return (result, verdict);
     }
 
+    // Snapshots the final state for the verdict: the staged files plus every .cs directly in
+    // ContosoOrders.Core/FixtureHelpers, because a rename can move or add files. Staged-key copies
+    // are written first and win; a helper file whose name is already present is skipped.
     private static void SnapshotFinalState(ScenarioDefinition scenario, string solutionDirectory, string sampleDirectory)
     {
         var finalStateDirectory = Path.Combine(sampleDirectory, "final-state");
@@ -176,6 +179,25 @@ public class ScenarioAgentTests
             }
 
             File.Copy(source, Path.Combine(finalStateDirectory, fileName), overwrite: true);
+        }
+
+        var helperDirectory = Path.Combine(solutionDirectory, "ContosoOrders.Core", "FixtureHelpers");
+        if (!Directory.Exists(helperDirectory))
+        {
+            TestContext.Out.WriteLine("final-state: FixtureHelpers folder is missing");
+            return;
+        }
+
+        foreach (var helperFile in Directory.GetFiles(helperDirectory, "*.cs"))
+        {
+            Directory.CreateDirectory(finalStateDirectory);
+            var targetPath = Path.Combine(finalStateDirectory, Path.GetFileName(helperFile));
+            if (File.Exists(targetPath))
+            {
+                continue;
+            }
+
+            File.Copy(helperFile, targetPath);
         }
     }
 
