@@ -74,6 +74,7 @@ public class GuardScenariosTests
 
         Assert.That(prompt, Does.Contain("IOrderPricingCalculator"));
         Assert.That(prompt, Does.Contain("Remove"));
+        Assert.That(prompt, Does.Contain("ReplaceSnippet"));
     }
 
     [Test]

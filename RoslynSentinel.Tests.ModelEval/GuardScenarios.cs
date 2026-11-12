@@ -111,7 +111,7 @@ public static class GuardScenarios
 
         ## Steps (apply the step below)
 
-        1. Remove the interface `IOrderPricingCalculator` from the solution. Change nothing else.
+        1. Remove the interface `IOrderPricingCalculator` from the solution. Use the `ReplaceSnippet` tool. Change nothing else.
         """;
 
     // Declared before EmptyInterfaceRemoval: static field initializers run in textual order.

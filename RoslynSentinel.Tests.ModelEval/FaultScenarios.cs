@@ -78,6 +78,7 @@ public static class FaultScenarios
            only changes the method's declaration and misses its caller is not complete.
         """;
 
+    // 12 turns: with a cap of 6-8, 17 of 20 StopAndReport samples ran to the cap before they could end with BLOCKED: (batch B, plan_targeted_tool_scenario_evals).
     public static readonly ScenarioDefinition RenameSymbolNoSuchMethod = new(
         Id: RenameSymbolNoSuchMethodId,
         ScenarioType: 3,
@@ -85,7 +86,7 @@ public static class FaultScenarios
         ToolUnderTest: "RenameSymbol",
         StagedFiles: ScenarioFixtureFiles.ChainStartingFiles,
         PromptTemplate: RenameSymbolNoSuchMethodPrompt,
-        TurnCap: 6,
+        TurnCap: 12,
         Expected: ExpectedOutcome.StopAndReport,
         ExpectedRecoveryTool: null,
         CheckFinalState: (solutionDirectory, ct) => CheckStopAndReportAsync(solutionDirectory, null, ct),
@@ -144,6 +145,7 @@ public static class FaultScenarios
         1. In `SummarizeShipping`, change the string "national" to "national-post". Use the `ReplaceSnippet` tool. Change nothing else.
         """;
 
+    // 12 turns: with a cap of 6-8, 17 of 20 StopAndReport samples ran to the cap before they could end with BLOCKED: (batch B, plan_targeted_tool_scenario_evals).
     public static readonly ScenarioDefinition ReplaceSnippetWrongFileNoMatch = new(
         Id: ReplaceSnippetWrongFileNoMatchId,
         ScenarioType: 3,
@@ -151,7 +153,7 @@ public static class FaultScenarios
         ToolUnderTest: "ReplaceSnippet",
         StagedFiles: ScenarioFixtureFiles.ChainStartingFiles,
         PromptTemplate: ReplaceSnippetWrongFileNoMatchPrompt,
-        TurnCap: 6,
+        TurnCap: 12,
         Expected: ExpectedOutcome.StopAndReport,
         ExpectedRecoveryTool: null,
         CheckFinalState: (solutionDirectory, ct) => CheckStopAndReportAsync(solutionDirectory, "ContosoOrders.Core/FixtureHelpers/ShippingLabelPrinter.cs", ct),

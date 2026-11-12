@@ -106,6 +106,7 @@ public class FaultScenariosTests
         Assert.That(scenario.FaultKind, Is.EqualTo("symbol-no-near-match"));
         Assert.That(scenario.ToolUnderTest, Is.EqualTo("RenameSymbol"));
         Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.StopAndReport));
+        Assert.That(scenario.TurnCap, Is.EqualTo(12));
     }
 
     [Test]
@@ -147,6 +148,7 @@ public class FaultScenariosTests
         Assert.That(scenario.FaultKind, Is.EqualTo("file-name-no-match"));
         Assert.That(scenario.ToolUnderTest, Is.EqualTo("ReplaceSnippet"));
         Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.StopAndReport));
+        Assert.That(scenario.TurnCap, Is.EqualTo(12));
     }
 
     [Test]
