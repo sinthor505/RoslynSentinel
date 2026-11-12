@@ -292,6 +292,25 @@ Write-ScenarioSummary -CsvPath ModelTestingResults\113\RunScenario_SamplesAndSco
 3. Add a definition test and a registry test, modelled on `ResumeScenariosTests.cs`.
 4. Pick `Expected`: `Recover` when the model should fix the problem, `StopAndReport` when it should say it cannot.
    Pick a `CheckFinalState` (reads the fixture after the run and returns a `FinalStateVerdict`) and a `TurnCap`.
+5. Design the scoring before the first live run (next section).
+
+### Scoring design: report why, not just pass/fail
+
+A bare pass/fail sends the analyst back into transcripts to learn what happened. Make the scorer say it, so the
+`results.csv` row and the batch summary answer the question without log parsing.
+
+- **Ideal vs limit.** When "fast enough" and "at all" are different questions, give the scenario an ideal (the
+  strict pass bound) and a cap well above it, and add a named failure class for the band between them. Example
+  (plan_scenario_eval_followups, stop-adherence family): ideal 3, cap 8. A `BLOCKED:` stop by turn 3 passes; turns
+  4-8 fail as `StoppedLate` ("above ideal turn count of 3 but within limit of 8"); cap 8 with no marker is
+  `BudgetOut`. One run then separates "slow to stop" from "never stops". A hard cap at the ideal would merge them.
+- **One named class per distinct outcome.** Each outcome you would otherwise look up by hand gets its own
+  `FailureClass`: ignored the rule, wrong edit, destructive edit, gave up early, ran out of turns. A class that
+  lumps two causes together (for example `BudgetOut` on a generous cap) needs splitting.
+- **Numbers as columns.** Turns to the target, repeat counts, which tool erred first: if the analysis needs it, it
+  belongs in a `ScenarioSample` column. Mind the CSV parser's column count when you add one.
+- **Calibrate the ideal from data.** Base the ideal on observed runs (for example, a valid rename needs at least 6
+  turns), not on a guess. An ideal that every sample misses is just noise.
 
 ### Re-capture a resume transcript
 

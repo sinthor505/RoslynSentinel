@@ -18,6 +18,8 @@
 - Files: <paths>
 - Change: <what, concretely>
 - Done when: <verifiable condition, e.g. Build 0 errors, named test passes>
+<!-- Test, eval or LIVE step: state the outcome classes it reports (ideal vs limit, one named class per outcome),
+     not just pass/fail. See reference_model_eval_procedure.md, "Scoring design". -->
 
 ## Out of scope
 <!-- Deliberately excluded. -->
