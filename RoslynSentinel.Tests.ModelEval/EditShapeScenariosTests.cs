@@ -24,7 +24,6 @@ public class EditShapeScenariosTests
 
     [TestCase(TwoRenameScenarios.TwoRenamesWholeFileId)]
     [TestCase(InterfaceScenarios.InterfaceMemberRedeclaredId)]
-    [TestCase(BatchShapeScenarios.MixedSingleAndBatchShapeId)]
     public void Registry_FindsEditShapeScenarioIgnoringCase(string id)
     {
         var scenario = ScenarioRegistry.Find(id.ToUpperInvariant());
@@ -42,7 +41,8 @@ public class EditShapeScenariosTests
         Assert.That(ids.Select(id => id.ToUpperInvariant()).ToList(), Is.Unique);
         Assert.That(ids, Does.Contain(TwoRenameScenarios.TwoRenamesWholeFileId));
         Assert.That(ids, Does.Contain(InterfaceScenarios.InterfaceMemberRedeclaredId));
-        Assert.That(ids, Does.Contain(BatchShapeScenarios.MixedSingleAndBatchShapeId));
+        Assert.That(ids, Does.Not.Contain(BatchShapeScenarios.MixedSingleAndBatchShapeId));
+        Assert.That(ScenarioRegistry.Find(BatchShapeScenarios.MixedSingleAndBatchShapeId), Is.Null);
         Assert.That(ids, Does.Contain(RenameScenarios.CalcDiscRenameId));
     }
 
@@ -56,10 +56,15 @@ public class EditShapeScenariosTests
 
     [TestCase(TwoRenameScenarios.TwoRenamesWholeFileId, "RenameSymbol")]
     [TestCase(InterfaceScenarios.InterfaceMemberRedeclaredId, "ReplaceSnippet")]
-    [TestCase(BatchShapeScenarios.MixedSingleAndBatchShapeId, "ReplaceSnippet")]
     public void Scenario_ExpectedRecoveryTool(string id, string expectedTool)
     {
         Assert.That(ScenarioRegistry.Find(id)!.ExpectedRecoveryTool, Is.EqualTo(expectedTool));
+    }
+
+    [Test]
+    public void Batch_ExpectedRecoveryTool_IsReplaceSnippet()
+    {
+        Assert.That(BatchShapeScenarios.MixedSingleAndBatchShape.ExpectedRecoveryTool, Is.EqualTo("ReplaceSnippet"));
     }
 
     [TestCaseSource(nameof(EditShapeScenarios))]

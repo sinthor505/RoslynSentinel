@@ -11,7 +11,7 @@ public static class ScenarioRegistry
         RenameScenarios.CalcDiscRename,
         TwoRenameScenarios.TwoRenamesWholeFile,
         InterfaceScenarios.InterfaceMemberRedeclared,
-        BatchShapeScenarios.MixedSingleAndBatchShape,
+        // BatchShapeScenarios.MixedSingleAndBatchShape retired from the registry (plan_scenario_eval_followups, step 9): 0 mixed-shape calls in the live run, and e0ceceab accepts a top-level filePath with batchEdits. The type is kept for history.
         GuardScenarios.TwinApplyCalls,
         GuardScenarios.EmptyInterfaceRemoval,
         FaultScenarios.RenameSymbolTypo,
