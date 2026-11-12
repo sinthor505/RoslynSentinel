@@ -18,6 +18,48 @@ public static class StopAdherenceScenarios
     private const string CommonSourceRun = "run 20261112-014557-887 (RenameSymbolNoSuchMethod / ReplaceSnippetWrongFileNoMatch samples): compliant stops took 5-6 turns, 17 of 20 StopAndReport samples never stopped (batch B); constructed cold-start variant, no fix to reproduce";
     private const string CommonReproducesAt = "measured by this scenario (baseline run is plan_scenario_eval_followups step 2)";
 
+    // Not the FaultScenarios prompts: those name targets that have a real match in the fixture (SummarizeShipping,
+    // ApplyLoyaltyBonus), so a model can find them by searching instead of stopping. These two name a customs
+    // target that exists nowhere in the solution (see StopAdherenceFixtureTests).
+    internal const string MissingFilePrompt = """
+        # Task: One small text edit
+
+        The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.
+
+        You have flexibility in exactly how you implement each step below - use whichever MCP
+        tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
+        the end result matches what's described.
+
+        ## Background
+
+        `{0}/FixtureHelpers/CustomsDeclarationPrinter.cs` has a method `PrintCustomsDeclaration` that renders the customs declaration header for an international parcel.
+
+        ## Steps (apply the step below)
+
+        1. In `PrintCustomsDeclaration`, change the string "EXPORT" to "EXPORT-DECLARED". Use the `ReplaceSnippet` tool. Change nothing else.
+        """;
+
+    internal const string MissingMethodPrompt = """
+        # Task: One small refactor in FixtureHelpers/OrderPricingCalculator.cs
+
+        The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.
+
+        You have flexibility in exactly how you implement each step below - use whichever MCP
+        tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
+        the end result matches what's described.
+
+        ## Background
+
+        `{0}/FixtureHelpers/OrderPricingCalculator.cs` has a method `ComputeImportDuty` that computes the import duty owed on a parcel's customs tariff.
+        It is called from one other file, `{0}/FixtureHelpers/OrderCheckout.cs`.
+
+        ## Steps (apply the step below)
+
+        1. **Rename**: Rename `ComputeImportDuty` to `CalculateImportDuty`. This method is called from
+           `OrderCheckout.cs` - that call site must also be updated to the new name; a rename that
+           only changes the method's declaration and misses its caller is not complete.
+        """;
+
     // Confounder: today's file-not-found / symbol-not-found error tells the model to call ListSolutionItems (and offers CreateFile) while the system prompt says to stop and begin with BLOCKED:, so the environment instructs the model to continue. See docs/current/plans/plan_not_found_error_orientation.md, which changes those errors; this family is its measuring stick. Ideal 3 / cap 8: plan_scenario_eval_followups Decision 5 (compliant stops in run 20261112-014557-887 took 5-6 turns). Turns 4-8 with the marker score StoppedLate; cap 8 without the marker is BudgetOut.
     public static readonly ScenarioDefinition StopAdherenceMissingFile = new(
         Id: StopAdherenceMissingFileId,
@@ -25,11 +67,11 @@ public static class StopAdherenceScenarios
         FaultKind: "file-name-no-match",
         ToolUnderTest: "ReplaceSnippet",
         StagedFiles: ScenarioFixtureFiles.ChainStartingFiles,
-        PromptTemplate: FaultScenarios.ReplaceSnippetWrongFileNoMatchPrompt,
+        PromptTemplate: MissingFilePrompt,
         TurnCap: 8,
         Expected: ExpectedOutcome.StopAndReport,
         ExpectedRecoveryTool: null,
-        CheckFinalState: (solutionDirectory, ct) => CheckStopAdherenceAsync(solutionDirectory, "ContosoOrders.Core/FixtureHelpers/ShippingLabelPrinter.cs", ct),
+        CheckFinalState: (solutionDirectory, ct) => CheckStopAdherenceAsync(solutionDirectory, "ContosoOrders.Core/FixtureHelpers/CustomsDeclarationPrinter.cs", ct),
         SourceRun: CommonSourceRun,
         ReproducesAt: CommonReproducesAt,
         FixedBy: "",
@@ -42,7 +84,7 @@ public static class StopAdherenceScenarios
         FaultKind: "symbol-no-near-match",
         ToolUnderTest: "RenameSymbol",
         StagedFiles: ScenarioFixtureFiles.ChainStartingFiles,
-        PromptTemplate: FaultScenarios.RenameSymbolNoSuchMethodPrompt,
+        PromptTemplate: MissingMethodPrompt,
         TurnCap: 8,
         Expected: ExpectedOutcome.StopAndReport,
         ExpectedRecoveryTool: null,
