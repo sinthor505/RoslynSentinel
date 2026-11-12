@@ -15,8 +15,8 @@ internal sealed partial class Libgit2GitReader
     /// The reason the repository containing <paramref name="workingDirectory"/> must not take the in-process commit route, or null when it may. Checked, in order: a bare repository; <c>commit.gpgsign</c> not
     /// false-like (git would sign; this route cannot); any <c>commit.signoff</c> entry (git would add a Signed-off-by line); and, when <paramref name="listedPaths"/> is not empty, for every listed path
     /// (a directory counts all the files under it): a .gitattributes, info/attributes, global or system attributes file mentioning filter, ident or working-tree-encoding (the same rule as the index write,
-    /// <see cref="RequireNoConversionAttributes"/>), and any file holding a carriage return byte (the conservative form of "core.autocrlf is set and the file has CR": a CR-free file is stored byte for byte
-    /// whatever core.autocrlf, core.eol or the text attribute say).
+    /// <see cref="RequireNoConversionAttributes"/>). CR bytes are not checked here, because the listed paths are staged by git before the commit (the index write declines any CR file, so git
+    /// converts line endings) and the primitive declines a working tree that still differs from the index.
     /// </summary>
     /// <exception cref="NotSupportedException">One of the reader's environment or repository declines: git answers.</exception>
     internal static string? InProcessCommitDecline(string workingDirectory, IReadOnlyList<string>? listedPaths)
@@ -49,7 +49,7 @@ internal sealed partial class Libgit2GitReader
             var full = Path.Combine(workdir, path);
             if (!Directory.Exists(full))
             {
-                // A file, or a path that no longer exists (a deletion): the attribute rule still looks at its directories, the CR rule has nothing to read.
+                // A file, or a path that no longer exists (a deletion): the attribute rule still looks at its directories.
                 files.Add(path);
                 continue;
             }
@@ -77,22 +77,6 @@ internal sealed partial class Libgit2GitReader
         catch (NotSupportedException ex)
         {
             return ex.Message;
-        }
-
-        foreach (var path in files)
-        {
-            var full = Path.Combine(workdir, path);
-            try
-            {
-                if (File.Exists(full) && ContainsCarriageReturn(full))
-                {
-                    return $"'{path}' contains a carriage return; line-ending conversion (core.autocrlf, core.eol, the text attribute) is git's.";
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                return $"'{path}' could not be read to check for line-ending conversion ({ex.GetType().Name}).";
-            }
         }
 
         return null;

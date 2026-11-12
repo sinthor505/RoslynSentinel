@@ -13,7 +13,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// (default off). Taken: a whole-index commit and a commit of listed paths (tracked, untracked, deleted, with trailers) leave the same hash, message bytes, tree, index, status and remaining-staged list
 /// as the CLI route does in a twin repository, an fsck-clean repository, the reflog entry <c>commit: &lt;subject&gt;</c> on HEAD and the branch, a post-commit hook that runs, and no git process at all
 /// (git's trace2 log). Declined to the CLI, each counted with its reason on the route (<see cref="InProcessCommitRoute.DeclineCount"/>): a blocking hook, an amend, a merge in progress, signing, a filter
-/// attribute, a carriage return, a branch that moved while the commit was built. Off: the route is not entered, its counters do not move and the CLI commits.
+/// attribute, a branch that moved while the commit was built. Off: the route is not entered, its counters do not move and the CLI commits.
 /// </summary>
 // KNOWN FLAKE on full/parallel runs (spawns git): disregard a failure here when the change did not touch process spawning; re-run the class alone first.
 // Suspected cause: pipe EOF reads starved under load. Fix pointer: GitProcess.TryRun dedicated reader threads and GitTestRepo (docs/current/issues/issue_process_spawn_test_flake.md).
@@ -152,6 +152,7 @@ public class GitInProcessCommitRouteTests
     private static readonly (string Name, bool? ExpectTaken)[] ParityScenarios =
     [
         ("whole-index", true), ("messy-message", true), ("listed-tracked", true), ("listed-untracked", true), ("listed-delete", null), ("listed-trailers", true),
+        ("crlf-autocrlf", true), ("crlf-text-auto", true), ("mixed-eol-autocrlf", null), ("lone-cr-autocrlf", null),
     ];
 
     private static IEnumerable<TestCaseData> ParityCases() =>
@@ -203,6 +204,28 @@ public class GitInProcessCommitRouteTests
                 ToolCallContext.Set(context);
                 Write(directory, "a.txt", "a changed\n");
                 result = await impl.CommitAsync(directory, "trailer subject\n\ntrailer body", GitStageScope.listed, "a.txt", amend: false, CancellationToken.None);
+                break;
+            case "crlf-autocrlf":
+                RunGit(directory, "config", "core.autocrlf", "true");
+                Write(directory, "a.txt", "one\r\ntwo\r\n");
+                result = await impl.CommitAsync(directory, "crlf with autocrlf", GitStageScope.listed, "a.txt", amend: false, CancellationToken.None);
+                break;
+            case "crlf-text-auto":
+                // The attribute is committed first, so the listed CRLF file is normalised by git's own add, not by the route.
+                Write(directory, ".gitattributes", "* text=auto\n");
+                CommitAll(directory, "text=auto attributes");
+                Write(directory, "a.txt", "one\r\ntwo\r\n");
+                result = await impl.CommitAsync(directory, "crlf with text=auto", GitStageScope.listed, "a.txt", amend: false, CancellationToken.None);
+                break;
+            case "mixed-eol-autocrlf":
+                RunGit(directory, "config", "core.autocrlf", "true");
+                Write(directory, "a.txt", "a\r\nb\nc\r\n");
+                result = await impl.CommitAsync(directory, "mixed eol", GitStageScope.listed, "a.txt", amend: false, CancellationToken.None);
+                break;
+            case "lone-cr-autocrlf":
+                RunGit(directory, "config", "core.autocrlf", "true");
+                Write(directory, "a.txt", "a\rb\n");
+                result = await impl.CommitAsync(directory, "lone cr", GitStageScope.listed, "a.txt", amend: false, CancellationToken.None);
                 break;
             default:
                 throw new ArgumentException("no scenario " + scenario);
@@ -491,16 +514,22 @@ public class GitInProcessCommitRouteTests
     }
 
     [Test]
-    public async Task InProcessCommit_AListedFileHoldsCarriageReturns_DeclinesToTheCliAsync()
+    public async Task InProcessCommit_AListedCrlfFile_WithAutocrlf_IsCommittedInProcess_AndStoresTheLfBlobAsync()
     {
         var route = new InProcessCommitRoute();
         var directory = NewRepo("crlf", inProcess: true);
+        RunGit(directory, "config", "core.autocrlf", "true");
         File.WriteAllBytes(Path.Combine(directory, "a.txt"), Encoding.ASCII.GetBytes("one\r\ntwo\r\n"));
 
         var result = await NewImpl(route).CommitAsync(directory, "crlf file", GitStageScope.listed, "a.txt", amend: false, CancellationToken.None);
 
         AssertCommitted(directory, result);
-        AssertDeclined(route, "carriage return");
+        AssertTaken(route);
+        Assert.Multiple(() =>
+        {
+            Assert.That(RunGitRaw(directory, "cat-file", "-p", "HEAD:a.txt").StdOut.ReplaceLineEndings("\n"), Is.EqualTo("one\ntwo\n"), "git stores the LF blob");
+            Assert.That(RunGit(directory, "status", "--porcelain"), Is.Empty, "the working tree matches the index");
+        });
     }
 
     [Test]

@@ -76,7 +76,7 @@ internal sealed class InProcessCommitRoute
 
     /// <summary>
     /// The reason this commit must go to the CLI, decided BEFORE anything is staged, or null when the route may proceed. In order: an operation in progress (merge, cherry-pick, revert, rebase, am; read through the
-    /// reader seam); the repository-level rules of <see cref="Libgit2GitReader.InProcessCommitDecline"/> (<c>commit.gpgsign</c>, <c>commit.signoff</c>, conversion attributes and CR bytes of listed paths, and the reader's
+    /// reader seam); the repository-level rules of <see cref="Libgit2GitReader.InProcessCommitDecline"/> (<c>commit.gpgsign</c>, <c>commit.signoff</c>, conversion attributes, and the reader's
     /// environment and repository declines); a pre-commit, prepare-commit-msg or commit-msg hook that exists or cannot be ruled out; a reference-transaction or post-index-change hook that exists or cannot be
     /// ruled out; a post-commit hook that exists but could not be launched in process. Never throws.
     /// </summary>

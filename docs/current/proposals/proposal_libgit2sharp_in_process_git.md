@@ -235,15 +235,24 @@ below: `reference-transaction` or `post-index-change` hook, `commit.signoff`, a 
 (predicate Unknown). Owner decisions 2026-11-12: default stays off, trial on in this repo
 (`roslynsentinel.inProcessCommit=true` in its local config); accepted as is: listed tracked paths are
 staged before a late decline (stay staged if the CLI fallback then fails), a failed post-commit launch
-is ignored and uncounted, no `gc --auto` on the in-process route. Still open:
-`RequireWorkingTreeMatchesIndex` status-scan scope is a TODO in code.
+is ignored and uncounted, no `gc --auto` on the in-process route. Status-scan scope done
+(`b7d6e1bb`: pathspec on the listed paths, full scan when a path holds a glob metacharacter). Every
+route outcome is appended to `<common git dir>/roslynsentinel/commit-route.jsonl` (`ab4bbd15`; the
+counters reset on each idle restart).
+
+**Trial finding and decision (owner, 2026-11-12):** the pre-staging CR-byte decline sent every code
+commit of this repo (CRLF `.cs`, `core.autocrlf=true`, `* text=auto`) to the CLI. Dropped: the listed
+paths are staged before the commit and the index write declines any CR file (S8), so git's own
+`git add` converts line endings, and the primitive's working-tree check declines anything still
+different, which makes HEAD plus those entries what `git commit --only` stores. Pinned by CRLF,
+`text=auto`, mixed-EOL and lone-CR parity scenarios.
 
 **5c - in-process commit for the simple case (after a go from 5b).** Plain commit or
 `--only <paths>` (tree = HEAD tree plus the listed paths' index entries), trailers formatted in
 process with byte-parity tests against `git commit --trailer` (existing `Co-Authored-By` block),
 reflog `commit: <subject>`. Declines to the CLI on: `pre-commit`, `prepare-commit-msg` or
 `commit-msg` hook present; `amend` (fires `post-rewrite`); merge, cherry-pick or revert in progress;
-`commit.gpgsign=true`; a listed path with a `filter=` attribute or CR bytes; the existing
+`commit.gpgsign=true`; a listed path with a `filter=` attribute (CR bytes: dropped 2026-11-12, see above); the existing
 environment and repo-feature declines. Skipped versus the CLI: `gc --auto`.
 
 Hook policy: the hook files stay (they cover shell, IDE and rebase/merge commits, and an arbitrary
