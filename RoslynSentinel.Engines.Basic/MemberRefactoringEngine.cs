@@ -2674,6 +2674,7 @@ public class MemberRefactoringEngine
         }
         else
         {
+            // TODO not a lookup miss: several namespaces and no namespaceName is an ambiguous target but is coded NotFound; code it Ambiguous or InvalidArgument (a tool-level branch on the code may depend on it)
             throw new ToolNotFoundException($"File has {namespaces.Count} namespaces ({string.Join(", ", namespaces.Select(n => n.Name.ToString()))}); pass namespaceName to disambiguate.", "namespace");
         }
 
@@ -3104,11 +3105,7 @@ public class MemberRefactoringEngine
     public virtual async Task<MoveMemberResult> MoveMemberAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default, bool autoResolveCallSites = true, Dictionary<string, string>? callSiteFixups = null, IReadOnlyDictionary<string, string>? fieldMap = null, MoveMemberOldMember oldMember = MoveMemberOldMember.remove, string? forwarderReceiver = null)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new ToolNotFoundException($"File '{filePath}' not found.");
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
@@ -3140,6 +3137,7 @@ public class MemberRefactoringEngine
         INamedTypeSymbol? targetClassSymbol = null;
         if (!targetIsBaseType)
         {
+            // TODO a targetFilePath that matches no document yields an empty search here, so a misspelt targetFilepath looks like "no existing class" (a new class is synthesized); route it through DocumentLookup so the miss is reported
             var targetSearchDocs = targetFilePath.HasValue ? solution.GetDocumentIdsWithFilePath(targetFilePath.Value).Select(solution.GetDocument).Where(d => d != null) : solution.Projects.SelectMany(p => p.Documents);
             var targetClassMatches = new List<ClassDeclarationSyntax>();
             foreach (var doc in targetSearchDocs)
@@ -3267,7 +3265,8 @@ public class MemberRefactoringEngine
                     FieldDeclarationSyntax field => string.Join(", ", field.Declaration.Variables.Select(v => v.Identifier.Text)),
                     _ => "?"
                 }));
-                throw new ToolNotFoundException($"Cannot move instance member(s) [{names}] to '{targetClassName}': it is not an existing base class of '{className}'. " + "Moving an instance member elsewhere requires rewriting every call site's receiver expression. Pass " + "autoResolveCallSites:true (the default) to have this resolved automatically where unambiguous, or " + "make the member(s) static first, or move to an existing base class of the source type.");
+                // TODO not a lookup miss: the target exists and is not a base class of the source, so this is a refusal coded NotFound; the factories of MemberRefactoringNotFound do not apply (prose fix only)
+            throw new ToolNotFoundException($"Cannot move instance member(s) [{names}] to '{targetClassName}': it is not an existing base class of '{className}'. " + "Moving an instance member elsewhere requires rewriting every call site's receiver expression. Pass " + "autoResolveCallSites:true (the default) to have this resolved automatically where unambiguous, or " + "make the member(s) static first, or move to an existing base class of the source type.");
             }
 
             return await CheckedAsync(await MoveInstanceMembersAsync(solution, filePath, className, membersToMove, targetClassName, memberNames, targetFilePath, targetDoc, targetClassNode, callSiteFixups, fieldMap, oldMember, forwarderReceiver, cancellationToken));
@@ -5074,11 +5073,7 @@ public class MemberRefactoringEngine
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new ToolNotFoundException($"File '{filePath}' not found.");
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
