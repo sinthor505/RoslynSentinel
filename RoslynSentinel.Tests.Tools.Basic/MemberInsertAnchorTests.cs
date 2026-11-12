@@ -150,6 +150,108 @@ public class MemberInsertAnchorTests
     }
 
     [Test]
+    public async Task Member_AddWithTypoAnchor_SuggestsSimilarMemberAndWritesNothingAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var before = workspace.ReadText(FixtureRelativePath);
+
+        var result = await tools.MemberTool(
+            reason: "test typo insert anchor candidate outcome",
+            operation: MemberAction.addMember,
+            filePath: workspace.PathOf(FixtureRelativePath),
+            containerName: "AnchorTarget",
+            newMemberSource: "public int Added() => 3;",
+            insertAfterMemberName: "Existng");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.IsError, Is.True, "a typo anchor must be an error, not an append");
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+            Assert.That(result.ErrorData?.Message, Does.Contain("'Existng'"), "the message must name the anchor");
+            Assert.That(result.ErrorData?.Message, Does.Contain("Did you mean 'Existing'"), "the similar member must be suggested");
+            Assert.That(result.ErrorData?.Message, Does.Contain("insertAfterMemberName"), "the suggestion must name the parameter to retry with");
+        });
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "a not-found anchor must not write");
+    }
+
+    [Test]
+    public async Task Member_AddWithAnchorWithNoSimilarMember_SaysNoCandidateAndTellsUserAndWritesNothingAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var before = workspace.ReadText(FixtureRelativePath);
+
+        var result = await tools.MemberTool(
+            reason: "test no-candidate insert anchor outcome",
+            operation: MemberAction.addMember,
+            filePath: workspace.PathOf(FixtureRelativePath),
+            containerName: "AnchorTarget",
+            newMemberSource: "public int Added() => 3;",
+            insertAfterMemberName: "Archive");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.IsError, Is.True, "an anchor with no similar member must be an error, not an append");
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+            Assert.That(result.ErrorData?.Message, Does.Contain("has a similar name to 'Archive'"), "the message must say no similar member exists");
+            Assert.That(result.ErrorData?.Message, Does.Not.Contain("Did you mean"), "no suggestion when nothing is similar");
+            Assert.That(result.ErrorData?.Message, Does.Contain("tell the user"), "the message must offer the report-it-does-not-exist option");
+            Assert.That(result.ErrorData?.Message, Does.Contain("Member("), "the message must give the next listing call");
+            Assert.That(result.ErrorData?.Message, Does.Not.Contain("You MUST"), "the message must not use mandatory wording");
+        });
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "a not-found anchor must not write");
+    }
+
+    [Test]
+    public async Task Member_AddWithTypoContainer_SuggestsTypeAndWritesNothingAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var before = workspace.ReadText(FixtureRelativePath);
+
+        var result = await tools.MemberTool(
+            reason: "test typo container candidate outcome",
+            operation: MemberAction.addMember,
+            filePath: workspace.PathOf(FixtureRelativePath),
+            containerName: "AnchorTargt",
+            newMemberSource: "public int Added() => 3;");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.IsError, Is.True, "a typo container must be an error");
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+            Assert.That(result.ErrorData?.Message, Does.Contain("Did you mean 'AnchorTarget'"), "the similar type must be suggested");
+        });
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "a not-found container must not write");
+    }
+
+    [Test]
+    public async Task Member_AddWithUnknownContainer_ListsDeclaredTypesAndWritesNothingAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var before = workspace.ReadText(FixtureRelativePath);
+
+        var result = await tools.MemberTool(
+            reason: "test unknown container with no similar type outcome",
+            operation: MemberAction.addMember,
+            filePath: workspace.PathOf(FixtureRelativePath),
+            containerName: "ShippingLabelPrinter",
+            newMemberSource: "public int Added() => 3;");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.IsError, Is.True, "an unknown container must be an error");
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+            Assert.That(result.ErrorData?.Message, Does.Contain("No type declared in this file has a similar name"), "the message must say no similar type exists");
+            Assert.That(result.ErrorData?.Message, Does.Contain("GetFileOutline"), "the message must give the listing call");
+            Assert.That(result.ErrorData?.Message, Does.Contain("tell the user"), "the message must offer the report-it-does-not-exist option");
+        });
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "a not-found container must not write");
+    }
+
+    [Test]
     public async Task Member_AddWithPrefixedAnchorValue_TreatsValueAsLiteralNameAndWritesNothingAsync()
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));

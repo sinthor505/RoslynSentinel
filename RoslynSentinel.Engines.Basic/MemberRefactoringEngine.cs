@@ -2168,16 +2168,26 @@ public class MemberRefactoringEngine
     private static string BuildInsertAnchorNotFoundMessage(string anchorParam, string anchorName, string containerKind, string containerName, IReadOnlyList<string> anchorNames, int unnamedMemberCount)
     {
         const int listCap = 25;
-        var listed = anchorNames.Count == 0
+        var ranked = NameCandidates.Rank(anchorName, anchorNames, n => n);
+        var candidateNames = ranked.Select(r => r.Item).Distinct().ToList();
+        var orderedNames = candidateNames.Concat(anchorNames.Where(n => !candidateNames.Contains(n))).ToList();
+        var listed = orderedNames.Count == 0
             ? "none"
-            : string.Join(", ", anchorNames.Take(listCap)) + (anchorNames.Count > listCap ? $" (+{anchorNames.Count - listCap} more)" : string.Empty);
+            : string.Join(", ", orderedNames.Take(listCap)) + (orderedNames.Count > listCap ? $" (+{orderedNames.Count - listCap} more)" : string.Empty);
+        var similarNote = candidateNames.Count > 0
+            ? string.Concat(candidateNames.Select(c => $"Did you mean '{c}'? Retry with {anchorParam}: '{c}'. "))
+            : $"No member of {containerKind} '{containerName}' has a similar name to '{anchorName}'. ";
+        var notFoundNote = candidateNames.Count == 0
+            ? $" If '{anchorName}' is not among those members it does not exist in '{containerName}': tell the user so instead of anchoring on a different member."
+            : string.Empty;
         var unnamedNote = unnamedMemberCount > 0
             ? $" {unnamedMemberCount} member(s) have no matchable name (operators, indexers, events, delegates) and cannot be an anchor."
             : string.Empty;
         return $"Cannot edit: member '{anchorName}' ({anchorParam}) not found in {containerKind} '{containerName}'. "
             + $"Searched: the direct members of that {containerKind} by exact name ('{anchorName}' is taken as a literal member name, not a prefixed value such as 'after:Name'). "
             + $"Anchors available: {listed}.{unnamedNote} "
-            + $"Next: {ToolCallHint.Call("Member", ("operation", "view"), ("containerName", containerName))} lists its members with signatures; retry with one of them as {anchorParam}, or omit both anchors to append.";
+            + similarNote
+            + $"Next: {ToolCallHint.Call("Member", ("operation", "view"), ("containerName", containerName))} lists its members with signatures; retry with one of them as {anchorParam}, or omit both anchors to append.{notFoundNote}";
     }
 
     /// <summary>
