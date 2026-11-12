@@ -197,6 +197,105 @@ public class TranscriptResumeTests
         Assert.That(mismatches, Is.Zero);
     }
 
+    [Test]
+    public async Task ReplayKeptCallsDetailed_ReturnsOneEntryPerCallWithReplayedText()
+    {
+        var turns = new List<AgentTranscriptTurn>
+        {
+            Turn(1, "ReadFile", isError: false, resultJson: "{\"ok\":1}"),
+            Turn(2, "ReplaceSnippet", isError: true, resultJson: "{\"rejected\":2}"),
+        };
+
+        var replayed = await TranscriptResume.ReplayKeptCallsDetailedAsync(
+            turns,
+            (tool, _, _) => Task.FromResult(($"r:{tool}", tool == "ReplaceSnippet")),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(replayed, Has.Count.EqualTo(2));
+            Assert.That(replayed[0].RecordedResultText, Is.EqualTo("{\"ok\":1}"));
+            Assert.That(replayed[0].ReplayedResultText, Is.EqualTo("r:ReadFile"));
+            Assert.That(replayed[1].RecordedResultText, Is.EqualTo("{\"rejected\":2}"));
+            Assert.That(replayed[1].ReplayedResultText, Is.EqualTo("r:ReplaceSnippet"));
+            Assert.That(replayed.Any(call => call.Mismatch), Is.False);
+        });
+    }
+
+    [Test]
+    public async Task ReplayKeptCallsDetailed_FlagsDoctoredTranscript()
+    {
+        // Recorded as a success, but the replayed call is rejected: the entry must be flagged and logged.
+        var turns = new List<AgentTranscriptTurn> { Turn(1, "ReplaceSnippet", isError: false) };
+        var log = new List<string>();
+
+        var replayed = await TranscriptResume.ReplayKeptCallsDetailedAsync(
+            turns,
+            (_, _, _) => Task.FromResult((Rejection, true)),
+            CancellationToken.None,
+            log.Add);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(replayed, Has.Count.EqualTo(1));
+            Assert.That(replayed[0].Mismatch, Is.True);
+            Assert.That(log.Any(line => line.Contains("MISMATCH")), Is.True);
+        });
+    }
+
+    [Test]
+    public void ReplayMismatchReason_IsNullWithoutMismatches()
+    {
+        var replayed = new List<ReplayedCall>
+        {
+            new ReplayedCall(1, "ReadFile", false, false, "{}", "r:ReadFile"),
+        };
+
+        Assert.That(TranscriptResume.ReplayMismatchReason(replayed), Is.Null);
+    }
+
+    [Test]
+    public void ReplayMismatchReason_NamesFirstMismatch()
+    {
+        var replayed = new List<ReplayedCall>
+        {
+            new ReplayedCall(1, "ReadFile", false, false, "{}", "r:ReadFile"),
+            new ReplayedCall(2, "ReplaceSnippet", true, false, Rejection, "r:ReplaceSnippet"),
+            new ReplayedCall(3, "ReplaceSnippet", false, true, "{}", Rejection),
+        };
+
+        Assert.That(
+            TranscriptResume.ReplayMismatchReason(replayed),
+            Is.EqualTo("Replay mismatch: 2 of 3 replayed calls differ from the recording; first at turn 2 ReplaceSnippet (recorded IsError=True, replayed IsError=False)."));
+    }
+
+    [Test]
+    public async Task ReplayKeptCallsAsync_CountEqualsDetailedMismatches_OnDoctoredInput()
+    {
+        // Recorded: success, rejection, success. The fake always replays success, so only turn 2 differs.
+        var turns = new List<AgentTranscriptTurn>
+        {
+            Turn(1, "ReadFile", isError: false),
+            Turn(2, "ReplaceSnippet", isError: true),
+            Turn(3, "ReplaceSnippet", isError: false),
+        };
+
+        var detailed = await TranscriptResume.ReplayKeptCallsDetailedAsync(
+            turns,
+            (_, _, _) => Task.FromResult(("r", false)),
+            CancellationToken.None);
+        var counted = await TranscriptResume.ReplayKeptCallsAsync(
+            turns,
+            (_, _, _) => Task.FromResult(("r", false)),
+            CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(detailed.Count(call => call.Mismatch), Is.EqualTo(1));
+            Assert.That(counted, Is.EqualTo(detailed.Count(call => call.Mismatch)));
+        });
+    }
+
     // ---- results.csv row ----
 
     [Test]

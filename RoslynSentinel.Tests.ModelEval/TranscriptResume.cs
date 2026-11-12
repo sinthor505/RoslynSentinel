@@ -242,6 +242,7 @@ public static class TranscriptResume
                 .ToList(),
         }).ToList();
 
+    // TODO delegate to ReplayKeptCallsDetailedAsync once TranscriptResumeAgentTests moves to the detailed result.
     /// <summary>
     /// Re-executes every tool call of <paramref name="turns"/>, turn by turn and in recorded order, through
     /// <paramref name="callTool"/> (tool name, arguments JSON) so the fresh fixture's files (and the server's own
@@ -275,6 +276,64 @@ public static class TranscriptResume
         }
 
         return mismatches;
+    }
+
+    /// <summary>
+    /// Re-executes every tool call of <paramref name="turns"/> like <see cref="ReplayKeptCallsAsync"/> and returns one
+    /// <see cref="ReplayedCall"/> per recorded call, with the recorded and replayed result text and IsError flags.
+    /// This is the gate input: a scenario with any Mismatch is Inconclusive (step 8b). The older
+    /// <see cref="ReplayKeptCallsAsync"/> stays for the existing resume test and only counts.
+    /// </summary>
+    public static async Task<IReadOnlyList<ReplayedCall>> ReplayKeptCallsDetailedAsync(
+        IReadOnlyList<AgentTranscriptTurn> turns,
+        Func<string, string, CancellationToken, Task<(string ResultText, bool IsError)>> callTool,
+        CancellationToken cancellationToken,
+        Action<string>? log = null)
+    {
+        var replayed = new List<ReplayedCall>();
+        foreach (var turn in turns)
+        {
+            foreach (var recorded in turn.ToolCalls)
+            {
+                var (replayedText, replayedIsError) = await callTool(recorded.ToolName, recorded.ArgumentsJson, cancellationToken);
+                replayed.Add(new ReplayedCall(
+                    turn.TurnNumber,
+                    recorded.ToolName,
+                    recorded.IsError,
+                    replayedIsError,
+                    recorded.ResultJson,
+                    replayedText));
+                if (replayedIsError != recorded.IsError)
+                {
+                    log?.Invoke(
+                        $"*** MISMATCH at turn {turn.TurnNumber} {recorded.ToolName}: recorded IsError={recorded.IsError}, " +
+                        $"replay IsError={replayedIsError}. Fixture state may differ from the original run from here on.");
+                }
+                else
+                {
+                    log?.Invoke($"Replayed turn {turn.TurnNumber} {recorded.ToolName} (IsError={replayedIsError}, as recorded).");
+                }
+            }
+        }
+
+        return replayed;
+    }
+
+    /// <summary>
+    /// Null when no replayed call differs from the recording; otherwise a one-line reason naming the first mismatch.
+    /// </summary>
+    public static string? ReplayMismatchReason(IReadOnlyList<ReplayedCall> replayed)
+    {
+        var first = replayed.FirstOrDefault(call => call.Mismatch);
+        if (first is null)
+        {
+            return null;
+        }
+
+        int count = replayed.Count(call => call.Mismatch);
+        return $"Replay mismatch: {count} of {replayed.Count} replayed calls differ from the recording; " +
+            $"first at turn {first.TurnNumber} {first.ToolName} (recorded IsError={first.RecordedIsError}, " +
+            $"replayed IsError={first.ReplayedIsError}).";
     }
 
     /// <summary>
@@ -359,4 +418,19 @@ public static class TranscriptResume
             return a.ArgumentsJson == b.ArgumentsJson;
         }
     }
+}
+/// <summary>
+/// One kept tool call replayed through the fresh fixture: the recorded result beside what the server returned now.
+/// <see cref="Mismatch"/> is true when the replayed IsError flag differs from the recording.
+/// </summary>
+/// <param name="TurnNumber">Turn the recorded call belongs to.</param>
+/// <param name="ToolName">Recorded tool name.</param>
+/// <param name="RecordedIsError">IsError flag in the saved transcript.</param>
+/// <param name="ReplayedIsError">IsError flag returned by the replayed call.</param>
+/// <param name="RecordedResultText">Recorded result JSON from the saved transcript.</param>
+/// <param name="ReplayedResultText">Result text returned by the replayed call.</param>
+public sealed record ReplayedCall(int TurnNumber, string ToolName, bool RecordedIsError, bool ReplayedIsError, string RecordedResultText, string ReplayedResultText)
+{
+    /// <summary>True when the replayed IsError flag differs from the recorded one.</summary>
+    public bool Mismatch => RecordedIsError != ReplayedIsError;
 }

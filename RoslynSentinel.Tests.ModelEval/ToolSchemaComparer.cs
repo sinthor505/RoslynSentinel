@@ -90,7 +90,7 @@ public static class ToolSchemaComparer
             return (SchemaDifferenceKind.Structural, $"{tool}: {where} differs (capture commit {commit})");
         }
 
-        if (Canonicalise(recorded, true, null).ToJsonString() != Canonicalise(live, true, null).ToJsonString())
+        if (Canonicalise(recorded, true, null)?.ToJsonString() != Canonicalise(live, true, null)?.ToJsonString())
         {
             string level = RootDescription(recorded) != RootDescription(live) ? "tool-level" : "parameter-level";
             return (SchemaDifferenceKind.DescriptionOnly, $"{tool}: {level} schema description differs (capture commit {commit})");
