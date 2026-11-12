@@ -143,7 +143,8 @@ public class FileNotFoundCandidatesTests
         Assert.That(text, Does.Contain("No file in the solution has a similar name"));
         Assert.That(text, Does.Contain(ToolCallHint.Call("ListSolutionItems", ("kind", "all"))));
         Assert.That(text, Does.Contain("does not exist in this solution"));
-        Assert.That(text, Does.Contain($"{ToolCallHint.Call("CreateFile", ("filePath", MissingPath))} creates a new file at this path."));
+        Assert.That(text, Does.Not.Contain("CreateFile"), "CreateFile is not offered when no file has a similar name");
+        Assert.That(text, Does.Not.Contain("creates a new file"));
         Assert.That(text, Does.Contain("may since have been renamed or moved"));
         Assert.That(text, Does.Not.Contain("tell the user"));
         Assert.That(text, Does.Not.Contain("If your task is to create this file"));

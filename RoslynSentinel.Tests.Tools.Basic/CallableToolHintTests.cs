@@ -131,11 +131,13 @@ public class CallableToolHintTests
         Assert.That(unchanged.Message, Does.Not.Contain("tell the user"));
         Assert.That(unchanged.Message, Does.Contain("does not exist in this solution"));
 
-        Assert.That(unchanged.Message, Does.Contain("CreateFile("), "every tool callable: the create option is shown");
+        Assert.That(unchanged.Message, Does.Not.Contain("CreateFile"), "CreateFile is never offered in the no-candidate text, even with every tool callable");
+        Assert.That(unchanged.Message, Does.Contain("may since have been renamed or moved"));
 
         var onlyListing = WorkspaceReadNavigationImpl.BuildFileNotFoundError(solution, "C:\\x\\Missing.cs", name => name == "ListSolutionItems");
         Assert.That(onlyListing.Message, Does.Contain("ListSolutionItems("));
-        Assert.That(onlyListing.Message, Does.Not.Contain("CreateFile"), "CreateFile is not callable, so it is not named");
+        Assert.That(onlyListing.Message, Does.Not.Contain("CreateFile"), "CreateFile is never offered in the no-candidate text");
+        Assert.That(onlyListing.Message, Does.Contain("may since have been renamed or moved"));
     }
 
     // ---- WorkspaceFileEditImpl.BuildFileNotFoundError (ReadFile) ----

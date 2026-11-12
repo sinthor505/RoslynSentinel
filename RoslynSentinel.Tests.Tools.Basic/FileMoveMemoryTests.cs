@@ -237,7 +237,6 @@ public class FileMoveMemoryTests
         Assert.That(text, Is.EqualTo(
             $"File '{P("Calc.cs")}' was not found in the loaded solution (searched 3 project(s) by exact path, bare file name and similar file name; path comparison ignores case, so casing is not the cause). " +
             "No file in the solution has a similar name. " +
-            $"{ToolCallHint.Call("CreateFile", ("filePath", P("Calc.cs")))} creates a new file at this path. " +
             "A file read earlier under this name may since have been renamed or moved. " +
             $"{ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} lists every file in the solution. A file not in that list does not exist in this solution."));
     }

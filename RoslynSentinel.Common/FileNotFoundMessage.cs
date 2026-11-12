@@ -112,19 +112,14 @@ public static class FileNotFoundMessage
         return notFound + NoMatchFactsAndOptions(requestedPath, isCallable);
     }
 
-    // The facts and options that follow a "no file matches" statement: CreateFile creates the file (an option, named only when callable),
-    // a file read earlier may have been renamed or moved (a fact; the server records only its own moves, see movedToPath above), and
-    // ListSolutionItems lists every file (an option, named only when callable). Hints are built only when rendered.
+    // The facts and options that follow a "no file matches" statement: a file read earlier may have been renamed or moved (a fact; the
+    // server records only its own moves, see movedToPath above), and ListSolutionItems lists every file (an option, named only when
+    // callable). Hints are built only when rendered.
     // TODO remember server-side file renames (old path -> new path) and name the new path here instead of hedging.
     private static string NoMatchFactsAndOptions(string requestedPath, Func<string, bool>? isCallable)
     {
-        var text = string.Empty;
-        if (Callable(isCallable, "CreateFile"))
-        {
-            text += $"{ToolCallHint.Call("CreateFile", ("filePath", requestedPath))} creates a new file at this path. ";
-        }
-
-        text += "A file read earlier under this name may since have been renamed or moved.";
+        // CreateFile is deliberately not offered here: in ReplaceSnippetWrongFileNoMatch 5 of 9 failing samples created the missing file right after the option.
+        var text = "A file read earlier under this name may since have been renamed or moved.";
         if (Callable(isCallable, "ListSolutionItems"))
         {
             text += $" {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} lists every file in the solution. A file not in that list does not exist in this solution.";
