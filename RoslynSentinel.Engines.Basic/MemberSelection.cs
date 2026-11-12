@@ -235,13 +235,66 @@ public static class MemberSelection
 
         // The retry names the first overload of each ambiguous name and keeps every other requested entry as given.
         var retryNames = memberNames.Select(n => firstSignatureByName.TryGetValue(n, out var first) ? first : n).Distinct(StringComparer.Ordinal);
-        var retryArray = "[" + string.Join(", ", retryNames.Select(n => "\"" + n.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"")) + "]";
+        var retryArray = QuoteArray(retryNames);
         var retry = ToolCallHint.Next(toolName, string.Empty, ("memberNames", retryArray));
         var example = firstSignatureByName[overloaded[0].Name];
         return new ToolAmbiguousMatchException($"{string.Join(" ", descriptions)} A bare name selects every overload, so it is refused and nothing was {PastTense(verb)}. To {verb} one overload pass its signature in memberNames, for example \"{example}\"; listing every signature {verb}s the whole group. {retry}");
     }
 
     private static string PastTense(string verb) => verb.EndsWith('e') ? verb + "d" : verb + "ed";
+
+    private static string Gerund(string verb) => verb.EndsWith('e') ? verb.Substring(0, verb.Length - 1) + "ing" : verb + "ing";
+
+    // Quotes each name as a string literal and joins them into a bracketed array for a retry hint.
+    private static string QuoteArray(IEnumerable<string> names) =>
+        "[" + string.Join(", ", names.Select(n => "\"" + n.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"")) + "]";
+
+    // The name part of a member entry or printed signature: the text before '(' and before any type-parameter list.
+    private static string NameOf(string text)
+    {
+        var end = text.IndexOfAny(new[] { '(', '<' });
+        return (end < 0 ? text : text.Substring(0, end)).Trim();
+    }
+
+    // Available members whose name is similar to a missing entry come first (nearest first); the rest keep their order.
+    private static List<string> SimilarFirst(IEnumerable<string> available, IReadOnlyList<string> missing)
+    {
+        var list = available.ToList();
+        var similar = missing
+            .SelectMany(entry => NameCandidates.Rank(NameOf(entry), list, item => NameOf(item), int.MaxValue))
+            .GroupBy(r => r.Item, StringComparer.Ordinal)
+            .OrderBy(g => g.Min(r => r.Distance))
+            .Select(g => g.Key)
+            .ToList();
+        return similar.Concat(list.Where(item => !similar.Contains(item, StringComparer.Ordinal))).ToList();
+    }
+
+    // Not-found guidance: a 'Did you mean' per missing entry plus one prefilled retry; with no similar name for any
+    // missing entry, the no-match sentence and the report-it-does-not-exist option instead.
+    private static string BuildNotFoundHints(string[] memberNames, IReadOnlyList<string> missing, List<MemberDeclarationSyntax> members, string className, string toolName, string verb)
+    {
+        var names = members.SelectMany(m => DeclaredNames(m)).Distinct(StringComparer.Ordinal).ToList();
+        var topByEntry = new Dictionary<string, string>(StringComparer.Ordinal);
+        var didYouMean = new StringBuilder();
+        foreach (var entry in missing)
+        {
+            var ranked = NameCandidates.Rank(NameOf(entry), names, name => name);
+            if (ranked.Count > 0)
+            {
+                topByEntry[entry] = ranked[0].Item;
+                didYouMean.Append($" Did you mean '{ranked[0].Item}' for '{entry}'?");
+            }
+        }
+
+        if (topByEntry.Count == 0)
+        {
+            return $" No member of class '{className}' has a similar name to [{string.Join(", ", missing)}]. If a requested member is not in the found list (and the class is not partial), it does not exist in '{className}': tell the user so instead of {Gerund(verb)} a different member.";
+        }
+
+        var retryNames = memberNames.Select(n => topByEntry.TryGetValue(n, out var top) ? top : n).Distinct(StringComparer.Ordinal);
+        var retry = ToolCallHint.Next(toolName, string.Empty, ("memberNames", QuoteArray(retryNames)));
+        return didYouMean + " " + retry;
+    }
 
     /// <summary>
     /// Selects the class members named by memberNames, in declaration order (methods, properties, field declarations
@@ -284,7 +337,8 @@ public static class MemberSelection
         var result = members.Where(selected.Contains).ToList();
         if (result.Count == 0)
         {
-            throw new ToolNotFoundException($"None of the requested member(s) [{string.Join(", ", memberNames)}] were found in class '{className}' (found: [{string.Join(", ", DescribeAvailable(members))}]).");
+            // TODO no filePath reaches SelectMembers, so the no-candidate case cannot prefill GetFileOutline(filePath)
+            throw new ToolNotFoundException($"None of the requested member(s) [{string.Join(", ", memberNames)}] were found in class '{className}' (found: [{string.Join(", ", SimilarFirst(DescribeAvailable(members), missing))}]).{BuildNotFoundHints(memberNames, missing, members, className, toolName, verb)}");
         }
 
         // A requested entry that matches no member in this file is otherwise dropped silently while the rest moves (e.g. the
@@ -292,7 +346,8 @@ public static class MemberSelection
         // so the caller can copy one.
         if (missing.Count > 0)
         {
-            throw new ToolNotFoundException($"Requested member(s) [{string.Join(", ", missing)}] were not found in class '{className}' in this file (found: [{string.Join(", ", DescribeAvailable(members))}]). Nothing was {PastTense(verb)}. If the class is partial, the member may be declared in another part; pass that file's path.");
+            // TODO no filePath reaches SelectMembers, so the no-candidate case cannot prefill GetFileOutline(filePath)
+            throw new ToolNotFoundException($"Requested member(s) [{string.Join(", ", missing)}] were not found in class '{className}' in this file (found: [{string.Join(", ", SimilarFirst(DescribeAvailable(members), missing))}]). Nothing was {PastTense(verb)}. If the class is partial, the member may be declared in another part; pass that file's path.{BuildNotFoundHints(memberNames, missing, members, className, toolName, verb)}");
         }
 
         return result;
