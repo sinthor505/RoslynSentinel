@@ -1,6 +1,6 @@
 # Plan: Every not-found error ranks candidates, says plainly when none exist, and prefills one orientation call
 
-**Status:** APPROVED 2026-11-12. Outline approved and open decisions settled (Decision 3-8): inventory every not-found producer, share one edit-distance candidate helper in Common, bring the file and symbol lookups (then the bare literals) to a single standard, and prove it with LIVE reruns of the fault scenarios (target 6 of 10).
+**Status:** IN PROGRESS 2026-11-12. Step 2 and Step 3a-3b done (117d7507, 5bc6cc8e, 3d33d265); 3c and further wire-text changes on hold until the plan_scenario_eval_followups live baseline releases them.
 
 Related: [plan_scenario_eval_followups.md](./plan_scenario_eval_followups.md) (written in parallel: the stop-adherence scenario family and the seeded `RenameSymbolTypo` used in Step 6). Commit trailer for every slice: `Plan: plan_not_found_error_orientation` (the last slice adds `Closes:`).
 
@@ -238,6 +238,7 @@ Sketch of the two no-candidate texts (wording is the implementer's to refine; th
   distance; cap of 3; case-insensitive; empty input and a 1-2 character name (noise guard) return nothing.
   The `ApplyLoyaltyBonus` case is a negative test that decides the threshold question in Risks: if it returns a
   candidate the rule is too generous for solution-wide use and a stricter rule is added here, not later.
+- Done: 117d7507 (negative tests passed with the existing rule; not tightened).
 
 ### Step 3 - File-name candidates and the `FileNotFoundMessage` standard
 - Files: `RoslynSentinel.Common/DocumentLookup.cs` (`FindClosestPaths` `:276-288`, `TryGetDocument` `:255`),
@@ -271,6 +272,10 @@ Sketch of the two no-candidate texts (wording is the implementer's to refine; th
   existing `isCallable` and `declaringTypeFiles` parameters; `DocumentLookupResult.CandidatePaths` also feeds the
   Ambiguous branch) and builder tests; 3b move the 3 callers and update the pinned assertions; 3c consumer-path
   tests (`test-writer`).
+- Done: 3a 5bc6cc8e, 3b 3d33d265 (first wire-text change; the plan_scenario_eval_followups A/B baseline is pinned
+  at 5bc6cc8e, owner decision 2026-11-12). 3c HELD: `FileNotFoundConsumerPathTests.cs` written, uncommitted; the
+  ReplaceSnippet single/batch cases fail because the `ResolveFromWire` path guard (`WorkspaceFileEditImpl.cs:1164`,
+  batch `:1541`/`:1671`) returns "'filePath' could not be resolved." before the candidate lookup runs.
 
 ### Step 4 - Symbol-name candidates: Search(mode: symbol) and the docCommentId resolver
 - Files: new shared builder in `RoslynSentinel.Common` (for example `SymbolNotFoundDetail`, name open) that works
