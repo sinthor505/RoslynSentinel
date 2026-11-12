@@ -10,7 +10,7 @@ namespace RoslynSentinel.Common;
 /// <see cref="DeclineCount"/> and <see cref="LastDeclineReason"/> for every call of an ENABLED route that went to the CLI (a disabled route counts nothing). A decline is normal traffic and is never logged to stderr.
 /// </para>
 /// <para>
-/// Each outcome of an enabled route (taken or declined) is also appended as one JSON line to &lt;common git dir&gt;/roslynsentinel/commit-route.jsonl. The log survives server restarts; the append is best effort and never fails or changes a commit.
+/// Each outcome of an enabled route (taken or declined) is also appended as one JSON line to &lt;common git dir&gt;/roslynsentinel/commit-route.jsonl. The log survives server restarts; the append is best effort and never fails or changes a commit. A line of an enabled route also carries kind, pathCount, paths and pathsTruncated (see AppendOutcome), and a taken line carries ref and parent.
 /// </para>
 /// <para>
 /// Not reproduced, accepted: git's <c>gc --auto</c> after a commit (the next CLI commit still runs it), and the index file's refreshed stat data (a later <c>git status</c> refreshes it, see the CAS primitive).
@@ -36,10 +36,16 @@ internal sealed class InProcessCommitRoute
     private string? _lastDeclineReason;
 
     /// <summary>Test seam only: runs after the commit object exists and before the branch moves, to move the branch from outside (see <see cref="Libgit2GitReader.CommitWithCompareAndSwap"/>).</summary>
-    internal Action? BetweenCommitAndRefUpdate { get; init; }
+    internal Action? BetweenCommitAndRefUpdate
+    {
+        get; init;
+    }
 
     /// <summary>Test seam only: hook resolution, shell lookup and environment of the hook checks and the post-commit launch; null is the real repository and process.</summary>
-    internal GitHookOptions? HookOptions { get; init; }
+    internal GitHookOptions? HookOptions
+    {
+        get; init;
+    }
 
     /// <summary>Commits made in process.</summary>
     internal long TakenCount => Interlocked.Read(ref _takenCount);
@@ -66,12 +72,12 @@ internal sealed class InProcessCommitRoute
         }
     }
 
-    /// <summary>Counts one decline, keeps its reason and appends it to the commit-route log; the caller then runs the CLI path.</summary>
-    internal void RecordDecline(string reason, string workingDirectory)
+    /// <summary>Counts one decline, keeps its reason and appends it to the commit-route log (with the decision <paramref name="context"/> when given); the caller then runs the CLI path.</summary>
+    internal void RecordDecline(string reason, string workingDirectory, CommitRouteContext? context = null)
     {
         Interlocked.Increment(ref _declineCount);
         Volatile.Write(ref _lastDeclineReason, reason);
-        AppendOutcome(workingDirectory, "declined", commit: null, reason);
+        AppendOutcome(workingDirectory, "declined", commit: null, reason, context);
     }
 
     /// <summary>
@@ -141,13 +147,14 @@ internal sealed class InProcessCommitRoute
         storedMessage = null;
         CasCommitResult result;
         string finalMessage;
+        var context = new CommitRouteContext(listedPaths is { Count: > 0 } ? "only-paths" : "plain", listedPaths);
         try
         {
             var formatted = GitCommitMessage.FormatForRepository(workingDirectory, message, toolCallId, toolAgent);
             if (!formatted.IsFormatted)
             {
                 var declined = CasCommitResult.Declined($"message: {formatted.Detail}");
-                RecordDecline(declined.Detail!, workingDirectory);
+                RecordDecline(declined.Detail!, workingDirectory, context);
                 return declined;
             }
 
@@ -163,7 +170,7 @@ internal sealed class InProcessCommitRoute
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             var declined = CasCommitResult.Declined($"{ex.GetType().Name}: {ex.Message}");
-            RecordDecline(declined.Detail!, workingDirectory);
+            RecordDecline(declined.Detail!, workingDirectory, context);
             return declined;
         }
 
@@ -171,7 +178,7 @@ internal sealed class InProcessCommitRoute
         {
             // From here on nothing may throw or decline: the commit exists, and the CLI path would make a second one.
             Interlocked.Increment(ref _takenCount);
-            AppendOutcome(workingDirectory, "taken", result.CommitId, reason: null);
+            AppendOutcome(workingDirectory, "taken", result.CommitId, reason: null, context, result.ReferenceName, result.ParentId);
             storedMessage = finalMessage;
             LaunchPostCommit(workingDirectory);
             return result;
@@ -185,15 +192,17 @@ internal sealed class InProcessCommitRoute
             CasCommitOutcome.NothingToCommit => "nothing to commit; the CLI words the refusal.",
             _ => $"libgit2 failed: {result.Detail}",
         };
-        RecordDecline(declineReason, workingDirectory);
+        RecordDecline(declineReason, workingDirectory, context);
         return result;
     }
 
     /// <summary>
-    /// Appends one JSON line (utc, outcome, commit and reason when not null, pid) to &lt;common git dir&gt;/roslynsentinel/commit-route.jsonl, creating the folder. The common git directory is
+    /// Appends one JSON line (utc, outcome, commit and reason when not null, pid) to &lt;common git dir&gt;/roslynsentinel/commit-route.jsonl, creating the folder. When <paramref name="context"/>
+    /// is given, the line also carries kind, pathCount (null for a whole-index commit), paths (the first 20, each cut at 200 characters) and pathsTruncated (true only when something was cut or dropped);
+    /// a taken line also carries ref and parent from <paramref name="referenceName"/> and <paramref name="parentId"/>. The common git directory is
     /// the one the hook resolver reads (a linked worktree writes to its main repository). Best effort: every exception is ignored, and no repository means no line.
     /// </summary>
-    private static void AppendOutcome(string workingDirectory, string outcome, string? commit, string? reason)
+    private static void AppendOutcome(string workingDirectory, string outcome, string? commit, string? reason, CommitRouteContext? context = null, string? referenceName = null, string? parentId = null)
     {
         try
         {
@@ -203,10 +212,28 @@ internal sealed class InProcessCommitRoute
                 return;
             }
 
+            const int maxLoggedPaths = 20;
+            const int maxLoggedPathLength = 200;
+            var listed = context?.Paths;
+            var paths = listed?.Take(maxLoggedPaths).Select(p => p.Length > maxLoggedPathLength ? p[..maxLoggedPathLength] : p).ToArray();
+            bool? pathsTruncated = (listed is not null && (listed.Count > maxLoggedPaths || listed.Any(p => p.Length > maxLoggedPathLength))) ? true : null;
             var folder = Path.Combine(commonDirectory, "roslynsentinel");
             Directory.CreateDirectory(folder);
             var line = System.Text.Json.JsonSerializer.Serialize(
-                new { utc = DateTimeOffset.UtcNow.ToString("O"), outcome, commit, reason, pid = Environment.ProcessId },
+                new
+                {
+                    utc = DateTimeOffset.UtcNow.ToString("O"),
+                    outcome,
+                    commit,
+                    reason,
+                    pid = Environment.ProcessId,
+                    kind = context?.Kind,
+                    pathCount = listed?.Count,
+                    paths,
+                    pathsTruncated,
+                    @ref = referenceName,
+                    parent = parentId,
+                },
                 // Relaxed escaping keeps quotes and '+' readable in reasons; the file is a local log, never embedded in HTML.
                 new System.Text.Json.JsonSerializerOptions
                 {
@@ -237,3 +264,6 @@ internal sealed class InProcessCommitRoute
         }
     }
 }
+
+/// <summary>The decision context of one commit-route log line: the requested kind (plain, only-paths or amend) and the listed paths (null for a whole-index commit).</summary>
+internal sealed record CommitRouteContext(string Kind, IReadOnlyList<string>? Paths);

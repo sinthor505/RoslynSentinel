@@ -39,12 +39,15 @@ internal enum CasCommitOutcome
 /// Result of <see cref="Libgit2GitReader.CommitWithCompareAndSwap"/>. <see cref="CommitId"/> is set for <see cref="CasCommitOutcome.Committed"/>;
 /// <see cref="ExpectedTip"/> and <see cref="ActualTip"/> (null when the ref did not exist) for <see cref="CasCommitOutcome.BranchMoved"/>;
 /// <see cref="Detail"/> holds the reason or libgit2's own error text for every outcome but Committed and NothingToCommit.
+/// <see cref="ReferenceName"/> and <see cref="ParentId"/> are set for <see cref="CasCommitOutcome.Committed"/>: the full ref the compare-and-swap moved (HEAD when detached)
+/// and the tip the commit was built on (null for an unborn branch).
 /// </summary>
-internal sealed record CasCommitResult(CasCommitOutcome Outcome, string? CommitId = null, string? ExpectedTip = null, string? ActualTip = null, string? Detail = null)
+internal sealed record CasCommitResult(CasCommitOutcome Outcome, string? CommitId = null, string? ExpectedTip = null, string? ActualTip = null, string? Detail = null, string? ReferenceName = null, string? ParentId = null)
 {
     internal bool IsCommitted => Outcome == CasCommitOutcome.Committed;
 
-    internal static CasCommitResult Committed(string commitId) => new(CasCommitOutcome.Committed, CommitId: commitId);
+    internal static CasCommitResult Committed(string commitId, string? referenceName = null, string? parentId = null) =>
+        new(CasCommitOutcome.Committed, CommitId: commitId, ReferenceName: referenceName, ParentId: parentId);
 
     internal static CasCommitResult BranchMoved(string? expectedTip, string? actualTip, string detail) =>
         new(CasCommitOutcome.BranchMoved, ExpectedTip: expectedTip, ActualTip: actualTip, Detail: detail);

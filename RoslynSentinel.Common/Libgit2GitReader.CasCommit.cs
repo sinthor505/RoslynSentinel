@@ -144,7 +144,7 @@ internal sealed partial class Libgit2GitReader
             var (code, text) = Libgit2Native.CompareAndSwapReference(gitDirectory, referenceName, commit.Id.RawId, expectedOldId, reflogMessage);
             return code switch
             {
-                0 => CasCommitResult.Committed(commit.Sha),
+                0 => CasCommitResult.Committed(commit.Sha, referenceName, tip?.Sha),
                 Libgit2Native.ErrorModified or Libgit2Native.ErrorNotFound => CasCommitResult.BranchMoved(tip?.Sha, CurrentTip(repo, referenceName), text),
                 Libgit2Native.ErrorLocked => CasCommitResult.LockContention(text),
                 _ => CasCommitResult.Failed($"libgit2 error {code}: {text}"),
