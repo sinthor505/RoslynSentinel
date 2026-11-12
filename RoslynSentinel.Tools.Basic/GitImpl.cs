@@ -2851,18 +2851,24 @@ public class GitImpl : IGitOperations
                 args.AddRange(parsedPaths!);
             }
 
-            // nameOnly with staged or refA..refB: the file list is served by the seam (libgit2, git CLI as fallback). Everything else stays on the git CLI:
+            // staged or refA..refB: the file list (nameOnly) and the patch text (neither nameOnly nor stat) are served by the seam (libgit2, git CLI as fallback;
+            // the composite reader declines to the CLI for every patch whose text libgit2 would not reproduce byte for byte). Everything else stays on the git CLI:
             //  - working and a single ref compare with working-tree files: libgit2's index-to-workdir diff lists a stat-dirty file whose only difference is EOL
             //    conversion (core.autocrlf, .gitattributes) as modified where git lists nothing, and its tree-to-workdir diff has no index awareness;
-            //  - stat and the patch: libgit2's Patch and DiffStats do not reproduce git's stat graph widths, abbreviated index lines, rename headers, no-newline
-            //    markers, binary notes or hunk-header function context byte for byte, and a patch writer is not worth building.
+            //  - stat: libgit2's DiffStats does not reproduce git's stat graph widths.
             // A null answer re-runs the command below so git's own error text is what the caller sees.
             var nameStatus = nameOnly && IsSeamDiffTarget(target)
                 ? await Task.Run(() => _gitReader.GetNameStatus(gitRoot, target, pathLimit, GitProcessTimeout), cancellationToken)
                 : null;
+            var patchText = !nameOnly && !stat && IsSeamDiffTarget(target)
+                ? await Task.Run(() => _gitReader.GetPatchText(gitRoot, target, pathLimit, GitProcessTimeout), cancellationToken)
+                : null;
             var diffRaw = nameStatus is not null
                 ? new GitRawResult { ExitCode = 0, Stdout = FormatNameStatus(nameStatus) }
-                : await RunGitAsync(gitRoot, [.. args], cancellationToken);
+                : patchText is not null
+                    // RejoinLines: the text must be what RunGitAsync would have returned for the same git output.
+                    ? new GitRawResult { ExitCode = 0, Stdout = RejoinLines(patchText) }
+                    : await RunGitAsync(gitRoot, [.. args], cancellationToken);
 
             if (diffRaw.ExitCode != 0)
             {
@@ -2931,14 +2937,23 @@ public class GitImpl : IGitOperations
                 pathLimit = parsedPaths;
             }
 
-            // nameOnly: the file list is served by the seam, as for diff. stat and the patch stay on the git CLI for the reasons given in DiffAsync.
+            // nameOnly: the file list is served by the seam, as for diff; so is the patch (neither nameOnly nor stat), with the git CLI below as fallback when the
+            // reader declines. Only stat stays on the git CLI, for the reason given in DiffAsync.
             var nameStatus = nameOnly
                 ? await Task.Run(() => _gitReader.GetCommitNameStatus(gitRoot, target, pathLimit, GitProcessTimeout), cancellationToken)
+                : null;
+            var patchText = !nameOnly && !stat
+                ? await Task.Run(() => _gitReader.GetCommitPatchText(gitRoot, target, pathLimit, GitProcessTimeout), cancellationToken)
                 : null;
             GitRawResult diffRaw;
             if (nameStatus is not null)
             {
                 diffRaw = new GitRawResult { ExitCode = 0, Stdout = FormatNameStatus(nameStatus) };
+            }
+            else if (patchText is not null)
+            {
+                // RejoinLines: the text must be what RunGitAsync would have returned for the same git output.
+                diffRaw = new GitRawResult { ExitCode = 0, Stdout = RejoinLines(patchText) };
             }
             else
             {

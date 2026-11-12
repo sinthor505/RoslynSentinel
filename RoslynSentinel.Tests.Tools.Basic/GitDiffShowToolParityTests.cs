@@ -14,8 +14,9 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// throwaway repos and asserts the response DTOs serialize identically. Covered: the diff name-status list (nameOnly) for working, staged, a ref and a range, the
 /// name-status list of show, and the show header (hash, author, date, message). A case libgit2 declines (renames, submodules, conflicts, an annotated tag, a
 /// configured diff.renames and so on) goes through the production composite: the test asserts the CLI answered and that its DTO equals the CLI-only one. The
-/// stat text and the patch are not covered by a parity claim because they stay on the CLI (see the comment at the call site in GitImpl.DiffAsync); one test pins
-/// that they never reach the libgit2 reader.
+/// patch text of staged, refA..refB and show is served by libgit2 where it equals the CLI's (the declined cases, a rename or an empty-file add for example, are
+/// answered by the CLI and compared); the stat text and the working-tree comparisons stay on the CLI (see the comment at the call site in GitImpl.DiffAsync) and
+/// tests pin that they never reach the libgit2 reader.
 /// </summary>
 // KNOWN FLAKE on full/parallel runs (spawns git): disregard a failure here when the change did not touch process spawning; re-run the class alone first.
 [TestFixture]
@@ -1001,7 +1002,7 @@ public class GitDiffShowToolParityTests
     }
 
     [Test]
-    public async Task Show_StatAndPatch_ReachTheCliAndNeverTheNameStatusReadAsync()
+    public async Task Show_Stat_ReachesTheCliAndNeverTheNameStatusOrPatchReadAsync()
     {
         CommitBaseline();
         Write(_repo, "a.txt", "changed\n");
@@ -1009,24 +1010,66 @@ public class GitDiffShowToolParityTests
         var composite = new FallbackGitReader(new Libgit2GitReader(), new CliGitReader(), _ => { });
 
         var stat = await Show(composite, _repo, "HEAD", null, nameOnly: false, stat: true);
-        var patch = await Show(composite, _repo, "HEAD", null, nameOnly: false, stat: false);
         var viaCliStat = await Show(new CliGitReader(), _repo, "HEAD", null, nameOnly: false, stat: true);
-        var viaCliPatch = await Show(new CliGitReader(), _repo, "HEAD", null, nameOnly: false, stat: false);
 
         Assert.Multiple(() =>
         {
             Assert.That(stat.Diff, Does.Contain("a.txt").And.Contain("1 file changed"));
-            Assert.That(patch.Diff, Does.StartWith("diff --git a/a.txt b/a.txt"));
             Assert.That(Serialize(stat), Is.EqualTo(Serialize(viaCliStat)));
-            Assert.That(Serialize(patch), Is.EqualTo(Serialize(viaCliPatch)));
-            Assert.That(composite.Libgit2Count, Is.EqualTo(2), "only the header was read through libgit2, once per call");
+            Assert.That(composite.Libgit2Count, Is.EqualTo(1), "only the header was read through libgit2");
             Assert.That(composite.CliFallbackCount, Is.Zero);
-            Assert.That(composite.DeclineCount, Is.Zero, "stat and patch are never asked of the reader, so nothing was declined");
+            Assert.That(composite.DeclineCount, Is.Zero, "stat is never asked of the reader, so nothing was declined");
         });
     }
 
     [Test]
-    public async Task Diff_StatAndPatch_NeverReachTheReaderAsync()
+    public async Task Show_Patch_InTheNormalEnvironment_IsServedByLibgit2NotTheFallbackAsync()
+    {
+        CommitBaseline();
+        Write(_repo, "a.txt", "changed\n");
+        CommitAll(_repo, "change a");
+        var composite = new FallbackGitReader(new Libgit2GitReader(), new CliGitReader(), _ => { });
+
+        var patch = await Show(composite, _repo, "HEAD", null, nameOnly: false, stat: false);
+        var viaCliPatch = await Show(new CliGitReader(), _repo, "HEAD", null, nameOnly: false, stat: false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(patch.Diff, Does.StartWith("diff --git a/a.txt b/a.txt"));
+            Assert.That(Serialize(patch), Is.EqualTo(Serialize(viaCliPatch)));
+            Assert.That(composite.FirstFallbackReason, Is.Null, "libgit2 must serve this read; a CLI answer means a silent fallback");
+            Assert.That(composite.CliFallbackCount, Is.Zero);
+            Assert.That(composite.DeclineCount, Is.Zero, "libgit2 must serve this read; a decline would hand it to the CLI");
+            Assert.That(composite.Libgit2Count, Is.EqualTo(2), "the show header and the patch text");
+            Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Libgit2));
+        });
+    }
+
+    [Test]
+    public async Task Show_PatchOfAnEmptyFileAdd_IsDeclinedAndAnsweredByTheCliAsync()
+    {
+        CommitBaseline();
+        Write(_repo, "empty.txt", "");
+        CommitAll(_repo, "add an empty file");
+        var composite = new FallbackGitReader(new Libgit2GitReader(), new CliGitReader(), _ => { });
+
+        var patch = await Show(composite, _repo, "HEAD", null, nameOnly: false, stat: false);
+        var viaCliPatch = await Show(new CliGitReader(), _repo, "HEAD", null, nameOnly: false, stat: false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(patch.IsError, Is.False);
+            Assert.That(patch.Diff, Does.StartWith("diff --git a/empty.txt b/empty.txt"));
+            Assert.That(Serialize(patch), Is.EqualTo(Serialize(viaCliPatch)));
+            Assert.That(composite.DeclineCount, Is.EqualTo(1), "libgit2 declines an empty-file add (failure reason: " + composite.FirstFallbackReason + ")");
+            Assert.That(composite.LastDeclineReason, Is.Not.Null.And.Not.Empty);
+            Assert.That(composite.CliFallbackCount, Is.Zero, "a planned decline is not a failure");
+            Assert.That(composite.FirstFallbackReason, Is.Null);
+        });
+    }
+
+    [Test]
+    public async Task Diff_Stat_AndWorkingTreePatch_NeverReachTheReaderAsync()
     {
         CommitBaseline();
         Write(_repo, "a.txt", "changed\n");
@@ -1034,14 +1077,72 @@ public class GitDiffShowToolParityTests
 
         var stat = await Diff(composite, _repo, "working", null, nameOnly: false, stat: true);
         var patch = await Diff(composite, _repo, "working", null, nameOnly: false, stat: false);
+        RunGit(_repo, "add", "a.txt");
+        var stagedStat = await Diff(composite, _repo, "staged", null, nameOnly: false, stat: true);
 
         Assert.Multiple(() =>
         {
             Assert.That(stat.Diff, Does.Contain("1 file changed"));
             Assert.That(patch.Diff, Does.Contain("+changed"));
+            Assert.That(stagedStat.Diff, Does.Contain("1 file changed"), "stat of a seam target stays on the CLI too");
             Assert.That(composite.Libgit2Count, Is.Zero);
             Assert.That(composite.CliFallbackCount, Is.Zero);
             Assert.That(composite.DeclineCount, Is.Zero);
+        });
+    }
+
+    [Test]
+    public async Task Diff_Patch_StagedAndRange_InTheNormalEnvironment_AreServedByLibgit2NotTheFallbackAsync()
+    {
+        CommitBaseline();
+        RunGit(_repo, "branch", "side");
+        Write(_repo, "a.txt", "second\n");
+        CommitAll(_repo, "second");
+        Write(_repo, "b.txt", "staged change\n");
+        RunGit(_repo, "add", "b.txt");
+        var composite = new FallbackGitReader(new Libgit2GitReader(), new CliGitReader(), _ => { });
+
+        var staged = await Diff(composite, _repo, "staged", null, nameOnly: false, stat: false);
+        var range = await Diff(composite, _repo, "side..HEAD", null, nameOnly: false, stat: false);
+        var stagedWithPaths = await Diff(composite, _repo, "staged", "[\"b.txt\"]", nameOnly: false, stat: false);
+        var viaCliStaged = await Diff(new CliGitReader(), _repo, "staged", null, nameOnly: false, stat: false);
+        var viaCliRange = await Diff(new CliGitReader(), _repo, "side..HEAD", null, nameOnly: false, stat: false);
+        var viaCliStagedWithPaths = await Diff(new CliGitReader(), _repo, "staged", "[\"b.txt\"]", nameOnly: false, stat: false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(staged.Diff, Does.StartWith("diff --git a/b.txt b/b.txt"));
+            Assert.That(range.Diff, Does.StartWith("diff --git a/a.txt b/a.txt"));
+            Assert.That(Serialize(staged), Is.EqualTo(Serialize(viaCliStaged)));
+            Assert.That(Serialize(range), Is.EqualTo(Serialize(viaCliRange)));
+            Assert.That(Serialize(stagedWithPaths), Is.EqualTo(Serialize(viaCliStagedWithPaths)));
+            Assert.That(composite.FirstFallbackReason, Is.Null, "libgit2 must serve these reads; a CLI answer means a silent fallback");
+            Assert.That(composite.CliFallbackCount, Is.Zero);
+            Assert.That(composite.DeclineCount, Is.Zero, "libgit2 must serve these reads; a decline would hand them to the CLI");
+            Assert.That(composite.Libgit2Count, Is.EqualTo(3), "one patch read per call");
+            Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Libgit2));
+        });
+    }
+
+    [Test]
+    public async Task Diff_PatchOfAStagedRename_IsDeclinedAndAnsweredByTheCliAsync()
+    {
+        CommitBaseline();
+        RunGit(_repo, "mv", "a.txt", "renamed.txt");
+        var composite = new FallbackGitReader(new Libgit2GitReader(), new CliGitReader(), _ => { });
+
+        var patch = await Diff(composite, _repo, "staged", null, nameOnly: false, stat: false);
+        var viaCliPatch = await Diff(new CliGitReader(), _repo, "staged", null, nameOnly: false, stat: false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(patch.IsError, Is.False);
+            Assert.That(patch.Diff, Does.Contain("rename from a.txt").And.Contain("rename to renamed.txt"));
+            Assert.That(Serialize(patch), Is.EqualTo(Serialize(viaCliPatch)));
+            Assert.That(composite.DeclineCount, Is.EqualTo(1), "libgit2 declines a rename (failure reason: " + composite.FirstFallbackReason + ")");
+            Assert.That(composite.LastDeclineReason, Is.Not.Null.And.Not.Empty);
+            Assert.That(composite.CliFallbackCount, Is.Zero, "a planned decline is not a failure");
+            Assert.That(composite.FirstFallbackReason, Is.Null);
         });
     }
 
