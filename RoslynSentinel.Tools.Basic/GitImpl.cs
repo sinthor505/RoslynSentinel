@@ -719,19 +719,26 @@ public class GitImpl : IGitOperations
     }
 
     /// <summary>
-    /// Reads one git config value (action=get). Set and unset are not implemented yet. Keys that can hold
-    /// credentials, and URL values that carry userinfo, are refused without returning the value.
+    /// Reads one git config value (action=get), or sets or unsets one writable key in the repository's local
+    /// config (action=set or unset). Keys that can hold credentials, and URL values that carry userinfo, are
+    /// refused without returning the value.
     /// </summary>
     public async Task<GitConfigResult> ConfigAsync(
         string gitRoot, string? action, string? key, string? value, CancellationToken cancellationToken)
     {
         try
         {
-            // TODO Step 10b: set and unset
+            if (string.Equals(action, "set", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(action, "unset", StringComparison.OrdinalIgnoreCase))
+            {
+                var writeAction = string.Equals(action, "set", StringComparison.OrdinalIgnoreCase) ? "set" : "unset";
+                return await ConfigWriteAsync(gitRoot, writeAction, key, value, cancellationToken);
+            }
+
             if (!string.Equals(action, "get", StringComparison.OrdinalIgnoreCase))
             {
                 return ConfigFailure(action ?? "", GitErrorCodes.ActionRequired,
-                    $"operation=config needs action to be one of: get (got {action ?? "none"}). Nothing was changed.",
+                    $"operation=config needs action to be one of: get, set, unset (got {action ?? "none"}). Nothing was changed.",
                     $"Pass action, e.g. {ToolCallHint.Call("GitRemote", ("operation", "config"), ("action", "get"), ("key", "user.name"))}.");
             }
 
@@ -778,6 +785,116 @@ public class GitImpl : IGitOperations
         {
             return UnexpectedFailure<GitConfigResult>(ex, "config");
         }
+    }
+
+    /// <summary>
+    /// Sets or unsets one writable key in the repository's local config. Reads the effective value before and
+    /// after the write, so the result reports what git reads back rather than the requested value.
+    /// </summary>
+    private async Task<GitConfigResult> ConfigWriteAsync(
+        string gitRoot, string action, string? key, string? value, CancellationToken cancellationToken)
+    {
+        var keyError = ValidateConfigKey(key);
+        if (keyError is not null)
+            return ConfigFailure(action, GitErrorCodes.InvalidName, keyError.Replace("Nothing was read.", "Nothing was changed."),
+                "Valid forms by example: user.name, branch.main.remote.");
+
+        var writeKey = key!;
+        if (!IsWritableConfigKey(writeKey))
+            return ConfigFailure(action, GitErrorCodes.Refused,
+                $"Config key '{writeKey}' is not one this operation writes. Nothing was changed.",
+                "Writable keys: roslynsentinel.*, user.name, user.email, core.autocrlf, core.eol, core.safecrlf, core.longpaths, pull.rebase, push.default, init.defaultBranch, branch.<name>.remote, branch.<name>.merge, branch.<name>.rebase. The value of any other key can be read with action=get.");
+
+        if (action == "set")
+        {
+            if (value is null)
+                return ConfigFailure(action, GitErrorCodes.ActionRequired, "action=set needs value (got none). Nothing was changed.",
+                    $"Pass value, e.g. {ToolCallHint.Call("GitRemote", ("operation", "config"), ("action", "set"), ("key", writeKey), ("value", "true"))}.");
+            if (value.Contains('\0'))
+                return ConfigFailure(action, GitErrorCodes.InvalidName,
+                    "The config value contains a NUL character, which git cannot store. Nothing was changed.",
+                    "Pass the value without the NUL character.");
+        }
+
+        var before = await Task.Run(() => _gitReader.GetConfigValue(gitRoot, writeKey, GitProcessTimeout), cancellationToken);
+
+        if (action == "unset")
+        {
+            if (before is null)
+                return new GitConfigResult
+                {
+                    Action = action,
+                    Key = writeKey,
+                    Value = null,
+                    PreviousValue = null,
+                    Changed = false,
+                    Note = $"Key '{writeKey}' is not set. Nothing was changed.",
+                };
+
+            var unset = await RunGitAsync(gitRoot, ["config", "--local", "--unset", "--", writeKey], cancellationToken);
+            // Exit 5: the key is not in this repository's local file; the value comes from the global or system file.
+            if (unset.ExitCode == 5)
+                return new GitConfigResult
+                {
+                    Action = action,
+                    Key = writeKey,
+                    Value = before,
+                    PreviousValue = before,
+                    Changed = false,
+                    Note = $"Key '{writeKey}' is set in another scope (global or system), not in this repository's local config. Nothing was changed.",
+                };
+            if (unset.ExitCode != 0)
+                return ConfigFailure(action, GitErrorCodes.Fallback,
+                    $"git config exited with code {unset.ExitCode}. Nothing further was changed.",
+                    "The key and its current value can be read with action=get.");
+        }
+        else
+        {
+            // The -- guards a value that starts with '-'.
+            var set = await RunGitAsync(gitRoot, ["config", "--local", "--", writeKey, value!], cancellationToken);
+            if (set.ExitCode != 0)
+                return ConfigFailure(action, GitErrorCodes.Fallback,
+                    $"git config exited with code {set.ExitCode}. Nothing further was changed.",
+                    "The key and its current value can be read with action=get.");
+        }
+
+        var after = await Task.Run(() => _gitReader.GetConfigValue(gitRoot, writeKey, GitProcessTimeout), cancellationToken);
+        string? note = null;
+        if (action == "set" && !string.Equals(after, value, StringComparison.Ordinal))
+            note = $"git reads back '{after}' for key '{writeKey}'.";
+        else if (action == "unset" && after is not null)
+            note = $"Key '{writeKey}' is still set in another scope (global or system); the local entry was removed.";
+
+        return new GitConfigResult
+        {
+            Action = action,
+            Key = writeKey,
+            Value = after,
+            PreviousValue = before,
+            Changed = !string.Equals(before, after, StringComparison.Ordinal),
+            Note = note,
+        };
+    }
+
+    /// <summary>True when the validated key is one the config write operation may set or unset.</summary>
+    private static bool IsWritableConfigKey(string key)
+    {
+        var first = key.IndexOf('.');
+        var last = key.LastIndexOf('.');
+        var section = key[..first];
+        var subsection = last > first ? key[(first + 1)..last] : "";
+        var name = key[(last + 1)..];
+        if (string.Equals(section, "roslynsentinel", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (string.Equals(section, "branch", StringComparison.OrdinalIgnoreCase))
+            return subsection.Length > 0
+                && (string.Equals(name, "remote", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(name, "merge", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(name, "rebase", StringComparison.OrdinalIgnoreCase));
+        if (subsection.Length > 0)
+            return false;
+        string[] writable = ["user.name", "user.email", "core.autocrlf", "core.eol", "core.safecrlf", "core.longpaths", "pull.rebase", "push.default", "init.defaultbranch"];
+        return writable.Contains($"{section}.{name}", StringComparer.OrdinalIgnoreCase);
     }
 
     private static GitConfigResult ConfigFailure(string action, string kind, string error, string detail) => new()
