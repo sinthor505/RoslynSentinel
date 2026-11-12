@@ -45,6 +45,41 @@ public class ResumeScenariosTests
         Assert.That(ScenarioRegistry.All, Does.Contain(ResumeScenarios.StaleCallerEditAfterRename));
     }
 
+    [Test]
+    public void StaleWorkspaceAfterRename_DefinitionIsResumeFaultedRecoverScenario()
+    {
+        var scenario = ResumeScenarios.StaleWorkspaceAfterRename;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(scenario.Id, Is.EqualTo(ResumeScenarios.StaleWorkspaceAfterRenameId));
+            Assert.That(scenario.ScenarioType, Is.EqualTo(4));
+            Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.Recover));
+            Assert.That(scenario.ResumeTranscript, Is.EqualTo(CaptureFileName));
+            Assert.That(scenario.ResumeKeepTurns, Is.EqualTo(11));
+            Assert.That(scenario.ResumeFaultTool, Is.EqualTo("ReplaceSnippet"));
+            Assert.That(scenario.ResumeFaultSeeded, Is.False);
+            Assert.That(scenario.ResumeFaultArguments, Does.Contain("{SOLUTION}"));
+        });
+
+        using var arguments = System.Text.Json.JsonDocument.Parse(scenario.ResumeFaultArguments!);
+        Assert.Multiple(() =>
+        {
+            Assert.That(arguments.RootElement.GetProperty("filePath").ValueKind, Is.EqualTo(System.Text.Json.JsonValueKind.String));
+            Assert.That(arguments.RootElement.GetProperty("oldContent").ValueKind, Is.EqualTo(System.Text.Json.JsonValueKind.String));
+            Assert.That(arguments.RootElement.GetProperty("newContent").ValueKind, Is.EqualTo(System.Text.Json.JsonValueKind.String));
+        });
+    }
+
+    [Test]
+    public void Registry_FindsStaleWorkspaceAfterRename()
+    {
+        var scenario = ScenarioRegistry.Find(ResumeScenarios.StaleWorkspaceAfterRenameId.ToUpperInvariant());
+
+        Assert.That(scenario, Is.SameAs(ResumeScenarios.StaleWorkspaceAfterRename));
+        Assert.That(ScenarioRegistry.All, Does.Contain(ResumeScenarios.StaleWorkspaceAfterRename));
+    }
+
     // ---- Capture file ----
 
     [Test]

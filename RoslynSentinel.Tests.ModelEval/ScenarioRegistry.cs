@@ -19,6 +19,7 @@ public static class ScenarioRegistry
         FaultScenarios.ReplaceSnippetWrongFileNearMatch,
         FaultScenarios.ReplaceSnippetWrongFileNoMatch,
         ResumeScenarios.StaleCallerEditAfterRename,
+        ResumeScenarios.StaleWorkspaceAfterRename,
     ];
 
     /// <summary>All registered scenarios, in declaration order.</summary>

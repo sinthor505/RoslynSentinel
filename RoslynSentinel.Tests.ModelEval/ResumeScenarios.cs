@@ -12,6 +12,8 @@ public static class ResumeScenarios
 {
     public const string StaleCallerEditAfterRenameId = "StaleCallerEditAfterRename";
 
+    public const string StaleWorkspaceAfterRenameId = "StaleWorkspaceAfterRename";
+
     // Declared before StaleCallerEditAfterRename: static field initializers run in textual order.
     private static readonly Regex InterfaceTypedCalculatorField = new(@"\bIOrderPricingCalculator\s+_calculator\b", RegexOptions.CultureInvariant);
     private static readonly Regex ConcreteTypedCalculatorField = new(@"\bOrderPricingCalculator\s+_calculator\b", RegexOptions.CultureInvariant);
@@ -32,6 +34,28 @@ public static class ResumeScenarios
         FixedBy: "",
         ResumeTranscript: "stale-caller-edit-after-rename.json",
         ResumeKeepTurns: 11);
+
+    public static readonly ScenarioDefinition StaleWorkspaceAfterRename = new(
+        Id: StaleWorkspaceAfterRenameId,
+        ScenarioType: 4,
+        FaultKind: "stale-workspace: after the replay OrderCheckout.cs has its calculator field initializer rewritten (new() -> new OrderPricingCalculator()) by an edit the conversation never shows; a ReplaceSnippet whose oldContent copies the field line from the earlier ReadFile comes back NotFound",
+        ToolUnderTest: "ReplaceSnippet",
+        StagedFiles: ScenarioFixtureFiles.ChainStartingFiles,
+        PromptTemplate: "",
+        TurnCap: 8,
+        Expected: ExpectedOutcome.Recover,
+        ExpectedRecoveryTool: "ReadFile",
+        CheckFinalState: CheckStaleCallerEditFinalStateAsync,
+        SourceRun: "stale workspace variant of: 10-chain run 20261112-031134-405 (plan_targeted_tool_scenario_evals batch C, commit c7bddd9e) turn 12: ReplaceSnippet on OrderCheckout.cs with oldContent still naming CalcDisc after the turn 4 RenameSymbol, NotFound",
+        ReproducesAt: "not measured (resume faulted scenario, rate measured by this scenario)",
+        FixedBy: "",
+        ResumeTranscript: "stale-caller-edit-after-rename.json",
+        ResumeKeepTurns: 11,
+        ResumeFaultTool: "ReplaceSnippet",
+        ResumeFaultSeeded: false,
+        ResumeFaultArguments: """
+            {"reason":"stale workspace fault: another session rewrote the calculator field initializer","action":"apply","filePath":"{SOLUTION}/ContosoOrders.Core/FixtureHelpers/OrderCheckout.cs","oldContent":"private readonly OrderPricingCalculator _calculator = new();","newContent":"private readonly OrderPricingCalculator _calculator = new OrderPricingCalculator();"}
+            """);
 
     /// <summary>
     /// Path of a file in the tracked RoslynSentinel.Tests.ModelEval/ResumeTranscripts folder. Walks up from the
