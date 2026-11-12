@@ -215,6 +215,13 @@ public sealed class AgentToolCallRecord
     {
         get; init;
     }
+
+    /// <summary>Text of the result's trailing content blocks as the model saw them; null, and so omitted from the JSON, when there were none.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TrailingText
+    {
+        get; init;
+    }
 }
 
 /// <summary>Why the agent loop stopped.</summary>

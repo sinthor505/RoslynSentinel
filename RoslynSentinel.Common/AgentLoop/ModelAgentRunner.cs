@@ -374,7 +374,7 @@ public sealed class ModelAgentRunner
                     turnNumber, toolCall.Name,
                     FormatForAgentLog(turnNumber, callIndexInTurn, toolCall.Name, "args", toolCall.ArgumentsJson, transcriptDirectory));
 
-                var (resultJson, isError, latency, callStartedAt, callCompletedAt) = await ExecuteToolCallAsync(toolCall, cancellationToken);
+                var (resultJson, isError, latency, callStartedAt, callCompletedAt, trailingText) = await ExecuteToolCallAsync(toolCall, cancellationToken);
                 turnRecord.ToolCalls.Add(new AgentToolCallRecord
                 {
                     ToolName = toolCall.Name,
@@ -385,6 +385,7 @@ public sealed class ModelAgentRunner
                     StartedAt = callStartedAt,
                     CompletedAt = callCompletedAt,
                     ToolCallId = toolCall.Id,
+                    TrailingText = string.IsNullOrEmpty(trailingText) ? null : trailingText,
                 });
 
                 var loggedResult = FormatForAgentLog(turnNumber, callIndexInTurn, toolCall.Name, "result", resultJson, transcriptDirectory);
@@ -405,7 +406,7 @@ public sealed class ModelAgentRunner
                 {
                     Role = "tool",
                     ToolCallId = toolCall.Id,
-                    Content = resultJson,
+                    Content = ModelFacingToolContent(resultJson, trailingText),
                 });
                 await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
 
@@ -593,7 +594,7 @@ public sealed class ModelAgentRunner
             var pendingInjections = new List<AgentAssist>();
             foreach (var call in seed.ToolCalls)
             {
-                messages.Add(new AgentChatMessage { Role = "tool", ToolCallId = call.ToolCallId, Content = call.ResultJson });
+                messages.Add(new AgentChatMessage { Role = "tool", ToolCallId = call.ToolCallId, Content = ModelFacingToolContent(call.ResultJson, call.TrailingText) });
                 var injection = assistTracker.Observe(
                     new AgentToolCall { Id = call.ToolCallId, Name = call.ToolName, ArgumentsJson = call.ArgumentsJson },
                     call.ResultJson, call.IsError);
@@ -734,7 +735,7 @@ public sealed class ModelAgentRunner
         return null;
     }
 
-    private async Task<(string ResultJson, bool IsError, TimeSpan Latency, DateTimeOffset StartedAt, DateTimeOffset CompletedAt)> ExecuteToolCallAsync(
+    private async Task<(string ResultJson, bool IsError, TimeSpan Latency, DateTimeOffset StartedAt, DateTimeOffset CompletedAt, string TrailingText)> ExecuteToolCallAsync(
         AgentToolCall toolCall, CancellationToken cancellationToken)
     {
         var startedAt = DateTimeOffset.Now;
@@ -747,7 +748,7 @@ public sealed class ModelAgentRunner
         catch (JsonException ex)
         {
             stopwatch.Stop();
-            return ($$"""{"isError":true,"error":"Malformed tool-call arguments JSON: {{JsonEncode(ex.Message)}}"}""", true, stopwatch.Elapsed, startedAt, DateTimeOffset.Now);
+            return ($$"""{"isError":true,"error":"Malformed tool-call arguments JSON: {{JsonEncode(ex.Message)}}"}""", true, stopwatch.Elapsed, startedAt, DateTimeOffset.Now, string.Empty);
         }
 
         CallToolResult result;
@@ -763,23 +764,31 @@ public sealed class ModelAgentRunner
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             stopwatch.Stop();
-            return ($$"""{"isError":true,"error":"MCP call threw: {{JsonEncode(ex.Message)}}"}""", true, stopwatch.Elapsed, startedAt, DateTimeOffset.Now);
+            return ($$"""{"isError":true,"error":"MCP call threw: {{JsonEncode(ex.Message)}}"}""", true, stopwatch.Elapsed, startedAt, DateTimeOffset.Now, string.Empty);
         }
 
         stopwatch.Stop();
         var completedAt = DateTimeOffset.Now;
-        var text = result.Content
+        // ResultJson stays first-block-only: many consumers parse it as JSON (LoopAssist, the failure
+        // signature, BodyReportsFailure, assertions). Trailing blocks travel in TrailingText instead.
+        var blocks = result.Content
             .OfType<TextContentBlock>()
             .Select(c => c.Text)
-            .FirstOrDefault() ?? "";
+            .ToList();
+        var text = blocks.FirstOrDefault() ?? "";
+        var trailingText = string.Join("\n\n", blocks.Skip(1));
 
         // Check both envelope layers: the outer MCP-protocol IsError and the inner domain-level
         // SentinelCallToolResult<T>.IsError -> see [[project_searchmode_literal_override_bug]], now fixed
         // server-side via a CallToolFilter, but the harness still checks both defensively rather
         // than trusting either alone.
         var isError = result.IsError == true || BodyReportsFailure(text);
-        return (text, isError, stopwatch.Elapsed, startedAt, completedAt);
+        return (text, isError, stopwatch.Elapsed, startedAt, completedAt, trailingText);
     }
+
+    /// <summary>The tool-result text the model sees: the first block as ResultJson, then any trailing blocks appended after a blank line.</summary>
+    private static string ModelFacingToolContent(string resultJson, string? trailingText) =>
+        string.IsNullOrEmpty(trailingText) ? resultJson : resultJson + "\n\n" + trailingText;
 
     private static bool BodyReportsFailure(string resultText)
     {
