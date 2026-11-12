@@ -3118,6 +3118,8 @@ public class GitToolsSmokeTests
         var templateDir = Path.Combine(Path.GetTempPath(), "RoslynSentinelGitTemplate_" + Guid.NewGuid());
         Directory.CreateDirectory(templateDir);
         RunGit(templateDir, "init");
+        // pin the in-process commit route off: this fixture tests the CLI route
+        RunGit(templateDir, "config", "roslynsentinel.inProcessCommit", "false");
         RunGit(templateDir, "config", "user.email", "test@example.com");
         RunGit(templateDir, "config", "user.name", "Test");
         File.WriteAllText(Path.Combine(templateDir, "README.md"), "hello");
