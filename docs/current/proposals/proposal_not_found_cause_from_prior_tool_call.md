@@ -153,7 +153,7 @@ GetMethodSource(filePath: that file) returned FileNotFound with no note, because
 - E. (HELD until the owner confirms) the generic speculative not-found advice is replaced by the fact when an effect note is present;
   overlaps `plan_error_policy_pointer`.
 
-### Slice E design (design only; not implemented, waits for the owner and a RELEASE of held files)
+### Slice E design (owner approved 2026-11-12; not implemented, waits for f9's RELEASE of the held files)
 
 Where: not in `ErrorPolicyFilter` (registered only when the policy mode is not Off, and Off is the default; it only appends a trailing
 block). The speculative sentence is swapped where the fact is computed.
@@ -162,17 +162,45 @@ block). The speculative sentence is swapped where the fact is computed.
   have been renamed or moved", "If none of these is the symbol you meant, it does not exist in this solution"). They belong to
   `plan_not_found_error_orientation` (peer roslynsentinel-f1): `Common/FileNotFoundMessage.cs`, `Common/SymbolNotFoundDetail.cs`,
   `Engines.Basic/MemberRefactoringNotFound.cs`, `SyntaxTargetResolver`, `MemberSelection`, `DocumentLookup`.
-- Preferred shape: a structured marker rather than string stripping. Each builder emits its speculative sentence as a separately
-  addressable part (a small `NotFoundAdvice` value or a delimiter owned by one helper, e.g. `SpeculativeAdvice.Mark(text)`), and one
-  place (`NotFoundEvidence.ForCurrentCall`, which already runs once per not-found error and now knows whether an effect note exists)
-  swaps the marked part out when `EditEffectEvidence` produced a note. Builders then never need to know about effects.
+- Superseded shape (kept for the record): swap the marked part after the fact in `NotFoundEvidence.ForCurrentCall`. Rejected below
+  because the message is already a string by then.
 - `NotFoundEvidence` also sets a flag on `ToolCallContext` (e.g. `HasEditEffectFact`) so the error-policy filter can skip its
   policy suffix when the fact is present; needs `ToolCallContext.cs`, held by the `plan_error_policy_pointer` run. That run adds
   `ToolCallContext.HasEditEffectFact` (settable bool, default false) and its ErrorPolicyFilter check after its A/B and sends the hash
   with RELEASE; our part afterwards is one line: `NotFoundEvidence` sets `ToolCallContext.Current.HasEditEffectFact = true` whenever
   it attaches an EditEffect finding.
-- Order: coordinate with f1 (builders) before touching any builder file; the marker lands in the builders first (text-neutral), the
-  swap lands in `NotFoundEvidence` second.
+- Order (owner approved 2026-11-12): (1) a text-neutral marker in the builders, then (2) the effect swap and `HasEditEffectFact`.
+  Both wait for peer f9's RELEASE (it holds `FileNotFoundMessage.cs` and `SymbolNotFoundDetail.cs`); f1's code work is finished and
+  committed (4738bc33, e7416278), so no RELEASE from f1 is needed.
+
+**Decision: the builder resolves its own hedge through one Common helper (option 3), not a post-hoc swap.**
+
+The problem: the hedge sentence is rendered into `errorData.message` inside the tool, before `NotFoundEvidence` runs at the
+marshaller / failure handler, so a later swap would have to find the sentence inside an already-built string. Options considered:
+
+1. Carry the parts (`Facts` / `Hedge` / `Options`) on `ToolCallContext` and swap later. Needs the held `ToolCallContext.cs`, and the swap
+   is still a string replace of a remembered substring (fragile when a builder trims, wraps or pages the text).
+2. Carry the parts on `ResultError`. Cleanest structurally, but it changes the result shape and the wire (new `errorData` field), touches
+   every builder's return path and the marshaller, and needs a NEW-DTO justification (candidate evaluated: `ResultError` - already the
+   carrier, but a flat message; a `NotFoundParts` record would duplicate message text). Too large for the gain.
+3. **Chosen.** The builder asks Common at its single exit point: `SpeculativeAdvice.Resolve(string hedge)` returns `hedge` unchanged
+   (byte-identical) unless the current call has an effect fact for its missing term or target path, in which case it returns the
+   fact sentence (the `EditEffectEvidence` note, facts only) in place of the hedge and sets `ToolCallContext.Current.HasEditEffectFact`.
+   Why it works without new plumbing: by the time a builder runs, `ToolCallContext.Current` already carries `MissingTerm`,
+   `TargetFilePath`, the identity, `EditEffects` and `CurrentSolution` (set at call entry by `AgentIdentityCapture`), and the lookup is
+   in memory and synchronous. Engines.Basic and Tools.Basic both see Common, and an engine called with no context (tests, other hosts)
+   gets the hedge back unchanged.
+   Consequences: no new DTO and no wire change (the `Facts` / `Hedge` / `Options` record f1 suggested is not needed for E; the
+   policy pointer can still build it later if it wants parts); step 1 is exactly "route every hedge sentence through
+   `SpeculativeAdvice.Resolve`, which is the identity function" (text-neutral, pinned by the existing builder tests), step 2 gives
+   `Resolve` its lookup. `NotFoundEvidence.ForCurrentCall` keeps attaching the structured Finding for tools whose message was not
+   built through a marked builder and sets `HasEditEffectFact = true` whenever it attaches one; it skips the Finding when a builder
+   already embedded the fact (`HasEditEffectFact` already true), so the text does not appear twice.
+- Builder sites for step 1 (each assembles its text at one exit point; f1's list): Common `FileNotFoundMessage.Build` (FileCandidate
+  overload; hedge "A file read earlier under this name may since have been renamed or moved." and the candidate-branch "If none of
+  these is ..., it does not exist in this solution."), Common `SymbolNotFoundDetail` render methods, and the engine copies
+  `MemberRefactoringNotFound`, `SyntaxTargetResolver`, `MemberSelection`, `DeclarationNotFoundDetail` (`MemberNotFoundDetail`), plus
+  `DocumentLookup`. Any added wording follows `reference_tool_error_text_facts_options_policy.md`.
 
 ## Cost / risk
 
