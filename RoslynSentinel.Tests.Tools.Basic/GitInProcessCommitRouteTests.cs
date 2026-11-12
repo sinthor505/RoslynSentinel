@@ -637,4 +637,168 @@ public class GitInProcessCommitRouteTests
             Assert.That(json.RootElement.GetProperty("commit").GetString(), Is.EqualTo(Head(directory)));
         });
     }
+
+    [Test]
+    public async Task CommitOnlyPaths_TakenLine_RecordsKindPathsRefAndParentAsync()
+    {
+        var route = new InProcessCommitRoute();
+        var directory = NewRepo("only-paths-line", inProcess: true);
+        Write(directory, "a.txt", "changed\n");
+        var previousHead = Head(directory);
+
+        var result = await NewImpl(route).CommitAsync(directory, "only paths line", GitStageScope.listed, "a.txt", amend: false, CancellationToken.None);
+
+        AssertCommitted(directory, result);
+        AssertTaken(route);
+        var lines = ReadCommitRouteLog(directory);
+        Assert.That(lines, Has.Length.EqualTo(1));
+        using var json = System.Text.Json.JsonDocument.Parse(lines[0]);
+        var root = json.RootElement;
+        Assert.Multiple(() =>
+        {
+            Assert.That(root.GetProperty("outcome").GetString(), Is.EqualTo("taken"));
+            Assert.That(root.GetProperty("kind").GetString(), Is.EqualTo("only-paths"));
+            Assert.That(root.GetProperty("pathCount").GetInt32(), Is.EqualTo(1));
+            Assert.That(root.GetProperty("paths")[0].GetString(), Is.EqualTo("a.txt"));
+            Assert.That(root.GetProperty("ref").GetString(), Is.EqualTo("refs/heads/" + BranchName(directory)));
+            Assert.That(root.GetProperty("parent").GetString(), Is.EqualTo(previousHead));
+            Assert.That(root.GetProperty("commit").GetString(), Is.EqualTo(Head(directory)));
+        });
+    }
+
+    [Test]
+    public async Task CommitPlain_TakenLine_RecordsKindPlainAndNoPathsAsync()
+    {
+        var route = new InProcessCommitRoute();
+        var directory = NewRepo("plain-line", inProcess: true);
+        Write(directory, "a.txt", "changed\n");
+        RunGit(directory, "add", "a.txt");
+
+        var result = await NewImpl(route).CommitAsync(directory, "plain line", null, null, amend: false, CancellationToken.None);
+
+        AssertCommitted(directory, result);
+        AssertTaken(route);
+        var lines = ReadCommitRouteLog(directory);
+        Assert.That(lines, Has.Length.EqualTo(1));
+        using var json = System.Text.Json.JsonDocument.Parse(lines[0]);
+        Assert.Multiple(() =>
+        {
+            Assert.That(json.RootElement.GetProperty("kind").GetString(), Is.EqualTo("plain"));
+            Assert.That(json.RootElement.TryGetProperty("paths", out _), Is.False, "a plain commit lists no paths");
+        });
+    }
+
+    [Test]
+    public async Task CommitManyListedPaths_TakenLine_CapsPathsAt20AndSetsPathsTruncatedAsync()
+    {
+        var route = new InProcessCommitRoute();
+        var directory = NewRepo("many-paths-line", inProcess: true);
+        var names = Enumerable.Range(0, 25).Select(i => $"f{i:D2}.txt").ToList();
+        foreach (var name in names)
+        {
+            Write(directory, name, "one\n");
+        }
+
+        CommitAll(directory, "add 25 files");
+        foreach (var name in names)
+        {
+            Write(directory, name, "two\n");
+        }
+
+        var result = await NewImpl(route).CommitAsync(directory, "many listed", GitStageScope.listed, string.Join(",", names), amend: false, CancellationToken.None);
+
+        AssertCommitted(directory, result);
+        AssertTaken(route);
+        var lines = ReadCommitRouteLog(directory);
+        Assert.That(lines, Has.Length.EqualTo(1));
+        using var json = System.Text.Json.JsonDocument.Parse(lines[0]);
+        Assert.Multiple(() =>
+        {
+            Assert.That(json.RootElement.GetProperty("pathCount").GetInt32(), Is.EqualTo(25));
+            Assert.That(json.RootElement.GetProperty("paths").GetArrayLength(), Is.EqualTo(20));
+            Assert.That(json.RootElement.GetProperty("pathsTruncated").GetBoolean(), Is.True);
+        });
+    }
+
+    [Test]
+    public async Task CommitAmend_DeclinedLine_RecordsKindAmendAsync()
+    {
+        var route = new InProcessCommitRoute();
+        var directory = NewRepo("amend-line", inProcess: true);
+        Write(directory, "a.txt", "changed\n");
+
+        var result = await NewImpl(route).CommitAsync(directory, "amended subject", GitStageScope.all, null, amend: true, CancellationToken.None);
+
+        AssertCommitted(directory, result);
+        AssertDeclined(route, "amend");
+        var lines = ReadCommitRouteLog(directory);
+        Assert.That(lines, Has.Length.EqualTo(1));
+        using var json = System.Text.Json.JsonDocument.Parse(lines[0]);
+        Assert.Multiple(() =>
+        {
+            Assert.That(json.RootElement.GetProperty("outcome").GetString(), Is.EqualTo("declined"));
+            Assert.That(json.RootElement.GetProperty("kind").GetString(), Is.EqualTo("amend"));
+        });
+    }
+
+    /// <summary>Forwards every IGitReader call to <see cref="Target"/> except GetNameStatus, which throws: the post-commit remaining-staged read.</summary>
+    internal class ThrowingReaderProxy : System.Reflection.DispatchProxy
+    {
+        public IGitReader Target { get; set; } = null!;
+
+        protected override object? Invoke(System.Reflection.MethodInfo? targetMethod, object?[]? args)
+        {
+            if (targetMethod?.Name == nameof(IGitReader.GetNameStatus))
+            {
+                throw new InvalidOperationException("the test reader refuses GetNameStatus");
+            }
+
+            try
+            {
+                return targetMethod!.Invoke(Target, args);
+            }
+            catch (System.Reflection.TargetInvocationException ex) when (ex.InnerException is not null)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+                throw;
+            }
+        }
+    }
+
+    /// <summary>A logger whose every write throws, so the only thing that keeps the commit result is the guard around the post-commit read.</summary>
+    private sealed class ThrowingLogger : Microsoft.Extensions.Logging.ILogger<GitImpl>
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            throw new InvalidOperationException("the test logger refuses every write");
+    }
+
+    [Test]
+    public async Task CommitWhenThePostCommitReadAndTheLoggerBothThrow_StillReturnsTheCommit_WithOneCommitAndOneTakenLineAsync()
+    {
+        var route = new InProcessCommitRoute();
+        var directory = NewRepo("guard-line", inProcess: true);
+        Write(directory, "a.txt", "changed\n");
+        RunGit(directory, "add", "a.txt");
+        var proxy = System.Reflection.DispatchProxy.Create<IGitReader, ThrowingReaderProxy>();
+        ((ThrowingReaderProxy)proxy).Target = Composite();
+        var commitsBefore = int.Parse(RunGit(directory, "rev-list", "--count", "HEAD"));
+        var impl = new GitImpl(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), new ThrowingLogger(), proxy, route);
+
+        var result = await impl.CommitAsync(directory, "guarded subject", null, null, amend: false, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.IsError, Is.False, result.Error);
+            Assert.That(result.CommitHash, Is.EqualTo(Head(directory)), "the reported hash is `git rev-parse HEAD`");
+            Assert.That(int.Parse(RunGit(directory, "rev-list", "--count", "HEAD")), Is.EqualTo(commitsBefore + 1), "exactly one new commit");
+        });
+        var lines = ReadCommitRouteLog(directory);
+        Assert.That(lines, Has.Length.EqualTo(1));
+        using var json = System.Text.Json.JsonDocument.Parse(lines[0]);
+        Assert.That(json.RootElement.GetProperty("outcome").GetString(), Is.EqualTo("taken"));
+    }
 }
