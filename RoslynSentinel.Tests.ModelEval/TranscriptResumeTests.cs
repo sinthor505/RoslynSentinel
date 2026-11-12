@@ -164,6 +164,66 @@ public class TranscriptResumeTests
     }
 
     [Test]
+    public void RewriteTurns_CarriesTrailingTextThroughWithTheFixtureRewritten_AndNullStaysNull()
+    {
+        var oldPath = "C:/Temp/" + OldGuidFolder + "/ContosoOrders.Core/a.cs";
+        var original = new AgentTranscriptTurn
+        {
+            TurnNumber = 1,
+            ModelLatency = TimeSpan.FromSeconds(1),
+            StartedAt = DateTimeOffset.Now,
+            CompletedAt = DateTimeOffset.Now,
+            ModelMessage = new AgentChatMessage
+            {
+                Role = "assistant",
+                Content = "turn 1",
+                ToolCalls =
+                [
+                    new AgentToolCall { Id = "call_1", Name = "ReadFile", ArgumentsJson = "args_1" },
+                    new AgentToolCall { Id = "call_2", Name = "ReadFile", ArgumentsJson = "args_2" },
+                ],
+            },
+            ToolCalls =
+            [
+                new AgentToolCallRecord
+                {
+                    ToolName = "ReadFile",
+                    ArgumentsJson = "args_1",
+                    ResultJson = "{}",
+                    IsError = false,
+                    Latency = TimeSpan.FromMilliseconds(5),
+                    StartedAt = DateTimeOffset.Now,
+                    CompletedAt = DateTimeOffset.Now,
+                    ToolCallId = "call_1",
+                    TrailingText = "trailing block at " + oldPath,
+                },
+                new AgentToolCallRecord
+                {
+                    ToolName = "ReadFile",
+                    ArgumentsJson = "args_2",
+                    ResultJson = "{}",
+                    IsError = false,
+                    Latency = TimeSpan.FromMilliseconds(5),
+                    StartedAt = DateTimeOffset.Now,
+                    CompletedAt = DateTimeOffset.Now,
+                    ToolCallId = "call_2",
+                    TrailingText = null,
+                },
+            ],
+        };
+
+        var rewritten = TranscriptResume.RewriteTurns([original], NewDirectory).Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rewritten.ToolCalls[0].TrailingText, Does.Contain(NewDirectory));
+            Assert.That(rewritten.ToolCalls[0].TrailingText, Does.Not.Contain(OldGuidFolder));
+            Assert.That(rewritten.ToolCalls[1].TrailingText, Is.Null);
+            Assert.That(original.ToolCalls[0].TrailingText, Does.Contain(OldGuidFolder), "the source turn is not modified");
+        });
+    }
+
+    [Test]
     public void BuildAuthoredFaultTurn_BuildsOneAuthoredCallWithTheRealResult()
     {
         var turn = TranscriptResume.BuildAuthoredFaultTurn(12, "ReplaceSnippet", "{\"filePath\":\"a.cs\"}", Rejection, isError: true);

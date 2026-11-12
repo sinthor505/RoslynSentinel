@@ -288,6 +288,7 @@ public static class TranscriptResume
                     StartedAt = call.StartedAt,
                     CompletedAt = call.CompletedAt,
                     ToolCallId = call.ToolCallId,
+                    TrailingText = RewriteFixtureDirectory(call.TrailingText, newDirectory),
                 })
                 .ToList(),
         }).ToList();
