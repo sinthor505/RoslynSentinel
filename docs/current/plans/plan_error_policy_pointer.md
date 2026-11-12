@@ -1,6 +1,6 @@
 # Plan: gated error-policy suffix (Off / Pointer / Inline) on not-found tool errors, with eval stamping and an A/B
 
-**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Step 1 done (inventory).
+**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Steps 1-4 done (9856e63c; 22dd662b..cc3fba6c).
 
 ## Problem
 
@@ -69,6 +69,7 @@ Text-neutral slices first (Steps 1-4, 7-8), behaviour-changing ones after (5, 6,
 - Effect: text-neutral
 - Change: `ErrorPolicyMode { Off, Pointer, Inline }`, `ErrorPolicyKey` (four values; the wire name of each is the dotted form in D2), `ErrorPolicyOptions.Configure(args)` per the `LlmOptions.cs:1-9` pattern (flag, env var, default `Off`; `EolPolicyOptions.cs:13-17` is the small example). Unparseable mode fails startup with a clear message rather than falling back silently. `Inline` without a readable policy file fails startup.
 - Done when: Build 0 errors; unit tests cover default, env var, flag-over-env, invalid value.
+- Done: 22dd662b, 651d9a96, b3219f0c.
 
 ### Step 3 - Intent table and kind mapper in Common
 - Files: new `RoslynSentinel.Common/ErrorPolicyClassifier.cs`; new test file.
@@ -76,6 +77,7 @@ Text-neutral slices first (Steps 1-4, 7-8), behaviour-changing ones after (5, 6,
 - Effect: text-neutral
 - Change: (a) normalized kind constants (file, type, member, symbol; final set from Step 1) and a mapper `(errorCode, missingTargetKind) -> File | Symbol | null`, accepting `ToolErrorCode.NotFound` plus kind and the literal `"FileNotFound"` / `"MethodNotFound"` codes (reuse `NotFoundEvidence` logic if Step 1 says it fits). (b) intent table: tool name -> `Lookup` | `Edit`, with per-`operation` overrides for dispatch tools (`Member(view)` Lookup, `Member(replace)` Edit). (c) `Classify(toolName, arguments, errorCode, kind) -> ErrorPolicyKey?`.
 - Done when: Build 0 errors; drift test: every registered tool and every operation value of each dispatch tool has an intent entry (source of names from Step 1 item 4); mapper tests per code/kind.
+- Done: af486108, 56a1bb75. Judgement calls: `Build`, `RunTest`, `RunScanDetector` and text-only `Generate*` are Lookup; `validate`/`preview`/`verify`/`view` values are Lookup; `GitRemote` and `Declaration` are Edit for every value (no list/create split in the table); secondary selector enums are ignored.
 
 ### Step 4 - Policy file parser and prompt block
 - Files: new `RoslynSentinel.Common/AgentLoop/ErrorPolicyDocument.cs`; `RoslynSentinel.Common/AgentLoop/AgentSystemPrompts.cs` (add `WithErrorHandling`, do not change `CodingAgent` text here); new test file.
@@ -83,6 +85,7 @@ Text-neutral slices first (Steps 1-4, 7-8), behaviour-changing ones after (5, 6,
 - Effect: text-neutral (no caller yet)
 - Change: parse `### <Key>` sections into `IReadOnlyDictionary<ErrorPolicyKey, string>`; unknown or duplicate heading is an error. `WithErrorHandling(prompt, document)` appends an `ErrorHandling` block whose headings render as `Error handling: <Key>`. Expose `ContentHash` (SHA-256 of the file bytes, short form) for Step 8.
 - Done when: Build 0 errors; tests: round-trip, unknown heading, missing key, rendered heading matches the string the pointer will name (shared constant).
+- Done: aac1404c, cc3fba6c. An empty section body is an error (an empty Inline entry is useless).
 
 ### Step 5 - Record the target kind on the call context for slice-1 routes
 - Files: `ToolCallContext` (Common; verify it is a per-call mutable object set by `AgentIdentity`, filter 1, and that a mutation inside the tool is visible to an outer filter after the call returns - an `AsyncLocal` value set inside the call would not flow back); `RoslynSentinel.Common/ToolException.cs` (`ToolErrorMapper.ToResultError`); `RoslynSentinel.Tools.Basic/SymbolNavigationImpl.cs:106` (`LocateSymbol`, reached by `Search(mode: symbol)`); new test file.
