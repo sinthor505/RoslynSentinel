@@ -1,6 +1,9 @@
 # Idea: tool errors stay policy-agnostic but can point at, or carry, an operator-supplied error-handling policy
 
-**Status:** NOT DESIGNED 2026-11-12. Owner idea after the stop-adherence A/B showed a 9B model obeying the tool error's next-step text over the system prompt's stop rule, and after the owner ruled that tool error text carries no policy.
+**Status:** DESIGN SETTLED 2026-11-12, not built. Owner idea after the stop-adherence A/B showed a 9B model obeying the
+tool error's next-step text over the system prompt's stop rule, and after the owner ruled that tool error text carries
+no policy. Decisions D1-D7 below were settled with the owner on 2026-11-12. Plan:
+`docs/current/plans/plan_error_policy_pointer.md`.
 
 ## What happened
 
@@ -16,127 +19,154 @@ stop-adherence A/B" (table at lines 28-35, causes at lines 116-122).
 Consequence: once the policy sentences are stripped, the stop rule lives only in the system prompt, far from the
 moment of the error, and the model has nothing at the error site that points back at it.
 
-A tension to resolve in the same pass (verified, not part of this idea's mechanism): the same prompt section says
-"When a tool returns an error, follow the recovery step the error names" (`AgentSystemPrompts.cs:108`) directly
-before the stop rule. With policy-free errors that sentence has less to follow, but it still tells the model to
-prefer the error's text over the section's own stop rule whenever the two disagree.
-
 ## The actual gap
 
 The environment has two places that can steer a model at an error, and a rule cannot live in either without cost:
 
-- The tool error is the most recent and most specific text, so the model obeys it. But the owner ruled it must not hold policy: it is shared by every MCP client, and a policy that suits one operator (stop and report) is wrong for another (find the target, or create it).
-- The system prompt holds the policy, but it is far back in context at the moment of the error. The brief estimates the stop rule sits about 7K characters back in the system prompt; that figure is not measured here.
+- The tool error is the most recent and most specific text, so the model obeys it. But it must not hold policy: it is shared by every MCP client, and a policy that suits one operator (stop and report) is wrong for another (find the target, or create it).
+- The system prompt holds the policy, but it is far back in context at the moment of the error (estimated about 7K characters back; not measured).
 
 There is no mechanism that lets an operator say "for this deployment, here is the error-handling policy" and have it
 surface at the error site without the server owning the policy.
 
-## Possible fixes (not decided)
+## Two layers: options vs policy
 
-The owner's idea has two parts; the assessment below is the main session's, for the owner to settle.
+The design rests on keeping these apart.
 
-### 1. A neutral pointer, backed by a prompt section
+- **Options** are server-owned and tool-specific: the "next call" suggestions already in the error text. "A failing `Search` should not suggest `Search`" is an options defect, fixed per builder in `plan_not_found_error_orientation`, not here.
+- **Policy** is operator-owned and situation-specific: given this situation, stop, look further, or create? The answer depends on the agent's intent (looking around vs acting on a named target), not on which tool it used. A miss from `Search`, `GetFileOutline` or `Member(view)` is the same situation.
 
-Prompts carry an `ErrorHandling` section with one subitem per error kind (for example `ErrorHandling -> FileNotFound`).
-A tool error then appends: "Refer to the ErrorHandling -> FileNotFound policy for guidance." The tool nudges without
-holding policy, and the pointer brings the prompt rule back into recency at the moment of the error.
+Per-tool policy keys would therefore duplicate the options layer, repeat the same text, and grow the prompt block and
+the drift test with every tool.
 
-### 2. An operator-only control that gates the pointer
+## Design
 
-The policy mode is set at runtime by an operator-only control. Tool responses are gated on it and default to agnostic
-(no pointer) when nothing is set. The control is never visible to models under test or to subagents.
-
-### Assessment
-
-**Dangling pointer.** An external MCP client has no `ErrorHandling` section in its prompt. A pointer to a section the
-client does not have is noise, or worse an instruction to look for something missing. The pointer must therefore
-appear only when an operator has declared that the prompt carries the section. Default Off gives exactly today's
-agnostic text.
-
-**Modes.**
+### Modes (D1)
 
 | Mode | Server appends | Server holds policy? |
 | --- | --- | --- |
-| Off (default) | nothing | no |
-| Pointer | the reference sentence only | no |
-| Inline | operator-supplied policy text, verbatim, keyed per error kind | no, it echoes what the operator set |
+| `Off` (default, and the value when unset) | nothing | no |
+| `Pointer` | one reference sentence naming the policy entry | no |
+| `Inline` | the operator-supplied policy entry, verbatim | no, it echoes the operator's file |
 
-Inline is the control arm. It tests whether a pointer is enough for a 9B model when the referenced rule sits far back
-in the system prompt: if Pointer matches Inline, the pointer suffices; if only Inline works, the rule must be
-carried at the error site.
+`Inline` is the measurement control: if `Pointer` matches `Inline`, the pointer suffices; if only `Inline` works, the
+rule must be carried at the error site. Drop `Inline` if arm C is never run.
 
-**Keys.** Key the prompt subsections and the policy entries on the existing error identities, so the set of valid
-references is enumerable rather than free text. Candidate sources:
+### Keys (D2)
 
-- `ToolErrorCode` (`RoslynSentinel.Common/SentinelCallToolResult.cs:75`) and `DocumentEditResult.ErrorCode`; typed throws per `docs/current/plans/plan_error_codes_follow_cause.md` and `docs/current/proposals/proposal_tool_error_code_taxonomy.md` (the numeric scheme there is unbuilt).
-- Caveat found while verifying (open): `ToolErrorCode` has one `NotFound` code (line 83), but the owner's example `FileNotFound` is a finer kind than that, and symbol-not-found is another. The key cannot be `ToolErrorCode` alone. Candidates: a new finer code, or `ToolNotFoundException.MissingTargetKind` (carried through `ComposeFailure`, commit 580e2a55). Settle the key before building anything.
+Four keys from target kind x intent, as a closed enum in `Common` (name to be settled in the plan, e.g. `ErrorPolicyKey`):
 
-A unit test asserts that every key a tool can point at has a matching `ErrorHandling` subsection in the prompt
-(`AgentSystemPrompts.CodingAgent` or the composable block, see open question 3), so the two cannot drift.
+| | Lookup | Edit |
+| --- | --- | --- |
+| File | `FileNotFound.Lookup` | `FileNotFound.Edit` |
+| Symbol | `SymbolNotFound.Lookup` | `SymbolNotFound.Edit` |
 
-**Control surface.** Prefer a new operation on the existing operator tool over a new tool class.
+- **Target kind** comes from the error: `ToolErrorCode.NotFound` (`RoslynSentinel.Common/SentinelCallToolResult.cs:83`; `ToolErrorCode` is a static class of string constants, not an enum) plus a normalized `MissingTargetKind`, and the literal `"FileNotFound"` code some routes still emit. One mapping function in `Common` turns these into a kind.
+- `MissingTargetKind` (`RoslynSentinel.Common/ToolException.cs:80`) is a free-form string today with no production reader; the plan normalizes its values (file, type, member, symbol) before the mapper relies on it.
+- The kind is surfaced in the existing `StructuredDetail` as a fact (e.g. `missingTarget: file`). It is a fact, so it respects the facts/options/policy standard, and it needs no new DTO (check against the `dto-conventions` skill when planning).
+- **Intent** comes from a static table in `Common`: tool name -> `Lookup` or `Edit`, with a per-`operation` override for tools that do both (`Member(view)` is Lookup, `Member(replace)` is Edit). Intent is a property of the call, so the table, not each throw site, owns it. No tool sets the MCP `ReadOnly` annotation today; the table could later drive those annotations (out of scope).
+- "Repeated failure" is not a tool error; it belongs to `RoslynSentinel.Common/AgentLoop/LoopAssist.cs`. Out of scope.
 
-- `McpServerControl` is `McpServerControlTool` in `RoslynSentinel.Tools.Basic/AdminTools.cs:476-477`, described as "Operator control", with operations selected by the `McpServerControlOperation` enum (`StopServer`, `LaunchTestInstance`, `StopTestInstance`, `ListTestInstances`). Add `SetErrorPolicy` / `GetErrorPolicy` operations there.
-- This avoids a new `McpServerErrorHandlingControl` class, and with it the three-part registration (`[McpServerToolType]` class, `Server.Advanced/ToolClassRegistry.cs` entry, DI block in `ServiceRegistrationExtensions*.cs`) and the fresh-session requirement a new tool class brings.
-- The tool's current parameter list has `mode` and `includeTools` strings for test instances; reusing or adding parameters for the policy mode and inline text needs a look at how those are validated, so a policy call cannot be confused with a test-instance call. Open design detail.
-- Verify, do not assume, that `McpServerControl` is absent from the eval and subagent tool surfaces: check with `McpServerStatus(toolListing: inactive)` and the eval harness's allow-list (`LlmOptions.MinimalToolSchema` is one such narrowing). I did not verify this; the brief says it is operator-only.
-- Also a startup option, following the canonical `LlmOptions.cs` pattern (`RoslynSentinel.Common/LlmOptions.cs:1-9`: `--flag` argument, then `ROSLYNSENTINEL_*` environment variable, then default; configured once at startup). The in-process ModelEval harness and PlanStepRunner then set the mode without an MCP call. `EolPolicyOptions` and `IdleRestartOptions` are existing examples of the same shape.
+### Where the suffix is appended: one call-tool filter
 
-**Reproducibility.** The active mode, and a hash of any inline text, must be recorded in every eval run stamp and
-results row, the way the eval queue already records `ROSLYNSENTINEL_*` variables. Without it the A/B numbers are
-unattributable, and a run made with the control set by an operator call mid-session cannot be reproduced.
+There is no single renderer today:
 
-**Scope.** One global setting per server process is enough: per-session server isolation already gives one process
-per window. No per-tool or per-session setting.
+- Thrown errors: `CallToolFailureHandler.ToFailureResult` -> `ToolErrorMapper.ToResultError` (`RoslynSentinel.Server.Advanced/CallToolFailureHandler.cs` ~50-82; `RoslynSentinel.Common/ToolException.cs:266-279`).
+- Returned envelopes: `ToolResultMarshaller.WithNotFoundNotes` (`RoslynSentinel.Common/ToolResultMarshaller.cs:165-181`), registered only when the marshaller mode is not Off (`ServiceRegistrationExtensionsBasic.cs:44-56`).
+- Bypass routes that build their own text: `DocumentLookup.ToResultError` (`RoslynSentinel.Common/DocumentLookup.cs:126-131`); literal `"FileNotFound"` codes in `RoslynSentinel.Tools.Basic/WorkspaceFileEditImpl.cs:543-549` and `WorkspaceReadNavigationImpl.cs:78`; guards in `RefactoringToolHelpers.cs:165-191`; `BatchEditFailure` in `MemberRefactoringEngine.cs` (lines 1042, 1546, 5642); bare strings via `ToolErrorMapper.ToErrorMessage` (`ToolException.cs:297-301`), which drops the code.
 
-**Measurement plan.** Run the stop-adherence family after its fixtures are rebuilt so that nothing in the solution
-matches the missing name or description (eval doc "Recommendation" item 1, lines 145-148). Without that the family
-cannot separate "ignored the stop rule" from "found the target the prompt misnamed" (eval doc lines 107-115), and any
-A/B on it is uninterpretable.
+So the pointer is not added in the builders. A dedicated `ErrorPolicyFilter` call-tool filter, **registered only when
+the mode is not `Off`**, inspects each outgoing error envelope, reads the target kind from `StructuredDetail`, the intent
+from the table (tool name and `operation` argument), and appends the pointer or the inline entry. With the filter absent,
+`Off` is byte-identical to today by construction. This also removes the earlier cost of a second pinned assertion per
+builder: tests are one per key per mode on the filter, plus "this route carries the kind" tests on the routes.
+
+The bypass routes are migrated to carry the kind in slices. Slice 1 covers the routes the stop-adherence scenarios
+actually hit (read from their saved transcripts); the rest get `// TODO` markers.
+
+### Control surface: startup only (D3)
+
+- `--error-policy-mode` / `ROSLYNSENTINEL_ERROR_POLICY_MODE` and `--error-policy-file` / `ROSLYNSENTINEL_ERROR_POLICY_FILE`, following the canonical `RoslynSentinel.Common/LlmOptions.cs:1-9` pattern (flag, then env var, then default; configured once at startup). `EolPolicyOptions` is the small example.
+- No `McpServerControl` operation in v1. Reasons: `McpServerControl` is not in the ModelEval hidden-tool list (`RoslynSentinel.Tests.ModelEval/ChainEvalToolSurface.cs:22-27`) and is in the claude-lean set (`RoslynSentinel.Server.Advanced/ToolClassRegistry.cs:55, 70`), so a model under test can probably reach it (unverified); a mid-session switch breaks reproducibility; per-session server isolation makes a restart to change mode cheap. Startup-only means no model can change its own error text and nothing needs hiding.
+- ModelEval runs the server in-process (`ChainEvalToolSurface.cs:46-78`) and sets the options directly. PlanStepRunner starts a stdio child (`RoslynSentinel.Utilities.PlanStepRunner/Program.cs:195-208`) and passes the flags.
+- One global setting per server process; no per-tool or per-session setting.
+
+### One policy file feeds both the prompt and Inline (D4)
+
+- A Markdown file with one `### <Key>` heading per key, kept in the ModelEval project so the server ships no policy of its own.
+- A new helper `AgentSystemPrompts.WithErrorHandling(prompt, policy)` renders it as an `ErrorHandling` block appended to `CodingAgent` (no prompt-composition helper exists today). External-client prompts and the `Off` arm carry no block.
+- In `Inline` mode the server reads the same file and echoes the entry for the key.
+- The `Pointer` and `Inline` arms therefore use the same rule text word for word; the A/B isolates location, not wording.
+- Drift test (structural): every key has an entry in the file, and the pointer sentence names the heading exactly as `WithErrorHandling` renders it.
+
+### Pointer wording (D5)
+
+Working text: "Your instructions have an 'Error handling: FileNotFound.Edit' rule for this case; apply it." The exact
+string is pinned in the plan and must match the rendered heading.
+
+### The `AgentSystemPrompts.cs:108` sentence (D6)
+
+"When a tool returns an error, follow the recovery step the error names" sits directly before the stop rule and tells the
+model to prefer the error's text over the section's own rule. Reword it as part of the arm A baseline, since it affects
+every arm.
+
+### Reproducibility: run stamps (D7)
+
+Run stamps record only `CommitHash` and `Dirty` today (`RoslynSentinel.Common/AgentLoop/ModelAgentRunner.cs:44-47`,
+copied to the transcript at line 172); no stamp or CSV code records server options. Add `ErrorPolicyMode` and a hash of
+the policy file to `ProcessStamp` and to the `results.csv` row (`ScenarioSampleCsv.Append`, called at
+`RoslynSentinel.Tests.ModelEval/SavedTranscriptScoring.cs:70`). A generic server-options snapshot would be better; leave
+a `// TODO` for it.
+
+## Measurement plan
+
+Run the stop-adherence family after its fixtures are rebuilt so that nothing in the solution matches the missing name or
+description (eval doc "Recommendation" item 1, lines 145-148). Without that the family cannot separate "ignored the stop
+rule" from "found the target the prompt misnamed" (eval doc lines 107-115).
 
 | Arm | Tool error text | Prompt |
 | --- | --- | --- |
-| A | agnostic (Off) | with the `ErrorHandling` section |
-| B | agnostic plus Pointer | with the section |
-| C | agnostic plus Inline | with the section |
+| A | `Off` | `CodingAgent` (line 108 reworded) + `ErrorHandling` block |
+| B | `Pointer` | same |
+| C | `Inline` | same |
 
-If B is close to C, the pointer suffices. If neither beats A, the rule needs another carrier (a loop-assist
-injection, see `RoslynSentinel.Common/AgentLoop/LoopAssist.cs`, or the prompt tension at `AgentSystemPrompts.cs:108`).
+If B is close to C, the pointer suffices. If neither beats A, the rule needs another carrier (a loop-assist injection).
 Ten samples per row make differences of 1-3 samples noise (eval doc line 125); size the run accordingly.
 
-**Dependencies and coordination.** Lands after `plan_not_found_error_orientation`'s slice 5f (the policy strip). The
-pointer is a separate gated sentence appended at the same spot in the builders, so it does not block that plan and
-that plan does not need to know about it. One cost: every builder that gains the sentence gets a second pinned
-assertion (Off has none, Pointer has it), so the test count grows with the builder count.
+## Dependencies and coordination
 
-### Alternatives considered (not in the brief; for the owner to weigh)
+Lands after `plan_not_found_error_orientation`'s slice 5f (the policy strip). The filter is independent of the builders,
+so neither plan blocks the other.
 
-- **Keep policy in the tool text, tuned until it works.** Already tried in effect: OLD "You MUST call ListSolutionItems next" vs NEW "tell the user so instead of editing a different file" gave no measurable difference, and the owner ruled against policy in tool text. Lost on both counts.
-- **Prompt only, no pointer.** This is arm A. It is the baseline the pointer has to beat; it is the status quo the eval already scored as failing for this model.
-- **Always-on pointer.** Simpler, no control surface, but dangles for every external client and cannot be A/B tested. Lost on the dangling-pointer point.
-- **Per-session policy via the request.** More flexible but needs a protocol field and a way to hide it from models; one global setting per process already fits the isolation model.
+## Open items for the plan
 
-## Open questions
+1. Enum and option names (`ErrorPolicyKey`, `ErrorPolicyOptions`, mode enum).
+2. The normalized `MissingTargetKind` value set and which throw sites set it.
+3. Which error routes the MissingFile and MissingSymbol scenarios hit (from saved transcripts); those are slice 1.
+4. Options-layer check (belongs to `plan_not_found_error_orientation`): whether any lookup-tool not-found builder suggests calling the same tool again; leave a `// TODO` at the builder if so.
 
-Each with a recommendation; none decided.
+## Alternatives considered
 
-1. **Mode names.** Recommend `Off` / `Pointer` / `Inline`, and `Off` as the default and the value when unset.
-2. **Does Inline belong at all?** It makes the server echo operator text, which edges toward the server carrying policy. Recommend yes, as the measurement control, behind the same gate and documented as an operator-supplied echo; drop it if arm C is never run.
-3. **Where does the prompt section live?** Recommend a separate composable block (appended to `AgentSystemPrompts.CodingAgent` by the harness when the mode is Pointer or Inline), so a prompt for external clients and the Off arm carry no section at all and the drift test targets one block. The alternative, a fixed section inside `CodingAgent`, makes the Off arm carry unreferenced policy.
-4. **The key** (see Keys above): `ToolErrorCode` alone cannot name `FileNotFound`. No recommendation yet; needs a look at how many error kinds a policy actually needs (likely two or three: file not found, symbol not found, repeated failure).
-5. **The `AgentSystemPrompts.cs:108` sentence.** Whether "follow the recovery step the error names" should be reworded once errors carry no steps. Recommend deciding it with arm A, since it affects the baseline.
+- **Keep policy in the tool text, tuned until it works.** Tried in effect (OLD vs NEW gave no measurable difference) and ruled out by the owner.
+- **Prompt only, no pointer.** This is arm A, the baseline.
+- **Always-on pointer.** Dangles for every external client and cannot be A/B tested.
+- **Pointer appended in each builder.** No single renderer exists, the bypass routes would each need it, and every builder gains a gated assertion. Replaced by the filter.
+- **Runtime `McpServerControl` operation.** Probably reachable by models under test and harms reproducibility. Replaced by startup-only.
+- **Per-tool policy keys.** Duplicates the options layer; the policy for a miss depends on intent, not tool.
+- **Per-session policy via the request.** Needs a protocol field and hiding; one setting per process fits the isolation model.
 
 ## Cost and risk
 
-- Touches `Common` (options class, mode enum, the builders' pointer sentence), `Tools.Basic` (`McpServerControl` operations), the eval harness (stamp/results row, prompt composition) and a drift test. No new tool class.
-- Risk: a gate that is on by accident leaks an agnostic-breaking sentence to external clients; Off must be the default and tested as byte-identical to today's text.
-- Risk: the operator control reachable from a model session would let a model change its own error text; the gating check above is mandatory, not optional.
-- Makes harder: every error builder gains a gated suffix, and the A/B record gains a dimension that every future run must stamp.
+- Touches `Common` (options, key enum, intent table, kind mapper, `WithErrorHandling`, stamp), `Server.Advanced` (filter registration), the bypass routes (carry the kind, in slices), the ModelEval harness (prompt composition, results row) and drift tests. No new tool class.
+- Risk: the intent table drifts from the registered tools. Mitigation: a test that every registered tool and every operation of a multi-operation tool has an entry.
+- Risk: a route that does not carry the kind silently gets no suffix. Mitigation: slice 1 covers the measured routes; the rest are `// TODO`-marked.
+- Makes harder: the A/B record gains a dimension that every future run must stamp.
 
 ## Related
 
 - `docs/current/evals/eval_scenario_eval_followups.md` - Step 2 evidence and recommendations 1-2.
-- `docs/current/plans/plan_not_found_error_orientation.md` - Decision 10 and slice 5f (the policy strip this builds on).
-- `docs/current/references/reference_tool_error_text_facts_options_policy.md` - the facts/options/policy standard the pointer must respect (it is a reference to a rule, not the rule).
-- `docs/current/plans/plan_error_codes_follow_cause.md` and `docs/current/proposals/proposal_tool_error_code_taxonomy.md` - the error identities used as keys.
+- `docs/current/plans/plan_not_found_error_orientation.md` - Decision 10 and slice 5f (the policy strip this builds on); owns the options layer.
+- `docs/current/references/reference_tool_error_text_facts_options_policy.md` - the facts/options/policy standard.
+- `docs/current/plans/plan_error_codes_follow_cause.md` and `docs/current/proposals/proposal_tool_error_code_taxonomy.md` - error identities.
+- `docs/current/references/reference_tool_response_pipeline.md` - read before adding the call-tool filter.
 - Memory: Tool error code taxonomy (partial), Startup arg wiring (canonical `LlmOptions.cs`), Model-eval procedure.
