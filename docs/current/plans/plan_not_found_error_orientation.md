@@ -1,6 +1,6 @@
 # Plan: Every not-found error ranks candidates, says plainly when none exist, and prefills one orientation call
 
-**Status:** IN PROGRESS 2026-11-12. Steps 1, 2 done; 3a, 3b, 4a, 5d-1 done (f45d009b, 2f5165ef, 117d7507, 5bc6cc8e, 3d33d265, 44f5b3ef, f9f6b65b); 3c/3d and further wire-text changes on hold until the plan_scenario_eval_followups live baseline releases them.
+**Status:** IN PROGRESS 2026-11-12. Steps 1-4 done (f45d009b, 2f5165ef, 117d7507, 5bc6cc8e, 3d33d265, bd480d35, 44f5b3ef, b56d46b3, d1ed5854) plus 5d-1 (f9f6b65b); Decision 10 (facts and options, no policy) adds slice 5f before the rest of Step 5.
 
 Related: [plan_scenario_eval_followups.md](./plan_scenario_eval_followups.md) (written in parallel: the stop-adherence scenario family and the seeded `RenameSymbolTypo` used in Step 6). Commit trailer for every slice: `Plan: plan_not_found_error_orientation` (the last slice adds `Closes:`).
 
@@ -176,6 +176,20 @@ Owner decisions, 2026-11-12 (implement-plan settle, after a source review of thi
    Engines.Basic, Tools.Basic and Common only. Engines.Advanced (136 sites), Tools.Experimental and the `GitImpl`
    family go to a TODO.md line that points at `reference_not_found_error_inventory.md`; the plan closes without them.
 
+10. **Facts and options, no policy (2026-11-12, supersedes the policy parts of Decisions 1 and 2):** after the
+    plan_scenario_eval_followups A/B on 3b (no measurable effect: 1/10 vs 0/10) the owner ruled that tool error
+    text stays agnostic in the broad sense: facts (what was searched, nothing similar exists, it does not exist
+    in this solution) and options (candidates, prefilled calls named as possibilities) only; no policy ("tell the
+    user so instead of...", "do not create", "You MUST", "If your task is to create this file, call CreateFile").
+    Stop/report behaviour belongs in prompts. Rules and examples:
+    [reference_tool_error_text_facts_options_policy.md](../references/reference_tool_error_text_facts_options_policy.md).
+    Decision 2(b)'s "report-it-does-not-exist option" becomes the fact "it does not exist in this solution".
+    New slice 5f (before the rest of Step 5): strip policy from the two shared builders (`FileNotFoundMessage`,
+    `SymbolNotFoundDetail`) and from 5a-1's `MemberNotFoundDetail` text if it landed; update pinned assertions to
+    check the remaining fact/option. Batch D resumes on the revised standard.
+11. **Step 6 measures, does not target (revises Decision 6):** the runs are kept and recorded; 6 of 10 is an
+    observation, not a goal to tune tool text toward.
+
 Approach: build one ranking helper in `RoslynSentinel.Common` (lifted from `MemberNotFoundDetail`), make the two
 shared lookups (file: `DocumentLookup` + `FileNotFoundMessage`; symbol: `LocateSymbol` + the docCommentId
 resolver) use it, then move the remaining literals onto the same helpers in slices by project. Migration-first
@@ -328,7 +342,9 @@ Sketch of the two no-candidate texts (wording is the implementer's to refine; th
   takes the already-filtered project list (or a predicate) from its caller. Slices: 4a Common builder and tests;
   4b the `LocateSymbol` path (`SymbolNavigationImpl`, scope passed in); 4c move `MissingParameterListResolver` to
   Common (decision 3) and the resolver path with its 3 callers.
-- Done: 4a 44f5b3ef (`SymbolNotFoundDetail.BuildAsync`, no callers). 4b, 4c held (wire text).
+- Done: 4a 44f5b3ef (`SymbolNotFoundDetail.BuildAsync`, no callers), 4b b56d46b3 (LocateSymbol path), 4c d1ed5854
+  (Common `SymbolWireResolver`: parameter-list check first for every caller, then candidates; old resolver deleted).
+  3d+3c bd480d35.
 
 ### Step 5 - Sweep the bare literals onto the helpers (implementer-sweep lane, slices by project)
 - Files: per slice below. Each slice is one operation across one project, compile-green on its own.

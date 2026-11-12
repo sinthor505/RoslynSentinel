@@ -146,6 +146,9 @@ or turn number; unverified causes are hypotheses. Load the `failure-analysis` sk
   tool boundary and return a structured, actionable error.
 - A not-found/zero-result error must rule out scope, name-shape, container and kind mistakes before
   claiming absence, state what was searched and name the next call.
+- Tool error and hint text carries facts and options only, never policy ("stop", "do not create", "MUST",
+  "if your task is..."): it serves every caller; policy belongs in prompts.
+  `docs/current/references/reference_tool_error_text_facts_options_policy.md`.
 - An unhandled `CS####` during automated work gets a `docs/current/blockers/` writeup immediately.
 - Writing a blocker, finding, proposal, issue, design, plan, idea or reference doc: follow
   `docs/current/templates/README.md` (folder, filename, template); never read existing docs for style.
