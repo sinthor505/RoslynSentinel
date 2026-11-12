@@ -2977,8 +2977,8 @@ public class SymbolNavigationEngine
     /// any), attribute lists, signature, and body/initializer/accessors, taken verbatim from the
     /// file (the first line starts at the first doc-comment or declaration token, so it carries no
     /// leading indentation; later lines keep the file's own). Supports class-level members and enum
-    /// members; whole types are refused (TargetIneligible) because the file-read tool / GetFileOutline serve
-    /// that. Resolution mirrors Member(remove)/Member(replace): by name, narrowed by containerName,
+    /// members. A memberName that names a type (class, interface, struct, record, enum; nested included)
+    /// returns that whole declaration with Kind = class/interface/struct/record/enum, unless a non-type member matches first; same 200-line cap. Resolution mirrors Member(remove)/Member(replace): by name, narrowed by containerName,
     /// then contextSnippet/lineBefore/lineAfter. With requireContainerMatch a containerName that matches
     /// no candidate is refused (NotFound, listing the types that declare the member) instead of ignored;
     /// without it the lenient fallback applies. Unlike remove/replace, an overloaded name with no
@@ -3033,14 +3033,15 @@ public class SymbolNavigationEngine
         {
             if (allNameCandidates.Count > 0)
             {
-                var kindNames = string.Join(", ", allNameCandidates.Select(c => c.Kind).Distinct());
-                throw new ToolTargetIneligibleException(
-                    $"'{memberName}' is a type-level declaration ({kindNames}). Member source only supports class-level members " +
-                    $"(methods, properties, fields, constructors, events, indexers) and enum members; use {ToolCallHint.Call("ReadFile")} or {ToolCallHint.Call("GetFileOutline")} for a whole type.");
+                // A type declaration is returned whole (owner ruling): prefer the type(s) inside containerName, else every name match.
+                var typeCandidates = SyntaxTargetResolver.FilterByContainingType(allNameCandidates.ToList(), containerName);
+                memberCandidates = typeCandidates.Count > 0 ? typeCandidates : allNameCandidates.ToList();
             }
-
-            throw new ToolNotFoundException(
-                await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken), "member", memberName);
+            else
+            {
+                throw new ToolNotFoundException(
+                    await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken), "member", memberName);
+            }
         }
 
         // TODO overload ambiguity here still gets the generic contextSnippet hint: this method is shared by Member(view) and the ReadFile memberName read, so use SyntaxTargetResolver.BuildOverloadHintForCandidates once the calling tool is passed in
@@ -3078,6 +3079,11 @@ public class SymbolNavigationEngine
             CandidateKind.Event => "event",
             CandidateKind.Indexer => "indexer",
             CandidateKind.EnumMember => "enumMember",
+            CandidateKind.Class => "class",
+            CandidateKind.Interface => "interface",
+            CandidateKind.Struct => "struct",
+            CandidateKind.Record => "record",
+            CandidateKind.Enum => "enum",
             _ => resolved.Kind.ToString()
         };
 

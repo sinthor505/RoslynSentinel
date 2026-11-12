@@ -1058,12 +1058,50 @@ public class C
 
     [Test]
     [Category("SymbolNavigationEngine")] // sentinel:auto-category
-    public async Task GetMemberSource_TypeNameOnly_ReturnsTargetIneligible()
+    public async Task GetMemberSource_TypeName_ReturnsWholeTypeSource()
     {
         SetSource("public class Holder { public int A; }", "MemberSourceType.cs");
 
-        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceType.cs", "Holder"));
-        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        var (outcome, _, _, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceType.cs", "Holder");
+        Assert.That(outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(info!.Kind, Is.EqualTo("class"));
+        Assert.That(info.Name, Is.EqualTo("Holder"));
+        Assert.That(info.Source, Does.Contain("public class Holder"));
+        Assert.That(info.Source, Does.Contain("public int A;"));
+        Assert.That(info.IsComplete, Is.True);
+    }
+
+    [Test]
+    [Category("SymbolNavigationEngine")]
+    public async Task GetMemberSource_NestedTypeName_ReturnsNestedTypeSource()
+    {
+        SetSource("public class Outer { public class Inner { public int B; } public int C; }", "MemberSourceNested.cs");
+
+        var (outcome, _, _, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceNested.cs", "Inner");
+        Assert.That(outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(info!.Kind, Is.EqualTo("class"));
+        Assert.That(info.Source, Does.Contain("class Inner"));
+        Assert.That(info.Source, Does.Contain("public int B;"));
+        Assert.That(info.Source, Does.Not.Contain("class Outer"));
+        Assert.That(info.Source, Does.Not.Contain("public int C;"));
+    }
+
+    [Test]
+    [Category("SymbolNavigationEngine")]
+    public async Task GetMemberSource_InterfaceAndEnumTypeNames_ReturnKindsAndSource()
+    {
+        SetSource("public interface IFoo { void M(); }\npublic enum Color { Red, Green }", "MemberSourceKinds.cs");
+
+        var (ifaceOutcome, _, _, iface) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceKinds.cs", "IFoo");
+        Assert.That(ifaceOutcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(iface!.Kind, Is.EqualTo("interface"));
+        Assert.That(iface.Source, Does.Contain("void M();"));
+
+        var (enumOutcome, _, _, enumInfo) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceKinds.cs", "Color");
+        Assert.That(enumOutcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(enumInfo!.Kind, Is.EqualTo("enum"));
+        Assert.That(enumInfo.Source, Does.Contain("Red"));
+        Assert.That(enumInfo.Source, Does.Contain("Green"));
     }
 
     [Test]
