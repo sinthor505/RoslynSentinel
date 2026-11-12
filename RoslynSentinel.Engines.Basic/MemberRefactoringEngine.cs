@@ -1041,7 +1041,7 @@ public class MemberRefactoringEngine
                     (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
                 if (target == null)
                 {
-                    failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ToolErrorCode.NotFound, $"batchEdits[{edit.Index}] ({edit.TargetName}): target not found."));
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ToolErrorCode.NotFound, MemberRefactoringNotFound.BatchMessage(edit.Index, edit.TargetName, "declaration", "targetName", MemberRefactoringNotFound.MemberNames(root), filePath.ToString())));
                     continue;
                 }
                 resolvedTargets[edit.Index] = target;
@@ -1546,7 +1546,7 @@ public class MemberRefactoringEngine
 
                 if (targetNode == null)
                 {
-                    failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ToolErrorCode.NotFound, $"batchEdits[{edit.Index}] ({edit.TargetName}): target not found."));
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ToolErrorCode.NotFound, MemberRefactoringNotFound.BatchMessage(edit.Index, edit.TargetName, "declaration", "targetName", MemberRefactoringNotFound.MemberNames(root), filePath.ToString())));
                     continue;
                 }
                 resolvedTargets[edit.Index] = targetNode;
@@ -1707,7 +1707,7 @@ public class MemberRefactoringEngine
 
         if (target == null)
         {
-            throw new ToolNotFoundException("Cannot edit: target not found.", "member", targetName);
+            throw MemberRefactoringNotFound.Target(targetName, root, filePath.ToString());
         }
 
         SyntaxKind[] newKinds = accessibility switch
@@ -1760,7 +1760,7 @@ public class MemberRefactoringEngine
 
         if (target == null)
         {
-            throw new ToolNotFoundException("Cannot edit: target not found.", "member", targetName);
+            throw MemberRefactoringNotFound.Target(targetName, root, filePath.ToString());
         }
 
         var kind = SyntaxFacts.GetKeywordKind(modifier);
@@ -1811,7 +1811,7 @@ public class MemberRefactoringEngine
 
         if (target == null)
         {
-            throw new ToolNotFoundException("Cannot edit: target not found.", "member", targetName);
+            throw MemberRefactoringNotFound.Target(targetName, root, filePath.ToString());
         }
 
         var kind = SyntaxFacts.GetKeywordKind(modifier);
@@ -1826,7 +1826,7 @@ public class MemberRefactoringEngine
             {
                 Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
-                Message = "// Cannot edit: modifier not found.",
+                Message = MemberRefactoringNotFound.ModifierMessage(modifier, targetName, target),
                 UpdatedText = root.ToFullString()
             };
         }
@@ -1893,7 +1893,7 @@ public class MemberRefactoringEngine
 
         if (targetNode == null)
         {
-            throw new ToolNotFoundException("Cannot edit: target not found.", "member", targetName);
+            throw MemberRefactoringNotFound.Target(targetName, root, filePath.ToString());
         }
 
         // Insert only the attribute list as a text edit: replacing the target node and formatting it would re-format
@@ -1964,7 +1964,7 @@ public class MemberRefactoringEngine
 
         if (targetNode == null)
         {
-            throw new ToolNotFoundException("Cannot edit: target not found.", "member", targetName);
+            throw MemberRefactoringNotFound.Target(targetName, root, filePath.ToString());
         }
 
         // Find the attribute by name within the target's attribute lists
@@ -1972,7 +1972,8 @@ public class MemberRefactoringEngine
         AttributeSyntax? oldAttr = attrLists.SelectMany(al => al.Attributes).FirstOrDefault(a => GetAttributeName(a) == oldAttributeName);
         if (oldAttr == null)
         {
-            throw new ToolNotFoundException($"Cannot edit: attribute '{oldAttributeName}' not found on target.", "attribute", oldAttributeName);
+            // The retry names the tool parameter (ModifyAttribute's existingAttribute), not this method's oldAttributeName: the caller sets the tool's.
+            throw MemberRefactoringNotFound.Attribute(oldAttributeName, targetName, targetNode, filePath.ToString(), "existingAttribute");
         }
 
         return new DocumentEditResult
@@ -2030,9 +2031,10 @@ public class MemberRefactoringEngine
 
         if (memberTarget == null)
         {
-            throw new ToolNotFoundException("Cannot edit: target not found.", "member", targetName);
+            throw MemberRefactoringNotFound.Target(targetName, root, filePath.ToString());
         }
 
+        // TODO an attributeName the target does not carry removes nothing yet returns Modified; report it with MemberRefactoringNotFound.Attribute(attributeName, targetName, memberTarget, filePath.ToString(), "existingAttribute") as ReplaceAttributeAsync does.
         var newAttrLists = memberTarget.AttributeLists.Select(al => al.WithAttributes(SyntaxFactory.SeparatedList(al.Attributes.Where(a => !AttrMatches(a))))).Where(al => al.Attributes.Count > 0).ToList();
         var newMember = memberTarget.WithAttributeLists(SyntaxFactory.List(newAttrLists));
         return new DocumentEditResult
@@ -5590,11 +5592,12 @@ public class MemberRefactoringEngine
             {
                 Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
-                Message = "// Cannot edit: base type not found.",
+                Message = MemberRefactoringNotFound.BaseTypeMessage(baseTypeName, typeName, container),
                 UpdatedText = root.ToFullString()
             };
         }
 
+        // TODO a base list that exists but names nothing matching baseTypeName falls through to Modified with unchanged text; return MemberRefactoringNotFound.BaseTypeMessage(baseTypeName, typeName, container) as AlreadyInTargetState so a near name gets its Did-you-mean retry.
         var remaining = container.BaseList.Types.Where(t => !t.ToString().Contains(baseTypeName)).ToList();
         var newContainer = remaining.Count == 0 ? container.WithBaseList(null) : container.WithBaseList(container.BaseList.WithTypes(SyntaxFactory.SeparatedList(remaining)));
         return new DocumentEditResult
@@ -5638,7 +5641,7 @@ public class MemberRefactoringEngine
                     (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
                 if (container == null)
                 {
-                    failures.Add(new BatchEditFailure(edit.Index, edit.TypeName, ToolErrorCode.NotFound, $"batchEdits[{edit.Index}] ({edit.TypeName}): type not found."));
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TypeName, ToolErrorCode.NotFound, MemberRefactoringNotFound.BatchMessage(edit.Index, edit.TypeName, "type", "typeName", MemberRefactoringNotFound.TypeNames(root), filePath.ToString())));
                     continue;
                 }
                 resolvedTargets[edit.Index] = container;
