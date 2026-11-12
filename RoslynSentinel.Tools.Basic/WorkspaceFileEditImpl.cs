@@ -963,19 +963,41 @@ public class WorkspaceFileEditImpl
     /// matches only at a looser tier (its near-matches are never edit candidates), is thrown through
     /// <see cref="SnippetErrorFormatter.Build"/> so the message lists the file's own candidate lines.
     /// </summary>
-    private static SnippetMatch ResolveEditMatch(
+    private static (SnippetMatch Match, string? Note) ResolveEditMatch(
         SourceText sourceText, string oldContent, string? lineBefore, string? lineAfter,
         Func<int, string?>? memberNameAt, string? withinMember, int? matchLine)
     {
         var result = SnippetResolver.Resolve(
             sourceText, oldContent, WhitespaceTolerance.IgnoreLineEndings, SnippetCaseMode.CaseSensitive,
             new SnippetSelectors(withinMember, matchLine, lineBefore, lineAfter), memberNameAt);
-        if (result.Outcome != SnippetMatchOutcome.Matched)
+        if (result.Outcome == SnippetMatchOutcome.Matched)
         {
-            throw SnippetErrorFormatter.Build(result, sourceText, oldContent, "oldContent", memberNameAt, selectorsSupported: true, adjacentLinesSupported: false);
+            return (result.Matches.Single(), null);
         }
 
-        return result.Matches.Single();
+        // Batch V R8: oldContent that occurs once has a single candidate, so a wrong guessed matchLine only costs a
+        // turn. Retry without matchLine and use the match only if that retry matches; withinMember and lineBefore/lineAfter
+        // still apply. Any other retry outcome, or two or more matches, falls through to the original error below.
+        if (result.Outcome == SnippetMatchOutcome.SelectorMismatch && matchLine > 0 && result.PreFilterMatches.Count == 1)
+        {
+            var retry = SnippetResolver.Resolve(
+                sourceText, oldContent, WhitespaceTolerance.IgnoreLineEndings, SnippetCaseMode.CaseSensitive,
+                new SnippetSelectors(withinMember, null, lineBefore, lineAfter), memberNameAt);
+            if (retry.Outcome == SnippetMatchOutcome.Matched)
+            {
+                var only = retry.Matches.Single();
+                int pos = only.Start;
+                while (char.IsWhiteSpace(sourceText[pos]) && pos < only.Start + only.Length - 1)
+                {
+                    pos++;
+                }
+
+                int actualLine = sourceText.Lines.GetLinePosition(pos).Line + 1;
+                return (only, $"matchLine {matchLine} ignored: oldContent occurs once, at line {actualLine}.");
+            }
+        }
+
+        throw SnippetErrorFormatter.Build(result, sourceText, oldContent, "oldContent", memberNameAt, selectorsSupported: true, adjacentLinesSupported: false);
     }
 
     /// <summary>
@@ -1226,9 +1248,11 @@ public class WorkspaceFileEditImpl
                     // project_replacesnippet_silent_splice_corruption_adjacent_lines memory).
                     var root = await document.GetSyntaxRootAsync(cancellationToken);
                     SnippetMatch match;
+                    // Set when a wrong matchLine was ignored for a unique match; prefixed to the apply summary.
+                    string? selectorNote = null;
                     try
                     {
-                        match = ResolveEditMatch(
+                        (match, selectorNote) = ResolveEditMatch(
                             oldText, oldContent, lineBefore, lineAfter, memberNameAt: MemberNameResolverFor(root),
                             withinMember: withinMember, matchLine: matchLine);
                     }
@@ -1286,6 +1310,7 @@ public class WorkspaceFileEditImpl
 
                     if (action == ProposedChangeAction.validate)
                     {
+                        // validate returns here, before the apply summary, so no selector note is reported on this path.
                         var validationResult = await _validationEngine.ValidateChangesAsync(snippetChanges, cancellationToken: cancellationToken);
                         return !validationResult.IsError ? new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
@@ -1379,7 +1404,8 @@ public class WorkspaceFileEditImpl
                     if (!result.IsError && liftNote is null)
                         _appliedEdits.Remember((string)targetPath, oldContent, newContent, changeId);
                     var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet", result, blobChangeId: changeId, cancellationToken: cancellationToken);
-                    var appliedSummary = liftNote is null ? result.Summary : $"{liftNote} {result.Summary}";
+                    var summaryBody = liftNote is null ? result.Summary : $"{liftNote} {result.Summary}";
+                    var appliedSummary = selectorNote is null ? summaryBody : $"{selectorNote} {summaryBody}";
                     var strippedResult = result with { PreImages = null, Summary = blobWrite.Written ? $"{appliedSummary} Call {ToolCallHint.Call("UndoLastApply", ("changeId", changeId))} to revert." : appliedSummary };
                     string? diffContent = returnDiff
                         ? ValidateAndApplyHelper.BuildDiffFromPreImages(snippetChanges, result.PreImages)
@@ -1440,6 +1466,8 @@ public class WorkspaceFileEditImpl
         }
 
         var perEditErrors = new List<string>();
+        // Batch V R8: one note per edit whose wrong matchLine was ignored, prefixed to the batch summary.
+        var selectorNotes = new List<string>();
         var anySizeBoundExceeded = false;
         // Shape of the oversized NEW content, combined across edits: the most general shape wins
         // (FileLevel > MultipleMembers > Unspecified > SingleMember), so one non-member edit is never hidden.
@@ -1556,9 +1584,11 @@ public class WorkspaceFileEditImpl
 
                 try
                 {
-                    var match = ResolveEditMatch(
+                    var (match, selectorNote) = ResolveEditMatch(
                         originalText, edit.OldContent, edit.LineBefore, edit.LineAfter, memberNameAt: memberNameAt,
                         withinMember: edit.WithinMember, matchLine: edit.MatchLine);
+                    if (selectorNote is not null)
+                        selectorNotes.Add($"batchEdits[{index}]: {selectorNote}");
                     resolved.Add((index, match, edit.OldContent, edit.NewContent));
                 }
                 catch (ToolException toolEx)
@@ -1647,6 +1677,7 @@ public class WorkspaceFileEditImpl
 
         if (action == ProposedChangeAction.validate)
         {
+            // validate returns here, before the apply summary, so no selector note is reported on this path.
             var validationResult = await _validationEngine.ValidateChangesAsync(finalContents, cancellationToken: cancellationToken);
             return !validationResult.IsError
                 ? new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = false, SuccessData = new ReplaceSnippetResult(null, validationResult, null) }
@@ -1735,7 +1766,8 @@ public class WorkspaceFileEditImpl
             }
             var changeId = Guid.NewGuid().ToString("n")[..8];
             var blobWrite = await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet_batch", result, blobChangeId: changeId, cancellationToken: cancellationToken);
-            var appliedSummary = liftNote is null ? result.Summary : $"{liftNote} {result.Summary}";
+            var summaryBody = liftNote is null ? result.Summary : $"{liftNote} {result.Summary}";
+            var appliedSummary = selectorNotes.Count == 0 ? summaryBody : string.Join(" ", selectorNotes) + " " + summaryBody;
             var strippedResult = result with { PreImages = null, Summary = blobWrite.Written ? $"{appliedSummary} Call {ToolCallHint.Call("UndoLastApply", ("changeId", changeId))} to revert." : appliedSummary };
             string? diffContent = returnDiff
                 ? ValidateAndApplyHelper.BuildDiffFromPreImages(finalContents, result.PreImages)

@@ -514,4 +514,68 @@ public class ReplaceSnippetErrorCodeTests
         Assert.That(h.Workspace.ReadText(MemberDupRelativePath), Is.EqualTo(original),
             "a rejected batch must not write anything");
     }
+
+    [Test]
+    public async Task ReplaceSnippet_Single_UniqueMatchWithWrongMatchLine_AppliesWithNoteAsync()
+    {
+        using var h = CreateHarness();
+        var original = h.Workspace.ReadText(MemberDupRelativePath);
+        var actualLine = Array.FindIndex(original.Split('\n'), line => line.Contains("int Compute() => 1;")) + 1;
+        var wrongLine = actualLine + 2;
+
+        var result = await h.Tools.ReplaceSnippetTool(
+            reason: "unique oldContent with a wrong matchLine",
+            ProposedChangeAction.apply,
+            filePath: h.Workspace.PathOf(MemberDupRelativePath),
+            oldContent: "int Compute() => 1;",
+            newContent: "int Compute() => 2;",
+            matchLine: wrongLine);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(h.Workspace.ReadText(MemberDupRelativePath), Does.Contain("int Compute() => 2;"));
+        Assert.That(result.SuccessData!.ReplacementResult!.Summary,
+            Does.Contain($"matchLine {wrongLine} ignored: oldContent occurs once, at line {actualLine}."));
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_Batch_UniqueMatchWithWrongMatchLine_AppliesWithNoteAsync()
+    {
+        using var h = CreateHarness();
+        var original = h.Workspace.ReadText(MemberDupRelativePath);
+        var path = h.Workspace.PathOf(MemberDupRelativePath);
+        var actualLine = Array.FindIndex(original.Split('\n'), line => line.Contains("int Compute() => 1;")) + 1;
+
+        var result = await h.Tools.ReplaceSnippetTool(
+            reason: "batch unique oldContent with a wrong matchLine",
+            ProposedChangeAction.apply,
+            batchEdits:
+            [
+                new SnippetEdit { FilePath = path, OldContent = "int Compute() => 1;", NewContent = "int Compute() => 2;", MatchLine = actualLine + 2 },
+            ]);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(h.Workspace.ReadText(MemberDupRelativePath), Does.Contain("int Compute() => 2;"));
+        Assert.That(result.SuccessData!.ReplacementResult!.Summary, Does.Contain("ignored: oldContent occurs once, at line"));
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_Single_UniqueMatchWithWrongMatchLineAndWrongWithinMember_StillErrorsAsync()
+    {
+        using var h = CreateHarness();
+        var original = h.Workspace.ReadText(MemberDupRelativePath);
+        var actualLine = Array.FindIndex(original.Split('\n'), line => line.Contains("int Compute() => 1;")) + 1;
+
+        var result = await h.Tools.ReplaceSnippetTool(
+            reason: "wrong matchLine and a withinMember that does not hold oldContent",
+            ProposedChangeAction.apply,
+            filePath: h.Workspace.PathOf(MemberDupRelativePath),
+            oldContent: "int Compute() => 1;",
+            newContent: "int Compute() => 2;",
+            withinMember: "FirstMethod",
+            matchLine: actualLine + 2);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(h.Workspace.ReadText(MemberDupRelativePath), Is.EqualTo(original), "a rejected edit must not write anything");
+    }
 }
