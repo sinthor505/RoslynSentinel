@@ -3283,9 +3283,9 @@ public class GitImpl : IGitOperations
                         };
                     }
 
-                    var addBase = new[] { "--literal-pathspecs", "add", "--" };
-                    var addArgs = addBase.Concat(untracked).ToArray();
-                    var addRaw = await RunGitAsync(gitRoot, addArgs, cancellationToken);
+                    // The same whole-file stage StageAsync uses (git --literal-pathspecs add -- paths): libgit2 in process for ordinary text files, exactly that
+                    // git command for everything libgit2 declines, so the result and every error text below are what the CLI gave.
+                    var addRaw = await RunIndexStageAsync(gitRoot, IndexStageMode.AddListed, untracked, cancellationToken);
 
                     // Backstop: check for ignored-path advisory
                     if (addRaw.ExitCode != 0 && addRaw.Stderr.Contains("The following paths are ignored"))

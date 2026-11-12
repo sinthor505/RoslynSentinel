@@ -502,10 +502,10 @@ public class GitCommitReadsParityTests
     }
 
     // Twin repositories differ in every hash and in the author date git prints on a revert's summary line.
-    private static string MaskHashes(string text) => Regex.Replace(Regex.Replace(text, "[0-9a-f]{7,40}", "<hash>"), "Date:[^\\r\\n]*", "Date: <date>");
+    internal static string MaskHashes(string text) => Regex.Replace(Regex.Replace(text, "[0-9a-f]{7,40}", "<hash>"), "Date:[^\\r\\n]*", "Date: <date>");
 
     /// <summary>What a commit left behind, with the hashes of twin repositories made comparable: the object type, the parents (named when they are the old HEAD or MERGE_HEAD), who HEAD is, the files and the message.</summary>
-    private static string Facts(string directory, string hash, IReadOnlyDictionary<string, string> named)
+    internal static string Facts(string directory, string hash, IReadOnlyDictionary<string, string> named)
     {
         if (hash.Length == 0)
         {
@@ -513,12 +513,12 @@ public class GitCommitReadsParityTests
         }
 
         var parents = RunGit(directory, "rev-list", "--parents", "-n", "1", hash).Split(' ').Skip(1).Select(parent => named.GetValueOrDefault(parent, "other"));
-        var files = RunGit(directory, "show", "--no-renames", "--name-only", "--format=", hash).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Order();
+        var files = RunGit(directory, "-c", "core.quotePath=false", "show", "--no-renames", "--name-only", "--format=", hash).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Order();
         var head = Head(directory) == hash ? "own" : "moved";
         return $"{RunGit(directory, "cat-file", "-t", hash)}|parents={string.Join(',', parents)}|head={head}|files={string.Join(',', files)}|message={MaskHashes(RunGit(directory, "log", "-1", "--format=%B", hash))}";
     }
 
-    private static string CommitJson(GitCommitResult result) =>
+    internal static string CommitJson(GitCommitResult result) =>
         Json(result with { CommitHash = result.CommitHash.Length == 40 ? "<hash>" : result.CommitHash });
 
     /// <summary>
