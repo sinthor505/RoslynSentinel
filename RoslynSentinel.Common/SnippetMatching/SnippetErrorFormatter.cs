@@ -83,7 +83,7 @@ namespace RoslynSentinel.Common.SnippetMatching
             switch (result.Outcome)
             {
                 case SnippetMatchOutcome.NoMatch:
-                    return BuildNoMatch(result, snippet, snippetLabel);
+                    return BuildNoMatch(result, sourceText, snippet, snippetLabel);
 
                 case SnippetMatchOutcome.MatchedLooserThanRequested:
                     return BuildLooser(result, snippetLabel);
@@ -115,7 +115,7 @@ namespace RoslynSentinel.Common.SnippetMatching
 
         // ---- NoMatch ----
 
-        private static ToolNotFoundException BuildNoMatch(SnippetMatchResult result, string snippet, string label)
+        private static ToolNotFoundException BuildNoMatch(SnippetMatchResult result, SourceText sourceText, string snippet, string label)
         {
             if (string.IsNullOrWhiteSpace(snippet))
             {
@@ -134,6 +134,12 @@ namespace RoslynSentinel.Common.SnippetMatching
                 sb.Append(escapedQuotes).Append('\n');
             }
 
+            var literalEscapes = escapedQuotes is null ? DescribeLiteralEscapeSequences(sourceText, snippet, label) : null;
+            if (literalEscapes is not null)
+            {
+                sb.Append(literalEscapes).Append('\n');
+            }
+
             var markup = DescribeToolMarkup(result, snippet, label);
             if (markup is not null)
             {
@@ -143,8 +149,8 @@ namespace RoslynSentinel.Common.SnippetMatching
             sb.Append($"{label} was not found: it matches nothing at any whitespace tolerance probed.");
             sb.Append('\n').Append(DescribeProbe(result));
 
-            // An escaped-quote diagnosis already names the differing lines; a first-difference line would only repeat it.
-            var firstDifference = escapedQuotes is null ? DescribeFirstDifference(result, snippet, label) : null;
+            // An escaped-quote or literal-escape diagnosis already names the differing lines; a first-difference line would only repeat it.
+            var firstDifference = escapedQuotes is null && literalEscapes is null ? DescribeFirstDifference(result, snippet, label) : null;
             if (firstDifference is not null)
             {
                 sb.Append('\n').Append(firstDifference);
@@ -156,8 +162,10 @@ namespace RoslynSentinel.Common.SnippetMatching
             {
                 sb.Append('\n').Append(
                     $"No candidates: no window of the file reaches a similarity of {SnippetCandidateFinder.MinClosestWindowScore.ToString("0.00", CultureInfo.InvariantCulture)} " +
-                    $"to your {label}, so there is no close text to show. The text does not appear to be in this file; " +
-                    "re-read the file and check the file path before retrying.");
+                    $"to your {label}, so there is no close text to show. " +
+                    (literalEscapes is null
+                        ? "The text does not appear to be in this file; re-read the file and check the file path before retrying."
+                        : "The unescaped text was matched against the file, so resend it with real newlines and quotes."));
                 return new ToolNotFoundException(sb.ToString(), snippet: SnippetFailureDetail.From(result));
             }
 
@@ -610,6 +618,61 @@ namespace RoslynSentinel.Common.SnippetMatching
             }
 
             return null;
+        }
+
+        // A model that copied JSON-escaped text sends backslash-r, backslash-n, backslash-t or backslash-quote as literal
+        // characters. Null unless the snippet has such a sequence and the unescaped text matches the file (or nearly does).
+        private static string? DescribeLiteralEscapeSequences(SourceText sourceText, string snippet, string label)
+        {
+            var found = new List<string>();
+            if (snippet.Contains("\\r\\n", StringComparison.Ordinal))
+            {
+                found.Add("\\r\\n");
+            }
+            else if (snippet.Contains("\\r", StringComparison.Ordinal))
+            {
+                found.Add("\\r");
+            }
+
+            if (snippet.Contains("\\n", StringComparison.Ordinal) && !found.Contains("\\r\\n"))
+            {
+                found.Add("\\n");
+            }
+
+            if (snippet.Contains("\\t", StringComparison.Ordinal))
+            {
+                found.Add("\\t");
+            }
+
+            if (snippet.Contains("\\\"", StringComparison.Ordinal))
+            {
+                found.Add("\\\"");
+            }
+
+            if (found.Count == 0)
+            {
+                return null;
+            }
+
+            var unescaped = snippet
+                .Replace("\\r\\n", "\n", StringComparison.Ordinal)
+                .Replace("\\n", "\n", StringComparison.Ordinal)
+                .Replace("\\r", "\n", StringComparison.Ordinal)
+                .Replace("\\t", "\t", StringComparison.Ordinal)
+                .Replace("\\\"", "\"", StringComparison.Ordinal);
+            var resolved = SnippetResolver.Resolve(sourceText, unescaped, WhitespaceTolerance.IgnoreAllWhitespace, SnippetCaseMode.CaseSensitive);
+            var matches = resolved.Outcome != SnippetMatchOutcome.NoMatch
+                || (resolved.ClosestWindows.Count > 0 && resolved.ClosestWindows[0].Score >= 0.8);
+            if (!matches)
+            {
+                return null;
+            }
+
+            var newContentNote = label == "oldContent"
+                ? " - and write newContent the same way, or the escapes will be written into the code"
+                : string.Empty;
+            return $"Your {label} contains literal escape sequences such as \\n (backslash then n) copied from JSON-escaped text: " +
+                   $"found {string.Join(", ", found)}. Send real newlines, tabs and plain quotes exactly as the file shows them{newContentNote}.";
         }
 
         private static string? DescribeToolMarkup(SnippetMatchResult result, string snippet, string label)

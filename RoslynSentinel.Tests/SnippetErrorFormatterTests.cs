@@ -622,6 +622,40 @@ public class SnippetErrorFormatterTests
     }
 
     [Test]
+    public void NoMatch_LiteralBackslashRBackslashN_InMultiLineSnippet_SaysSendRealNewlines()
+    {
+        var lines = new[] { "public class A", "{", "    public void M()", "    {", "        Run();", "    }", "}" };
+        var source = Lines(lines);
+        var snippet = string.Join("\\r\\n", lines);
+        var result = Resolve(source, snippet);
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+
+        var ex = Build(source, snippet, result);
+
+        Assert.That(ex.Message, Does.Contain("literal escape sequences"));
+        Assert.That(ex.Message, Does.Contain("real newlines"));
+        Assert.That(ex.Message, Does.Contain("found \\r\\n"));
+        Assert.That(ex.Message, Does.Not.Contain("re-read the file and check the file path"));
+    }
+
+    [Test]
+    public void NoMatch_LiteralBackslashQuote_WithLiteralNewlines_SaysSendRealQuotes()
+    {
+        var lines = new[] { "class C", "{", "    void M()", "    {", "        Log(\"start\");", "        Log(\"end\");", "    }", "}" };
+        var source = Lines(lines);
+        var snippet = string.Join("\\n", lines.Select(l => l.Replace("\"", "\\\"")));
+        var result = Resolve(source, snippet);
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+
+        var ex = Build(source, snippet, result);
+
+        Assert.That(ex.Message, Does.Contain("literal escape sequences"));
+        Assert.That(ex.Message, Does.Contain("real newlines"));
+        Assert.That(ex.Message, Does.Contain("found \\n, \\\""));
+        Assert.That(ex.Message, Does.Not.Contain("re-read the file and check the file path"));
+    }
+
+    [Test]
     public void NoMatch_EscapedQuotesAndDoubledBackslashes_NamesBoth()
     {
         const string source = "void M()\n    var p = \"C:\\\\temp\";\n    return p;";
