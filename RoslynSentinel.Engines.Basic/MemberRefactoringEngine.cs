@@ -173,7 +173,7 @@ public class MemberRefactoringEngine
 
         if (classNode is not ClassDeclarationSyntax classDecl)
         {
-            throw new ToolNotFoundException("Cannot edit: class not found.", "class", className);
+            throw MemberRefactoringNotFound.Class(className, root, filePath.ToString());
         }
 
         return classDecl;
@@ -438,7 +438,7 @@ public class MemberRefactoringEngine
 
         if (classNode == null || classNode is not ClassDeclarationSyntax classDecl)
         {
-            throw new ToolNotFoundException("Cannot edit: class not found.", "class", className);
+            throw MemberRefactoringNotFound.Class(className, root, filePath.ToString());
         }
 
         // Overloads may each declare the parameter: never take the first one silently.
@@ -459,7 +459,7 @@ public class MemberRefactoringEngine
                 var containing = ctorMatches.Where(c => c.FullSpan.Contains(snippetMatch.Start)).ToList();
                 if (containing.Count == 0)
                 {
-                    throw new ToolNotFoundException($"contextSnippet is not inside any constructor with parameter '{paramName}' on '{className}'.", "parameter", paramName);
+                    throw MemberRefactoringNotFound.SnippetOutsideConstructors(paramName, className, MemberRefactoringNotFound.StartLines(sourceText, ctorMatches), filePath.ToString());
                 }
 
                 ctor = NameTargetLookup.RequireSingle(containing, "Constructor with parameter", paramName);
@@ -468,7 +468,7 @@ public class MemberRefactoringEngine
 
         if (ctor == null || ctor.Body == null)
         {
-            throw new ToolNotFoundException($"Constructor parameter '{paramName}' not found on '{className}'.", "parameter", paramName);
+            throw MemberRefactoringNotFound.ConstructorParameter(paramName, className, classDecl, filePath.ToString());
         }
 
         var targetParam = ctor.ParameterList.Parameters.First(p => p.Identifier.Text == paramName);
@@ -572,7 +572,9 @@ public class MemberRefactoringEngine
 
         if (classNode == null || classNode is not ClassDeclarationSyntax classDecl)
         {
-            throw new ToolNotFoundException($"Class '{className}' was not found in '{filePath}'. Searched: class, interface, struct, record and enum declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to confirm the type name.", "class", className);
+            // The factory carries the candidates or the outline option; the search scope (declaration kinds and the snippet filter) is appended as a fact.
+            var classMiss = MemberRefactoringNotFound.Class(className, root, filePath.ToString());
+            throw new ToolNotFoundException(classMiss.Message + " Searched class, interface, struct, record and enum declarations matching this name and the contextSnippet/lineBefore/lineAfter filter.", "class", className);
         }
 
         // TODO tuple outcome slot is always Modified; return only the list
@@ -638,7 +640,7 @@ public class MemberRefactoringEngine
 
         if (enumNode == null || enumNode is not EnumDeclarationSyntax)
         {
-            throw new ToolNotFoundException($"Cannot edit: enum '{enumName}' not found.", "enum", enumName);
+            throw MemberRefactoringNotFound.Enum(enumName, root, filePath.ToString());
         }
 
         var enumDecl = (EnumDeclarationSyntax)enumNode;
@@ -820,7 +822,7 @@ public class MemberRefactoringEngine
 
         if (!existing.Any(m => m.Name == memberName))
         {
-            throw new ToolNotFoundException($"Cannot edit: member '{memberName}' not found in enum '{enumName}'.", "enum member", memberName);
+            throw MemberRefactoringNotFound.EnumMember(memberName, enumName, existing.Select(m => m.Name).OfType<string>(), filePath.ToString());
         }
 
         var names = existing.Where(m => m.Name != memberName).Select(m => m.Signature).ToList();
@@ -844,7 +846,7 @@ public class MemberRefactoringEngine
         var idx = existing.FindIndex(m => m.Name == memberName);
         if (idx < 0)
         {
-            throw new ToolNotFoundException($"Cannot edit: member '{memberName}' not found in enum '{enumName}'.", "enum member", memberName);
+            throw MemberRefactoringNotFound.EnumMember(memberName, enumName, existing.Select(m => m.Name).OfType<string>(), filePath.ToString());
         }
 
         var names = existing.Select(m => m.Signature).ToList();
@@ -3116,7 +3118,7 @@ public class MemberRefactoringEngine
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         if (classNode == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'.");
+            throw MemberRefactoringNotFound.Class(className, root, filePath.ToString());
         }
 
         // memberNames entries are bare names or signatures like "Save(int)" (see MemberSelection). One shared selection, also used by
@@ -3746,7 +3748,7 @@ public class MemberRefactoringEngine
         var baseClassNode = baseRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == baseType.Name);
         if (baseClassNode == null)
         {
-            throw new ToolNotFoundException($"Base class '{baseType.Name}' not found in '{baseFile}'.");
+            throw MemberRefactoringNotFound.Class(baseType.Name, baseRoot, baseFile, "targetClassName");
         }
 
         // Base and derived class routinely live in the same file (a small hierarchy kept together
@@ -4268,7 +4270,7 @@ public class MemberRefactoringEngine
             var sameClassRoot = (CompilationUnitSyntax)(await sameClassDocument.GetSyntaxRootAsync(cancellationToken))!;
             var sameClassText = await sameClassDocument.GetTextAsync(cancellationToken);
             var sameClassModel = await sameClassDocument.GetSemanticModelAsync(cancellationToken);
-            var sameClassNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(sameClassRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className) ?? throw new RoslynSentinel.Common.ToolNotFoundException($"Class '{className}' was not found in the file.", "class", className);
+            var sameClassNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(sameClassRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className) ?? throw MemberRefactoringNotFound.Class(className, sameClassRoot, filePath.ToString());
             var receiverCandidates = sameClassModel?.GetDeclaredSymbol(sameClassNode, cancellationToken) is { } sameClassSymbol
                 ? sameClassSymbol.GetMembers().Where(m => !m.IsStatic && !m.IsImplicitlyDeclared && (m is IFieldSymbol || m is IPropertySymbol) && (m is IFieldSymbol f ? f.Type : ((IPropertySymbol)m).Type).Name == targetClassName).Select(m => m.Name).ToList()
                 : new List<string>();
@@ -4326,7 +4328,7 @@ public class MemberRefactoringEngine
 
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).First()!;
         var root = (CompilationUnitSyntax)(await document.GetSyntaxRootAsync(cancellationToken))!;
-        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className) ?? throw new RoslynSentinel.Common.ToolNotFoundException($"Class '{className}' was not found in the file.", "class", className);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className) ?? throw MemberRefactoringNotFound.Class(className, root, filePath.ToString());
 
         // Receiver rewrites (`oldReceiver.Member` -> `resolvedReceiver.Member`) are minimal edits: only the receiver
         // expression's own span is replaced, against each document's ORIGINAL text, so the rest of every caller file
@@ -5084,7 +5086,7 @@ public class MemberRefactoringEngine
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         if (classNode == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'.");
+            throw MemberRefactoringNotFound.Class(className, root, filePath.ToString());
         }
 
         // The same selection MoveMemberAsync makes (bare names and signatures like "Save(int)"), so a dry run refuses exactly what the real move refuses.

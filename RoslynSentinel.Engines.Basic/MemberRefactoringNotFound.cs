@@ -141,6 +141,10 @@ public static class MemberRefactoringNotFound
     public static ToolNotFoundException EnumMember(string memberName, string enumName, EnumDeclarationSyntax? enumDecl, string filePath, string paramName = "memberName")
         => new(ScopedMessage("enum member", memberName, paramName, EnumMemberNames(enumDecl), $"enum '{enumName}'", filePath), "enum member", memberName);
 
+    /// <summary>Enum member miss from a caller that holds the enum's member names rather than its syntax (RemoveEnumMember, ReplaceEnumMember read them through GetContainerMembersAsync).</summary>
+    public static ToolNotFoundException EnumMember(string memberName, string enumName, IEnumerable<string> enumMemberNames, string filePath, string paramName = "memberName")
+        => new(ScopedMessage("enum member", memberName, paramName, enumMemberNames, $"enum '{enumName}'", filePath), "enum member", memberName);
+
     /// <summary>Constructor parameter miss (kind "parameter"): ConstructorParameter remove. Lists the parameters of the class's constructors.</summary>
     public static ToolNotFoundException ConstructorParameter(string paramName, string className, ClassDeclarationSyntax? classDecl, string filePath, string retryParamName = "paramName")
         => new(ScopedMessage("constructor parameter", paramName, retryParamName, ConstructorParameterNames(classDecl), $"the constructors of '{className}'", filePath), "parameter", paramName);

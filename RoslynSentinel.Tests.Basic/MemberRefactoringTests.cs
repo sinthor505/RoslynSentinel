@@ -1210,7 +1210,8 @@ public class C
             await _memberRefactoringEngine.RemoveEnumMemberAsync("ToolScope.cs", "ToolScope", "nonexistent");
         });
 
-        Assert.That(ex!.Message, Does.Contain("not found in enum"));
+        Assert.That(ex!.Message, Does.Contain("Declared in enum 'ToolScope': file, project, solution."));
+        Assert.That(ex.MissingTargetKind, Is.EqualTo("enum member"));
     }
 
     [Test]
@@ -1254,7 +1255,8 @@ public enum Singleton
             await _memberRefactoringEngine.ReplaceEnumMemberAsync("ToolScope.cs", "ToolScope", "nonexistent", "workspace");
         });
 
-        Assert.That(ex!.Message, Does.Contain("not found in enum"));
+        Assert.That(ex!.Message, Does.Contain("Declared in enum 'ToolScope': file, project, solution."));
+        Assert.That(ex.MissingTargetKind, Is.EqualTo("enum member"));
     }
 
     [Test]
@@ -1481,7 +1483,10 @@ public class Foo { }
             await _memberRefactoringEngine.ModifyEnumAsync("Foo.cs", "NonExistentEnum", "SomeValue");
         });
 
-        Assert.That(ex!.Message, Does.Contain("enum 'NonExistentEnum' not found"));
+        Assert.That(ex!.Message, Does.Contain("No enum is declared in '"));
+        Assert.That(ex.Message, Does.Contain("GetFileOutline"));
+        Assert.That(ex.MissingTargetKind, Is.EqualTo("enum"));
+        Assert.That(ex.MissingTargetName, Is.EqualTo("NonExistentEnum"));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -3479,7 +3484,8 @@ public class Service
         });
 
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(ex.Message, Does.Contain("not inside any constructor"));
+        Assert.That(ex.Message, Does.Contain("Constructors declaring 'count' start at line"));
+        Assert.That(ex.Message, Does.Contain("ReadFile"));
     }
 
     [Test]
