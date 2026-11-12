@@ -163,6 +163,17 @@ public class ToolSchemaComparerTests
     }
 
     [Test]
+    public void Compare_NewParameterNamedDescription_IsStructural()
+    {
+        var result = CompareOne(
+            """{"type":"object","properties":{"path":{"type":"string"}}}""",
+            """{"type":"object","properties":{"path":{"type":"string"},"description":{"type":"string","description":"x"}}}""");
+
+        Assert.That(result.Kind, Is.EqualTo(SchemaDifferenceKind.Structural));
+        Assert.That(result.Detail, Does.StartWith("T:"));
+    }
+
+    [Test]
     public void ResumeSource_ReadsBackSchemasDescriptionsAndCommit()
     {
         string path = Path.GetTempFileName();

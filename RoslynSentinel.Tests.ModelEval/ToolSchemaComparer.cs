@@ -127,7 +127,7 @@ public static class ToolSchemaComparer
                 : null;
     }
 
-    // Builds a normalised tree: object keys sorted, optionally without "description", and required/enum arrays sorted.
+    // Builds a normalised tree: object keys sorted, optionally without string-valued "description" keywords (a parameter named description keeps its object schema), and required/enum arrays sorted.
     private static JsonNode? Canonicalise(JsonElement element, bool keepDescriptions, string? key)
     {
         return element.ValueKind switch
@@ -143,7 +143,7 @@ public static class ToolSchemaComparer
         var result = new JsonObject();
         foreach (JsonProperty property in element.EnumerateObject().OrderBy(p => p.Name, StringComparer.Ordinal))
         {
-            if (!keepDescriptions && property.Name == DescriptionKey)
+            if (!keepDescriptions && property.Name == DescriptionKey && property.Value.ValueKind == JsonValueKind.String)
             {
                 continue;
             }
