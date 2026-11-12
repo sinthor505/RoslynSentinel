@@ -183,6 +183,57 @@ public class TranscriptResumeTests
         });
     }
 
+    [Test]
+    public void BuildAuthoredFaultTurn_SeveralCalls_OneAssistantTurnWithAllCallsAndResults()
+    {
+        var args = "{\"filePath\":\"a.cs\"}";
+        var turn = TranscriptResume.BuildAuthoredFaultTurn(1,
+        [
+            ("ReplaceSnippet", args, "ok", false),
+            ("ReplaceSnippet", args, "dup", false),
+        ]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(turn.TurnNumber, Is.EqualTo(1));
+            Assert.That(turn.ModelMessage.Role, Is.EqualTo("assistant"));
+            Assert.That(turn.ModelMessage.ToolCalls, Has.Count.EqualTo(2));
+            Assert.That(turn.ModelMessage.ToolCalls[0].Id, Is.EqualTo("authored-fault-1-1"));
+            Assert.That(turn.ModelMessage.ToolCalls[1].Id, Is.EqualTo("authored-fault-1-2"));
+            Assert.That(turn.ModelMessage.ToolCalls[0].Name, Is.EqualTo("ReplaceSnippet"));
+            Assert.That(turn.ModelMessage.ToolCalls[1].Name, Is.EqualTo("ReplaceSnippet"));
+            Assert.That(turn.ModelMessage.ToolCalls[0].ArgumentsJson, Is.EqualTo(args));
+            Assert.That(turn.ModelMessage.ToolCalls[1].ArgumentsJson, Is.EqualTo(args));
+            Assert.That(turn.ToolCalls, Has.Count.EqualTo(2));
+            Assert.That(turn.ToolCalls[0].ToolCallId, Is.EqualTo("authored-fault-1-1"));
+            Assert.That(turn.ToolCalls[1].ToolCallId, Is.EqualTo("authored-fault-1-2"));
+            Assert.That(turn.ToolCalls[0].ResultJson, Is.EqualTo("ok"));
+            Assert.That(turn.ToolCalls[1].ResultJson, Is.EqualTo("dup"));
+            Assert.That(turn.ToolCalls[0].IsError, Is.False);
+            Assert.That(turn.ToolCalls[1].IsError, Is.False);
+        });
+    }
+
+    [Test]
+    public void BuildAuthoredFaultTurn_SingleCallListOverload_KeepsTheLegacyId()
+    {
+        var turn = TranscriptResume.BuildAuthoredFaultTurn(5, [("ReplaceSnippet", "{}", Rejection, true)]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(turn.ModelMessage.ToolCalls, Has.Count.EqualTo(1));
+            Assert.That(turn.ModelMessage.ToolCalls[0].Id, Is.EqualTo("authored-fault-5"));
+            Assert.That(turn.ToolCalls, Has.Count.EqualTo(1));
+            Assert.That(turn.ToolCalls[0].ToolCallId, Is.EqualTo("authored-fault-5"));
+        });
+    }
+
+    [Test]
+    public void BuildAuthoredFaultTurn_NoCalls_Throws()
+    {
+        Assert.Throws<ArgumentException>(() => TranscriptResume.BuildAuthoredFaultTurn(1, []));
+    }
+
     // ---- replay of the kept calls ----
 
     [Test]

@@ -294,12 +294,49 @@ public static class TranscriptResume
 
     /// <summary>
     /// A turn whose call was authored by the harness, not the model: the call itself is authored by the harness, only
-    /// its <paramref name="resultText"/> is real (executed on the fixture). Used to seed a failed last call.
+    /// its <paramref name="resultText"/> is real (executed on the fixture). Used to seed a failed last call. For several calls
+    /// in one assistant turn (a twin-call turn) use the list overload.
     /// </summary>
     public static AgentTranscriptTurn BuildAuthoredFaultTurn(int turnNumber, string toolName, string argumentsJson, string resultText, bool isError)
     {
-        var callId = "authored-fault-" + turnNumber;
+        return BuildAuthoredFaultTurn(turnNumber, [(toolName, argumentsJson, resultText, isError)]);
+    }
+
+    /// <summary>
+    /// A turn whose calls were authored by the harness, not the model: the calls themselves are authored by the harness, only
+    /// their <paramref name="calls"/> results are real (executed on the fixture). Used to seed a failed last call. Several entries
+    /// put several calls in ONE assistant turn (a twin-call turn), in order; a single entry keeps the legacy id.
+    /// </summary>
+    public static AgentTranscriptTurn BuildAuthoredFaultTurn(int turnNumber, IReadOnlyList<(string ToolName, string ArgumentsJson, string ResultText, bool IsError)> calls)
+    {
+        if (calls.Count == 0)
+        {
+            throw new ArgumentException("At least one authored fault call is required.", nameof(calls));
+        }
+
         var now = DateTimeOffset.UtcNow;
+        var modelCalls = new List<AgentToolCall>(calls.Count);
+        var records = new List<AgentToolCallRecord>(calls.Count);
+        for (var i = 0; i < calls.Count; i++)
+        {
+            var call = calls[i];
+            var callId = calls.Count == 1
+                ? "authored-fault-" + turnNumber
+                : "authored-fault-" + turnNumber + "-" + (i + 1);
+            modelCalls.Add(new AgentToolCall { Id = callId, Name = call.ToolName, ArgumentsJson = call.ArgumentsJson });
+            records.Add(new AgentToolCallRecord
+            {
+                ToolName = call.ToolName,
+                ArgumentsJson = call.ArgumentsJson,
+                ResultJson = call.ResultText,
+                IsError = call.IsError,
+                Latency = TimeSpan.Zero,
+                StartedAt = now,
+                CompletedAt = now,
+                ToolCallId = callId,
+            });
+        }
+
         return new AgentTranscriptTurn
         {
             TurnNumber = turnNumber,
@@ -311,22 +348,9 @@ public static class TranscriptResume
                 Role = "assistant",
                 Content = "",
                 ReasoningContent = null,
-                ToolCalls = [new AgentToolCall { Id = callId, Name = toolName, ArgumentsJson = argumentsJson }],
+                ToolCalls = modelCalls,
             },
-            ToolCalls =
-            [
-                new AgentToolCallRecord
-                {
-                    ToolName = toolName,
-                    ArgumentsJson = argumentsJson,
-                    ResultJson = resultText,
-                    IsError = isError,
-                    Latency = TimeSpan.Zero,
-                    StartedAt = now,
-                    CompletedAt = now,
-                    ToolCallId = callId,
-                },
-            ],
+            ToolCalls = records,
         };
     }
 

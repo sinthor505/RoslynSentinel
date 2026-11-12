@@ -24,6 +24,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <param name="ResumeFaultSeeded">false: stale workspace; the fault call is executed on the fixture but is NOT shown to the model. true: authored failed last call; the call is appended to the history as an assistant turn authored by the harness, with its real result. The turn cap counts it and it is scored as a live turn, so it is the scenario's first error.</param>
 /// <param name="IdealTurns">Soft pass bound in live turns for a StopAndReport scenario: a BLOCKED: stop at or below it passes; a stop above it but within TurnCap fails as FailureClass.StoppedLate. null = no soft tier (the existing behaviour).</param>
 /// <param name="EndOnCorrectFinalState">Resume scenarios only: true ends a live sample early (AgentStopReason.TargetReached) as soon as CheckFinalState returns FinalStateVerdict.Correct after a live turn; false = run to the model's own finish or the turn cap. CheckFinalState must be cheap (text-only, no build) because it runs after every live turn.</param>
+/// <param name="ResumeFaultExtraCalls">Seeded resume scenarios only (ResumeFaultSeeded true): further authored calls placed in the SAME assistant turn as the ResumeFaultTool call, executed in order after it on the fixture, each with its real result. {SOLUTION} in the arguments is replaced as for ResumeFaultArguments. null/empty = the turn holds only the ResumeFaultTool call. Ignored for an unseeded fault.</param>
 public sealed record ScenarioDefinition(
     string Id,
     int ScenarioType,
@@ -45,7 +46,8 @@ public sealed record ScenarioDefinition(
     bool ResumeFaultSeeded = false,
     int? IdealTurns = null,
     // A separate target-predicate field may become necessary later for flexibility (owner request); today the target is exactly CheckFinalState == Correct.
-    bool EndOnCorrectFinalState = false)
+    bool EndOnCorrectFinalState = false,
+    IReadOnlyList<(string Tool, string Arguments)>? ResumeFaultExtraCalls = null)
 {
     /// <summary>
     /// True when this scenario runs through the resume path: it replays a saved transcript, or it is a seeded-fault
