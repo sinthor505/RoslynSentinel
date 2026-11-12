@@ -517,6 +517,58 @@ public class GitCasCommitTests
     }
 
     [Test]
+    public void HeadPlusPaths_Declines_WhenAListedFileDiffersInTheWorkingTree()
+    {
+        var dir = NewRepo(_root, "decline-listed-file");
+        Write(dir, "a.txt", "committed\n");
+        GitTestRepo.CommitAll(dir, "baseline");
+        Write(dir, "a.txt", "staged\n");
+        RunGit(dir, "add", "a.txt");
+        Write(dir, "a.txt", "changed in the working tree only\n");
+
+        AssertDeclined(CommitPaths(dir, "x\n", "a.txt"), "differs between the working tree and the index");
+    }
+
+    [Test]
+    public void HeadPlusPaths_Declines_WhenAFileUnderAListedDirectoryDiffersInTheWorkingTree()
+    {
+        var dir = NewRepo(_root, "decline-listed-dir");
+        Write(dir, "src/b.txt", "committed\n");
+        GitTestRepo.CommitAll(dir, "baseline");
+        Write(dir, "src/b.txt", "changed in the working tree only\n");
+
+        AssertDeclined(CommitPaths(dir, "x\n", "src"), "differs between the working tree and the index");
+    }
+
+    [Test]
+    public void HeadPlusPaths_IgnoresAWorkingTreeChange_InASiblingSharingTheListedPrefix()
+    {
+        var dir = NewRepo(_root, "sibling-prefix");
+        Write(dir, "src/a.txt", "v1\n");
+        Write(dir, "src/a.txt.bak", "bak v1\n");
+        GitTestRepo.CommitAll(dir, "baseline");
+        Write(dir, "src/a.txt", "v2\n");
+        RunGit(dir, "add", "src/a.txt");
+        Write(dir, "src/a.txt.bak", "bak changed in the working tree only\n");
+
+        var result = CommitPaths(dir, "a only\n", "src/a.txt");
+
+        Assert.That(result.Outcome, Is.EqualTo(CasCommitOutcome.Committed), result.ToString());
+        AssertNoLockLeft(dir);
+    }
+
+    [Test]
+    public void HeadPlusPaths_Declines_WhenAListedPathWithGlobCharactersDiffersInTheWorkingTree()
+    {
+        var dir = NewRepo(_root, "decline-glob-literal");
+        Write(dir, "f[1].txt", "committed\n");
+        GitTestRepo.CommitAll(dir, "baseline");
+        Write(dir, "f[1].txt", "changed in the working tree only\n");
+
+        AssertDeclined(CommitPaths(dir, "x\n", "f[1].txt"), "differs between the working tree and the index");
+    }
+
+    [Test]
     public void HeadPlusPaths_Declines_ForBadPaths()
     {
         var dir = NewRepo(_root, "bad-paths");

@@ -358,7 +358,7 @@ internal sealed partial class Libgit2GitReader
     /// </summary>
     private static void RequireWorkingTreeMatchesIndex(Repository repo, HashSet<string> wanted)
     {
-        // TODO restrict the status scan to the listed paths (StatusOptions.PathSpec) once its literal-prefix behaviour is pinned by a test; the full scan costs the whole tree.
+        // Pathspec narrows the scan to the listed paths; glob metacharacters fall back to the full scan because libgit2 treats them as patterns, and IsAtOrUnder stays the exact filter.
         var options = new StatusOptions
         {
             Show = StatusShowOption.IndexAndWorkDir,
@@ -369,6 +369,11 @@ internal sealed partial class Libgit2GitReader
             DetectRenamesInIndex = false,
             DetectRenamesInWorkDir = false,
         };
+
+        if (!wanted.Any(path => path.IndexOfAny(['*', '?', '[', ']', '\\']) >= 0))
+        {
+            options.PathSpec = wanted.ToArray();
+        }
 
         const FileStatus workingTreeDifference = FileStatus.ModifiedInWorkdir | FileStatus.DeletedFromWorkdir | FileStatus.TypeChangeInWorkdir | FileStatus.RenamedInWorkdir
             | FileStatus.Conflicted | FileStatus.Unreadable;
