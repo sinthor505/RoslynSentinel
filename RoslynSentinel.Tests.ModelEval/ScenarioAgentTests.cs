@@ -1,4 +1,5 @@
 using System.IO.Pipelines;
+using System.Text.Json;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -21,6 +22,8 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// Runs one targeted scenario (ROSLYNSENTINEL_MODELEVAL_SCENARIO, looked up in <see cref="ScenarioRegistry"/>) against the
 /// loaded model, ROSLYNSENTINEL_MODELEVAL_SCENARIO_SAMPLES times (default 10). Each sample gets its own fixture, host and
 /// MCP client with the scenario's staged files, is scored by <see cref="ScenarioSampleLoop"/> and appends one results.csv line.
+/// Resume scenarios (ResumeTranscript set) replay their named capture's kept turns on a fresh fixture first and are gated
+/// on schema and replay drift; cold-start scenarios run from the staged files only.
 /// Measurement only: it asserts that at least one sample ran, not what the model did.
 /// </summary>
 // TODO ResumeEnvironment in TranscriptResumeAgentTests duplicates this wiring; extract one shared environment once both settle.
@@ -33,7 +36,7 @@ public class ScenarioAgentTests
     private const int DefaultSamples = 10;
 
     [Test]
-    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1 -Test Scenario -Scenario <id>")]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1 -Test Scenario -Scenario <id>; resume scenarios use the capture they name.")]
     public async Task RunScenario_SamplesAndScores()
     {
         LlmOptions.Configure([]);
@@ -83,7 +86,7 @@ public class ScenarioAgentTests
         IReadOnlyList<ScenarioSample> ran;
         try
         {
-            ran = await ScenarioSampleLoop.RunAsync(
+            ran = await ScenarioSampleLoop.RunSamplesAsync(
                 scenario,
                 samples,
                 runDirectory,
@@ -104,12 +107,17 @@ public class ScenarioAgentTests
             $"{ran.FirstOrDefault(s => s.IsInconclusive)?.InconclusiveReason}. See {csvPath}.");
     }
 
-    private static async Task<(AgentRunResult Result, FinalStateVerdict? Verdict)> RunSampleAsync(
+    private static async Task<(AgentRunResult? Result, FinalStateVerdict? Verdict, bool SchemaDrift, int ResultDrift, string InconclusiveReason)> RunSampleAsync(
         ScenarioDefinition scenario,
         int sampleIndex,
         string sampleDirectory,
         CancellationToken cancellationToken)
     {
+        if (scenario.ResumeTranscript is not null)
+        {
+            return await RunResumeSampleAsync(scenario, sampleIndex, sampleDirectory, cancellationToken);
+        }
+
         await using var environment = await ScenarioEnvironment.CreateAsync(scenario, sampleDirectory, cancellationToken);
 
         var runner = new ModelAgentRunner(
@@ -124,11 +132,88 @@ public class ScenarioAgentTests
             Path.Combine(environment.SolutionDirectory, "ContosoOrders.Core"));
         var result = await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, sampleDirectory, cancellationToken);
 
+        var verdict = await ComputeFinalStateAsync(scenario, sampleIndex, environment.SolutionDirectory, sampleDirectory, cancellationToken);
+        return (result, verdict, false, 0, "");
+    }
+
+    // Resume sample: replays the kept turns of the named capture on a fresh fixture, gates on schema and replay drift, then lets the model continue.
+    private static async Task<(AgentRunResult? Result, FinalStateVerdict? Verdict, bool SchemaDrift, int ResultDrift, string InconclusiveReason)> RunResumeSampleAsync(
+        ScenarioDefinition scenario,
+        int sampleIndex,
+        string sampleDirectory,
+        CancellationToken cancellationToken)
+    {
+        var source = TranscriptResume.Load(ResumeScenarios.CapturePath(scenario.ResumeTranscript!));
+        var kept = TranscriptResume.KeepTurns(source, scenario.ResumeKeepTurns);
+
+        await using var environment = await ScenarioEnvironment.CreateAsync(scenario, sampleDirectory, cancellationToken);
+
+        // Schema gate: the kept calls must still be offered with the schemas the transcript recorded.
+        var liveTools = await environment.Client.ListToolsAsync(cancellationToken: cancellationToken);
+        var liveSchemas = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        var liveDescriptions = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var tool in liveTools)
+        {
+            if (tool.JsonSchema.ValueKind != JsonValueKind.Undefined)
+            {
+                liveSchemas[tool.Name] = tool.JsonSchema;
+            }
+
+            liveDescriptions[tool.Name] = tool.Description ?? "";
+        }
+
+        var (schemaReason, schemaDrift) = ResumeScenarioGate.CheckSchemas(source, kept, liveSchemas, liveDescriptions);
+        if (schemaReason.Length > 0)
+        {
+            TestContext.Out.WriteLine($"Sample {sampleIndex}: {schemaReason}");
+            return (null, null, schemaDrift, 0, schemaReason);
+        }
+
+        var directory = environment.SolutionDirectory;
+        var seed = TranscriptResume.RewriteTurns(kept, directory);
+        var systemPrompt = TranscriptResume.RewriteFixtureDirectory(source.SystemPrompt, directory)!;
+        var userPrompt = TranscriptResume.RewriteFixtureDirectory(source.UserPrompt, directory)!;
+
+        // Same fixture state as at the resume point: the kept calls run again, in order, on the fresh fixture.
+        var replayed = await TranscriptResume.ReplayKeptCallsDetailedAsync(
+            seed,
+            (tool, arguments, token) => TranscriptReplayHelper.ReplayToolCallAsync(environment.Client, tool, arguments, token),
+            cancellationToken,
+            TestContext.Out.WriteLine);
+        var (replayReason, resultDrift) = ResumeScenarioGate.CheckReplay(replayed);
+        if (replayReason.Length > 0)
+        {
+            TestContext.Out.WriteLine($"Sample {sampleIndex}: {replayReason}");
+            return (null, null, schemaDrift, resultDrift, replayReason);
+        }
+
+        // turnCap counts the seeded turns, so the live loop gets ContinueTurns more on top of the kept ones.
+        var runner = new ModelAgentRunner(
+            environment.AgentClient, environment.Client,
+            repeatedFailureLimit: 10,
+            maxTokensPerTurn: 16384,
+            turnCap: scenario.ResumeKeepTurns + scenario.TurnCap,
+            wallClockCap: TimeSpan.FromMinutes(10),
+            logger: environment.Host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
+        var result = await runner.RunAsync(systemPrompt, userPrompt, sampleDirectory, cancellationToken, seedTurns: seed);
+
+        var verdict = await ComputeFinalStateAsync(scenario, sampleIndex, environment.SolutionDirectory, sampleDirectory, cancellationToken);
+        return (result, verdict, schemaDrift, resultDrift, "");
+    }
+
+    // Computes the final-state verdict and snapshots the files it was computed from. Must run while the environment is alive.
+    private static async Task<FinalStateVerdict?> ComputeFinalStateAsync(
+        ScenarioDefinition scenario,
+        int sampleIndex,
+        string solutionDirectory,
+        string sampleDirectory,
+        CancellationToken cancellationToken)
+    {
         // The verdict reads the fixture, so it must be computed before the environment is disposed.
         FinalStateVerdict? verdict = null;
         try
         {
-            verdict = await scenario.CheckFinalState(environment.SolutionDirectory, cancellationToken);
+            verdict = await scenario.CheckFinalState(solutionDirectory, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -138,14 +223,14 @@ public class ScenarioAgentTests
         // The fixture directory is deleted when the environment is disposed, so the snapshot is the only record of the files the verdict was computed from.
         try
         {
-            SnapshotFinalState(scenario, environment.SolutionDirectory, sampleDirectory);
+            SnapshotFinalState(scenario, solutionDirectory, sampleDirectory);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             TestContext.Out.WriteLine($"Sample {sampleIndex}: final-state snapshot failed: {ex.Message}");
         }
 
-        return (result, verdict);
+        return verdict;
     }
 
     // Snapshots the final state for the verdict: the staged files plus every .cs directly in
