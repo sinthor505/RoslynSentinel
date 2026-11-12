@@ -84,10 +84,10 @@ public class WorkspaceProjectManagementImpl
                     var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true);
                     if (project == null)
                     {
+                        // hint-ok: the prefix names the call that failed, it does not suggest a call
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = true,
-                            // hint-ok: the prefix names the call that failed, it does not suggest a call
                             ErrorData = new ResultError(ToolErrorCode.NotFound, "ListSolutionItems(kind: files): " + ProjectNotFoundDetail.Build(projectName, solution.Projects.Select(p => p.Name).ToList()))
                         };
                     }
