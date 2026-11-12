@@ -231,6 +231,83 @@ public class LoopAssistRunnerTests
         });
     }
 
+    [Test]
+    public async Task TargetReached_TruePredicateAfterLiveTurn2_StopsWithTargetReached()
+    {
+        var run = NewRun(LoopAssistOptions.Off, turnCap: 6);
+        var calls = 0;
+
+        var result = await run.Runner.RunAsync(
+            "system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken,
+            targetReached: _ => Task.FromResult(++calls == 2));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.TargetReached));
+            Assert.That(result.TurnCount, Is.EqualTo(2));
+            Assert.That(result.Transcript.StopReason, Is.EqualTo(AgentStopReason.TargetReached));
+            Assert.That(result.Converged, Is.False);
+            Assert.That(calls, Is.EqualTo(2));
+            Assert.That(run.Logger.Lines, Has.Some.Contains("Agent run finished: TargetReached"));
+        });
+    }
+
+    [Test]
+    public async Task TargetReached_NeverTrue_RunsToTheCap()
+    {
+        var run = NewRun(LoopAssistOptions.Off, turnCap: 3);
+        var calls = 0;
+
+        var result = await run.Runner.RunAsync(
+            "system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken,
+            targetReached: _ =>
+            {
+                calls++;
+                return Task.FromResult(false);
+            });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.TurnCapExceeded));
+            Assert.That(calls, Is.EqualTo(3));
+        });
+    }
+
+    [Test]
+    public async Task TargetReached_IsNotEvaluatedOnSeededTurns()
+    {
+        var run = NewRun(LoopAssistOptions.Off, turnCap: 5);
+        var calls = 0;
+
+        var result = await run.Runner.RunAsync(
+            "seed-system", "seed-user", _runDirectory, TestContext.CurrentContext.CancellationToken,
+            seedTurns: ThreeSeedTurns(),
+            targetReached: _ => Task.FromResult(++calls == 1));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.TargetReached));
+            Assert.That(result.TurnCount, Is.EqualTo(4), "3 seeded turns plus 1 live turn");
+            Assert.That(calls, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public async Task TargetReached_ThrowingPredicate_DoesNotFailTheRun()
+    {
+        var run = NewRun(LoopAssistOptions.Off, turnCap: 3);
+
+        var result = await run.Runner.RunAsync(
+            "system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken,
+            targetReached: _ => throw new InvalidOperationException("predicate broke"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.TurnCapExceeded));
+            Assert.That(run.Logger.Lines, Has.Some.Contains("target predicate threw"));
+        });
+    }
+
     private const string SeedLocateArguments = """{"reason":"loop assist test","symbolName":"NoSuchSymbol"}""";
 
     private const string SeedRejection =

@@ -228,6 +228,9 @@ public enum AgentStopReason
 
     /// <summary>The model sent tool-call markup as text instead of a tool call on two consecutive turns (the first got a nudge); nothing was parsed.</summary>
     MalformedToolCall,
+
+    /// <summary>A caller-supplied target predicate held after a live turn's tool results were appended.</summary>
+    TargetReached,
 }
 
 /// <summary>
@@ -275,6 +278,6 @@ public sealed class AgentRunResult
         get; init;
     }
 
-    /// <summary>True only when the model stopped on its own (no more tool calls) within the caps -> says nothing about whether the task was actually done correctly. A <see cref="AgentStopReason.ContextExhausted"/> stop is therefore not converged.</summary>
+    /// <summary>True only when the model stopped on its own (no more tool calls) within the caps -> says nothing about whether the task was actually done correctly. A <see cref="AgentStopReason.ContextExhausted"/> stop is therefore not converged. <see cref="AgentStopReason.TargetReached"/> is excluded on purpose: no Converged consumer (SubAgent, PlanStepRunner) passes a target predicate.</summary>
     public bool Converged => StopReason == AgentStopReason.ModelFinished;
 }

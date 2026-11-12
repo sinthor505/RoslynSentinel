@@ -126,13 +126,19 @@ public sealed class ModelAgentRunner
     /// loop then continues from the last seeded turn's number, so <c>turnCap</c> must already include the seeded
     /// turns. The caller is responsible for the tool-side state (re-executing the calls on a fresh fixture).
     /// </param>
+    /// <param name="targetReached">
+    /// Optional predicate evaluated after each LIVE turn's tool results have been appended to the conversation.
+    /// Seeded turns are never evaluated. Returning true stops the run with <see cref="AgentStopReason.TargetReached"/>.
+    /// A predicate that throws is logged and treated as not reached; it never fails the run.
+    /// </param>
     public async Task<AgentRunResult> RunAsync(
         string systemPrompt,
         string userPrompt,
         string transcriptDirectory,
         CancellationToken cancellationToken = default,
         string? runId = null,
-        IReadOnlyList<AgentTranscriptTurn>? seedTurns = null)
+        IReadOnlyList<AgentTranscriptTurn>? seedTurns = null,
+        Func<CancellationToken, Task<bool>>? targetReached = null)
     {
         runId ??= DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff");
 
@@ -462,11 +468,32 @@ public sealed class ModelAgentRunner
             {
                 break;
             }
+
+            if (targetReached is not null)
+            {
+                bool reached;
+                try
+                {
+                    reached = await targetReached(cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(ex, "Turn {Turn}: target predicate threw; treating it as not reached.", turnNumber);
+                    reached = false;
+                }
+
+                if (reached)
+                {
+                    stopReason = AgentStopReason.TargetReached;
+                    _logger.LogInformation("Turn {Turn}: target state reached, stopping.", turnNumber);
+                    break;
+                }
+            }
         }
 
         // The outcome sentence is added only when loop assist is on, so the off-path line is unchanged.
         var assistOutcome = assistTracker.Enabled
-            ? " " + LoopAssistTracker.DescribeRunOutcome(stopReason == AgentStopReason.ModelFinished, transcript.AssistCount ?? 0)
+            ? " " + LoopAssistTracker.DescribeRunOutcome(stopReason is AgentStopReason.ModelFinished or AgentStopReason.TargetReached, transcript.AssistCount ?? 0)
             : "";
         _logger.LogInformation("Agent run finished: {StopReason} after {TurnCount} turn(s), {Elapsed}.{AssistOutcome}", stopReason, turnNumber, overallStopwatch.Elapsed, assistOutcome);
 
