@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tests.Battery.Basic;
 using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tools.Basic;
 
@@ -213,5 +214,35 @@ public sealed class SymbolNavigationMissTests
         Assert.That(message, Does.Not.Contain("Did you mean"));
         Assert.That(message, Does.Contain("ListAll"));
         AssertFactsAndOptionsOnly(message);
+    }
+
+    // ---- InspectSymbol: file-lookup guard (plan_not_found_error_orientation, Step 5e) ----
+
+    [Test]
+    [Category("SymbolNavigationEngine")]
+    public async Task InspectSymbol_MisspeltFile_ReturnsFileNearMatchAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((OrderPricingFixture.FileName, OrderPricingFixture.Source));
+        var result = await NavigationTools(workspace).InspectSymbolTool(reason: "test message", filePath: "OrderPricingCalculater.cs", contextSnippet: "ComputeTotal", aspect: InspectSymbolAspect.info);
+        Assert.That(result.IsError, Is.True, result.StatusMessage);
+        Assert.That(result.ErrorData?.ErrorCode.ToString(), Is.EqualTo(nameof(ToolErrorCode.NotFound)), result.ErrorData?.Message);
+        Assert.That(result.ErrorData?.Message, Does.Contain(OrderPricingFixture.FileName));
+    }
+
+    [Test]
+    [Category("SymbolNavigationEngine")]
+    public async Task InspectSymbol_SnippetNotInFile_OffersTheOutlineAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((OrderPricingFixture.FileName, OrderPricingFixture.Source));
+        var before = workspace.ReadText(OrderPricingFixture.FileName);
+        var result = await NavigationTools(workspace).InspectSymbolTool(reason: "test message", filePath: OrderPricingFixture.FileName, contextSnippet: "NoSuchTextAnywhere", aspect: InspectSymbolAspect.info);
+        Assert.That(result.IsError, Is.True, result.StatusMessage);
+        Assert.That(result.ErrorData?.ErrorCode.ToString(), Is.EqualTo(nameof(ToolErrorCode.NotFound)), result.ErrorData?.Message);
+        var message = result.ErrorData?.Message ?? string.Empty;
+        Assert.That(message, Does.Contain("GetFileOutline("));
+        Assert.That(message, Does.Contain(OrderPricingFixture.FileName));
+        Assert.That(message, Does.Not.Contain("Re-check"));
+        AssertFactsAndOptionsOnly(message);
+        Assert.That(workspace.ReadText(OrderPricingFixture.FileName), Is.EqualTo(before), "A refused lookup must not write the file.");
     }
 }

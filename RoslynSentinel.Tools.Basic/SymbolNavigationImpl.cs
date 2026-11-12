@@ -144,6 +144,27 @@ public class SymbolNavigationImpl
 
         try
         {
+            // Same file-lookup guard as ReplaceSnippetBatch: a blank path or no loaded solution keeps its own text;
+            // a misspelt or missing file gets the shared not-found text with its near matches.
+            if (!filePathResolved.Validated
+                && (filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded || string.IsNullOrWhiteSpace(filePathResolved.Absolute)))
+            {
+                return new SentinelCallToolResult<object>
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded ? SolutionNotLoadedMessage.Build(_workspaceManager.LoadState) : "path could not be resolved.")
+                };
+            }
+            var lookup = await _workspaceManager.GetDocumentAsync(filePathResolved, ReadSource.Committed, cancellationToken);
+            if (!lookup.TryGetDocument(out _))
+            {
+                return new SentinelCallToolResult<object>
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(lookup.Status == DocumentLookupStatus.Ambiguous ? ToolErrorCode.Ambiguous : ToolErrorCode.NotFound, lookup.Describe())
+                };
+            }
+
             if (aspect == InspectSymbolAspect.info)
             {
                 var symbolInfo = await _symbolNavigationEngine.GetSymbolInfoAsync(filePathResolved, contextSnippet, lineBefore, lineAfter, cancellationToken);
@@ -154,8 +175,8 @@ public class SymbolNavigationImpl
                         $"Could not resolve a symbol in '{filePathResolved}' for contextSnippet \"{snippetPreview}\". " +
                         "This means one of: the snippet text does not appear verbatim in the file, it matched a " +
                         "location with no bindable symbol (e.g. whitespace, a keyword, or a comment), or it matched " +
-                        "more than one location and lineBefore/lineAfter did not disambiguate. Re-check the snippet " +
-                        "against GetMethodSource/GetFileOutline output, or add lineBefore/lineAfter to pin the match."
+                        "more than one location and lineBefore/lineAfter did not disambiguate. " +
+                        $"{ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} and GetMethodSource show the file's exact text; lineBefore/lineAfter pin a match."
                         : symbolInfo!.Error;
                     // TODO error-policy: route does not record the missing-target kind
                     return new SentinelCallToolResult<object>
