@@ -405,6 +405,10 @@ public class TestInstanceLauncherTests
             Assert.That(listed.Select(r => r.Pid), Does.Contain(launched.Pid));
             Assert.That(listed.Single(r => r.Pid == launched.Pid).IsAlive, Is.True);
 
+            // An unknown pid names the pid the server does track (plan_not_found_error_orientation, Step 5e slice 4).
+            var unknownPid = Assert.Throws<TestInstanceException>(() => launcher.Stop(99999991));
+            Assert.That(unknownPid!.Message, Does.Contain($"Tracked pids: {launched.Pid}."));
+
             // tools/list over HTTP with both Accept values; the reply is a Server-Sent Events body.
             using var http = new HttpClient();
             using var request = new HttpRequestMessage(HttpMethod.Post, launched.Url);

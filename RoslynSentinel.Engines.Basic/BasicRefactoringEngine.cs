@@ -2580,13 +2580,13 @@ public class BasicRefactoringEngine
         }).OrderBy(b => b.Span.Length).FirstOrDefault();
         if (block == null)
         {
-            throw new ToolNotFoundException($"Could not find a suitable block. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use {ToolCallHint.Call("GetFileOutline")} to find the lines.", "block");
+            throw new ToolNotFoundException($"No block body of '{filePath}', which has {tree.GetText(cancellationToken).Lines.Count} line(s), contains lines {startLine}-{endLine}. A constructor header, a field or an attribute list is not inside a block body. To see the line range of each member, call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()))}.", "block");
         }
 
         var targeted = block.Statements.Where(s => StatementStartLine(s) <= endLine && StatementEndLine(s) >= startLine).ToList();
         if (targeted.Count == 0)
         {
-            throw new ToolNotFoundException($"Could not find any statements in the specified range. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use {ToolCallHint.Call("GetFileOutline")} to find the lines.", "statement");
+            throw new ToolNotFoundException($"No statement of the block body that contains lines {startLine}-{endLine} of '{filePath}' (which has {tree.GetText(cancellationToken).Lines.Count} line(s)) overlaps that range. To see the line range of each member, call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()))}.", "statement");
         }
 
         var tryBlock = SyntaxFactory.Block(SyntaxFactory.List(targeted));
@@ -2655,7 +2655,7 @@ public class BasicRefactoringEngine
         }).OrderBy(b => b.Span.Length).FirstOrDefault();
         if (block == null)
         {
-            throw new ToolNotFoundException($"Could not find a suitable block for the snippet. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use {ToolCallHint.Call("GetFileOutline")} to find the lines.", "block");
+            throw new ToolNotFoundException($"The snippet matched at line {startLine} of '{filePath}', which has {sourceText.Lines.Count} line(s), and no block body contains that line. A constructor header, a field or an attribute list is not inside a block body. To see the line range of each member, call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()))}.", "block");
         }
 
         // StatementStartLine and StatementEndLine are unused
@@ -2672,7 +2672,7 @@ public class BasicRefactoringEngine
 
         if (targeted.Count == 0)
         {
-            throw new ToolNotFoundException($"Could not find any statements containing the snippet. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use {ToolCallHint.Call("GetFileOutline")} to find the lines.", "statement");
+            throw new ToolNotFoundException($"The snippet matched at line {startLine} of '{filePath}' (which has {sourceText.Lines.Count} line(s)) inside a block body, but no statement of that block contains it. To see the line range of each member, call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()))}.", "statement");
         }
 
         // Build the try/catch as in the original

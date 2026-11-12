@@ -150,10 +150,10 @@ public sealed class TestCategoryTaggingEngine
                 var matches = infos.Where(i => Eq(i.Project.Name, entry) || Eq(i.Project.AssemblyName, entry)).ToList();
                 if (matches.Count == 0)
                 {
-                    var available = string.Join(", ", infos.Where(i => i.Detected is not null).Select(i => i.Project.Name).Take(25));
+                    // The names offered are every C# project of the solution (a test project is any of them with a test framework; the scope entry may also be an assembly name).
                     return TestCategoryPlan.Failed(new ResultError(
                         ToolErrorCode.NotFound,
-                        $"testScope names no project called '{entry}'. Test projects detected in the solution: {(available.Length == 0 ? "(none)" : available)}."));
+                        ProjectNotFoundDetail.Build(entry, infos.Select(i => i.Project.Name).ToList(), "testScope")));
                 }
 
                 scoped.AddRange(matches.Where(m => !scoped.Contains(m)));

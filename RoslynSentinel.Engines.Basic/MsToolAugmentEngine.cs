@@ -119,7 +119,8 @@ public class MsToolAugmentEngine
         var field = RoslynSentinel.Common.NameTargetLookup.RequireSingle(fieldMatches, "Field", fieldName);
         if (field == null)
         {
-            return MsAugmentResult.Fail($"Field '{fieldName}' not found in {filePath}.", ToolErrorCode.NotFound);
+            var declaredFields = root.DescendantNodes().OfType<FieldDeclarationSyntax>().SelectMany(f => f.Declaration.Variables).Select(v => v.Identifier.Text);
+            return MsAugmentResult.Fail(MemberRefactoringNotFound.DeclarationMessage("field", fieldName, "fieldName", declaredFields, filePath.Absolute), ToolErrorCode.NotFound);
         }
 
         // ── Compute names ──
@@ -1258,7 +1259,8 @@ public class MsToolAugmentEngine
 
         if (typeDecl == null)
         {
-            return MsAugmentResult.Fail($"Type '{typeName}' not found in {filePath}.", ToolErrorCode.NotFound);
+            // The names offered are every class, struct, interface and record declared in the file (the lookup above matches TypeDeclarationSyntax).
+            return MsAugmentResult.Fail(MemberRefactoringNotFound.DeclarationMessage("type", typeName, "typeName", root.DescendantNodes().OfType<TypeDeclarationSyntax>().Select(t => t.Identifier.Text), filePath.Absolute), ToolErrorCode.NotFound);
         }
 
         if (typeDecl.Members.OfType<MethodDeclarationSyntax>()
@@ -1471,7 +1473,10 @@ public class MsToolAugmentEngine
 
             if (candidates.Count == 0)
             {
-                return MsAugmentResult.Fail($"No method named '{contextSnippet}' found in {filePath}.", ToolErrorCode.NotFound);
+                // With extractEntireBody, contextSnippet carries the method name, so the wanted name and the retry parameter are contextSnippet.
+                return MsAugmentResult.Fail(
+                    MemberRefactoringNotFound.DeclarationMessage("method", contextSnippet, "contextSnippet", MemberRefactoringNotFound.MethodNames(root), filePath.Absolute)
+                    + " With extractEntireBody: true, contextSnippet is read as the name of the method whose body is extracted.", ToolErrorCode.NotFound);
             }
 
             if (candidates.Count > 1)
@@ -1873,7 +1878,12 @@ public class MsToolAugmentEngine
 
         if (!File.Exists(filePath))
         {
-            throw new ToolNotFoundException($"File not found: {filePath}");
+            // Not a document and not on disk: the shared text (a directory fact, same-name and similar files as candidates, or the no-similar-name fact).
+            // With no solution loaded nothing is searched, so the text states 0 projects.
+            var candidates = currentSolution is null ? [] : DocumentLookup.FindFileCandidates(currentSolution, filePath.Absolute);
+            var declaring = currentSolution is null ? null : DocumentLookup.FindDeclaringTypeFiles(currentSolution, filePath.Absolute);
+            // TODO isCallable: no ActiveToolSurface is in scope in the engine, so the text names tools unconditionally
+            throw new ToolNotFoundException(FileNotFoundMessage.Build(filePath.Absolute, candidates, currentSolution?.Projects.Count() ?? 0, null, declaring));
         }
 
         return await File.ReadAllTextAsync(filePath, cancellationToken);

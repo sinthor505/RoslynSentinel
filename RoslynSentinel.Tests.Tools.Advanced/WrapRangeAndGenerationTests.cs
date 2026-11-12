@@ -69,7 +69,10 @@ public class Holder
         var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Order.cs"), 8, 10, WrapRangeWrapper.tryCatch);
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData, Is.Not.Null);
-        Assert.That(result.ErrorData!.Message, Does.Contain("Choose a range"));
+        // The fact (the range and the file's line count) and the option (a prefilled GetFileOutline); the old "Choose a range" instruction is gone.
+        Assert.That(result.ErrorData!.Message, Does.Contain("contains lines 8-10"));
+        Assert.That(result.ErrorData!.Message, Does.Match(@"which has \d+ line\(s\)"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("GetFileOutline("));
         Assert.That(result.ErrorData!.Message, Does.Not.Contain("unexpectedly"));
         Assert.That(result.ErrorData!.Message, Does.Not.Contain("NullReference"));
     }

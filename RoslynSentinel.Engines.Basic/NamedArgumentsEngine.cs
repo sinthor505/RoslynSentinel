@@ -64,7 +64,7 @@ public sealed class NamedArgumentsEngine
         string? targetDocCommentId = null;
         if (!string.IsNullOrWhiteSpace(targetSymbol))
         {
-            var (resolvedId, targetError) = await ResolveTargetAsync(solution, targetSymbol, cancellationToken);
+            var (resolvedId, targetError) = await ResolveTargetAsync(solution, targetSymbol, RetryCallFor(scope, scopeName, options), cancellationToken);
             if (targetError is not null)
             {
                 return Failed(targetError);
@@ -140,8 +140,8 @@ public sealed class NamedArgumentsEngine
                 var projects = solution.Projects.Where(p => string.Equals(p.Name, scopeName, StringComparison.OrdinalIgnoreCase)).ToList();
                 if (projects.Count == 0)
                 {
-                    var available = string.Join(", ", solution.Projects.Select(p => p.Name).Distinct().Take(25));
-                    return ([], new ResultError(ToolErrorCode.NotFound, $"No project named '{scopeName}'. Available projects: {available}."));
+                    // The retry names the parameter this tool takes the project in (scopeName), not the shared default.
+                    return ([], new ResultError(ToolErrorCode.NotFound, ProjectNotFoundDetail.Build(scopeName, solution.Projects.Select(p => p.Name).ToList(), "scopeName")));
                 }
 
                 return (projects.SelectMany(p => p.Documents).ToList(), null);
@@ -155,13 +155,22 @@ public sealed class NamedArgumentsEngine
                 }
 
                 var wanted = new FilePathWrapper(scopeName);
-                var found = DocumentLookup.FindDocumentOrNull(solution, wanted);
-                var matches = found?.FilePath is null
+                // A bare name matching several files still throws ToolAmbiguousMatchException (GetDocumentOrThrow), as FindDocumentOrNull did.
+                var lookup = DocumentLookup.TryGetDocument(solution, wanted);
+                if (lookup.Status == DocumentLookupStatus.NotFound)
+                {
+                    // TODO isCallable: no ActiveToolSurface is in scope in the engine, so the text names tools unconditionally
+                    return ([], new ResultError(ToolErrorCode.NotFound, lookup.Describe()));
+                }
+
+                var found = lookup.GetDocumentOrThrow();
+                var matches = found.FilePath is null
                     ? new List<Document>()
                     : solution.Projects.SelectMany(p => p.Documents).Where(d => string.Equals(d.FilePath, found.FilePath, PathComparison.Comparison)).ToList();
+                // The document resolved but its path matches no document of any project: a state fact, no name to rank.
                 if (matches.Count == 0)
                 {
-                    return ([], new ResultError(ToolErrorCode.NotFound, $"File '{scopeName}' is not part of the loaded solution."));
+                    return ([], new ResultError(ToolErrorCode.NotFound, $"File '{scopeName}' resolved to a document that has no file path, so no document of the loaded solution has that path."));
                 }
 
                 return (matches, null);
@@ -172,7 +181,30 @@ public sealed class NamedArgumentsEngine
         }
     }
 
-    private static async Task<(string? DocCommentId, ResultError? Error)> ResolveTargetAsync(Solution solution, string targetSymbol, CancellationToken cancellationToken)
+    // The calling tool's own call with only targetSymbol corrected; preview so the retry writes nothing.
+    private static Func<string, string?> RetryCallFor(NamedArgumentsScope scope, string? scopeName, NamedArgumentsOptions options)
+    {
+        return retryId =>
+        {
+            var pairs = new List<(string Name, string Value)> { ("scope", scope.ToString()) };
+            if (!string.IsNullOrWhiteSpace(scopeName))
+            {
+                pairs.Add(("scopeName", scopeName));
+            }
+
+            pairs.Add(("targetSymbol", retryId));
+            if (options.MinParameters != 1)
+            {
+                pairs.Add(("minParameters", options.MinParameters.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            }
+
+            pairs.Add(("literalArgumentsOnly", options.LiteralArgumentsOnly ? "true" : "false"));
+            pairs.Add(("mode", "preview"));
+            return ToolCallHint.Call("NamedArguments", pairs.ToArray());
+        };
+    }
+
+    private static async Task<(string? DocCommentId, ResultError? Error)> ResolveTargetAsync(Solution solution, string targetSymbol, Func<string, string?> retryCall, CancellationToken cancellationToken)
     {
         foreach (var project in solution.Projects)
         {
@@ -191,7 +223,8 @@ public sealed class NamedArgumentsEngine
             return (DocumentationCommentId.CreateDeclarationId(method.OriginalDefinition), null);
         }
 
-        return (null, new ResultError(ToolErrorCode.NotFound, $"No symbol found for targetSymbol docCommentId: {targetSymbol}"));
+        var detail = await SymbolWireResolver.DescribeUnresolvedIdAsync(solution, targetSymbol, retryCall, cancellationToken);
+        return (null, new ResultError(ToolErrorCode.NotFound, $"targetSymbol: docCommentId '{targetSymbol}' resolves to no symbol in any project of the loaded solution. " + detail));
     }
 
     private static bool IsGeneratedPath(string path)

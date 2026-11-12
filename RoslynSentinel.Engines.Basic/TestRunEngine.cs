@@ -130,10 +130,16 @@ public class TestRunEngine
 
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var project = ProjectLookup.FindProject(solution, scopeName);
-            if (project?.FilePath is null)
+            if (project is null)
             {
                 return new EngineResultWrapper<TestRunResult>(EngineOutcome.InvalidInput,
-                    error: new EngineError($"Project '{scopeName}' was not found in the loaded solution."));
+                    error: new EngineError(ProjectNotFoundDetail.Build(scopeName, solution.Projects.Select(p => p.Name).ToList(), "scopeName")));
+            }
+
+            if (project.FilePath is null)
+            {
+                return new EngineResultWrapper<TestRunResult>(EngineOutcome.InvalidInput,
+                    error: new EngineError($"Project '{project.Name}' is loaded but has no project file path (it is an in-memory project), so `dotnet test` has no project file to run."));
             }
 
             targets = [(project.Name, project.FilePath)];

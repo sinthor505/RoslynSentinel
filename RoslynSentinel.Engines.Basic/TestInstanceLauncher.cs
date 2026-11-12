@@ -420,8 +420,13 @@ public sealed class TestInstanceLauncher
         {
             if (!_instances.TryRemove(pid.Value, out var handle))
             {
+                // The fact: which pids this server does track (a pid is an exact number, so no similarity ranking).
+                var tracked = _instances.Keys.OrderBy(k => k).ToList();
+                var trackedText = tracked.Count == 0
+                    ? "No test instance is tracked at all."
+                    : $"Tracked pids: {string.Join(", ", tracked)}.";
                 throw new TestInstanceException(ToolErrorCode.NotFound,
-                    $"No test instance with pid {pid.Value} is tracked by this server. Call {ToolCallHint.Call("McpServerControl", ("operation", "ListTestInstances"))} to see the running ones.");
+                    $"No test instance with pid {pid.Value} is tracked by this server. {trackedText} {ToolCallHint.Call("McpServerControl", ("operation", "ListTestInstances"))} lists the running ones.");
             }
 
             targets.Add(handle);

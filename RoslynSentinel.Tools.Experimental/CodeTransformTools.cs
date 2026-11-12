@@ -1363,6 +1363,7 @@ public class CodeTransformTools
 
                         IList<string>? memberList = members?.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(m => m.Trim()).Where(m => m.Length > 0).ToList();
                         var result = await _msToolAugmentEngine.GenerateToStringSafeAsync(resolvedFilePath, className, memberList, cancellationToken);
+                        // TODO a failed MsAugmentResult (type miss: NotFound, existing ToString: TargetIneligible) is returned as SuccessData with IsError = false; map result.IsError to an error with result.ErrorCode like ExtractMethod does
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
