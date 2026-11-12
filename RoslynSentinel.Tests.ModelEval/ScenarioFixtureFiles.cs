@@ -25,4 +25,22 @@ public static class ScenarioFixtureFiles
 
     public static string Absolute(string solutionDirectory, string relativePath) =>
         Path.Combine(solutionDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+    /// <summary>Reads a fixture file as text, or null when it does not exist.</summary>
+    public static async Task<string?> ReadFileOrNullAsync(string solutionDirectory, string relativePath, CancellationToken cancellationToken)
+    {
+        var path = Absolute(solutionDirectory, relativePath);
+        return File.Exists(path) ? await File.ReadAllTextAsync(path, cancellationToken) : null;
+    }
+
+    /// <summary>
+    /// Reads the calculator after a run. A class rename may also rename the file, so the Standard-named
+    /// file is tried first, then the original name. Null when neither exists.
+    /// </summary>
+    public static async Task<string?> ReadCalculatorOrNullAsync(string solutionDirectory, CancellationToken cancellationToken)
+    {
+        const string standardRelativePath = "ContosoOrders.Core/FixtureHelpers/StandardOrderPricingCalculator.cs";
+        var standardText = await ReadFileOrNullAsync(solutionDirectory, standardRelativePath, cancellationToken);
+        return standardText ?? await ReadFileOrNullAsync(solutionDirectory, CalculatorRelativePath, cancellationToken);
+    }
 }
