@@ -1,6 +1,6 @@
 # Adopt LibGit2Sharp in-process for read-mostly git operations
 
-**Status:** APPROVED (partly) 2026-11-10. The owner approved runner consolidation (step 0), the spike (step 1) and stage 1 (step 2) on 2026-11-10; all three landed the same day (see Results). Stage 2 (step 3) and restricting native binaries to win-x64 were approved later on 2026-11-10; stage 3 landed scoped to whole-file stage/unstage. Stage 4 (step 5, commit) was approved on 2026-11-11: 5a and the 5b spike are queued, 5c waits on the spike.
+**Status:** APPROVED (partly) 2026-11-10. The owner approved runner consolidation (step 0), the spike (step 1) and stage 1 (step 2) on 2026-11-10; all three landed the same day (see Results). Stage 2 (step 3) and restricting native binaries to win-x64 were approved later on 2026-11-10; stage 3 landed scoped to whole-file stage/unstage. Stage 4 (step 5, commit) was approved on 2026-11-11 and landed 2026-11-12: 5a, 5b and 5c done; the in-process commit route is default off and on as a trial in this repo.
 
 ## Results (2026-11-10)
 
