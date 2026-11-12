@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Scenario eval follow-ups - resolved (2026-11-12)
+
+Scenario eval follow-ups (2026-11-12) - models ignore the `BLOCKED:` stop rule (17 of 20 stop-and-report samples ran to the cap, 0 of 5 10-chain runs used it): 3-turn stop-adherence family with a control; resume samples end at target state instead of raising the cap; `RenameSymbolTypo` and `TwinApplyCalls` become seeded scenarios; `EmptyInterfaceRemoval` redesigned; `MixedSingleAndBatchShape` retired - [plan](plans/closed/plan_scenario_eval_followups.md)
+
+Evidence: plan closed (plans/closed/plan_scenario_eval_followups.md); results in evals/eval_scenario_eval_followups.md
+
 ## Targeted tool scenario evals - resolved (2026-11-11)
 
 Targeted tool scenario evals (2026-11-11) - short model-eval scenarios (cold start and resume, clean and faulted): 10 cold-start and 3 resume scenarios, per-call scorer with live-turn-only resume scoring, schema and replay drift gates, run stamp, `BLOCKED:` stop marker in the shared system prompt, batch summary, 10-chain re-baseline - [plan](plans/closed/plan_targeted_tool_scenario_evals.md)

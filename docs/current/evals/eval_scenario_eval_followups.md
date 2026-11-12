@@ -1,10 +1,10 @@
 # Eval: scenario-eval follow-ups - stop-adherence A/B, EmptyInterfaceRemoval redesign, early-exit resume reruns, seeded scenarios
 
-**Status:** OPEN 2026-11-12. Step 2 and step 8 results recorded; steps 4, 6 and 7 rows pending.
+**Status:** OPEN 2026-11-12. All plan runs recorded (steps 2, 4, 6 before/after, 7, 8); recommendations 1-4 and a third RenameSymbolTypo arm (after f1's slice 4d) are open.
 
 ## Context
 
-Live runs for [plan_scenario_eval_followups](../plans/plan_scenario_eval_followups.md), all on host 113,
+Live runs for [plan_scenario_eval_followups](../plans/closed/plan_scenario_eval_followups.md), all on host 113,
 model `qwen3.5-9b-coder`, 10 samples per row, harness `RunScenario_SamplesAndScores`. Each run was built from
 a pinned worktree (the eval queue builds the worktree it is submitted from), so later commits on master do not
 move the numbers.
@@ -137,7 +137,30 @@ at its slice 4c, d1ed5854, after this commit).
   arm below quotes what replaced it.
 - RenameSymbolTypo had no early exit in this run, so 6 Correct samples ran to the cap; early exit is now on
   (d1ca5019, owner decision).
-- **After arm** (job 20261112-190330-001, pinned 2c6cc92c: d1ed5854 candidates + d4378c04 stripped text): pending.
+- **After arm** (run 20261112-190351-115, pinned 2c6cc92c: d1ed5854 candidates + d4378c04 stripped text):
+
+  | Arm | Passed | First live call used `CalcDisc` | Real name first in any call | Turns mean/max |
+  | --- | --- | --- | --- | --- |
+  | Before (85602567) | 8/10 | 0/10 (all 10 searched the typo) | T4-T9 | 8.7/9 |
+  | After (2c6cc92c) | 10/10 | 1/10 (8 read the candidate's file at T2) | T2-T4 | 6.8/9 |
+
+  The seeded error now states only facts: "Symbol 'CalcDsc' (method) was not found in project
+  'ContosoOrders.Core'. Did you mean one of these? - CalcDisc (method) in OrderPricingCalculator, ... ->
+  Search(..., query: "CalcDisc", filePath: "...") - CalcuateTotal (method) in Order, ... Retry with the exact symbol
+  you meant. If none of these is the symbol you meant, it does not exist in this solution." No sample repeated the
+  typo in a symbol search; eight went straight to the named file. The owner's wording concern (a claimed history)
+  no longer applies to this path. Small sample: read as "candidates help", not as an exact effect size.
+- **Reasoning at T2 (after arm, `ReasoningContent`):** 4 of 10 explicitly noticed the suggestion and checked it first
+  (s05: "The error says `CalcDsc` doesn't exist and suggests `CalcDisc` might be what's intended. Let me read the
+  file to find the correct spelling."); 5 did not mention it and read the calculator file, which the task prompt
+  already names; 1 dismissed it (s10: "The suggested symbols don't match - let me search for `CalcDsc`"); s08
+  noticed it but still searched the typo. None used the suggestion directly. Before arm (3 checked): "The
+  docCommentId doesn't resolve. Let me search for the method first" -> Search on the typo, as the old error named.
+- So the gain has two parts that this pair cannot separate: removing the old error's "Re-run Search" (which
+  the before arm obeyed with the typo) and adding the candidate. Hypothesis for why no sample used it directly
+  (not tested): each candidate's next call is a `Search(... query: "CalcDisc" ...)`, not the original
+  `RenameSymbol` with the corrected id, so accepting it still costs a lookup turn. Offering the corrected
+  original call per candidate is the environment change to try (belongs to `plan_not_found_error_orientation`).
 
 - **Step 5 (cap-16 diagnostic): skipped** (owner, 2026-11-12). The FailedLastCallStaleOldContent cap hits are
   stuck on ValidationFailed and ReadFile type-name loops, not progressing slowly; cap stays 8.

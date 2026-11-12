@@ -1,10 +1,10 @@
 # Plan: Scenario-eval follow-ups - stop-adherence family, resume early exit, and repairs for four scenarios that missed their target
 
-**Status:** IN PROGRESS 2026-11-12. Code done for steps 9, 8, 1, 3, 6 (4ae86e64, 23aaa1fb, 714fc5d6..1d6da15b, 8392824f, 42b91d30..85602567); step 8 LIVE run done; steps 2, 4, 6 LIVE runs queued; step 7 next.
+**Status:** IMPLEMENTED 2026-11-12. Steps 1-9 done: 4ae86e64, 23aaa1fb, 8392824f, 714fc5d6, 6cb0f4a5, ee68eb85, 1d6da15b, 42b91d30, 3dbffff3, 88357268, 0c16de03, c10a21c1, 65edfc13, 8e400a2f, 85602567, c95c8d37, 034a55e3, 59319c18, e336ba78, 6c73bd42, 4aaf6c15, fed00505, d1ca5019; step 5 skipped by the owner. Live results and open recommendations: [eval_scenario_eval_followups](../../evals/eval_scenario_eval_followups.md).
 
 ## Problem
 
-The parent plan ([plan_targeted_tool_scenario_evals](./closed/plan_targeted_tool_scenario_evals.md), closed)
+The parent plan ([plan_targeted_tool_scenario_evals](./plan_targeted_tool_scenario_evals.md), closed)
 built the targeted scenario harness (`RoslynSentinel.Tests.ModelEval`: `ScenarioRegistry.cs`,
 `FaultScenarios.cs`, `GuardScenarios.cs`, `BatchShapeScenarios.cs`, `ResumeScenarios.cs`,
 `ScenarioAgentTests.cs`, `ScenarioScorer.cs`, `ScenarioSampleLoop.cs`; runner
@@ -32,7 +32,7 @@ failed twice), stop ... Begin your final message with `BLOCKED:`".
 - Confounder to keep in view: today's file-not-found error says "You MUST call ListSolutionItems" and offers
   CreateFile, i.e. the environment tells the model to keep going while the system prompt tells it to stop. A weak
   model following the more specific, more recent instruction is an environment defect, not a model defect.
-  [plan_not_found_error_orientation](./plan_not_found_error_orientation.md) changes those errors; this family is
+  [plan_not_found_error_orientation](../plan_not_found_error_orientation.md) changes those errors; this family is
   the measuring stick for that change.
 
 ### 2. Resume samples spend their whole cap after the target is already reached
@@ -126,7 +126,7 @@ Alternatives considered:
   `scripts/roslynsentinel-evalqueue.ps1 submit ... -Test Scenario -EvalArgs '-Scenario <Id> -Samples 10'`. Record
   the run id and the commit stamp (the existing run stamp carries it) for every run; the stop-adherence results
   move when the not-found errors change, so every number must be attributable to a commit. Procedure:
-  [reference_model_eval_procedure](../references/reference_model_eval_procedure.md).
+  [reference_model_eval_procedure](../../references/reference_model_eval_procedure.md).
 - Failure analysis of any LIVE result follows the CLAUDE.md doctrine: trace each cause to a `file:line`, quoted
   error or turn number, and name the environment change, not a model fault.
 - Commit trailer for every slice: `Plan: plan_scenario_eval_followups` (the last slice carries
@@ -181,6 +181,8 @@ Alternatives considered:
   (dispatcher-run); a scorer test pins the sample-03 form (or the eval doc records it as a true miss).
 
 ### Step 2 - LIVE: baseline of the stop-adherence family
+- Done: A/B at base 1d6da15b (OLD arm with 3d33d265 reverse-applied in a worktree), runs 20261112-164424-449,
+  -165322-543, -170258-695 (OLD) and -171257-079, -172029-110, -172902-360 (NEW); eval doc 827d7430.
 - Files: new `docs/current/evals/eval_scenario_eval_followups.md`.
 - Change: LIVE: 10 samples per variant (`StopAdherenceMissingFile`, `StopAdherenceMissingMethod`,
   `StopAdherenceControl`). Record per variant: passed of 10, failure classes (`BudgetOut` / `IgnoredStop` /
@@ -223,6 +225,7 @@ Alternatives considered:
   existing `ModelAgentRunner` and scorer tests still pass.
 
 ### Step 4 - LIVE: rerun the three resume scenarios with early exit
+- Done: runs 20261112-173855-346, -175537-006, -181443-667 (10/10, 6/10, 4/10); eval doc 3a3941a1.
 - Files: `docs/current/evals/eval_scenario_eval_followups.md`.
 - Change: LIVE: 10 samples each of `StaleCallerEditAfterRename`, `StaleWorkspaceAfterRename`,
   `FailedLastCallStaleOldContent`. Compare with the batch D numbers (rescore status of those numbers is not
@@ -235,6 +238,7 @@ Alternatives considered:
   grader disagree).
 
 ### Step 5 - Optional diagnostic: `FailedLastCallStaleOldContent` at live cap 16 (owner-gated)
+- Done: skipped by the owner (cap hits were ValidationFailed / ReadFile loops, not slow progress); cap stays 8.
 - Files: `ResumeScenarios.cs` (temporary `TurnCap` change, reverted or kept per the decision below);
   `docs/current/evals/eval_scenario_eval_followups.md`.
 - Change: after step 4, ask the owner whether to run it. If yes: LIVE: 10 samples with `TurnCap: 16`, to see
@@ -268,6 +272,8 @@ Alternatives considered:
   name from the error, failure classes).
 
 ### Step 7 - Convert `TwinApplyCalls` to a seeded scenario
+- Done: c95c8d37, 034a55e3, 59319c18, e336ba78, 6c73bd42, fed00505 (4 reaction classes, owner); run
+  20261112-184619-610 10/10 MovedOn; resume-path spot-check 20261112-185044-957 3/3.
 - Files: `GuardScenarios.cs` (`TwinApplyCalls`, `:37`), `ScenarioAgentTests.cs`, `TranscriptResume` (the authored
   turn builder), tests.
 - Change: the seeded turn holds the duplicate `ReplaceSnippet` call and the tool's real duplicate-apply
