@@ -225,25 +225,32 @@ public class GuardScenariosTests
         Assert.That(GuardScenarios.ClassifyTwinApplyReaction(3, verdict), Is.EqualTo(GuardScenarios.TwinApplyReaction.ResentAgain));
     }
 
-    [Test]
-    public void ClassifyTwinApplyReaction_SeedRepeatOnlyAndWrongState_IsReverted()
+    [TestCase(FinalStateVerdict.Wrong)]
+    [TestCase(FinalStateVerdict.Destructive)]
+    [TestCase(null)]
+    public void ClassifyTwinApplyReaction_SeedRepeatOnlyAndWrongDestructiveOrNoVerdict_IsDamaged(FinalStateVerdict? verdict)
     {
-        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(2, FinalStateVerdict.Wrong), Is.EqualTo(GuardScenarios.TwinApplyReaction.Reverted));
+        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(2, verdict), Is.EqualTo(GuardScenarios.TwinApplyReaction.Damaged));
     }
 
-    [TestCase(FinalStateVerdict.Correct)]
-    [TestCase(FinalStateVerdict.Unchanged)]
-    [TestCase(null)]
-    public void ClassifyTwinApplyReaction_SeedRepeatOnlyAndCorrectState_IsMovedOn(FinalStateVerdict? verdict)
+    [Test]
+    public void ClassifyTwinApplyReaction_SeedRepeatOnlyAndCorrectState_IsMovedOn()
     {
-        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(2, verdict), Is.EqualTo(GuardScenarios.TwinApplyReaction.MovedOn));
+        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(2, FinalStateVerdict.Correct), Is.EqualTo(GuardScenarios.TwinApplyReaction.MovedOn));
+    }
+
+    [Test]
+    public void ClassifyTwinApplyReaction_SeedRepeatOnlyAndUnchangedState_IsReverted()
+    {
+        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(2, FinalStateVerdict.Unchanged), Is.EqualTo(GuardScenarios.TwinApplyReaction.Reverted));
     }
 
     [Test]
     public void ClassifyTwinApplyReaction_ScoreOverload_ReadsRepeatCountAndVerdict()
     {
         Assert.That(GuardScenarios.ClassifyTwinApplyReaction(ScoreWith(3, FinalStateVerdict.Correct)), Is.EqualTo(GuardScenarios.TwinApplyReaction.ResentAgain));
-        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(ScoreWith(2, FinalStateVerdict.Wrong)), Is.EqualTo(GuardScenarios.TwinApplyReaction.Reverted));
+        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(ScoreWith(2, FinalStateVerdict.Wrong)), Is.EqualTo(GuardScenarios.TwinApplyReaction.Damaged));
+        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(ScoreWith(2, null)), Is.EqualTo(GuardScenarios.TwinApplyReaction.Damaged));
     }
 
     [Test]
@@ -267,8 +274,9 @@ public class GuardScenariosTests
         Assert.That(GuardScenarios.ClassifyTwinApplyReaction(sample), Is.Null);
     }
 
-    [Test]
-    public void ClassifyTwinApplyReaction_ScoredSample_ClassifiesItsScore()
+    [TestCase(FinalStateVerdict.Unchanged, GuardScenarios.TwinApplyReaction.Reverted)]
+    [TestCase(FinalStateVerdict.Correct, GuardScenarios.TwinApplyReaction.MovedOn)]
+    public void ClassifyTwinApplyReaction_ScoredSample_ClassifiesItsScore(FinalStateVerdict verdict, GuardScenarios.TwinApplyReaction expected)
     {
         var sample = new ScenarioSample(
             ScenarioId: GuardScenarios.TwinApplyCallsId,
@@ -278,13 +286,13 @@ public class GuardScenariosTests
             Commit: "",
             Dirty: false,
             LiftRenames: "on",
-            Score: ScoreWith(2, FinalStateVerdict.Wrong),
+            Score: ScoreWith(2, verdict),
             SchemaDrift: false,
             ResultDrift: 0,
             InconclusiveReason: "",
             TranscriptPath: "");
 
-        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(sample), Is.EqualTo(GuardScenarios.TwinApplyReaction.Reverted));
+        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(sample), Is.EqualTo(expected));
     }
 
     // ---- EmptyInterfaceRemoval classifier ----

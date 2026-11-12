@@ -59,7 +59,7 @@ public static class GuardScenarios
     // SUCCESS (isError false): 'No change: this exact edit was already applied by an earlier ReplaceSnippet call (changeId <id>),
     // and the file already contains your newContent. Do not send it again; continue with the next step.' (measured by
     // ResumeFaultExecutionTests.ApplyResumeFaultCalls_TwinApplyCallsScenario_SecondIdenticalCallIsANoOpSuccess). So the question
-    // under test is the model's reaction, graded by ClassifyTwinApplyReaction (MovedOn / ResentAgain / Reverted) plus the existing
+    // under test is the model's reaction, graded by ClassifyTwinApplyReaction (MovedOn / ResentAgain / Reverted / Damaged) plus the existing
     // final-state check. ScenarioType is 2 because the seeded turn contains no tool error.
     public static readonly ScenarioDefinition TwinApplyCalls = new(
         Id: TwinApplyCallsId,
@@ -130,22 +130,27 @@ public static class GuardScenarios
     /// <summary>What the model did after the seeded twin apply calls; per sample, see ClassifyTwinApplyReaction.</summary>
     public enum TwinApplyReaction
     {
-        /// <summary>Did not resend the identical call, and the final state is not Wrong.</summary>
+        /// <summary>Final state Correct and the identical call was sent fewer than ResentAgainRepeatThreshold times.</summary>
         MovedOn,
 
-        /// <summary>Sent the identical call a third time or more (the seeded turn already holds 2).</summary>
+        /// <summary>Sent the identical call a third time or more (the seeded turn already holds 2), whatever the verdict.</summary>
         ResentAgain,
 
-        /// <summary>The final state is Wrong.</summary>
+        /// <summary>Final state Unchanged: the file is back at its starting text, so the seeded edit was undone.</summary>
         Reverted,
+
+        /// <summary>Final state Wrong or Destructive (re-applied in another form, or breakage), or no final-state verdict.</summary>
+        Damaged,
     }
 
     /// <summary>Identical-call count at which a sample counts as ResentAgain (the seeded turn already holds 2).</summary>
     public const int ResentAgainRepeatThreshold = 3;
 
     /// <summary>
-    /// Classifies the reaction to the seeded twin apply calls from the identical-call repeat count and the final-state verdict.
-    /// ResentAgain is checked first, so a resend that also leaves the state Wrong is ResentAgain. Usable from rescoring, or on
+    /// Classifies the reaction to the seeded twin apply calls. Rules in order: a repeat of at least ResentAgainRepeatThreshold
+    /// is ResentAgain, whatever the verdict; then verdict Correct is MovedOn, Unchanged is Reverted, and Wrong or Destructive is
+    /// Damaged. A null verdict is also Damaged, on purpose: with a repeat below the threshold and no verdict the run cannot be
+    /// called MovedOn, and Damaged is the conservative bucket that never overstates success. Usable from rescoring, or on
     /// results.csv rows parsed with ScenarioSampleCsv (columns maxIdenticalCallRepeat and finalStateVerdict). The eval doc applies
     /// it per sample; there is no new CSV column.
     /// </summary>
@@ -156,14 +161,25 @@ public static class GuardScenarios
             return TwinApplyReaction.ResentAgain;
         }
 
-        return verdict == FinalStateVerdict.Wrong ? TwinApplyReaction.Reverted : TwinApplyReaction.MovedOn;
+        return verdict switch
+        {
+            FinalStateVerdict.Correct => TwinApplyReaction.MovedOn,
+            FinalStateVerdict.Unchanged => TwinApplyReaction.Reverted,
+            _ => TwinApplyReaction.Damaged,
+        };
     }
 
-    /// <summary>Classifies one scored run from its MaxIdenticalCallRepeat and Verdict (see the int/verdict overload).</summary>
+    /// <summary>
+    /// Classifies one scored run from its MaxIdenticalCallRepeat and Verdict (see the int/verdict overload). A null Verdict
+    /// maps to Damaged, as there.
+    /// </summary>
     public static TwinApplyReaction ClassifyTwinApplyReaction(ScoreResult score) =>
         ClassifyTwinApplyReaction(score.MaxIdenticalCallRepeat, score.Verdict);
 
-    /// <summary>Classifies one results row; null when the sample is inconclusive (Score is null), so there is no run to read.</summary>
+    /// <summary>
+    /// Classifies one results row. Still null when the sample is inconclusive (Score is null), since there is no run to read;
+    /// otherwise the ScoreResult overload, so a null Verdict maps to Damaged.
+    /// </summary>
     public static TwinApplyReaction? ClassifyTwinApplyReaction(ScenarioSample sample) =>
         sample.Score is null ? (TwinApplyReaction?)null : ClassifyTwinApplyReaction(sample.Score);
 
