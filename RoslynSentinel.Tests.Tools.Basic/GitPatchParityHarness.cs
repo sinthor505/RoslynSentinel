@@ -20,6 +20,14 @@ internal static class GitPatchParityHarness
 {
     private const int DiffMaxBytes = 524288;
     private const int OutcomeDetailMax = 120;
+
+    /// <summary>Which production call a pin exercises: the diff text (staged or A..B) or the show text of one commit.</summary>
+    internal enum PatchSurface
+    {
+        Diff,
+        Show,
+    }
+
     private static readonly object RecordLock = new();
 
     private static readonly MethodInfo RejoinLinesMethod =
@@ -100,7 +108,7 @@ internal static class GitPatchParityHarness
         var impl = new GitImpl(
             new FakeWorkspaceManager(WorkspaceAccess.ReadOnly),
             NullLogger<GitImpl>.Instance,
-            new FallbackGitReader(new Libgit2GitReader(), new CliGitReader(), _ => { }),
+            new CliGitReader(), // CLI-only: this side is the oracle, so it must never route through libgit2.
             new InProcessCommitRoute());
         var result = await impl.DiffAsync(dir, target, null, DiffMaxBytes, nameOnly: false, stat: false, CancellationToken.None);
         if (result.IsError)
@@ -128,6 +136,7 @@ internal static class GitPatchParityHarness
     /// outcome except the throw one ends with ";raw=equal" or ";raw=differs" (git stdout bytes against UTF-8 of the
     /// libgit2 content). <paramref name="indentHeuristic"/> is passed to the libgit2 side only.
     /// </summary>
+    // TODO remove CompareAsync and CompareRootCommitAsync: no caller remains after the Step 13 pin (AssertPinAsync replaces the record-only corpus)
     internal static async Task<string> CompareAsync(string dir, string target, bool indentHeuristic = true)
     {
         var (cliText, cliWarning) = await CliToolTextAsync(dir, target);
@@ -155,6 +164,7 @@ internal static class GitPatchParityHarness
     /// against <paramref name="revision"/> (raw bytes, then the tool-visible text), the libgit2 side compares a null tree
     /// with the commit's tree. Outcome strings are the same as <see cref="CompareAsync"/>.
     /// </summary>
+    // TODO remove CompareRootCommitAsync with CompareAsync: no caller remains after the Step 13 pin
     internal static async Task<string> CompareRootCommitAsync(string dir, string revision)
     {
         const string emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
@@ -250,4 +260,112 @@ internal static class GitPatchParityHarness
         var middle = runs / 2;
         return runs % 2 == 1 ? samples[middle] : (samples[middle - 1] + samples[middle]) / 2.0;
     }
+
+    /// <summary>
+    /// The CLI tool text and Warning for a show of one commit: git diff of its first parent (the empty tree for a root commit) against the commit, through the
+    /// same re-join and decode check as the tool. This is the CLI side of <see cref="PatchSurface.Show"/> pins.
+    /// </summary>
+    private static (string Text, string? Warning) CliShowToolText(string dir, string revision)
+    {
+        const string emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+        var parent = RunGitBytes(dir, "rev-parse", "--verify", "--quiet", revision + "^");
+        var from = parent.ExitCode == 0 ? revision + "^" : emptyTree;
+        var (exitCode, stdout) = RunGitBytes(dir, "diff", from, revision);
+        if (exitCode != 0)
+        {
+            throw new InvalidOperationException("git diff " + from + " " + revision + " exited with " + exitCode + ".");
+        }
+
+        return ToolTextFromRaw(Encoding.UTF8.GetString(stdout));
+    }
+
+    /// <summary>Describes the first line where the CLI text and the tool text differ (1-based line, both sides), for a failure message.</summary>
+    private static string FirstDifference(string cli, string tool)
+    {
+        var cliLines = cli.Split('\n');
+        var toolLines = tool.Split('\n');
+        for (var i = 0; i < Math.Max(cliLines.Length, toolLines.Length); i++)
+        {
+            var cliLine = i < cliLines.Length ? cliLines[i] : null;
+            var toolLine = i < toolLines.Length ? toolLines[i] : null;
+            if (!string.Equals(cliLine, toolLine, StringComparison.Ordinal))
+            {
+                return (i + 1) + ": cli=" + Show(cliLine) + " tool=" + Show(toolLine);
+            }
+        }
+
+        return "none (the texts are equal)";
+    }
+
+    /// <summary>
+    /// The one pin body. Calls the production composite (GetPatchText or GetCommitPatchText, no paths), records the observed class and text parity in the
+    /// shared table, then asserts the expected class with the composite's counters and the text and Warning against the CLI.
+    /// </summary>
+    private static async Task AssertPinAsync(string scenario, string dir, string target, PatchSurface surface, bool routed)
+    {
+        var composite = new FallbackGitReader(new Libgit2GitReader(), new CliGitReader(), _ => { });
+        var cliTimeout = TimeSpan.FromSeconds(60);
+        var raw = surface == PatchSurface.Diff
+            ? composite.GetPatchText(dir, target, null, cliTimeout)
+            : composite.GetCommitPatchText(dir, target, null, cliTimeout);
+        var (toolText, toolWarning) = ToolTextFromRaw(raw ?? string.Empty);
+        var (cliText, cliWarning) = surface == PatchSurface.Diff
+            ? await CliToolTextAsync(dir, target)
+            : CliShowToolText(dir, target);
+
+        var recordedTarget = surface == PatchSurface.Diff ? target : "show " + target;
+        var label = scenario + " " + recordedTarget;
+        var observed = composite.DeclineCount > 0
+            ? "declined:" + Truncate(composite.LastDeclineReason ?? string.Empty)
+            : composite.CliFallbackCount > 0
+                ? "fallback:" + Truncate(composite.FirstFallbackReason ?? string.Empty)
+                : "routed";
+        var sameText = string.Equals(toolText, cliText, StringComparison.Ordinal);
+        var sameWarning = string.Equals(toolWarning, cliWarning, StringComparison.Ordinal);
+        Record(
+            scenario,
+            recordedTarget,
+            observed + ";text=" + (sameText ? "parity" : "differs:" + Truncate(FirstDifference(cliText, toolText))) + ";warning=" + (sameWarning ? "parity" : "differs"));
+
+        Assert.That(raw, Is.Not.Null, label + ": the composite returned no text (a revision or path did not resolve).");
+        if (routed)
+        {
+            Assert.Multiple(() =>
+            {
+                Assert.That(composite.Libgit2Count, Is.EqualTo(1), label + ": libgit2 should answer (last decline: " + composite.LastDeclineReason + ", first failure: " + composite.FirstFallbackReason + ").");
+                Assert.That(composite.DeclineCount, Is.Zero, label + ": declined: " + composite.LastDeclineReason);
+                Assert.That(composite.CliFallbackCount, Is.Zero, label + ": failed: " + composite.FirstFallbackReason);
+                Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Libgit2), label + ": the last answer was not libgit2.");
+                Assert.That(toolText, Is.EqualTo(cliText), label + ": tool text differs from the CLI; first difference at line " + FirstDifference(cliText, toolText));
+                Assert.That(toolWarning, Is.EqualTo(cliWarning), label + ": Warning differs from the CLI.");
+            });
+        }
+        else
+        {
+            Assert.Multiple(() =>
+            {
+                Assert.That(composite.DeclineCount, Is.EqualTo(1), label + ": expected a planned decline (counted, not silent).");
+                Assert.That(composite.LastDeclineReason, Is.Not.Null.And.Not.Empty, label + ": a decline must carry a reason.");
+                Assert.That(composite.Libgit2Count, Is.Zero, label + ": libgit2 should not have answered.");
+                Assert.That(composite.CliFallbackCount, Is.Zero, "a decline is not a failure: " + composite.FirstFallbackReason);
+                Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Cli), label + ": the last answer was not the CLI.");
+                Assert.That(toolText, Is.EqualTo(cliText), label + ": the CLI-answered text differs from the tool's CLI text.");
+                Assert.That(toolWarning, Is.EqualTo(cliWarning), label + ": Warning differs from the CLI.");
+            });
+        }
+    }
+
+    /// <summary>
+    /// Pin for a call that the composite routes to libgit2: exactly one libgit2 answer, no planned decline and no failure, and the tool text and
+    /// Warning equal the CLI's. <paramref name="target"/> is "staged" or "A..B" for <see cref="PatchSurface.Diff"/>, a revision for <see cref="PatchSurface.Show"/>.
+    /// </summary>
+    internal static Task AssertRoutedIdenticalAsync(string scenario, string dir, string target, PatchSurface surface = PatchSurface.Diff) =>
+        AssertPinAsync(scenario, dir, target, surface, routed: true);
+
+    /// <summary>
+    /// Pin for a call that libgit2 declines: the composite counts exactly one planned decline with a reason (no libgit2 answer, no failure),
+    /// and the text it returns (git's own answer) equals the CLI tool text and Warning.
+    /// </summary>
+    internal static Task AssertDeclinedAsync(string scenario, string dir, string target, PatchSurface surface = PatchSurface.Diff) =>
+        AssertPinAsync(scenario, dir, target, surface, routed: false);
 }
