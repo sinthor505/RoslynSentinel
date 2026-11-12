@@ -90,8 +90,8 @@ public class GetLargeResultTests
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
-        Assert.That(result.ErrorData!.Message, Does.Contain("Result file not found").Or.Contain("resultId").Or.Contain("filePath"),
-            "ErrorData should explain that a resultId or filePath is required.");
+        Assert.That(result.ErrorData!.Message, Does.Contain("Neither resultId nor filePath was given."),
+            "ErrorData should state that neither a resultId nor a filePath was given.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -106,8 +106,7 @@ public class GetLargeResultTests
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(result.ErrorData!.Message, Does.Contain("Result file not found"));
-        Assert.That(result.ErrorData!.Message, Does.Contain("00000000000000000000000000000000"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("No stored result matches resultId '00000000000000000000000000000000'."));
     }
 
     // Deliberately no SetTestSolution or SolutionPath: solution root remains empty.
@@ -130,7 +129,7 @@ public class GetLargeResultTests
             Assert.That(result.ErrorData, Is.Not.Null);
             Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded));
             Assert.That(result.ErrorData!.Message, Does.Contain("No solution is loaded"));
-            Assert.That(result.ErrorData!.Message, Does.Not.Contain("Result file not found"));
+            Assert.That(result.ErrorData!.Message, Does.Not.Contain("No stored result matches"));
         }
         finally
         {
@@ -176,7 +175,7 @@ public class GetLargeResultTests
 
         Assert.That(!result.IsError, Is.False,
             "A result file outside .roslynsentinel/largeresults/ must be rejected.");
-        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound)); Assert.That(result.ErrorData!.Message, Is.EqualTo("Result file not found. Supply a valid resultId or filePath pointing to a largeresult_*.json file in the largeresults directory.")); // TODO engine: the miss is the largeresult_ filename prefix, not the outside-dir check the test name describes
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound)); Assert.That(result.ErrorData!.Message, Does.Contain($"filePath '{outsidePath}' is not a stored result: it is outside the largeresults directory; its file name does not match largeresult_*.json.")); // the message now states both failed checks (outside the directory and the largeresult_ file-name pattern)
     }
 
     [Test, CancelAfter(10000)]

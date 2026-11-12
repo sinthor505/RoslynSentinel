@@ -558,7 +558,7 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError("FileNotFound", $"'{Path.GetFileName(absolutePath)}' does not exist at '{absolutePath}'. {SolutionNotLoadedMessage.Build(_workspaceManager.LoadState)}")
+                    ErrorData = new ResultError("FileNotFound", $"'{Path.GetFileName(absolutePath)}' does not exist at '{absolutePath}' (only that exact path was checked: no solution is loaded, so no search by file name or similar name ran). {SolutionNotLoadedMessage.Build(_workspaceManager.LoadState)}")
                 };
             }
 

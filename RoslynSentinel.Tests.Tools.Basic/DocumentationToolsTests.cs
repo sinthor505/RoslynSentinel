@@ -343,7 +343,8 @@ public class DocumentationToolsTests
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(result.ErrorData.Message, Does.Contain("Document not found"));
+        // The old "Document not found" prefix is now the fact that the fixed state path does not exist.
+        Assert.That(result.ErrorData.Message, Does.Contain("'migration-state.yaml' (docType state) does not exist at docs/migration-state.yaml"));
         Assert.That(result.ErrorData.Message, Does.Contain("action: list"));
     }
 

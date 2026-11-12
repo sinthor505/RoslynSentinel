@@ -87,8 +87,7 @@ public class WorkspaceProjectManagementImpl
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = true,
-                            // TODO ListSolutionItems(kind: files) project miss: bare "not found." text; use SolutionStructureEngine.ProjectNotFound's ProjectNotFoundDetail text (plan_not_found_error_orientation, Tools layer, outside the engine slices)
-                            ErrorData = new ResultError(ToolErrorCode.NotFound, $"Project '{projectName}' not found.")
+                            ErrorData = new ResultError(ToolErrorCode.NotFound, "ListSolutionItems(kind: files): " + ProjectNotFoundDetail.Build(projectName, solution.Projects.Select(p => p.Name).ToList()))
                         };
                     }
 
@@ -206,7 +205,8 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<List<SolutionFileInfo>, ResultError>
             {
                 IsError = true,
-                ErrorData = new ResultError("InvalidArgument", $"Directory not found: '{workspacePath}'")
+                // TODO ListWorkspaceSolutions directory miss is coded InvalidArgument; the cause is a missing directory (NotFound).
+                ErrorData = new ResultError("InvalidArgument", $"workspacePath '{workspacePath}' is not an existing directory" + (File.Exists(workspacePath) ? " ('" + workspacePath + "' is a file)." : " (nothing exists at that path)."))
             };
         }
 

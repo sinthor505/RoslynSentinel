@@ -136,7 +136,7 @@ public class WholeFileWriteTools
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.NotFound, $"DeleteFile: '{filePathResolved}' does not exist. " + ToolCallHint.Next("Search", "to find the right path.", ("mode", "text")))
+                    ErrorData = new ResultError(ToolErrorCode.NotFound, await DeleteFileMissTextAsync(filePathResolved, filePath, cancellationToken))
                 };
             }
 
@@ -175,6 +175,53 @@ public class WholeFileWriteTools
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"DeleteFile for '{filePathResolved}'")
             };
         }
+    }
+
+    // Facts and options for a DeleteFile target that is not a file on disk: what was checked, similar files that do exist (loaded
+    // solution only, each with a prefilled DeleteFile retry) or the no-similar-name fact, and Search as an option when it is callable.
+    // TODO DeleteFile with no solution loaded returns NotFound; the cause is SolutionNotLoaded (ResolveFromWire yields an empty path), so the code is wrong.
+    private async Task<string> DeleteFileMissTextAsync(FilePathWrapper filePathResolved, string wirePath, CancellationToken cancellationToken)
+    {
+        var path = (string)filePathResolved;
+        Solution? solution = null;
+        try
+        {
+            solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        }
+        catch (SolutionNotLoadedException)
+        {
+            // No solution: nothing was resolved or checked, which the first sentence says.
+        }
+
+        var parts = new List<string>();
+        if (solution is null)
+        {
+            parts.Add($"DeleteFile: no solution is loaded, so '{wirePath}' was not resolved to a path and no file was checked.");
+        }
+        else
+        {
+            parts.Add(Directory.Exists(path)
+                ? $"DeleteFile: '{path}' is a directory, not a file; this tool deletes single files."
+                : $"DeleteFile: '{path}' does not exist on disk.");
+            parts.Add($"Searched {solution.Projects.Count()} loaded project(s) by exact path, bare file name and similar file name; path comparison ignores case.");
+            var candidates = DocumentLookup.FindFileCandidates(solution, path).Where(c => File.Exists(c.Path)).ToList();
+            if (candidates.Count == 0)
+            {
+                parts.Add("No existing file in the solution has a similar name.");
+            }
+
+            foreach (var candidate in candidates)
+            {
+                parts.Add($"Did you mean '{candidate.Path}'? Retry with {ToolCallHint.Call("DeleteFile", ("filePath", candidate.Path))}.");
+            }
+        }
+
+        if (_activeToolSurface is null || _activeToolSurface.IsCallable("Search"))
+        {
+            parts.Add(ToolCallHint.Next("Search", "to find the right path.", ("mode", "text")));
+        }
+
+        return string.Join(" ", parts);
     }
 
     /// <summary>

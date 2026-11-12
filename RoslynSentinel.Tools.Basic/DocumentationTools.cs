@@ -238,8 +238,8 @@ public class DocumentationTools
                 Filename = filename,
                 ErrorCode = ToolErrorCode.NotFound,
                 Error = ignoreDocType
-                    ? $"'{filename}' was not found under the testing doc root. Names containing a directory separator are treated as explicit relative paths, so no basename fallback was attempted. Call {ToolCallHint.Call("ProjectDoc", ("action", "list"))} to see the exact available paths."
-                    : $"'{filename}' was not found under docType='{docType}', nor at that path relative to the docs root. Names containing a directory separator are treated as explicit relative paths, so no basename fallback was attempted - a same-named file in a different directory is not a valid substitute. Call {ToolCallHint.Call("ProjectDoc", ("action", "list"))} to see the exact available paths."
+                    ? $"'{filename}' was not found under the testing doc root. Names containing a directory separator are treated as explicit relative paths, so no basename fallback was attempted. " + DocMissFacts(filename, docType, docsRoot, null, TestingDocsLabel)
+                    : $"'{filename}' was not found under docType='{docType}', nor at that path relative to the docs root. Names containing a directory separator are treated as explicit relative paths, so no basename fallback was attempted, and a same-named file in a different directory is not substituted. " + DocMissFacts(filename, docType, docsRoot, subdir, ProductionDocsLabel)
             };
         }
 
@@ -302,10 +302,52 @@ public class DocumentationTools
         string stem = Path.GetFileNameWithoutExtension(Path.GetFileName(filename));
         var notFoundError = ok
             ? ignoreDocType
-                ? $"No file matching '{stem}' (with or without extension) was found anywhere under the testing doc root. Call {ToolCallHint.Call("ProjectDoc", ("action", "list"))} to see all available files."
-                : $"No file matching '{stem}' (with or without extension) was found under docType='{docType}', or anywhere else under docs/. Call {ToolCallHint.Call("ProjectDoc", ("action", "list"))} to see all available files."
+                ? $"No file matching '{stem}' (with or without extension) was found anywhere under the testing doc root. " + DocMissFacts(filename, docType, docsRoot, null, TestingDocsLabel)
+                : $"No file matching '{stem}' (with or without extension) was found under docType='{docType}', or anywhere else under docs/. " + DocMissFacts(filename, docType, docsRoot, subdir, ProductionDocsLabel)
             : guardError;
         return new DocReadResult { Found = false, Filename = filename, ErrorCode = ok ? ToolErrorCode.NotFound : ToolErrorCode.InvalidArgument, Error = notFoundError };
+    }
+
+    private const string ProductionDocsLabel = "docs/";
+    private const string TestingDocsLabel = "docs/current/evals/";
+
+    /// <summary>
+    /// The facts and options that close a ProjectDoc read miss: ranked similar doc names (the docType's own files first, so ties
+    /// favour them) with a prefilled read retry, or the no-similar-name fact with how many files were searched, then the list
+    /// option. <paramref name="retryDocType"/> goes into the prefilled retry; any docType resolves a path relative to the docs root.
+    /// </summary>
+    private static string DocMissFacts(string requested, DocType retryDocType, string docsRoot, string? docTypeSubdir, string docsLabel)
+    {
+        var docs = Directory.Exists(docsRoot)
+            ? Directory.GetFiles(docsRoot, "*", SearchOption.AllDirectories)
+                .Select(f => Path.GetRelativePath(docsRoot, f).Replace('\\', '/'))
+                .OrderBy(f => f, StringComparer.Ordinal)
+                .ToList()
+            : [];
+        if (docTypeSubdir is not null && Directory.Exists(docTypeSubdir))
+        {
+            var prefix = Path.GetRelativePath(docsRoot, docTypeSubdir).Replace('\\', '/') + "/";
+            docs = docs.Where(d => d.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                .Concat(docs.Where(d => !d.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+        }
+
+        var stem = Path.GetFileNameWithoutExtension(Path.GetFileName(requested));
+        var candidates = NameCandidates.Rank(stem, docs, d => Path.GetFileNameWithoutExtension(d));
+        var parts = new List<string>();
+        if (candidates.Count == 0)
+        {
+            parts.Add($"No file under {docsLabel} has a name similar to '{stem}' ({docs.Count} file(s) searched).");
+        }
+
+        foreach (var candidate in candidates)
+        {
+            var retry = ToolCallHint.Call("ProjectDoc", ("action", "read"), ("docType", retryDocType.ToString()), ("name", candidate.Item));
+            parts.Add($"Did you mean '{candidate.Item}'? Retry with {retry}.");
+        }
+
+        parts.Add($"{ToolCallHint.Call("ProjectDoc", ("action", "list"))} lists every file under {docsLabel}.");
+        return string.Join(" ", parts);
     }
 
     /// <summary>
@@ -479,7 +521,15 @@ public class DocumentationTools
                     var fullPath = Path.Combine(docsRoot, "migration-state.yaml");
                     if (!File.Exists(fullPath))
                     {
-                        return new DocReadResult { Found = false, Filename = "migration-state.yaml" };
+                        // docType state ignores name, so a similar file elsewhere under docs/ is offered as a documentation read.
+                        var stateLabel = IsTestingMode ? TestingDocsLabel : ProductionDocsLabel;
+                        return new DocReadResult
+                        {
+                            Found = false,
+                            Filename = "migration-state.yaml",
+                            ErrorCode = ToolErrorCode.NotFound,
+                            Error = $"'migration-state.yaml' (docType state) does not exist at {stateLabel}migration-state.yaml; the path is fixed and name is ignored for docType state. " + DocMissFacts("migration-state.yaml", DocType.documentation, docsRoot, null, stateLabel)
+                        };
                     }
 
                     return new DocReadResult { Found = true, Filename = "migration-state.yaml", Content = File.ReadAllText(fullPath) };
@@ -598,7 +648,7 @@ public class DocumentationTools
         {
             case DocReadResult r when r.IsError:
                 var readMessage = r.Error is null && !r.Found
-                    ? $"Document not found: '{name ?? r.Filename}' (docType {docType}). Use {ToolCallHint.Call("ProjectDoc", ("action", "list"))} to see available files."
+                    ? $"'{name ?? r.Filename}' (docType {docType}) matched no document. {ToolCallHint.Call("ProjectDoc", ("action", "list"))} lists the available files."
                     : r.Message;
                 return ToError(r.Code, readMessage);
             case DocReadResult r:

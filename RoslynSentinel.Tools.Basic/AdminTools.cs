@@ -159,12 +159,12 @@ public class AdminTools
 
         if (unmatched.Count > 0)
         {
-            return Refused(ToolErrorCode.NotFound, $"Nothing cleared: '{string.Join("', '", unmatched)}' match no tracked change. Tracked changes: {DriftMessages.SummarizeFiles(current)}. Call {ToolCallHint.Call("ExternalFileDrift", ("operation", "List"))} for full paths.");
+            return Refused(ToolErrorCode.NotFound, UnmatchedDriftNamesText(unmatched, current));
         }
 
         if (matched.Count == 0)
         {
-            return Refused(ToolErrorCode.NotFound, $"Nothing cleared: files named no entries. Tracked changes: {DriftMessages.SummarizeFiles(current)}. Call {ToolCallHint.Call("ExternalFileDrift", ("operation", "List"))} for full paths.");
+            return Refused(ToolErrorCode.NotFound, $"Nothing cleared: files named no entries (the list held only blank names). Tracked changes: {DriftMessages.SummarizeFiles(current)}. {ToolCallHint.Call("ExternalFileDrift", ("operation", "List"))} lists the full paths.");
         }
 
         health.ClearExternalFileChanges(matched);
@@ -182,6 +182,65 @@ public class AdminTools
 
     private const int LedgerListCap = 50;
     private const int LedgerIdListCap = 10;
+
+    // Facts for Acknowledge names that match no tracked change: the names, how matching works, ranked tracked names
+    // (file-name similarity, top 3 per name) with a prefilled retry or the no-similar-name fact, and the List option.
+    private static string UnmatchedDriftNamesText(IReadOnlyList<string> unmatched, IReadOnlyList<string> current)
+    {
+        var trackedNames = current.Select(p => Path.GetFileName(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var parts = new List<string>
+        {
+            $"Nothing cleared: '{string.Join("', '", unmatched)}' match no tracked change (names and relative paths are compared ignoring case; {current.Count} change(s) tracked)."
+        };
+
+        foreach (var token in unmatched)
+        {
+            var candidates = NameCandidates.Rank(Path.GetFileName(token), trackedNames, n => n);
+            if (candidates.Count == 0)
+            {
+                parts.Add($"No tracked change has a name similar to '{token}'.");
+                continue;
+            }
+
+            foreach (var candidate in candidates)
+            {
+                parts.Add($"Did you mean '{candidate.Item}'? Retry with files: '{candidate.Item}'.");
+            }
+        }
+
+        parts.Add($"Tracked changes: {DriftMessages.SummarizeFiles(current)}.");
+        parts.Add($"{ToolCallHint.Call("ExternalFileDrift", ("operation", "List"))} lists the full paths.");
+        return string.Join(" ", parts);
+    }
+
+    // Facts for LedgerFix ids that match no open entry: the ids, ranked entry ids with a prefilled retry or the
+    // no-similar-id fact, the unresolved ids, and the LedgerList option.
+    private static string UnknownLedgerIdsText(IReadOnlyList<string> unknown, IReadOnlyList<LedgerEntryBase> entries, string listCall)
+    {
+        var allIds = entries.Select(e => e.EntryId).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var parts = new List<string>
+        {
+            $"Nothing changed: unknown entry id(s) {BoundedIds(unknown)} (ids are compared ignoring case; the open ledger holds {allIds.Count} entries)."
+        };
+
+        foreach (var id in unknown)
+        {
+            var candidates = NameCandidates.Rank(id, allIds, n => n);
+            if (candidates.Count == 0)
+            {
+                parts.Add($"No ledger entry has an id similar to '{id}'.");
+                continue;
+            }
+
+            foreach (var candidate in candidates)
+            {
+                parts.Add($"Did you mean '{candidate.Item}'? Retry with entryIds: '{candidate.Item}'.");
+            }
+        }
+
+        parts.Add($"Unresolved ids: {BoundedIds(entries.Where(e => !e.IsFixed).Select(e => e.EntryId))}. {listCall} shows the details.");
+        return string.Join(" ", parts);
+    }
 
     /// <summary>
     /// Core of <c>ExternalFileDriftTool(operation: LedgerList | LedgerFix | LedgerRelease)</c>. <paramref name="ledger"/> is the
@@ -293,8 +352,7 @@ public class AdminTools
 
         if (unknown.Count > 0)
         {
-            var unresolvedIds = entries.Where(e => !e.IsFixed).Select(e => e.EntryId);
-            return Refused(ToolErrorCode.NotFound, $"Nothing changed: unknown entry id(s) {BoundedIds(unknown)}. Unresolved ids: {BoundedIds(unresolvedIds)}. Call {listCall} for details.");
+            return Refused(ToolErrorCode.NotFound, UnknownLedgerIdsText(unknown, entries, listCall));
         }
 
         if (resolved.Count == 0)

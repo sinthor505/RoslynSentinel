@@ -1773,12 +1773,10 @@ public class WorkspaceReadNavigationImpl
         JsonNode? node = ResultPager.SelectNode(root, effectivePath);
         if (node is null)
         {
-            var suggestion = available.Count > 0 ? $" Retry with {FetchHint(null, available[0])}." : string.Empty;
             return new SentinelCallToolResult<object>
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.NotFound,
-                    $"Path '{effectivePath}' was not found in the stored result. Pageable paths: {availableText}. Paths use property names separated by dots and [i] array indexes, for example successData.items[0].list.{suggestion}")
+                ErrorData = new ResultError(ToolErrorCode.NotFound, DescribeMissingPagePath(effectivePath, available, availableText, FetchHint))
             };
         }
 
@@ -1873,6 +1871,94 @@ public class WorkspaceReadNavigationImpl
         return Build(count, WarningFor(count));
     }
 
+    // Facts and options for a page path that selects nothing in the stored result: what was searched, pageable paths ranked by their
+    // last segment (the shared prefix such as successData would make every path look similar) with a prefilled fetch call, or the
+    // no-similar-name fact with a fetch call for the first pageable path, then the full list of pageable paths.
+    private static string DescribeMissingPagePath(string wantedPath, IReadOnlyList<string> available, string availableText, Func<int?, string, string> fetchHint)
+    {
+        static string LastSegment(string path)
+        {
+            var segment = path[(path.LastIndexOf('.') + 1)..];
+            var bracket = segment.IndexOf('[');
+            return bracket >= 0 ? segment[..bracket] : segment;
+        }
+
+        var parts = new List<string>
+        {
+            $"Path '{wantedPath}' was not found in the stored result ({available.Count} pageable path(s) searched; paths use property names separated by dots and [i] array indexes, for example successData.items[0].list)."
+        };
+
+        var candidates = NameCandidates.Rank(LastSegment(wantedPath), available, LastSegment);
+        foreach (var candidate in candidates)
+        {
+            parts.Add($"Did you mean '{candidate.Item}'? Retry with {fetchHint(null, candidate.Item)}.");
+        }
+
+        if (candidates.Count == 0)
+        {
+            parts.Add($"No pageable path has a name similar to '{wantedPath}'.");
+            if (available.Count > 0)
+            {
+                parts.Add($"{fetchHint(null, available[0])} pages the first pageable path.");
+            }
+        }
+
+        parts.Add($"Pageable paths: {availableText}.");
+        return string.Join(" ", parts);
+    }
+
+    // Facts for a GetLargeResult call that resolved to no stored result file: the resultId or filePath asked for and which check
+    // failed, the number of stored results, and a prefilled fetch call for the most recent one as an option.
+    private static string DescribeLargeResultMiss(string solutionRoot, string? resultId, string? filePath, string? absolutePath)
+    {
+        var dir = System.IO.Path.GetFullPath(System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "largeresults"));
+        var stored = Directory.Exists(dir)
+            ? Directory.EnumerateFiles(dir, "largeresult_*.json").OrderByDescending(f => System.IO.Path.GetFileName(f), StringComparer.OrdinalIgnoreCase).ToList()
+            : [];
+        var parts = new List<string>();
+        if (!string.IsNullOrEmpty(resultId))
+        {
+            parts.Add($"No stored result matches resultId '{resultId}'.");
+        }
+        else if (!string.IsNullOrEmpty(absolutePath))
+        {
+            var name = System.IO.Path.GetFileName(absolutePath);
+            var failed = new List<string>();
+            if (!System.IO.Path.GetFullPath(absolutePath).StartsWith(dir, StringComparison.OrdinalIgnoreCase))
+            {
+                failed.Add("it is outside the largeresults directory");
+            }
+
+            if (!name.StartsWith("largeresult_", StringComparison.OrdinalIgnoreCase) || !name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                failed.Add("its file name does not match largeresult_*.json");
+            }
+
+            if (!File.Exists(absolutePath))
+            {
+                failed.Add("no file exists at that path");
+            }
+
+            parts.Add($"filePath '{filePath}' is not a stored result" + (failed.Count > 0 ? ": " + string.Join("; ", failed) : string.Empty) + ".");
+        }
+        else
+        {
+            parts.Add("Neither resultId nor filePath was given.");
+        }
+
+        var recentIds = stored.Take(3)
+            .Select(f => System.IO.Path.GetFileNameWithoutExtension(f))
+            .Select(n => n[(n.LastIndexOf('_') + 1)..])
+            .ToList();
+        parts.Add($"The largeresults directory (.roslynsentinel/largeresults under the solution root) holds {stored.Count} stored result(s).");
+        if (recentIds.Count > 0)
+        {
+            parts.Add($"Most recent resultId: '{recentIds[0]}'; {LargeResultHints.FetchCall(recentIds[0])} pages it.");
+        }
+
+        return string.Join(" ", parts);
+    }
+
     // Returned for a stored file GetLargeResult cannot read: one written before the result marshaller (Raw or a typed list wrapper,
     // plan_wire_result_marshaller.md Step 10) or with a Type name that no longer exists. Only Envelope files are written now.
     private const string StoredResultFromOlderServerMessage =
@@ -1939,16 +2025,10 @@ public class WorkspaceReadNavigationImpl
                 };
             }
 
-            var message = "Result file not found. Supply a valid resultId or filePath pointing to a largeresult_*.json file in the largeresults directory.";
-            if (!string.IsNullOrEmpty(resultId))
-            {
-                message += $" (resultId looked up: {resultId})";
-            }
-
             return new SentinelCallToolResult<object>
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.NotFound, message)
+                ErrorData = new ResultError(ToolErrorCode.NotFound, DescribeLargeResultMiss(solutionRoot, resultId, filePath, filePathResolved.Absolute))
             };
         }
 
