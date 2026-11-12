@@ -62,24 +62,29 @@ public class SymbolNotFoundDetailTests
     [Test]
     public async Task FindCandidates_PropertyFieldAndEvent_AreOfferedWithTheirKinds()
     {
-        const string members = "namespace Fixture; public class Gadget { public int Widgets { get; set; } public int widgetCount; public event System.Action? WidgetChanged; }";
+        // Candidate matching is strict (edit distance only), so each member is one edit from the wanted Widgetq.
+        const string members = "namespace Fixture; public class Gadget { public int Widgets { get; set; } public int widgetx; public event System.Action? Widgett; }";
         var projects = Projects(BuildSolution(("Gadget.cs", members)));
 
-        var candidates = await SymbolNotFoundDetail.FindCandidatesAsync(projects, "Widgets", "any", cap: 10);
+        var candidates = await SymbolNotFoundDetail.FindCandidatesAsync(projects, "Widgetq", "any", cap: 10);
 
         Assert.That(candidates.Select(c => (c.Name, c.Kind)), Does.Contain(("Widgets", "property")));
-        Assert.That(candidates.Select(c => (c.Name, c.Kind)), Does.Contain(("widgetCount", "field")));
-        Assert.That(candidates.Select(c => (c.Name, c.Kind)), Does.Contain(("WidgetChanged", "event")));
+        Assert.That(candidates.Select(c => (c.Name, c.Kind)), Does.Contain(("widgetx", "field")));
+        Assert.That(candidates.Select(c => (c.Name, c.Kind)), Does.Contain(("Widgett", "event")));
     }
 
-    [Test]
-    public async Task FindCandidates_CompilerGeneratedMembers_AreSkipped()
+    // Each wanted name is one edit from a compiler-generated name, so the skip (not the strict ranking) is what keeps it out.
+    [TestCase("get_Widget")]
+    [TestCase("set_Widget")]
+    [TestCase("add_WidgetChange")]
+    [TestCase("<Widgets>k__BackingFiel")]
+    public async Task FindCandidates_CompilerGeneratedMembers_AreSkipped(string wanted)
     {
         // Auto-property backing fields, accessors and a field-like event's backing field are not user-declared symbols.
         const string members = "namespace Fixture; public class Gadget { public int Widgets { get; set; } public event System.Action? WidgetChanged; }";
         var projects = Projects(BuildSolution(("Gadget.cs", members)));
 
-        var candidates = await SymbolNotFoundDetail.FindCandidatesAsync(projects, "Widgets", "any", cap: 20);
+        var candidates = await SymbolNotFoundDetail.FindCandidatesAsync(projects, wanted, "any", cap: 20);
 
         Assert.That(candidates.Select(c => c.Name), Has.None.Contains("k__BackingField"));
         Assert.That(candidates.Select(c => c.Name), Has.None.StartWith("get_"));
@@ -118,6 +123,20 @@ public class SymbolNotFoundDetailTests
         Assert.That(two, Has.Count.EqualTo(2));
         Assert.That(byDefault[0].Name, Is.EqualTo("CalcDisc"));
         Assert.That(byDefault[0].Distance, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task FindCandidates_SharedPrefixOnlyNames_AreNotOffered_NearTypoStillRanksFirst()
+    {
+        // Owner decision (plan_not_found_error_orientation Risk 1): the solution-wide list is strict, so the shared 4-character prefix "Appl" is not similarity.
+        const string others = "namespace Fixture; public class Others { public void ApplyDiscount() { } public void ApplyPercentage() { } }";
+        var projects = Projects(BuildSolution(("Others.cs", others)));
+
+        var prefixOnly = await SymbolNotFoundDetail.FindCandidatesAsync(projects, "ApplyLoyaltyBonus", "method", cap: 10);
+        var typo = await SymbolNotFoundDetail.FindCandidatesAsync(projects, "CalcDsc", "method");
+
+        Assert.That(prefixOnly, Is.Empty);
+        Assert.That(typo[0].Name, Is.EqualTo("CalcDisc"));
     }
 
     [Test]
@@ -203,6 +222,20 @@ public class SymbolNotFoundDetailTests
         Assert.That(text, Does.Contain("does not exist in this solution"));
         Assert.That(text, Does.Not.Contain("tell the user"));
         Assert.That(text, Does.Not.Contain("You MUST"));
+    }
+
+    [Test]
+    public async Task BuildAsync_OnlySharedPrefixNamesExist_SaysNoSymbolHasASimilarName()
+    {
+        const string others = "namespace Fixture; public class Others { public void ApplyDiscount() { } public void ApplyPercentage() { } }";
+        var projects = Projects(BuildSolution(("Others.cs", others)));
+
+        var text = await SymbolNotFoundDetail.BuildAsync(projects, "ApplyLoyaltyBonus", "method", ScopeDescription, ProjectName);
+
+        Assert.That(text, Does.Contain("No symbol in the solution has a similar name"));
+        Assert.That(text, Does.Not.Contain("Did you mean"));
+        Assert.That(text, Does.Not.Contain("ApplyDiscount"));
+        Assert.That(text, Does.Not.Contain("ApplyPercentage"));
     }
 
     [Test]

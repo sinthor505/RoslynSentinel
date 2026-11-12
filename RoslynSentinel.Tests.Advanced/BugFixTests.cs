@@ -1984,20 +1984,21 @@ public class Foo : IFoo
             Assert.That(ex.Message.TrimEnd(), Does.EndWith(")"));
         }
 
-        // -- Did-you-mean ranks a non-test type ahead of a test method sharing its name stem, even when the test method comes first in the file --
+        // -- Did-you-mean ranks a non-test type ahead of a test method one edit further away, even when the test method comes first in the file --
+        // The candidate list is strict (edit distance only), so the names are edit-near: Widgit is 1 edit from Widget and 2 from Widgets.
         [Test]
         public async Task FindCallersAsync_DidYouMean_RanksTypeAheadOfSameNamedTestMethod()
         {
             SetMultipleFiles(
-                ("A.cs", "public class TestAttribute : System.Attribute { }\r\npublic class Checks\r\n{\r\n    [Test]\r\n    public void WidgetShouldWork() { }\r\n}"),
+                ("A.cs", "public class TestAttribute : System.Attribute { }\r\npublic class Checks\r\n{\r\n    [Test]\r\n    public void Widgets() { }\r\n}"),
                 ("B.cs", "public class Widget { }"));
-            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindCallersAsync(null, "Widge", contextSnippet: null));
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindCallersAsync(null, "Widgit", contextSnippet: null));
             var msg = ex!.Message;
             Assert.That(msg, Does.Contain("Did you mean"));
             // Shared candidate list (SymbolNotFoundDetail, Step 5e): the type comes first, the test method after it, each with its own FindReferences call.
             Assert.That(msg, Does.Contain("Widget (type)"));
-            Assert.That(msg, Does.Contain("WidgetShouldWork (method) in Checks"));
-            Assert.That(msg.IndexOf("Widget (type)", StringComparison.Ordinal), Is.LessThan(msg.IndexOf("WidgetShouldWork (method)", StringComparison.Ordinal)));
+            Assert.That(msg, Does.Contain("Widgets (method) in Checks"));
+            Assert.That(msg.IndexOf("Widget (type)", StringComparison.Ordinal), Is.LessThan(msg.IndexOf("Widgets (method)", StringComparison.Ordinal)));
             Assert.That(msg, Does.Contain("it does not exist in this solution."));
             Assert.That(msg, Does.Contain("symbolName: \"Widget\""));
             Assert.That(msg, Does.Contain("filePath:"));

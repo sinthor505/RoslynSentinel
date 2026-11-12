@@ -192,6 +192,11 @@ Owner decisions, 2026-11-12 (implement-plan settle, after a source review of thi
     each candidate shows its exact docCommentId (fact) and the calling tool's own call with only the id corrected
     (option), via an optional retry-call delegate threaded from RenameSymbol, DeleteUnusedSymbol and
     PreviewRenameImpact (precedent `NameTargetLookup.RequireSingle`). Default null keeps the neutral output.
+13. **Step 6 follow-ups (2026-11-12, from the transcript read):** (a) the no-similar-file text drops the CreateFile
+    option (5 of 9 NoMatch failures created the file right after it; a read/edit miss is not a create request);
+    (b) solution-wide symbol candidates use a strict similarity rule (edit distance only; Risk 1 realized:
+    "ApplyLoyaltyBonus" got ApplyDiscount/ApplyPercentage through the 4-character prefix rule, so the
+    nothing-similar fact never appeared). Member-level and file candidates keep the generous rule.
 11. **Step 6 measures, does not target (revises Decision 6):** the runs are kept and recorded; 6 of 10 is an
     observation, not a goal to tune tool text toward.
 

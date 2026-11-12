@@ -25,7 +25,7 @@ public static class SymbolNotFoundDetail
     /// <summary>
     /// Collects declared named types, ordinary methods, properties (not indexers), fields (including constants and enum
     /// members) and events of the source symbols of <paramref name="searchedProjects"/> whose name is similar to
-    /// <paramref name="wantedName"/> (<see cref="NameCandidates.Rank{T}"/>), same kind as <paramref name="symbolKind"/> first
+    /// <paramref name="wantedName"/> by the strict edit-distance rule (<see cref="NameCandidates.Rank{T}"/> with strict), same kind as <paramref name="symbolKind"/> first
     /// (when it is not "any"), then nearest, then in declaration walk order. Implicitly declared symbols and accessors are
     /// skipped; the same name, container and kind (overloads, partials) is listed once. Returns at most
     /// <paramref name="cap"/> candidates; empty for a wanted name shorter than 3 characters.
@@ -45,8 +45,10 @@ public static class SymbolNotFoundDetail
             CollectNamespace(compilation.Assembly.GlobalNamespace, declared, cancellationToken);
         }
 
-        // cap: int.MaxValue so the same-kind ordering below happens before the cap.
-        var ranked = NameCandidates.Rank(wantedName, declared, c => c.Name, int.MaxValue);
+        // cap: int.MaxValue so the same-kind ordering below happens before the cap. strict: a solution-wide list has many names, and the
+        // generous shared-prefix rule offered unrelated ones (ApplyLoyaltyBonus got ApplyDiscount and ApplyPercentage); MemberNotFoundDetail
+        // and the file candidates keep the generous rule.
+        var ranked = NameCandidates.Rank(wantedName, declared, c => c.Name, int.MaxValue, strict: true);
         var wantKind = !string.IsNullOrWhiteSpace(symbolKind) && !string.Equals(symbolKind, "any", StringComparison.OrdinalIgnoreCase);
         return ranked
             .OrderBy(r => wantKind && !string.Equals(r.Item.Kind, symbolKind, StringComparison.OrdinalIgnoreCase) ? 1 : 0)
