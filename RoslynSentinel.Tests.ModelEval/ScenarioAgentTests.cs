@@ -210,27 +210,32 @@ public class ScenarioAgentTests
             userPrompt = string.Format(scenario.PromptTemplate, Path.Combine(environment.SolutionDirectory, "ContosoOrders.Core"));
         }
 
-        // Faulted resume: ONE real call on the fresh fixture. Unseeded, it is not added to seed, so the model never sees it (stale workspace).
+        // Faulted resume: real calls on the fresh fixture. Unseeded, the ONE call is not added to seed, so the model never sees it (stale workspace).
         if (scenario.ResumeFaultTool is not null)
         {
-            var (faultIsError, faultText, faultArguments) = await ApplyResumeFaultAsync(environment.Client, scenario, directory, cancellationToken);
             if (scenario.ResumeFaultSeeded)
             {
-                // Seeded: the failed result is the point, so IsError is expected here. The authored call is appended as the
+                // Seeded: the failed result is the point, so IsError is expected here. The authored call(s) are appended as the
                 // scenario's first error. Scoring stays at ResumeKeepTurns on purpose (ScenarioSampleLoop passes only that as
                 // seededTurns), so the authored failed call counts as the scenario's first error. For an authored-only seed the
-                // authored turn is turn 1 (NextSeedTurnNumber on an empty seed).
-                seed.Add(TranscriptResume.BuildAuthoredFaultTurn(NextSeedTurnNumber(seed), scenario.ResumeFaultTool!, faultArguments, faultText, faultIsError));
-                TestContext.Out.WriteLine($"Sample {sampleIndex}: authored fault call seeded ({scenario.ResumeFaultTool}, isError={faultIsError}).");
-            }
-            else if (faultIsError)
-            {
-                var excerpt = faultText.Length > 200 ? faultText[..200] : faultText;
-                return (null, null, schemaDrift, resultDrift, "FaultCallFailed: " + excerpt);
+                // authored turn is turn 1 (NextSeedTurnNumber on an empty seed). With ResumeFaultExtraCalls the single authored turn
+                // holds several calls, executed in order on the fixture.
+                var calls = await ApplyResumeFaultCallsAsync(environment.Client, scenario, directory, cancellationToken);
+                seed.Add(TranscriptResume.BuildAuthoredFaultTurn(NextSeedTurnNumber(seed), calls));
+                TestContext.Out.WriteLine($"Sample {sampleIndex}: authored fault call(s) seeded ({calls.Count} call(s) in one turn; first {scenario.ResumeFaultTool}, isError={calls[0].IsError}).");
             }
             else
             {
-                TestContext.Out.WriteLine($"Sample {sampleIndex}: resume fault applied ({scenario.ResumeFaultTool}); not shown to the model.");
+                var (faultIsError, faultText, _) = await ApplyResumeFaultAsync(environment.Client, scenario, directory, cancellationToken);
+                if (faultIsError)
+                {
+                    var excerpt = faultText.Length > 200 ? faultText[..200] : faultText;
+                    return (null, null, schemaDrift, resultDrift, "FaultCallFailed: " + excerpt);
+                }
+                else
+                {
+                    TestContext.Out.WriteLine($"Sample {sampleIndex}: resume fault applied ({scenario.ResumeFaultTool}); not shown to the model.");
+                }
             }
         }
 
@@ -250,7 +255,7 @@ public class ScenarioAgentTests
     }
 
     // Runs the ONE resume fault call on the fresh fixture; its result is never added to the seeded turns.
-    private static async Task<(bool IsError, string ResultText, string ArgumentsJson)> ApplyResumeFaultAsync(
+    internal static async Task<(bool IsError, string ResultText, string ArgumentsJson)> ApplyResumeFaultAsync(
         McpClient client,
         ScenarioDefinition scenario,
         string solutionDirectory,
@@ -259,6 +264,32 @@ public class ScenarioAgentTests
         var arguments = scenario.ResumeFaultArguments!.Replace("{SOLUTION}", solutionDirectory.Replace('\\', '/'));
         var (resultText, isError) = await TranscriptReplayHelper.ReplayToolCallAsync(client, scenario.ResumeFaultTool!, arguments, cancellationToken);
         return (isError, resultText, arguments);
+    }
+
+    // Runs the primary resume fault call, then each ResumeFaultExtraCalls entry in order, on the fresh fixture. Returns one entry per
+    // executed call, each with its REAL result text and IsError. Null or empty extras = only the primary call. The caller uses this for
+    // seeded faults only; extras are never run for an unseeded fault.
+    internal static async Task<IReadOnlyList<(string ToolName, string ArgumentsJson, string ResultText, bool IsError)>> ApplyResumeFaultCallsAsync(
+        McpClient client,
+        ScenarioDefinition scenario,
+        string solutionDirectory,
+        CancellationToken cancellationToken)
+    {
+        var executed = new List<(string ToolName, string ArgumentsJson, string ResultText, bool IsError)>();
+        var (primaryIsError, primaryText, primaryArguments) = await ApplyResumeFaultAsync(client, scenario, solutionDirectory, cancellationToken);
+        executed.Add((scenario.ResumeFaultTool!, primaryArguments, primaryText, primaryIsError));
+
+        if (scenario.ResumeFaultExtraCalls is not null)
+        {
+            foreach (var (tool, rawArguments) in scenario.ResumeFaultExtraCalls)
+            {
+                var arguments = rawArguments.Replace("{SOLUTION}", solutionDirectory.Replace('\\', '/'));
+                var (resultText, isError) = await TranscriptReplayHelper.ReplayToolCallAsync(client, tool, arguments, cancellationToken);
+                executed.Add((tool, arguments, resultText, isError));
+            }
+        }
+
+        return executed;
     }
 
     // Computes the final-state verdict and snapshots the files it was computed from. Must run while the environment is alive.
