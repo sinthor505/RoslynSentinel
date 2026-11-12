@@ -13,6 +13,9 @@ public sealed class ToolCallContext : IDetachedPayloadSource
     private static readonly AsyncLocal<ToolCallContext?> Slot = new();
 
     private int _gatePassed;
+
+    private string? _missingTargetKind;
+
     private readonly object _detachedLock = new();
     private readonly List<(string Name, object Payload)> _detached = [];
 
@@ -92,6 +95,21 @@ public sealed class ToolCallContext : IDetachedPayloadSource
     public void MarkWritten(DateTime utc)
     {
         LastWriteUtc = utc;
+    }
+
+    /// <summary>
+    /// The kind of target (for example "document" or "method") that a not-found error in this call named, recorded by
+    /// <c>ToolErrorMapper.ToResultError</c> and read by the error-policy filter after the call returns. Side channel
+    /// only: never serialized, never on the wire.
+    /// </summary>
+    public string? MissingTargetKind => Volatile.Read(ref _missingTargetKind);
+
+    /// <summary>Records the missing-target kind for this call; null or whitespace is ignored, and the last write wins.</summary>
+    public void RecordMissingTarget(string? kind)
+    {
+        if (string.IsNullOrWhiteSpace(kind))
+            return;
+        Volatile.Write(ref _missingTargetKind, kind);
     }
 
     /// <summary>

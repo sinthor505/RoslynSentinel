@@ -265,6 +265,9 @@ public static class ToolErrorMapper
     /// <param name="context">Short label prefixed to the message (e.g. "ApplyDiff diff apply for 'Foo.cs'").</param>
     public static ResultError ToResultError(Exception ex, ISolutionProvider workspaceManager, string context)
     {
+        // Error-policy side channel, text-neutral: records the missing-target kind on the ambient call context.
+        if (ex is ToolNotFoundException notFound)
+            ToolCallContext.Current?.RecordMissingTarget(notFound.MissingTargetKind);
         var (code, message) = ToCodeAndMessage(ex, workspaceManager, context);
         // The structured payload (ambiguous candidates, snippet failure detail, failed diff hunks) is
         // small and capped by the engine, far under the offload threshold, and ToResultError is
