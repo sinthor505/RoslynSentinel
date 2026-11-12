@@ -2366,6 +2366,8 @@ public class MemberRefactoringEngine
             throw new ToolInvalidArgumentException($"newMemberSource declares a type, but Member(replace) replaces members, not types. To replace a type use {ToolCallHint.Call("ReplaceSnippet")} or {ToolCallHint.Call("ApplyDiff")}."); // hint-ok: Member(replace) here is prose describing the operation, not a call to make
         }
 
+        // TODO Member replace silently drops a doc comment supplied in newMemberSource: PreserveOld transplants the old
+        // leading trivia (old /// summary) over it, although the newMemberSource description says "full trivia".
         var replacedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, member, newMember, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         if (string.Equals(replacedText, root.ToFullString(), StringComparison.Ordinal))
         {

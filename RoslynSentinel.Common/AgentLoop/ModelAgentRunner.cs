@@ -299,6 +299,8 @@ public sealed class ModelAgentRunner
                 }
                 else
                 {
+                    // TODO a turn whose reasoning holds unparsed tool-call markup (a closing tool_call tag, parameter tags)
+                    // is a malformed call, not a finish: give it its own stop reason or nudge a retry (run 20261112-151054-918 T4).
                     stopReason = AgentStopReason.ModelFinished;
                     _logger.LogInformation("Turn {Turn}: model made no tool calls, treating as finished.", turnNumber);
                 }

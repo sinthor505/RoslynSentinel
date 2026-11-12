@@ -732,6 +732,30 @@ no run hit the turn cap, and `schemaDrift`/`resultDrift` are false/0 throughout.
 - **Caveat.** n=5 is one batch on one host and one commit with a dirty tree; a 4/5 pass rate cannot be told apart from the
   ~80% seen in F to H5, and 0/5 markers only shows the marker is rare here, not that it never fires.
 
+## Batch W: fixes for the Batch V root causes, plus a Step 10 check run (2026-11-11/12)
+
+The five ranked candidates under "Batch V" were all built (owner approved #4 without a proposal):
+
+| # | Fix | Commit |
+| --- | --- | --- |
+| 1 | Ten-chain fixture: `Step10_SummarizeShippingSwitchUsesNamedConstantsNotLiterals` (source-text test; fails while `SummarizeShipping` still matches `\b[12]\s*=>`); comment and prompt line cover steps 1, 3, 7, 9 and 10 | 31e46d41 |
+| 2 | Snippet NoMatch error names literal escape sequences in oldContent and says to send real newlines (`SnippetErrorFormatter.DescribeLiteralEscapeSequences`) | c56ef060 |
+| 3 | RunTest with a filter matching no test says nothing ran (`WorkspaceBuildTestImpl.SummarizeTestRun`, `TestSuiteFilter.ZeroMatchHint`); `runSucceeded`/`isError` unchanged | aad595db |
+| 4 | A unique exact match applies when only a guessed matchLine rejects it, with a note in the summary (`WorkspaceFileEditImpl.ResolveEditMatch`) | 9b725c0b |
+| 5 | matchLine description: only when oldContent matches more than once, omit otherwise | 2659562f |
+
+Not measured as a batch: H6 (30f4622f) and Batch C (c7bddd9e) were both run on commits that predate 31e46d41.
+
+**Step 10 check (one run each, host 113, `qwen3.5-9b-coder`, rename lifting unset):**
+- `20261112-151054-918` (bf391f7a): failed at T4 before any edit landed. The model wrote its RenameSymbol call as
+  tool-call markup inside the reasoning text, 0 parsed tool calls, and `ModelAgentRunner` scored that turn
+  `ModelFinished`. Gap marked with a TODO at the "treating as finished" branch.
+- `20261112-151531-550` (b7d6e1bb plus comment-only changes): the fixture compiles with the new test
+  (RunTest T40: 9 tests, was 8). Step 10 was done before the first RunTest (T35 constants, T37 literals), so the
+  test passed on first sight and its failing case was not seen live. T40 failed only Step 3 (helper private), T42
+  9/9. The run FAILED the per-tool budget (ReplaceSnippet 6 > 5; also Member 2, ReadFile 1, 2 guardrail redirects)
+  after 44 turns. Root cause not analysed.
+
 ## Out of scope
 
 - Batch C ran before 31b206a6 and 28391d8c; their effect is unmeasured.
