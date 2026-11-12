@@ -468,9 +468,12 @@ public static class RenameLifter
     /// The lines a finished rename rewrote, per file name (no directory), as <c>File.cs:12  trimmed source line</c>: each changed document's
     /// new text diffed against the document in <paramref name="baseline"/>. For RenameSymbol's own result; the lift collects the same rows
     /// from the renamer's text changes while it plans. A path with no baseline document (a new file) is skipped.
+    /// <paramref name="movedTo"/> maps the old path of a file the same operation moved (RenameSymbol taking a type's file along) to its new path:
+    /// the baseline is read at the old path, but the rows name the new file, the one the caller can read now. Null = no file moved.
     /// </summary>
     public static async Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> RewrittenLinesAsync(
-        Solution baseline, IReadOnlyDictionary<FilePathWrapper, string> changes, CancellationToken cancellationToken)
+        Solution baseline, IReadOnlyDictionary<FilePathWrapper, string> changes, CancellationToken cancellationToken,
+        IReadOnlyDictionary<FilePathWrapper, FilePathWrapper>? movedTo = null)
     {
         var rewritten = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var (path, newContent) in changes)
@@ -480,7 +483,7 @@ public static class RenameLifter
                 continue;
             }
 
-            var fileName = Path.GetFileName(path.ToString());
+            var fileName = Path.GetFileName((movedTo is not null && movedTo.TryGetValue(path, out var movedPath) ? movedPath : path).ToString());
             var oldLines = before.Split('\n');
             var newLines = newContent.Split('\n');
             List<string> lines;

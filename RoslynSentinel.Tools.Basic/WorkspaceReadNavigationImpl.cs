@@ -72,7 +72,11 @@ public class WorkspaceReadNavigationImpl
     // call, says plainly when no loaded file has a similar name, and offers to report the file as
     // non-existent. Searching by file name turns most wrong-path retries into a one-shot redirect.
     internal static ResultError BuildFileNotFoundError(Solution solution, string normalizedPath, Func<string, bool>? isCallable = null)
-        => new("FileNotFound", FileNotFoundMessage.Build(normalizedPath, DocumentLookup.FindFileCandidates(solution, normalizedPath), solution.Projects.Count(), isCallable, DocumentLookup.FindDeclaringTypeFiles(solution, normalizedPath)));
+    {
+        // A file the server itself moved (RenameSymbol, SyncTypeAndFilename) is named at its new path instead of hedged.
+        var moved = DocumentLookup.FindMovedTo(solution, normalizedPath);
+        return new("FileNotFound", FileNotFoundMessage.Build(normalizedPath, DocumentLookup.FindFileCandidates(solution, normalizedPath), solution.Projects.Count(), isCallable, DocumentLookup.FindDeclaringTypeFiles(solution, normalizedPath), moved?.NewPath, moved?.ToolName));
+    }
 
     /// <summary>
     /// Builds the MethodNotFound message for GetMethodSource. Parts, each only when it applies: the original sentence,

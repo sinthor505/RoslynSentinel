@@ -223,6 +223,14 @@ public class RefactoringSignatureImpl
         if (apply.Error is not null)
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
 
+        // Remember the moves so a later read of the OLD path is told the new one (FileNotFoundMessage). A dry run moved nothing.
+        // TODO MoveType (RefactoringStructuralImpl) and any other tool that deletes a file and creates another do not record their moves; only RenameSymbol and SyncTypeAndFilename (the two TypeFileRename.MoveInto callers) do
+        if (!apply.DryRun)
+        {
+            foreach (var (from, to) in fileMoves)
+                FileMoveMemory.Shared.Record(from.Absolute, to.Absolute, "RenameSymbol");
+        }
+
         // fileRenamed is the first move; any further moves (same-named partial files in different folders) are named in the note.
         var fileRenamed = fileMoves.Count == 0 ? null : new RenameSymbolFileRenamed(RelativeOrAbsolute(fileMoves[0].From), RelativeOrAbsolute(fileMoves[0].To));
         var fileRenameNotes = fileMoves.Skip(1).Select(m => $"Also renamed '{RelativeOrAbsolute(m.From)}' to '{RelativeOrAbsolute(m.To)}'.").Concat(skippedMoveNotes).ToList();
@@ -247,11 +255,12 @@ public class RefactoringSignatureImpl
         {
             // READCHOKEPOINT-CAST: the committed solution still holds the pre-rename texts here (read before the apply above).
             var rewrittenLines = RenameLifter.DescribeRewrittenLines(
-                await RenameLifter.RewrittenLinesAsync(committedForMoves, result.PendingChanges, cancellationToken));
+                await RenameLifter.RewrittenLinesAsync(committedForMoves, result.PendingChanges, cancellationToken, fileMoves.ToDictionary(m => m.From, m => m.To)));
             callSitesNote = rewrittenLines.Length == 0 ? null : rewrittenLines + "\n" + RenameLifter.AlreadyUpdatedSentence;
 
             // H3: remember the old and new text of each rewritten line, so a later ReplaceSnippet whose oldContent still has the old text is told so.
             // The written files' older rows are stale now (this write replaced them), so forget them first.
+            // TODO the rows below are keyed by the PRE-move path for a file this rename moved, so a later ReplaceSnippet on the new path finds no note; key a moved file by its new path
             foreach (var writtenPath in result.PendingChanges.Keys)
                 RewrittenLineMemory.Shared.Forget(writtenPath.ToString());
             RewrittenLineMemory.Shared.Remember("RenameSymbol",

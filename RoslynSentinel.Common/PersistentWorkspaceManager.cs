@@ -964,6 +964,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 // just below does.
                 ClearExternalFileChanges();
 
+                // The recorded file moves (old path -> new path) describe the previous load's files.
+                FileMoveMemory.Shared.Clear();
+
                 // Rebuild the content-hash baseline from what was just loaded -> same "full reset, not
                 // just added-to" requirement as ClearExternalFileChanges just above, so a stale hash
                 // from a previous load never survives a reload and is compared against genuinely new

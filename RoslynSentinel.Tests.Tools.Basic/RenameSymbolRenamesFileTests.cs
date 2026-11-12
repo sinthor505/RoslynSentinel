@@ -16,6 +16,8 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 // stem equals the old type name, in the same apply as the symbol rename. Members, nested types and files with another stem stay put;
 // a taken target name leaves the file alone and the response says why. Runs on a real PersistentWorkspaceManager with real files.
 [TestFixture]
+// Not parallel: the move-record tests below read FileMoveMemory.Shared, which every LoadSolutionAsync in another fixture clears.
+[NonParallelizable]
 [Category("RefactoringSignatureTools")]
 public class RenameSymbolRenamesFileTests
 {
@@ -269,5 +271,60 @@ public class RenameSymbolRenamesFileTests
             Assert.That(File.Exists(h.PathOf("StandardCalc.cs")), Is.False);
             Assert.That(Json(result).GetProperty("fileRenamed").GetProperty("to").GetString(), Does.EndWith("StandardCalc.cs"));
         });
+    }
+
+    // Eval run 20261112-151531-550 T8-T12: after RenameSymbol moved the file the model read the OLD path and got the hedged text ("an earlier rename
+    // or move has changed its name"), then needed two more calls to find the new path. The server remembers its own moves (FileMoveMemory) and names the new path.
+    [Test]
+    public async Task RenameSymbol_FileMoved_ReadFileOfTheOldPathNamesTheNewPathAndToolAsync()
+    {
+        using var h = new Harness(
+            ("Calc.cs", "namespace T;\r\npublic class Calc\r\n{\r\n    public int X() => 1;\r\n}\r\n"),
+            ("User.cs", "namespace T;\r\npublic class User\r\n{\r\n    public Calc Make() => new Calc();\r\n}\r\n"));
+        var rename = await h.RenameAsync("T:T.Calc", "StandardCalc");
+        Assert.That(rename.IsError, Is.False, rename.ErrorData?.Message);
+
+        var read = await TestTools.WorkspaceTools(h.Manager).ReadFileTool(reason: "test message", h.PathOf("Calc.cs"));
+
+        Assert.That(read.IsError, Is.True);
+        var message = read.ErrorData!.Message;
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("was moved to '").And.Contain("StandardCalc.cs' by an earlier RenameSymbol call in this session"));
+            Assert.That(message, Does.Contain("(a rename of the type it declares). Use the new path."));
+            Assert.That(message, Does.Contain("ReadFile"));
+            Assert.That(message, Does.Not.Contain("find its current path"), "the hedged wording must not appear when the new path is known");
+            Assert.That(message, Does.Not.Contain("Did you mean"));
+        });
+    }
+
+    [Test]
+    public async Task RenameSymbol_FileMoved_CallSitesNoteNamesThePostMoveFileAsync()
+    {
+        using var h = new Harness(
+            ("Calc.cs", "namespace T;\r\npublic class Calc\r\n{\r\n    public int X() => 1;\r\n}\r\n"),
+            ("User.cs", "namespace T;\r\npublic class User\r\n{\r\n    public Calc Make() => new Calc();\r\n}\r\n"));
+
+        var rename = await h.RenameAsync("T:T.Calc", "StandardCalc");
+
+        Assert.That(rename.IsError, Is.False, rename.ErrorData?.Message);
+        var note = Json(rename).GetProperty("callSitesNote").GetString();
+        Assert.Multiple(() =>
+        {
+            Assert.That(note, Does.Contain("  StandardCalc.cs:2"), "the moved file is named by its new name");
+            Assert.That(note, Does.Not.Contain("  Calc.cs:"), "the pre-move file name must not appear");
+            Assert.That(note, Does.Contain("  User.cs:4"), "an unmoved file keeps its name");
+        });
+    }
+
+    [Test]
+    public async Task RenameSymbol_DryRun_DoesNotRecordTheMoveAsync()
+    {
+        using var h = new Harness(("Calc.cs", "namespace T;\r\npublic class Calc\r\n{\r\n}\r\n"));
+
+        var result = await h.Tools.RenameSymbolTool(reason: "test message", projectName: ProjectName, docCommentId: "T:T.Calc", newName: "StandardCalc", dryRun: true);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(FileMoveMemory.Shared.TryGetCurrentPath(h.PathOf("Calc.cs"), out _, out _), Is.False, "nothing was moved, so nothing is remembered");
     }
 }

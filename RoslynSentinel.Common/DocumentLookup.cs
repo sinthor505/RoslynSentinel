@@ -50,7 +50,8 @@ public sealed record DocumentLookupResult(
     Document? Document,
     IReadOnlyList<string> CandidatePaths,
     int SearchedProjectCount,
-    [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<(string TypeName, string FilePath)>? DeclaringTypeFiles = null, [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<FileCandidate>? FileCandidates = null) : IOperationResult
+    [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<(string TypeName, string FilePath)>? DeclaringTypeFiles = null, [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<FileCandidate>? FileCandidates = null,
+    [property: System.Text.Json.Serialization.JsonIgnore] (string NewPath, string ToolName)? MovedTo = null) : IOperationResult
 {
     /// <summary>True when the lookup failed; mirrors <see cref="IsFound"/>.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -118,7 +119,7 @@ public sealed record DocumentLookupResult(
         }
 
         // The shared builder also probes the disk (directory / project file / file outside the solution) before falling back to the lookup wording.
-        return FileNotFoundMessage.Build(RequestedPath, FileCandidates ?? CandidatePaths.Select(p => new FileCandidate(p, 0, true)).ToList(), SearchedProjectCount, isCallable, DeclaringTypeFiles);
+        return FileNotFoundMessage.Build(RequestedPath, FileCandidates ?? CandidatePaths.Select(p => new FileCandidate(p, 0, true)).ToList(), SearchedProjectCount, isCallable, DeclaringTypeFiles, MovedTo?.NewPath, MovedTo?.ToolName);
     }
 
     /// <summary>
@@ -260,7 +261,23 @@ public static class DocumentLookup
         }
 
         var candidates = FindFileCandidates(solution, requested);
-        return new DocumentLookupResult(DocumentLookupStatus.NotFound, requested, null, candidates.Where(c => c.SameFileName).Select(c => c.Path).ToList(), projectCount, FindDeclaringTypeFiles(solution, requested), candidates);
+        return new DocumentLookupResult(DocumentLookupStatus.NotFound, requested, null, candidates.Where(c => c.SameFileName).Select(c => c.Path).ToList(), projectCount, FindDeclaringTypeFiles(solution, requested), candidates, FindMovedTo(solution, requested));
+    }
+
+    /// <summary>
+    /// Where the server itself moved the file at <paramref name="requestedPath"/> to (<see cref="FileMoveMemory.Shared"/>), and by which tool, or null
+    /// when it did not or the new path is no longer a document of <paramref name="solution"/> (a stale record must not send the caller to a
+    /// file that is gone). The one place the not-found errors of the lookup, ReadFile and the navigation reads ask.
+    /// </summary>
+    public static (string NewPath, string ToolName)? FindMovedTo(Solution solution, string requestedPath)
+    {
+        if (!FileMoveMemory.Shared.TryGetCurrentPath(requestedPath, out var currentPath, out var toolName)
+            || solution.GetDocumentIdsWithFilePath(currentPath).IsEmpty)
+        {
+            return null;
+        }
+
+        return (currentPath, toolName);
     }
 
     /// <summary>

@@ -56,16 +56,31 @@ public static class FileNotFoundMessage
     /// same as the string-list overload. Candidates sharing the requested file name are named first and flagged; the rest
     /// are offered as "did you mean", each with a ReadFile call when ReadFile can be called. With no candidates it says so
     /// and names the next call.
+    /// <paramref name="movedToPath"/> / <paramref name="movedByTool"/> (from <see cref="FileMoveMemory"/>, set only when the server itself moved the
+    /// missing file earlier in this session and the new path is still a loaded document): after the disk branches, the text names the new
+    /// path and the tool and returns, instead of the "did you mean" / "it may have been renamed" wording. Both null leaves every other
+    /// branch's text exactly as it was.
     /// </summary>
     public static string Build(
         string requestedPath, IReadOnlyList<FileCandidate> candidates, int searchedProjectCount, Func<string, bool>? isCallable = null,
-        IReadOnlyList<(string TypeName, string FilePath)>? declaringTypeFiles = null)
+        IReadOnlyList<(string TypeName, string FilePath)>? declaringTypeFiles = null,
+        string? movedToPath = null, string? movedByTool = null)
     {
         var sameNamePaths = candidates.Where(c => c.SameFileName).Select(c => c.Path).ToList();
         var diskText = TryDiskBranch(requestedPath, sameNamePaths, isCallable);
         if (diskText is not null)
         {
             return diskText;
+        }
+
+        if (movedToPath is not null && movedByTool is not null)
+        {
+            // Eval run 20261112-151531-550 T8: RenameSymbol moved the file, the model read the old path and the hedged text below cost it two more calls.
+            var movedText = $"File '{requestedPath}' was moved to '{movedToPath}' by an earlier {movedByTool} call in this session" +
+                            (movedByTool == "RenameSymbol" ? " (a rename of the type it declares)" : string.Empty) + $". Use the new path.\n  - {movedToPath}";
+            return Callable(isCallable, "ReadFile")
+                ? movedText + $" -> {ToolCallHint.Call("ReadFile", ("filePath", movedToPath))}"
+                : movedText;
         }
 
         var declaring = DeclaringTypeSentence(declaringTypeFiles);
@@ -94,7 +109,7 @@ public static class FileNotFoundMessage
         var notFound = intro + "No file in the solution has a similar name. ";
         // Batch H3 R2/R3 T1: the model read a file its task asks it to create later. Say so before the listing advice.
         // Batch H5 R1 T11.1/T16.1: the file had been renamed by an earlier type rename, and "does not exist yet" read as "create it".
-        // TODO remember server-side file renames (old path -> new path) and name the new path here instead of hedging.
+        // A rename the server itself made is named above (movedToPath); this hedge covers a move made outside this server's record.
         if (Callable(isCallable, "CreateFile"))
             notFound += $"If your task is to create this file, call {ToolCallHint.Call("CreateFile")} instead of reading it. If you read or edited it earlier, an earlier rename or move has changed its name: do not recreate it, find its current path. ";
         return Callable(isCallable, "ListSolutionItems")

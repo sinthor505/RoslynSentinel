@@ -1465,6 +1465,9 @@ public class RefactoringStructuralImpl
                 return new SentinelCallToolResult<object> { IsError = false, SuccessData = AppliedChangeSummary.From(apply, [filePathResolved, newPath], $"[DryRun] Would rename '{Path.GetFileName(filePathResolved)}' to '{Path.GetFileName(newPath)}'.", validated: false) };
             }
 
+            // Remember the move so a later read of the old path is told the new one (FileNotFoundMessage).
+            FileMoveMemory.Shared.Record(filePathResolved.Absolute, newPath.Absolute, "SyncTypeAndFilename");
+
             // No ChangedContent: this only moves a file to a new name -> the file's content is
             // byte-for-byte unchanged, so there is no new text to show beyond the summary.
             return new SentinelCallToolResult<object> { IsError = false, SuccessData = AppliedChangeSummary.From(apply, [filePathResolved, newPath], $"Renamed '{Path.GetFileName(filePathResolved)}' to '{Path.GetFileName(newPath)}'.", validated: false) };
