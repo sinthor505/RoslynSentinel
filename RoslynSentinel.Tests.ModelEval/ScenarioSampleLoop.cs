@@ -118,7 +118,8 @@ public static class ScenarioSampleLoop
                         outcome.SchemaDrift,
                         outcome.ResultDrift,
                         InconclusiveReason: string.Empty,
-                        result.TranscriptPath);
+                        result.TranscriptPath,
+                        LiveTurnsToTarget: scenario.LiveTurnsFor(score.TurnCount));
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

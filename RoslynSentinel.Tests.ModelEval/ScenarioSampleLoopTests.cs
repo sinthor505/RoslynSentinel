@@ -210,6 +210,56 @@ public class ScenarioSampleLoopTests
         Assert.That(samples[0].InconclusiveReason, Is.EqualTo("HarnessError: no run result"));
     }
 
+    [Test]
+    public async Task RunSamplesAsync_ColdStart_LiveTurnsToTargetIsTheTranscriptTurnCount()
+    {
+        var samples = await ScenarioSampleLoop.RunSamplesAsync(
+            Scenario(),
+            1,
+            _dir,
+            Path.Combine(_dir, "results.csv"),
+            "off",
+            (i, dir, ct) => Task.FromResult<(AgentRunResult?, FinalStateVerdict?, bool, int, string)>((FakeRunWithTurns(4), (FinalStateVerdict?)FinalStateVerdict.Correct, false, 0, string.Empty)),
+            CancellationToken.None);
+
+        Assert.That(samples[0].Score, Is.Not.Null);
+        Assert.That(samples[0].LiveTurnsToTarget, Is.EqualTo(4));
+    }
+
+    [Test]
+    public async Task RunSamplesAsync_ResumeScenario_LiveTurnsToTargetExcludesKeptTurns()
+    {
+        var scenario = Scenario() with { ResumeKeepTurns = 2 };
+
+        var samples = await ScenarioSampleLoop.RunSamplesAsync(
+            scenario,
+            1,
+            _dir,
+            Path.Combine(_dir, "results.csv"),
+            "off",
+            (i, dir, ct) => Task.FromResult<(AgentRunResult?, FinalStateVerdict?, bool, int, string)>((FakeRunWithTurns(scenario.ResumeKeepTurns + 3), (FinalStateVerdict?)FinalStateVerdict.Correct, false, 0, string.Empty)),
+            CancellationToken.None);
+
+        Assert.That(samples[0].Score, Is.Not.Null);
+        Assert.That(samples[0].LiveTurnsToTarget, Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task RunSamplesAsync_InconclusiveSample_LiveTurnsToTargetIsNull()
+    {
+        var samples = await ScenarioSampleLoop.RunSamplesAsync(
+            Scenario(),
+            1,
+            _dir,
+            Path.Combine(_dir, "results.csv"),
+            "off",
+            (i, dir, ct) => Task.FromResult<(AgentRunResult?, FinalStateVerdict?, bool, int, string)>((FakeRunWithTurns(4), null, false, 0, "SchemaChanged: ReadFile input changed")),
+            CancellationToken.None);
+
+        Assert.That(samples[0].IsInconclusive, Is.True);
+        Assert.That(samples[0].LiveTurnsToTarget, Is.Null);
+    }
+
     private static ScenarioDefinition Scenario() => new(
         Id: "loop-test",
         ScenarioType: 1,
@@ -239,6 +289,27 @@ public class ScenarioSampleLoopTests
             Transcript = transcript,
             TranscriptPath = "x/transcript.json",
             TurnCount = 2,
+        };
+    }
+
+    private static AgentRunResult FakeRunWithTurns(int turnCount)
+    {
+        var turns = new List<AgentTranscriptTurn> { Turn(1, null, null, Call(Tool)) };
+        for (var n = 2; n <= turnCount; n++)
+        {
+            turns.Add(Turn(n, "Done.", null));
+        }
+
+        var transcript = Transcript(turns.ToArray());
+        transcript.CommitHash = "abc123";
+        transcript.WorkingTreeDirty = true;
+
+        return new AgentRunResult
+        {
+            StopReason = AgentStopReason.ModelFinished,
+            Transcript = transcript,
+            TranscriptPath = "x/transcript.json",
+            TurnCount = turnCount,
         };
     }
 
