@@ -312,10 +312,9 @@ Write-ScenarioSummary -CsvPath ModelTestingResults\113\RunScenario_SamplesAndSco
 - Saved transcript: `.\scripts\roslynsentinel-modeleval.ps1 -Test ScoreTranscript -ScoreTranscript <transcript.json>`
   (the test reads `ROSLYNSENTINEL_MODELEVAL_SCORE_TRANSCRIPT`).
 - Finished run folder: set `ROSLYNSENTINEL_MODELEVAL_RESCORE_RUN` to the folder, then run `ScenarioRescoreRunTests`.
-  It writes `rescored.csv` in that folder. The exact RunTest filter is not checked here.
-
-Not checked against the code: the `final-state\` folder name, the `%TEMP%\rs-drift-probe` location, and the evalqueue
-`submit` flags (taken from the brief).
+  It writes `rescored.csv` in that folder. The test is `[Explicit]`: RunTest filter
+  `Name=RescoreScenarioRuns_WritesRescoredCsv`, scope project `RoslynSentinel.Tests.ModelEval`, with the variable
+  passed in `environment`.
 
 ## Output locations
 
