@@ -235,11 +235,17 @@ public class GitCommitSeamParityTests
         var head = Head(repo);
         var composite = Composite();
 
+        // Upper-casing a digit-only prefix is a no-op, so libgit2 would resolve it as a valid lower-case abbreviation and nothing would throw (flake when the first 7 hex characters are all digits).
+        // Use the shortest prefix (length >= 7) that contains a hex letter a-f; fall back to the full sha if there is none.
+        var firstLetter = head.IndexOfAny(new[] { 'a', 'b', 'c', 'd', 'e', 'f' });
+        var abbrevLength = firstLetter < 0 ? head.Length : Math.Max(7, firstLetter + 1);
+        var abbrev = head[..abbrevLength].ToUpperInvariant();
+
         // "HEAD^{commit}" is a legal rev-parse expression: git answers it, so the decline must hand it over rather than report "no such commit".
         Assert.Multiple(() =>
         {
             Assert.That(() => new Libgit2GitReader().ResolveCommitAbbreviation(repo, "HEAD", Timeout), Throws.TypeOf<NotSupportedException>());
-            Assert.That(() => new Libgit2GitReader().ResolveCommitAbbreviation(repo, head[..7].ToUpperInvariant(), Timeout), Throws.TypeOf<NotSupportedException>());
+            Assert.That(() => new Libgit2GitReader().ResolveCommitAbbreviation(repo, abbrev, Timeout), Throws.TypeOf<NotSupportedException>());
             Assert.That(composite.ResolveCommitAbbreviation(repo, "HEAD", Timeout), Is.EqualTo(head));
         });
         AssertDeclinedToTheCli(composite);
