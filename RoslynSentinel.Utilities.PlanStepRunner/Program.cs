@@ -202,7 +202,7 @@ public static class Program
             // production plans they mirror share basenames; without it ProjectDoc's basename
             // fallback silently answered with the production copy (run 20260910-013550-398 spent
             // all 60 turns implementing a plan it never asked for).
-            Arguments = ["--base-repo-dir=" + worktreePath, "--include-tools=" + options.IncludeTools, "--testing", "--log-dir=" + stepDir, "--run-id=" + runId, "--step-id=" + stepId],
+            Arguments = ["--base-repo-dir=" + worktreePath, "--include-tools=" + options.IncludeTools, "--testing", "--log-dir=" + stepDir, "--run-id=" + runId, "--step-id=" + stepId, .. ErrorPolicyWiring.ChildServerArgs()],
             WorkingDirectory = worktreePath,
         });
 
@@ -245,7 +245,7 @@ public static class Program
             "disk, and do not read any other plan step file.\n\n" +
             $"=== BEGIN PLAN STEP: {step.FileName} ===\n{step.Body}\n=== END PLAN STEP ===";
 
-        var result = await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, stepDir, CancellationToken.None, runId: runId);
+        var result = await runner.RunAsync(ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgent), userPrompt, stepDir, CancellationToken.None, runId: runId);
 
         if (result.RepeatedFailure is { } repeatedFailure)
         {
