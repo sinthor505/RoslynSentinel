@@ -70,7 +70,7 @@ public static class MemberNotFoundDetail
         }
 
         var ranked = scope
-            .Select(e => (Entry: e, Cmp: Compare(memberName, e.Name)))
+            .Select(e => (Entry: e, Cmp: NameCandidates.Compare(memberName, e.Name)))
             .OrderBy(x => x.Cmp.Similar ? 0 : 1)
             .ThenBy(x => x.Cmp.Similar ? x.Cmp.Distance : 0)
             .ThenBy(x => x.Entry.Order)
@@ -191,63 +191,5 @@ public static class MemberNotFoundDetail
         }
 
         return found;
-    }
-
-    // A name is "similar" when it is a short edit away, shares a prefix of 4+ characters, or (for names of 4+ characters)
-    // contains, is contained in, or is a subsequence of the other: CalcDisc is similar to CalculateDiscountedTotal.
-    private static (bool Similar, int Distance) Compare(string wanted, string actual)
-    {
-        var w = wanted.ToLowerInvariant();
-        var a = actual.ToLowerInvariant();
-        var distance = EditDistance(w, a);
-        var prefix = 0;
-        while (prefix < w.Length && prefix < a.Length && w[prefix] == a[prefix])
-        {
-            prefix++;
-        }
-
-        var similar = distance <= Math.Max(2, Math.Max(w.Length, a.Length) * 2 / 5)
-                      || prefix >= 4
-                      || (Math.Min(w.Length, a.Length) >= 4
-                          && (w.Contains(a, StringComparison.Ordinal) || a.Contains(w, StringComparison.Ordinal) || IsSubsequence(w, a) || IsSubsequence(a, w)));
-        return (similar, distance);
-    }
-
-    private static bool IsSubsequence(string needle, string haystack)
-    {
-        var i = 0;
-        foreach (var c in haystack)
-        {
-            if (i < needle.Length && needle[i] == c)
-            {
-                i++;
-            }
-        }
-
-        return i == needle.Length;
-    }
-
-    private static int EditDistance(string a, string b)
-    {
-        var previous = new int[b.Length + 1];
-        var current = new int[b.Length + 1];
-        for (var j = 0; j <= b.Length; j++)
-        {
-            previous[j] = j;
-        }
-
-        for (var i = 1; i <= a.Length; i++)
-        {
-            current[0] = i;
-            for (var j = 1; j <= b.Length; j++)
-            {
-                var cost = a[i - 1] == b[j - 1] ? 0 : 1;
-                current[j] = Math.Min(Math.Min(current[j - 1] + 1, previous[j] + 1), previous[j - 1] + cost);
-            }
-
-            (previous, current) = (current, previous);
-        }
-
-        return previous[b.Length];
     }
 }
