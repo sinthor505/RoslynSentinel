@@ -115,7 +115,7 @@ internal static class GitPatchParityHarness
     internal static (string Text, string? Warning) Libgit2ToolText(string dir, string target) =>
         ToolTextFromRaw(Libgit2Patch(dir, target));
 
-    private static (string Text, string? Warning) ToolTextFromRaw(string raw)
+    internal static (string Text, string? Warning) ToolTextFromRaw(string raw)
     {
         var text = (string)RejoinLinesMethod.Invoke(null, new object?[] { raw })!;
         var warning = (string?)DetectDecodeCorruptionMethod.Invoke(null, new object?[] { text });
@@ -126,9 +126,9 @@ internal static class GitPatchParityHarness
     /// Outcome for one diff target: "parity" when the tool-visible text and Warning are equal, "differs:&lt;line&gt;:..."
     /// for the first differing line (or the Warning), "libgit2-throws:&lt;type&gt;" when the libgit2 probe throws. Every
     /// outcome except the throw one ends with ";raw=equal" or ";raw=differs" (git stdout bytes against UTF-8 of the
-    /// libgit2 content).
+    /// libgit2 content). <paramref name="indentHeuristic"/> is passed to the libgit2 side only.
     /// </summary>
-    internal static async Task<string> CompareAsync(string dir, string target)
+    internal static async Task<string> CompareAsync(string dir, string target, bool indentHeuristic = true)
     {
         var (cliText, cliWarning) = await CliToolTextAsync(dir, target);
         var (gitExit, gitBytes) = RunGitBytes(dir, DiffArgs(target));
@@ -140,13 +140,55 @@ internal static class GitPatchParityHarness
         string libRaw;
         try
         {
-            libRaw = Libgit2Patch(dir, target);
+            libRaw = Libgit2Patch(dir, target, indentHeuristic);
         }
         catch (Exception ex)
         {
             return "libgit2-throws:" + ex.GetType().Name;
         }
 
+        return OutcomeFor(cliText, cliWarning, gitBytes, libRaw);
+    }
+
+    /// <summary>
+    /// Outcome for a root commit, in the shape <c>show</c> prints it: the CLI side is <c>git diff</c> of the empty tree
+    /// against <paramref name="revision"/> (raw bytes, then the tool-visible text), the libgit2 side compares a null tree
+    /// with the commit's tree. Outcome strings are the same as <see cref="CompareAsync"/>.
+    /// </summary>
+    internal static async Task<string> CompareRootCommitAsync(string dir, string revision)
+    {
+        const string emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+        var (gitExit, gitBytes) = RunGitBytes(dir, "diff", emptyTree, revision);
+        if (gitExit != 0)
+        {
+            throw new InvalidOperationException("git diff " + emptyTree + " " + revision + " exited with " + gitExit + ".");
+        }
+
+        var (cliText, cliWarning) = ToolTextFromRaw(Encoding.UTF8.GetString(gitBytes));
+        string libRaw;
+        try
+        {
+            using var repo = new Repository(dir);
+            // Same CompareOptions as Libgit2Patch with the default context and indent settings.
+            var options = new CompareOptions
+            {
+                Similarity = SimilarityOptions.None,
+                ContextLines = 3,
+                IndentHeuristic = true,
+            };
+            libRaw = repo.Diff.Compare<Patch>(null as Tree, CommitTree(repo, revision), options).Content;
+        }
+        catch (Exception ex)
+        {
+            return "libgit2-throws:" + ex.GetType().Name;
+        }
+
+        return await Task.FromResult(OutcomeFor(cliText, cliWarning, gitBytes, libRaw));
+    }
+
+    /// <summary>Compares the CLI tool-visible text and Warning with the libgit2 raw patch and returns the outcome string.</summary>
+    private static string OutcomeFor(string cliText, string? cliWarning, byte[] gitBytes, string libRaw)
+    {
         var rawSuffix = gitBytes.SequenceEqual(Encoding.UTF8.GetBytes(libRaw)) ? ";raw=equal" : ";raw=differs";
         var (libText, libWarning) = ToolTextFromRaw(libRaw);
         if (string.Equals(cliText, libText, StringComparison.Ordinal) && string.Equals(cliWarning, libWarning, StringComparison.Ordinal))
@@ -173,9 +215,9 @@ internal static class GitPatchParityHarness
 
     private static string[] DiffArgs(string target) => target == "staged" ? ["diff", "--cached"] : ["diff", target];
 
-    private static string Show(string? line) => line is null ? "<missing>" : line.Replace("\r", "\\r").Replace("\t", "\\t");
+    internal static string Show(string? line) => line is null ? "<missing>" : line.Replace("\r", "\\r").Replace("\t", "\\t");
 
-    private static string Truncate(string value) => value.Length <= OutcomeDetailMax ? value : value[..OutcomeDetailMax];
+    internal static string Truncate(string value) => value.Length <= OutcomeDetailMax ? value : value[..OutcomeDetailMax];
 
     /// <summary>Appends one scenario<TAB>target<TAB>outcome line to the shared table. Never truncates the file.</summary>
     internal static void Record(string scenario, string target, string outcome)
