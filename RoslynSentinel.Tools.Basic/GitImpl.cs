@@ -737,9 +737,10 @@ public class GitImpl : IGitOperations
 
             if (!string.Equals(action, "get", StringComparison.OrdinalIgnoreCase))
             {
+                // TODO add the GitRemote(operation: config) call literal once Step 20 adds GitRemoteOperation.config
                 return ConfigFailure(action ?? "", GitErrorCodes.ActionRequired,
                     $"operation=config needs action to be one of: get, set, unset (got {action ?? "none"}). Nothing was changed.",
-                    $"Pass action, e.g. {ToolCallHint.Call("GitRemote", ("operation", "config"), ("action", "get"), ("key", "user.name"))}.");
+                    "Valid actions are get, set and unset; get takes key, set takes key and value, unset takes key.");
             }
 
             var keyError = ValidateConfigKey(key);
@@ -808,8 +809,9 @@ public class GitImpl : IGitOperations
         if (action == "set")
         {
             if (value is null)
+                // TODO add the GitRemote(operation: config) call literal once Step 20 adds GitRemoteOperation.config
                 return ConfigFailure(action, GitErrorCodes.ActionRequired, "action=set needs value (got none). Nothing was changed.",
-                    $"Pass value, e.g. {ToolCallHint.Call("GitRemote", ("operation", "config"), ("action", "set"), ("key", writeKey), ("value", "true"))}.");
+                    "Pass value with action=set; an empty string is a valid value.");
             if (value.Contains('\0'))
                 return ConfigFailure(action, GitErrorCodes.InvalidName,
                     "The config value contains a NUL character, which git cannot store. Nothing was changed.",
