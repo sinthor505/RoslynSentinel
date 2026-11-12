@@ -1,6 +1,6 @@
 # Not-found errors name the prior tool call that renamed, moved or removed the target
 
-**Status:** IMPLEMENTED 2026-11-12 (v1, slices 1-4: d5667196, 3a246d60, e000f0cf, a7385d44). v2 (generic-edit symbol diff) not built; live check after a server restart pending (see "Settled in implementation").
+**Status:** IN PROGRESS 2026-11-12. v1 slices 1-4 done (d5667196, 3a246d60, e000f0cf, a7385d44) and live-checked PASS for rename, dry-run rename and undo; follow-up slices A-D approved by the owner (see "Follow-ups after the live check"), E held. v2 (generic-edit symbol diff) not built.
 
 ## Motivation
 
@@ -140,6 +140,18 @@ edit and record `Removed`/`Added` facts. That says "removed `Bar`, added `Baz`",
 - Known gaps (TODO markers in `AgentIdentityCapture.cs`): InspectSymbol has no name to key on; MoveMember `memberNames` is not read;
   Search symbol mode zero-hit is a success result and never reaches the not-found path. The index is not cleared when another
   solution is loaded into the same manager.
+
+## Follow-ups after the live check (approved 2026-11-12)
+
+Live check at buildSha e7416278: rename note, dry-run rename note and undo (no note afterwards) PASS. Gap: DeleteFile of a file, then
+GetMethodSource(filePath: that file) returned FileNotFound with no note, because a file miss keys on the path, not on `MissingTerm`.
+
+- A. A file miss (FileNotFound / file-miss) matches `FileDeleted` and file-move/rename effects by path; RenameSymbol's fileRenamed case records the file move.
+- B. Search symbol-mode zero hits (ForZeroHitSearch path) and InspectSymbol get the note.
+- C. MoveMember reads `memberNames` for the lookup term.
+- D. The effect index is cleared or rescoped when a different solution is loaded into the same manager.
+- E. (HELD until the owner confirms) the generic speculative not-found advice is replaced by the fact when an effect note is present;
+  overlaps `plan_error_policy_pointer`.
 
 ## Cost / risk
 
