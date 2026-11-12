@@ -693,6 +693,45 @@ Archive `C:\tmp\rs_eval_h6\ModelTestingResults\113\Model_AppliesTenChainedRefact
   re-read (R4 T9, R5 T8-T9); R1 T7 "verify what RenameSymbol actually did" after a ReplaceSnippet lift; the one recurring RunTest
   failure is Step 7 (`OrderCheckout._calculator` declared as the concrete type), fixed next turn in R2 and R4.
 
+## Batch C (stop-marker prompt): c7bddd9e, first batch under the `BLOCKED:` stop-marker system prompt, 4/5 (2026-11-12)
+
+Not the pre-31b206a6 "batch C" named under "Out of scope"; this label comes from the scorer output file name
+(`batchC-blocked-prompt-scores.csv`). Batches A to H4 in this file are not comparable with it, because the CodingAgent system
+prompt changed (2e15938d added the `BLOCKED:` stop instruction). H6 above also ran with that prompt (and the loop latch ON),
+but 2 of its 5 runs were lost to host context errors; this is the first batch under the prompt with 5 usable runs.
+Plan: [plan_targeted_tool_scenario_evals](../plans/plan_targeted_tool_scenario_evals.md), step 11.
+
+**Setup.** 5 runs of `Model_AppliesTenChainedRefactors` (`OrderPricingRefactorChain10`), host 113, model
+`qwen3.5-9b-coder`, commit c7bddd9e (CSV `dirty` is `true`, `liftRenames` is `unset`). Queue jobs `20261112-023432-001` to
+`-005`; they are not in the scorer CSV, which identifies runs only by archive folder, so the table uses folders.
+Scores come from `-Test ScoreTranscript` (step 3d scorer):
+`ModelTestingResults\113\Model_AppliesTenChainedRefactors\batchC-blocked-prompt-scores.csv`.
+
+| Run | Folder | Turns | First call ok | First error | Recovered | Calls to recover | Failure class | `BLOCKED:` marker | Retry phrases |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 20261112-023447-515 | 33 | no | ValidationFailed (GuardrailRedirect) | yes | 8 | None | no | 0 |
+| 2 | 20261112-024739-379 | 15 | no | ValidationFailed (GuardrailRedirect) | yes | 5 | None | no | 0 |
+| 3 | 20261112-025227-243 | 38 | no | NotFound | yes | 7 | None | no | 4 |
+| 4 | 20261112-031134-405 | 30 | no | ValidationFailed (GuardrailRedirect) | yes | 5 | None | no | 0 |
+| 5 | 20261112-032304-453 | 30 | no | ValidationFailed (GuardrailRedirect) | **no** | - | None | no | 6 |
+
+Pass: **4/5** (from the queue results; the CSV's `passed` and `finalStateVerdict` columns are blank, so the CSV alone does not say
+which run failed). Mean turns **29.2** (146/5). Marker present in **0/5** runs. All five stop reasons are `ModelFinished`,
+no run hit the turn cap, and `schemaDrift`/`resultDrift` are false/0 throughout. Mean calls to recover (4 recovering runs): 6.25.
+
+- **The marker did not cause early stops.** GaveUpEarly count: **0** (every run's failure class is `None`, marker absent in
+  all five, none ended by the marker). The instruction cost no recoverable-error run its chance to recover: 4 of 5 recovered after 5 to 8 calls.
+- **The one failed run.** The only run the scorer marks not recovered is run 5 (`20261112-032304-453`); treating that as the
+  failed run is an inference from the CSV, to be confirmed against `results.csv`. It started with a ValidationFailed
+  guardrail redirect, made 30 calls after that first error over 27 turns, never recovered, ended `ModelFinished` at 30 turns
+  with no marker, and showed 6 retry phrases with no identical-call repeat (`maxIdenticalCallRepeat` 1). So it kept trying
+  and finished by itself; it neither stopped on the marker nor looped on one call. Root cause not analysed here.
+- **This is the new baseline.** Later comparisons under the `BLOCKED:` prompt should be made against this batch (4/5, 29.2
+  turns, 0/5 markers), not against A-H4. Every run's first call failed (5/5), so first-call success is 0/5 here; no earlier
+  batch in this file is scored the same way.
+- **Caveat.** n=5 is one batch on one host and one commit with a dirty tree; a 4/5 pass rate cannot be told apart from the
+  ~80% seen in F to H5, and 0/5 markers only shows the marker is rare here, not that it never fires.
+
 ## Out of scope
 
 - Batch C ran before 31b206a6 and 28391d8c; their effect is unmeasured.
