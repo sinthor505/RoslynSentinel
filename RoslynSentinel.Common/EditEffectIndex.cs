@@ -111,6 +111,30 @@ public class EditEffectIndex
         }
     }
 
+    /// <summary>Non-reverted <see cref="EditEffectKind.Renamed"/> effects whose <see cref="EditEffect.NewName"/> equals <paramref name="newName"/> (case-sensitive), newest first. A rename to a name makes that name declared again, so a note for the name's earlier removal or rename is stale.</summary>
+    public IReadOnlyList<EditEffect> FindByNewName(string newName)
+    {
+        if (string.IsNullOrEmpty(newName))
+        {
+            return [];
+        }
+
+        lock (_gate)
+        {
+            var found = new List<EditEffect>();
+            for (var i = _effects.Count - 1; i >= 0; i--)
+            {
+                var effect = _effects[i];
+                if (!effect.Reverted && effect.Kind == EditEffectKind.Renamed && string.Equals(effect.NewName, newName, StringComparison.Ordinal))
+                {
+                    found.Add(effect);
+                }
+            }
+
+            return found;
+        }
+    }
+
     /// <summary>
     /// Adds effects read from operation blobs at solution load. An effect already held (same call, change, kind, name and time) is
     /// skipped, and the result stays in time order. The bound applies as for <see cref="Append"/>.

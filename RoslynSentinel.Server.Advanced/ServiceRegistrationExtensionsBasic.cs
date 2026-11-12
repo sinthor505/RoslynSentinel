@@ -1102,7 +1102,10 @@ public static class RoslynSentinelServiceExtensionsBasic
                     context.Params?.Name,
                     context.Params?.Arguments,
                     () => (context.Server.Services?.GetService<PersistentWorkspaceManager>() as IEditAttributionLedgerProvider)?.EditAttributions.CurrentSeq ?? 0,
-                    () => context.Server.Services?.GetService<PersistentWorkspaceManager>()?.GetSolutionRoot());
+                    () => context.Server.Services?.GetService<PersistentWorkspaceManager>()?.GetSolutionRoot(),
+                    // The edit effect note (EditEffectEvidence) needs the index and the in-memory solution; both are read lazily or only for mapped-term calls.
+                    () => (context.Server.Services?.GetService<PersistentWorkspaceManager>() as IEditEffectIndexProvider)?.EditEffects,
+                    () => context.Server.Services?.GetService<PersistentWorkspaceManager>()?.CurrentSolution);
                 return await next(context, cancellationToken);
             }));
     }

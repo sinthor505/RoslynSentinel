@@ -78,6 +78,16 @@ public sealed class ToolCallContext : IDetachedPayloadSource
     /// <summary>Solution root at call start, for the not-found notes; null when no solution is loaded.</summary>
     public string? SolutionRoot { get; init; }
 
+    /// <summary>
+    /// The server's edit effect index, for the effect note on a not-found error (<see cref="EditEffectEvidence"/>). Set by the agent identity
+    /// filter only for calls with a mapped term; null otherwise, and for engines, tests and other hosts. Carried here because the two readers
+    /// (the result marshaller and the failure handler) are static and have no service access.
+    /// </summary>
+    public EditEffectIndex? EditEffects { get; init; }
+
+    /// <summary>Reads the current in-memory solution when called, so the effect note can say where a renamed symbol is declared now; null when none was supplied. Called only on a not-found error.</summary>
+    public Func<Microsoft.CodeAnalysis.Solution?>? CurrentSolution { get; init; }
+
     /// <summary>True once the write gate has passed for this call.</summary>
     public bool GatePassed => Volatile.Read(ref _gatePassed) != 0;
 
