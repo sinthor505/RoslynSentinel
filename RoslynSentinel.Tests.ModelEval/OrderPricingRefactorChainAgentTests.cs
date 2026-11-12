@@ -1296,7 +1296,7 @@ using Xunit;
 
 namespace ContosoOrders.Tests.ModelEvalGenerated
 {
-    // Acceptance tests for steps 1, 3, 7 and 9 of the refactor plan. They fail until those steps are done.
+    // Acceptance tests for steps 1, 3, 7, 9 and 10 of the refactor plan. They fail until those steps are done.
     public class RefactorAcceptanceTests
     {
         private const string Ns = "ContosoOrders.Core.FixtureHelpers.";
@@ -1388,6 +1388,48 @@ namespace ContosoOrders.Tests.ModelEvalGenerated
             var describe = iface.GetMethod("DescribeOrder", new[] { typeof(int), typeof(string) });
             Assert.True(describe != null && describe.ReturnType == typeof(string), "Step 9: IOrderPricingCalculator must declare string DescribeOrder(int, string).");
             Assert.True(iface.GetMethod("SummarizeShipping") == null, "Step 9: IOrderPricingCalculator must not declare SummarizeShipping.");
+        }
+
+        [Fact]
+        public void Step10_SummarizeShippingSwitchUsesNamedConstantsNotLiterals()
+        {
+            var source = CalculatorSource();
+            var declaration = System.Text.RegularExpressions.Regex.Match(source, @"\bstring\s+SummarizeShipping\s*\(");
+            if (!declaration.Success)
+            {
+                throw new InvalidOperationException("Step 10: could not find SummarizeShipping in the calculator source.");
+            }
+
+            var open = source.IndexOf('{', declaration.Index + declaration.Length);
+            if (open < 0)
+            {
+                throw new InvalidOperationException("Step 10: could not read the body of SummarizeShipping.");
+            }
+
+            var depth = 0;
+            var close = source.Length - 1;
+            for (var i = open; i < source.Length; i++)
+            {
+                if (source[i] == '{')
+                {
+                    depth++;
+                }
+                else if (source[i] == '}')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        close = i;
+                        break;
+                    }
+                }
+            }
+
+            var body = string.Join(
+                "\n",
+                source.Substring(open, close - open + 1).Split('\n').Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+            Assert.False(System.Text.RegularExpressions.Regex.IsMatch(body, @"\b[12]\s*=>"),
+                "Step 10: SummarizeShipping's switch still has the literal 1 or 2 as a case pattern; replace them with the named constants LocalZone and RegionalZone.");
         }
     }
 }
@@ -1497,7 +1539,7 @@ namespace ContosoOrders.Tests.ModelEvalGenerated
           build to just the `ContosoOrders.Core` project rather than the whole solution.
         - Then run the tests in the `ContosoOrders.Tests` project with an MCP tool and confirm every
           test passes. A failing test means a behavior changed: fix the code, not the test.
-        - `ContosoOrders.Tests/ModelEvalGenerated/RefactorAcceptanceTests.cs` checks steps 1, 3, 7 and 9 and
+        - `ContosoOrders.Tests/ModelEvalGenerated/RefactorAcceptanceTests.cs` checks steps 1, 3, 7, 9 and 10 and
           fails until they are done. Do not edit that file.
 
         ## Before you report done
