@@ -66,20 +66,18 @@ public class AdvancedRefactoringTools
 
     private async Task<string?> GetFileNotInSolutionError(FilePathWrapper filePath, CancellationToken cancellationToken)
     {
-        System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DocumentId>? ids;
+        Microsoft.CodeAnalysis.Solution solution;
         try
         {
-            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-            ids = solution.GetDocumentIdsWithFilePath(filePath);
+            solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         }
         catch (SolutionNotLoadedException)
         {
-            ids = null;
+            return $"No solution is loaded, so file '{Path.GetFileName(filePath)}' could not be looked up. {ToolCallHint.Call("LoadSolution")} loads one.";
         }
 
-        if (ids == null || ids.Value.Length == 0)
-            return $"File '{Path.GetFileName(filePath)}' not found in the loaded solution. " + $"Verify the path is correct and the solution is loaded. " + $"Loaded projects: {_workspaceManager.ProjectCount}.";
-        return null;
+        var lookup = DocumentLookup.TryGetDocument(solution, filePath);
+        return lookup.IsFound ? null : lookup.Describe(_activeToolSurface is null ? null : _activeToolSurface.IsCallable);
     }
 
     /// <summary>

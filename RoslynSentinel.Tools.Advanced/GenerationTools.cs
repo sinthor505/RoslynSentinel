@@ -122,23 +122,22 @@ public class GenerationTools
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
 
-        System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DocumentId>? fileIds;
+        string? fileMiss;
         try
         {
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-            fileIds = solution.GetDocumentIdsWithFilePath(resolvedFilePath);
+            var lookup = DocumentLookup.TryGetDocument(solution, resolvedFilePath);
+            fileMiss = lookup.IsFound ? null : "GenerateHttpClient: " + lookup.Describe(_activeToolSurface is null ? null : _activeToolSurface.IsCallable);
         }
         catch (SolutionNotLoadedException)
         {
-            fileIds = null;
+            fileMiss = $"GenerateHttpClient: No solution is loaded, so file '{Path.GetFileName(resolvedFilePath)}' could not be looked up. {ToolCallHint.Call("LoadSolution")} loads one.";
         }
-        if (fileIds == null || fileIds.Value.Length == 0)
+        if (fileMiss is not null)
             return new SentinelCallToolResult<object>
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.NotFound,
-                    $"GenerateHttpClient: file '{Path.GetFileName(resolvedFilePath)}' not found in the loaded solution. " +
-                   $"Verify the path is correct and the solution is loaded. Loaded projects: {_workspaceManager.ProjectCount}.")
+                ErrorData = new ResultError(ToolErrorCode.NotFound, fileMiss)
             };
 
         try
@@ -234,23 +233,22 @@ public class GenerationTools
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
 
-        System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DocumentId>? interpFileIds;
+        string? interpFileMiss;
         try
         {
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-            interpFileIds = solution.GetDocumentIdsWithFilePath(resolvedFilePath);
+            var lookup = DocumentLookup.TryGetDocument(solution, resolvedFilePath);
+            interpFileMiss = lookup.IsFound ? null : "InterpolateStringSafe: " + lookup.Describe(_activeToolSurface is null ? null : _activeToolSurface.IsCallable);
         }
         catch (SolutionNotLoadedException)
         {
-            interpFileIds = null;
+            interpFileMiss = $"InterpolateStringSafe: No solution is loaded, so file '{Path.GetFileName(resolvedFilePath)}' could not be looked up. {ToolCallHint.Call("LoadSolution")} loads one.";
         }
-        if (interpFileIds == null || interpFileIds.Value.Length == 0)
+        if (interpFileMiss is not null)
             return new SentinelCallToolResult<object>
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.NotFound,
-                    $"InterpolateStringSafe: file '{Path.GetFileName(resolvedFilePath)}' not found in the loaded solution. " +
-                   $"Verify the path is correct and the solution is loaded. Loaded projects: {_workspaceManager.ProjectCount}.")
+                ErrorData = new ResultError(ToolErrorCode.NotFound, interpFileMiss)
             };
 
         try
