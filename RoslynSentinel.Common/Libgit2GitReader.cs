@@ -1429,12 +1429,9 @@ internal sealed partial class Libgit2GitReader : IGitReader
     /// <exception cref="NotSupportedException">One of the declines above: git answers.</exception>
     private static Repository? Open(string workingDirectory)
     {
-        foreach (var name in OverridingEnvironmentVariables)
+        if (FirstOverridingEnvironmentVariable(Environment.GetEnvironmentVariable) is { } name)
         {
-            if (Environment.GetEnvironmentVariable(name) is not null)
-            {
-                throw new NotSupportedException($"{name} is set in the process environment; git honours it and libgit2 does not.");
-            }
+            throw new NotSupportedException($"{name} is set in the process environment; git honours it and libgit2 does not.");
         }
 
         if (!Directory.Exists(workingDirectory))
