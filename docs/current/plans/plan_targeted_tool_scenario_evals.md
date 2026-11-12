@@ -238,6 +238,11 @@ C#; none in `agent.log` or `test-result.txt`).
     flag off and on.
   - Done when: 10 samples run on host 113 in one invocation and write the CSV; the measured time per
     sample is recorded here (estimate: 1 to 1.5 minutes).
+  - Measured 2026-11-11 (`qwen3.5-9b-coder`, host 113, commit f661adb4): 83 s per sample with the lift flag
+    off (job 20261111-233623-001, 15m35s for 10), 66 s with it on (20261111-235219-001, 12m52s). Other
+    scenarios ran 18 to 88 s per sample (the one-line edit scenarios fastest). Each job also pays about 15 s
+    of build and start. One sample in each job ended Inconclusive (LM Studio HTTP 500, "Context size has been
+    exceeded", on the first request).
 
 ### Step 6 - Remaining type 1 scenarios
 
