@@ -1,6 +1,6 @@
 # Adopt LibGit2Sharp in-process for read-mostly git operations
 
-**Status:** APPROVED (partly) 2026-11-10. The owner approved runner consolidation (step 0), the spike (step 1) and stage 1 (step 2) on 2026-11-10; all three landed the same day (see Results). Stage 2 (step 3) and restricting native binaries to win-x64 were approved later on 2026-11-10; stage 3 is proposed and not yet approved.
+**Status:** APPROVED (partly) 2026-11-10. The owner approved runner consolidation (step 0), the spike (step 1) and stage 1 (step 2) on 2026-11-10; all three landed the same day (see Results). Stage 2 (step 3) and restricting native binaries to win-x64 were approved later on 2026-11-10; stage 3 landed scoped to whole-file stage/unstage. Stage 4 (step 5, commit) was approved on 2026-11-11: 5a and the 5b spike are queued, 5c waits on the spike.
 
 ## Results (2026-11-10)
 
@@ -162,15 +162,54 @@ Parity tests on `GitTestRepo` fixtures run each probe through both backends and 
   timeout; a `gitBackend` block shows active backend, libgit2 version and first fallback reason
   (from `FallbackGitReader`'s counters).
 
-### Step 4 - stage 3: index writes (PROPOSED, not approved)
+### Step 4 - stage 3: index writes (DONE, scoped: whole-file stage/add/unstage only)
 
 `stage`, `unstage` and hunk staging. No LibGit2Sharp equivalent of `git apply` (hunk staging) was
 found in the reference clone; it would need index blob construction, with `.gitattributes` EOL
-filter handling reproduced by hand. This is the riskiest stage and may be dropped.
+filter handling reproduced by hand. Decided: hunk staging and no-path unstage stay on the CLI.
+
+### Step 5 - stage 4: commit (APPROVED 2026-11-11)
+
+Value: an in-process commit returns the new commit object, so the hash is exact and the derivation
+chain (trailer walk, summary line, parent chain) is needed only on the CLI path. Today the commit
+flow spawns git several times around the commit itself.
+
+**5a - commit-adjacent git calls in-process (low risk, no spike).** Route the reads and the
+pre-stage `CommitAsync` still spawns through the reader seam: the untracked pre-stage `git add`
+(reuse the in-process stage), HEAD-with-parents, `MERGE_HEAD`, the trailer config read, the amend
+upstream check (`@{upstream}`, `merge-base --is-ancestor`) and the post-commit hash derivation
+reads. Afterwards only `git commit` itself spawns. Measure the commit wall time before and after.
+
+**5b - spike, go/no-go for in-process commit.** Two questions, answered in a worktree with no
+production change:
+
+1. Compare-and-swap ref update. The CLI commit updates the branch only if it still points at the
+   parent it built on. `Repository.Commit` appears to update HEAD without that check, which with
+   several sessions in one tree could orphan another session's commit. Find a CAS route
+   (`git_reference_create_matching` via LibGit2Sharp, or a P/Invoke into the bundled native
+   library) and prove it with two processes committing concurrently: one must fail cleanly, neither
+   commit may be lost.
+2. Hook runner. libgit2 runs no hooks. Resolve `core.hooksPath` (this repo: `.githooks`, with
+   `post-commit`, `post-merge`, `post-rewrite` all starting `scripts/Start-ServerPrebuild.ps1`
+   detached), locate Git for Windows' `sh.exe`, and run `post-commit` unawaited from the worktree
+   root with output discarded. Measure what it saves against the CLI commit, which waits for the
+   hook's PowerShell to start.
+
+**5c - in-process commit for the simple case (after a go from 5b).** Plain commit or
+`--only <paths>` (tree = HEAD tree plus the listed paths' index entries), trailers formatted in
+process with byte-parity tests against `git commit --trailer` (existing `Co-Authored-By` block),
+reflog `commit: <subject>`. Declines to the CLI on: `pre-commit`, `prepare-commit-msg` or
+`commit-msg` hook present; `amend` (fires `post-rewrite`); merge, cherry-pick or revert in progress;
+`commit.gpgsign=true`; a listed path with a `filter=` attribute or CR bytes; the existing
+environment and repo-feature declines. Skipped versus the CLI: `gc --auto`.
+
+Hook policy: the hook files stay (they cover shell, IDE and rebase/merge commits, and an arbitrary
+repo's hooks cannot be recreated); the server runs `post-*` hooks itself only for commits it made in
+process.
 
 ### Stays on the CLI (decided for this proposal)
 
-- `commit`: hooks (pre-commit, commit-msg) and GPG signing.
+- `commit`: amend, merge conclusion, signing and pre-commit/commit-msg hooks (step 5c declines).
 - `push`, `fetch`, `pull`: credential helpers and SSH.
 - `revert`, `stash apply/pop`: conflict semantics.
 - `worktree add/remove`: locks and long paths.
