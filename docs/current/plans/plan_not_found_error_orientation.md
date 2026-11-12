@@ -2,7 +2,7 @@
 
 **Status:** IN PROGRESS 2026-11-12. Steps 1-4 done (f45d009b, 2f5165ef, 117d7507, 5bc6cc8e, 3d33d265, bd480d35, 44f5b3ef, b56d46b3, d1ed5854) plus 5d-1 (f9f6b65b); Decision 10 (facts and options, no policy) adds slice 5f before the rest of Step 5.
 
-Related: [plan_scenario_eval_followups.md](./plan_scenario_eval_followups.md) (written in parallel: the stop-adherence scenario family and the seeded `RenameSymbolTypo` used in Step 6). Commit trailer for every slice: `Plan: plan_not_found_error_orientation` (the last slice adds `Closes:`).
+Related: [plan_scenario_eval_followups.md](./closed/plan_scenario_eval_followups.md) (closed 3c28c01f; results in [eval_scenario_eval_followups.md](../evals/eval_scenario_eval_followups.md)) (written in parallel: the stop-adherence scenario family and the seeded `RenameSymbolTypo` used in Step 6). Commit trailer for every slice: `Plan: plan_not_found_error_orientation` (the last slice adds `Closes:`).
 
 ## Problem
 
@@ -187,6 +187,11 @@ Owner decisions, 2026-11-12 (implement-plan settle, after a source review of thi
     New slice 5f (before the rest of Step 5): strip policy from the two shared builders (`FileNotFoundMessage`,
     `SymbolNotFoundDetail`) and from 5a-1's `MemberNotFoundDetail` text if it landed; update pinned assertions to
     check the remaining fact/option. Batch D resumes on the revised standard.
+12. **Per-candidate next call for docCommentId tools (open item 2, settled 2026-11-12):** RenameSymbolTypo after 4c
+    went 8/10 -> 10/10, but 0/10 used the candidate directly because its prefilled call was a Search. New slice 4d:
+    each candidate shows its exact docCommentId (fact) and the calling tool's own call with only the id corrected
+    (option), via an optional retry-call delegate threaded from RenameSymbol, DeleteUnusedSymbol and
+    PreviewRenameImpact (precedent `NameTargetLookup.RequireSingle`). Default null keeps the neutral output.
 11. **Step 6 measures, does not target (revises Decision 6):** the runs are kept and recorded; 6 of 10 is an
     observation, not a goal to tune tool text toward.
 
