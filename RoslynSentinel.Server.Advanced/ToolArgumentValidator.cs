@@ -609,6 +609,8 @@ public static class ToolArgumentValidator
                 ["maxCount"] = "count",
                 ["target"] = "ref",
                 ["commitHash"] = "ref",
+                ["key"] = "configKey",
+                ["value"] = "configValue",
                 ["files"] = "paths",
             },
             ["Member"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

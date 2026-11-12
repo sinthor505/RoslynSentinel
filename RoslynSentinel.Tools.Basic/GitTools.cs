@@ -46,7 +46,7 @@ public class GitTools
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
-    [Description("Unified git tool. A conflicting revert (or a GitRemote pull) leaves the repo mid-operation (status shows inProgress); abort backs out. stage can take hunkIds+hunkFingerprint or lineRange to stage part of one file. branch, checkout, push, fetch, pull, tag, stash and worktree are the GitRemote tool.")]
+    [Description("Unified git tool. A conflicting revert (or a GitRemote pull) leaves the repo mid-operation (status shows inProgress); abort backs out. stage can take hunkIds+hunkFingerprint or lineRange to stage part of one file. branch, checkout, push, fetch, pull, tag, stash and worktree are the GitRemote tool; config is GitRemote (operation: config).")]
     public async Task<SentinelCallToolResult<object>> GitTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Requirements. abort: cancels an in-progress merge/rebase/cherry-pick/revert/am (no other params). reset: ref. revert: ref (the commit). commit: message unless amend. hunks: one path; lists its unstaged hunks with ids and a fingerprint for stage's hunkIds.")]

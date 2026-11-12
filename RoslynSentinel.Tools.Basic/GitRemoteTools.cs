@@ -26,13 +26,13 @@ public class GitRemoteTools
 
     [McpServerTool(Name = "GitRemote")]
     [Produces(DataTag.Report)]
-    [Description("Git branch, checkout, push, fetch, pull, tag, stash and worktree. status, log, diff, commit, stage and the rest are the Git tool.")]
+    [Description("Git branch, checkout, push, fetch, pull, tag, stash, worktree and config. status, log, diff, commit, stage and the rest are the Git tool.")]
     public async Task<SentinelCallToolResult<object>> GitRemoteTool(
     [Description(ToolParams.Reason)] ToolCallReason reason,
-    [Description("Requirements. branch: omit branchName to list, else creates it from startPoint (deleteBranch=true deletes it). checkout: branchName required; createBranch=true creates it from startPoint if missing. push/fetch/pull: remoteName (default origin). tag: action; create/delete need tagName. stash: action; apply/pop need stashIndex. worktree: action; add needs worktreePath+branchName; remove needs worktreePath.")]
+    [Description("Requirements. branch: omit branchName to list, else creates it from startPoint (deleteBranch=true deletes it). checkout: branchName required; createBranch=true creates it from startPoint if missing. push/fetch/pull: remoteName (default origin). tag: action; create/delete need tagName. stash: action; apply/pop need stashIndex. worktree: action; add needs worktreePath+branchName; remove needs worktreePath. config: action get needs configKey; set needs configKey and configValue; unset needs configKey. get reads any key except ones that can hold credentials; set/unset write only an allowlisted set of keys in the repository's local config, listed in the error when refused.")]
         GitRemoteOperation operation,
-    // CONDITIONAL-PARAM-REVIEW-REQUIRED: action is required when operation=tag, stash or worktree; refused for every other operation.
-    [Description("tag: list|create|delete. stash: list|push|apply|pop. worktree: list|add|remove.")]
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: action is required when operation=tag, stash, worktree or config; refused for every other operation.
+    [Description("tag: list|create|delete. stash: list|push|apply|pop. worktree: list|add|remove. config: get|set|unset.")]
         GitAction? action = null,
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: branchName is required for operation=checkout; optional for operation=branch (omit to list).
     [Description("branch/checkout/worktree add: branch to create/delete/switch to/use in the new worktree (branch: omit to list; checkout, worktree add: required).")]
@@ -70,14 +70,21 @@ public class GitRemoteTools
         string? worktreePath = null,
     [Description("worktree remove only: true removes a worktree with uncommitted or untracked files, permanently discarding them (--force). Default false: a dirty worktree is refused, listing changed paths. Main, current and locked worktrees are always refused.")]
         bool discardUncommittedChanges = false,
-    [Description("list actions only: absolute path to a different repo/worktree.")]
+    [Description("list actions and config get: absolute path to a different repo/worktree.")]
         string? repoPath = null,
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: configKey is required for config get, set and unset; unused otherwise.
+    [Description("config: the key, e.g. user.name")]
+        string? configKey = null,
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: configValue is required for config set; unused otherwise.
+    [Description("config set: the value to store")]
+        string? configValue = null,
     CancellationToken cancellationToken = default)
     {
-        var isReadOnlyOperation = operation is GitRemoteOperation.tag or GitRemoteOperation.stash or GitRemoteOperation.worktree && action == GitAction.list;
+        var isReadOnlyOperation = (operation is (GitRemoteOperation.tag or GitRemoteOperation.stash or GitRemoteOperation.worktree) && action == GitAction.list)
+            || (operation == GitRemoteOperation.config && action == GitAction.get);
         if (!string.IsNullOrWhiteSpace(repoPath) && !isReadOnlyOperation)
         {
-            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"repoPath is only supported for list actions (tag/stash/worktree) - operation '{operation}' always targets the loaded solution's repo. Omit repoPath, or use action: list.", Detail: null) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"repoPath is only supported for list actions (tag/stash/worktree) and config get - operation '{operation}' always targets the loaded solution's repo. Omit repoPath, or use action: list.", Detail: null) };
         }
 
         var gitRoot = _gitImpl.TryGetGitRoot(out var rootError, isReadOnlyOperation ? repoPath : null);
@@ -90,9 +97,9 @@ public class GitRemoteTools
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"ref is only supported for tag create - operation '{operation}' takes its ref from another parameter (branch/checkout: startPoint). Omit ref.", Detail: null) };
         }
 
-        if (action is not null && operation is not (GitRemoteOperation.tag or GitRemoteOperation.stash or GitRemoteOperation.worktree))
+        if (action is not null && operation is not (GitRemoteOperation.tag or GitRemoteOperation.stash or GitRemoteOperation.worktree or GitRemoteOperation.config))
         {
-            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"action is only supported for tag/stash/worktree - operation '{operation}' does not use it. Omit action.", Detail: null) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"action is only supported for tag/stash/worktree/config - operation '{operation}' does not use it. Omit action.", Detail: null) };
         }
 
         if (!string.IsNullOrWhiteSpace(worktreePath) && operation != GitRemoteOperation.worktree)
@@ -125,6 +132,7 @@ public class GitRemoteTools
             GitRemoteOperation.tag => await _gitImpl.TagAsync(gitRoot, action, tagName, resolvedRef, message, count, cancellationToken),
             GitRemoteOperation.stash => await _gitImpl.StashAsync(gitRoot, action, message, includeUntracked, paths, stashIndex, count, cancellationToken),
             GitRemoteOperation.worktree => await _gitImpl.WorktreeAsync(gitRoot, action, worktreePath, branchName, createBranch, startPoint, discardUncommittedChanges, cancellationToken),
+            GitRemoteOperation.config => await _gitImpl.ConfigAsync(gitRoot, action, configKey, configValue, cancellationToken),
             _ => new GitResult { IsError = true, Error = $"Unknown operation '{operation}'." }
         };
 
