@@ -451,6 +451,13 @@ public class WorkspaceFileEditImpl
             // or changeId matches nothing tracked.
             ((IScopedOperationLedger)_workspaceManager).RecordUndo(changeId);
 
+            // The undone change's symbol effects ("call X renamed Y") no longer hold. Marked only when files were actually put back (or
+            // already matched), and only effects stamped with this changeId at blob write; an apply that wrote no blob has none.
+            if (reverted.Count + noOpFiles.Count > 0)
+            {
+                (_workspaceManager as IEditEffectIndexProvider)?.EditEffects.MarkReverted(changeId);
+            }
+
             var failedPart = failed.Count > 0 ? $" Failures: {string.Join("; ", failed)}" : "";
             var noOpPart = noOpFiles.Count > 0
                 ? $" ({noOpFiles.Count} already matched pre-apply state - no change needed: {string.Join(", ", noOpFiles)})"

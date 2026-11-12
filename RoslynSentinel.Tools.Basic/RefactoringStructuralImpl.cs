@@ -66,12 +66,35 @@ public class RefactoringStructuralImpl
         IProgress<EngineProgress>? progress = default,
         IReadOnlyCollection<FilePathWrapper>? removePaths = null,
         CancellationToken cancellationToken = default,
-        IReadOnlyCollection<FilePathWrapper>? deletePaths = null) =>
+        IReadOnlyCollection<FilePathWrapper>? deletePaths = null,
+        Action? recordEffects = null) =>
         ValidateAndApplyHelper.ValidateAndApplyAsync(
             _validationEngine, _workspaceManager, _logger, changes, operationName,
             dryRun, returnDiff, progress, removePaths, cancellationToken, deletePaths,
             describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct, changes.Keys.Select(k => (string)k).ToList(), isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
-            describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, removePaths, deletePaths));
+            describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, removePaths, deletePaths),
+            recordEffects: recordEffects);
+
+    // Edit effect emitters (see EditEffect). Each returns the hook ValidateAndApplyHelper runs just before the write chokepoint, so the
+    // effect is recorded only for a real apply and committed only if the write stands. Facts are gathered before the write.
+    private Action RecordAddedEffect(IReadOnlyList<(string Display, string SimpleName, string? Container)> added, FilePathWrapper filePath)
+    {
+        var path = EditEffectNames.DisplayPath(filePath.Absolute, _workspaceManager.GetSolutionRoot());
+        return () =>
+        {
+            foreach (var (display, simpleName, container) in added)
+                ToolCallContext.Current?.RecordEffect(EditEffectKind.Added, display, null, simpleName, null, container, path);
+        };
+    }
+
+    private async Task<Action> RecordRemovedEffectAsync(FilePathWrapper filePath, string memberName, string? containerName, string? contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken)
+    {
+        // READCHOKEPOINT-CAST: the committed solution still holds the removed declaration (read before the apply).
+        var committed = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var (display, docId, simpleName) = await MemberEditEffectFacts.DescribeExistingAsync(committed, filePath, memberName, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        var path = EditEffectNames.DisplayPath(filePath.Absolute, _workspaceManager.GetSolutionRoot());
+        return () => ToolCallContext.Current?.RecordEffect(EditEffectKind.Removed, display, docId, simpleName, null, null, path);
+    }
 
     private static string DescribeMemberOutcome(DocumentEditResult updated, string fallbackLabel)
     {
@@ -755,7 +778,8 @@ public class RefactoringStructuralImpl
                 return enumRemoveError;
 
             var enumRemoveChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumRemoved.UpdatedText };
-            var enumRemoveApply = await ValidateAndApplyAsync(enumRemoveChanges, $"Removed '{memberName}' from enum '{removeEnumName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
+            var enumRemoveEffect = dryRun ? null : await RecordRemovedEffectAsync(filePathResolved, memberName, containerName ?? removeEnumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+            var enumRemoveApply = await ValidateAndApplyAsync(enumRemoveChanges, $"Removed '{memberName}' from enum '{removeEnumName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken, recordEffects: enumRemoveEffect);
             if (enumRemoveApply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = enumRemoveApply.Error };
             return new SentinelCallToolResult<object> { IsError = false, SuccessData = AppliedChangeSummary.From(enumRemoveApply, [filePathResolved], $"Removed '{memberName}' from enum '{removeEnumName}' in {Path.GetFileName(filePathResolved)}.", validated: false, workspaceVersion: _workspaceManager.WorkspaceVersion) };
@@ -764,7 +788,8 @@ public class RefactoringStructuralImpl
         var result = await _memberRefactoringEngine.RemoveMemberAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable, cancellationToken: cancellationToken);
 
         var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
-        var apply = await ValidateAndApplyAsync(changes, $"Remove member '{memberName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
+        var removeEffect = dryRun ? null : await RecordRemovedEffectAsync(filePathResolved, memberName, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        var apply = await ValidateAndApplyAsync(changes, $"Remove member '{memberName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken, recordEffects: removeEffect);
         if (apply.Error is not null)
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
         var removeMessage = $"Removed '{memberName}' from {Path.GetFileName(filePathResolved)}.";
@@ -836,7 +861,8 @@ public class RefactoringStructuralImpl
         var topLevelDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
 
         var topLevelChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = topLevelResult.UpdatedText };
-        var topLevelApply = await ValidateAndApplyAsync(topLevelChanges, topLevelDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
+        var topLevelApply = await ValidateAndApplyAsync(topLevelChanges, topLevelDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken,
+            recordEffects: RecordAddedEffect(MemberEditEffectFacts.DescribeAdded(newMemberSource, namespaceName, isEnumMember: false), filePathResolved));
         if (topLevelApply.Error is not null)
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = topLevelApply.Error };
         return new SentinelCallToolResult<object> { IsError = false, SuccessData = AppliedChangeSummary.From(topLevelApply, [filePathResolved], topLevelDescription, validated: true), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = topLevelDescription };
@@ -894,7 +920,8 @@ public class RefactoringStructuralImpl
 
         var enumAddDescription = $"Added member to enum '{containerName}' in {Path.GetFileName(filePathResolved)}.";
         var enumAddChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumAdded.UpdatedText };
-        var enumAddApply = await ValidateAndApplyAsync(enumAddChanges, enumAddDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
+        var enumAddApply = await ValidateAndApplyAsync(enumAddChanges, enumAddDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken,
+            recordEffects: RecordAddedEffect(MemberEditEffectFacts.DescribeAdded(newMemberSource, EditEffectNames.SimpleName(containerName), isEnumMember: true), filePathResolved));
         if (enumAddApply.Error is not null)
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = enumAddApply.Error };
         return new SentinelCallToolResult<object> { IsError = false, SuccessData = AppliedChangeSummary.From(enumAddApply, [filePathResolved], enumAddDescription, validated: true), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = enumAddDescription };
@@ -945,7 +972,8 @@ public class RefactoringStructuralImpl
                 SuccessData = AppliedChangeSummary.From(await ValidateAndApplyHelper.ComputeLineChangesAsync(_workspaceManager, noStageChanges, cancellationToken), null, noStageChanges.Keys.ToList(), description, dryRun: false, diff: null, changedContent: noStageChanges.Count == 0 ? null : noStageChanges, validated: false)
             };
         }
-        return await ApplyAddedMemberAsync(updated, description, filePathResolved, "Member", dryRun, returnDiff, cancellationToken);
+        return await ApplyAddedMemberAsync(updated, description, filePathResolved, "Member", dryRun, returnDiff, cancellationToken,
+            RecordAddedEffect(MemberEditEffectFacts.DescribeAdded(newMemberSource, EditEffectNames.SimpleName(containerName), isEnumMember: false), filePathResolved));
     }
 
     /// <summary>
@@ -959,10 +987,11 @@ public class RefactoringStructuralImpl
         string operationName,
         bool dryRun,
         bool returnDiff,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action? recordEffects = null)
     {
         var addChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText };
-        var addApply = await ValidateAndApplyAsync(addChanges, description, operationName, dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
+        var addApply = await ValidateAndApplyAsync(addChanges, description, operationName, dryRun, returnDiff || dryRun, cancellationToken: cancellationToken, recordEffects: recordEffects);
         if (addApply.Error is not null)
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = addApply.Error };
         return new SentinelCallToolResult<object> { IsError = false, SuccessData = AppliedChangeSummary.From(addApply, [filePathResolved], description), WorkspaceVersion = _workspaceManager.WorkspaceVersion, StatusMessage = description };
@@ -1029,7 +1058,8 @@ public class RefactoringStructuralImpl
                 description = $"Added '{typedType} {typedName}' field to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
             }
 
-            return await ApplyAddedMemberAsync(updated, description, filePathResolved, "TypedMember", dryRun, returnDiff, cancellationToken);
+            return await ApplyAddedMemberAsync(updated, description, filePathResolved, "TypedMember", dryRun, returnDiff, cancellationToken,
+                RecordAddedEffect([($"{EditEffectNames.SimpleName(containerName)}.{typedName}", typedName, EditEffectNames.SimpleName(containerName))], filePathResolved));
         }
         catch (Exception ex)
         {

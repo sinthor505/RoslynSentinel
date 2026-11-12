@@ -98,7 +98,10 @@ public static class ValidateAndApplyHelper
         // replaces the untouched-file sentence, which it already covers; null keeps DescribeUntouchedFileErrors as the fallback.
         // StructuredDetail (untyped items, because Common cannot name the engine's EditImpactDetail) becomes
         // errorData.structuredDetail of the rejection; null keeps the compiler diagnostics there, as before.
-        Func<DiagnosticReport, CancellationToken, Task<(string? Text, IReadOnlyList<object>? StructuredDetail)>>? describeEditImpact = null)
+        Func<DiagnosticReport, CancellationToken, Task<(string? Text, IReadOnlyList<object>? StructuredDetail)>>? describeEditImpact = null,
+        // Records the call's EditEffects (ToolCallContext.Current?.RecordEffect). Runs only for a real apply that passed the compile gate,
+        // immediately before the write chokepoint, which commits the effects only if the write stands (never on a dry run or a refusal).
+        Action? recordEffects = null)
     {
         // The pre-images feed the per-file changed-line counts and the collateral-change tripwire below.
         // EOL conversion is done by the chokepoint (PersistentWorkspaceManager.ApplyProposedChangesAsync).
@@ -202,6 +205,7 @@ public static class ValidateAndApplyHelper
                 LineChanges: ComputeLineChanges(changes, deletePaths, p => beforeTexts.GetValueOrDefault(p)));
         }
 
+        recordEffects?.Invoke();
         var applyResult = await workspaceManager.ApplyProposedChangesAsync(
             changes, retryCount: 3, validateChanges: false, rollbackOnPartialFailure: true,
             progress: progress, cancellationToken: cancellationToken, deletePaths: deletePaths,

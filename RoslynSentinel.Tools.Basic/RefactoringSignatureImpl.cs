@@ -57,12 +57,14 @@ public class RefactoringSignatureImpl
         IProgress<EngineProgress>? progress = default,
         IReadOnlyCollection<FilePathWrapper>? removePaths = null,
         CancellationToken cancellationToken = default,
-        IReadOnlyCollection<FilePathWrapper>? deletePaths = null) =>
+        IReadOnlyCollection<FilePathWrapper>? deletePaths = null,
+        Action? recordEffects = null) =>
         ValidateAndApplyHelper.ValidateAndApplyAsync(
             _validationEngine, _workspaceManager, _logger, changes, operationName,
             dryRun, returnDiff, progress, removePaths, cancellationToken, deletePaths,
             describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
-            describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, removePaths, deletePaths));
+            describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, removePaths, deletePaths),
+            recordEffects: recordEffects);
 
     public async Task<SentinelCallToolResult<object>> RenameSymbol(
         ToolCallReason reason,
@@ -212,11 +214,24 @@ public class RefactoringSignatureImpl
             fileMoves.Add((from, to));
         }
 
+        // The edit effect ("call X renamed Y to Z") is recorded just before the write chokepoint, which commits it only if the write
+        // stands. NewFilePath is the symbol's declaring file after the rename: the moved-to path when this rename also moved that file
+        // (the file move itself is not part of the symbol effect).
+        var renamedSymbol = resolution.Symbol!;
+        var declaringPath = renamedSymbol.Locations.Where(l => l.IsInSource).Select(l => l.SourceTree!.FilePath).FirstOrDefault(p => !string.IsNullOrEmpty(p));
+        var movedDeclaringPath = declaringPath is null ? null : fileMoves.Where(m => string.Equals(m.From.Absolute, declaringPath, StringComparison.OrdinalIgnoreCase)).Select(m => m.To.Absolute).FirstOrDefault();
+        var effectFilePath = movedDeclaringPath ?? declaringPath;
+        var effectNewFilePath = effectFilePath is null ? null : EditEffectNames.DisplayPath(effectFilePath, solutionRoot);
+        void RecordRenameEffect() => ToolCallContext.Current?.RecordEffect(
+            EditEffectKind.Renamed, EditEffectNames.Display(renamedSymbol), renamedSymbol.GetDocumentationCommentId(),
+            EditEffectNames.SimpleName(renamedSymbol.Name), result.NewName, null, effectNewFilePath);
+
         var apply = await ValidateAndApplyAsync(
             changes,
             $"Rename '{result.OldName}' to '{result.NewName}'.",
             "RenameSymbol", dryRun, returnDiff, cancellationToken: cancellationToken,
-            deletePaths: deletePaths.Count == 0 ? null : deletePaths);
+            deletePaths: deletePaths.Count == 0 ? null : deletePaths,
+            recordEffects: RecordRenameEffect);
 
         if (apply.Error is not null)
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };

@@ -36,7 +36,7 @@ public enum EditEffectKind
 /// <param name="SymbolDocId">Documentation comment id of the symbol before the edit; null when not known.</param>
 /// <param name="SimpleName">Name without container, generic arity or parameter list; the index key.</param>
 /// <param name="NewName">New simple name for Renamed; null otherwise.</param>
-/// <param name="NewContainer">New containing type or namespace for Moved; null otherwise.</param>
+/// <param name="NewContainer">New containing type or namespace for Moved, or the container an Added symbol was declared in; null otherwise.</param>
 /// <param name="NewFilePath">New declaring file for Moved, Renamed or Added; null when not known.</param>
 /// <param name="ToolCallId">The call id the response echoes as <c>toolCall.toolCallId</c>; null when the host assigns none.</param>
 /// <param name="ToolName">The MCP tool that made the edit.</param>
