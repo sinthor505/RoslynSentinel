@@ -123,23 +123,49 @@ public class GitInProcessCommitRouteTests
         Assert.That(result.CommitHash, Is.EqualTo(Head(directory)), "the reported hash is `git rev-parse HEAD`");
     }
 
-    /// <summary>The route handed exactly one commit to the CLI and made none itself; its reason names <paramref name="fragment"/>.</summary>
-    private static void AssertDeclined(InProcessCommitRoute route, string fragment)
+    /// <summary>The route handed exactly one commit to the CLI and made none itself; its reason names <paramref name="fragment"/>. With <paramref name="directory"/>, the last commit-route log line is a declined line with that reason and a kind (equal to <paramref name="expectedKind"/> when given).</summary>
+    private static void AssertDeclined(InProcessCommitRoute route, string fragment, string? directory = null, string? expectedKind = null)
     {
+        // TODO Step 4b: make directory required
+        using var logged = directory is null ? null : JsonDocument.Parse(ReadCommitRouteLog(directory)[^1]);
         Assert.Multiple(() =>
         {
             Assert.That(route.TakenCount, Is.Zero, "nothing was committed in process");
             Assert.That(route.DeclineCount, Is.EqualTo(1), "last decline: " + route.LastDeclineReason);
             Assert.That(route.LastDeclineReason, Does.Contain(fragment).IgnoreCase);
+            if (logged is not null)
+            {
+                var root = logged.RootElement;
+                Assert.That(root.GetProperty("outcome").GetString(), Is.EqualTo("declined"), "the log line is a decline");
+                Assert.That(root.GetProperty("reason").GetString(), Does.Contain(fragment).IgnoreCase, "the logged reason");
+                Assert.That(root.TryGetProperty("kind", out var kind), Is.True, "the line carries kind");
+                if (expectedKind is not null && kind.ValueKind == JsonValueKind.String)
+                {
+                    Assert.That(kind.GetString(), Is.EqualTo(expectedKind), "the logged kind");
+                }
+            }
         });
     }
 
-    private static void AssertTaken(InProcessCommitRoute route)
+    /// <summary>The route committed in process and declined nothing. With <paramref name="directory"/>, the last commit-route log line is a taken line with a kind (equal to <paramref name="expectedKind"/> when given).</summary>
+    private static void AssertTaken(InProcessCommitRoute route, string? directory = null, string? expectedKind = null)
     {
+        // TODO Step 4b: make directory required
+        using var logged = directory is null ? null : JsonDocument.Parse(ReadCommitRouteLog(directory)[^1]);
         Assert.Multiple(() =>
         {
             Assert.That(route.TakenCount, Is.EqualTo(1), "the route should have committed (last decline: " + route.LastDeclineReason + ")");
             Assert.That(route.DeclineCount, Is.Zero, "last decline: " + route.LastDeclineReason);
+            if (logged is not null)
+            {
+                var root = logged.RootElement;
+                Assert.That(root.GetProperty("outcome").GetString(), Is.EqualTo("taken"), "the log line is a taken commit");
+                Assert.That(root.TryGetProperty("kind", out var kind), Is.True, "the line carries kind");
+                if (expectedKind is not null && kind.ValueKind == JsonValueKind.String)
+                {
+                    Assert.That(kind.GetString(), Is.EqualTo(expectedKind), "the logged kind");
+                }
+            }
         });
     }
 
@@ -425,7 +451,7 @@ public class GitInProcessCommitRouteTests
         var result = await NewImpl(route).CommitAsync(directory, "hooked", GitStageScope.listed, "a.txt", amend: false, CancellationToken.None);
 
         AssertCommitted(directory, result);
-        AssertDeclined(route, "pre-commit");
+        AssertDeclined(route, "pre-commit", directory, "only-paths");
         Assert.That(File.Exists(Path.Combine(directory, ".git", "pre-commit-ran")), Is.True, "the CLI commit ran the hook");
     }
 
@@ -439,7 +465,7 @@ public class GitInProcessCommitRouteTests
         var result = await NewImpl(route).CommitAsync(directory, "amended subject", GitStageScope.all, null, amend: true, CancellationToken.None);
 
         AssertCommitted(directory, result);
-        AssertDeclined(route, "amend");
+        AssertDeclined(route, "amend", directory, "amend");
         Assert.Multiple(() =>
         {
             Assert.That(RunGit(directory, "rev-list", "--count", "HEAD"), Is.EqualTo("1"), "the amend replaced the initial commit");
@@ -467,7 +493,7 @@ public class GitInProcessCommitRouteTests
         var result = await NewImpl(route).CommitAsync(directory, "conclude the merge", null, null, amend: false, CancellationToken.None);
 
         AssertCommitted(directory, result);
-        AssertDeclined(route, "merge");
+        AssertDeclined(route, "merge", directory, "plain");
         Assert.That(RunGit(directory, "rev-list", "--parents", "-n", "1", "HEAD").Split(' ').Length - 1, Is.EqualTo(2), "a merge commit has two parents");
     }
 
@@ -487,7 +513,7 @@ public class GitInProcessCommitRouteTests
         var spawned = await SpawnedGitCommandsAsync(directory, async () =>
             result = await impl.CommitAsync(directory, "signed?", GitStageScope.all, null, amend: false, CancellationToken.None));
 
-        AssertDeclined(route, "gpgsign");
+        AssertDeclined(route, "gpgsign", directory, "plain");
         Assert.Multiple(() =>
         {
             Assert.That(spawned, Does.Contain("commit"), "the commit was left to the git CLI");
@@ -510,7 +536,7 @@ public class GitInProcessCommitRouteTests
         var result = await NewImpl(route).CommitAsync(directory, "filtered", GitStageScope.listed, "a.txt", amend: false, CancellationToken.None);
 
         AssertCommitted(directory, result);
-        AssertDeclined(route, "filter");
+        AssertDeclined(route, "filter", directory, "only-paths");
     }
 
     [Test]
@@ -546,13 +572,54 @@ public class GitInProcessCommitRouteTests
         var result = await NewImpl(route).CommitAsync(directory, "after the race", null, null, amend: false, CancellationToken.None);
 
         AssertCommitted(directory, result);
-        AssertDeclined(route, "branch moved");
+        AssertDeclined(route, "branch moved", directory, "plain");
         Assert.Multiple(() =>
         {
             Assert.That(Lines(RunGit(directory, "log", "--format=%s", "-3")), Is.EqualTo("after the race,racer,initial commit"), "the CLI commit sits on top of the racing commit");
             Assert.That(RunGit(directory, "show", "--name-only", "--format=", "HEAD"), Is.EqualTo("a.txt"));
         });
         AssertFsckClean(directory);
+    }
+
+    [Test]
+    public async Task InProcessCommit_CommitSignoffConfigured_DeclinesToTheCliAsync()
+    {
+        var route = new InProcessCommitRoute();
+        var directory = NewRepo("signoff", inProcess: true);
+        RunGit(directory, "config", "commit.signoff", "true");
+        Write(directory, "a.txt", "changed\n");
+
+        var result = await NewImpl(route).CommitAsync(directory, "signed off", GitStageScope.listed, "a.txt", amend: false, CancellationToken.None);
+
+        AssertCommitted(directory, result);
+        AssertDeclined(route, "signoff", directory, "only-paths");
+        Assert.That(RunGit(directory, "log", "-1", "--format=%B"), Does.Contain("Signed-off-by: "), "the CLI commit added the sign-off line");
+    }
+
+    [Test]
+    public async Task InProcessCommit_ConfigDefinedHook_DeclinesToTheCliAsync()
+    {
+        var route = new InProcessCommitRoute();
+        var directory = NewRepo("config-hook", inProcess: true);
+        RunGit(directory, "config", "hook.pre-commit.command", "exit 0");
+        Write(directory, "a.txt", "changed\n");
+
+        var result = await NewImpl(route).CommitAsync(directory, "config hook", GitStageScope.listed, "a.txt", amend: false, CancellationToken.None);
+
+        AssertCommitted(directory, result);
+        AssertDeclined(route, "cannot be ruled out", directory, "only-paths");
+    }
+
+    [Test]
+    public async Task InProcessCommit_NothingToCommit_DeclinesToTheCliAsync()
+    {
+        var route = new InProcessCommitRoute();
+        var directory = NewRepo("clean", inProcess: true);
+
+        var result = await NewImpl(route).CommitAsync(directory, "nothing new", null, null, amend: false, CancellationToken.None);
+
+        Assert.That(result.IsError, Is.True, "the CLI refuses a commit with nothing to commit");
+        AssertDeclined(route, "nothing to commit", directory, "plain");
     }
 
     // ---- off by default ----
