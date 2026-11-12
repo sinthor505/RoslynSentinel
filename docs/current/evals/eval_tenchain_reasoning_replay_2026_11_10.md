@@ -770,12 +770,18 @@ T21, T27, T28; guardrail redirects (not counted): T6 (class rename), T15 (method
 | 28 | ReplaceSnippet NotFound | own rejected newContent reused as oldContent; `RejectedOriginNote` fired | known |
 | 32 | Member InvalidArgument | stray class `}` in newMemberSource; the generic `ContainsDiagnostics` branch (`MemberRefactoringEngine.cs:2353`) fires before `DetectTrailingUnparsedDeclaration` (`:2357`); the "statement or method body fragment" text is wrong here | new |
 
-Ranked fixes (not approved): (1) validate gets the apply branch's EditImpactGate and hint text (T4/T13 become redirects:
-ReplaceSnippet 6 -> 4, under budget); (2) a multi-rename edit names every rename in the redirect, and a verdict that could
-not be checked is not `valid`; (3) CS0103 for a missing callee names `Member(operation: addMember, ...)` or "declare it
-in the same newContent"; (4) FileNotFound and callSitesNote use the post-move path (existing TODO in
-`FileNotFoundMessage.cs`); (5) wording: `filePath` "required unless batchEdits", CS0144 names the implementing class,
-Member reports an extra `}` before the generic message.
+Ranked fixes (owner approved 2026-11-12 as "Build root-cause fixes 1-5"; 1, 2, 3 and 5 built, 4 pending):
+(1) validate gets the apply branch's EditImpactGate and hint text (T4/T13 become redirects: ReplaceSnippet 6 -> 4,
+under budget) - built in 1594f54f (shared `ComposeCompileRejectionAsync`; validate records nothing and never lifts);
+(2) a multi-rename edit names every rename in the redirect, and a verdict that could not be checked is not `valid` -
+built in b371b8b2 (`EditImpactAnalyzer`; new verdict `unverified` for a member of a type renamed in the same edit; the
+broader "unattributed CS0246/CS0103/CS0234 near the call site" heuristic is a `// TODO` in `BuildVerdicts`);
+(3) CS0103 for a missing callee names `Member(operation: addMember, ...)` or "declare it in the same newContent" -
+built in 64ae244c; (4) FileNotFound and callSitesNote use the post-move path (existing TODO in
+`FileNotFoundMessage.cs`) - pending, handled by the main session; (5) wording - built: `filePath` "required unless
+batchEdits" and the single-edit rejection's "file is unchanged" sentence in 1594f54f; CS0144 names up to 3 implementing
+classes and Member reports an extra `}` before the generic message in 64ae244c. Worktree test runs of the touched
+classes were green. Not yet measured live.
 
 ## Out of scope
 
