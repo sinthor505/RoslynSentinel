@@ -600,7 +600,7 @@ public class WorkspaceProjectManagementImpl
     // (checkout, non-package edit) no Build can ever make the assets file newer. Cheap in the common case: an assets
     // file newer than both files is accepted without being parsed. A project whose files cannot be read is skipped.
     // State is a signature of the flagged condition (file times + reason) used to avoid repeating advice.
-    private static List<(string Name, string Path, string State)> AnalyzeRestoreState(IEnumerable<string> csprojPaths)
+    internal static List<(string Name, string Path, string State)> AnalyzeRestoreState(IEnumerable<string> csprojPaths)
     {
         var flagged = new List<(string Name, string Path, string State)>();
         foreach (var csproj in csprojPaths)

@@ -265,6 +265,98 @@ public class WorkspaceBuildTestImpl
         return attribution.Count == 0 ? existing : existing.Concat(attribution).ToList();
     }
 
+    // Appends one Info finding per project that has CS0246/CS0234 errors AND no current restore assets, so the caller
+    // learns the missing namespaces follow from the restore state. resolveCsproj maps an error to its project's .csproj
+    // path (null = unknown project, skipped). Returns existing unchanged (same reference) when nothing is flagged, and
+    // never throws: a project whose files cannot be read is skipped (AnalyzeRestoreState) and any other failure yields existing.
+    internal static IReadOnlyList<Finding> WithUnrestoredProjectFindings(
+        IReadOnlyList<Finding> existing, IEnumerable<DiagnosticInfo> errors, Func<DiagnosticInfo, string?> resolveCsproj)
+    {
+        try
+        {
+            var csprojPaths = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var error in errors)
+            {
+                if (error.Severity != "Error" || error.Id is not ("CS0246" or "CS0234"))
+                {
+                    continue;
+                }
+
+                var csproj = resolveCsproj(error);
+                if (!string.IsNullOrEmpty(csproj) && seen.Add(csproj))
+                {
+                    csprojPaths.Add(csproj);
+                }
+            }
+
+            if (csprojPaths.Count == 0)
+            {
+                return existing;
+            }
+
+            var findings = new List<Finding>();
+            foreach (var (name, _, state) in WorkspaceProjectManagementImpl.AnalyzeRestoreState(csprojPaths))
+            {
+                // State is "assets missing", or "<csprojTicks>|<propsTicks>|<assetsTicks>|<mismatch reason>" for stale assets.
+                var cause = state == "assets missing"
+                    ? "obj/project.assets.json is missing (no restore assets)"
+                    : $"obj/project.assets.json is older than the project's restore inputs and no longer matches them ({state.Split('|', 4).Last()})";
+                findings.Add(new Finding(
+                    "RestoreState",
+                    $"{name}: {cause}, so its package and project references are not resolved; its CS0246/CS0234 errors can follow from that. "
+                    + $"Options: {ToolCallHint.Call("Build", ("level", "fullBuild"))} then {ToolCallHint.Call("LoadSolution", ("forceReload", "true"))} restores and reloads.",
+                    FindingSeverity.Info));
+            }
+
+            return findings.Count == 0 ? existing : existing.Concat(findings).ToList();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return existing;
+        }
+    }
+
+    // Loads the solution only when a CS0246/CS0234 error exists; maps an error to its .csproj by project name, then by
+    // the file's owning project (quick builds and multi-targeted names carry no usable Project name).
+    private async Task<IReadOnlyList<Finding>> WithUnrestoredProjectFindingsAsync(
+        IReadOnlyList<Finding> existing, IReadOnlyList<DiagnosticInfo> errors, CancellationToken cancellationToken)
+    {
+        if (!errors.Any(e => e.Id is "CS0246" or "CS0234"))
+        {
+            return existing;
+        }
+
+        try
+        {
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            var pathByName = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var project in solution.Projects)
+            {
+                if (project.FilePath is { } projectPath)
+                {
+                    pathByName.TryAdd(project.Name, projectPath);
+                }
+            }
+
+            return WithUnrestoredProjectFindings(existing, errors, error =>
+            {
+                if (error.Project is { } name && pathByName.TryGetValue(name, out var byName))
+                {
+                    return byName;
+                }
+
+                var documentId = solution.GetDocumentIdsWithFilePath(error.FilePath.ToString()).FirstOrDefault();
+                return documentId is null ? null : solution.GetProject(documentId.ProjectId)?.FilePath;
+            });
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Build: could not map CS0246/CS0234 errors to projects for the restore-state check");
+            return existing;
+        }
+    }
+
     public async Task<SentinelCallToolResult<object>> Build(ToolCallReason reason, BuildVerifyLevel level = BuildVerifyLevel.fullBuildThrowaway,
         ToolScope scope = ToolScope.solution, string? scopeName = null, int maxDetails = 20,
         bool useScratchDir = false, bool includeOutput = false, bool includeWarnings = false,
@@ -312,7 +404,9 @@ public class WorkspaceBuildTestImpl
                 var failureMessage = (driftHint is not null ? buildSummary + " " + driftHint : buildSummary) + " " + ToolCallHint.Next("Build", "after fixing the errors in this result (root-cause project first).", ("level", "quickBuild"));
                 // The build ran and failed: report isError:true like RunTestTool does for an incomplete run, but keep the
                 // BuildResult payload (inline or offloaded) so the caller still gets the error details.
-                return buildToolResult with { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, failureMessage), Findings = WithForeignWriterFindings(result.Findings, buildResult.Errors), StatusMessage = failureMessage };
+                // CS0246/CS0234 in a project with no current restore assets: name that as the likely cause.
+                var failureFindings = await WithUnrestoredProjectFindingsAsync(WithForeignWriterFindings(result.Findings, buildResult.Errors), buildResult.Errors, cancellationToken);
+                return buildToolResult with { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, failureMessage), Findings = failureFindings, StatusMessage = failureMessage };
             }
 
             return buildToolResult with { Findings = result.Findings, StatusMessage = buildSummary };
