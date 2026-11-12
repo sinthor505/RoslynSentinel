@@ -238,6 +238,22 @@ public class EditEffectEvidenceTests
     }
 
     [Test]
+    public void HasEffectFor_SameCallerAndNewestNotAdded_IsTrue_OtherwiseFalse()
+    {
+        var moved = IndexOf(Effect(EditEffectKind.Moved, "N.Foo.Bar", newContainer: "N.Util", newFile: "Util.cs", tool: "MoveMember"));
+        var movedThenAdded = IndexOf(
+            Effect(EditEffectKind.Moved, "N.Foo.Bar", newContainer: "N.Util", secondsAgo: 300),
+            Effect(EditEffectKind.Added, "N.Foo.Bar", newContainer: "N.Foo", secondsAgo: 60));
+
+        Assert.That(EditEffectEvidence.HasEffectFor(moved, "Foo.Bar", "s1", "inst-1"), Is.True);
+        Assert.That(EditEffectEvidence.HasEffectFor(moved, "Bar(int)", "s1", "inst-1"), Is.True);
+        Assert.That(EditEffectEvidence.HasEffectFor(moved, "Foo.Bar", "s2", "inst-1"), Is.False);
+        Assert.That(EditEffectEvidence.HasEffectFor(moved, "Other.Bar", "s1", "inst-1"), Is.False);
+        Assert.That(EditEffectEvidence.HasEffectFor(moved, "var x = Bar;", "s1", "inst-1"), Is.False);
+        Assert.That(EditEffectEvidence.HasEffectFor(movedThenAdded, "Foo.Bar", "s1", "inst-1"), Is.False);
+    }
+
+    [Test]
     public void TermThatIsNotAName_GivesNoNote()
     {
         var index = IndexOf(Effect(EditEffectKind.Renamed, "N.Foo.Bar", newName: "Baz"));

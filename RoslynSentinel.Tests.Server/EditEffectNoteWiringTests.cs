@@ -105,6 +105,81 @@ public class EditEffectNoteWiringTests
         Assert.That(context.EditEffects, Is.SameAs(index));
     }
 
+    // A MoveMember call as the filter sees it: className plus a memberNames array (the array is not a string, so Args cannot build it).
+    private static void EnterMoveMember(EditEffectIndex? index, string className, string[] memberNames)
+    {
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["className"] = Json(className),
+            ["memberNames"] = JsonDocument.Parse(JsonSerializer.Serialize(memberNames)).RootElement.Clone(),
+            [AgentIdentityCapture.AgentIdKey] = Json("a1"),
+            [AgentIdentityCapture.SessionIdKey] = Json("s1"),
+        };
+        AgentIdentityCapture.Enter("MoveMember", arguments, () => 0, () => "C:\\root", () => index, () => null);
+    }
+
+    // A MoveMember of Foo.Bar into Target by session s1 / agent a1, committed to the returned index.
+    private static EditEffectIndex IndexWithMove(string session = "s1")
+    {
+        var index = new EditEffectIndex();
+        var writer = new ToolCallContext("a1", null, "MoveMember", "move", 0) { SessionId = session };
+        writer.AssignToolCallId("b17c0d2e");
+        writer.RecordEffect(EditEffectKind.Moved, "Foo.Bar", null, "Bar", null, "Target", "Target.cs");
+        writer.CommitPendingEffects(index);
+        return index;
+    }
+
+    [Test]
+    public void Enter_MoveMember_TermIsTheMemberWithAnEffect_QualifiedByClassName()
+    {
+        EnterMoveMember(IndexWithMove(), "Foo", ["Zed", "Bar"]);
+
+        Assert.That(ToolCallContext.Current!.MissingTerm, Is.EqualTo("Foo.Bar"));
+        Assert.That(ToolCallContext.Current.TargetFilePath, Is.Null);
+    }
+
+    [Test]
+    public void Enter_MoveMember_NoMatchingEffect_UsesTheFirstMember_AndAnotherSessionsEffectDoesNotCount()
+    {
+        EnterMoveMember(new EditEffectIndex(), "Foo", ["Zed", "Bar"]);
+        Assert.That(ToolCallContext.Current!.MissingTerm, Is.EqualTo("Foo.Zed"));
+
+        EnterMoveMember(IndexWithMove(session: "s2"), "Foo", ["Zed", "Bar"]);
+        Assert.That(ToolCallContext.Current!.MissingTerm, Is.EqualTo("Foo.Zed"));
+
+        EnterMoveMember(null, "Foo", ["Zed", "Bar"]);
+        Assert.That(ToolCallContext.Current!.MissingTerm, Is.EqualTo("Foo.Zed"));
+    }
+
+    [Test]
+    public void Enter_MoveMember_OverloadSignatureAndRenamedClass_StillMatch()
+    {
+        // Member passed as a signature: the parameter list is dropped by the term parser.
+        EnterMoveMember(IndexWithMove(), "Foo", ["Bar(int)"]);
+        Assert.That(ToolCallContext.Current!.MissingTerm, Is.EqualTo("Foo.Bar(int)"));
+        Assert.That(EditEffectEvidence.HasEffectFor(IndexWithMove(), ToolCallContext.Current.MissingTerm!, "s1", ServerInstanceIdentity.Id), Is.True);
+
+        // No member has an effect but the class was renamed: className alone is the term.
+        var index = new EditEffectIndex();
+        var writer = new ToolCallContext("a1", null, "RenameSymbol", "rename", 0) { SessionId = "s1" };
+        writer.RecordEffect(EditEffectKind.Renamed, "Foo", "T:Foo", "Foo", "Foo2", null, "Foo.cs");
+        writer.CommitPendingEffects(index);
+        EnterMoveMember(index, "Foo", ["Zed"]);
+        Assert.That(ToolCallContext.Current!.MissingTerm, Is.EqualTo("Foo"));
+    }
+
+    [Test]
+    public void FailureHandler_MoveMemberNotFoundAfterMove_CarriesMovedNote()
+    {
+        EnterMoveMember(IndexWithMove(), "Foo", ["Bar"]);
+
+        CallToolResult result = CallToolFailureHandler.ToFailureResult(new ToolNotFoundException("no such member"), "MoveMember");
+
+        JsonObject body = JsonNode.Parse(TextOf(result))!.AsObject();
+        Assert.That(body["findings"]![0]!["source"]!.GetValue<string>(), Is.EqualTo("EditEffect"));
+        Assert.That(body["findings"]![0]!["message"]!.GetValue<string>(), Does.EndWith("moved `Foo.Bar` to `Target` in `Target.cs`."));
+    }
+
     [Test]
     public void Enter_IndexLookupThrows_KeepsIdentityAndTerm()
     {

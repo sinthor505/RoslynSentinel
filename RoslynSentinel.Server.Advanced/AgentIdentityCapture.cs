@@ -38,13 +38,12 @@ public static class AgentIdentityCapture
     // Symbol tools with no file to search: the argument naming the symbol, read only for the edit effect note (EditEffectEvidence). They
     // set MissingTerm but not TargetFilePath, so NotFoundEvidence (which needs a file) behaves as before for them.
     // TODO InspectSymbol has no name argument (filePath + contextSnippet only), so it gets no effect note until a name can be taken from the snippet
-    // TODO MoveMember's memberNames is an array and is not read; only className (a renamed class) can match
+    // MoveMember is not in this map: its term is chosen from className and memberNames by MoveMemberTerm.
     // TODO Search symbol mode returns zero rows as success, not an error, so its effect note never reaches the not-found path
     private static readonly Dictionary<string, string> SymbolTermArgument = new(StringComparer.Ordinal)
     {
         ["LocateSymbol"] = "symbolName",
         ["RenameSymbol"] = "docCommentId",
-        ["MoveMember"] = "className",
         ["Search"] = "query",
     };
 
@@ -70,10 +69,12 @@ public static class AgentIdentityCapture
             AgentOperatingModeOptions.ResolveOnce(agentId is not null);
             var fileTerm = toolName is not null && MissingTermArgument.TryGetValue(toolName, out var termArgument) ? ReadString(arguments, termArgument) : null;
             // Search names a symbol only in symbol mode; its text and declaration-listing modes put a pattern or filter in query.
-            var symbolTerm = fileTerm is null && toolName is not null && SymbolTermArgument.TryGetValue(toolName, out var symbolArgument)
-                && (toolName != "Search" || string.Equals(ReadString(arguments, "mode"), "symbol", StringComparison.OrdinalIgnoreCase))
-                ? ReadString(arguments, symbolArgument)
-                : null;
+            var symbolTerm = fileTerm is null && toolName == "MoveMember"
+                ? MoveMemberTerm(arguments, TryGet(editEffects), sessionId)
+                : fileTerm is null && toolName is not null && SymbolTermArgument.TryGetValue(toolName, out var symbolArgument)
+                    && (toolName != "Search" || string.Equals(ReadString(arguments, "mode"), "symbol", StringComparison.OrdinalIgnoreCase))
+                    ? ReadString(arguments, symbolArgument)
+                    : null;
             var term = fileTerm ?? symbolTerm;
             ToolCallContext.Set(new ToolCallContext(agentId, agentType, toolName ?? string.Empty, ReadString(arguments, "reason"), currentSeq())
             {
@@ -118,6 +119,50 @@ public static class AgentIdentityCapture
             Debug.WriteLine($"Service lookup for the call context failed: {ex}");
             return null;
         }
+    }
+
+    // MoveMember names several members and the class they leave, but the context carries one term. Candidates, most specific first: each
+    // member qualified by className (a recorded effect's display is container-qualified, so className acts as the container qualifier of
+    // EditEffectEvidence's matching), then className alone (a renamed class). The first candidate with a recorded effect for this caller's
+    // session or server instance wins; with none (or no index) the first candidate is used, so the term is stable.
+    private static string? MoveMemberTerm(IDictionary<string, JsonElement>? arguments, EditEffectIndex? index, string? sessionId)
+    {
+        var className = ReadString(arguments, "className");
+        var candidates = ReadStringArray(arguments, "memberNames").Select(m => className is null ? m : $"{className}.{m}").ToList();
+        if (className is not null)
+        {
+            candidates.Add(className);
+        }
+
+        if (index is not null)
+        {
+            foreach (var candidate in candidates)
+            {
+                if (EditEffectEvidence.HasEffectFor(index, candidate, sessionId, ServerInstanceIdentity.Id))
+                {
+                    return candidate;
+                }
+            }
+        }
+
+        return candidates.Count > 0 ? candidates[0] : null;
+    }
+
+    private static List<string> ReadStringArray(IDictionary<string, JsonElement>? arguments, string key)
+    {
+        var names = new List<string>();
+        if (arguments is not null && arguments.TryGetValue(key, out var element) && element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.String && item.GetString() is { Length: > 0 } name)
+                {
+                    names.Add(name);
+                }
+            }
+        }
+
+        return names;
     }
 
     private static string? TakeString(IDictionary<string, JsonElement>? arguments, string key)

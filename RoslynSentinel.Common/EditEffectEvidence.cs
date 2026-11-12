@@ -74,9 +74,7 @@ public static class EditEffectEvidence
                 return null;
             }
 
-            bool SameCaller(EditEffect e) => sessionId is not null && e.SessionId is not null
-                ? string.Equals(sessionId, e.SessionId, StringComparison.Ordinal)
-                : string.Equals(e.ServerInstanceId, serverInstanceId, StringComparison.Ordinal);
+            bool SameCaller(EditEffect e) => IsSameCaller(e, sessionId, serverInstanceId);
 
             var head = index.Find(simple).FirstOrDefault(e => SameCaller(e) && QualifierMatches(e.SymbolDisplay, qualifier, simple));
             if (head is null || head.Kind == EditEffectKind.Added)
@@ -106,6 +104,38 @@ public static class EditEffectEvidence
             Debug.WriteLine($"Edit effect evidence failed: {ex}");
             return null;
         }
+    }
+
+    /// <summary>
+    /// True when the newest recorded effect of the same caller (same identity rule as <see cref="Find"/>) for <paramref name="term"/> is a
+    /// fact other than <see cref="EditEffectKind.Added"/>. Lets a tool with several candidate names (MoveMember's memberNames) choose the one
+    /// that has something to report. Never throws; a term that is not a name has no effect.
+    /// </summary>
+    public static bool HasEffectFor(EditEffectIndex index, string term, string? sessionId, string serverInstanceId)
+    {
+        try
+        {
+            if (!TryParseTerm(term, out var qualifier, out var simple))
+            {
+                return false;
+            }
+
+            var head = index.Find(simple).FirstOrDefault(e => IsSameCaller(e, sessionId, serverInstanceId) && QualifierMatches(e.SymbolDisplay, qualifier, simple));
+            return head is not null && head.Kind != EditEffectKind.Added;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Edit effect lookup failed: {ex}");
+            return false;
+        }
+    }
+
+    // Both session ids present: they must be equal. Either missing: fall back to the same server instance.
+    private static bool IsSameCaller(EditEffect effect, string? sessionId, string serverInstanceId)
+    {
+        return sessionId is not null && effect.SessionId is not null
+            ? string.Equals(sessionId, effect.SessionId, StringComparison.Ordinal)
+            : string.Equals(effect.ServerInstanceId, serverInstanceId, StringComparison.Ordinal);
     }
 
     // Reduces a term to its qualifier and simple name. Accepts a documentation comment id ("M:Foo.Bar(System.Int32)"), generics, arity and a
