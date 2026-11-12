@@ -178,7 +178,7 @@ function Resolve-EvalHost([string]$Address) {
     $known = [ordered]@{
         '112' = 'http://192.168.1.112:1234/v1'
         '113' = 'http://192.168.1.113:1234/v1'
-        '85'  = 'http://192.168.1.85:1234/v1'
+        '85'  = 'http://192.168.10.85:1234/v1'
     }
     foreach ($alias in $known.Keys) {
         if ($Address -eq $alias -or $Address.TrimEnd('/') -eq $known[$alias]) {

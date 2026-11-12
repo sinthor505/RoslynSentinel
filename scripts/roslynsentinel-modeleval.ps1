@@ -305,7 +305,7 @@ $repoRoot = Split-Path $PSScriptRoot -Parent
 $knownHosts = @{
     '112' = @{ BaseUrl = 'http://192.168.1.112:1234/v1'; Suffix = '112' }
     '113' = @{ BaseUrl = 'http://192.168.1.113:1234/v1'; Suffix = '113' }
-	'85' = @{ BaseUrl = 'http://192.168.1.85:1234/v1'; Suffix = '85' }
+	'85' = @{ BaseUrl = 'http://192.168.10.85:1234/v1'; Suffix = '85' }
 }
 
 if ($knownHosts.ContainsKey($HostAddress)) {
