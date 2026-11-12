@@ -264,22 +264,27 @@ public static class MemberRefactoringNotFound
     // The file declares a type of this name, but of another kind than the lookup wanted (a kind mistake, not a name mistake).
     private static string? OtherKindFact(SyntaxNode? root, string wanted, string filePath, Func<BaseTypeDeclarationSyntax, bool> isExpectedKind, string expectedKindWithArticle)
     {
-        var other = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(t => t.Identifier.Text == wanted && !isExpectedKind(t));
-        if (other is null)
+        // Every same-named declaration of another kind is described (nested types in different containers can share a name),
+        // so no first match is picked among several.
+        var actualKinds = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
+            .Where(t => t.Identifier.Text == wanted && !isExpectedKind(t))
+            .Select(other => other switch
+            {
+                ClassDeclarationSyntax => "a class",
+                StructDeclarationSyntax => "a struct",
+                InterfaceDeclarationSyntax => "an interface",
+                EnumDeclarationSyntax => "an enum",
+                RecordDeclarationSyntax => "a record",
+                _ => "another kind of type",
+            })
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (actualKinds is null || actualKinds.Count == 0)
         {
             return null;
         }
 
-        var actual = other switch
-        {
-            ClassDeclarationSyntax => "a class",
-            StructDeclarationSyntax => "a struct",
-            InterfaceDeclarationSyntax => "an interface",
-            EnumDeclarationSyntax => "an enum",
-            RecordDeclarationSyntax => "a record",
-            _ => "another kind of type",
-        };
-        return $"'{wanted}' is declared in '{filePath}' as {actual}, not as {expectedKindWithArticle}.";
+        return $"'{wanted}' is declared in '{filePath}' as {string.Join(" and ", actualKinds)}, not as {expectedKindWithArticle}.";
     }
 
     private static string JoinNames(IReadOnlyList<string> names)

@@ -2792,11 +2792,11 @@ public class MemberRefactoringEngine
                 if (isToolActive?.Invoke("DeleteUnusedSymbol") == true)
                     typeRemovalHints.Add($"use {ToolCallHint.Call("DeleteUnusedSymbol")}");
                 if (isToolActive?.Invoke("ReplaceSnippet") == true)
-                    typeRemovalHints.Add($"edit the file's raw text with {ToolCallHint.Call("ReplaceSnippet")} as a last resort");
+                    typeRemovalHints.Add($"edit the file's raw text with {ToolCallHint.Call("ReplaceSnippet")}");
                 if (isToolActive?.Invoke("ApplyDiff") == true)
-                    typeRemovalHints.Add($"edit the file's raw text with {ToolCallHint.Call("ApplyDiff")} as a last resort");
+                    typeRemovalHints.Add($"edit the file's raw text with {ToolCallHint.Call("ApplyDiff")}");
                 var typeRemovalHint = typeRemovalHints.Count == 0
-                    ? "To remove an unreferenced type declaration, edit the file directly with the tools available to you, then confirm the solution still compiles."
+                    ? "To remove an unreferenced type declaration, edit the file directly with the tools available to you."
                     : $"To remove an unreferenced type declaration, {string.Join(" or ", typeRemovalHints)}.";
                 throw new ToolNotFoundException($"'{memberName}' is a type-level declaration ({kindNames}) that Member(remove) could not delete here. " +
                     "Member(remove) deletes classes, interfaces, structs, records and enums that resolve to a symbol in the loaded solution, " +
@@ -3116,7 +3116,7 @@ public class MemberRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
         {
-            throw new ToolNotFoundException($"Failed to get syntax root for '{filePath}'.");
+            throw MemberRefactoringNotFound.Unavailable("syntax root", filePath.ToString());
         }
 
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
@@ -3728,25 +3728,25 @@ public class MemberRefactoringEngine
     {
         if (baseType.DeclaringSyntaxReferences.Length == 0)
         {
-            throw new ToolNotFoundException("Base class is in an external assembly and cannot be modified.");
+            throw MemberRefactoringNotFound.Unresolved("class", baseType.Name, $"Base class '{baseType.Name}' is declared in an external assembly, so it has no source in the loaded solution to move members into.", filePath.ToString());
         }
 
         var baseFile = baseType.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree.FilePath;
         if (baseFile == null)
         {
-            throw new ToolNotFoundException("Base class source file not found.");
+            throw MemberRefactoringNotFound.Unresolved("class", baseType.Name, $"The declaration of base class '{baseType.Name}' carries no source file path, so the file to move members into cannot be located.");
         }
 
         var baseDoc = DocumentLookup.FindDocumentOrNull(solution, baseFile);
         if (baseDoc == null)
         {
-            throw new ToolNotFoundException($"Base class source document not found at '{baseFile}'.");
+            throw MemberRefactoringNotFound.Unresolved("class", baseType.Name, $"Base class '{baseType.Name}' is declared in '{baseFile}', which is not a document of the loaded solution.");
         }
 
         var baseRoot = await baseDoc.GetSyntaxRootAsync(cancellationToken);
         if (baseRoot == null)
         {
-            throw new ToolNotFoundException($"Failed to get syntax root for base class file '{baseFile}'.");
+            throw MemberRefactoringNotFound.Unavailable("syntax root", baseFile);
         }
 
         var baseClassNode = baseRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == baseType.Name);
@@ -3850,7 +3850,7 @@ public class MemberRefactoringEngine
         var targetSymbol = targetModel?.GetDeclaredSymbol(targetClassNode, cancellationToken);
         if (targetSymbol == null)
         {
-            throw new ToolNotFoundException($"Could not resolve target class '{targetClassNode.Identifier.Text}' to rewrite call sites against it.");
+            throw MemberRefactoringNotFound.Unresolved("class", targetClassNode.Identifier.Text, $"Target class '{targetClassNode.Identifier.Text}' did not resolve to a symbol, so the call sites of the moved members cannot be rewritten against it.", targetDocument.FilePath);
         }
 
         var movedSpans = membersToMove.Select(m => m.FullSpan).ToList();
@@ -5084,7 +5084,7 @@ public class MemberRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
         {
-            throw new ToolNotFoundException($"Failed to get syntax root for '{filePath}'.");
+            throw MemberRefactoringNotFound.Unavailable("syntax root", filePath.ToString());
         }
 
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
@@ -5099,7 +5099,7 @@ public class MemberRefactoringEngine
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (semanticModel == null)
         {
-            throw new ToolNotFoundException($"Failed to get semantic model for '{filePath}'.");
+            throw MemberRefactoringNotFound.Unavailable("semantic model", filePath.ToString());
         }
 
         var memberSymbols = membersToMove.Select(m => semanticModel.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m)).Where(s => s != null).Cast<ISymbol>().ToList();
