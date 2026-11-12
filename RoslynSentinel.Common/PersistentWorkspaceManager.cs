@@ -22,7 +22,7 @@ namespace RoslynSentinel.Common;
 /// <c>RoslynSentinel.Tests.TestSolutionFixture</c>, which stands up a disposable on-disk copy of
 /// the Samples/ContosoOrders scenario and loads it through this class.
 /// </summary>
-public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader, IWorkspaceReloadFailureProvider, IEditAttributionLedgerProvider, IObservedContentLedger
+public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader, IWorkspaceReloadFailureProvider, IEditAttributionLedgerProvider, IEditEffectIndexProvider, IObservedContentLedger
 {
     private readonly ILogger<IWorkspaceManager> _logger;
     private MSBuildWorkspace? _workspace;
@@ -79,6 +79,13 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
     /// <inheritdoc/>
     public EditAttributionLedger EditAttributions => _editAttributions;
+
+    // Edit effect index: symbol-level facts (renamed, removed, moved, ...) committed by the write chokepoint. Owned here like the edit
+    // attribution ledger and deliberately not registered in DI, so there is only one live instance.
+    private readonly EditEffectIndex _editEffects = new();
+
+    /// <inheritdoc/>
+    public EditEffectIndex EditEffects => _editEffects;
 
     // Content-hash baseline: path (normalized via FilePathWrapper's own case-insensitive, separator-
     // canonicalized equality/hashing) -> SHA-256 of the last content RoslynSentinel itself wrote or
@@ -424,9 +431,12 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             }
         }
 
+        // TODO name ListWorkspaceSolutions (it lists the solutions under the base directory) as an option here once Common
+        // has an isCallable gate for tool names; until then only LoadSolution's own parameters are named. The Tried list
+        // is the last sentence the path-sanitization tests split on, so keep quote characters out of what follows it.
         throw new ToolNotFoundException(
             $"Could not resolve relative solution path '{solutionPath}'. Tried: {string.Join(", ", candidates.Distinct())}. " +
-            $"Pass an absolute path, or supply baseRepoDir to LoadSolution (or set --base-repo-dir at server startup).");
+            $"LoadSolution accepts an absolute path, or a baseRepoDir to resolve the relative path against; --base-repo-dir at server startup sets a default.");
     }
 
     /// <summary>
@@ -912,6 +922,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     {
                         // Keep the previously loaded solution and workspace untouched; report the failure to the caller.
                         newWorkspace.Dispose();
+                        // TODO a load failure is not a lookup miss (inventory C5b); it is coded NotFound through ToolNotFoundException; reclassify when a load-failure code exists.
                         throw new ToolNotFoundException($"Solution '{solutionPath}' failed to load: {string.Join(" ", _workspaceLoadErrors)} The previously loaded solution is still active.");
                     }
 
@@ -983,6 +994,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     var detail = _workspaceLoadErrors.Count > 0
                         ? string.Join(" ", _workspaceLoadErrors)
                         : "no projects were found.";
+                    // TODO a load failure is not a lookup miss (inventory C5b); it is coded NotFound through ToolNotFoundException; reclassify when a load-failure code exists.
                     throw new ToolNotFoundException($"Solution '{solutionPath}' failed to load: {detail}");
                 }
 
@@ -2136,6 +2148,34 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         IReadOnlyCollection<FilePathWrapper>? deletePaths = null,
         bool exactRestore = false, string? operationLabel = null, StaleReadPolicy staleReadPolicy = StaleReadPolicy.None)
     {
+        try
+        {
+            return await ApplyProposedChangesCoreAsync(
+                changes, retryCount, validateChanges, rollbackOnPartialFailure, progress, cancellationToken,
+                deletePaths, exactRestore, operationLabel, staleReadPolicy);
+        }
+        finally
+        {
+            // The core commits the call's pending edit effects (CommitEditEffects) only when a write stands. Anything still pending here
+            // belongs to a refused, failed, rolled-back, partially failed or no-op apply (or one that threw), so it is dropped, never
+            // left for a later apply in the same call to commit.
+            ToolCallContext.Current?.TakePendingEffects();
+        }
+    }
+
+    // The chokepoint body; see ApplyProposedChangesAsync, the public wrapper, for the contract.
+    private async Task<ApplyChangesResult> ApplyProposedChangesCoreAsync(
+        Dictionary<FilePathWrapper, string> changes,
+        int retryCount,
+        bool validateChanges,
+        bool rollbackOnPartialFailure,
+        IProgress<EngineProgress>? progress,
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<FilePathWrapper>? deletePaths,
+        bool exactRestore,
+        string? operationLabel,
+        StaleReadPolicy staleReadPolicy)
+    {
         // A long single tool call (batch edits) keeps resetting the idle clock at every write.
         ServerActivityTracker.Shared.Touch();
         deletePaths ??= [];
@@ -2621,6 +2661,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             }
 
             RecordEditAttributions(succeeded, noOp, deletePaths, preImages);
+            CommitEditEffects(succeeded, noOp, failed.Count == 0);
 
             // --- Proactive Workspace Sync ---
             bool workspaceInSync = false;
@@ -2878,6 +2919,39 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             }
 
             return null;
+        }
+    }
+
+    // Commits the call's pending edit effects to the effect index when this write stands: something was really written (not only no-op
+    // files), nothing failed, and the rollback decision did not undo it (a rollback clears `succeeded`). Otherwise the pending effects are
+    // dropped. Caller holds _solutionLock and the write lease; this takes neither lock and does no I/O. The change id is not known here (the
+    // callers mint it after this method returns), so the effects enter the index without one and the blob writer stamps them
+    // (ToolCallContext.StampCommittedEffects). Never fails the write.
+    private void CommitEditEffects(List<string> succeeded, List<string> noOp, bool noFailures)
+    {
+        try
+        {
+            var context = ToolCallContext.Current;
+            if (context is null)
+            {
+                return;
+            }
+
+            var wrote = noFailures && succeeded.Any(filePath => !noOp.Contains(filePath, PathComparison.Comparer));
+            if (!wrote)
+            {
+                context.TakePendingEffects();
+                return;
+            }
+
+            context.CommitPendingEffects(_editEffects);
+        }
+        catch (Exception ex)
+        {
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning(ex, "Edit effect commit failed; the write itself succeeded.");
+            }
         }
     }
 

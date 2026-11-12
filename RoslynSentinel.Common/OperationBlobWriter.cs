@@ -120,12 +120,19 @@ public static class OperationBlobWriter
             var fileName = $"{SanitizeToolName(toolName)}_{timestamp}_{fraction}_{changeId}.json";
             var filePath = Path.Combine(dir, fileName);
 
+            // The effects the chokepoint committed for this call since its last blob get this change id here (the id is minted by the
+            // caller after the chokepoint returns). On disk only; readers that predate these fields ignore them, and blobs without them still read.
+            var effects = ToolCallContext.Current?.StampCommittedEffects(changeId) ?? [];
+
             var payload = new
             {
                 toolName,
                 changeId,
+                toolCallId = ToolCallContext.Current?.ToolCallId,
                 generatedUtc = DateTime.UtcNow.ToString("O"),
                 itemCount = items.Count,
+                // Serialized to an element first so the effects keep their own camelCase options inside this blob's PascalCase-default writer.
+                effects = JsonSerializer.SerializeToElement(effects, EditEffect.JsonOptions),
                 items,
             };
 

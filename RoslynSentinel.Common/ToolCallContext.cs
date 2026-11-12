@@ -16,6 +16,12 @@ public sealed class ToolCallContext : IDetachedPayloadSource
 
     private string? _missingTargetKind;
 
+    // Edit effects recorded by this call's operations. Pending until the write chokepoint commits them with the write; committed ones
+    // wait here (with the index that holds them) until the blob writer stamps them with the blob's change id.
+    private readonly object _effectsLock = new();
+    private readonly List<EditEffect> _pendingEffects = [];
+    private readonly List<(EditEffectIndex Index, EditEffect Effect)> _committedUnstamped = [];
+
     private readonly object _detachedLock = new();
     private readonly List<(string Name, object Payload)> _detached = [];
 
@@ -110,6 +116,91 @@ public sealed class ToolCallContext : IDetachedPayloadSource
         if (string.IsNullOrWhiteSpace(kind))
             return;
         Volatile.Write(ref _missingTargetKind, kind);
+    }
+
+    /// <summary>
+    /// Records that this call's operation did something to a symbol or file. The effect stays pending until the write chokepoint
+    /// commits it with the write (a refused, failed or rolled-back write drops it). Stamps the call id, tool, session, agent, server
+    /// instance and time itself. Emitters call this as <c>ToolCallContext.Current?.RecordEffect(...)</c>, so with no context
+    /// (engines, tests, other hosts) nothing is recorded. Safe from concurrent continuations of the call.
+    /// </summary>
+    public void RecordEffect(EditEffectKind kind, string symbolDisplay, string? symbolDocId, string simpleName, string? newName, string? newContainer, string? newFilePath)
+    {
+        var effect = new EditEffect(
+            kind, symbolDisplay, symbolDocId, simpleName, newName, newContainer, newFilePath,
+            ToolCallId, ToolName, ChangeId: null, SessionId, ServerInstanceIdentity.Id, AgentId, DateTime.UtcNow);
+        lock (_effectsLock)
+        {
+            _pendingEffects.Add(effect);
+        }
+    }
+
+    /// <summary>Returns the effects recorded and not yet committed or dropped, oldest first, and clears them.</summary>
+    public IReadOnlyList<EditEffect> TakePendingEffects()
+    {
+        lock (_effectsLock)
+        {
+            if (_pendingEffects.Count == 0)
+            {
+                return [];
+            }
+
+            var taken = _pendingEffects.ToArray();
+            _pendingEffects.Clear();
+            return taken;
+        }
+    }
+
+    /// <summary>
+    /// Called by the write chokepoint, inside the write lock, once a write stands: appends the pending effects to
+    /// <paramref name="index"/> and keeps them here until <see cref="StampCommittedEffects"/> gives them the blob's change id.
+    /// Returns how many were committed. Pending effects are cleared either way.
+    /// </summary>
+    public int CommitPendingEffects(EditEffectIndex index)
+    {
+        var taken = TakePendingEffects();
+        if (taken.Count == 0)
+        {
+            return 0;
+        }
+
+        index.Append(taken);
+        lock (_effectsLock)
+        {
+            foreach (var effect in taken)
+            {
+                _committedUnstamped.Add((index, effect));
+            }
+        }
+
+        return taken.Count;
+    }
+
+    /// <summary>
+    /// Called by the operation blob writer: gives the effects committed since the last blob this change id, replaces them in their
+    /// index by the stamped copies, and returns the stamped copies for the blob. Empty when this call committed none.
+    /// </summary>
+    public IReadOnlyList<EditEffect> StampCommittedEffects(string changeId)
+    {
+        List<(EditEffectIndex Index, EditEffect Effect)> batch;
+        lock (_effectsLock)
+        {
+            if (_committedUnstamped.Count == 0)
+            {
+                return [];
+            }
+
+            batch = [.. _committedUnstamped];
+            _committedUnstamped.Clear();
+        }
+
+        var stamped = new List<EditEffect>(batch.Count);
+        foreach (var group in batch.GroupBy(b => b.Index))
+        {
+            stamped.AddRange(group.Key.AssignChangeId([.. group.Select(b => b.Effect)], changeId));
+        }
+
+        return stamped;
     }
 
     /// <summary>
