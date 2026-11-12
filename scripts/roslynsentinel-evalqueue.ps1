@@ -133,15 +133,20 @@ if (-not $EvalScript) { $EvalScript = Join-Path $PSScriptRoot 'roslynsentinel-mo
 if (-not $QueueRoot) { $QueueRoot = $env:ROSLYNSENTINEL_EVALQUEUE_ROOT }
 if (-not $QueueRoot) { $QueueRoot = Join-Path $env:LOCALAPPDATA 'RoslynSentinel\evalqueue' }
 $QueueRoot = [System.IO.Path]::GetFullPath($QueueRoot).TrimEnd('\')
+# 'pwsh -File ... -Id a,b' passes the single string 'a,b'; an in-process '&' call passes an array. Accept both.
+if ($Id) { $Id = @($Id | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
 
 # ---------------------------------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------------------------------
 
 function Stop-EvalQueue([string]$Message) {
-    # Plain line on stdout (not a thrown error): the caller is usually an agent reading captured output.
-    Write-Output "evalqueue error: $Message"
-    exit 2
+    # Thrown here and printed by the catch around the command switch at the end of the script. A Write-Output
+    # here would land in the caller's variable when the call sits inside an assignment (for example
+    # $files = @(... Find-JobFile ...)) and the script would exit 2 having printed nothing.
+    $stop = [System.Exception]::new($Message)
+    $stop.Data['EvalQueueStop'] = $true
+    throw $stop
 }
 
 function Get-Hash([string]$Text, [int]$Length = 16) {
@@ -853,13 +858,21 @@ function Invoke-Worker {
     }
 }
 
-switch ($Command) {
-    'submit' { Invoke-Submit }
-    'status' { Invoke-Status }
-    'wait' { Invoke-Wait }
-    'cancel' { Invoke-Cancel }
-    'start' { Invoke-Start }
-    'worker' { Invoke-Worker }
+try {
+    switch ($Command) {
+        'submit' { Invoke-Submit }
+        'status' { Invoke-Status }
+        'wait' { Invoke-Wait }
+        'cancel' { Invoke-Cancel }
+        'start' { Invoke-Start }
+        'worker' { Invoke-Worker }
+    }
+}
+catch {
+    if (-not $_.Exception.Data['EvalQueueStop']) { throw }
+    # Plain line on stdout (not a thrown error): the caller is usually an agent reading captured output.
+    Write-Output "evalqueue error: $($_.Exception.Message)"
+    exit 2
 }
 # The git probes can leave a non-zero $LASTEXITCODE behind (a repo root that is not a git repo).
 exit 0

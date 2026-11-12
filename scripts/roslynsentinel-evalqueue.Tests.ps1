@@ -159,6 +159,11 @@ try {
     Assert-That (@($reuse.queued).Count -eq 0 -and @($reuse.attached)[0].id -eq $ran.id -and @($reuse.attached)[0].state -eq 'Finished') 'Dedup: a finished run on the same tree is reused'
     $out = Invoke-Queue 'wait' @{ Id = $ran.id }
     Assert-That ($script:lastExit -eq 0 -and "$out" -match 'results: ') 'Wait: returns at once for a finished job, exit code 0, with the results folder'
+    # One comma-joined string is what 'pwsh -File ... -Id a,b' delivers.
+    $out = Invoke-Queue 'wait' @{ Id = "$($ran.id), $($ran.id)" }
+    Assert-That ($script:lastExit -eq 0 -and @("$out" | Select-String -Pattern 'results: ' -AllMatches).Matches.Count -eq 2) 'Wait: a comma-joined -Id string is split into job ids'
+    $out = Invoke-Queue 'wait' @{ Id = 'no-such-job' }
+    Assert-That ($script:lastExit -eq 2 -and "$out" -match "evalqueue error: No job id contains 'no-such-job'") 'Wait: an unknown id prints the error instead of exiting 2 silently'
 
     # --- orphaned job ----------------------------------------------------------------------------------
     New-Queue
