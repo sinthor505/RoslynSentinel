@@ -376,6 +376,31 @@ public record GitTagResult : GitResult
     }
 }
 
+/// <summary>
+/// Result of operation=config. Get sets Value (null when the key is unset) and Note; set and unset
+/// (added in a later slice) also set PreviousValue and Changed.
+/// </summary>
+public record GitConfigResult : GitResult
+{
+    /// <summary>The action taken (get for now).</summary>
+    public string Action { get; set; } = "";
+
+    /// <summary>The config key as the caller gave it.</summary>
+    public string Key { get; set; } = "";
+
+    /// <summary>The value read for the key, exactly as stored; null when the key is unset.</summary>
+    public string? Value { get; set; }
+
+    /// <summary>The value before a set or unset; null for get.</summary>
+    public string? PreviousValue { get; set; }
+
+    /// <summary>True when a set or unset changed the stored value; false for get.</summary>
+    public bool Changed { get; set; }
+
+    /// <summary>A fact about the result, such as that the key is not set in any visible scope; null when the key has a value.</summary>
+    public string? Note { get; set; }
+}
+
 /// <summary>One entry in a stash list.</summary>
 public record GitStashEntry
 {
@@ -691,6 +716,114 @@ public class GitImpl : IGitOperations
         {
             return UnexpectedFailure<GitTagResult>(ex, "tag");
         }
+    }
+
+    /// <summary>
+    /// Reads one git config value (action=get). Set and unset are not implemented yet. Keys that can hold
+    /// credentials, and URL values that carry userinfo, are refused without returning the value.
+    /// </summary>
+    public async Task<GitConfigResult> ConfigAsync(
+        string gitRoot, string? action, string? key, string? value, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // TODO Step 10b: set and unset
+            if (!string.Equals(action, "get", StringComparison.OrdinalIgnoreCase))
+            {
+                return ConfigFailure(action ?? "", GitErrorCodes.ActionRequired,
+                    $"operation=config needs action to be one of: get (got {action ?? "none"}). Nothing was changed.",
+                    $"Pass action, e.g. {ToolCallHint.Call("GitRemote", ("operation", "config"), ("action", "get"), ("key", "user.name"))}.");
+            }
+
+            var keyError = ValidateConfigKey(key);
+            if (keyError is not null)
+            {
+                return ConfigFailure("get", GitErrorCodes.InvalidName, keyError,
+                    "Valid forms by example: user.name, branch.main.remote.");
+            }
+
+            var configKey = key!;
+            if (IsDeniedConfigKey(configKey))
+            {
+                return ConfigFailure("get", GitErrorCodes.Refused,
+                    $"Config key '{configKey}' can hold credentials, so its value is not returned. Nothing was read.",
+                    "Other keys can be read, for example key=user.name.");
+            }
+
+            // The typed seam reads in-process where that reproduces git config and runs the git CLI otherwise. It blocks, so it runs
+            // off the caller's thread; the token only stops a call that has not started.
+            var configValue = await Task.Run(() => _gitReader.GetConfigValue(gitRoot, configKey, GitProcessTimeout), cancellationToken);
+
+            if (configValue is not null
+                && string.Equals(configKey.Split('.')[0], "url", StringComparison.OrdinalIgnoreCase)
+                && System.Text.RegularExpressions.Regex.IsMatch(configValue, @"://[^/\s@]+@"))
+            {
+                return ConfigFailure("get", GitErrorCodes.Refused,
+                    $"Config key '{configKey}' has a value that carries credentials (userinfo), so it is not returned.",
+                    "Other keys can be read, for example key=user.name.");
+            }
+
+            return new GitConfigResult
+            {
+                Action = "get",
+                Key = configKey,
+                Value = configValue,
+                Note = configValue is null
+                    ? $"Key '{configKey}' is not set in any config scope visible from this repository."
+                    : null,
+                Changed = false
+            };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return UnexpectedFailure<GitConfigResult>(ex, "config");
+        }
+    }
+
+    private static GitConfigResult ConfigFailure(string action, string kind, string error, string detail) => new()
+    {
+        Action = action,
+        IsError = true,
+        ErrorKind = kind,
+        Error = error,
+        ErrorDetail = detail
+    };
+
+    /// <summary>Returns the fact-only error for a key that is not section.name or section.subsection.name, or null when the shape is valid.</summary>
+    private static string? ValidateConfigKey(string? key)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+            return "Config key is empty. Nothing was read.";
+        var malformed = $"Config key '{key}' is not of the form section.name or section.subsection.name. Nothing was read.";
+        foreach (var c in key)
+        {
+            if (char.IsWhiteSpace(c) || char.IsControl(c))
+                return malformed;
+        }
+        if (key[0] == '-')
+            return malformed;
+        var first = key.IndexOf('.');
+        var last = key.LastIndexOf('.');
+        if (first < 0 || last - first == 1)
+            return malformed;
+        var section = key[..first];
+        var name = key[(last + 1)..];
+        if (!System.Text.RegularExpressions.Regex.IsMatch(section, @"^[A-Za-z0-9-]+\z")
+            || !System.Text.RegularExpressions.Regex.IsMatch(name, @"^[A-Za-z][A-Za-z0-9-]*\z"))
+            return malformed;
+        return null;
+    }
+
+    /// <summary>True when the validated key names a credential-carrying setting whose value must not be returned.</summary>
+    private static bool IsDeniedConfigKey(string key)
+    {
+        var section = key[..key.IndexOf('.')];
+        var name = key[(key.LastIndexOf('.') + 1)..];
+        return string.Equals(section, "credential", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(name, "password", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(name, "token", StringComparison.OrdinalIgnoreCase)
+            || (string.Equals(section, "http", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(name, "extraheader", StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task<GitTagResult> TagListAsync(string gitRoot, int count, CancellationToken cancellationToken)
