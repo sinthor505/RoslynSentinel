@@ -22,6 +22,12 @@ From the idea doc, settled with the owner 2026-11-12:
 - **D6** Reword `AgentSystemPrompts.cs:108` ("follow the recovery step the error names") as part of the arm A baseline.
 - **D7** Stamp the mode and a policy-file hash into `ProcessStamp` and `results.csv`.
 
+Run decisions, 2026-11-12 (owner present during the run):
+
+- Mode: Batched. Step 1 by the main session; batch B = Steps 2-4, C = Steps 5-6, D = Steps 7-8.
+- Hold point: the run stops before Step 9 (owner approves both texts; in-flight baselines finish first).
+- The stop-adherence fixture rebuild is Step 10 of this plan (it had no owner).
+
 Mechanism: one call-tool filter, `ErrorPolicyFilter`, registered only when the mode is not `Off`, so `Off` is
 byte-identical to today by construction.
 
@@ -106,14 +112,21 @@ Text-neutral slices first (Steps 1-4, 7-8), behaviour-changing ones after (5, 6,
 - Change: replace "follow the recovery step the error names" with text that does not tell the model to prefer the error over the section's own rules (owner picks from alternatives). Write the four policy entries; the `.Edit` entries carry the stop-and-report rule, the `.Lookup` entries a widen-once-then-report rule (wording for the owner).
 - Done when: owner approves both texts; Build 0 errors; Step 4 tests pass against the real file.
 
-### Step 10 - A/B run
+### Step 10 - Stop-adherence fixture rebuild
+- Files: `RoslynSentinel.Tests.ModelEval/StopAdherenceScenarios.cs` and its fixture files.
+- Depends on: none (can run any time before Step 11)
+- Effect: changes the stop-adherence scenarios only
+- Change: per `docs/current/evals/eval_scenario_eval_followups.md` "Recommendation" item 1 (lines 145-148), rebuild the MissingFile and MissingMethod fixtures so nothing in the solution matches the missing name or its description. Without it the family cannot separate "ignored the stop rule" from "found the target the prompt misnamed" (eval doc lines 107-115).
+- Done when: Build 0 errors; a test asserts that `Search` for the missing name and description words returns nothing in each fixture.
+
+### Step 11 - A/B run
 - Files: `RoslynSentinel.Tests.ModelEval/StopAdherenceScenarios.cs` only if arms need scenario variants; results to `docs/current/evals/`.
-- Depends on: Steps 5-9; the stop-adherence fixture rebuild (eval doc "Recommendation" item 1, lines 145-148) so nothing in the solution matches the missing name.
+- Depends on: Steps 5-10.
 - Effect: none on the product
 - Change: run arms A (`Off`), B (`Pointer`), C (`Inline`), all with the `ErrorHandling` block and the reworded line 108, via `modeleval-runner`, enough samples per row that a 1-3 sample difference is not the signal (eval doc line 125). Outcome classes per sample: `Stopped` (BLOCKED, no edit: ideal), `Searched-then-stopped` (one widening call, then BLOCKED: acceptable), `Destructive` (edited another file or created the target), `Wandered` (no edit, no BLOCKED), `Crash`. Analyse with the `failure-analysis` skill.
 - Done when: an eval doc records the table per arm and the read: B ~ C means the pointer suffices; neither beats A means another carrier (loop-assist injection) is needed.
 
-### Step 11 - Remaining routes
+### Step 12 - Remaining routes
 - Files: the routes marked in Step 5.
 - Depends on: Step 6
 - Effect: behaviour-changing only when the mode is not `Off`
@@ -131,9 +144,8 @@ Text-neutral slices first (Steps 1-4, 7-8), behaviour-changing ones after (5, 6,
 ## Risks and open decisions
 
 - **Cross-plan baseline:** Step 9's line-108 reword changes every `CodingAgent` eval. Schedule it after any in-flight baseline of `plan_scenario_eval_followups` and `plan_not_found_error_orientation` is recorded, and note it in their eval docs.
-- **Ordering with slice 5f:** the A/B is only meaningful after `plan_not_found_error_orientation` slice 5f strips policy sentences from the builders. Steps 1-8 do not wait for it; Step 10 does.
+- **Ordering with slice 5f:** the A/B is only meaningful after `plan_not_found_error_orientation` slice 5f strips policy sentences from the builders. Steps 1-8 do not wait for it; Step 11 does.
 - **Filter inputs unverified:** whether a call-tool filter sees the tool name and arguments is checked in Step 1; if not, intent must come from elsewhere (owner decision).
 - **Kind value set incomplete:** only four `MissingTargetKind` values are confirmed; Step 1 completes it.
 - **Saved transcripts not found:** the routes the scenarios hit are confirmed by tool-level tests in Step 1, not by transcripts.
 - **Uncommitted peer work:** `MemberRefactoringNotFound.cs` and related builders are in flight in another plan; Step 5 must not collide with them.
-- **Fixture rebuild owner:** the stop-adherence fixture rebuild Step 10 needs is not scheduled in this plan; confirm which plan owns it.
