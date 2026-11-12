@@ -1,6 +1,6 @@
 # Not-found errors name the prior tool call that renamed, moved or removed the target
 
-**Status:** APPROVED 2026-11-12. Owner settled the identity scope and v1 coverage; dispatched for implementation in slices.
+**Status:** IMPLEMENTED 2026-11-12 (v1, slices 1-4: d5667196, 3a246d60, e000f0cf, a7385d44). v2 (generic-edit symbol diff) not built; live check after a server restart pending (see "Settled in implementation").
 
 ## Motivation
 
@@ -118,6 +118,28 @@ edit and record `Removed`/`Added` facts. That says "removed `Bar`, added `Baz`",
 - Should an effect note replace the generic "typo/renamed/moved" advice that `plan_error_policy_pointer` is reworking? v1 adds
   a finding only; replacing the advice is a follow-up coordinated with that plan.
 - Index bound and blob seeding window (proposed: 500 effects, 60 minutes, matching `NotFoundEvidence.DefaultWindow`).
+
+## Settled in implementation (2026-11-12)
+
+- `_sessionId` comes only from Claude Code's PreToolUse hook (`agent-identity-hook.exe`, copies the payload `session_id`); it is per
+  conversation (a new chat gets a new id), host-side so it survives a server restart. PlanStepRunner and model-eval send none and
+  use the server-instance fallback (`ServerInstanceIdentity.Id`, random per process).
+- The chokepoint cannot stamp a changeId (callers mint it after the apply). Effects commit with `ChangeId = null` and
+  `OperationBlobWriter.WriteAsync` stamps them (`ToolCallContext.StampCommittedEffects`). A write with no blob keeps a null
+  ChangeId and `UndoLastApply` cannot revert it.
+- Effects commit only when a write stands and at least one file changed; refusals, rollbacks and partial failures drop them.
+  Emitters hand effects over through `ValidateAndApplyAsync(recordEffects:)`, which runs only for a real apply that passed the gate.
+- Lookup term argument names: LocateSymbol `symbolName`, RenameSymbol `docCommentId`, MoveMember `className`, Search `query`
+  (symbol mode only). InspectSymbol has no name argument and is not mapped.
+- The note is produced inside `NotFoundEvidence.ForCurrentCall` (the single point both call sites use) and replaces the text note.
+- DeleteFile records one `Removed` per top-level non-partial type plus `FileDeleted`. MoveMember records `Moved` only in
+  remove mode (a keep mode leaves a forwarder). ChangeSignature records `SignatureChanged`.
+- Undo on disk: `UndoLastApply` writes `<blob>.undone` beside the blob; `EditEffectSeeder` skips such blobs. Seeding runs in the
+  background after LoadSolution (60 minutes, 200 blobs, 5 s, newest 500 effects), fail-open.
+- Index bound 500 and window 60 minutes kept. The generic not-found advice is unchanged (v1 adds a Finding only).
+- Known gaps (TODO markers in `AgentIdentityCapture.cs`): InspectSymbol has no name to key on; MoveMember `memberNames` is not read;
+  Search symbol mode zero-hit is a success result and never reaches the not-found path. The index is not cleared when another
+  solution is loaded into the same manager.
 
 ## Cost / risk
 
