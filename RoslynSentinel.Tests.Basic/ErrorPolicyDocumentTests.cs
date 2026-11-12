@@ -214,7 +214,7 @@ public class ErrorPolicyDocumentTests
         Assert.That(result, Does.StartWith("You are a coding agent."));
         Assert.That(result, Does.Contain("\n\n## Error handling\n\n"));
         var headings = result.Split('\n').Where(line => line.StartsWith("### ", StringComparison.Ordinal)).ToList();
-        Assert.That(headings, Is.EqualTo(ErrorPolicyKeys.All.Select(ErrorPolicyDocument.RenderedHeading).ToList()));
+        Assert.That(headings, Is.EqualTo(ErrorPolicyKeys.All.Select(key => "### " + ErrorPolicyDocument.RenderedHeading(key)).ToList()));
         Assert.That(result, Does.EndWith("Symbol edit body.\n"));
     }
 
