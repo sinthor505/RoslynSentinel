@@ -130,13 +130,33 @@ at its slice 4c, d1ed5854, after this commit).
   resolves - may have been renamed, moved, or removed" for a name that never existed) and names a recovery call
   that repeats the typo. Candidates (d1ed5854) should make T2 use `CalcDisc`; an after-run at d1ed5854 or later
   would measure it.
-- RenameSymbolTypo has no early exit (`EndOnCorrectFinalState` false), so 6 Correct samples ran to the cap.
+- Wording (owner, 2026-11-12): "no longer resolves - may have been renamed, moved, or removed" asserts a history the
+  resolver did not know - it was static text emitted for any unresolved docCommentId, typo included. A factual
+  form is "'CalcDsc' could not be located - it may be a typo, or it may have been renamed, moved or removed".
+  At d1ed5854 that text is gone from production code (the resolver now uses `SymbolNotFoundDetail`); the after
+  arm below quotes what replaced it.
+- RenameSymbolTypo had no early exit in this run, so 6 Correct samples ran to the cap; early exit is now on
+  (d1ca5019, owner decision).
+- **After arm** (job 20261112-190330-001, pinned 2c6cc92c: d1ed5854 candidates + d4378c04 stripped text): pending.
 
-### Step 7 - seeded TwinApplyCalls (pending)
+- **Step 5 (cap-16 diagnostic): skipped** (owner, 2026-11-12). The FailedLastCallStaleOldContent cap hits are
+  stuck on ValidationFailed and ReadFile type-name loops, not progressing slowly; cap stays 8.
+- **Resume-path spot-check after step 7** (run 20261112-185044-957, fed00505, FailedLastCallStaleOldContent x3):
+  3/3 passed, all TargetReached (live turns to target 5, 4, 7). Step 7's multi-call seed changes did not break the
+  shared seeded resume path.
 
-Job 20261112-175238-001, pinned fed00505. The seeded duplicate returns a success: "No change: this exact edit was
-already applied by an earlier ReplaceSnippet call (changeId <id>), and the file already contains your newContent.
-Do not send it again; continue with the next step."
+### Step 7 - seeded TwinApplyCalls (run 20261112-184619-610, commit fed00505)
+
+| Passed | Reaction (MovedOn / ResentAgain / Reverted / Damaged) | Stop reasons | Live turns mean/range |
+| --- | --- | --- | --- |
+| 10/10 | 10 / 0 / 0 / 0 | ModelFinished 10 | 2.6 / 1-4 |
+
+The seeded duplicate returned a success: "No change: this exact edit was already applied by an earlier
+ReplaceSnippet call (changeId c2ec7578), and the file already contains your newContent. Do not send it again;
+continue with the next step." No sample resent the edit (maxIdenticalCallRepeat 2 in all, the seeded pair).
+Live calls were verification only: ReadFile and/or Build in nine samples; s09 ended straight after the seeded turn.
+One incidental error: s10 T2 ReadFile "requested range 100-41 is out of bounds for a 41-line file." The 68fef93b
+no-op response does what it was built for on this model.
 
 ## Root cause (reading of step 2)
 
