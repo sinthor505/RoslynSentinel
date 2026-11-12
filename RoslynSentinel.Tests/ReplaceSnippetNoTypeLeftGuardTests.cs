@@ -68,9 +68,37 @@ public class ReplaceSnippetNoTypeLeftGuardTests
         Assert.That(result.ErrorData?.Message, Does.Contain("memberName: "), "the Member remove hint must name memberName (eval run 20261111-061005-246)");
             Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
             Assert.That(result.ErrorData?.Message, Does.Contain("IOrderPricingCalculator.cs"));
+            Assert.That(result.ErrorData?.Message, Does.Contain("declares IOrderPricingCalculator"), "the refusal lists the declared type even when there is one");
+            Assert.That(result.ErrorData?.Message, Does.Not.Contain("<TypeName>"));
             Assert.That(result.ErrorData?.Message, Does.Not.Contain(workspace.PathOf(InterfaceRelativePath)), "the refusal names the workspace-relative path, not an absolute one");
         });
         Assert.That(workspace.ReadText(InterfaceRelativePath), Is.EqualTo(originalInterface), "a refused edit must not write the file");
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_WholeTwoTypeFileToEmpty_ListsEveryTypeAndOffersMemberRemovePerType()
+    {
+        using var workspace = CreateWorkspace();
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+        var originalTwoTypes = workspace.ReadText(TwoTypesRelativePath);
+
+        var result = await tools.ReplaceSnippetTool(
+            reason: "clear the whole two-type file by replacing its entire content with nothing",
+            ProposedChangeAction.apply,
+            filePath: workspace.PathOf(TwoTypesRelativePath),
+            oldContent: TwoTypesSource,
+            newContent: "");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.IsError, Is.True, "an edit that leaves a type-less file must be refused");
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+            Assert.That(result.ErrorData?.Message, Does.Contain("declares First, Second"));
+            Assert.That(result.ErrorData?.Message, Does.Contain("memberName: \"First\""), "each declared type gets its own Member remove hint");
+            Assert.That(result.ErrorData?.Message, Does.Contain("memberName: \"Second\""), "each declared type gets its own Member remove hint");
+            Assert.That(result.ErrorData?.Message, Does.Not.Contain("<TypeName>"));
+        });
+        Assert.That(workspace.ReadText(TwoTypesRelativePath), Is.EqualTo(originalTwoTypes), "a refused edit must not write the file");
     }
 
     [Test]

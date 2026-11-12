@@ -905,27 +905,39 @@ public class WorkspaceFileEditImpl
             return null;
         }
 
-        static string TypeNameHint(string text)
-        {
-            var names = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(text).GetRoot().DescendantNodes()
+        // Top-level declared type names in source order; nested types are skipped (their parent is a type declaration).
+        static List<string> TopLevelTypeNames(string text) =>
+            Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(text).GetRoot().DescendantNodes()
                 .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.BaseTypeDeclarationSyntax>()
+                .Where(type => type.Parent is not Microsoft.CodeAnalysis.CSharp.Syntax.BaseTypeDeclarationSyntax)
                 .Select(type => type.Identifier.Text)
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
-            return names.Count == 1 ? names[0] : "<TypeName>";
-        }
 
         bool Callable(string tool) => _activeToolSurface is null || _activeToolSurface.IsCallable(tool);
+        var names = TopLevelTypeNames(before);
         var steps = new List<string>();
-        if (Callable("DeleteFile")) steps.Add($"To delete the file, use {ToolCallHint.Call("DeleteFile")}.");
+        var including = names.Count == 1 ? "that type" : "those types";
+        if (Callable("DeleteFile")) steps.Add($"To delete the file (this removes the whole file including {including}), use {ToolCallHint.Call("DeleteFile")}.");
         // memberName is optional in Member's schema, so Call adds no placeholder for it: name it explicitly (eval run
         // 20261111-061005-246 followed this hint without memberName twice).
-        if (Callable("Member")) steps.Add($"To remove one type, use {ToolCallHint.Call("Member", ("operation", "remove"), ("memberName", TypeNameHint(before)))}.");
+        if (Callable("Member"))
+        {
+            foreach (var name in names)
+            {
+                steps.Add($"To remove {name} only, use {ToolCallHint.Call("Member", ("operation", "remove"), ("memberName", name))}.");
+            }
+        }
         if (Callable("WriteFile")) steps.Add($"To replace the whole file, use {ToolCallHint.Call("WriteFile", ("operation", "ReplaceFile"))}.");
 
         var prefix = batch ? "ReplaceSnippet batch: " : "ReplaceSnippet: ";
         var suffix = batch ? "; nothing in the batch was written" : "";
-        var message = $"{prefix}this edit would leave '{path}' with no type declaration (the result is empty or only usings/comments) - not applied{suffix}.";
+        var fact = names.Count == 0
+            ? string.Empty
+            : names.Count == 1
+                ? $" This file declares {names[0]}; the replaced text contains it."
+                : $" This file declares {string.Join(", ", names)}; the replaced text contains all of them.";
+        var message = $"{prefix}this edit would leave '{path}' with no type declaration (the result is empty or only usings/comments) - not applied{suffix}.{fact}";
         return steps.Count == 0 ? message : message + " " + string.Join(" ", steps);
     }
 
