@@ -1,6 +1,6 @@
 # Plan: short targeted model-eval scenarios (cold-start and resume, clean and faulted)
 
-**Status:** IN PROGRESS 2026-11-11. Steps 1 to 7 done; steps 8 to 11 not started.
+**Status:** IN PROGRESS 2026-11-12. Steps 1 to 8 done; step 9 not started; step 10 not started; step 11 runs done (4 of 5 passed, mean 29.2 turns, 0 of 5 ended with `BLOCKED:`), eval doc not yet written.
 
 ## Problem
 
@@ -310,6 +310,18 @@ C#; none in `agent.log` or `test-result.txt`).
     edit right after a rename (stale `oldContent`). Then, as captures allow: an `oldContent` not-found
     turn; chain step 7 with CS0246 or CS0144.
   - Done when: one resume scenario runs 10 samples and writes the CSV.
+  - Done: capture df439d297c05bfc1edca071006e0b254379aaa83 (`ResumeTranscripts/stale-caller-edit-after-rename.json`,
+    turns 1-11 of 10-chain run 20261112-031134-405, `.gitignore` negation added); code 764a001a, b5631bb7,
+    dcad5e46, e8ba80f6 (`ScenarioDefinition.ResumeTranscript`/`ResumeKeepTurns`, `ResumeScenarioGate`,
+    `ScenarioSampleLoop.RunSamplesAsync`, `ResumeScenarios.StaleCallerEditAfterRename`, live wiring).
+  - Measured 2026-11-12 (`qwen3.5-9b-coder`, host 113, commit e8ba80f6, job 20261112-040335-001): 10 samples,
+    0 Inconclusive, 9 passed (final state Correct; one Wrong, BudgetOut), all 10 hit the 8-live-turn cap,
+    about 165 s per sample (28 min for 10). Two open findings: `schemaDrift` was true on all 10 (a
+    description-only difference in a called tool since the capture; not yet identified) and `resultDrift` was
+    4 to 5 of the 11 replayed calls on every sample, which says the volatile-field list in
+    `NormalizeResultText` is incomplete or the replayed wording differs; neither was analysed. The scorer's
+    first-error columns read the seeded history (the T2 ReplaceSnippet failure), so for a resume scenario
+    `firstErrorCode`, `callsToRecover` and `recoveryUsedExpectedTool` describe the capture, not the sample.
 
 ### Step 9 - Type 4: faulted resume scenarios
 
