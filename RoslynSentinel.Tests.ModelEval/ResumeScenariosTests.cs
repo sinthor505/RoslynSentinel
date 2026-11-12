@@ -245,4 +245,56 @@ public class ResumeScenariosTests
 
         Assert.That(verdict, Is.EqualTo(FinalStateVerdict.Destructive));
     }
+
+    // ---- IsResumeSample and ResumeTurnCap ----
+
+    [Test]
+    public void IsResumeSample_TrueForTranscriptAndAuthoredOnlySeed_FalseForColdStart()
+    {
+        var authoredOnly = FaultScenarios.RenameSymbolTypo with { ResumeFaultSeeded = true };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ResumeScenarios.StaleCallerEditAfterRename.IsResumeSample, Is.True);
+            Assert.That(ResumeScenarios.StaleWorkspaceAfterRename.IsResumeSample, Is.True);
+            Assert.That(ResumeScenarios.FailedLastCallStaleOldContent.IsResumeSample, Is.True);
+            Assert.That(FaultScenarios.RenameSymbolTypo.IsResumeSample, Is.False);
+            Assert.That(authoredOnly.IsResumeSample, Is.True);
+        });
+    }
+
+    [Test]
+    public void ResumeTurnCap_CountsKeptTurnsAuthoredFaultTurnAndLiveTurns()
+    {
+        var staleCaller = ResumeScenarios.StaleCallerEditAfterRename;
+        var seededTranscript = ResumeScenarios.FailedLastCallStaleOldContent;
+        var authoredOnly = FaultScenarios.RenameSymbolTypo with { ResumeFaultSeeded = true };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(staleCaller.ResumeTurnCap, Is.EqualTo(staleCaller.ResumeKeepTurns + staleCaller.TurnCap));
+            Assert.That(seededTranscript.ResumeTurnCap, Is.EqualTo(seededTranscript.ResumeKeepTurns + 1 + seededTranscript.TurnCap));
+            Assert.That(authoredOnly.ResumeTurnCap, Is.EqualTo(1 + authoredOnly.TurnCap));
+        });
+    }
+
+    [Test]
+    public void NextSeedTurnNumber_EmptySeedStartsAtTurnOne()
+    {
+        Assert.That(RoslynSentinel.Tests.ModelEval.LiveModel.ScenarioAgentTests.NextSeedTurnNumber([]), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void NextSeedTurnNumber_FollowsTheLastSeededTurn_AndAuthoredFaultOnEmptySeedIsTurnOne()
+    {
+        var seeded = TranscriptResume.BuildAuthoredFaultTurn(1, "RenameSymbol", "{}", "x", true);
+        var authored = TranscriptResume.BuildAuthoredFaultTurn(
+            RoslynSentinel.Tests.ModelEval.LiveModel.ScenarioAgentTests.NextSeedTurnNumber([]), "RenameSymbol", "{}", "x", true);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(RoslynSentinel.Tests.ModelEval.LiveModel.ScenarioAgentTests.NextSeedTurnNumber([seeded]), Is.EqualTo(2));
+            Assert.That(authored.TurnNumber, Is.EqualTo(1));
+        });
+    }
 }

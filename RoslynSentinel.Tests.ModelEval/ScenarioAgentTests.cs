@@ -23,7 +23,8 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// loaded model, ROSLYNSENTINEL_MODELEVAL_SCENARIO_SAMPLES times (default 10). Each sample gets its own fixture, host and
 /// MCP client with the scenario's staged files, is scored by <see cref="ScenarioSampleLoop"/> and appends one results.csv line.
 /// Resume scenarios (ResumeTranscript set) replay their named capture's kept turns on a fresh fixture first and are gated
-/// on schema and replay drift; cold-start scenarios run from the staged files only.
+/// on schema and replay drift; cold-start scenarios run from the staged files only. The resume path also covers
+/// seeded-fault scenarios with no transcript (authored-only seed, no gates).
 /// Measurement only: it asserts that at least one sample ran, not what the model did.
 /// </summary>
 // TODO ResumeEnvironment in TranscriptResumeAgentTests duplicates this wiring; extract one shared environment once both settle.
@@ -113,7 +114,7 @@ public class ScenarioAgentTests
         string sampleDirectory,
         CancellationToken cancellationToken)
     {
-        if (scenario.ResumeTranscript is not null)
+        if (scenario.IsResumeSample)
         {
             return await RunResumeSampleAsync(scenario, sampleIndex, sampleDirectory, cancellationToken);
         }
@@ -136,6 +137,13 @@ public class ScenarioAgentTests
         return (result, verdict, false, 0, "");
     }
 
+    /// <summary>
+    /// Turn number for the next authored turn appended to a seed. An empty seed (authored-only scenario) starts at turn 1;
+    /// otherwise the authored turn follows the last seeded turn.
+    /// </summary>
+    internal static int NextSeedTurnNumber(IReadOnlyList<RoslynSentinel.Common.AgentLoop.AgentTranscriptTurn> seed) =>
+        seed.Count == 0 ? 1 : seed[^1].TurnNumber + 1;
+
     // Resume sample: replays the kept turns of the named capture on a fresh fixture, gates on schema and replay drift, then lets the model continue.
     private static async Task<(AgentRunResult? Result, FinalStateVerdict? Verdict, bool SchemaDrift, int ResultDrift, string InconclusiveReason)> RunResumeSampleAsync(
         ScenarioDefinition scenario,
@@ -143,48 +151,63 @@ public class ScenarioAgentTests
         string sampleDirectory,
         CancellationToken cancellationToken)
     {
-        var source = TranscriptResume.Load(ResumeScenarios.CapturePath(scenario.ResumeTranscript!));
-        var kept = TranscriptResume.KeepTurns(source, scenario.ResumeKeepTurns);
-
         await using var environment = await ScenarioEnvironment.CreateAsync(scenario, sampleDirectory, cancellationToken);
 
-        // Schema gate: the kept calls must still be offered with the schemas the transcript recorded.
-        var liveTools = await environment.Client.ListToolsAsync(cancellationToken: cancellationToken);
-        var liveSchemas = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
-        var liveDescriptions = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var tool in liveTools)
+        var directory = environment.SolutionDirectory;
+        string systemPrompt;
+        string userPrompt;
+        List<RoslynSentinel.Common.AgentLoop.AgentTranscriptTurn> seed;
+        var schemaDrift = false;
+        var resultDrift = 0;
+        if (scenario.ResumeTranscript is not null)
         {
-            if (tool.JsonSchema.ValueKind != JsonValueKind.Undefined)
+            var source = TranscriptResume.Load(ResumeScenarios.CapturePath(scenario.ResumeTranscript));
+            var kept = TranscriptResume.KeepTurns(source, scenario.ResumeKeepTurns);
+
+            // Schema gate: the kept calls must still be offered with the schemas the transcript recorded.
+            var liveTools = await environment.Client.ListToolsAsync(cancellationToken: cancellationToken);
+            var liveSchemas = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+            var liveDescriptions = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var tool in liveTools)
             {
-                liveSchemas[tool.Name] = tool.JsonSchema;
+                if (tool.JsonSchema.ValueKind != JsonValueKind.Undefined)
+                {
+                    liveSchemas[tool.Name] = tool.JsonSchema;
+                }
+
+                liveDescriptions[tool.Name] = tool.Description ?? "";
             }
 
-            liveDescriptions[tool.Name] = tool.Description ?? "";
+            (var schemaReason, schemaDrift) = ResumeScenarioGate.CheckSchemas(source, kept, liveSchemas, liveDescriptions);
+            if (schemaReason.Length > 0)
+            {
+                TestContext.Out.WriteLine($"Sample {sampleIndex}: {schemaReason}");
+                return (null, null, schemaDrift, 0, schemaReason);
+            }
+
+            seed = TranscriptResume.RewriteTurns(kept, directory).ToList();
+            systemPrompt = TranscriptResume.RewriteFixtureDirectory(source.SystemPrompt, directory)!;
+            userPrompt = TranscriptResume.RewriteFixtureDirectory(source.UserPrompt, directory)!;
+
+            // Same fixture state as at the resume point: the kept calls run again, in order, on the fresh fixture.
+            var replayed = await TranscriptResume.ReplayKeptCallsDetailedAsync(
+                seed,
+                (tool, arguments, token) => TranscriptReplayHelper.ReplayToolCallAsync(environment.Client, tool, arguments, token),
+                cancellationToken,
+                TestContext.Out.WriteLine);
+            (var replayReason, resultDrift) = ResumeScenarioGate.CheckReplay(replayed);
+            if (replayReason.Length > 0)
+            {
+                TestContext.Out.WriteLine($"Sample {sampleIndex}: {replayReason}");
+                return (null, null, schemaDrift, resultDrift, replayReason);
+            }
         }
-
-        var (schemaReason, schemaDrift) = ResumeScenarioGate.CheckSchemas(source, kept, liveSchemas, liveDescriptions);
-        if (schemaReason.Length > 0)
+        else
         {
-            TestContext.Out.WriteLine($"Sample {sampleIndex}: {schemaReason}");
-            return (null, null, schemaDrift, 0, schemaReason);
-        }
-
-        var directory = environment.SolutionDirectory;
-        var seed = TranscriptResume.RewriteTurns(kept, directory).ToList();
-        var systemPrompt = TranscriptResume.RewriteFixtureDirectory(source.SystemPrompt, directory)!;
-        var userPrompt = TranscriptResume.RewriteFixtureDirectory(source.UserPrompt, directory)!;
-
-        // Same fixture state as at the resume point: the kept calls run again, in order, on the fresh fixture.
-        var replayed = await TranscriptResume.ReplayKeptCallsDetailedAsync(
-            seed,
-            (tool, arguments, token) => TranscriptReplayHelper.ReplayToolCallAsync(environment.Client, tool, arguments, token),
-            cancellationToken,
-            TestContext.Out.WriteLine);
-        var (replayReason, resultDrift) = ResumeScenarioGate.CheckReplay(replayed);
-        if (replayReason.Length > 0)
-        {
-            TestContext.Out.WriteLine($"Sample {sampleIndex}: {replayReason}");
-            return (null, null, schemaDrift, resultDrift, replayReason);
+            // Authored-only seed: nothing to replay, so no schema or replay gate. The prompts are the cold-start prompts.
+            seed = [];
+            systemPrompt = AgentSystemPrompts.CodingAgent;
+            userPrompt = string.Format(scenario.PromptTemplate, Path.Combine(environment.SolutionDirectory, "ContosoOrders.Core"));
         }
 
         // Faulted resume: ONE real call on the fresh fixture. Unseeded, it is not added to seed, so the model never sees it (stale workspace).
@@ -195,8 +218,9 @@ public class ScenarioAgentTests
             {
                 // Seeded: the failed result is the point, so IsError is expected here. The authored call is appended as the
                 // scenario's first error. Scoring stays at ResumeKeepTurns on purpose (ScenarioSampleLoop passes only that as
-                // seededTurns), so the authored failed call counts as the scenario's first error.
-                seed.Add(TranscriptResume.BuildAuthoredFaultTurn(seed[^1].TurnNumber + 1, scenario.ResumeFaultTool!, faultArguments, faultText, faultIsError));
+                // seededTurns), so the authored failed call counts as the scenario's first error. For an authored-only seed the
+                // authored turn is turn 1 (NextSeedTurnNumber on an empty seed).
+                seed.Add(TranscriptResume.BuildAuthoredFaultTurn(NextSeedTurnNumber(seed), scenario.ResumeFaultTool!, faultArguments, faultText, faultIsError));
                 TestContext.Out.WriteLine($"Sample {sampleIndex}: authored fault call seeded ({scenario.ResumeFaultTool}, isError={faultIsError}).");
             }
             else if (faultIsError)
@@ -215,7 +239,7 @@ public class ScenarioAgentTests
             environment.AgentClient, environment.Client,
             repeatedFailureLimit: 10,
             maxTokensPerTurn: 16384,
-            turnCap: scenario.ResumeKeepTurns + (scenario.ResumeFaultSeeded ? 1 : 0) + scenario.TurnCap,
+            turnCap: scenario.ResumeTurnCap,
             wallClockCap: TimeSpan.FromMinutes(10),
             logger: environment.Host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         // Early exit: scenarios flagged EndOnCorrectFinalState stop the live loop once CheckFinalState is Correct (null = run to finish or cap).

@@ -48,6 +48,17 @@ public sealed record ScenarioDefinition(
     bool EndOnCorrectFinalState = false)
 {
     /// <summary>
+    /// True when this scenario runs through the resume path: it replays a saved transcript, or it is a seeded-fault
+    /// scenario with no transcript (authored-only seed, nothing to replay).
+    /// </summary>
+    public bool IsResumeSample => ResumeTranscript is not null || ResumeFaultSeeded;
+
+    /// <summary>
+    /// The runner turn cap for a resume sample: the kept turns, plus the authored fault turn when seeded, plus the live turns (TurnCap).
+    /// </summary>
+    public int ResumeTurnCap => ResumeKeepTurns + (ResumeFaultSeeded ? 1 : 0) + TurnCap;
+
+    /// <summary>
     /// Builds the live-sample stop predicate for this scenario. Returns null when EndOnCorrectFinalState is false.
     /// Otherwise the predicate runs CheckFinalState on the fixture directory and is true only for FinalStateVerdict.Correct.
     /// It deliberately does not catch exceptions: the runner treats a throwing predicate as false.
