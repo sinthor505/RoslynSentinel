@@ -136,6 +136,44 @@ internal static class GitHooks
     }
 
     /// <summary>
+    /// The reason <see cref="LaunchPostHook"/> would not start hook <paramref name="hookName"/> (a hook that exists but cannot be launched faithfully: declined resolution, config-defined hooks, a non-shell
+    /// shebang, no sh.exe, an unreadable file), or null when it would start it or the repository has no such hook (git runs nothing). A caller that has already committed cannot hand the hook to the CLI,
+    /// so it asks BEFORE committing and declines to the CLI when this is not null. Never throws for a repository, config or file problem.
+    /// </summary>
+    internal static string? PostHookLaunchBlocker(string workingDirectory, string hookName, GitHookOptions? options = null)
+    {
+        options ??= GitHookOptions.Default;
+        var path = ResolveHookPath(workingDirectory, hookName, options);
+        switch (path.Outcome)
+        {
+            case HookPathOutcome.Declined:
+                return path.Detail ?? $"the {hookName} hook could not be resolved faithfully";
+            case HookPathOutcome.NotFound:
+                return null;
+        }
+
+        if (path.ConfigHooksPresent)
+        {
+            return "The config has hook.* entries (config-defined hooks), which this runner does not evaluate.";
+        }
+
+        try
+        {
+            if (UnsupportedShebang(path.Path!) is { } unsupported)
+            {
+                return unsupported;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return $"the {hookName} hook could not be read ({ex.GetType().Name})";
+        }
+
+        var shell = (options.LocateShell ?? (() => GitShellLocator.Locate()))();
+        return shell.Path is null ? $"no sh.exe to run the {hookName} hook: {shell.Detail}" : null;
+    }
+
+    /// <summary>
     /// The hooks directory for a repository layout, by the rules of the class comment.
     /// </summary>
     /// <exception cref="NotSupportedException">A <c>core.hooksPath</c> form this does not reproduce.</exception>

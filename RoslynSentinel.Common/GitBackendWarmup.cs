@@ -44,6 +44,7 @@ public sealed class GitBackendWarmup
     private readonly Func<string, string> _repoProbe;
     private readonly FallbackGitReader _reader;
     private readonly ShortHashLengths _lengths;
+    private readonly InProcessCommitRoute _commitRoute;
     private readonly Action<string> _log;
     private readonly Lazy<Task<GitBackendStatus>> _native;
     private readonly ConcurrentDictionary<string, byte> _loggedRepoFailureKinds = new(StringComparer.Ordinal);
@@ -54,9 +55,11 @@ public sealed class GitBackendWarmup
     /// <param name="reader">Source of the fallback counters and first fallback reason that <see cref="Report"/> shows.</param>
     /// <param name="log">Receives the one-line failure messages; defaults to stderr.</param>
     /// <param name="lengths">The short-hash length cache the default repo probe refreshes and <see cref="Report"/> reads; defaults to <see cref="ShortHashLengths.Shared"/>.</param>
-    internal GitBackendWarmup(Func<string> nativeProbe, Func<string, string>? repoProbe, FallbackGitReader reader, Action<string>? log = null, ShortHashLengths? lengths = null)
+    /// <param name="commitRoute">Source of the in-process commit counters that <see cref="Report"/> shows; defaults to <see cref="InProcessCommitRoute.Shared"/>.</param>
+    internal GitBackendWarmup(Func<string> nativeProbe, Func<string, string>? repoProbe, FallbackGitReader reader, Action<string>? log = null, ShortHashLengths? lengths = null, InProcessCommitRoute? commitRoute = null)
     {
         _lengths = lengths ?? ShortHashLengths.Shared;
+        _commitRoute = commitRoute ?? InProcessCommitRoute.Shared;
         _nativeProbe = nativeProbe;
         _repoProbe = repoProbe ?? (directory => ProbeRepository(directory, new Libgit2GitReader(_lengths)));
         _reader = reader;
@@ -118,7 +121,10 @@ public sealed class GitBackendWarmup
             CliFallbackCount: _reader.CliFallbackCount,
             ShortHashLength: _lengths.SolutionRepositoryLength,
             DeclineCount: _reader.DeclineCount,
-            LastDeclineReason: _reader.LastDeclineReason);
+            LastDeclineReason: _reader.LastDeclineReason,
+            InProcessCommitCount: _commitRoute.TakenCount,
+            InProcessCommitDeclineCount: _commitRoute.DeclineCount,
+            LastInProcessCommitDeclineReason: _commitRoute.LastDeclineReason);
     }
 
     private GitBackendStatus RunNativeProbe()
@@ -209,6 +215,8 @@ internal sealed record GitBackendStatus(string Backend, string? Libgit2Version, 
 /// null and 0 are the healthy values. A planned decline (a request libgit2 deliberately leaves to the git CLI, such as pathspec magic or a CR in a
 /// file to stage) is reported in <c>DeclineCount</c> / <c>LastDeclineReason</c> instead and is normal traffic, not a fault.
 /// <c>Libgit2Count</c> is the calls libgit2 served.
+/// The last three fields are the in-process commit route's counters (git config <c>roslynsentinel.inProcessCommit</c>, off by default): <c>InProcessCommitCount</c> commits made in process,
+/// <c>InProcessCommitDeclineCount</c> / <c>LastInProcessCommitDeclineReason</c> the commits of an enabled route that the git CLI made instead (a hook, signing, a merge in progress, a lost race, ...). Normal traffic, not a fault.
 /// </summary>
 public sealed record GitBackendSnapshot(
     string ActiveBackend,
@@ -220,4 +228,7 @@ public sealed record GitBackendSnapshot(
     long CliFallbackCount,
     int? ShortHashLength = null,
     long DeclineCount = 0,
-    string? LastDeclineReason = null);
+    string? LastDeclineReason = null,
+    long InProcessCommitCount = 0,
+    long InProcessCommitDeclineCount = 0,
+    string? LastInProcessCommitDeclineReason = null);

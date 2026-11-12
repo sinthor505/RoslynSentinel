@@ -606,6 +606,9 @@ public class GitImpl : IGitOperations
     // Injectable (internal constructor) so a test can force one backend; production always uses the shared GitReaders.Default.
     private readonly IGitReader _gitReader;
 
+    // The default-off in-process commit route (git config roslynsentinel.inProcessCommit; see CommitAsync and InProcessCommitRoute). Injectable so a test sees its own counters and can move the branch mid-commit; production uses the shared one.
+    private readonly InProcessCommitRoute _commitRoute;
+
     public GitImpl(ISolutionProvider workspaceManager)
         : this(workspaceManager, new NullLogger<GitImpl>(), GitReaders.Default)
     {
@@ -616,11 +619,12 @@ public class GitImpl : IGitOperations
     {
     }
 
-    internal GitImpl(ISolutionProvider workspaceManager, ILogger<GitImpl> logger, IGitReader gitReader)
+    internal GitImpl(ISolutionProvider workspaceManager, ILogger<GitImpl> logger, IGitReader gitReader, InProcessCommitRoute? commitRoute = null)
     {
         _workspaceManager = workspaceManager;
         _logger = logger;
         _gitReader = gitReader;
+        _commitRoute = commitRoute ?? InProcessCommitRoute.Shared;
     }
 
     /// <summary>
@@ -3215,6 +3219,9 @@ public class GitImpl : IGitOperations
             // For scope=listed, classify paths first to determine which ones need pre-staging
             // (untracked only) vs those already in the index.
             bool stagedUntrackedFiles = false;
+            // Kept for the in-process commit route below (null unless scope=listed with paths).
+            string[]? listedFilePaths = null;
+            List<ClassifiedPath>? classifiedListed = null;
             if (scope == GitStageScope.listed && !string.IsNullOrWhiteSpace(paths))
             {
                 var filePaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
@@ -3239,6 +3246,8 @@ public class GitImpl : IGitOperations
 
                 // Classify paths
                 var classified = await ClassifyPathsAsync(gitRoot, filePaths!.ToList(), cancellationToken);
+                listedFilePaths = filePaths;
+                classifiedListed = classified;
 
                 // Check for missing paths - reject early
                 var missing = classified.Where(cp => cp.Classification == PathClassification.Missing).ToList();
@@ -3313,6 +3322,11 @@ public class GitImpl : IGitOperations
                 if (stageResult.IsError)
                     return new GitCommitResult { IsError = true, Error = stageResult.Error };
             }
+
+            // Opt-in (git config roslynsentinel.inProcessCommit=true, default off): a plain new commit made in process through the compare-and-swap primitive, with no git process.
+            // Null (the route is off, or it declined and counted why) continues below with exactly the CLI path of before.
+            if (await TryCommitInProcessAsync(gitRoot, message, amend, scope, paths, listedFilePaths, classifiedListed, cancellationToken) is { } inProcessResult)
+                return inProcessResult;
 
             // BuildTool commit arguments
             var messageArgs = (amend, HasMessage: !string.IsNullOrWhiteSpace(message)) switch
@@ -3445,6 +3459,102 @@ public class GitImpl : IGitOperations
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return UnexpectedFailure<GitCommitResult>(ex, "commit");
+        }
+    }
+
+    /// <summary>
+    /// The in-process commit route of <see cref="CommitAsync"/> (git config <c>roslynsentinel.inProcessCommit</c>, default off; see <see cref="InProcessCommitRoute"/>): returns the finished result when the commit was made
+    /// in process, null for "continue with the CLI path exactly as before" (the route is off, or it declined: counted with its reason on the route). Simple case only: a plain new commit (an amend is a counted decline) of the
+    /// whole index, or of listed paths (<c>scope=listed</c>). The listed paths' content is staged FIRST, tracked ones here (<c>git add -u</c>, in process where libgit2 can) and untracked ones by the pre-stage
+    /// CommitAsync already ran, so HEAD plus those index entries is what <c>git commit --only -- paths</c> would store; entries of other paths stay untouched, as with --only. Every decline decidable without
+    /// touching the repository runs before that staging; the primitive's own declines come after it, and then the CLI's <c>--only</c> commit stores the same content from the working tree. After a commit the hash is the
+    /// primitive's (no derivation), the message is the text stored, and the remaining-staged list comes from the same seam read as the CLI path. Never throws except for cancellation.
+    /// </summary>
+    private async Task<GitCommitResult?> TryCommitInProcessAsync(
+        string gitRoot, string? message, bool amend, GitStageScope? scope, string? paths, string[]? listedFilePaths, List<ClassifiedPath>? classified, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!await Task.Run(() => _commitRoute.IsEnabled(_gitReader, gitRoot, GitProcessTimeout), cancellationToken))
+            {
+                return null;
+            }
+
+            // From here the route is enabled: every way out that is not a commit is a counted decline.
+            if (amend || string.IsNullOrWhiteSpace(message))
+            {
+                _commitRoute.RecordDecline("an amend rewrites HEAD; the CLI does it.");
+                return null;
+            }
+
+            var listed = !string.IsNullOrWhiteSpace(paths);
+            if (listed && (scope != GitStageScope.listed || listedFilePaths is not { Length: > 0 } || classified is null))
+            {
+                _commitRoute.RecordDecline("paths were given without scope=listed; the CLI decides what they mean.");
+                return null;
+            }
+
+            var listedForRoute = listed ? listedFilePaths : null;
+            var decline = await Task.Run(() => _commitRoute.DeclineBeforeStaging(_gitReader, gitRoot, listedForRoute, GitProcessTimeout), cancellationToken);
+            if (decline is not null)
+            {
+                _commitRoute.RecordDecline(decline);
+                return null;
+            }
+
+            if (listed)
+            {
+                var tracked = classified!.Where(cp => cp.Classification == PathClassification.InIndex).Select(cp => cp.Path).ToList();
+                if (tracked.Count > 0)
+                {
+                    var staged = await RunIndexStageAsync(gitRoot, IndexStageMode.UpdateListed, tracked, cancellationToken);
+                    if (staged.ExitCode != 0)
+                    {
+                        _commitRoute.RecordDecline("staging the listed tracked paths failed; the CLI commits them with --only.");
+                        return null;
+                    }
+                }
+            }
+
+            // The same trailer decision as the CLI path (roslynsentinel.commitTrailers, the call id the response echoes or a random one); null call id means cleanup only.
+            var trailerPlan = await PlanCommitTrailersAsync(gitRoot, ["-m", message], amend: false, hasMessage: true, cancellationToken);
+            var agentId = ToolCallContext.Current?.AgentId;
+            var committed = await Task.Run(
+                () =>
+                {
+                    var outcome = _commitRoute.Commit(gitRoot, message, trailerPlan?.CallId, agentId, listedForRoute, out var storedMessage);
+                    return (Outcome: outcome, Stored: storedMessage);
+                },
+                cancellationToken);
+            if (!committed.Outcome.IsCommitted)
+            {
+                return null;
+            }
+
+            // The commit exists: nothing below may fall back to the CLI (it would make a second commit) or fail the call.
+            var remainingStaged = new List<string>();
+            try
+            {
+                remainingStaged = (await Task.Run(() => _gitReader.GetNameStatus(gitRoot, "staged", null, GitProcessTimeout), CancellationToken.None))
+                    ?.Select(entry => entry.Path).ToList() ?? [];
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogDebug(ex, "Could not list the paths still staged after the in-process commit; reporting none.");
+            }
+
+            return new GitCommitResult
+            {
+                IsError = false,
+                CommitHash = committed.Outcome.CommitId!,
+                Message = RejoinLines(committed.Stored ?? message).Trim(),
+                RemainingStaged = remainingStaged,
+            };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _commitRoute.RecordDecline($"{ex.GetType().Name}: {ex.Message}");
+            return null;
         }
     }
 
