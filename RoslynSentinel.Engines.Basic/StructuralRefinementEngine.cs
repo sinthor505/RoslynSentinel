@@ -38,7 +38,7 @@ public class StructuralRefinementEngine
     public async Task<DocumentEditResult> SyncTypeAndFilenameAsync(FilePathWrapper filePath, string? targetTypeName = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken);
 
         var topLevelTypes = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
@@ -51,8 +51,19 @@ public class StructuralRefinementEngine
             primaryType = RoslynSentinel.Common.NameTargetLookup.RequireSingle(topLevelTypes.Where(t => t.Identifier.Text == targetTypeName).ToList(), "Type", targetTypeName);
             if (primaryType == null)
             {
-                var available = topLevelTypes.Count == 0 ? "none" : string.Join(", ", topLevelTypes.Select(t => t.Identifier.Text));
-                throw new ToolNotFoundException($"No top-level type named '{targetTypeName}' found in '{filePath}'. Top-level types present: {available}. Next: {ToolCallHint.Call("Search", ("mode", "class"), ("query", targetTypeName))}", "type", targetTypeName);
+                var message = MemberRefactoringNotFound.DeclarationMessage("top-level type", targetTypeName, "targetTypeName", topLevelTypes.Select(t => t.Identifier.Text), filePath.ToString());
+                if (topLevelTypes.Count > 0)
+                {
+                    message += $" Top-level types declared in '{filePath}': {string.Join(", ", topLevelTypes.Select(t => t.Identifier.Text))}.";
+                }
+
+                var declaredNested = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Any(t => t.Parent is BaseTypeDeclarationSyntax && t.Identifier.Text == targetTypeName) == true;
+                if (declaredNested)
+                {
+                    message += $" '{targetTypeName}' is declared in '{filePath}' only as a nested type; this tool syncs the file name with a top-level type.";
+                }
+
+                throw new ToolNotFoundException(message, "type", targetTypeName);
             }
         }
         else
@@ -103,11 +114,7 @@ public class StructuralRefinementEngine
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new ToolNotFoundException($"File '{filePath}' is not in the loaded solution. Next: {ToolCallHint.Call("ListAll")} to confirm the owning project.", "file");
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -119,7 +126,7 @@ public class StructuralRefinementEngine
         var symbol = semanticModel?.GetDeclaredSymbol(node!, cancellationToken) ?? semanticModel?.GetSymbolInfo(node!, cancellationToken).Symbol;
         if (symbol == null)
         {
-            throw new ToolNotFoundException($"No symbol found at line {line}, column {column} of '{filePath}'. Next: {ToolCallHint.Call("ReadFile")} the line to confirm the position.", "symbol");
+            throw MemberRefactoringNotFound.Unresolved("symbol", $"{line}:{column}", $"No symbol was found at line {line}, column {column} of '{filePath}': the node there ({node?.GetType().Name ?? "none"}) has no declared or referenced symbol.", filePath.ToString());
         }
 
         RequireDeletableDeclaration(symbol);
@@ -162,11 +169,7 @@ public class StructuralRefinementEngine
     public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePathWrapper filePath, string symbolName, string? contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new ToolNotFoundException($"File '{filePath}' is not in the loaded solution. Next: {ToolCallHint.Call("ListAll")} to confirm the owning project.", "file");
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -208,15 +211,20 @@ public class StructuralRefinementEngine
 
         if (target == null)
         {
-            throw new ToolNotFoundException(candidates.Count == 0
-                ? $"No symbol named '{symbolName}' found in '{filePath}'. Next: {ToolCallHint.Call("Search", ("mode", "symbol"), ("query", symbolName))}"
-                : $"'{symbolName}' has {candidates.Count} declaration(s) in '{filePath}', and contextSnippet did not match any of them. Provide a contextSnippet that is a verbatim substring of the intended declaration.", "symbol", symbolName);
+            if (candidates.Count == 0)
+            {
+                throw MemberRefactoringNotFound.Declaration("symbol", symbolName, "symbolName", root.DescendantNodes().Select(GetDeclaredNodeName).OfType<string>(), filePath.ToString());
+            }
+
+            var startLines = MemberRefactoringNotFound.StartLines(sourceText, candidates);
+            throw new ToolNotFoundException(
+                $"'{symbolName}' has {candidates.Count} declaration(s) in '{filePath}', starting at line {string.Join(", ", startLines)}, and contextSnippet matched none of them. {ToolCallHint.Call("ReadFile", ("filePath", filePath.ToString()), ("startLine", startLines.Min().ToString(System.Globalization.CultureInfo.InvariantCulture)))} reads the first one.", "symbol", symbolName);
         }
 
         var symbol = semanticModel.GetDeclaredSymbol(target, cancellationToken);
         if (symbol == null)
         {
-            throw new ToolNotFoundException($"No symbol could be resolved for '{symbolName}' at the matched location of '{filePath}'. Next: {ToolCallHint.Call("ReadFile")} the snippet location to confirm it is a declaration.", "symbol", symbolName);
+            throw MemberRefactoringNotFound.Unresolved("symbol", symbolName, $"No symbol could be resolved for '{symbolName}' at the matched location of '{filePath}': the matched node ({target.GetType().Name}) is not a declaration that resolves to a symbol.", filePath.ToString());
         }
 
         return await SafeDeleteSymbolAsync(filePath, symbol, cancellationToken);
@@ -343,11 +351,7 @@ public class StructuralRefinementEngine
         RequireDeletableDeclaration(symbol);
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new ToolNotFoundException($"File '{filePath}' is not in the loaded solution. Next: {ToolCallHint.Call("ListAll")} to confirm the owning project.", "file");
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -378,7 +382,11 @@ public class StructuralRefinementEngine
 
         if (node == null)
         {
-            throw new ToolNotFoundException($"Declaration of symbol '{symbol.Name}' not found in '{filePath}'. Next: {ToolCallHint.Call("Search", ("mode", "symbol"), ("query", symbol.Name))} to locate it.", "symbol", symbol.Name);
+            var declaredIn = symbol.DeclaringSyntaxReferences.Select(r => r.SyntaxTree.FilePath).Where(p => !string.IsNullOrEmpty(p)).Distinct(PathComparison.Comparer).ToList();
+            var fact = declaredIn.Count == 0
+                ? $"Symbol '{symbol.Name}' has no declaration in source, so no declaration of it exists in '{filePath}'."
+                : $"No declaration of symbol '{symbol.Name}' was found in '{filePath}'; it is declared in {string.Join(", ", declaredIn)}.";
+            throw new ToolNotFoundException($"{fact} To locate it, call {ToolCallHint.Call("Search", ("mode", "symbol"), ("query", symbol.Name))}.", "symbol", symbol.Name);
         }
 
         return new DocumentEditResult

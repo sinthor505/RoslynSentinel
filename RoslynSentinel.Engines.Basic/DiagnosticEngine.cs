@@ -35,7 +35,7 @@ public class DiagnosticEngine
     public async Task<EngineResultWrapper<DiagnosticSummary>> GetFileDiagnosticsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var diagnostics = semanticModel?.GetDiagnostics(null, cancellationToken) ?? Enumerable.Empty<Diagnostic>();
 
@@ -50,7 +50,7 @@ public class DiagnosticEngine
     public async Task<EngineResultWrapper<DiagnosticSummary>> GetProjectDiagnosticsAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var project = ProjectLookup.FindProject(solution, projectName) ?? throw new ToolNotFoundException("Project not found.");
+        var project = ProjectLookup.FindProject(solution, projectName) ?? throw SolutionStructureEngine.ProjectNotFound(projectName, solution);
         var compilation = await project.GetCompilationAsync(cancellationToken);
         var diagnostics = compilation?.GetDiagnostics(cancellationToken) ?? Enumerable.Empty<Diagnostic>();
 

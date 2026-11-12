@@ -28,16 +28,14 @@ public class InventoryEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
 
-        var document = DocumentLookup.FindDocumentOrNull(solution, filePath);
-        if (document == null)
+        var lookup = DocumentLookup.TryGetDocument(solution, filePath);
+        if (lookup.Status == DocumentLookupStatus.NotFound)
         {
-            var existsOnDisk = File.Exists(normalizedPath);
-            var projectCount = solution.Projects.Count();
-            throw new ToolNotFoundException(
-                $"File not found in solution: {normalizedPath} " +
-                $"(existsOnDisk={existsOnDisk}, projectsLoaded={projectCount}). " +
-                "The owning project may have failed to load - check workspace load errors.");
+            throw FileMiss(lookup, normalizedPath, solution);
         }
+
+        // An ambiguous bare file name throws ToolAmbiguousMatchException here, as FindDocumentOrNull did.
+        var document = lookup.GetDocumentOrThrow();
 
         var root = await document.GetSyntaxRootAsync(cancellationToken)
                    ?? throw new InvalidOperationException("Syntax root not found.");
@@ -51,21 +49,31 @@ public class InventoryEngine
         return new CodeInventoryReport(filePath, namespaces, classes, interfaces, methods, properties);
     }
 
+    // The not-found error for a file that is not a document of the solution: the shared file-miss text (ranked candidates, or the
+    // no-similar-name fact with an orientation option) followed by the disk and load facts this tool has always stated.
+    private static ToolNotFoundException FileMiss(DocumentLookupResult lookup, string normalizedPath, Solution solution)
+    {
+        var existsOnDisk = File.Exists(normalizedPath);
+        var projectCount = solution.Projects.Count();
+        return new ToolNotFoundException(
+            $"{lookup.Describe()} Disk and load facts: existsOnDisk={existsOnDisk}, projectsLoaded={projectCount}. " +
+            "A project that failed to load leaves its files out of the solution.",
+            "document", normalizedPath);
+    }
+
     public async Task<CodeInventoryReport> GetCodeInventoryAsync2(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
 
-        var document = DocumentLookup.FindDocumentOrNull(solution, filePath);
-        if (document == null)
+        var lookup = DocumentLookup.TryGetDocument(solution, filePath);
+        if (lookup.Status == DocumentLookupStatus.NotFound)
         {
-            var existsOnDisk = File.Exists(normalizedPath);
-            var projectCount = solution.Projects.Count();
-            throw new ToolNotFoundException(
-                $"File not found in solution: {normalizedPath} " +
-                $"(existsOnDisk={existsOnDisk}, projectsLoaded={projectCount}). " +
-                "The owning project may have failed to load - check workspace load errors.");
+            throw FileMiss(lookup, normalizedPath, solution);
         }
+
+        // An ambiguous bare file name throws ToolAmbiguousMatchException here, as FindDocumentOrNull did.
+        var document = lookup.GetDocumentOrThrow();
 
         var root = await document.GetSyntaxRootAsync(cancellationToken)
                    ?? throw new InvalidOperationException("Syntax root not found.");

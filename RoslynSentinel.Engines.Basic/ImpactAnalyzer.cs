@@ -30,13 +30,11 @@ public class ImpactAnalyzer
         try
         {
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-            var document = solution.GetDocumentIdsWithFilePath(filePath)
-                .Select(solution.GetDocument)
-                .FirstOrDefault();
-
-            if (document == null)
+            var documentLookup = DocumentLookup.TryGetDocument(solution, filePath);
+            if (!documentLookup.TryGetDocument(out var document))
             {
-                return new ImpactReport("", "", [], 0, 0, Error: $"Document not found: {filePath}");
+                // TODO this returned lookup miss carries no ErrorCode (it reads as Exception); pass documentLookup.Code so it is NotFound or Ambiguous
+                return new ImpactReport("", "", [], 0, 0, Error: documentLookup.Describe());
             }
 
             var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
@@ -70,13 +68,14 @@ public class ImpactAnalyzer
 
             if (symbol == null)
             {
-                return new ImpactReport("", "", [], 0, 0, Error: $"No symbol found at the specified position. The snippet matched, but its innermost node ({token.Parent?.GetType().Name}) has no declared or referenced symbol; pass a snippet on a declaration or use lineBefore/lineAfter.", ErrorCode: ToolErrorCode.NotFound);
+                return new ImpactReport("", "", [], 0, 0, Error: $"No symbol was found for the snippet matched at line {sourceText.Lines.GetLinePosition(snippetMatch.Start).Line + 1} of '{filePath}': the snippet matched there, but its innermost node ({token.Parent?.GetType().Name}) has no declared or referenced symbol. To see what the file declares, call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()))}. A snippet on a declaration, or one narrowed with lineBefore/lineAfter, resolves to a symbol.", ErrorCode: ToolErrorCode.NotFound);
             }
 
             // Metadata (BCL/referenced) symbols have no source location; reporting their references would be a silent mis-resolution
             if (!symbol.Locations.Any(l => l.IsInSource))
             {
-                return new ImpactReport("", "", [], 0, 0, Error: $"Not found: '{symbol.ToDisplayString()}' is not declared in this solution. The snippet likely resolved to a referenced type or constructor. Pass the declared name with lineBefore/lineAfter.", ErrorCode: ToolErrorCode.NotFound);
+                // TODO offer ranked candidates (SymbolNotFoundDetail.FindCandidatesAsync over the solution's source symbols) next to this fact
+                return new ImpactReport("", "", [], 0, 0, Error: $"'{symbol.ToDisplayString()}' is not declared in this solution: the snippet resolved to a referenced (metadata) symbol such as a library type or constructor, which has no source references to report. A snippet on the declared name, or one narrowed with lineBefore/lineAfter, resolves to a source symbol.", ErrorCode: ToolErrorCode.NotFound);
             }
 
             if (_logger.IsEnabled(LogLevel.Information))
@@ -149,7 +148,7 @@ public class ImpactAnalyzer
     public async Task<List<string>> GetDataFlowAsync(FilePathWrapper filePath, int startLine, int startColumn, int endLine, int endColumn, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"Document not found: {filePath}");
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (syntaxRoot == null || semanticModel == null)
@@ -196,9 +195,7 @@ public class ImpactAnalyzer
     private async Task<ImpactReport> FindSymbolRelationsAsync(FilePathWrapper filePath, int line, int column, Func<ISymbol, Solution, CancellationToken, Task<IEnumerable<ISymbol>>> relationFinder, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath)
-            .Select(solution.GetDocument)
-            .FirstOrDefault() ?? throw new ToolNotFoundException($"Document not found: {filePath}");
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (syntaxRoot == null || semanticModel == null)
@@ -223,7 +220,8 @@ public class ImpactAnalyzer
 
         if (symbol == null)
         {
-            throw new ToolNotFoundException("No symbol found at the specified position.");
+            throw MemberRefactoringNotFound.Unresolved("symbol", $"{line}:{column}",
+                $"No symbol was found at line {line}, column {column} of '{filePath}': the node there ({token.Parent?.GetType().Name}) has no declared or referenced symbol.", filePath.ToString());
         }
 
         var relatedSymbols = await relationFinder(symbol, solution, cancellationToken);

@@ -181,12 +181,14 @@ public class SemanticRefactoringEngine
 
         if (classNode == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' was not found in '{filePath}'. Searched: class declarations in this file. Next: {ToolCallHint.Call("Search", ("mode", "class"), ("query", className))}", "class", className);
+            throw MemberRefactoringNotFound.Class(className, root, filePath.ToString());
         }
 
         if (propNode == null)
         {
-            throw new ToolNotFoundException($"Property '{propertyName}' was not found in class '{className}'. Next: {ToolCallHint.Call("Search", ("mode", "property"), ("query", propertyName))}", "property", propertyName);
+            var propertyMessage = MemberRefactoringNotFound.DeclarationMessage("property", propertyName, "propertyName", classNode.Members.OfType<PropertyDeclarationSyntax>().Select(p => p.Identifier.Text), filePath.ToString())
+                                  + $" Only the properties declared directly in class '{className}' were searched.";
+            throw new ToolNotFoundException(propertyMessage, "property", propertyName);
         }
 
         var getter = SyntaxFactory.MethodDeclaration(propNode.Type, $"Get{propertyName}")
@@ -217,12 +219,13 @@ public class SemanticRefactoringEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
+        // TODO a line range outside the file throws ArgumentOutOfRangeException from the line lookup on the next line; state the file's line count there too
         var span = Microsoft.CodeAnalysis.Text.TextSpan.FromBounds(sourceText.Lines[startLine - 1].Start, sourceText.Lines[endLine - 1].End);
 
         var nodes = root?.DescendantNodes(span).Where(n => n is StatementSyntax && n.Parent is BlockSyntax).Cast<StatementSyntax>().ToList();
         if (nodes == null || nodes.Count == 0)
         {
-            throw new ToolNotFoundException($"No statements found in lines {startLine}-{endLine} of '{filePath}'. Searched: statements inside a block body whose span falls within that line range. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use {ToolCallHint.Call("GetFileOutline")} to find the lines.", "statements");
+            throw new ToolNotFoundException($"No statements were found in lines {startLine}-{endLine} of '{filePath}', which has {sourceText.Lines.Count} line(s): no statement inside a block body has its span within that range. A constructor header, a field or an attribute list is not a statement of a block body. To see the line range of each member, call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()))}.", "statements");
         }
 
         return await WrapStatementsInUsingAsync(filePath, document, root!, nodes, disposalName, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
