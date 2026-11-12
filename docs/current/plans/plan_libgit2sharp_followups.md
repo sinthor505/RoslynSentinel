@@ -1,6 +1,7 @@
 # Plan: LibGit2Sharp follow-ups - route trial evidence, audit, default-on, config operation, patch text
 
-**Status:** IN PROGRESS 2026-11-12. Steps 1-12 done (6a58ffd6..dc8c2520). Approved 2026-11-12. Follow-ups to proposal_libgit2sharp_in_process_git; decisions recorded; Steps 22-23 (lists) skipped unless a caller shows cost.
+**Status:** IN PROGRESS 2026-11-12. Steps 1-13, 15-18, 20, 21 done (6a58ffd6..ee512c94); Step 14 (live gate) and Step 19
+(the flip) open. Approved 2026-11-12. Follow-ups to proposal_libgit2sharp_in_process_git; decisions recorded; Steps 22-23 (lists) skipped unless a caller shows cost.
 
 ## Problem
 
@@ -529,6 +530,20 @@ a one-file staged diff and a 20-file staged diff: CLI patch (the exact command `
 - Done when: the numbers and the decision are written into this plan's Status.
 
 ### Step 13 (F) - patch text on the seam, no caller (runs only if Step 12 passes)
+
+- Done: 13a+13b 4e8997a3, mnemonicPrefix fix 100c0631 (one commit; split-index and `core.abbrev` not 7..40 also decline), 13c 081fbde4 (corpus
+  pinned as asserted tests: routed = text and Warning identical with a libgit2 call and no fallback; declined = counted
+  decline and CLI-equal text). Routed: plain modify, hunk context boundaries, binary, mode change, CRLF, no-newline,
+  non-UTF-8, ambiguous hunk placement, C function context, Markdown, deleted-then-re-added, merge and root commit via
+  show, and `diff.algorithm`/`diff.indentHeuristic`/`diff.noprefix`/`diff.renames=false`/`diff.wsErrorHighlight`/
+  `core.whitespace`. `diff.mnemonicPrefix` came off the verified list (100c0631): the CLI-only pin showed git keeps
+  `a/ b/` for refA..refB while libgit2 prints `c/ c/`, so it declines. Show is not exercised by the config-key cases
+  (range is the proxy). Declined: rename, empty file, unicode/space path, typechange, symlink,
+  submodule, `diff=` attribute, `diff.context`, `diff.interHunkContext`, `diff.external`, any `color.*` (incl.
+  `color.ui`), any unlisted `diff.*`, split index, `core.abbrev` other than 7..40. OWNER CONFIRM (TODO in
+  `Libgit2GitReader.Patch.cs` `PatchNeutralConfigKeys`): `diff.tool`, `diff.guitool` and `diff.<driver>.<var>` are treated
+  as neutral (this machine's global/system config sets `diff.tool` and `diff.astextplain.textconv`, so the literal rule
+  would decline every call here; those keys act only via difftool or a path the attribute rule already declines).
 - Step 13a - interface, CLI and fallback
   - Files: `RoslynSentinel.Common/GitReader.cs`, `CliGitReader.cs`, `FallbackGitReader.cs`
   - Depends on: 12 (and 9: same files, so not in parallel)
@@ -570,6 +585,7 @@ a one-file staged diff and a 20-file staged diff: CLI patch (the exact command `
   FAIL stops Steps 19 until fixed. (The owner has accepted the criteria; the go to flip is the table passing.)
 
 ### Step 15 (D) - pin the route off in `GitTestRepo.InitRepo`
+- Done: 91278598
 - Files: `RoslynSentinel.Tests.Support.Basic/GitTestRepo.cs` (`InitRepo` `:33-37`),
   `RoslynSentinel.Tests.Tools.Basic/GitInProcessCommitRouteTests.cs`
 - Depends on: 7 (same file)
@@ -583,6 +599,8 @@ a one-file staged diff and a 20-file staged diff: CLI patch (the exact command `
 - Size: D1 (2 files, about 4 edits).
 
 ### Step 16 (D) - pin the commit-through-`GitImpl` fixtures explicitly
+- Done: 1147afcb (only `GitToolsSmokeTests.BuildTemplateRepo` bypassed `InitRepo`; the other six commit fixtures get the
+  pin from it, so no extra explicit line was added there)
 - Files: the fixtures that commit through `GitImpl`/`GitTool` without `GitTestRepo.InitRepo`. Reviewer-verified
   inventory (2026-11-12): `.CommitAsync(` has 53 hits in 4 test files, including `GitCommitReadsParityTests.cs:547`,
   `GitCommitSeamParityTests.cs`, `GitInProcessCommitRouteTests.cs` and `GitCommitUntrackedParityTests.cs:213,279,281`;
@@ -598,6 +616,8 @@ a one-file staged diff and a 20-file staged diff: CLI patch (the exact command `
 - Size: S0 (one operation, at most 8 files, about 25 sites).
 
 ### Step 17 (D) - spawn-count test: a pinned-false copy and an in-process twin
+- Done: 181e43bf (twin covers plain, plain-trailers, untracked, scope-all); the ResolveCommitAbbreviation flake fix
+  landed as 4af88bfb
 - Files: `RoslynSentinel.Tests.Tools.Basic/GitCommitSeamParityTests.cs`
 - Depends on: 16
 - Effect: text-neutral (tests only)
@@ -611,6 +631,7 @@ a one-file staged diff and a 20-file staged diff: CLI patch (the exact command `
 - Size: D1 (1 file).
 
 ### Step 18 (D) - ratchet: a commit-through-`GitImpl` test must pin the route
+- Done: 200584db (the "remove the pin in a local experiment" proof was not run)
 - Files: `RoslynSentinel.Tests.Tools.Basic/GitCommitRoutePinRatchetTests.cs` (new)
 - Depends on: 16
 - Effect: text-neutral (tests only)
@@ -642,6 +663,14 @@ a one-file staged diff and a 20-file staged diff: CLI patch (the exact command `
 - Size: D1 (3 files).
 
 ### Step 20 (E) - wire the config operation into the `GitRemote` tool (behaviour-changing)
+
+- Done: 20a 789a7bdc (`ConfigAsync` now takes `GitAction?`; hint literals restored), 20b dfa5d985 (validator aliases
+  `key` -> `configKey`, `value` -> `configValue`; no conflicting-parameter guard, as `tagName` has none), 20c ee512c94.
+  Schema cost (`Measure-ToolSchemaCost.ps1 -Mode claude`, which emits GitRemote): GitRemote 3564 -> 4078 chars
+  (~1387 -> ~1587 tokens, 20 -> 22 params, +514 chars / ~+200 tokens); Git tool +41 chars (one phrase); total
+  91874 -> 92429 chars (~35749 -> ~35965 tokens, +555 chars / ~+216 tokens). Not done: the prose operation lists in
+  `ToolsetCatalog.cs:81` and `ToolsetControlTools.cs:30` do not name `config` (open follow-up: add it there, one phrase each);
+  `docs/generated/` was not regenerated. Live check after the main session's restart is still open.
 - Step 20a - enums
   - Files: `RoslynSentinel.Common/ToolEnums.cs`
   - Depends on: 10b
@@ -679,6 +708,7 @@ a one-file staged diff and a 20-file staged diff: CLI patch (the exact command `
   - Size: D1 (test-writer).
 
 ### Step 21 (F) - route patch text for the parity scenarios (only if Step 12 passed)
+- Done: cc5a0145 (needs a server restart before live use)
 - Files: `RoslynSentinel.Tools.Basic/GitImpl.cs` (`DiffAsync` `:2550`, `ShowAsync` `:2645`),
   `RoslynSentinel.Tests.Tools.Basic/GitDiffShowToolParityTests.cs`
 - Depends on: 13a, 13b (not in parallel with another `GitImpl.cs` step)
