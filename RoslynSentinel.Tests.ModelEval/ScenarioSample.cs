@@ -196,7 +196,7 @@ public static class ScenarioSampleCsv
         value.Length == 0 ? null : ParseEnum<T>(value);
 
     // Quote-aware split of one line: doubled quotes inside a quoted field become one quote.
-    private static List<string> SplitFields(string line)
+    internal static List<string> SplitFields(string line)
     {
         var fields = new List<string>();
         var field = new StringBuilder();
