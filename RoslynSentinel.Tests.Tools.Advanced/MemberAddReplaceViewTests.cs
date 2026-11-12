@@ -77,6 +77,24 @@ public sealed class MemberAddReplaceViewTests
     }
 
     [Test]
+    [Category("MemberSourceInfo")] // sentinel:auto-category
+    [Category("MemberSourceViewResult")] // sentinel:auto-category
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task Member_View_WithMemberNameNamingAType_ReturnsTheWholeTypeSource()
+    {
+        using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.view, memberName: "Order");
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var view = result.SuccessData as MemberSourceViewResult;
+        Assert.That(view, Is.Not.Null);
+        Assert.That(view!.Member.Name, Is.EqualTo("Order"));
+        Assert.That(view.Member.Kind, Is.EqualTo("class"));
+        Assert.That(view.Member.Source, Does.Contain("public class Order"));
+        Assert.That(view.Member.Source, Does.Contain("public int OrderId { get; set; }"));
+    }
+
+    [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Member_View_WithMissingMemberName_ReturnsNotFound()
     {
