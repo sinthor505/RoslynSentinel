@@ -12,6 +12,8 @@ public static class ScenarioRegistry
         TwoRenameScenarios.TwoRenamesWholeFile,
         InterfaceScenarios.InterfaceMemberRedeclared,
         BatchShapeScenarios.MixedSingleAndBatchShape,
+        GuardScenarios.TwinApplyCalls,
+        GuardScenarios.EmptyInterfaceRemoval,
     ];
 
     /// <summary>All registered scenarios, in declaration order.</summary>

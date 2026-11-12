@@ -35,12 +35,15 @@ public class EditShapeScenariosTests
     }
 
     [Test]
-    public void Registry_HoldsFourUniqueScenarios()
+    public void Registry_IdsAreUnique()
     {
         var ids = ScenarioRegistry.All.Select(s => s.Id).ToList();
 
-        Assert.That(ids, Has.Count.EqualTo(4));
-        Assert.That(ids, Is.Unique);
+        Assert.That(ids.Select(id => id.ToUpperInvariant()).ToList(), Is.Unique);
+        Assert.That(ids, Does.Contain(TwoRenameScenarios.TwoRenamesWholeFileId));
+        Assert.That(ids, Does.Contain(InterfaceScenarios.InterfaceMemberRedeclaredId));
+        Assert.That(ids, Does.Contain(BatchShapeScenarios.MixedSingleAndBatchShapeId));
+        Assert.That(ids, Does.Contain(RenameScenarios.CalcDiscRenameId));
     }
 
     // ---- Definition shape ----
