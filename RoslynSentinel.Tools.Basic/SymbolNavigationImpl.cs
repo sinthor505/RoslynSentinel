@@ -176,7 +176,7 @@ public class SymbolNavigationImpl
                         "This means one of: the snippet text does not appear verbatim in the file, it matched a " +
                         "location with no bindable symbol (e.g. whitespace, a keyword, or a comment), or it matched " +
                         "more than one location and lineBefore/lineAfter did not disambiguate. " +
-                        $"{ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} and GetMethodSource show the file's exact text; lineBefore/lineAfter pin a match."
+                        $"{ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} shows the file's members and their lines; lineBefore/lineAfter pin a match."
                         : symbolInfo!.Error;
                     // TODO error-policy: route does not record the missing-target kind
                     return new SentinelCallToolResult<object>
