@@ -125,6 +125,12 @@ Text-neutral slices first (Steps 1-4, 7-8), behaviour-changing ones after (5, 6,
 - Effect: behaviour-changing for every eval using `CodingAgent` (line 108 reword)
 - Change: replace "follow the recovery step the error names" with text that does not tell the model to prefer the error over the section's own rules (owner picks from alternatives). Write the four policy entries; the `.Edit` entries carry the stop-and-report rule, the `.Lookup` entries a widen-once-then-report rule (wording for the owner).
 - Done when: owner approves both texts; Build 0 errors; Step 4 tests pass against the real file.
+- Approved 2026-11-12 (owner). 9a, line 108 becomes: "When a tool returns an error, read the facts and the calls it lists, then decide using the rules in this section." (the stop rule that follows is unchanged). 9a lands only after the not-found plan's in-flight baseline is recorded. 9b (the policy file) is text-neutral until a mode is set and lands now, with these entries:
+  - `FileNotFound.Edit`: "The file does not exist. If the task named this file, stop: do not edit or create a different file. Begin your final message with BLOCKED: and quote the error."
+  - `FileNotFound.Lookup`: "If the task named this file and the error lists no matching file, stop and begin your final message with BLOCKED:. If you chose the path yourself, make one call from the error's options; if that finds nothing, stop with BLOCKED:."
+  - `SymbolNotFound.Edit`: "The symbol does not exist. If the task named it, stop: do not edit a different symbol or create it. Begin your final message with BLOCKED: and quote the error."
+  - `SymbolNotFound.Lookup`: "If the task named this symbol and the error lists no similar name, stop and begin your final message with BLOCKED:. If you chose the name yourself, make one call from the error's options; if that finds nothing, stop with BLOCKED:."
+- Step 10 runs now, beside 9b (owner, 2026-11-12).
 
 ### Step 10 - Stop-adherence fixture rebuild
 - Files: `RoslynSentinel.Tests.ModelEval/StopAdherenceScenarios.cs` and its fixture files.
