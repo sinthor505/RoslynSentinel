@@ -522,8 +522,10 @@ public class DiscoveryEngine
         return results.OrderBy(r => TodoSeverity.TryGetValue(r.Kind, out var sev) ? sev : 99).ThenBy(r => r.FilePath).ThenBy(r => r.Line).ToList();
     }
 
-    public async Task<RenameImpactPreview> PreviewRenameImpactAsync(FilePathWrapper filePath = default, string? symbolName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? docCommentId = null, string? projectName = null, CancellationToken cancellationToken = default)
+    public async Task<RenameImpactPreview> PreviewRenameImpactAsync(FilePathWrapper filePath = default, string? symbolName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? docCommentId = null, string? projectName = null, CancellationToken cancellationToken = default, Func<string, string?>? retryCall = null)
     {
+        // retryCall (optional, last so existing callers are unchanged): maps a not-found candidate's docCommentId to the calling tool's own
+        // call with only the id corrected; the engine just forwards it to the shared resolver.
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         ISymbol symbol;
         string resolvedSymbolName;
@@ -536,7 +538,7 @@ public class DiscoveryEngine
                 throw new ToolInvalidArgumentException("projectName is required when docCommentId is provided.");
             }
 
-            var resolution = await _workspaceManager.ResolveFromWireAsync(projectName, docCommentId, cancellationToken);
+            var resolution = await _workspaceManager.ResolveFromWireAsync(projectName, docCommentId, cancellationToken, retryCall);
             if (!resolution.Resolved)
             {
                 throw resolution.Error!.Code switch

@@ -210,7 +210,26 @@ public class SymbolRelationshipImpl
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
-            var result = await _discoveryEngine.PreviewRenameImpactAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, cancellationToken);
+            // Each not-found candidate is offered as this same call with only the id corrected (the request's own projectName, and filePath
+            // when it was given). The tool being called is by definition callable, so no isCallable check is needed (this impl has no
+            // ActiveToolSurface). The delegate runs at render time only.
+            string RetryPreview(string candidateId)
+            {
+                var pairs = new List<(string Name, string Value)> { ("docCommentId", candidateId) };
+                if (!string.IsNullOrWhiteSpace(projectName))
+                {
+                    pairs.Add(("projectName", projectName));
+                }
+
+                if (!string.IsNullOrWhiteSpace(filePath))
+                {
+                    pairs.Add(("filePath", filePath));
+                }
+
+                return ToolCallHint.Call("PreviewRenameImpact", pairs.ToArray());
+            }
+
+            var result = await _discoveryEngine.PreviewRenameImpactAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, cancellationToken, RetryPreview);
             return new SentinelCallToolResult<object>
             {
                 IsError = false,

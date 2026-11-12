@@ -93,10 +93,14 @@ public static class SymbolNotFoundDetail
     /// Search(mode: symbol) when Search is callable; a supplied <paramref name="nextCall"/> is invoked at render time only,
     /// and an empty result leaves the line without a call. Hints are built only here, never speculatively, because
     /// <see cref="ToolCallHint.Call(string, (string Name, string Value)[])"/> records each one as issued.
+    /// <paramref name="retryCall"/> is for a tool whose input is a docCommentId: when it is supplied, each candidate that has an
+    /// id also states that id as a fact, and the call is <c>retryCall(candidate id)</c> (the calling tool's own call with only the
+    /// id corrected) in place of the default Search call; a null result falls back to the default. A supplied
+    /// <paramref name="nextCall"/> wins over it. It is the last parameter so existing positional callers compile unchanged.
     /// </summary>
     public static string RenderCandidates(
         string wantedName, string symbolKind, string scopeDescription, IReadOnlyList<SymbolCandidate> candidates,
-        Func<string, bool>? isCallable = null, Func<SymbolCandidate, string>? nextCall = null)
+        Func<string, bool>? isCallable = null, Func<SymbolCandidate, string>? nextCall = null, Func<string, string?>? retryCall = null)
     {
         var text = new StringBuilder();
         text.Append($"Symbol '{wantedName}' ({symbolKind}) was not found in {scopeDescription}. Did you mean one of these?");
@@ -113,9 +117,15 @@ public static class SymbolNotFoundDetail
                 text.Append($", {candidate.FilePath}");
             }
 
+            var hasId = retryCall is not null && !string.IsNullOrEmpty(candidate.DocCommentId);
+            if (hasId)
+            {
+                text.Append($", docCommentId '{candidate.DocCommentId}'");
+            }
+
             var call = nextCall is not null
                 ? nextCall(candidate)
-                : Callable(isCallable, "Search") ? DefaultSearchCall(candidate) : string.Empty;
+                : (hasId ? retryCall!(candidate.DocCommentId!) : null) ?? (Callable(isCallable, "Search") ? DefaultSearchCall(candidate) : string.Empty);
             if (!string.IsNullOrEmpty(call))
             {
                 text.Append($" -> {call}");
@@ -168,22 +178,24 @@ public static class SymbolNotFoundDetail
     /// </summary>
     public static Task<string> BuildAsync(
         IReadOnlyCollection<Project> searchedProjects, string query, string symbolKind, string scopeDescription, string? projectName,
-        Func<string, bool>? isCallable = null, Func<SymbolCandidate, string>? nextCall = null, CancellationToken cancellationToken = default)
+        Func<string, bool>? isCallable = null, Func<SymbolCandidate, string>? nextCall = null, CancellationToken cancellationToken = default,
+        Func<string, string?>? retryCall = null)
     {
         // TODO optional per-error-code operator policy suffix (idea_error_policy_pointer)
-        return BuildAsyncCore(searchedProjects, query, symbolKind, scopeDescription, projectName, isCallable, nextCall, cancellationToken);
+        return BuildAsyncCore(searchedProjects, query, symbolKind, scopeDescription, projectName, isCallable, nextCall, cancellationToken, retryCall);
     }
 
     private static async Task<string> BuildAsyncCore(
         IReadOnlyCollection<Project> searchedProjects, string query, string symbolKind, string scopeDescription, string? projectName,
-        Func<string, bool>? isCallable = null, Func<SymbolCandidate, string>? nextCall = null, CancellationToken cancellationToken = default)
+        Func<string, bool>? isCallable = null, Func<SymbolCandidate, string>? nextCall = null, CancellationToken cancellationToken = default,
+        Func<string, string?>? retryCall = null)
     {
         // TODO split ignores generic arguments: Ns.Box<int>.Foo splits at a dot inside <...>; scan for the last '.' outside angle brackets
         var (container, name) = SplitQuery(query);
         var candidates = await FindCandidatesAsync(searchedProjects, name, symbolKind, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (candidates.Count > 0)
         {
-            return RenderCandidates(name, symbolKind, scopeDescription, candidates, isCallable, nextCall);
+            return RenderCandidates(name, symbolKind, scopeDescription, candidates, isCallable, nextCall, retryCall);
         }
 
         var containerFile = container is null

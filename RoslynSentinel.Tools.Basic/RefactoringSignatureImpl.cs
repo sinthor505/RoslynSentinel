@@ -77,8 +77,31 @@ public class RefactoringSignatureImpl
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = msg.Progress, Total = msg.Total, Message = msg.Message }, null, cancellationToken));
 
+        // Each not-found candidate is offered as this same call with only the id corrected (the request's own arguments). The delegate
+        // runs at render time only, and names RenameSymbol only when it is callable (a null result keeps the neutral Search call).
+        string? RetryRename(string candidateId)
+        {
+            if (_activeToolSurface is not null && !_activeToolSurface.IsCallable("RenameSymbol"))
+            {
+                return null;
+            }
+
+            var pairs = new List<(string Name, string Value)> { ("projectName", projectName), ("docCommentId", candidateId), ("newName", newName) };
+            if (dryRun)
+            {
+                pairs.Add(("dryRun", "true"));
+            }
+
+            if (returnDiff)
+            {
+                pairs.Add(("returnDiff", "true"));
+            }
+
+            return ToolCallHint.Call("RenameSymbol", pairs.ToArray());
+        }
+
         SymbolResolution resolution = await _workspaceManager.ResolveFromWireAsync(
-            projectName, docCommentId, cancellationToken);
+            projectName, docCommentId, cancellationToken, RetryRename);
         // The shared resolver also repairs a method id written without its parameter list (one method of that name is used and
         // the note says so; several overloads come back as an InvalidArgument error listing every full id).
         string? docCommentIdNote = resolution.Note;

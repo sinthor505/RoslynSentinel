@@ -43,6 +43,9 @@ public class DocCommentIdNotFoundCandidateTests
         return manager;
     }
 
+    // CalcDisc's exact id in the OrderPricingFixture; the misspelt ids below (CalcDsc) must lead here.
+    private const string CorrectedCalcDiscId = "M:Fixture.OrderPricingCalculator.CalcDisc(System.Decimal,System.Decimal)";
+
     private static async Task<SentinelCallToolResult<object>> RenameAsync(string docCommentId)
     {
         using var manager = NewManager();
@@ -60,7 +63,7 @@ public class DocCommentIdNotFoundCandidateTests
     }
 
     [Test]
-    public async Task RenameSymbol_MisspeltMethodId_NamesCandidateWithFileContainerAndPrefilledCall()
+    public async Task RenameSymbol_MisspeltMethodId_NamesCandidateWithItsIdAndTheCorrectedRenameCall()
     {
         var result = await RenameAsync("M:Fixture.OrderPricingCalculator.CalcDsc(System.Decimal,System.Decimal)");
 
@@ -72,8 +75,11 @@ public class DocCommentIdNotFoundCandidateTests
             Assert.That(message, Does.Contain("CalcDisc"), "the similar declared method is named");
             Assert.That(message, Does.Contain(OrderPricingFixture.FileName), "the candidate's declaring file is named");
             Assert.That(message, Does.Contain("OrderPricingCalculator"), "the candidate's container is named");
-            Assert.That(message, Does.Contain(ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("filePath", OrderPricingFixture.FileName))),
-                "the candidate carries a prefilled Search call");
+            Assert.That(message, Does.Contain($"docCommentId '{CorrectedCalcDiscId}'"), "the candidate's exact id is stated as a fact");
+            Assert.That(message, Does.Contain(ToolCallHint.Call("RenameSymbol", ("projectName", ProjectName), ("docCommentId", CorrectedCalcDiscId), ("newName", "Whatever"), ("dryRun", "true"))),
+                "the option is the request's own RenameSymbol call (its projectName, newName and dryRun) with only the id corrected");
+            Assert.That(message, Does.Not.Contain("Search("), "the per-candidate Search call is replaced");
+            Assert.That(message, Does.Not.Contain("CalcDsc(System.Decimal"), "the corrected call does not repeat the misspelt id");
             Assert.That(message, Does.Contain($"project '{ProjectName}'"), "the scope names the project searched");
             Assert.That(message, Does.Not.Contain("no longer resolves"));
         });
@@ -100,7 +106,7 @@ public class DocCommentIdNotFoundCandidateTests
     }
 
     [Test]
-    public async Task PreviewRenameImpact_MisspeltMethodId_NamesCandidateWithPrefilledCall()
+    public async Task PreviewRenameImpact_MisspeltMethodId_NamesCandidateWithItsIdAndTheCorrectedPreviewCall()
     {
         var result = await PreviewAsync("M:Fixture.OrderPricingCalculator.CalcDsc(System.Decimal,System.Decimal)");
 
@@ -110,7 +116,10 @@ public class DocCommentIdNotFoundCandidateTests
         Assert.Multiple(() =>
         {
             Assert.That(message, Does.Contain("CalcDisc"));
-            Assert.That(message, Does.Contain(ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("filePath", OrderPricingFixture.FileName))));
+            Assert.That(message, Does.Contain($"docCommentId '{CorrectedCalcDiscId}'"), "the candidate's exact id is stated as a fact");
+            Assert.That(message, Does.Contain(ToolCallHint.Call("PreviewRenameImpact", ("docCommentId", CorrectedCalcDiscId), ("projectName", ProjectName))),
+                "the option is the request's own PreviewRenameImpact call (its projectName) with only the id corrected");
+            Assert.That(message, Does.Not.Contain("Search("), "the per-candidate Search call is replaced");
             Assert.That(message, Does.Not.Contain("no longer resolves"));
         });
     }
@@ -165,5 +174,51 @@ public class DocCommentIdNotFoundCandidateTests
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), result.ErrorData.Message);
         Assert.That(result.ErrorData.Message, Does.Contain("CalcDisc"));
         Assert.That(workspace.ReadText(OrderPricingFixture.FileName), Does.Contain("CalcDisc"));
+        var filePath = workspace.PathOf(OrderPricingFixture.FileName);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData.Message, Does.Contain($"docCommentId '{CorrectedCalcDiscId}'"), "the candidate's exact id is stated as a fact");
+            Assert.That(result.ErrorData.Message, Does.Contain(ToolCallHint.Call("DeleteUnusedSymbol", ("filePath", filePath), ("projectName", "InMemoryProject"), ("docCommentId", CorrectedCalcDiscId))),
+                "the option is the request's own DeleteUnusedSymbol call (its filePath and projectName) with only the id corrected");
+            Assert.That(result.ErrorData.Message, Does.Not.Contain("Search("), "the per-candidate Search call is replaced");
+        });
+    }
+
+    [Test]
+    public async Task DeleteUnusedSymbol_MethodIdNothingResembles_SaysNoSimilarNameWithoutIdFactOrRetryCall()
+    {
+        using var workspace = InMemoryWorkspace.Create((OrderPricingFixture.FileName, OrderPricingFixture.Source));
+        var tools = TestTools.WorkspaceTools(workspace.Manager);
+
+        var result = await tools.DeleteUnusedSymbolTool(reason: "test message", workspace.PathOf(OrderPricingFixture.FileName),
+            projectName: "InMemoryProject", docCommentId: "M:Fixture.OrderPricingCalculator.ApplyLoyaltyBonus(System.Decimal)");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), result.ErrorData.Message);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData.Message, Does.Contain("No symbol in the solution has a similar name"));
+            Assert.That(result.ErrorData.Message, Does.Contain("the symbol does not exist in this solution."));
+            Assert.That(result.ErrorData.Message, Does.Not.Contain("docCommentId '"), "no candidate, so no id fact");
+            Assert.That(result.ErrorData.Message, Does.Not.Contain("DeleteUnusedSymbol("), "no candidate, so no retry call");
+            Assert.That(workspace.ReadText(OrderPricingFixture.FileName), Does.Contain("CalcDisc"));
+        });
+    }
+
+    [Test]
+    public async Task PreviewRenameImpact_MethodIdNothingResembles_SaysNoSimilarNameWithoutIdFactOrRetryCall()
+    {
+        var result = await PreviewAsync("M:Fixture.OrderPricingCalculator.ApplyLoyaltyBonus(System.Decimal)");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), result.ErrorData?.Message);
+        var message = result.ErrorData?.Message;
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("No symbol in the solution has a similar name"));
+            Assert.That(message, Does.Contain("the symbol does not exist in this solution."));
+            Assert.That(message, Does.Not.Contain("docCommentId '"), "no candidate, so no id fact");
+            Assert.That(message, Does.Not.Contain("PreviewRenameImpact("), "no candidate, so no retry call");
+        });
     }
 }

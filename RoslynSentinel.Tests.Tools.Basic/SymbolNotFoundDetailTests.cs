@@ -318,6 +318,77 @@ public class SymbolNotFoundDetailTests
         Assert.That(withoutCandidate, Does.Contain("No symbol"));
     }
 
+    private const string CalcDiscId = "M:Fixture.OrderPricingCalculator.CalcDisc(System.Decimal,System.Decimal)";
+
+    [Test]
+    public async Task BuildAsync_RetryCall_StatesTheCandidateIdAndUsesTheRetryCallInsteadOfSearch()
+    {
+        var projects = Projects(BuildSolution());
+        var received = new List<string>();
+        string? Retry(string id)
+        {
+            received.Add(id);
+            return $"Tool(docCommentId: \"{id}\", other: \"kept\")";
+        }
+
+        var text = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName, retryCall: Retry);
+
+        Assert.That(text, Does.Contain($"CalcDisc (method) in OrderPricingCalculator, {OrderPricingFixture.FileName}, docCommentId '{CalcDiscId}' -> Tool(docCommentId: \"{CalcDiscId}\", other: \"kept\")"));
+        Assert.That(text, Does.Not.Contain("Search("));
+        Assert.That(received, Is.EqualTo(new[] { CalcDiscId }));
+    }
+
+    [Test]
+    public async Task BuildAsync_RetryCallReturnsNull_StatesTheIdAndKeepsTheNeutralSearchCall()
+    {
+        var projects = Projects(BuildSolution());
+
+        var text = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName, retryCall: _ => null);
+
+        Assert.That(text, Does.Contain($"docCommentId '{CalcDiscId}'"));
+        Assert.That(text, Does.Contain(ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("filePath", OrderPricingFixture.FileName))));
+    }
+
+    [Test]
+    public async Task BuildAsync_NoRetryCall_OutputHasNoDocCommentIdFact()
+    {
+        var projects = Projects(BuildSolution());
+
+        var text = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName);
+
+        Assert.That(text, Does.Not.Contain("docCommentId"));
+    }
+
+    [Test]
+    public async Task BuildAsync_RetryCall_NoCandidate_NeverInvokesTheDelegate()
+    {
+        var projects = Projects(BuildSolution());
+        var invocations = 0;
+
+        var text = await SymbolNotFoundDetail.BuildAsync(projects, "ApplyLoyaltyBonus", "method", ScopeDescription, ProjectName,
+            retryCall: _ => { invocations++; return "Tool()"; });
+
+        Assert.That(invocations, Is.EqualTo(0), "the retry call is built only when a candidate is rendered");
+        Assert.That(text, Does.Contain("No symbol"));
+        Assert.That(text, Does.Not.Contain("docCommentId"));
+    }
+
+    [Test]
+    public void RenderCandidates_RetryCall_CandidateWithoutIdKeepsTheNeutralCallAndExplicitNextCallWins()
+    {
+        IReadOnlyList<SymbolCandidate> candidates = [new SymbolCandidate("CalcDisc", "method", "OrderPricingCalculator", "Calc.cs", 3, null, 1)];
+
+        var withoutId = SymbolNotFoundDetail.RenderCandidates("CalcDsc", "method", ScopeDescription, candidates, retryCall: _ => "Tool()");
+        var withNextCall = SymbolNotFoundDetail.RenderCandidates("CalcDsc", "method", ScopeDescription,
+            [candidates[0] with { DocCommentId = CalcDiscId }], nextCall: _ => "Next()", retryCall: _ => "Tool()");
+
+        Assert.That(withoutId, Does.Not.Contain("docCommentId"), "a candidate without an id has no id to state");
+        Assert.That(withoutId, Does.Not.Contain("Tool()"));
+        Assert.That(withoutId, Does.Contain("-> " + ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("filePath", "Calc.cs"))));
+        Assert.That(withNextCall, Does.Contain("-> Next()"));
+        Assert.That(withNextCall, Does.Not.Contain("Tool()"));
+    }
+
     // ── Renderers (builder path, hand-made candidates) ────────────────────────
 
     [Test]

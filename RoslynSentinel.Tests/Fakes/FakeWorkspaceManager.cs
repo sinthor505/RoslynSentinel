@@ -368,14 +368,15 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     bool IUnrecoverableBreaker.IsTripped() => _unrecoverableHaltMessage is not null;
     string? IUnrecoverableBreaker.StateMessage() => _unrecoverableHaltMessage;
     public Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<SymbolResolution> ResolveFromWireAsync(string projectName, string docCommentId, CancellationToken cancellationToken) =>
+    public Task<SymbolResolution> ResolveFromWireAsync(string projectName, string docCommentId, CancellationToken cancellationToken, Func<string, string?>? retryCall = null) =>
         // Same shared not-found path as PersistentWorkspaceManager (SymbolWireResolver), so a fake-backed tool test sees the production text.
         SymbolWireResolver.ResolveAsync(
             (handle, ct) => new SymbolResolver(this).ResolveSymbolAsync(handle, ct),
             ct => GetSolutionAsync(ReadSource.Committed, ct),
             projectName,
             docCommentId,
-            cancellationToken);
+            cancellationToken,
+            retryCall);
     public Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public string CachePendingChangeset(Dictionary<FilePathWrapper, string> changes, int retryCount, bool validateOnApply) => throw new NotImplementedException();

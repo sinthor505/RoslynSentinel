@@ -909,7 +909,11 @@ public class WorkspaceProjectManagementImpl
         {
             if (!string.IsNullOrEmpty(docCommentId) && !string.IsNullOrEmpty(projectName))
             {
-                SymbolResolution resolution = await _workspaceManager.ResolveFromWireAsync(projectName, docCommentId, cancellationToken);
+                // Each not-found candidate is offered as this same call with only the id corrected (the request's own filePath and
+                // projectName). The tool being called is by definition callable, so no isCallable check is needed (this impl has no
+                // ActiveToolSurface). The delegate runs at render time only.
+                SymbolResolution resolution = await _workspaceManager.ResolveFromWireAsync(projectName, docCommentId, cancellationToken,
+                    candidateId => ToolCallHint.Call("DeleteUnusedSymbol", ("filePath", filePath), ("projectName", projectName), ("docCommentId", candidateId)));
                 if (!resolution.Resolved)
                 {
                     return new SentinelCallToolResult<object>

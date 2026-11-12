@@ -3551,14 +3551,16 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     public Task<SymbolResolution> ResolveFromWireAsync(
         string projectName,
         string docCommentId,
-        CancellationToken cancellationToken) =>
+        CancellationToken cancellationToken,
+        Func<string, string?>? retryCall = null) =>
         // The not-found path (shape check, missing-parameter-list fallback, ranked candidates) is shared with the test fake.
         SymbolWireResolver.ResolveAsync(
             this.ResolveSymbolAsync,
             ct => this.GetSolutionAsync(ReadSource.Committed, ct),
             projectName,
             docCommentId,
-            cancellationToken);
+            cancellationToken,
+            retryCall);
 
     private static int CountLines(string text)
     {
