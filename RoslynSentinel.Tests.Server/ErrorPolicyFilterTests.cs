@@ -229,8 +229,15 @@ public class ErrorPolicyFilterTests
         var mcpBuilder = services.AddMcpServer();
         mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
         mcpBuilder.AddRoslynSentinelToolsBasic(services, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
-        mcpBuilder.WithTools<ReadFileProbeTool>();
-        mcpBuilder.WithTools<RenameSymbolProbeTool>();
+        mcpBuilder.WithTools(new[]
+        {
+            McpServerTool.Create(
+                new Func<Task<SentinelCallToolResult<object>>>(ReadFileProbeTool.ReadFileProbe),
+                new McpServerToolCreateOptions { Name = "ReadFile", Description = "Test-only probe that always returns a FileNotFound failure." }),
+            McpServerTool.Create(
+                new Func<string>(RenameSymbolProbeTool.RenameSymbolProbe),
+                new McpServerToolCreateOptions { Name = "RenameSymbol", Description = "Test-only probe that always throws a method not-found." }),
+        });
 
         var hostBuilder = Host.CreateApplicationBuilder();
         foreach (var descriptor in services)
@@ -334,15 +341,13 @@ public class ErrorPolicyFilterTests
 }
 
 /// <summary>
-/// Test-only probe named ReadFile. It returns a FileNotFound failure through the normal return path, the same
-/// return type the real ReadFile tool uses, so the error-policy filter sees a structured not-found body.
+/// Test-only probe standing in for ReadFile. It returns a FileNotFound failure through the normal return path, the same
+/// return type the real ReadFile tool uses, so the error-policy filter sees a structured not-found body. It carries no
+/// MCP attributes: it is registered from a delegate, so the attribute schema scan never sees a test-only ReadFile.
 /// </summary>
-[McpServerToolType]
-public class ReadFileProbeTool
+public static class ReadFileProbeTool
 {
-    [McpServerTool(Name = "ReadFile")]
-    [System.ComponentModel.Description("Test-only probe that always returns a FileNotFound failure.")]
-    public Task<SentinelCallToolResult<object>> ReadFileProbe() => Task.FromResult(
+    public static Task<SentinelCallToolResult<object>> ReadFileProbe() => Task.FromResult(
         new SentinelCallToolResult<object>
         {
             IsError = true,
@@ -351,13 +356,10 @@ public class ReadFileProbeTool
 }
 
 /// <summary>
-/// Test-only probe named RenameSymbol. It throws a not-found with kind "method" so the exception is mapped inside the
-/// call (ToolErrorMapper records the kind), in position behind the error-policy filter.
+/// Test-only probe standing in for RenameSymbol. It throws a not-found with kind "method" so the exception is mapped
+/// inside the call (ToolErrorMapper records the kind), in position behind the error-policy filter. No MCP attributes.
 /// </summary>
-[McpServerToolType]
-public class RenameSymbolProbeTool
+public static class RenameSymbolProbeTool
 {
-    [McpServerTool(Name = "RenameSymbol")]
-    [System.ComponentModel.Description("Test-only probe that always throws a method not-found.")]
-    public string RenameSymbolProbe() => throw new ToolNotFoundException("probe symbol missing", "method", "Foo");
+    public static string RenameSymbolProbe() => throw new ToolNotFoundException("probe symbol missing", "method", "Foo");
 }
