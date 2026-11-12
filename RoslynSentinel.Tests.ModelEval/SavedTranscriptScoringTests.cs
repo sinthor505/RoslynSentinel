@@ -31,6 +31,34 @@ public class SavedTranscriptScoringTests
             Assert.That(sample.Score.CallsToRecover, Is.EqualTo(1));
             Assert.That(sample.ScenarioId, Does.StartWith("saved:"));
             Assert.That(ScenarioSampleCsv.Parse(lines[1]), Is.EqualTo(sample));
+            Assert.That(sample.Score.StopReason, Is.Null);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Test]
+    public void ScoreFile_ScoresStopReason_WhenTheTranscriptRecordsOne()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "savedscore-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var transcript = new AgentTranscript { StopReason = AgentStopReason.TurnCapExceeded };
+            transcript.Turns.Add(Turn(1, Call(Tool, "{\"a\":1}", isError: true, resultJson: NotFoundResultJson)));
+            transcript.Turns.Add(Turn(2, Call(Tool, "{\"a\":2}")));
+            File.WriteAllText(Path.Combine(folder, "transcript.json"), JsonSerializer.Serialize(transcript));
+            var csvPath = Path.Combine(folder, "score.csv");
+
+            var sample = SavedTranscriptScoring.ScoreFile(folder, Tool, csvPath);
+
+            var parsed = ScenarioSampleCsv.Parse(File.ReadAllLines(csvPath)[1]);
+            Assert.That(sample.Score, Is.Not.Null);
+            Assert.That(sample.Score!.StopReason, Is.EqualTo(AgentStopReason.TurnCapExceeded));
+            Assert.That(sample.Score.FailureClass, Is.EqualTo(FailureClass.BudgetOut));
+            Assert.That(parsed, Is.EqualTo(sample));
         }
         finally
         {

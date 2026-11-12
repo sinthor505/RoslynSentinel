@@ -30,7 +30,7 @@ public static class SavedTranscriptScoring
 
     /// <summary>
     /// Scores the transcript at <paramref name="transcriptPathOrFolder"/> and appends one line to <paramref name="csvPath"/>.
-    /// A saved transcript records neither a verdict nor a stop reason, so only the call-level figures are filled in.
+    /// A saved transcript records no verdict; its stop reason is scored when the transcript carries one (older transcripts do not), and the call-level figures are filled in.
     /// </summary>
     public static ScenarioSample ScoreFile(string transcriptPathOrFolder, string toolUnderTest, string csvPath)
     {
@@ -49,7 +49,7 @@ public static class SavedTranscriptScoring
             ExpectedOutcome.Recover,
             expectedRecoveryTool: null,
             verdict: null,
-            stopReason: null);
+            stopReason: transcript.StopReason);
 
         var runFolderLeaf = Path.GetFileName(Path.GetDirectoryName(Path.GetFullPath(path)) ?? "");
         // ScenarioType 0 means a saved transcript scored outside a scenario (scenario types are 1-4).
