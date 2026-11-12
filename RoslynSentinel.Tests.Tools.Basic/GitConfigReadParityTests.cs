@@ -7,7 +7,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// Compares <see cref="IGitReader.GetConfigValue"/> across <see cref="CliGitReader"/>, <see cref="Libgit2GitReader"/> and the production composite
 /// <see cref="FallbackGitReader"/> on throwaway repos: set, unset, empty, valueless, multi-valued, global-only, and the linked-worktree cases. The CLI is
 /// the oracle. A case libgit2 serves asserts the composite's counters show libgit2 answered; a case libgit2 declines asserts the CLI answered. The
-/// global-only case seen from a linked worktree is Explicit (see its reason). The global file is isolated per test through GIT_CONFIG_GLOBAL.
+/// global-only case seen from a linked worktree is Explicit (see its reason). The global file is isolated per test through a throwaway HOME and USERPROFILE.
 /// </summary>
 // KNOWN FLAKE on full/parallel runs (spawns git): disregard a failure here when the change did not touch process spawning; re-run the class alone first.
 [TestFixture]
@@ -18,10 +18,19 @@ public class GitConfigReadParityTests
     private const string Key = "sentinel.probe";
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(60);
 
+    // libgit2 declines a read when any of these is set in the process, even empty (GitReaderEnvironmentTests), so each is cleared for the
+    // test and restored after. HOME and USERPROFILE point at a throwaway home; XDG_CONFIG_HOME cannot be set to isolate, so it is cleared.
+    private static readonly string[] IsolatedVariables =
+    [
+        "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "XDG_CONFIG_HOME",
+        "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH",
+    ];
+
     private string _root = null!;
     private string _repo = null!;
     private string _globalConfig = null!;
-    private string? _savedGlobalConfig;
+    private string _home = null!;
+    private Dictionary<string, string?>? _savedEnvironment;
 
     [SetUp]
     public void SetUp()
@@ -34,23 +43,35 @@ public class GitConfigReadParityTests
         _root = Path.Combine(Path.GetTempPath(), "rs-gitconfig-" + Guid.NewGuid().ToString("N"));
         _repo = Path.Combine(_root, "repo");
         InitRepo(_repo);
-        // An empty global file isolates every case from the machine's own ~/.gitconfig; the global-only cases write into it.
-        _globalConfig = Path.Combine(_root, "global.gitconfig");
+
+        _home = Path.Combine(_root, "home");
+        Directory.CreateDirectory(_home);
+        _globalConfig = Path.Combine(_home, ".gitconfig");
         File.WriteAllText(_globalConfig, string.Empty);
-        _savedGlobalConfig = Environment.GetEnvironmentVariable("GIT_CONFIG_GLOBAL");
-        Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", _globalConfig);
+        _savedEnvironment = IsolatedVariables.ToDictionary(name => name, name => Environment.GetEnvironmentVariable(name));
+        foreach (var name in IsolatedVariables)
+        {
+            Environment.SetEnvironmentVariable(name, null);
+        }
+
+        Environment.SetEnvironmentVariable("HOME", _home);
+        Environment.SetEnvironmentVariable("USERPROFILE", _home);
     }
 
     [TearDown]
     public void TearDown()
     {
-        if (_root is null)
+        if (_savedEnvironment is not null)
         {
-            return;
+            foreach (var (name, value) in _savedEnvironment)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+            }
+
+            _savedEnvironment = null;
         }
 
-        Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", _savedGlobalConfig);
-        if (!Directory.Exists(_root))
+        if (_root is null || !Directory.Exists(_root))
         {
             return;
         }

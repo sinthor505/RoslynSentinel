@@ -576,6 +576,8 @@ public class GitInProcessCommitRouteTests
     [Test]
     public async Task InProcessCommit_CommitSignoffConfigured_DeclinesToTheCliAsync()
     {
+        // The route declines on the commit.signoff key regardless of whether the installed git version honours it, so the
+        // CLI commit is asserted to succeed but not to carry a Signed-off-by line.
         var route = new InProcessCommitRoute();
         var directory = NewRepo("signoff", inProcess: true);
         RunGit(directory, "config", "commit.signoff", "true");
@@ -585,7 +587,6 @@ public class GitInProcessCommitRouteTests
 
         AssertCommitted(directory, result);
         AssertDeclined(route, "signoff", directory, "only-paths");
-        Assert.That(RunGit(directory, "log", "-1", "--format=%B"), Does.Contain("Signed-off-by: "), "the CLI commit added the sign-off line");
     }
 
     [Test]
