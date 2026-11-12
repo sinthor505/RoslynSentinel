@@ -248,6 +248,75 @@ per sample: sampleIndex, loopAssist, role, firstNewToolName, firstCallIdenticalT
 reachedRenameSymbolWithinTurns, assistCount, then stopReason, newCalls, harnessError) and `sample-NN\transcript.json` /
 `agent.log`. `assistCount` includes assists fired while seeding the kept turns.
 
+## Targeted scenarios (`-Test Scenario`)
+
+A scenario is one registered, single-fault case run for `-Samples` samples, each on a fresh fixture. Definitions:
+`ScenarioDefinition.cs` (parameter docs), `ScenarioRegistry.cs` (the registry), `ResumeScenarios.cs` (resume cases).
+
+### Run one
+
+```powershell
+.\scripts\roslynsentinel-evalqueue.ps1 submit -HostAddress 113 -Test Scenario -Model <key> -Session <name> -Purpose '<why>' -EvalArgs '-Scenario <Id> -Samples 10'
+.\scripts\roslynsentinel-modeleval.ps1 -HostAddress 113 -Test Scenario -Scenario <Id> -Samples 10   # direct, no queue
+```
+
+The run folder is `ModelTestingResults\<host>\RunScenario_SamplesAndScores\<timestamp>\`. It holds `results.csv` (one
+row per sample), `sample-NN\transcript.json` per sample, and `final-state\`. After the run the batch summary prints
+(`Get-ScenarioSummary.ps1`): Inconclusive samples are listed by reason and are never in any rate. Run it by hand:
+
+```powershell
+. .\scripts\Get-ScenarioSummary.ps1
+Write-ScenarioSummary -CsvPath ModelTestingResults\113\RunScenario_SamplesAndScores\<timestamp>\results.csv
+```
+
+### Scenario types
+
+- 1: cold start, clean. Starts from the fixture with no seeded history.
+- 2: resume, clean. History is seeded from a capture in `ResumeTranscripts`; the prompts come from the capture.
+- 3: cold start, faulted. The fault is part of the fixture or prompt (`FaultKind` says which).
+- 4: resume, faulted. History is seeded, then ONE real fault call runs after the replay. Fields:
+  - `ResumeFaultTool` / `ResumeFaultArguments`: the call. The token `{SOLUTION}` becomes the fixture solution
+    directory with forward slashes.
+  - `ResumeFaultSeeded: false` (stale workspace): the call runs on the fixture but is NOT shown to the model.
+    Example: `StaleWorkspaceAfterRename`.
+  - `ResumeFaultSeeded: true` (authored failed last call): the harness appends one assistant turn with the real
+    result to the history, and it is scored as a live turn. Example: `FailedLastCallStaleOldContent`.
+  - Stale: the `ScenarioDefinition` parameter doc still says `true` is "not implemented yet"; the code and
+    `FailedLastCallStaleOldContent` show it is implemented.
+
+### Add a scenario
+
+1. Add a `ScenarioDefinition` to a `*Scenarios.cs` file (resume cases: `ResumeScenarios.cs`; cold-start faulted:
+   `FaultScenarios.cs`).
+2. Register it in `ScenarioRegistry.cs`.
+3. Add a definition test and a registry test, modelled on `ResumeScenariosTests.cs`.
+4. Pick `Expected`: `Recover` when the model should fix the problem, `StopAndReport` when it should say it cannot.
+   Pick a `CheckFinalState` (reads the fixture after the run and returns a `FinalStateVerdict`) and a `TurnCap`.
+
+### Re-capture a resume transcript
+
+1. Take a run's `transcript.json`. Keep the header (system prompt, user prompt, tools, commit hash, and the schemas
+   and descriptions of the tools the kept turns call) and turns 1..K.
+2. Store it as `RoslynSentinel.Tests.ModelEval\ResumeTranscripts\<name>.json`. It is tracked; `.gitignore` has
+   negations for that folder.
+3. Set `ResumeTranscript` and `ResumeKeepTurns` = K on the scenario definition.
+4. Check drift before spending model time. Run the no-model `ResumeDriftProbeTests` with RunTest filter
+   `Name=Probe_ReplaysTheCaptureAndPrintsDrift`, suite full. It writes `drift-probe.txt`. `schemaDrift` must be
+   false and `resultDrift` 0.
+5. The gate (`ResumeScenarioGate.cs`): a structural schema change to a tool the kept turns call, or a replay
+   mismatch (an IsError difference), makes the sample Inconclusive (`SchemaChanged: ...` or `Replay mismatch: ...`).
+   A description-only change sets `schemaDrift` but is not Inconclusive. Result-text differences count as `resultDrift`.
+
+### Score without a model
+
+- Saved transcript: `.\scripts\roslynsentinel-modeleval.ps1 -Test ScoreTranscript -ScoreTranscript <transcript.json>`
+  (the test reads `ROSLYNSENTINEL_MODELEVAL_SCORE_TRANSCRIPT`).
+- Finished run folder: set `ROSLYNSENTINEL_MODELEVAL_RESCORE_RUN` to the folder, then run `ScenarioRescoreRunTests`.
+  It writes `rescored.csv` in that folder. The exact RunTest filter is not checked here.
+
+Not checked against the code: the `final-state\` folder name, the `%TEMP%\rs-drift-probe` location, and the evalqueue
+`submit` flags (taken from the brief).
+
 ## Output locations
 
 - Per-run transcripts + `agent.log`: `RoslynSentinel.Tests.ModelEval/bin/Debug/net10.0/model-eval/<TestName>/<timestamp>/`
