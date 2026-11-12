@@ -1,11 +1,14 @@
 using RoslynSentinel.Common;
+using ScenarioAgentTests = RoslynSentinel.Tests.ModelEval.LiveModel.ScenarioAgentTests;
 
-namespace RoslynSentinel.Tests.ModelEval.LiveModel;
+namespace RoslynSentinel.Tests.ModelEval;
 
 /// <summary>
 /// No-model checks for the seeded resume fault: ApplyResumeFaultCallsAsync runs the primary call and then the
 /// ResumeFaultExtraCalls entries in order on a fresh fixture, and reports each call's real result. Nothing here
 /// asks a model to act.
+/// It deliberately lives outside LiveModel so it runs without a model (the LiveModel assembly set-up ignores everything there
+/// when ROSLYNSENTINEL_LLM_MODEL is unset).
 /// </summary>
 [TestFixture]
 public class ResumeFaultExecutionTests
