@@ -23,6 +23,8 @@ public class BareFileWriteRatchetTests
         ["RoslynSentinel.Common/AgentLoop/ModelAgentRunner.cs::WriteTranscriptAsync"] = 1,
         // Lock holder sidecar under .roslynsentinel/ (server state, not a workspace source file), written while holding the exclusive OS write lock.
         ["RoslynSentinel.Common/CrossProcessWriteLock.cs::WriteHolderSidecar"] = 1,
+        // In-process commit route outcome log under <common git dir>/roslynsentinel/ (server state inside .git, not a workspace file; best-effort append).
+        ["RoslynSentinel.Common/InProcessCommitRoute.cs::AppendOutcome"] = 1,
         // Large-result cache under .roslynsentinel/largeresults (server state, not workspace files).
         ["RoslynSentinel.Common/LargeResultHelper.cs::StoreWrappedJsonAsync"] = 1, // used by StoreEnvelopeAsync
         // Migration ledger state file (server state).
