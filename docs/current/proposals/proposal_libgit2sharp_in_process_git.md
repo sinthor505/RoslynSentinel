@@ -232,8 +232,10 @@ An amend with a local `.` upstream still spawns 3 (declined by design).
 parity with git 2.55); 5c-4 `d23e3f15` route in `GitImpl.CommitAsync` (`InProcessCommitRoute.cs`),
 enabled per repo by `git config roslynsentinel.inProcessCommit true`. Extra declines beyond the list
 below: `reference-transaction` or `post-index-change` hook, `commit.signoff`, a `hook.*` config entry
-(predicate Unknown). Open: whether to default it on; listed tracked paths are staged before a late
-decline (stay staged if the CLI fallback then fails); a failed post-commit launch is ignored;
+(predicate Unknown). Owner decisions 2026-11-12: default stays off, trial on in this repo
+(`roslynsentinel.inProcessCommit=true` in its local config); accepted as is: listed tracked paths are
+staged before a late decline (stay staged if the CLI fallback then fails), a failed post-commit launch
+is ignored and uncounted, no `gc --auto` on the in-process route. Still open:
 `RequireWorkingTreeMatchesIndex` status-scan scope is a TODO in code.
 
 **5c - in-process commit for the simple case (after a go from 5b).** Plain commit or
