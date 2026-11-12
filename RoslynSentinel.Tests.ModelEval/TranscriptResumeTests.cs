@@ -322,6 +322,61 @@ public class TranscriptResumeTests
     }
 
     [Test]
+    public void CountResultDrift_LargeResultFileNameTimestampAndId_AreIgnored()
+    {
+        var replayed = new List<ReplayedCall>
+        {
+            new ReplayedCall(1, "ReadFile", false, false,
+                "{\"filePath\":\"C:\\\\Users\\\\a\\\\.roslynsentinel\\\\largeresults\\\\largeresult_20261112T031321Z_7af89068ffd747e8ad3b974a1a09283a.json\"}",
+                "{\"filePath\":\"C:\\\\Users\\\\a\\\\.roslynsentinel\\\\largeresults\\\\largeresult_20261112T031322Z_0123456789abcdef0123456789abcdef.json\"}"),
+        };
+
+        Assert.That(TranscriptResume.CountResultDrift(replayed), Is.Zero);
+    }
+
+    [Test]
+    public void CountResultDrift_ChangeIdInUndoHint_IsIgnored()
+    {
+        var replayed = new List<ReplayedCall>
+        {
+            new ReplayedCall(1, "ReplaceSnippet", false, false,
+                "{\"hint\":\"Call UndoLastApply(reason: \\\"<why you call this>\\\", changeId: \\\"1991aaec\\\") to revert.\"}",
+                "{\"hint\":\"Call UndoLastApply(reason: \\\"<why you call this>\\\", changeId: \\\"6b2f0c3d\\\") to revert.\"}"),
+        };
+
+        Assert.That(TranscriptResume.CountResultDrift(replayed), Is.Zero);
+    }
+
+    [Test]
+    public void CountResultDrift_ResultIdInPagingHint_IsIgnored()
+    {
+        var replayed = new List<ReplayedCall>
+    {
+        new ReplayedCall(1, "ReadFile", false, false,
+            "{\"hint\":\"GetLargeResult(reason: \\\"page through the stored result\\\", resultId: \\\"7af89068ffd747e8ad3b974a1a09283a\\\", path: \\\"successData.changedFiles\\\")\"}",
+            "{\"hint\":\"GetLargeResult(reason: \\\"page through the stored result\\\", resultId: \\\"b2b713451c4344d9b4e3bd2568bfbcf6\\\", path: \\\"successData.changedFiles\\\")\"}"),
+    };
+
+        Assert.That(TranscriptResume.CountResultDrift(replayed), Is.Zero);
+    }
+
+    [Test]
+    public void CountResultDrift_OtherHexValuesStillCount()
+    {
+        var replayed = new List<ReplayedCall>
+        {
+            new ReplayedCall(1, "ReadFile", false, false,
+                "{\"contentHash\":\"0123456789abcdef0123456789abcdef\"}",
+                "{\"contentHash\":\"fedcba9876543210fedcba9876543210\"}"),
+            new ReplayedCall(2, "ReadFile", false, false,
+                "{\"text\":\"commit 1a2b3c4d done\"}",
+                "{\"text\":\"commit 9f8e7d6c done\"}"),
+        };
+
+        Assert.That(TranscriptResume.CountResultDrift(replayed), Is.EqualTo(2));
+    }
+
+    [Test]
     public void NormalizeResultText_NullAndEmpty_AreEmpty()
     {
         Assert.That(TranscriptResume.NormalizeResultText(null), Is.EqualTo(string.Empty));

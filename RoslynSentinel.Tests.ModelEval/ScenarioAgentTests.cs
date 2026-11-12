@@ -287,7 +287,7 @@ public class ScenarioAgentTests
     }
 
     /// <summary>One sample's isolated world: fixture on disk with the scenario's staged files, in-process MCP server, MCP client, LM client.</summary>
-    private sealed class ScenarioEnvironment : IAsyncDisposable
+    internal sealed class ScenarioEnvironment : IAsyncDisposable
     {
         private IHost? _host;
         private McpClient? _client;

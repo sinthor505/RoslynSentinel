@@ -153,9 +153,23 @@ public static class TranscriptResume
     // The volatile keys were found by surveying recorded ReplaceSnippet/RenameSymbol/ReadFile/Build results of 10-chain runs
     // (toolCallId, changeId, resultId, duration, sizeBytes/sizeChars, workspaceVersion, fixture path); extend the list when
     // CountResultDrift flags a field that is not a wording change.
-    // TODO: a field this survey missed will show up as drift on every sample; when that happens, add its key to this list.
+    // Ids embedded inside strings (the large-result file name, the changeId in a prose hint and the resultId in a paging hint) are masked by their own
+    // regexes in NormalizeResultText, not by this key list.
+    // TODO: a field this survey missed will show up as drift on every sample; when that happens, add its key to this list (or, if it sits inside a string, a narrow regex in NormalizeResultText).
     private static readonly Regex VolatileJsonValueRegex = new(
         @"""(toolCallId|changeId|resultId|duration|durationMs|elapsed|elapsedMs|sizeBytes|sizeChars|workspaceVersion)""\s*:\s*(""(?:[^""\\]|\\.)*""|-?[0-9.]+)",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex LargeResultFileNameRegex = new(
+        @"largeresult_[0-9]{8}T[0-9]{6}Z_[0-9a-fA-F]{32}\.json",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex ChangeIdProseRegex = new(
+        @"changeId:\s*(?:\\""|"")[0-9a-fA-F]{6,}(?:\\""|"")",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex ResultIdProseRegex = new(
+        @"resultId:\s*(?:\\""|"")[0-9a-fA-F]{32}(?:\\""|"")",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex IsoTimestampRegex = new(
@@ -218,7 +232,7 @@ public static class TranscriptResume
 
     /// <summary>
     /// Masks what always differs between two runs of the same call: the fixture directory, volatile id, timing and size
-    /// values, ISO-8601 timestamps and .NET TimeSpan text. Null or empty gives "".
+    /// values, ids inside strings, ISO-8601 timestamps and .NET TimeSpan text. Null or empty gives "".
     /// </summary>
     public static string NormalizeResultText(string? text)
     {
@@ -229,6 +243,9 @@ public static class TranscriptResume
 
         var normalized = RewriteFixtureDirectory(text, "<FIXTURE>") ?? string.Empty;
         normalized = VolatileJsonValueRegex.Replace(normalized, "\"$1\":\"<v>\"");
+        normalized = LargeResultFileNameRegex.Replace(normalized, "largeresult_<id>.json");
+        normalized = ChangeIdProseRegex.Replace(normalized, "changeId: <id>");
+        normalized = ResultIdProseRegex.Replace(normalized, "resultId: <id>");
         normalized = IsoTimestampRegex.Replace(normalized, "<time>");
         return TimeSpanTextRegex.Replace(normalized, "<duration>");
     }
