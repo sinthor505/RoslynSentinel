@@ -2,6 +2,25 @@
 
 **Status:** APPROVED (partly) 2026-11-10. The owner approved runner consolidation (step 0), the spike (step 1) and stage 1 (step 2) on 2026-11-10; all three landed the same day (see Results). Stage 2 (step 3) and restricting native binaries to win-x64 were approved later on 2026-11-10; stage 3 landed scoped to whole-file stage/unstage. Stage 4 (step 5, commit) was approved on 2026-11-11 and landed 2026-11-12: 5a, 5b and 5c done; the in-process commit route is default off and on as a trial in this repo.
 
+## Current state and next (2026-11-12)
+
+- **In process (libgit2):** HEAD sha, status, log, path classification, branch/stash lists,
+  diff/show nameOnly (stage 2); whole-file stage/add/unstage (stage 3); commit of the whole index or
+  of listed paths through the CAS primitive (stage 4, route `roslynsentinel.inProcessCommit`).
+  Every libgit2 decline falls back to the CLI; counters in `McpServerStatus` `gitBackend`.
+- **Still the CLI:** hunk staging, amend, merge conclusion, signing, blocking hooks, push/fetch/pull,
+  revert, stash apply/pop, worktree add/remove, diff/show patch text, tag and worktree lists,
+  `git config` writes; and `git commit` itself whenever the route declines.
+- **Trial (this repo only, default off elsewhere):** each route outcome is one line in
+  `.git/roslynsentinel/commit-route.jsonl` (`ab4bbd15`, relaxed escaping `abec2588`). Since the CR
+  decline was dropped (`d8b112e6`) CRLF code commits take the route (first: `abec2588`); the
+  post-commit server prebuild still fires. Tools.Basic full run green at `abec2588`, Tests.Basic at
+  `c09cc8fd`.
+- **Next candidates, in order:** (1) review the trial log after a few days of peer sessions
+  (decline reasons, any wrong commit) and decide default-on; (2) a `Git` config operation (shell
+  `git config` was needed twice); (3) in-process worktree and tag lists; (4) diff/show patch text,
+  which needs a parity corpus first.
+
 ## Results (2026-11-10)
 
 - Commits: step 0 `15881fa2`; step 1 `abc4152e` (LibGit2Sharp 0.32.0 in `Common`); step 2 `54f24cf7`
