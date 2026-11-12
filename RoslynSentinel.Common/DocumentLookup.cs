@@ -187,6 +187,9 @@ public sealed class DocumentScope
     public static DocumentScope ForProject(string projectName) => new(DocumentScopeKind.Project, default, null, projectName);
 }
 
+/// <summary>One loaded document offered by a file-not-found error: its path, the edit distance between file stems (0 for a same-file-name match) and whether its file name equals the requested one.</summary>
+public sealed record FileCandidate(string Path, int Distance, bool SameFileName);
+
 /// <summary>
 /// The one implementation of path-to-<see cref="Document"/> lookup. <see cref="IWorkspaceReader"/>
 /// implementations run it on the snapshot the caller's <see cref="ReadSource"/> selects; it stays
@@ -201,6 +204,9 @@ public static class DocumentLookup
     private const int MaxClosestPaths = 5;
     private const int MaxAmbiguousPaths = 10;
     private const int MaxDeclaringTypeFiles = 3;
+
+    private const int MaxFileCandidates = 3;
+
     private static readonly char[] Separators = ['\\', '/'];
 
     /// <summary>
@@ -273,6 +279,7 @@ public static class DocumentLookup
     /// The real paths of documents whose file name matches the file name of <paramref name="requestedPath"/>
     /// (ignoring case), at most <paramref name="max"/>. Shared by the not-found errors of the lookup and of ReadFile.
     /// </summary>
+    [Obsolete("Use FindFileCandidates")]
     public static IReadOnlyList<string> FindClosestPaths(Solution solution, string requestedPath, int max = MaxClosestPaths)
     {
         var requestedFileName = Path.GetFileName(requestedPath);
@@ -288,6 +295,47 @@ public static class DocumentLookup
             .Distinct(PathComparison.Comparer)
             .Take(max)
             .ToList();
+    }
+
+    /// <summary>
+    /// The loaded documents offered as "did you mean" for a file that was not found: same-file-name matches first
+    /// (distance 0), then documents whose file stem is similar, nearest first. At most <paramref name="max"/> in total;
+    /// empty when nothing is similar.
+    /// </summary>
+    public static IReadOnlyList<FileCandidate> FindFileCandidates(Solution solution, string requestedPath, int max = MaxFileCandidates)
+    {
+        var requestedFileName = Path.GetFileName(requestedPath);
+        if (string.IsNullOrEmpty(requestedFileName))
+        {
+            return [];
+        }
+
+        var paths = solution.Projects
+            .SelectMany(p => p.Documents)
+            .Where(d => !string.IsNullOrEmpty(d.FilePath))
+            .Select(d => d.FilePath!)
+            .Distinct(PathComparison.Comparer)
+            .ToList();
+
+        var sameName = paths
+            .Where(p => PathComparison.Comparer.Equals(Path.GetFileName(p), requestedFileName))
+            .Take(max)
+            .Select(p => new FileCandidate(p, 0, true))
+            .ToList();
+
+        var result = new List<FileCandidate>(sameName);
+        var room = max - sameName.Count;
+        if (room > 0)
+        {
+            var remaining = paths
+                .Where(p => !PathComparison.Comparer.Equals(Path.GetFileName(p), requestedFileName))
+                .ToList();
+            var stem = Path.GetFileNameWithoutExtension(requestedFileName);
+            result.AddRange(NameCandidates.Rank(stem, remaining, p => Path.GetFileNameWithoutExtension(p), room)
+                .Select(r => new FileCandidate(r.Item, r.Distance, false)));
+        }
+
+        return result;
     }
 
     /// <summary>

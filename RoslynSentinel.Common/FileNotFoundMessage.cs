@@ -5,7 +5,8 @@ namespace RoslynSentinel.Common;
 /// <see cref="DocumentLookupResult.Describe"/> and the ReadFile / GetMethodSource / GetFileOutline not-found errors.
 /// Before this, three copies of the text existed and all of them looked only at the loaded documents, so a file that
 /// is on disk but outside the solution (or a directory, or a project file) got the misleading "does not exist anywhere".
-/// <see cref="Build"/> probes the disk for a rooted path and picks the first matching branch:
+/// <see cref="Build"/> probes the disk for a rooted path and picks the first matching branch. The overload taking
+/// <see cref="FileCandidate"/>s is the one the lookup uses, fed by <see cref="DocumentLookup.FindFileCandidates"/>:
 /// 1) a directory; 2) a project/solution file; 3) a file that exists on disk but is outside the loaded solution (with
 /// the nearest LoadSolution target); 4) a loaded file with the same name exists; 5) nothing matches at all.
 /// </summary>
@@ -20,29 +21,15 @@ public static class FileNotFoundMessage
     /// <paramref name="isCallable"/> says whether a tool name can be called on this server (null = every tool can);
     /// a tool is named in the text only when it can be called. A non-rooted path skips the disk checks.
     /// </summary>
+    [Obsolete("Use the overload taking file candidates")]
     public static string Build(
         string requestedPath, IReadOnlyList<string> candidatePaths, int searchedProjectCount, Func<string, bool>? isCallable = null,
         IReadOnlyList<(string TypeName, string FilePath)>? declaringTypeFiles = null)
     {
-        if (IsRooted(requestedPath))
+        var diskText = TryDiskBranch(requestedPath, candidatePaths, isCallable);
+        if (diskText is not null)
         {
-            if (SafeDirectoryExists(requestedPath))
-            {
-                var directoryText = $"'{requestedPath}' is a directory, not a file. Pass the path of a source file inside it.";
-                return Callable(isCallable, "ListSolutionItems")
-                    ? directoryText + $" To list the files of the loaded solution call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))}."
-                    : directoryText;
-            }
-
-            if (SafeFileExists(requestedPath))
-            {
-                if (ProjectOrSolutionExtensions.Contains(Path.GetExtension(requestedPath), PathComparison.Comparer))
-                {
-                    return $"'{requestedPath}' is a project/solution file, not a source document; this tool reads source files (.cs) of the loaded solution.";
-                }
-
-                return OutsideSolutionText(requestedPath, candidatePaths, isCallable);
-            }
+            return diskText;
         }
 
         var list = string.Join("\n", candidatePaths.Select(c => $"  - {c}"));
@@ -62,6 +49,87 @@ public static class FileNotFoundMessage
         return Callable(isCallable, "ListSolutionItems")
             ? notFound + $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path."
             : notFound + "Retry with a path you have already seen in an earlier result; do not guess another one.";
+    }
+
+    /// <summary>
+    /// Builds the message from the file candidates of <c>DocumentLookup.FindFileCandidates</c>. The disk branches are the
+    /// same as the string-list overload. Candidates sharing the requested file name are named first and flagged; the rest
+    /// are offered as "did you mean", each with a ReadFile call when ReadFile can be called. With no candidates it says so
+    /// and names the next call.
+    /// </summary>
+    public static string Build(
+        string requestedPath, IReadOnlyList<FileCandidate> candidates, int searchedProjectCount, Func<string, bool>? isCallable = null,
+        IReadOnlyList<(string TypeName, string FilePath)>? declaringTypeFiles = null)
+    {
+        var sameNamePaths = candidates.Where(c => c.SameFileName).Select(c => c.Path).ToList();
+        var diskText = TryDiskBranch(requestedPath, sameNamePaths, isCallable);
+        if (diskText is not null)
+        {
+            return diskText;
+        }
+
+        var declaring = DeclaringTypeSentence(declaringTypeFiles);
+        var intro = declaring + $"File '{requestedPath}' was not found in the loaded solution (searched {searchedProjectCount} project(s) by exact path, bare file name and similar file name; path comparison ignores case, so casing is not the cause). ";
+        if (candidates.Count > 0)
+        {
+            var text = intro;
+            if (sameNamePaths.Count > 0)
+            {
+                text += "A file with the same name exists at a different path. ";
+            }
+
+            text += "Did you mean one of these?";
+            foreach (var candidate in candidates)
+            {
+                text += $"\n  - {candidate.Path}";
+                if (Callable(isCallable, "ReadFile"))
+                {
+                    text += $" -> {ToolCallHint.Call("ReadFile", ("filePath", candidate.Path))}";
+                }
+            }
+
+            return text + "\nRetry with the exact path of the file you meant. If none of these is the file you meant, it does not exist in this solution: tell the user so instead of editing a different file.";
+        }
+
+        var notFound = intro + "No file in the solution has a similar name. ";
+        // Batch H3 R2/R3 T1: the model read a file its task asks it to create later. Say so before the listing advice.
+        // Batch H5 R1 T11.1/T16.1: the file had been renamed by an earlier type rename, and "does not exist yet" read as "create it".
+        // TODO remember server-side file renames (old path -> new path) and name the new path here instead of hedging.
+        if (Callable(isCallable, "CreateFile"))
+            notFound += $"If your task is to create this file, call {ToolCallHint.Call("CreateFile")} instead of reading it. If you read or edited it earlier, an earlier rename or move has changed its name: do not recreate it, find its current path. ";
+        return Callable(isCallable, "ListSolutionItems")
+            ? notFound + $"To see every file in the solution, call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))}. If the file is not in that list it does not exist in this solution: tell the user so instead of editing a different file."
+            : notFound + "Retry only with a path you have already seen in an earlier result. If there is none, the file does not exist in this solution: tell the user so instead of editing a different file.";
+    }
+
+    // Probes the disk for a rooted path and returns the text of the first branch that applies (directory, project or solution
+    // file, file outside the loaded solution), or null when none does. sameNamePaths feeds the outside-solution text.
+    private static string? TryDiskBranch(string requestedPath, IReadOnlyList<string> sameNamePaths, Func<string, bool>? isCallable)
+    {
+        if (!IsRooted(requestedPath))
+        {
+            return null;
+        }
+
+        if (SafeDirectoryExists(requestedPath))
+        {
+            var directoryText = $"'{requestedPath}' is a directory, not a file. Pass the path of a source file inside it.";
+            return Callable(isCallable, "ListSolutionItems")
+                ? directoryText + $" To list the files of the loaded solution call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))}."
+                : directoryText;
+        }
+
+        if (SafeFileExists(requestedPath))
+        {
+            if (ProjectOrSolutionExtensions.Contains(Path.GetExtension(requestedPath), PathComparison.Comparer))
+            {
+                return $"'{requestedPath}' is a project/solution file, not a source document; this tool reads source files (.cs) of the loaded solution.";
+            }
+
+            return OutsideSolutionText(requestedPath, sameNamePaths, isCallable);
+        }
+
+        return null;
     }
 
     // A type that was renamed, or a file that was moved, leaves the old file name behind: when the missing file's stem is a
