@@ -459,14 +459,26 @@ public static class EditImpactAnalyzer
         // the RenameSymbol redirect would also apply to (not locals, not renames onto a taken name), one copyable call each.
         if (isToolActive("RenameSymbol") && primary.Key.Kind == SymbolChangeKind.Renamed && !EditImpactLocalDiff.IsLocal(primary.Key))
         {
+            // Not only the renames with attributed uses: a member rename whose call sites sit behind a type renamed in the same edit has none attributed
+            // (their receiver no longer binds, so no CS1061 names the method), yet the model must rename it too (eval run 20261112-151531-550 T6 vs T15).
+            // Attributed ones first, in the order of the impact list, then the remaining renames in diff order.
             var alsoRenamed = ordered.Skip(1)
                 .Select(kv => kv.Key)
+                .Concat(changes)
+                .Where(c => c != primary.Key)
                 .Where(c => c.Kind == SymbolChangeKind.Renamed && !EditImpactLocalDiff.IsLocal(c) && c.NewNameTakenIn is null && !string.IsNullOrEmpty(c.NewName))
+                .Distinct()
                 .ToList();
             if (alsoRenamed.Count > 0)
             {
                 nextStep += " The same edit also renames " + string.Join("; ", alsoRenamed.Select(c => $"{c.OldName} to {c.NewName}: use {RenameCallFor(c, symbolHandleOf)}"))
                     + ". Send one RenameSymbol call per rename, then redo the rest of your edit.";
+
+                // A member's docCommentId contains its type's name, so renaming the type first leaves the member's id unresolvable.
+                if (IsTypeKind(primary.Key) && alsoRenamed.Any(c => !IsTypeKind(c)))
+                {
+                    nextStep += " Rename the members before the type " + primary.Key.OldName + " (their docCommentId names the current type).";
+                }
             }
         }
 
@@ -585,6 +597,7 @@ public static class EditImpactAnalyzer
     /// <summary>
     /// One <see cref="ImpactVerdict"/> per diff entry except added declarations (noise), the entries that break uses first, capped at
     /// <see cref="MaxVerdicts"/>: "breaksUses" with the first few broken uses and the next step when diagnostics outside the edit were attributed to it,
+    /// "unverified" for a member of a type this edit renames or removes whose uses break (the members' own uses are masked by the unbound type),
     /// "valid" otherwise.
     /// </summary>
     private static List<ImpactVerdict> BuildVerdicts(
@@ -593,7 +606,15 @@ public static class EditImpactAnalyzer
         Func<string, bool> isToolActive,
         Func<SymbolChange, SymbolHandle?>? symbolHandleOf)
     {
-        var verdicts = new List<(bool Breaks, ImpactVerdict Verdict)>();
+        // Rank 2 = breaks uses, 1 = unverified, 0 = valid.
+        var verdicts = new List<(int Rank, ImpactVerdict Verdict)>();
+
+        // F2 (eval run 20261112-151531-550 T6): a type renamed or removed in this edit that breaks uses. The call sites of its members then have an
+        // unbound receiver type, so the compiler reports no CS1061 for a renamed member and its uses cannot be checked by the symbol diff.
+        // TODO also mark unverified when the only evidence is other unattributed CS0246/CS0103/CS0234 in the member's call-site files (not only a renamed owner type)
+        var brokenTypes = attributed.Keys
+            .Where(c => IsTypeKind(c) && c.Kind is SymbolChangeKind.Renamed or SymbolChangeKind.Removed)
+            .ToList();
         foreach (var change in changes.Where(c => c.Kind != SymbolChangeKind.Added))
         {
             var location = change.File is null ? null : change.Line > 0 ? $"{change.File}:{change.Line}" : change.File;
@@ -608,17 +629,26 @@ public static class EditImpactAnalyzer
             if (attributed.TryGetValue(change, out var uses))
             {
                 var useDiagnostics = uses.Select(u => u.Diagnostic).ToList();
-                verdicts.Add((true, new ImpactVerdict(kind, change.DeclarationKind, change.Container, change.OldName, change.NewName, location, "breaksUses",
+                verdicts.Add((2, new ImpactVerdict(kind, change.DeclarationKind, change.Container, change.OldName, change.NewName, location, "breaksUses",
                     useDiagnostics.Count, useDiagnostics.Take(MaxBrokenUsesOnTheWire).ToList(), SuggestedToolFor(change, isToolActive),
                     NextStepOf(change, useDiagnostics, changes, isToolActive, symbolHandleOf))));
             }
+            else if (!IsTypeKind(change) && !EditImpactLocalDiff.IsLocal(change) && change.Kind != SymbolChangeKind.Unapplied
+                && OwningRenamedType(change, brokenTypes) is { } owner)
+            {
+                var ownerNewName = owner.Kind == SymbolChangeKind.Renamed ? $" ({owner.OldName} -> {owner.NewName})" : string.Empty;
+                verdicts.Add((1, new ImpactVerdict(kind, change.DeclarationKind, change.Container, change.OldName, change.NewName, location, "unverified", 0, [],
+                    change.Kind == SymbolChangeKind.Renamed ? SuggestedToolFor(change, isToolActive) : null,
+                    $"Uses of {change.OldName} could not be checked: the receiver type no longer binds because of another change in this edit{ownerNewName}. "
+                    + "Do not read this as valid; apply that change first, then check this one.")));
+            }
             else
             {
-                verdicts.Add((false, new ImpactVerdict(kind, change.DeclarationKind, change.Container, change.OldName, change.NewName, location, "valid", 0, [], null, null)));
+                verdicts.Add((0, new ImpactVerdict(kind, change.DeclarationKind, change.Container, change.OldName, change.NewName, location, "valid", 0, [], null, null)));
             }
         }
 
-        return verdicts.OrderByDescending(v => v.Breaks).Select(v => v.Verdict).Take(MaxVerdicts).ToList();
+        return verdicts.OrderByDescending(v => v.Rank).Select(v => v.Verdict).Take(MaxVerdicts).ToList();
     }
 
     /// <summary>The tool the next step for this entry names (the first callable one of its row in the next-step table), or null when it names none.</summary>
@@ -870,4 +900,26 @@ public static class EditImpactAnalyzer
         => symbolHandleOf?.Invoke(change) is { } h
             ? ToolCallHint.Call("RenameSymbol", ("projectName", h.ProjectName), ("docCommentId", h.DocCommentId), ("newName", change.NewName!))
             : ToolCallHint.Call("RenameSymbol", ("newName", change.NewName!));
+
+    /// <summary>True when the entry declares a type (class, struct, record, interface, enum or delegate), not a member or a local.</summary>
+    private static bool IsTypeKind(SymbolChange change)
+        => change.DeclarationKind is "class" or "struct" or "record" or "interface" or "enum" or "delegate";
+
+    /// <summary>
+    /// The entry of <paramref name="brokenTypes"/> (types renamed or removed by this edit whose uses break) that declares <paramref name="member"/> or one
+    /// of its enclosing types, else null. A member's <see cref="SymbolChange.Container"/> is the baseline path, so it ends in the type's old name.
+    /// </summary>
+    private static SymbolChange? OwningRenamedType(SymbolChange member, IReadOnlyList<SymbolChange> brokenTypes)
+    {
+        foreach (var type in brokenTypes)
+        {
+            var path = string.IsNullOrEmpty(type.Container) ? type.OldName : type.Container + "." + type.OldName;
+            if (member.Container == path || member.Container.StartsWith(path + ".", StringComparison.Ordinal))
+            {
+                return type;
+            }
+        }
+
+        return null;
+    }
 }

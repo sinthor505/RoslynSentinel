@@ -363,6 +363,66 @@ public class EditImpactAnalyzerTests
         Assert.That(result.Changes.Count, Is.EqualTo(1), "its members are the same members under the new type name");
     }
 
+    // F2, eval run 20261112-151531-550 T6: one whole-file edit renames the class AND CalcDisc. The only compiler error is CS0246 on the class
+    // (the call site's receiver no longer binds, so no CS1061 names CalcDisc); the redirect used to name only the class rename.
+    private static string ClassAndMethodRenamed() => Calculator
+        .Replace("OrderPricingCalculator", "StandardOrderPricingCalculator")
+        .Replace("CalcDisc", "CalculateDiscountedTotal");
+
+    [Test]
+    public async Task ClassAndMethodRenamedInOneEdit_RedirectNamesBothRenamesWithOneCallEach()
+    {
+        var (result, report) = await GateAndAnalyzeAsync(Texts((CalculatorFile, ClassAndMethodRenamed())), Active("RenameSymbol", "ReplaceSnippet"));
+
+        Assert.That(report.Diagnostics.Where(d => d.Severity == "Error").Select(d => d.Id).Distinct(), Is.EquivalentTo(new[] { "CS0246" }),
+            "the fixture only proves the case when the method rename is not reported by the compiler");
+        Assert.That(result, Is.Not.Null);
+        var nextStep = result!.NextStepLine;
+        Assert.Multiple(() =>
+        {
+            Assert.That(nextStep, Does.Contain("renames OrderPricingCalculator to StandardOrderPricingCalculator"));
+            Assert.That(nextStep, Does.Contain("also renames CalcDisc to CalculateDiscountedTotal"));
+            Assert.That(Regex.Matches(nextStep, @"RenameSymbol\(").Count, Is.EqualTo(2), nextStep);
+            Assert.That(nextStep, Does.Contain("one RenameSymbol call per rename"));
+            Assert.That(nextStep, Does.Contain("Rename the members before the type OrderPricingCalculator"));
+        });
+    }
+
+    [Test]
+    public async Task MethodRenameBehindAClassRenameInTheSameEdit_IsUnverifiedNotValid()
+    {
+        var (result, _) = await GateAndAnalyzeAsync(Texts((CalculatorFile, ClassAndMethodRenamed())), Active("RenameSymbol", "ReplaceSnippet"));
+
+        Assert.That(result?.Verdicts, Is.Not.Null);
+        var verdicts = result!.Verdicts!;
+        var type = verdicts.Single(v => v.DeclarationKind == "class");
+        var method = verdicts.Single(v => v.OldName == "CalcDisc");
+        Assert.Multiple(() =>
+        {
+            Assert.That(type.Verdict, Is.EqualTo("breaksUses"));
+            Assert.That(method.Verdict, Is.EqualTo("unverified"));
+            Assert.That(method.NextStep, Does.Contain("Uses of CalcDisc could not be checked").And.Contain("receiver type no longer binds"));
+            Assert.That(method.BrokenUseCount, Is.EqualTo(0));
+        });
+    }
+
+    [Test]
+    public async Task SingleMethodRename_TextHasNoAlsoRenamesSentence_AndVerdictIsBreaksUsesNotUnverified()
+    {
+        var renamed = Calculator.Replace("CalcDisc", "CalculateDiscountedTotal");
+
+        var (result, _) = await GateAndAnalyzeAsync(Texts((CalculatorFile, renamed)), Active("RenameSymbol", "ReplaceSnippet"));
+
+        Assert.That(result, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result!.NextStepLine, Does.Contain("use RenameSymbol(").And.EndWith("instead."));
+            Assert.That(result.NextStepLine, Does.Not.Contain("also renames"));
+            Assert.That(result.Verdicts!.Single(v => v.OldName == "CalcDisc").Verdict, Is.EqualTo("breaksUses"));
+            Assert.That(result.Verdicts!.Any(v => v.Verdict == "unverified"), Is.False);
+        });
+    }
+
     [Test]
     public async Task ParameterAdded_IsAttributedToCs7036_AndPointsAtSignatureTools()
     {

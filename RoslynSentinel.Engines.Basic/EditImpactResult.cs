@@ -86,11 +86,11 @@ public sealed record EditImpactResult(
 /// <param name="OldName">The name in the baseline.</param>
 /// <param name="NewName">The new name for a rename; otherwise null.</param>
 /// <param name="Location">"File.cs:line" of the declaration after the edit (before it for a removal); null when unknown.</param>
-/// <param name="Verdict">"valid" (nothing outside the edit breaks), "breaksUses" (<paramref name="BrokenUseCount"/> uses break), "lifted" (the rename was applied as RenameSymbol) or "liftRejected" (it was tried and the result still had errors).</param>
+/// <param name="Verdict">"valid" (nothing outside the edit breaks), "unverified" (a member of a type this edit also renames or removes: its call sites cannot be checked because their receiver no longer binds; <paramref name="NextStep"/> carries the reason), "breaksUses" (<paramref name="BrokenUseCount"/> uses break), "lifted" (the rename was applied as RenameSymbol) or "liftRejected" (it was tried and the result still had errors).</param>
 /// <param name="BrokenUseCount">How many diagnostics outside the edit follow from this change (for "lifted": the call sites the rename rewrote).</param>
 /// <param name="BrokenUses">The first few of those diagnostics; <paramref name="BrokenUseCount"/> is the total.</param>
 /// <param name="SuggestedTool">The tool the next step names, when one fits and is callable; otherwise null.</param>
-/// <param name="NextStep">The next-step sentence for this change when it breaks uses; otherwise null.</param>
+/// <param name="NextStep">The next-step sentence for this change when it breaks uses, or the reason its uses could not be checked when "unverified"; otherwise null.</param>
 public sealed record ImpactVerdict(
     string Kind,
     string DeclarationKind,
