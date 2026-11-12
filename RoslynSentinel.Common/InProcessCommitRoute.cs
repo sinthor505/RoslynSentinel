@@ -10,6 +10,9 @@ namespace RoslynSentinel.Common;
 /// <see cref="DeclineCount"/> and <see cref="LastDeclineReason"/> for every call of an ENABLED route that went to the CLI (a disabled route counts nothing). A decline is normal traffic and is never logged to stderr.
 /// </para>
 /// <para>
+/// Each outcome of an enabled route (taken or declined) is also appended as one JSON line to &lt;common git dir&gt;/roslynsentinel/commit-route.jsonl. The log survives server restarts; the append is best effort and never fails or changes a commit.
+/// </para>
+/// <para>
 /// Not reproduced, accepted: git's <c>gc --auto</c> after a commit (the next CLI commit still runs it), and the index file's refreshed stat data (a later <c>git status</c> refreshes it, see the CAS primitive).
 /// </para>
 /// </summary>
@@ -21,6 +24,9 @@ internal sealed class InProcessCommitRoute
     // Hooks git runs around a commit that this route does not run: any of them present (or unresolvable) means the CLI commits. post-commit is launched in process (see Commit);
     // the three blocking hooks are checked by GitHooks.HasBlockingHook.
     private static readonly string[] UnsupportedCommitHooks = ["reference-transaction", "post-index-change"];
+
+    // Serialises the commit-route log appends of this process: the route is called from concurrent tool calls.
+    private static readonly object AppendLock = new();
 
     /// <summary>The process-wide route the Git tool uses and the status block reports.</summary>
     internal static InProcessCommitRoute Shared { get; } = new();
@@ -60,11 +66,12 @@ internal sealed class InProcessCommitRoute
         }
     }
 
-    /// <summary>Counts one decline and keeps its reason; the caller then runs the CLI path.</summary>
-    internal void RecordDecline(string reason)
+    /// <summary>Counts one decline, keeps its reason and appends it to the commit-route log; the caller then runs the CLI path.</summary>
+    internal void RecordDecline(string reason, string workingDirectory)
     {
         Interlocked.Increment(ref _declineCount);
         Volatile.Write(ref _lastDeclineReason, reason);
+        AppendOutcome(workingDirectory, "declined", commit: null, reason);
     }
 
     /// <summary>
@@ -140,7 +147,7 @@ internal sealed class InProcessCommitRoute
             if (!formatted.IsFormatted)
             {
                 var declined = CasCommitResult.Declined($"message: {formatted.Detail}");
-                RecordDecline(declined.Detail!);
+                RecordDecline(declined.Detail!, workingDirectory);
                 return declined;
             }
 
@@ -156,7 +163,7 @@ internal sealed class InProcessCommitRoute
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             var declined = CasCommitResult.Declined($"{ex.GetType().Name}: {ex.Message}");
-            RecordDecline(declined.Detail!);
+            RecordDecline(declined.Detail!, workingDirectory);
             return declined;
         }
 
@@ -164,20 +171,52 @@ internal sealed class InProcessCommitRoute
         {
             // From here on nothing may throw or decline: the commit exists, and the CLI path would make a second one.
             Interlocked.Increment(ref _takenCount);
+            AppendOutcome(workingDirectory, "taken", result.CommitId, reason: null);
             storedMessage = finalMessage;
             LaunchPostCommit(workingDirectory);
             return result;
         }
 
-        RecordDecline(result.Outcome switch
+        var declineReason = result.Outcome switch
         {
             CasCommitOutcome.Declined => $"the commit primitive declined: {result.Detail}",
             CasCommitOutcome.BranchMoved => $"the branch moved while the commit was built (expected {result.ExpectedTip ?? "unborn"}, now {result.ActualTip ?? "gone"}); nothing was written, the CLI commits.",
             CasCommitOutcome.LockContention => $"another git process holds a lock: {result.Detail}",
             CasCommitOutcome.NothingToCommit => "nothing to commit; the CLI words the refusal.",
             _ => $"libgit2 failed: {result.Detail}",
-        });
+        };
+        RecordDecline(declineReason, workingDirectory);
         return result;
+    }
+
+    /// <summary>
+    /// Appends one JSON line (utc, outcome, commit and reason when not null, pid) to &lt;common git dir&gt;/roslynsentinel/commit-route.jsonl, creating the folder. The common git directory is
+    /// the one the hook resolver reads (a linked worktree writes to its main repository). Best effort: every exception is ignored, and no repository means no line.
+    /// </summary>
+    private static void AppendOutcome(string workingDirectory, string outcome, string? commit, string? reason)
+    {
+        try
+        {
+            var commonDirectory = Libgit2GitReader.ReadHookLayout(workingDirectory)?.CommonDirectory;
+            if (commonDirectory is null)
+            {
+                return;
+            }
+
+            var folder = Path.Combine(commonDirectory, "roslynsentinel");
+            Directory.CreateDirectory(folder);
+            var line = System.Text.Json.JsonSerializer.Serialize(
+                new { utc = DateTimeOffset.UtcNow.ToString("O"), outcome, commit, reason, pid = Environment.ProcessId },
+                new System.Text.Json.JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull }) + "\n";
+            lock (AppendLock)
+            {
+                File.AppendAllText(Path.Combine(folder, "commit-route.jsonl"), line, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            }
+        }
+        catch (Exception)
+        {
+            // Best effort by design: the log must never fail or change a commit or a decline.
+        }
     }
 
     private void LaunchPostCommit(string workingDirectory)

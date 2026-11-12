@@ -143,6 +143,9 @@ public class GitInProcessCommitRouteTests
         });
     }
 
+    private static string[] ReadCommitRouteLog(string directory) =>
+        File.ReadAllLines(Path.Combine(directory, ".git", "roslynsentinel", "commit-route.jsonl"));
+
     // ---- parity with the CLI route ----
 
     /// <summary>Scenario name, and whether the route is expected to commit it itself (null: either route may, the facts must still be equal).</summary>
@@ -553,7 +556,7 @@ public class GitInProcessCommitRouteTests
     public void GitBackendBlock_ShowsTheInProcessCommitCounters()
     {
         var route = new InProcessCommitRoute();
-        route.RecordDecline("a hook exists");
+        route.RecordDecline("a hook exists", NewRepo("counters", inProcess: false));
         var warmup = new GitBackendWarmup(() => "v1", _ => "ok", Composite(), log: null, lengths: null, commitRoute: route);
         warmup.Start();
 
@@ -564,6 +567,45 @@ public class GitInProcessCommitRouteTests
             Assert.That(block.InProcessCommitCount, Is.Zero);
             Assert.That(block.InProcessCommitDeclineCount, Is.EqualTo(1));
             Assert.That(block.LastInProcessCommitDeclineReason, Is.EqualTo("a hook exists"));
+        });
+    }
+
+    [Test]
+    public void RecordDecline_AppendsADeclinedLine_ToTheCommitRouteLog()
+    {
+        var route = new InProcessCommitRoute();
+        var directory = NewRepo("declined-line", inProcess: false);
+
+        route.RecordDecline("a hook exists", directory);
+
+        var lines = ReadCommitRouteLog(directory);
+        Assert.That(lines, Has.Length.EqualTo(1));
+        using var json = System.Text.Json.JsonDocument.Parse(lines[0]);
+        Assert.Multiple(() =>
+        {
+            Assert.That(json.RootElement.GetProperty("outcome").GetString(), Is.EqualTo("declined"));
+            Assert.That(json.RootElement.GetProperty("reason").GetString(), Is.EqualTo("a hook exists"));
+        });
+    }
+
+    [Test]
+    public void Commit_AppendsATakenLine_WithTheNewCommitSha()
+    {
+        var route = new InProcessCommitRoute();
+        var directory = NewRepo("taken-line", inProcess: true);
+        Write(directory, "a.txt", "changed\n");
+        RunGit(directory, "add", "a.txt");
+
+        var result = route.Commit(directory, "taken line", null, null, null, out _);
+
+        Assert.That(result.IsCommitted, Is.True, result.Detail);
+        var lines = ReadCommitRouteLog(directory);
+        Assert.That(lines, Has.Length.EqualTo(1));
+        using var json = System.Text.Json.JsonDocument.Parse(lines[0]);
+        Assert.Multiple(() =>
+        {
+            Assert.That(json.RootElement.GetProperty("outcome").GetString(), Is.EqualTo("taken"));
+            Assert.That(json.RootElement.GetProperty("commit").GetString(), Is.EqualTo(Head(directory)));
         });
     }
 }

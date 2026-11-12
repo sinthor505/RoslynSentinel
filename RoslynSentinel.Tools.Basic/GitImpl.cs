@@ -3483,14 +3483,14 @@ public class GitImpl : IGitOperations
             // From here the route is enabled: every way out that is not a commit is a counted decline.
             if (amend || string.IsNullOrWhiteSpace(message))
             {
-                _commitRoute.RecordDecline("an amend rewrites HEAD; the CLI does it.");
+                _commitRoute.RecordDecline("an amend rewrites HEAD; the CLI does it.", gitRoot);
                 return null;
             }
 
             var listed = !string.IsNullOrWhiteSpace(paths);
             if (listed && (scope != GitStageScope.listed || listedFilePaths is not { Length: > 0 } || classified is null))
             {
-                _commitRoute.RecordDecline("paths were given without scope=listed; the CLI decides what they mean.");
+                _commitRoute.RecordDecline("paths were given without scope=listed; the CLI decides what they mean.", gitRoot);
                 return null;
             }
 
@@ -3498,7 +3498,7 @@ public class GitImpl : IGitOperations
             var decline = await Task.Run(() => _commitRoute.DeclineBeforeStaging(_gitReader, gitRoot, listedForRoute, GitProcessTimeout), cancellationToken);
             if (decline is not null)
             {
-                _commitRoute.RecordDecline(decline);
+                _commitRoute.RecordDecline(decline, gitRoot);
                 return null;
             }
 
@@ -3510,7 +3510,7 @@ public class GitImpl : IGitOperations
                     var staged = await RunIndexStageAsync(gitRoot, IndexStageMode.UpdateListed, tracked, cancellationToken);
                     if (staged.ExitCode != 0)
                     {
-                        _commitRoute.RecordDecline("staging the listed tracked paths failed; the CLI commits them with --only.");
+                        _commitRoute.RecordDecline("staging the listed tracked paths failed; the CLI commits them with --only.", gitRoot);
                         return null;
                     }
                 }
@@ -3553,7 +3553,7 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _commitRoute.RecordDecline($"{ex.GetType().Name}: {ex.Message}");
+            _commitRoute.RecordDecline($"{ex.GetType().Name}: {ex.Message}", gitRoot);
             return null;
         }
     }
