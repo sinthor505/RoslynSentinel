@@ -191,4 +191,31 @@ public static class AgentSystemPrompts
 
         Put your reasoning before that line, not after it.
         """;
+
+    /// <summary>
+    /// Appends an "## Error handling" section to <paramref name="prompt"/>, with one
+    /// <c>### Error handling: &lt;wire name&gt;</c> subsection per key present in
+    /// <paramref name="document"/>, in <see cref="ErrorPolicyKeys.All"/> order. Returns the prompt
+    /// unchanged when the document has no entries.
+    /// </summary>
+    public static string WithErrorHandling(string prompt, ErrorPolicyDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(prompt);
+        ArgumentNullException.ThrowIfNull(document);
+        if (document.Entries.Count == 0)
+        {
+            return prompt;
+        }
+
+        string result = prompt.TrimEnd() + "\n\n## Error handling\n\n";
+        foreach (ErrorPolicyKey key in ErrorPolicyKeys.All)
+        {
+            if (document.Entries.TryGetValue(key, out string? body))
+            {
+                result += "### " + ErrorPolicyDocument.RenderedHeading(key) + "\n" + body + "\n\n";
+            }
+        }
+
+        return result.TrimEnd() + "\n";
+    }
 }
