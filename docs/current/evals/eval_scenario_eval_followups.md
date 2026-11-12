@@ -117,6 +117,9 @@ reason to doubt. Each cause below is traced to quoted text and turn numbers; the
    Destructive samples made that call at T2, then found `SummarizeShipping` elsewhere. Both texts also offer
    `CreateFile` ("If your task is to create this file..."); 5 of 20 created the file. The NEW wording ("tell the
    user so instead of editing a different file") did not change the outcome: NEW Destructive stayed 8 of 10.
+   The system prompt itself sanctions this: `AgentSystemPrompts.cs:108` says "When a tool returns an error,
+   follow the recovery step the error names", directly before the stop rule (`:108-112`). An error that names a
+   call is therefore an instruction the prompt told the model to obey.
 3. **The symbol-not-found error also names next calls** ("Try exactMatch=false ... or call ListAll(...)") even
    when it concludes "the name is not declared anywhere"; MissingMethod samples spent T2-T6 on those probes and
    stopped late (StoppedLate 4 OLD, 7 NEW).
@@ -147,9 +150,11 @@ Open, for the owner (none decided):
    the current two as a separate "misnamed target" pair whose expected outcome is decided explicitly (stop vs
    find). Highest leverage: without it, error-text A/Bs on this family are uninterpretable.
 2. **Not-found errors on a "nothing similar" result**: drop or demote the `CreateFile` offer and the
-   `exactMatch=false`/`ListAll` probes when the search already covered those, and say "stop and report" in the
-   same words as the system prompt. This belongs to `plan_not_found_error_orientation`; rerun this family after
-   it.
+   `exactMatch=false`/`ListAll` probes when the search already covered those. Owner ruling 2026-11-12 (relayed by
+   `plan_not_found_error_orientation`): tool error text stays agnostic - facts and options only, no policy - so
+   "stop and report" wording belongs in prompts, not tool text; that plan is stripping the existing policy
+   sentences ("tell the user so ...", "If your task is to create this file, call CreateFile ...") from both shared
+   builders. Rerun this family after that lands (symbol side: d1ed5854 is f1's 4c, the RenameSymbol resolver).
 3. **Empty-file guard hint**: when the refused edit's oldContent spans other declarations, say so ("your edit
    also removes `PricingAuditEntry`") instead of suggesting `DeleteFile`. Check what s02 T2 actually sent first.
 4. **Fixture build**: fix or exclude `ContosoOrders.Tests\ModelEvalGenerated\OrderCheckoutTests.cs` (CS0246
