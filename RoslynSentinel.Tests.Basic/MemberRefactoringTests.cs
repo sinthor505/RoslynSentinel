@@ -2172,6 +2172,72 @@ public class Calc
         Assert.That(blankLinesBetween1and2, Is.GreaterThanOrEqualTo(1), "Blank line between First and Second must survive.");
         Assert.That(blankLinesBetween2and3, Is.GreaterThanOrEqualTo(1), "Blank line between Second and Third must survive.");
     }
+
+    [Test]
+    public async Task ReplaceMember_NewSourceWithDocComment_ReplacesOldDocCommentAndKeepsBlankLine()
+    {
+        SetSource(@"
+public class Calc
+{
+    public int A() => 1;
+
+    /// <summary>Old.</summary>
+    public int B() => 2;
+}
+", "Calc.cs");
+
+        var result = await _memberRefactoringEngine.ReplaceMemberAsync("Calc.cs", "B", "/// <summary>New.</summary>\npublic int B() => 22;");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText.Split("New.").Length - 1, Is.EqualTo(1), "The new doc comment must appear exactly once.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("Old."), "The old doc comment must be replaced.");
+        Assert.That(result.UpdatedText.Split("<summary>").Length - 1, Is.EqualTo(1), "Exactly one doc comment must remain for B.");
+
+        var aIndex = result.UpdatedText.IndexOf("public int A()", StringComparison.Ordinal);
+        var docIndex = result.UpdatedText.IndexOf("/// <summary>New.", StringComparison.Ordinal);
+        var between = result.UpdatedText.Substring(aIndex, docIndex - aIndex);
+        Assert.That(between, Does.Match(@"\n\r?\n"), "The blank line between A and B must survive.");
+    }
+
+    [Test]
+    public async Task ReplaceMember_NewSourceWithoutDocComment_KeepsOldDocComment()
+    {
+        SetSource(@"
+public class Calc
+{
+    public int A() => 1;
+
+    /// <summary>Old.</summary>
+    public int B() => 2;
+}
+", "Calc.cs");
+
+        var result = await _memberRefactoringEngine.ReplaceMemberAsync("Calc.cs", "B", "public int B() => 22;");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText.Split("Old.").Length - 1, Is.EqualTo(1), "The old doc comment must be kept.");
+        Assert.That(result.UpdatedText, Does.Contain("public int B() => 22;"));
+    }
+
+    [Test]
+    public async Task ReplaceMember_OldWithoutDocComment_NewDocCommentIsAdded()
+    {
+        SetSource(@"
+public class Calc
+{
+    public int A() => 1;
+
+    public int B() => 2;
+}
+", "Calc.cs");
+
+        var result = await _memberRefactoringEngine.ReplaceMemberAsync("Calc.cs", "B", "/// <summary>New.</summary>\npublic int B() => 22;");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("New."));
+        Assert.That(result.UpdatedText, Does.Match(@"(?m)^    /// <summary>New\.</summary>"), "The added doc comment must be indented like the method.");
+    }
+
     [Test]
     public async Task RemoveMember_DoesNotReformatUnrelatedSiblingSpacingOrBlankLines()
     {

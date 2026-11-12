@@ -127,7 +127,7 @@ public class RefactoringStructuralTools
         [ExternalInputRequired(DataTag.SymbolName, required: false)] string? namespaceName = null,
         [Description("The member to target. For overloads, combine with contextSnippet/lineBefore/lineAfter.")]
         [Consumes(DataTag.SymbolName, required: false)] string? memberName = null,
-        [Description("Exactly one member declaration (full trivia, signature and body); for addTopLevelType, the full type declaration.")]
+        [Description("Exactly one member declaration (signature and body; a doc comment in it replaces the old one, and with none the old doc comment is kept); for addTopLevelType, the full type declaration.")]
         [Consumes(DataTag.SourceCode, required: false)] string? newMemberSource = null,
         // No [Description] on the two anchor names by design (owner ruling): the names say they are member names, not line numbers.
         [ExternalInputRequired(DataTag.SymbolName, required: false)] string? insertAfterMemberName = null,

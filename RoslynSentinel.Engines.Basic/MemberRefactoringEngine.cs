@@ -2366,9 +2366,12 @@ public class MemberRefactoringEngine
             throw new ToolInvalidArgumentException($"newMemberSource declares a type, but Member(replace) replaces members, not types. To replace a type use {ToolCallHint.Call("ReplaceSnippet")} or {ToolCallHint.Call("ApplyDiff")}."); // hint-ok: Member(replace) here is prose describing the operation, not a call to make
         }
 
-        // TODO Member replace silently drops a doc comment supplied in newMemberSource: PreserveOld transplants the old
-        // leading trivia (old /// summary) over it, although the newMemberSource description says "full trivia".
-        var replacedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, member, newMember, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
+        // A doc comment in newMemberSource replaces the old one; with none, PreserveOld keeps the old leading trivia.
+        var mergedLeading = MergeLeadingTriviaForReplace(member, newMember);
+        var replacedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, member,
+            mergedLeading.HasValue ? newMember.WithLeadingTrivia(mergedLeading.Value) : newMember,
+            await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken,
+            mergedLeading.HasValue ? RoslynFormattingHelper.TriviaEditIntent.ReplaceLeading : RoslynFormattingHelper.TriviaEditIntent.PreserveOld);
         if (string.Equals(replacedText, root.ToFullString(), StringComparison.Ordinal))
         {
             return new DocumentEditResult
@@ -2388,6 +2391,40 @@ public class MemberRefactoringEngine
             UpdatedText = replacedText,
             Warnings = snippetWarning == null ? null : new[] { snippetWarning }
         };
+    }
+
+    // Leading trivia for a replace whose newMemberSource carries a doc comment, or null to keep the old trivia (PreserveOld).
+    private static SyntaxTriviaList? MergeLeadingTriviaForReplace(SyntaxNode oldNode, SyntaxNode newNode)
+    {
+        static bool IsDocComment(SyntaxTrivia trivia) =>
+            trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) || trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia);
+
+        var newLeading = newNode.GetLeadingTrivia().ToList();
+        var newDocStart = newLeading.FindIndex(IsDocComment);
+        if (newDocStart < 0)
+        {
+            return null;
+        }
+
+        var oldLeading = oldNode.GetLeadingTrivia().ToList();
+        var oldDocStart = oldLeading.FindIndex(IsDocComment);
+        var keepCount = oldDocStart >= 0 ? oldDocStart : oldLeading.Count;
+        if (oldDocStart < 0)
+        {
+            // No old doc comment: drop only the final indentation, keeping blank lines and comments.
+            while (keepCount > 0 && oldLeading[keepCount - 1].IsKind(SyntaxKind.WhitespaceTrivia))
+            {
+                keepCount--;
+            }
+        }
+
+        // Directives in the dropped part (e.g. #region/#endregion) would be lost with it, so keep the old trivia instead.
+        if (oldLeading.Skip(keepCount).Any(trivia => trivia.IsDirective))
+        {
+            return null;
+        }
+
+        return SyntaxFactory.TriviaList(oldLeading.Take(keepCount).Concat(newLeading.Skip(newDocStart)));
     }
 
     public async Task<DocumentEditResult> AddMemberAsync(FilePathWrapper filePath, string containerName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
