@@ -368,25 +368,14 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     bool IUnrecoverableBreaker.IsTripped() => _unrecoverableHaltMessage is not null;
     string? IUnrecoverableBreaker.StateMessage() => _unrecoverableHaltMessage;
     public Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public async Task<SymbolResolution> ResolveFromWireAsync(string projectName, string docCommentId, CancellationToken cancellationToken)
-    {
-        SymbolHandle handle = new SymbolHandle(projectName, docCommentId);
-        ISymbol? symbol = await new SymbolResolver(this).ResolveSymbolAsync(handle, cancellationToken);
-
-        if (symbol is null)
-        {
-            return new SymbolResolution
-            {
-                Handle = handle,
-                Error = new EngineError(
-                    EngineErrorCode.SymbolNotResolved,
-                    $"Symbol '{docCommentId}' no longer resolves - may have been renamed, moved, or removed. Re-run Search(mode: symbol).",
-                    DataTag.SymbolHandle)
-            };
-        }
-
-        return new SymbolResolution { Symbol = symbol, Handle = handle };
-    }
+    public Task<SymbolResolution> ResolveFromWireAsync(string projectName, string docCommentId, CancellationToken cancellationToken) =>
+        // Same shared not-found path as PersistentWorkspaceManager (SymbolWireResolver), so a fake-backed tool test sees the production text.
+        SymbolWireResolver.ResolveAsync(
+            (handle, ct) => new SymbolResolver(this).ResolveSymbolAsync(handle, ct),
+            ct => GetSolutionAsync(ReadSource.Committed, ct),
+            projectName,
+            docCommentId,
+            cancellationToken);
     public Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public string CachePendingChangeset(Dictionary<FilePathWrapper, string> changes, int retryCount, bool validateOnApply) => throw new NotImplementedException();

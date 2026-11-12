@@ -3548,43 +3548,17 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     public Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default) => _symbolResolver.ResolveByDocCommentIdAsync(symbolId, projectName, cancellationToken);
 
     // v1 -> single integration point for all symbol-accepting tools
-    public async Task<SymbolResolution> ResolveFromWireAsync(
+    public Task<SymbolResolution> ResolveFromWireAsync(
         string projectName,
         string docCommentId,
-        CancellationToken cancellationToken)
-    {
-        SymbolHandle handle = new SymbolHandle(projectName, docCommentId);
-        ISymbol? symbol = await this.ResolveSymbolAsync(handle, cancellationToken);
-
-        // Batch H4 R4 T6.1: a changeId from an undo hint ('0cbca485@...') was passed as a docCommentId and got told the symbol
-        // "may have been renamed". An ID without a kind prefix can never resolve, so say what the shape is instead.
-        if (symbol is null && !System.Text.RegularExpressions.Regex.IsMatch(docCommentId ?? "", @"^[NTFPEM]:\S"))
-        {
-            return new SymbolResolution
-            {
-                Handle = handle,
-                Error = new EngineError(
-                    EngineErrorCode.SymbolNotResolved,
-                    $"'{docCommentId}' is not a documentation-comment ID: those start with a kind letter and a colon (T: type, M: method, P: property, F: field, E: event, N: namespace), for example 'T:MyApp.Orders.OrderService'. It is not a changeId from an undo hint. Find the symbol with {ToolCallHint.Call("Search", ("mode", "symbol"))} and use the ID it returns.",
-                    DataTag.SymbolHandle)
-            };
-        }
-
-        if (symbol is null)
-        {
-            // TODO the 'no longer resolves' message should rule out a missing parameter list before suggesting a rename
-            return new SymbolResolution
-            {
-                Handle = handle,
-                Error = new EngineError(
-                    EngineErrorCode.SymbolNotResolved,
-                    $"Symbol '{docCommentId}' no longer resolves - may have been renamed, moved, or removed. Re-run {ToolCallHint.Call("Search", ("mode", "symbol"))}.",
-                    DataTag.SymbolHandle)
-            };
-        }
-
-        return new SymbolResolution { Symbol = symbol, Handle = handle };
-    }
+        CancellationToken cancellationToken) =>
+        // The not-found path (shape check, missing-parameter-list fallback, ranked candidates) is shared with the test fake.
+        SymbolWireResolver.ResolveAsync(
+            this.ResolveSymbolAsync,
+            ct => this.GetSolutionAsync(ReadSource.Committed, ct),
+            projectName,
+            docCommentId,
+            cancellationToken);
 
     private static int CountLines(string text)
     {

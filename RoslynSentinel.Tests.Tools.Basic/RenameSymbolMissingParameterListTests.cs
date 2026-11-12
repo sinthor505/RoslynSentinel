@@ -98,13 +98,19 @@ public class RenameSymbolMissingParameterListTests
     }
 
     [Test]
-    public async Task RenameSymbol_MethodIdWithoutParameterList_NoSuchMethod_KeepsTheOriginalNotFoundAsync()
+    public async Task RenameSymbol_MethodIdWithoutParameterList_NoSuchMethod_StaysNotFoundWithTheNoSimilarNameTextAsync()
     {
         var result = await RenameAsync("M:T.Calc.Nope", "Whatever");
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), result.ErrorData.Message);
-        Assert.That(result.ErrorData.Message, Does.Contain("no longer resolves"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData.Message, Does.Contain("Nope"), "the wanted name is echoed");
+            Assert.That(result.ErrorData.Message, Does.Contain("No symbol in the solution has a similar name"));
+            Assert.That(result.ErrorData.Message, Does.Contain("tell the user"), "the report-it-does-not-exist option is offered");
+            Assert.That(result.ErrorData.Message, Does.Not.Contain("no longer resolves"));
+        });
     }
 
     [Test]

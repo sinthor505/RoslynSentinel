@@ -915,10 +915,11 @@ public class WorkspaceProjectManagementImpl
                     return new SentinelCallToolResult<object>
                     {
                         IsError = true,
-                        ErrorData = new ResultError(resolution.Error!.Code == EngineErrorCode.SymbolNotResolved ? ToolErrorCode.NotFound : ToolErrorCode.Exception, resolution.Error!.Message)
+                        ErrorData = new ResultError(SymbolWireResolver.ToToolErrorCode(resolution.Error!), resolution.Error!.Message)
                     };
                 }
 
+                // TODO surface resolution.Note (a parameter-list-less id was resolved to the only method of that name) in the response WarningDetails, as RenameSymbol does with docCommentIdNote
                 var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePathResolved, resolution.Symbol!, cancellationToken);
                 return await ApplyAndRespondAsync(result);
             }

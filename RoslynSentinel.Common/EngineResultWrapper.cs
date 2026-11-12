@@ -9,6 +9,8 @@ public enum EngineErrorCode
     StaleSession,
     SymbolNotResolved,
     BuildNotRun,
+    /// <summary>A method docCommentId without its parameter list names several overloads; the message lists their full ids. Callers map it to an invalid-argument error (the caller must pick one), not NotFound.</summary>
+    MissingParameterListOverloads,
 }
 
 public sealed class EngineResultWrapper<T> : IOperationResult

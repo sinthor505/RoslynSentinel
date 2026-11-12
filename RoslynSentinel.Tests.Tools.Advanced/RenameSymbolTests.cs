@@ -49,7 +49,11 @@ public sealed class RenameSymbolTests
         var result = await tools.RenameSymbolTool(reason: "test message", projectName: "TestProj", docCommentId: "M:TestProj.Order.NoSuchSymbol", newName: "NewName");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData, Is.Not.Null);
-        Assert.That(result.ErrorData!.Message, Does.Contain("NoSuchSymbol").Or.Contain("no longer resolves"));
+        // FakeWorkspaceManager shares the production not-found path (SymbolWireResolver): the wanted name is echoed and, with no
+        // similar declared name in the project, the text says so and offers to report the symbol as non-existent.
+        Assert.That(result.ErrorData!.Message, Does.Contain("NoSuchSymbol"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("No symbol in the solution has a similar name").And.Contain("tell the user"));
+        Assert.That(result.ErrorData!.Message, Does.Not.Contain("no longer resolves"));
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("NotFound"));
     }
 

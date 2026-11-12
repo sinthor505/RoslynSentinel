@@ -10,9 +10,9 @@ namespace RoslynSentinel.Common;
 /// listed with their full ids so the caller can pick one. Syntax-free: it uses the compilation of the named project only.
 /// </summary>
 /// <remarks>
-/// This is the shared copy that <c>IWorkspaceManager.ResolveFromWireAsync</c> will call in a later slice (plan_not_found_error_orientation
-/// decision 3), so every tool that resolves through it gets the fallback. The copy in RoslynSentinel.Engines.Basic is obsolete;
-/// its one caller (RenameSymbol) moves to this type in that slice.
+/// Called by <see cref="SymbolWireResolver"/>, the not-found path behind <c>IWorkspaceManager.ResolveFromWireAsync</c>, so every tool
+/// that resolves a docCommentId (RenameSymbol, DeleteUnusedSymbol, PreviewRenameImpact) gets the fallback
+/// (plan_not_found_error_orientation decision 3).
 /// </remarks>
 public static class MissingParameterListResolver
 {

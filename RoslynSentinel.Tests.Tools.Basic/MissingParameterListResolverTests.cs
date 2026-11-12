@@ -117,21 +117,4 @@ public class MissingParameterListResolverTests
         Assert.That(unique!.Name, Is.EqualTo("Echo"));
         Assert.That(overloadIds, Is.Empty);
     }
-
-    [Test]
-    public async Task FindAsync_CommonAndLegacyCopies_AgreeOnTheUniqueMethodCase()
-    {
-        var solution = BuildSolution();
-        const string id = "M:Fixture.OrderPricingCalculator.CalcDisc";
-
-        var common = await CommonResolver.FindAsync(solution, ProjectName, id);
-#pragma warning disable CS0618 // The Engines.Basic copy is obsolete; this pins that it still agrees with the shared one until it is removed.
-        var legacy = await RoslynSentinel.Engines.Basic.MissingParameterListResolver.FindAsync(solution, ProjectName, id);
-#pragma warning restore CS0618
-
-        Assert.That(common.Unique, Is.Not.Null);
-        Assert.That(legacy.Unique, Is.Not.Null);
-        Assert.That(common.Unique!.GetDocumentationCommentId(), Is.EqualTo(legacy.Unique!.GetDocumentationCommentId()));
-        Assert.That(common.OverloadIds, Is.EqualTo(legacy.OverloadIds));
-    }
 }
