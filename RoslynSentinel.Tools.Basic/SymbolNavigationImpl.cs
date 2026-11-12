@@ -171,13 +171,14 @@ public class SymbolNavigationImpl
                 if (symbolInfo == null || symbolInfo.Kind == "Error")
                 {
                     var snippetPreview = contextSnippet.Length > 60 ? contextSnippet[..60] + "..." : contextSnippet;
+                    var outlineOption = $"{ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} shows the file's members and their lines; lineBefore/lineAfter pin a match.";
                     var errorMsg = string.IsNullOrEmpty(symbolInfo?.Error) ? 
                         $"Could not resolve a symbol in '{filePathResolved}' for contextSnippet \"{snippetPreview}\". " +
                         "This means one of: the snippet text does not appear verbatim in the file, it matched a " +
                         "location with no bindable symbol (e.g. whitespace, a keyword, or a comment), or it matched " +
                         "more than one location and lineBefore/lineAfter did not disambiguate. " +
-                        $"{ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} shows the file's members and their lines; lineBefore/lineAfter pin a match."
-                        : symbolInfo!.Error;
+                        outlineOption
+                        : symbolInfo!.Error + " " + outlineOption;
                     // TODO error-policy: route does not record the missing-target kind
                     return new SentinelCallToolResult<object>
                     {
