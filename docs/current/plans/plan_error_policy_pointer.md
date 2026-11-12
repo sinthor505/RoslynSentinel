@@ -151,6 +151,14 @@ Deviation (owner-accepted 2026-11-12): the run uses qwen3.5-9b-mtp instead of qw
 - Change: run arms A (`Off`), B (`Pointer`), C (`Inline`), all with the `ErrorHandling` block and the reworded line 108, via `modeleval-runner`, enough samples per row that a 1-3 sample difference is not the signal (eval doc line 125). Outcome classes per sample: `Stopped` (BLOCKED, no edit: ideal), `Searched-then-stopped` (one widening call, then BLOCKED: acceptable), `Destructive` (edited another file or created the target), `Wandered` (no edit, no BLOCKED), `Crash`. Analyse with the `failure-analysis` skill.
 - Done when: an eval doc records the table per arm and the read: B ~ C means the pointer suffices; neither beats A means another carrier (loop-assist injection) is needed.
 
+### Step 11a - Skip the suffix when a prior edit explains the miss
+- Files: `RoslynSentinel.Common/ToolCallContext.cs`; `RoslynSentinel.Server.Advanced/ErrorPolicyFilter.cs`; filter test file.
+- Depends on: Step 11 finished (these files are held during the A/B, since each eval job rebuilds from the tree).
+- Effect: behaviour-changing only when the mode is not `Off`: no policy block when the not-found is explained by an earlier in-session rename, move, removal or delete.
+- Change: add `ToolCallContext.HasEditEffectFact` (settable, default false). `ErrorPolicyFilter` appends nothing when it is true, because "the task named it, stop" is wrong when the target was renamed this session. Peer session roslynsentinel-cc (`proposal_not_found_cause_from_prior_tool_call`) sets the flag from `NotFoundEvidence` when it attaches an `EditEffect` finding.
+- Owner approved 2026-11-12.
+- Done when: Build 0 errors; filter test: flag true gives no block in `Pointer` and `Inline`, flag false is unchanged.
+
 ### Step 12 - Remaining routes
 - Files: the routes marked in Step 5.
 - Depends on: Step 6
