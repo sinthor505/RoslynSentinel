@@ -129,7 +129,8 @@ public static class ScenarioRescoring
                     turnCap: scenario.TurnCap);
                 sample = new ScenarioSample(
                     scenarioId, scenarioType, faultKind, sampleIndex, commit, dirty, liftRenames,
-                    score, schemaDrift, resultDrift, inconclusiveReason, transcriptPath);
+                    score, schemaDrift, resultDrift, inconclusiveReason, transcriptPath,
+                    LiveTurnsToTarget: scenario.LiveTurnsFor(score.TurnCount));
             }
 
             ScenarioSampleCsv.Append(outputCsvPath, sample);

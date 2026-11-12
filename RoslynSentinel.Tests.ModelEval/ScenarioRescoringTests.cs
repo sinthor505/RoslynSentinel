@@ -12,6 +12,23 @@ public class ScenarioRescoringTests
     private const string OldHeader =
         "scenarioId,scenarioType,faultKind,sampleIndex,commit,dirty,liftRenames,firstCallSucceeded,firstErrorCode,firstErrorClass,recovered,callsToRecover,recoveryUsedExpectedTool,markerPresent,turnCount,stopReason,failureClass,passed,callsAfterFirstError,turnsAfterFirstError,outputCharsAfterFirstError,maxIdenticalCallRepeat,identicalReasoningBlocks,retryPhraseCount,schemaDrift,resultDrift,inconclusiveReason,transcriptPath";
 
+    // Current 30-column layout: Header minus liveTurnsToTarget, the column added last.
+    private static readonly string LegacyHeader = string.Join(',', ScenarioSampleCsv.Header.Split(',').SkipLast(1));
+
+    // Cold-start row by column name, for LegacyHeader and Header files; the transcript is written by WriteRun.
+    private static readonly (string Name, string Value)[] ColdRowValues =
+    [
+        ("scenarioId", "S1"),
+        ("scenarioType", "3"),
+        ("sampleIndex", "1"),
+        ("commit", "abc"),
+        ("dirty", "false"),
+        ("liftRenames", "off"),
+        ("schemaDrift", "false"),
+        ("resultDrift", "0"),
+        ("transcriptPath", "x"),
+    ];
+
     private string _folder = string.Empty;
 
     [SetUp]
@@ -212,14 +229,85 @@ public class ScenarioRescoringTests
         Assert.That(ex!.Message, Does.Contain("Missing"));
     }
 
+    [Test]
+    public async Task RescoreRunFolder_LegacyThirtyColumnResults_SetsLiveTurnsToTargetFromTheSavedTranscript()
+    {
+        Assert.That(LegacyHeader.Split(',').Length, Is.EqualTo(ScenarioSampleCsv.LegacyColumnCount));
+        var transcript = TwoTurnTranscript();
+        WriteRun(LegacyHeader, transcript, ColdRowValues);
+        var scenario = Scenario("S1");
+
+        var samples = await RescoreAsync(scenario, Path.Combine(_folder, "rescored.csv"));
+
+        Assert.That(samples, Has.Count.EqualTo(1));
+        Assert.That(samples[0].Score, Is.Not.Null);
+        Assert.That(samples[0].LiveTurnsToTarget, Is.EqualTo(scenario.LiveTurnsFor(transcript.Turns.Count)));
+    }
+
+    [Test]
+    public async Task RescoreRunFolder_OutputCsvCarriesLiveTurnsToTarget()
+    {
+        var transcript = TwoTurnTranscript();
+        WriteRun(LegacyHeader, transcript, ColdRowValues);
+        var scenario = Scenario("S1");
+        var outputCsv = Path.Combine(_folder, "rescored.csv");
+
+        await RescoreAsync(scenario, outputCsv);
+
+        var lines = File.ReadAllLines(outputCsv);
+        Assert.That(lines, Has.Length.EqualTo(2));
+        Assert.That(ScenarioSampleCsv.Parse(lines[1]).LiveTurnsToTarget, Is.EqualTo(scenario.LiveTurnsFor(transcript.Turns.Count)));
+    }
+
+    [Test]
+    public async Task RescoreRunFolder_ResumeScenario_LiveTurnsToTargetExcludesTheKeptTurn()
+    {
+        // Two turns, one kept: one live turn.
+        WriteRun(ScenarioSampleCsv.Header, TwoTurnTranscript(), ColdRowValues);
+        var scenario = Scenario("S1") with { ResumeTranscript = "x.json", ResumeKeepTurns = 1 };
+
+        var samples = await RescoreAsync(scenario, Path.Combine(_folder, "rescored.csv"));
+
+        Assert.That(samples, Has.Count.EqualTo(1));
+        Assert.That(samples[0].LiveTurnsToTarget, Is.EqualTo(1));
+    }
+
+    private Task<IReadOnlyList<ScenarioSample>> RescoreAsync(ScenarioDefinition scenario, string outputCsv) =>
+        ScenarioRescoring.RescoreRunFolderAsync(
+            _folder,
+            id => id == "S1" ? scenario : null,
+            (s, folder, ct) => Task.FromResult<FinalStateVerdict?>(FinalStateVerdict.Correct),
+            outputCsv,
+            CancellationToken.None);
+
+    // Writes results.csv with one row under header and the sample-01 transcript.
+    private void WriteRun(string header, AgentTranscript transcript, params (string Name, string Value)[] values)
+    {
+        File.WriteAllLines(Path.Combine(_folder, "results.csv"), new[] { header, RowFor(header, values) });
+        var sampleFolder = Path.Combine(_folder, "sample-01");
+        Directory.CreateDirectory(sampleFolder);
+        File.WriteAllText(Path.Combine(sampleFolder, "transcript.json"), JsonSerializer.Serialize(transcript));
+    }
+
+    private static AgentTranscript TwoTurnTranscript()
+    {
+        var transcript = new AgentTranscript();
+        transcript.Turns.Add(Turn(1, Call(Tool, "{\"a\":1}")));
+        transcript.Turns.Add(Turn(2, Call(Tool, "{\"a\":2}")));
+        return transcript;
+    }
+
     private void WriteResults(params string[] rows) =>
         File.WriteAllLines(Path.Combine(_folder, "results.csv"), new[] { OldHeader }.Concat(rows));
 
-    // Builds one 28-column row by header name; columns not given are empty.
-    private static string Row(params (string Name, string Value)[] values)
+    // Builds one OldHeader row by column name; columns not given are empty.
+    private static string Row(params (string Name, string Value)[] values) => RowFor(OldHeader, values);
+
+    // Builds one row under header by column name; columns not given are empty.
+    private static string RowFor(string header, params (string Name, string Value)[] values)
     {
         var map = values.ToDictionary(v => v.Name, v => v.Value);
-        return string.Join(",", OldHeader.Split(',').Select(name => map.GetValueOrDefault(name, string.Empty)));
+        return string.Join(",", header.Split(',').Select(name => map.GetValueOrDefault(name, string.Empty)));
     }
 
     private static ScenarioDefinition Scenario(string id) => new(
