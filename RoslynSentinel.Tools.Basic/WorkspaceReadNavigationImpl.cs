@@ -68,16 +68,11 @@ public class WorkspaceReadNavigationImpl
     /// <summary>The surface's callable check for error text that names other tools, or null when there is no surface.</summary>
     private Func<string, bool>? CallableCheck => _activeToolSurface is null ? null : _activeToolSurface.IsCallable;
 
-    // Candidate-suggestion behavior confirmed live: an agent asked to read a file at a slightly
-    // wrong path (e.g. missing a subfolder) retried the identical wrong path 2-3 times before
-    // giving up, even when ListSolutionItemsTool's own earlier output already showed the real path ->
-    // the plain "file not found" message gave them nothing to act on. Searching the solution for
-    // files sharing the requested filename turns most of these into a one-shot redirect; when
-    // nothing matches by filename either, the message issues an explicit, unhedged directive
-    // rather than a suggestion, since softer phrasing ("consider calling X") was observed not
-    // changing the model's next action.
+    // The message offers ranked file candidates (same or similar file name) with a prefilled ReadFile
+    // call, says plainly when no loaded file has a similar name, and offers to report the file as
+    // non-existent. Searching by file name turns most wrong-path retries into a one-shot redirect.
     internal static ResultError BuildFileNotFoundError(Solution solution, string normalizedPath, Func<string, bool>? isCallable = null)
-        => new("FileNotFound", FileNotFoundMessage.Build(normalizedPath, DocumentLookup.FindClosestPaths(solution, normalizedPath), solution.Projects.Count(), isCallable, DocumentLookup.FindDeclaringTypeFiles(solution, normalizedPath)));
+        => new("FileNotFound", FileNotFoundMessage.Build(normalizedPath, DocumentLookup.FindFileCandidates(solution, normalizedPath), solution.Projects.Count(), isCallable, DocumentLookup.FindDeclaringTypeFiles(solution, normalizedPath)));
 
     /// <summary>
     /// Builds the MethodNotFound message for GetMethodSource. Parts, each only when it applies: the original sentence,

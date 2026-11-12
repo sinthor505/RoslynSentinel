@@ -11,7 +11,7 @@ namespace RoslynSentinel.Tests.Basic;
 [Category("WorkspaceTools")] // sentinel:auto-category
 public class FileNotFoundMessageTests
 {
-    private static readonly IReadOnlyList<string> NoCandidates = [];
+    private static readonly IReadOnlyList<FileCandidate> NoCandidates = [];
 
     private string _root = "";
 
@@ -130,7 +130,7 @@ public class FileNotFoundMessageTests
     {
         MakeFile("Sol", "B.sln");
         var source = MakeFile("Sol", "Thing.cs");
-        string[] candidates = [@"C:\loaded\src\Thing.cs"];
+        IReadOnlyList<FileCandidate> candidates = [new FileCandidate(@"C:\loaded\src\Thing.cs", 0, true)];
 
         var text = FileNotFoundMessage.Build(source, candidates, 2);
 
@@ -142,25 +142,34 @@ public class FileNotFoundMessageTests
     public void Build_MissingFileWithCandidates_UsesTheDifferentPathWording()
     {
         var missing = Path.Combine(_root, "NoSuchDir", "Thing.cs");
-        string[] candidates = [@"C:\loaded\a\Thing.cs", @"C:\loaded\b\Thing.cs"];
+        IReadOnlyList<FileCandidate> candidates =
+        [
+            new FileCandidate(@"C:\loaded\a\Thing.cs", 0, true),
+            new FileCandidate(@"C:\loaded\b\Thing.cs", 0, true),
+        ];
 
         var text = FileNotFoundMessage.Build(missing, candidates, 3);
 
         Assert.That(text, Does.Contain($"File '{missing}' was not found in the loaded solution (searched 3 project(s)"));
-        Assert.That(text, Does.Contain("A file with the same name exists at a different path. You MUST retry with the exact path of the file you meant:"));
-        Assert.That(text, Does.Contain(@"  - C:\loaded\a\Thing.cs"));
-        Assert.That(text, Does.Contain(@"  - C:\loaded\b\Thing.cs"));
+        Assert.That(text, Does.Contain("A file with the same name exists at a different path. Did you mean one of these?"));
+        Assert.That(text, Does.Contain("  - " + @"C:\loaded\a\Thing.cs" + " -> " + ToolCallHint.Call("ReadFile", ("filePath", @"C:\loaded\a\Thing.cs"))));
+        Assert.That(text, Does.Contain("  - " + @"C:\loaded\b\Thing.cs" + " -> " + ToolCallHint.Call("ReadFile", ("filePath", @"C:\loaded\b\Thing.cs"))));
+        Assert.That(text, Does.Contain("Retry with the exact path of the file you meant."));
+        Assert.That(text, Does.Not.Contain("You MUST"));
     }
 
     [Test]
-    public void Build_MissingFileNoCandidatesListingCallable_DirectsToListSolutionItems()
+    public void Build_MissingFileNoCandidatesListingCallable_OffersListSolutionItems()
     {
         var missing = Path.Combine(_root, "NoSuchDir", "Thing.cs");
 
         var text = FileNotFoundMessage.Build(missing, NoCandidates, 3, name => name == "ListSolutionItems");
 
-        Assert.That(text, Does.Contain("was not found anywhere in the loaded solution (searched 3 project(s), no file-name match"));
-        Assert.That(text, Does.Contain("You MUST call " + ToolCallHint.Call("ListSolutionItems", ("kind", "all"))));
+        Assert.That(text, Does.Contain("was not found in the loaded solution (searched 3 project(s) by exact path"));
+        Assert.That(text, Does.Contain("No file in the solution has a similar name"));
+        Assert.That(text, Does.Contain("call " + ToolCallHint.Call("ListSolutionItems", ("kind", "all"))));
+        Assert.That(text, Does.Contain("does not exist in this solution"));
+        Assert.That(text, Does.Not.Contain("You MUST"));
     }
 
     [Test]
@@ -170,9 +179,12 @@ public class FileNotFoundMessageTests
 
         var text = FileNotFoundMessage.Build(missing, NoCandidates, 3, name => name is "ReadFile" or "GetLargeResult");
 
-        Assert.That(text, Does.Contain("was not found anywhere in the loaded solution"));
+        Assert.That(text, Does.Contain("was not found in the loaded solution"));
+        Assert.That(text, Does.Contain("No file in the solution has a similar name"));
         Assert.That(text, Does.Not.Contain("ListSolutionItems"));
-        Assert.That(text, Does.Contain("Retry with a path you have already seen"));
+        Assert.That(text, Does.Contain("Retry only with a path you have already seen"));
+        Assert.That(text, Does.Contain("does not exist in this solution"));
+        Assert.That(text, Does.Not.Contain("You MUST"));
     }
 
     [Test]
@@ -184,7 +196,7 @@ public class FileNotFoundMessageTests
         {
             var text = FileNotFoundMessage.Build(relative, NoCandidates, 1, _ => true);
 
-            Assert.That(text, Does.Contain("was not found anywhere in the loaded solution"), relative);
+            Assert.That(text, Does.Contain("was not found in the loaded solution"), relative);
             Assert.That(text, Does.Not.Contain("is a directory"), relative);
         }
     }

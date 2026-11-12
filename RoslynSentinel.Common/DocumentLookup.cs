@@ -39,6 +39,7 @@ public enum DocumentLookupStatus
 /// Result of <see cref="DocumentLookup.TryGetDocument"/>. A result type rather than a nullable
 /// <see cref="Microsoft.CodeAnalysis.Document"/> because the two failure shapes (not found, ambiguous) each
 /// carry the paths a caller needs to recover, and the lookup is the only place that knows them.
+/// FileCandidates carries the ranked file candidates of a not-found lookup (null when built without them).
 /// Tool-layer callers use <see cref="ToResultError"/>; engine-layer callers use
 /// <see cref="GetDocumentOrThrow"/>, which throws the matching <see cref="ToolException"/> subclass so
 /// <see cref="ToolErrorMapper"/> reports the right error code.
@@ -49,7 +50,7 @@ public sealed record DocumentLookupResult(
     Document? Document,
     IReadOnlyList<string> CandidatePaths,
     int SearchedProjectCount,
-    [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<(string TypeName, string FilePath)>? DeclaringTypeFiles = null) : IOperationResult
+    [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<(string TypeName, string FilePath)>? DeclaringTypeFiles = null, [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<FileCandidate>? FileCandidates = null) : IOperationResult
 {
     /// <summary>True when the lookup failed; mirrors <see cref="IsFound"/>.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -117,7 +118,7 @@ public sealed record DocumentLookupResult(
         }
 
         // The shared builder also probes the disk (directory / project file / file outside the solution) before falling back to the lookup wording.
-        return FileNotFoundMessage.Build(RequestedPath, CandidatePaths, SearchedProjectCount, isCallable, DeclaringTypeFiles);
+        return FileNotFoundMessage.Build(RequestedPath, FileCandidates ?? CandidatePaths.Select(p => new FileCandidate(p, 0, true)).ToList(), SearchedProjectCount, isCallable, DeclaringTypeFiles);
     }
 
     /// <summary>
@@ -258,7 +259,8 @@ public static class DocumentLookup
             }
         }
 
-        return new DocumentLookupResult(DocumentLookupStatus.NotFound, requested, null, FindClosestPaths(solution, requested), projectCount, FindDeclaringTypeFiles(solution, requested));
+        var candidates = FindFileCandidates(solution, requested);
+        return new DocumentLookupResult(DocumentLookupStatus.NotFound, requested, null, candidates.Where(c => c.SameFileName).Select(c => c.Path).ToList(), projectCount, FindDeclaringTypeFiles(solution, requested), candidates);
     }
 
     /// <summary>

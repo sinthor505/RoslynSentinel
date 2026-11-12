@@ -43,7 +43,7 @@ public class FileNotFoundDeclaringTypeTests
 
         Assert.That(read.ErrorCode, Is.EqualTo("FileNotFound"));
         Assert.That(read.Message, Does.StartWith(expected));
-        Assert.That(read.Message, Does.Contain("was not found anywhere in the loaded solution"), "the usual explanation still follows");
+        Assert.That(read.Message, Does.Contain("was not found in the loaded solution"), "the usual explanation still follows");
         Assert.That(navigation.ErrorCode, Is.EqualTo("FileNotFound"));
         Assert.That(navigation.Message, Is.EqualTo(read.Message), "both read paths share one text");
     }

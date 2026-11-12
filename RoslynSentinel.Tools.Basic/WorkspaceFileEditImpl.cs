@@ -542,7 +542,7 @@ public class WorkspaceFileEditImpl
     /// <summary>FileNotFound for ReadFile. <paramref name="isCallable"/> says whether a tool name can be called on this
     /// server (null = every tool can); ListSolutionItems is named only when it can.</summary>
     internal static ResultError BuildFileNotFoundError(Microsoft.CodeAnalysis.Solution solution, string normalizedPath, Func<string, bool>? isCallable = null)
-        => new("FileNotFound", FileNotFoundMessage.Build(normalizedPath, DocumentLookup.FindClosestPaths(solution, normalizedPath), solution.Projects.Count(), isCallable, DocumentLookup.FindDeclaringTypeFiles(solution, normalizedPath)));
+        => new("FileNotFound", FileNotFoundMessage.Build(normalizedPath, DocumentLookup.FindFileCandidates(solution, normalizedPath), solution.Projects.Count(), isCallable, DocumentLookup.FindDeclaringTypeFiles(solution, normalizedPath)));
 
     private async Task<SentinelCallToolResult<object>> ReadFileWithoutSolutionAsync(string absolutePath, int? startLine, int? endLine, CancellationToken cancellationToken)
     {
