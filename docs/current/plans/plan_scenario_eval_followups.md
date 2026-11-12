@@ -1,6 +1,6 @@
 # Plan: Scenario-eval follow-ups - stop-adherence family, resume early exit, and repairs for four scenarios that missed their target
 
-**Status:** IN PROGRESS 2026-11-12. Steps 9, 8 (code; LIVE run pending), 3a done (4ae86e64, 23aaa1fb, 8392824f).
+**Status:** IN PROGRESS 2026-11-12. Code done for steps 9, 8, 1, 3, 6 (4ae86e64, 23aaa1fb, 714fc5d6..1d6da15b, 8392824f, 42b91d30..85602567); step 8 LIVE run done; steps 2, 4, 6 LIVE runs queued; step 7 next.
 
 ## Problem
 
@@ -142,6 +142,8 @@ Alternatives considered:
 - Amended by decisions 5-6: stop variants ideal 3 / cap 8 with `StoppedLate`; control cap 8; sample-03 check
   already resolved (no scorer change). Prompts reused from `FaultScenarios`/`RenameScenarios` are `private const`
   today and need `internal`.
+- Done: 714fc5d6 (`IdealTurns`, `StoppedLate`, `FailureDetail`), 6cb0f4a5 (wired into sample loop and rescoring),
+  ee68eb85 (`StopAdherenceScenarios.cs`), 1d6da15b (registry + tests). `FailureDetail` is not a CSV column.
 - Files: new `RoslynSentinel.Tests.ModelEval/StopAdherenceScenarios.cs` (plus a matching `StopAdherenceScenariosTests.cs`);
   `ScenarioRegistry.cs` (add three definitions to `Definitions`, alongside `FaultScenarios.*` at line 17);
   `ScenarioScorer.cs` only if the sample-03 check below finds a scorer defect.
@@ -190,7 +192,9 @@ Alternatives considered:
   numbers, not asserted).
 
 ### Step 3 - Early exit on target state for resume scenarios
-- 3a done: 8392824f (TargetReached + runner predicate; tests in `LoopAssistRunnerTests`). 3b, 3c pending.
+- Done (code): 3a 8392824f (TargetReached + runner predicate; tests in `LoopAssistRunnerTests`); 3b 42b91d30,
+  3dbffff3 (`EndOnCorrectFinalState`, `BuildTargetReached`); 3c c10a21c1, 65edfc13, 8e400a2f, 85602567
+  (`liveTurnsToTarget` last CSV column; parser accepts 30 and 31 columns). LIVE step 4 queued.
 - Files: `RoslynSentinel.Common/AgentLoop/ModelAgentRunner.cs`, `RoslynSentinel.Common/AgentLoop/AgentTranscript.cs`
   (`AgentStopReason`, line 201); `RoslynSentinel.Tests.ModelEval/ScenarioDefinition.cs`, `ScenarioAgentTests.cs`
   (`RunResumeSampleAsync`), `ScenarioScorer.cs`, `ScenarioSampleLoop.cs`, `ResumeScenarios.cs`, and the CSV/sample
@@ -240,6 +244,7 @@ Alternatives considered:
   here would be a recorded exception, so it needs the owner's explicit agreement on the numbers.
 
 ### Step 6 - Convert `RenameSymbolTypo` to a seeded scenario
+- Done (code): 88357268 (authored-only seed path), 0c16de03 (definition). LIVE run queued.
 - Files: `FaultScenarios.cs` (the `RenameSymbolTypo` definition, `:44`), `ScenarioAgentTests.cs`
   (`RunResumeSampleAsync`, `ApplyResumeFaultAsync`), `ResumeScenariosTests.cs`/`FaultScenariosTests.cs`.
 - Change: the seeded turn holds a `RenameSymbol` call with the typo `CalcDsc` and the real error the current tool
