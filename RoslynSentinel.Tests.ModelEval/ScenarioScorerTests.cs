@@ -497,6 +497,51 @@ public class ScenarioScorerTests
         Assert.That(zero, Is.EqualTo(cold));
     }
 
+    [Test]
+    public void FailureClass_None_AndPassed_WhenTargetReachedAfterFailedThenSuccessfulCall()
+    {
+        var transcript = Transcript(
+            Turn(null, null, Call(Tool, isError: true, resultJson: NotFoundResultJson)),
+            Turn("Done.", null, Call(Tool, "{\"retry\":true}")));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.Recover, null, Final.Correct, AgentStopReason.TargetReached);
+
+        Assert.That(result.Passed, Is.True);
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.None));
+        Assert.That(result.TurnCapHit, Is.False);
+        Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.TargetReached));
+    }
+
+    [Test]
+    public void FailureClass_None_AndPassed_WhenTargetReachedOnResumeWithSeededTurns()
+    {
+        var transcript = Transcript(
+            Turn(null, null, Call(Tool, "{\"a\":1}", isError: true, resultJson: NotFoundResultJson)),
+            Turn("Done.", null, Call(Tool, "{\"retry\":true}")));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.Recover, null, Final.Correct, AgentStopReason.TargetReached, seededTurns: 1);
+
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.None));
+        Assert.That(result.Passed, Is.True);
+    }
+
+    [Test]
+    public void TargetReachedWithNonCorrectVerdict_IsNotBudgetOutOrFalseDoneClaim()
+    {
+        // This combination cannot occur through the harness: BuildTargetReached is true only for Correct.
+        // The test only pins that the scorer does not mislabel it as BudgetOut or FalseDoneClaim.
+        var transcript = Transcript(
+            Turn(null, null, Call(Tool, isError: true, resultJson: NotFoundResultJson)),
+            Turn("Done.", null));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.Recover, null, Final.Wrong, AgentStopReason.TargetReached);
+
+        Assert.That(result.Passed, Is.False);
+        Assert.That(result.FailureClass, Is.Not.EqualTo(FailureClass.BudgetOut));
+        Assert.That(result.FailureClass, Is.Not.EqualTo(FailureClass.FalseDoneClaim));
+        Assert.That(result.TurnCapHit, Is.False);
+    }
+
     private static AgentTranscriptTurn[] RunOfTurns(int count, string finalContent)
     {
         var turns = new AgentTranscriptTurn[count];

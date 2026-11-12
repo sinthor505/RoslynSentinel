@@ -303,6 +303,7 @@ public static class ScenarioScorer
             return FailureClass.StoppedLate;
         }
 
+        // AgentStopReason.TargetReached (the resume harness stopped the run because CheckFinalState was Correct) is a finish: it is never BudgetOut (TurnCapExceeded only), never FalseDoneClaim (not endedByItself) and TurnCapHit stays false. The harness sets it only on a Correct verdict, so TargetReached with a non-Correct verdict cannot occur.
         var endedByItself = stopReason is null || stopReason == AgentStopReason.ModelFinished;
         if (!markerPresent && verdict is not null && verdict != FinalStateVerdict.Correct && endedByItself)
         {
