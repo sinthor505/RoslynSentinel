@@ -684,4 +684,20 @@ public class ReadFileTests
             File.Delete(path);
         }
     }
+
+    [Test]
+    public async Task ReadFile_MemberNameNamingAType_ReturnsTheWholeTypeSourceAsync()
+    {
+        UseDocumentSource("public class Alpha\n{\n    public int Keep() => 1;\n    public int Other() => 2;\n}\n");
+
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Alpha");
+
+        Assert.That(result.IsError, Is.False);
+        var view = (MemberSourceViewResult)result.SuccessData!;
+        Assert.That(view.Member.Name, Is.EqualTo("Alpha"));
+        Assert.That(view.Member.Kind, Is.EqualTo("class"));
+        Assert.That(view.Member.Source, Does.Contain("public class Alpha"));
+        Assert.That(view.Member.Source, Does.Contain("public int Keep()"));
+        Assert.That(view.Member.Source, Does.Contain("public int Other()"));
+    }
 }

@@ -305,7 +305,7 @@ public class WorkspaceTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("Omit to start from the first line.")] int? startLine = null,
         [Description("Omit to read through the last line.")] int? endLine = null,
-        [Consumes(DataTag.SymbolName, required: false)][Description("Read just this member's source (method, property, field, constructor) instead of the whole file. Cannot be combined with startLine/endLine.")] string? memberName = null,
+        [Consumes(DataTag.SymbolName, required: false)][Description("Read just this member's source (method, property, field, constructor, or a type name for the whole type) instead of the whole file. Cannot be combined with startLine/endLine.")] string? memberName = null,
         [Consumes(DataTag.SymbolName, required: false)][Description("Only with memberName: the type that holds the member, to disambiguate same-named members.")] string? containerName = null,
         [Description("None (default) = unchanged; Summary = adds a lineEndings field: counts per style, dominant style, final-newline flag and the line numbers that differ; All = like Summary, and the returned source is rendered with <CRLF>, <LF>, <CR> or <EOF> at the end of every line. In All mode the source is NOT verbatim - never paste it into ReplaceSnippet.")] LineEndingDisplay showLineEndings = LineEndingDisplay.None,
         CancellationToken cancellationToken = default)
