@@ -156,7 +156,9 @@ public class GitRelativeWorktreeTests
         new("ListStashes", nameof(IGitReader.ListStashes), (r, d) => r.ListStashes(d, Timeout)),
         new("CountStashes", nameof(IGitReader.CountStashes), (r, d) => r.CountStashes(d, Timeout)),
         new("GetNameStatus", nameof(IGitReader.GetNameStatus), (r, d) => r.GetNameStatus(d, _firstSha + "..HEAD", paths: null, Timeout)),
+        new("GetPatchText", nameof(IGitReader.GetPatchText), (r, d) => r.GetPatchText(d, "staged", paths: null, Timeout)),
         new("GetCommitNameStatus", nameof(IGitReader.GetCommitNameStatus), (r, d) => r.GetCommitNameStatus(d, "HEAD", paths: null, Timeout)),
+        new("GetCommitPatchText", nameof(IGitReader.GetCommitPatchText), (r, d) => r.GetCommitPatchText(d, "HEAD", paths: null, Timeout)),
         // The raw message differs only in its final newline between the readers (libgit2 keeps it, the CLI output is trimmed); the Git tool trims it when it builds its DTO, so compare it trimmed.
         new("GetCommitHeader", nameof(IGitReader.GetCommitHeader), (r, d) => r.GetCommitHeader(d, "HEAD", Timeout) is { } header ? header with { Message = header.Message.TrimEnd('\r', '\n') } : null),
         new("GetCommitMessages", nameof(IGitReader.GetCommitMessages), (r, d) => r.GetCommitMessages(d, Timeout)),

@@ -51,10 +51,10 @@ public class GitReaderEnvironmentTests
         ["XDG_CONFIG_HOME"] = "GetBoolConfig(trailers)",
     };
 
-    // The methods that load the index: the ones a split index must decline (GetNameStatus only for "staged").
+    // The methods that load the index: the ones a split index must decline (GetNameStatus and GetPatchText only for "staged", and GetCommitPatchText).
     private static readonly string[] IndexReaders =
     [
-        "GetStatus", "GetRepositoryStatus", "ListTrackedPaths", "ListIndexPathsMatching", "FindIgnoredPaths", "GetNameStatus(staged)", "HasStagedChanges", "StageWholeFiles", "UnstagePaths",
+        "GetStatus", "GetRepositoryStatus", "ListTrackedPaths", "ListIndexPathsMatching", "FindIgnoredPaths", "GetNameStatus(staged)", "GetPatchText(staged)", "GetCommitPatchText", "HasStagedChanges", "StageWholeFiles", "UnstagePaths",
     ];
 
     private readonly Dictionary<string, string?> _savedEnvironment = [];
@@ -130,7 +130,10 @@ public class GitReaderEnvironmentTests
         new("CountStashes", nameof(IGitReader.CountStashes), (r, d) => r.CountStashes(d, Timeout)),
         new("GetNameStatus(range)", nameof(IGitReader.GetNameStatus), (r, d) => r.GetNameStatus(d, firstSha + "..HEAD", paths: null, Timeout)),
         new("GetNameStatus(staged)", nameof(IGitReader.GetNameStatus), (r, d) => r.GetNameStatus(d, "staged", paths: null, Timeout)),
+        // Null under GIT_INDEX_FILE naming an unreadable index: git itself fails there, so the CLI answers null (as HasStagedChanges does).
+        new("GetPatchText(staged)", nameof(IGitReader.GetPatchText), (r, d) => r.GetPatchText(d, "staged", paths: null, Timeout), MayBeNull: true),
         new("GetCommitNameStatus", nameof(IGitReader.GetCommitNameStatus), (r, d) => r.GetCommitNameStatus(d, "HEAD", paths: null, Timeout)),
+        new("GetCommitPatchText", nameof(IGitReader.GetCommitPatchText), (r, d) => r.GetCommitPatchText(d, "HEAD", paths: null, Timeout)),
         // The raw message differs only in its final newline between the readers (the Git tool trims it); compare it trimmed.
         new("GetCommitHeader", nameof(IGitReader.GetCommitHeader), (r, d) => r.GetCommitHeader(d, "HEAD", Timeout) is { } header ? header with { Message = header.Message.TrimEnd('\r', '\n') } : null),
         new("GetCommitMessages", nameof(IGitReader.GetCommitMessages), (r, d) => r.GetCommitMessages(d, Timeout)),

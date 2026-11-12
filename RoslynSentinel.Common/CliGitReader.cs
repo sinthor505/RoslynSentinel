@@ -281,6 +281,35 @@ internal sealed class CliGitReader : IGitReader
         return run is { ExitCode: 0 } ? ParseNameStatus(run.Value.StdOut) : null;
     }
 
+    public string? GetPatchText(string workingDirectory, string target, IReadOnlyList<string>? paths, TimeSpan cliTimeout)
+    {
+        // Exactly what the Git tool's diff runs (DiffAsync): core.quotePath=false so non-ASCII names are not octal-escaped, the target as given, no format flags.
+        // Stdout is decoded by GitProcess as UTF-8 with a BOM skipped, as the tool does; the tool's line re-join is the caller's.
+        var args = new List<string> { "-c", "core.quotePath=false", "diff" };
+        if (target == "staged")
+        {
+            args.Add("--cached");
+        }
+        else if (target != "working")
+        {
+            args.Add(target);
+        }
+
+        AddPathLimit(args, paths);
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, [.. args]);
+        return run is { ExitCode: 0 } ? run.Value.StdOut : null;
+    }
+
+    public string? GetCommitPatchText(string workingDirectory, string revision, IReadOnlyList<string>? paths, TimeSpan cliTimeout)
+    {
+        // Exactly what the Git tool's show runs for its diff (ShowAsync): the parent (or the empty tree for a root commit) against the revision; a merge commit diffs against its first parent.
+        var parent = GitProcess.TryRun(workingDirectory, cliTimeout, "rev-parse", "--verify", "--quiet", revision + "^");
+        var args = new List<string> { "-c", "core.quotePath=false", "diff", parent is { ExitCode: 0 } ? revision + "^" : EmptyTreeHash, revision };
+        AddPathLimit(args, paths);
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, [.. args]);
+        return run is { ExitCode: 0 } ? run.Value.StdOut : null;
+    }
+
     public CommitHeader? GetCommitHeader(string workingDirectory, string revision, TimeSpan cliTimeout)
     {
         var run = GitProcess.TryRun(workingDirectory, cliTimeout, "show", "--format=%H%x1f%an%x1f%aI%x1f%B", "--no-patch", revision);

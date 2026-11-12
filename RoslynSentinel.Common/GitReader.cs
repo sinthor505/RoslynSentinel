@@ -177,6 +177,23 @@ internal interface IGitReader
     IReadOnlyList<NameStatusEntry>? GetCommitNameStatus(string workingDirectory, string revision, IReadOnlyList<string>? paths, TimeSpan cliTimeout);
 
     /// <summary>
+    /// The patch text of the Git tool's <c>diff</c> for <paramref name="target"/> (<c>git -c core.quotePath=false diff</c> plus <c>--cached</c> for "staged" or the target as given, then
+    /// <c>-- paths</c>): stdout decoded as UTF-8 exactly as the tool decodes it (a leading BOM skipped), before the tool's line re-join, so the caller applies that step. Paths and
+    /// target rules are those of <see cref="GetNameStatus"/> (<paramref name="paths"/> null means no <c>--</c>, an empty list a bare <c>--</c>). The CLI reader answers every target. The libgit2
+    /// reader serves only "staged" and plain <c>refA..refB</c> and throws <see cref="NotSupportedException"/> for the others and for every input whose text it cannot reproduce byte for byte
+    /// (a rename or copy, an empty file added or deleted, a path with a space or a non-ASCII character, a typechange or symbolic link, a submodule, a path with a diff attribute, and any
+    /// <c>diff.*</c> or <c>color.*</c> config key that is not known to be neutral). Null when git cannot answer (not a repository, unknown revision, git missing or timed out, a non-zero exit):
+    /// the caller re-runs git so the user sees git's own error text.
+    /// </summary>
+    string? GetPatchText(string workingDirectory, string target, IReadOnlyList<string>? paths, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// The patch text of the Git tool's <c>show</c>: <c>git diff &lt;revision&gt;^ &lt;revision&gt;</c>, or against the empty tree for a root commit (a merge commit is diffed against its first parent), decoded
+    /// as <see cref="GetPatchText"/> decodes it. Same pathspec rules, decline rules and null conditions as <see cref="GetPatchText"/>.
+    /// </summary>
+    string? GetCommitPatchText(string workingDirectory, string revision, IReadOnlyList<string>? paths, TimeSpan cliTimeout);
+
+    /// <summary>
     /// The header of the Git tool's <c>show</c>: hash, author name, author date and message of <paramref name="revision"/> (<c>git show --no-patch</c> with those
     /// format fields). The libgit2 reader throws <see cref="NotSupportedException"/> for what it cannot reproduce (a revision that is not a plain commit, such as an
     /// annotated tag; a declared non-UTF-8 encoding; text git and .NET decode differently). Null when git cannot answer (not a repository, unknown revision).

@@ -121,6 +121,12 @@ internal sealed class FallbackGitReader : IGitReader
     public IReadOnlyList<NameStatusEntry>? GetCommitNameStatus(string workingDirectory, string revision, IReadOnlyList<string>? paths, TimeSpan cliTimeout) =>
         Invoke(reader => reader.GetCommitNameStatus(workingDirectory, revision, paths, cliTimeout));
 
+    public string? GetPatchText(string workingDirectory, string target, IReadOnlyList<string>? paths, TimeSpan cliTimeout) =>
+        Invoke(reader => reader.GetPatchText(workingDirectory, target, paths, cliTimeout));
+
+    public string? GetCommitPatchText(string workingDirectory, string revision, IReadOnlyList<string>? paths, TimeSpan cliTimeout) =>
+        Invoke(reader => reader.GetCommitPatchText(workingDirectory, revision, paths, cliTimeout));
+
     public CommitHeader? GetCommitHeader(string workingDirectory, string revision, TimeSpan cliTimeout) =>
         Invoke(reader => reader.GetCommitHeader(workingDirectory, revision, cliTimeout));
 

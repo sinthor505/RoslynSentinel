@@ -1082,6 +1082,18 @@ public class GitReaderParityTests
             return null;
         }
 
+        public string? GetPatchText(string workingDirectory, string target, IReadOnlyList<string>? paths, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
+        public string? GetCommitPatchText(string workingDirectory, string revision, IReadOnlyList<string>? paths, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
         public CommitHeader? GetCommitHeader(string workingDirectory, string revision, TimeSpan cliTimeout)
         {
             Gate();
