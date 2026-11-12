@@ -207,7 +207,12 @@ internal sealed class InProcessCommitRoute
             Directory.CreateDirectory(folder);
             var line = System.Text.Json.JsonSerializer.Serialize(
                 new { utc = DateTimeOffset.UtcNow.ToString("O"), outcome, commit, reason, pid = Environment.ProcessId },
-                new System.Text.Json.JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull }) + "\n";
+                // Relaxed escaping keeps quotes and '+' readable in reasons; the file is a local log, never embedded in HTML.
+                new System.Text.Json.JsonSerializerOptions
+                {
+                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                }) + "\n";
             lock (AppendLock)
             {
                 File.AppendAllText(Path.Combine(folder, "commit-route.jsonl"), line, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
