@@ -16,10 +16,12 @@
   decline was dropped (`d8b112e6`) CRLF code commits take the route (first: `abec2588`); the
   post-commit server prebuild still fires. Tools.Basic full run green at `abec2588`, Tests.Basic at
   `c09cc8fd`.
-- **Next candidates, in order:** (1) review the trial log after a few days of peer sessions
-  (decline reasons, any wrong commit) and decide default-on; (2) a `Git` config operation (shell
-  `git config` was needed twice); (3) in-process worktree and tag lists; (4) diff/show patch text,
-  which needs a parity corpus first.
+- **Trial snapshot (2026-11-12 08:31-11:35 local, 13 server processes):** 66 log lines, 65 taken,
+  1 declined (the CR-byte rule, before `d8b112e6`). Only this repo's setup (`core.autocrlf=true`,
+  main worktree) is exercised and no decline rule has fired in real use, so too early for default-on.
+- **Next (approved 2026-11-12, sequenced in `plans/plan_libgit2sharp_followups.md`):** trial
+  instrumentation, an audit script, a second-setup run and written default-on criteria; a `Git`
+  config operation; diff/show patch text behind a parity corpus; in-process worktree and tag lists.
 
 ## Results (2026-11-10)
 
@@ -72,8 +74,8 @@
   Stage never converts line endings: files containing CR bytes, `core.safecrlf`, filter/ident/
   encoding attributes and non-regular files decline to the CLI (12 decline rules in total), and a
   held `index.lock` declines without touching the index.
-- Risk not yet tested: `worktree.useRelativePaths=true` (git 2.48+) writes
-  `extensions.relativeWorktrees`, which libgit2 1.8.6 probably rejects; reads would fall back.
+- `worktree.useRelativePaths=true` (git 2.48+) writes `extensions.relativeWorktrees`, which
+  libgit2 1.8.6 rejects; every read then falls back to the CLI (`8a7c94fa`, pinned by tests).
 
 ## Motivation
 
@@ -245,6 +247,18 @@ GetInProgressOperation, HasStagedChanges). A plain commit, amend or trailers com
 `git commit`; median 442 -> 117 ms (trailers off, tracked), 439 -> 132 ms (trailers on, untracked).
 An amend with a local `.` upstream still spawns 3 (declined by design).
 
+**5c - in-process commit for the simple case (design, after a go from 5b).** Plain commit or
+`--only <paths>` (tree = HEAD tree plus the listed paths' index entries), trailers formatted in
+process with byte-parity tests against `git commit --trailer` (existing `Co-Authored-By` block),
+reflog `commit: <subject>`. Declines to the CLI on: `pre-commit`, `prepare-commit-msg` or
+`commit-msg` hook present; `amend` (fires `post-rewrite`); merge, cherry-pick or revert in progress;
+`commit.gpgsign=true`; a listed path with a `filter=` attribute (CR bytes: dropped 2026-11-12, see
+below); the existing environment and repo-feature declines. Skipped versus the CLI: `gc --auto`.
+
+Hook policy: the hook files stay (they cover shell, IDE and rebase/merge commits, and an arbitrary
+repo's hooks cannot be recreated); the server runs `post-*` hooks itself only for commits it made in
+process.
+
 **5c done (2026-11-12), route DEFAULT OFF:** 5c-1 `a6462ec5` CAS commit primitive
 (`Libgit2GitReader.CasCommit.cs`, `Libgit2Native.cs`); 5c-2 `5d108b73` hook runner (`GitHooks.cs`,
 `GitShellLocator.cs`); 5c-3 `79fae5b2` message cleanup and trailers (`GitCommitMessage.cs`, byte
@@ -265,18 +279,6 @@ paths are staged before the commit and the index write declines any CR file (S8)
 `git add` converts line endings, and the primitive's working-tree check declines anything still
 different, which makes HEAD plus those entries what `git commit --only` stores. Pinned by CRLF,
 `text=auto`, mixed-EOL and lone-CR parity scenarios.
-
-**5c - in-process commit for the simple case (after a go from 5b).** Plain commit or
-`--only <paths>` (tree = HEAD tree plus the listed paths' index entries), trailers formatted in
-process with byte-parity tests against `git commit --trailer` (existing `Co-Authored-By` block),
-reflog `commit: <subject>`. Declines to the CLI on: `pre-commit`, `prepare-commit-msg` or
-`commit-msg` hook present; `amend` (fires `post-rewrite`); merge, cherry-pick or revert in progress;
-`commit.gpgsign=true`; a listed path with a `filter=` attribute (CR bytes: dropped 2026-11-12, see above); the existing
-environment and repo-feature declines. Skipped versus the CLI: `gc --auto`.
-
-Hook policy: the hook files stay (they cover shell, IDE and rebase/merge commits, and an arbitrary
-repo's hooks cannot be recreated); the server runs `post-*` hooks itself only for commits it made in
-process.
 
 ### Stays on the CLI (decided for this proposal)
 
@@ -304,33 +306,41 @@ process.
 
 ## Open questions
 
-- May `Git(commit)` ever skip hooks? Currently: no. (Affects whether commit could move in-process.)
-- Do this repo or harness worktrees use extensions libgit2 cannot open (reftable, sha256, some
-  index extensions)? The spike answers this.
-- Does anything depend on `RunGitAsync`'s CRLF plus trailing-newline output shape? Step 0 must
-  audit the ~69 call sites and the parsers before removing it. Not yet audited.
-- Does LibGit2Sharp 0.32.0 (net8.0 asset) load on net10.0 and honour `core.autocrlf`/`.gitattributes`
-  the same way git does for `status` and `diff`? Hypothesis; spike and parity tests decide.
-- Exact spike go/no-go thresholds (see step 1).
+All resolved (2026-11-12); open follow-ups live in `plans/plan_libgit2sharp_followups.md`.
+
+- May `Git(commit)` ever skip hooks? No: the 5c route declines on any blocking hook and runs
+  `post-*` hooks itself for the commits it makes (see "Hook policy").
+- Extensions libgit2 cannot open? None in this repo (`repositoryformatversion = 0`, spike);
+  `extensions.relativeWorktrees` is rejected and falls back to the CLI (`8a7c94fa`).
+- Dependence on `RunGitAsync`'s CRLF plus trailing-newline output? No per-caller audit is recorded;
+  step 0 (`15881fa2`) removed the re-join and the full suite was green at `bb00f4bb`.
+- Does the net8.0 asset load on net10.0, and does libgit2 honour `core.autocrlf`/`.gitattributes`
+  like git? Loads (spike GO). Status matches; working-tree diffs do not, so they stay on the CLI.
+- Spike thresholds: moot, the spike passed every exit criterion.
 
 ## Cost / risk
 
-- **No hooks.** libgit2 runs none; hence commit stays on the CLI.
-- **No automatic signing.** `commit.gpgsign` is ignored (manual signing is possible); another
-  reason commit stays on the CLI.
+- **No hooks.** libgit2 runs none. The in-process commit route (5c) declines to the CLI when a
+  `pre-commit`, `prepare-commit-msg`, `commit-msg`, `reference-transaction` or `post-index-change`
+  hook or a `hook.*` entry exists, and runs `post-commit` itself, unawaited (`GitHooks.cs`).
+- **No automatic signing.** `commit.gpgsign` is ignored by libgit2 (manual signing is possible);
+  the route declines to the CLI when it is true.
 - **No credential helpers/GCM, limited SSH.** Network operations stay on the CLI.
 - **Handle locking on Windows.** Mitigated only by the per-call `using` rule above; a leaked
   `Repository` blocks worktree deletion, which the PlanStepRunner harness depends on.
 - **Native calls cannot be timed out or killed.** A hung libgit2 call hangs a server thread, unlike
-  the CLI's timeout-and-kill-tree. Reads on local repos only in stages 1-2.
+  the CLI's timeout-and-kill-tree. Stages 1-2 are reads on local repos; stages 3-4 write, and a
+  hang inside an in-process stage or commit would also leave `index.lock` held, blocking the shell
+  and the CLI fallback until the server exits.
 - **Newer repo formats.** Reftable, sha256 and some index extensions may not open; CLI fallback
   covers this, at the price of two code paths.
 - **Dual implementation.** Needs CLI-vs-libgit2 parity tests (`GitTestRepo` fixtures) and ongoing
   maintenance until the CLI path can be deleted for a given operation.
 - **Packaging.** The native `runtimes/` folder (a few MB) must survive `scripts/install.ps1`
   and the per-session instance copies; a missing native asset surfaces as `DllNotFoundException`
-  and falls back to the CLI, so the failure would be silent. Add a startup log line or test that
-  reports which backend is active.
+  and falls back to the CLI, so the failure would be silent. Mitigated by step 3b: the warmup logs
+  a native-load failure to stderr once and `McpServerStatus` `gitBackend` reports the active
+  backend and the first fallback reason.
 - **Touches:** `Common` (new dependency and seam), `GitProcess`, `GitWorktreeManager`, `GitImpl`,
   the five stage-1 probes, install/launch scripts. Layering stays one-way (`Common` is the lowest
   layer, so Engines and Tools can both reach the seam).
