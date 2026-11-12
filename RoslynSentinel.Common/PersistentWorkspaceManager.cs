@@ -945,6 +945,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 }
 
                 // SolutionPath must be set before the swap: RecordStructuralFileHashes reads it.
+                var previousSolutionPath = SolutionPath;
                 SolutionPath = solutionPath;
                 try
                 {
@@ -959,6 +960,16 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         newWorkspace.Dispose();
                     }
                     throw;
+                }
+
+                // A different solution replaced the loaded one: the held edit effects name the old solution's symbols and files, so they go before the
+                // new solution's blobs are seeded (SeedEditEffectsInBackground, below). A reload of the same solution keeps them. After the swap, so a
+                // load that failed and kept the old workspace keeps its effects too. No new lock: we already hold _solutionLock, and the index's own gate
+                // is a leaf (the chokepoint appends to it under _solutionLock the same way), so the order _solutionLock -> index gate is unchanged.
+                // TODO a seeding task still running from the previous load can add the old solution's effects after this clear (bounded by the seeder's 5 s budget); give the seeder a per-load generation if that shows up.
+                if (previousSolutionPath is not null && !IsSameSolutionFile(previousSolutionPath, solutionPath))
+                {
+                    _editEffects.Clear();
                 }
 
                 // TODO an open that succeeds with zero projects still replaces a previously good solution (same as before this change); consider keeping the old one.
@@ -1070,6 +1081,20 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 _logger.LogWarning(ex, "Large-result sweep failed under {Root}", solutionRoot);
             }
         });
+    }
+
+    // True when both paths name the same solution file: full paths (separators and relative segments normalised) compared with the repo's
+    // path comparison (case-insensitive), not ordinal string equality. A path that cannot be normalised is compared as given.
+    private static bool IsSameSolutionFile(string left, string right)
+    {
+        try
+        {
+            return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), PathComparison.Comparison);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return string.Equals(left, right, PathComparison.Comparison);
+        }
     }
 
     // Reads the last hour of operation blobs into the edit effect index (EditEffectSeeder), so an agent's own renames and removals from before a

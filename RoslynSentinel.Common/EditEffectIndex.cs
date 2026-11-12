@@ -87,6 +87,20 @@ public class EditEffectIndex
         return marked;
     }
 
+    /// <summary>
+    /// Drops every effect and returns how many were held. For a load of a different solution into the same manager: the held effects name
+    /// symbols and files of the previous solution, so a lookup in the new one must not find them. Takes only this index's own gate.
+    /// </summary>
+    public int Clear()
+    {
+        lock (_gate)
+        {
+            var held = _effects.Count;
+            _effects.Clear();
+            return held;
+        }
+    }
+
     /// <summary>Non-reverted effects whose <see cref="EditEffect.SimpleName"/> equals <paramref name="simpleName"/> (case-sensitive), newest first.</summary>
     public IReadOnlyList<EditEffect> Find(string simpleName)
     {

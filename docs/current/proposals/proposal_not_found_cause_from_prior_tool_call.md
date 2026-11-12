@@ -153,6 +153,24 @@ GetMethodSource(filePath: that file) returned FileNotFound with no note, because
 - E. (HELD until the owner confirms) the generic speculative not-found advice is replaced by the fact when an effect note is present;
   overlaps `plan_error_policy_pointer`.
 
+### Slice E design (design only; not implemented, waits for the owner and a RELEASE of held files)
+
+Where: not in `ErrorPolicyFilter` (registered only when the policy mode is not Off, and Off is the default; it only appends a trailing
+block). The speculative sentence is swapped where the fact is computed.
+
+- The not-found builders own the generic sentences ("typo, renamed, moved or removed", "A file read earlier under this name may since
+  have been renamed or moved", "If none of these is the symbol you meant, it does not exist in this solution"). They belong to
+  `plan_not_found_error_orientation` (peer roslynsentinel-f1): `Common/FileNotFoundMessage.cs`, `Common/SymbolNotFoundDetail.cs`,
+  `Engines.Basic/MemberRefactoringNotFound.cs`, `SyntaxTargetResolver`, `MemberSelection`, `DocumentLookup`.
+- Preferred shape: a structured marker rather than string stripping. Each builder emits its speculative sentence as a separately
+  addressable part (a small `NotFoundAdvice` value or a delimiter owned by one helper, e.g. `SpeculativeAdvice.Mark(text)`), and one
+  place (`NotFoundEvidence.ForCurrentCall`, which already runs once per not-found error and now knows whether an effect note exists)
+  swaps the marked part out when `EditEffectEvidence` produced a note. Builders then never need to know about effects.
+- `NotFoundEvidence` also sets a flag on `ToolCallContext` (e.g. `HasEditEffectFact`) so the error-policy filter can skip its
+  policy suffix when the fact is present; needs `ToolCallContext.cs`, held by the `plan_error_policy_pointer` run.
+- Order: coordinate with f1 (builders) before touching any builder file; the marker lands in the builders first (text-neutral), the
+  swap lands in `NotFoundEvidence` second.
+
 ## Cost / risk
 
 - Touches the write chokepoint (`PersistentWorkspaceManager`); read `docs/current/references/reference_architecture_map.md`
