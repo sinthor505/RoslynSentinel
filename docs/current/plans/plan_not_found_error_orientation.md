@@ -1,6 +1,6 @@
 # Plan: Every not-found error ranks candidates, says plainly when none exist, and prefills one orientation call
 
-**Status:** APPROVED 2026-11-12. Owner approved the outline: inventory every not-found producer, share one edit-distance candidate helper in Common, bring the file and symbol lookups (then the bare literals) to a single standard, and prove it with LIVE reruns of the fault scenarios.
+**Status:** APPROVED 2026-11-12. Outline approved and open decisions settled (Decision 3-8): inventory every not-found producer, share one edit-distance candidate helper in Common, bring the file and symbol lookups (then the bare literals) to a single standard, and prove it with LIVE reruns of the fault scenarios (target 6 of 10).
 
 Related: [plan_scenario_eval_followups.md](./plan_scenario_eval_followups.md) (written in parallel: the stop-adherence scenario family and the seeded `RenameSymbolTypo` used in Step 6). Commit trailer for every slice: `Plan: plan_not_found_error_orientation` (the last slice adds `Closes:`).
 
@@ -44,7 +44,7 @@ The causes, each verified against source on 2026-11-12:
 5. **A good model is already in the tree and barely used.** `MemberNotFoundDetail.BuildAsync`
    (`MemberNotFoundDetail.cs:41-117`, similarity and edit distance at `:196-252`) gives closest names, a
    container check, names grouped by kind, other-file declarations and a next call. Production callers:
-   `MemberRefactoringEngine.cs:2338` (ReplaceMember), `:2631` (RemoveMember),
+   `MemberRefactoringEngine.cs:2338` (ReplaceMember), `:2633` (RemoveMember),
    `SymbolNavigationEngine.cs:2943` and `:2967` (the member read behind ReadFile(memberName) and
    Member(view)). Nothing else uses it. Even it does not say "no similar name; report that" and prefills no
    per-candidate call.
@@ -141,6 +141,28 @@ Owner decisions, 2026-11-12:
      `GetFileOutline(filePath)` for a named file, `Search(mode: symbol, query: <name>, ...)`,
      `ListSolutionItems(kind: all)`), then the report-it-does-not-exist option.
    - (c) No "You MUST" order to call a listing when the listing cannot help.
+
+Owner decisions, 2026-11-12 (implement-plan settle, after a source review of this plan):
+
+3. **Parameter-list check moves to Common.** `MissingParameterListResolver` (Engines.Basic; uses only Roslyn and
+   `ProjectLookup`) moves to `RoslynSentinel.Common` and runs inside `ResolveFromWireAsync`, so RenameSymbol,
+   DeleteUnusedSymbol and PreviewRenameImpact all get it (today only `RefactoringSignatureImpl.cs:89` calls it) and
+   the `:3572` TODO closes. RenameSymbol's unique-resolve and overload-list branches (`RefactoringSignatureImpl.cs:88-110`)
+   move into the shared path. Migration-first: the Common type beside the old, old `[Obsolete]`.
+4. **Unit-test fixture:** a static `OrderPricingCalculator` fixture source (members `CalcDisc`, `OrderCheckout`,
+   `GetTotal`; no `ApplyLoyaltyBonus`) in the existing `RoslynSentinel.Tests.Support.Basic` (already referenced by
+   Tests, Tests.Basic and Tests.Tools.Basic), built with `TestSolutionBuilder`. The eval fixture in Tests.ModelEval
+   is not touched (scenarios are out of scope). "The fixture" in Steps 2-4 means this source.
+5. **No-file orientation call for a missing symbol (open item 3, settled):** if the query or docCommentId names a
+   container that resolves (for example `OrderPricingCalculator.ApplyLoyaltyBonus`), prefill
+   `GetFileOutline(filePath: <that type's file>)`; otherwise `ListAll(kind: <mapped>, projectName: <if given>)`, size
+   left to the response pipeline.
+6. **Step 6 target (open item 6, settled):** at least 6 of 10 for each of `RenameSymbolNoSuchMethod` and
+   `ReplaceSnippetWrongFileNoMatch`.
+7. **Wire shape (open item 4):** text only, as the plan default; `AmbiguousCandidate` is not changed.
+8. **Run mode:** Batched, owner present. A = Step 1 (read-only explore jobs, then one doc write; runs alongside B),
+   B = Steps 2-3, C = Step 4, D = Steps 5a, 5b, 5d, E = Steps 5c, 5e, then Step 6 (needs
+   `plan_scenario_eval_followups` Steps 1 and 6). Slice splits are noted in each step.
 
 Approach: build one ranking helper in `RoslynSentinel.Common` (lifted from `MemberNotFoundDetail`), make the two
 shared lookups (file: `DocumentLookup` + `FileNotFoundMessage`; symbol: `LocateSymbol` + the docCommentId
@@ -245,6 +267,10 @@ Sketch of the two no-candidate texts (wording is the implementer's to refine; th
   per consumer path, not just the builder: ReadFile (`WorkspaceFileEditImpl.cs:695`), GetFileOutline
   (`WorkspaceReadNavigationImpl.cs:391`), ReplaceSnippet single (`:1229`) and batch (`:1550`), and a Member
   operation through `RequireDocument` each return the new text for the misspelt-file case.
+- Slices (2026-11-12): 3a Common candidate record, `FindFileCandidates`, the new `Build` overload (it must carry the
+  existing `isCallable` and `declaringTypeFiles` parameters; `DocumentLookupResult.CandidatePaths` also feeds the
+  Ambiguous branch) and builder tests; 3b move the 3 callers and update the pinned assertions; 3c consumer-path
+  tests (`test-writer`).
 
 ### Step 4 - Symbol-name candidates: Search(mode: symbol) and the docCommentId resolver
 - Files: new shared builder in `RoslynSentinel.Common` (for example `SymbolNotFoundDetail`, name open) that works
@@ -276,6 +302,10 @@ Sketch of the two no-candidate texts (wording is the implementer's to refine; th
   `RenameSymbolTests.cs:52` and `RenameSymbolMissingParameterListTests.cs:107` (which assert "no longer
   resolves") are updated deliberately. A hidden-test-project hit still produces the existing
   `includeTests: true` note.
+- Layering (2026-11-12 review): `SymbolLocation` and `TestProjectDetector` are Engines.Basic, so the Common builder
+  takes the already-filtered project list (or a predicate) from its caller. Slices: 4a Common builder and tests;
+  4b the `LocateSymbol` path (`SymbolNavigationImpl`, scope passed in); 4c move `MissingParameterListResolver` to
+  Common (decision 3) and the resolver path with its 3 callers.
 
 ### Step 5 - Sweep the bare literals onto the helpers (implementer-sweep lane, slices by project)
 - Files: per slice below. Each slice is one operation across one project, compile-green on its own.
@@ -285,7 +315,8 @@ Sketch of the two no-candidate texts (wording is the implementer's to refine; th
     `SyntaxTargetResolver.BuildContainerNotFoundMessage*` (`:118-190`; rank the listed types),
     `MemberRefactoringEngine.BuildInsertAnchorNotFoundMessage` (`:2055-2067`; rank the anchors),
     `MemberSelection.SelectMembers` (`:287,295`; rank, add next call).
-  - 5b `Engines.Basic`, `BasicRefactoringEngine.cs` - rows 16-18: `:251`, `:1452`, `:1500`, `:1751`,
+  - 5b `Engines.Basic`, `BasicRefactoringEngine.cs` - rows 16-18 (`:1452` belongs to 5d, after the
+    `ScanTools` catch change): `:251`, `:1500`, `:1751`,
     `:2080`, `:2122`, `:2277`, `:2336`, `:2481`, `:2525`, `:2786`.
   - 5c `Engines.Basic`, `MemberRefactoringEngine.cs` - rows 11-14, 18-19: the hand-rolled file lookups at
     `:2937-2941` and `:4911` move onto `DocumentLookup.RequireDocument` (this also gives MoveMember the bare-file-name
@@ -296,6 +327,11 @@ Sketch of the two no-candidate texts (wording is the implementer's to refine; th
     count); project-name misses (`BasicRefactoringEngine.cs:1452`, `GenerationTools.cs:194-196`,
     `ScanTools.cs:1096-1101`) use the Step 2 helper on project names. `ScanTools.cs:1096` stops matching on
     message text: find which engine call throws "not found in solution" and catch the exception type instead.
+  - Slice sizes (2026-11-12 review; none of 5a-5d fits one tier as written): 5a three D1 slices
+    (`MemberNotFoundDetail`; container resolver plus insert anchor; `MemberSelection`); 5b two D1 slices; 5c about
+    five (file lookups; constructor/class/enum; method parameter; the identical "target not found" sites through one
+    helper; the rest), dispatched only once no other session has uncommitted edits in `MemberRefactoringEngine.cs`;
+    5d three, in order (`ScanTools` catch change; file-miss routing; project-name misses).
   - 5e Anything the Step 1 inventory lists that is not in 5a-5d (other engines, other tool classes), as further
     slices.
 - Done when (each slice): `Build` 0 errors, `-Flavor Solution` green; the slice's rows in the reference doc
@@ -318,9 +354,9 @@ Sketch of the two no-candidate texts (wording is the implementer's to refine; th
 
   | Scenario | Baseline (2026-11-12, qwen3.5-9b-coder) | Target | After |
   | --- | --- | --- | --- |
-  | `RenameSymbolNoSuchMethod` | 2/10 | more than 2/10; no sample edits a file | recorded here |
+  | `RenameSymbolNoSuchMethod` | 2/10 | at least 6/10 (Decision 6); no sample edits a file | recorded here |
   | `ReplaceSnippetWrongFileNearMatch` | 10/10 | stays 10/10, recovery via the candidate, not the listing order | recorded here |
-  | `ReplaceSnippetWrongFileNoMatch` | 0/10 | more than 0/10; no sample edits a different file or calls `CreateFile` | recorded here |
+  | `ReplaceSnippetWrongFileNoMatch` | 0/10 | at least 6/10 (Decision 6); no sample edits a different file or calls `CreateFile` | recorded here |
   | stop-adherence family and `RenameSymbolTypo` | baseline from `plan_scenario_eval_followups.md` Steps 2 and 4 | no regression; `RenameSymbolTypo` recovers via the candidate | recorded here |
 
   Numeric thresholds beyond "more than baseline" are not set (open, see Risks). A scenario that does not
