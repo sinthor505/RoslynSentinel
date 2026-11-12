@@ -32,8 +32,11 @@ public class ModelEvalAssemblySetUp
         // env vars here (ROSLYNSENTINEL_LIFT_RENAMES, ROSLYNSENTINEL_LOOP_LATCH); unset leaves them off.
         LiftRenamesOptions.Configure([]);
         LoopLatchOptions.Configure([]);
-        // Reads ROSLYNSENTINEL_ERROR_POLICY_MODE / _FILE; unset leaves the policy Off.
-        ErrorPolicyOptions.Configure([]);
+        // Reads ROSLYNSENTINEL_ERROR_POLICY_MODE / _FILE; unset leaves the policy Off. For Pointer/Inline with no file,
+        // the harness defaults the file to ErrorPolicyFile.OutputPath (deviation from production startup, harness convenience only).
+        ErrorPolicyOptions.Configure(ErrorPolicyFile.ResolveConfigureArgs(
+            Environment.GetEnvironmentVariable("ROSLYNSENTINEL_ERROR_POLICY_MODE"),
+            Environment.GetEnvironmentVariable("ROSLYNSENTINEL_ERROR_POLICY_FILE")));
         ModelAgentRunner.ProcessStamp = BuildProcessStamp(ReadWorkingTreeStamp(AppContext.BaseDirectory));
 
         if (string.IsNullOrEmpty(LlmOptions.Model))
@@ -66,14 +69,23 @@ public class ModelEvalAssemblySetUp
     internal static (string CommitHash, bool Dirty, string ErrorPolicyMode, string ErrorPolicyHash)? BuildProcessStamp(
         (string CommitHash, bool Dirty)? gitStamp)
     {
+        return BuildProcessStamp(gitStamp, ErrorPolicyOptions.Mode, ErrorPolicyOptions.PolicyFilePath);
+    }
+
+    /// <summary>
+    /// Same as the one-argument form, but takes the error policy mode and file explicitly so callers need no static
+    /// <see cref="ErrorPolicyOptions"/> state. Null git stamp still gives null; a null or empty file gives an empty hash.
+    /// </summary>
+    internal static (string CommitHash, bool Dirty, string ErrorPolicyMode, string ErrorPolicyHash)? BuildProcessStamp(
+        (string CommitHash, bool Dirty)? gitStamp, ErrorPolicyMode mode, string? policyFile)
+    {
         if (gitStamp is not { } git)
         {
             return null;
         }
 
-        var policyFile = ErrorPolicyOptions.PolicyFilePath;
         var hash = string.IsNullOrEmpty(policyFile) ? string.Empty : ErrorPolicyDocument.Load(policyFile).ContentHash;
-        return (git.CommitHash, git.Dirty, ErrorPolicyOptions.Mode.ToString().ToLowerInvariant(), hash);
+        return (git.CommitHash, git.Dirty, mode.ToString().ToLowerInvariant(), hash);
     }
 
     /// <summary>

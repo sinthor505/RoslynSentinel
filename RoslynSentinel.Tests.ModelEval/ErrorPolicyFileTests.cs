@@ -3,6 +3,7 @@ using NUnit.Framework;
 using RoslynSentinel.Common;
 using RoslynSentinel.Common.AgentLoop;
 using RoslynSentinel.Server.Advanced;
+using RoslynSentinel.Tests.ModelEval.LiveModel;
 
 namespace RoslynSentinel.Tests.ModelEval;
 
@@ -81,5 +82,51 @@ public sealed class ErrorPolicyFileTests
             Assert.That(prompt, Does.Contain(heading), ErrorPolicyKeys.ToWireName(key));
             Assert.That(ErrorPolicyFilter.PointerText(key), Does.Contain(heading), ErrorPolicyKeys.ToWireName(key));
         }
+    }
+
+    [TestCase("pointer", null)]
+    [TestCase("inline", null)]
+    [TestCase("inline", "   ")]
+    public void ResolveConfigureArgs_PointerOrInlineWithoutFile_DefaultsToBundledPolicyFile(string mode, string? file)
+    {
+        string[] args = ErrorPolicyFile.ResolveConfigureArgs(mode, file);
+
+        Assert.That(args, Is.EqualTo(new[] { "--error-policy-file=" + ErrorPolicyFile.OutputPath }));
+    }
+
+    [TestCase(null, null)]
+    [TestCase("off", null)]
+    [TestCase("pointer", "x.md")]
+    public void ResolveConfigureArgs_OffOrFileGiven_ReturnsNoArgs(string? mode, string? file)
+    {
+        string[] args = ErrorPolicyFile.ResolveConfigureArgs(mode, file);
+
+        Assert.That(args, Is.Empty);
+    }
+
+    [Test]
+    public void ResolveConfigureArgs_UnknownMode_Throws()
+    {
+        Assert.Throws<ArgumentException>(() => ErrorPolicyFile.ResolveConfigureArgs("bogus", null));
+    }
+
+    [Test]
+    public void ResolveConfigureArgs_ResolvedPath_StampsPointerModeAndPolicyHash()
+    {
+        string[] args = ErrorPolicyFile.ResolveConfigureArgs("pointer", null);
+        Assert.That(args, Has.Length.EqualTo(1));
+
+        const string prefix = "--error-policy-file=";
+        string resolvedPath = args[0][prefix.Length..];
+        Assert.That(resolvedPath, Is.EqualTo(ErrorPolicyFile.OutputPath));
+        Assert.That(File.Exists(resolvedPath), Is.True, resolvedPath);
+
+        var stamp = ModelEvalAssemblySetUp.BuildProcessStamp(("abc123", false), ErrorPolicyMode.Pointer, resolvedPath);
+
+        Assert.That(stamp, Is.Not.Null);
+        Assert.That(stamp!.Value.ErrorPolicyMode, Is.EqualTo("pointer"));
+        string expectedHash = ErrorPolicyDocument.Load(ErrorPolicyFile.OutputPath).ContentHash;
+        Assert.That(expectedHash, Is.Not.Empty);
+        Assert.That(stamp.Value.ErrorPolicyHash, Is.EqualTo(expectedHash));
     }
 }
