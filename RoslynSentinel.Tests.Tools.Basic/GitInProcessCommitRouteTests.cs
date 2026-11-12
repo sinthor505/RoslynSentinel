@@ -622,6 +622,7 @@ public class GitInProcessCommitRouteTests
     {
         var route = new InProcessCommitRoute();
         var directory = NewRepo("off", inProcess: false);
+        RunGit(directory, "config", "--unset", InProcessCommitRoute.ConfigKey);
         Write(directory, "a.txt", "changed\n");
 
         GitCommitResult? result = null;

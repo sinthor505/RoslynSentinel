@@ -29,11 +29,12 @@ public static class GitTestRepo
         }
     }
 
-    /// <summary>Creates <paramref name="directory"/> if needed and runs <c>git init --quiet</c> in it.</summary>
+    /// <summary>Creates <paramref name="directory"/> if needed, runs <c>git init --quiet</c> in it, and pins <c>roslynsentinel.inProcessCommit</c> to false so the in-process commit route is off unless a test opts in.</summary>
     public static void InitRepo(string directory)
     {
         Directory.CreateDirectory(directory);
         RunGit(directory, "init", "--quiet");
+        RunGit(directory, "config", "roslynsentinel.inProcessCommit", "false");
     }
 
     /// <summary>Runs git and returns trimmed stdout; throws InvalidOperationException (with stderr) on a non-zero exit code.</summary>
