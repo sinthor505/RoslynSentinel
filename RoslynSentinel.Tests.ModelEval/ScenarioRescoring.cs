@@ -46,7 +46,7 @@ public static class ScenarioRescoring
 
     /// <summary>
     /// Re-scores every row of &lt;runFolder&gt;/results.csv, appends each resulting sample to outputCsvPath and returns them in file order.
-    /// Inconclusive rows stay Inconclusive and are not scored. Columns are read by header name, so the 28- and 30-column layouts both work.
+    /// Inconclusive rows stay Inconclusive and are not scored. Columns are read by header name, so the 28-column, 30-column and 31-column layouts (the last adds liveTurnsToTarget) all work.
     /// </summary>
     public static async Task<IReadOnlyList<ScenarioSample>> RescoreRunFolderAsync(
         string runFolder,

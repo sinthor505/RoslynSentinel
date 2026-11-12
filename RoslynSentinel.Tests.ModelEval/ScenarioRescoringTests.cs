@@ -8,7 +8,7 @@ public class ScenarioRescoringTests
 {
     private const string Tool = "ReplaceSnippet";
 
-    // Pre-30-column results.csv layout (no finalStateVerdict or turnCapHit columns).
+    // 28-column results.csv layout (no finalStateVerdict or turnCapHit columns).
     private const string OldHeader =
         "scenarioId,scenarioType,faultKind,sampleIndex,commit,dirty,liftRenames,firstCallSucceeded,firstErrorCode,firstErrorClass,recovered,callsToRecover,recoveryUsedExpectedTool,markerPresent,turnCount,stopReason,failureClass,passed,callsAfterFirstError,turnsAfterFirstError,outputCharsAfterFirstError,maxIdenticalCallRepeat,identicalReasoningBlocks,retryPhraseCount,schemaDrift,resultDrift,inconclusiveReason,transcriptPath";
 
