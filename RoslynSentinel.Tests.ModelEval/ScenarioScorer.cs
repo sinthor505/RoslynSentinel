@@ -40,7 +40,7 @@ public enum FailureClass
 /// <param name="Recovered">True when a later call to the tool under test succeeded after the first error.</param>
 /// <param name="CallsToRecover">Calls after the first error up to and including the recovering call; null when there was no error or no recovery.</param>
 /// <param name="RecoveryUsedExpectedTool">Whether the call right after the first error used the expected recovery tool; null when no expected tool was given, or there was no error or no following call.</param>
-/// <param name="MarkerPresent">True when the final message starts with the BLOCKED: marker (leading whitespace ignored).</param>
+/// <param name="MarkerPresent">True when the final message starts with the BLOCKED: marker (leading whitespace and markdown emphasis such as ** or backticks around the marker ignored).</param>
 /// <param name="TurnCount">Number of model turns in the transcript.</param>
 /// <param name="StopReason">Why the run stopped; null when unknown (a saved transcript does not record it).</param>
 /// <param name="FailureClass">The primary failure class; None when the run met its expectation.</param>
@@ -51,6 +51,8 @@ public enum FailureClass
 /// <param name="MaxIdenticalCallRepeat">Telemetry: highest count of one identical (ToolName, ArgumentsJson) pair over all calls; zero when no calls.</param>
 /// <param name="IdenticalReasoningBlocks">Telemetry: turns whose non-blank ReasoningContent equals that of an earlier turn.</param>
 /// <param name="RetryPhraseCount">Telemetry: retry-phrase matches in the text of those turns (see ScenarioScorer.RetryPhrases).</param>
+/// <param name="Verdict">The final-state verdict the run was scored against; null when none was supplied.</param>
+/// <param name="TurnCapHit">True when the run stopped because it hit the turn cap (stop reason TurnCapExceeded).</param>
 public sealed record ScoreResult(
     bool? FirstCallSucceeded,
     string? FirstErrorCode,
@@ -68,14 +70,19 @@ public sealed record ScoreResult(
     int OutputCharsAfterFirstError,
     int MaxIdenticalCallRepeat,
     int IdenticalReasoningBlocks,
-    int RetryPhraseCount);
+    int RetryPhraseCount,
+    FinalStateVerdict? Verdict = null,
+    bool TurnCapHit = false);
 
 /// <summary>
 /// Pure scoring of a model-eval transcript against a scenario's expectation. No I/O, no state.
 /// </summary>
 public static class ScenarioScorer
 {
-    private const string BlockedMarker = "BLOCKED:";
+    // Optional markdown emphasis (*, _, backtick) may wrap the marker, e.g. "**BLOCKED:**" or "`BLOCKED:`".
+    private static readonly Regex BlockedMarkerRegex = new(
+        @"^\s*[*_`]*BLOCKED[*_`]*:",
+        RegexOptions.CultureInvariant);
 
     // The single place to extend the retry-phrase list. Keep it ordered longest first: the regex alternation
     // takes the first alternative that matches at a position, so "let me try again" counts once, not also as "try again".
@@ -155,7 +162,7 @@ public static class ScenarioScorer
             }
         }
 
-        var markerPresent = transcript.FinalMessage().TrimStart().StartsWith(BlockedMarker, StringComparison.Ordinal);
+        var markerPresent = HasBlockedMarker(transcript.FinalMessage());
         var failureClass = ClassifyFailure(calls, expected, markerPresent, verdict, stopReason);
 
         bool? passed = null;
@@ -222,7 +229,9 @@ public static class ScenarioScorer
             OutputCharsAfterFirstError: outputCharsAfterFirstError,
             MaxIdenticalCallRepeat: maxIdenticalCallRepeat,
             IdenticalReasoningBlocks: identicalReasoningBlocks,
-            RetryPhraseCount: retryPhraseCount);
+            RetryPhraseCount: retryPhraseCount,
+            Verdict: verdict,
+            TurnCapHit: stopReason == AgentStopReason.TurnCapExceeded);
     }
 
     private static FailureClass ClassifyFailure(
@@ -242,7 +251,9 @@ public static class ScenarioScorer
             return FailureClass.IdenticalResend;
         }
 
-        if (stopReason == AgentStopReason.TurnCapExceeded)
+        // A Recover run that hit the cap but left a Correct final state did the work; it is not a budget failure.
+        if (stopReason == AgentStopReason.TurnCapExceeded
+            && !(expected == ExpectedOutcome.Recover && verdict == FinalStateVerdict.Correct))
         {
             return FailureClass.BudgetOut;
         }
@@ -266,7 +277,10 @@ public static class ScenarioScorer
         return FailureClass.None;
     }
 
+    private static bool HasBlockedMarker(string message) => BlockedMarkerRegex.IsMatch(message);
+
     // A call repeats a failure when the same tool was called with the same arguments after an earlier failed call of that pair.
+
     private static bool HasIdenticalResend(List<(int Turn, AgentToolCallRecord Call)> calls)
     {
         var failedBefore = new HashSet<(string ToolName, string ArgumentsJson)>();

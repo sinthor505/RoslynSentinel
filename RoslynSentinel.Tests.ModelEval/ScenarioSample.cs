@@ -43,7 +43,7 @@ public static class ScenarioSampleCsv
 {
     /// <summary>Column names, in the order ToCsvLine writes them.</summary>
     public const string Header =
-        "scenarioId,scenarioType,faultKind,sampleIndex,commit,dirty,liftRenames,firstCallSucceeded,firstErrorCode,firstErrorClass,recovered,callsToRecover,recoveryUsedExpectedTool,markerPresent,turnCount,stopReason,failureClass,passed,callsAfterFirstError,turnsAfterFirstError,outputCharsAfterFirstError,maxIdenticalCallRepeat,identicalReasoningBlocks,retryPhraseCount,schemaDrift,resultDrift,inconclusiveReason,transcriptPath";
+        "scenarioId,scenarioType,faultKind,sampleIndex,commit,dirty,liftRenames,firstCallSucceeded,firstErrorCode,firstErrorClass,recovered,callsToRecover,recoveryUsedExpectedTool,markerPresent,turnCount,stopReason,failureClass,passed,finalStateVerdict,turnCapHit,callsAfterFirstError,turnsAfterFirstError,outputCharsAfterFirstError,maxIdenticalCallRepeat,identicalReasoningBlocks,retryPhraseCount,schemaDrift,resultDrift,inconclusiveReason,transcriptPath";
 
     /// <summary>One CSV line (no line terminator). Score columns are all empty when Score is null.</summary>
     public static string ToCsvLine(ScenarioSample sample)
@@ -69,6 +69,8 @@ public static class ScenarioSampleCsv
             ScoreField(s, r => EnumName(r.StopReason)),
             ScoreField(s, r => r.FailureClass.ToString()),
             ScoreField(s, r => NullableBool(r.Passed)),
+            ScoreField(s, r => EnumName(r.Verdict)),
+            ScoreField(s, r => Bool(r.TurnCapHit)),
             ScoreField(s, r => Int(r.CallsAfterFirstError)),
             ScoreField(s, r => Int(r.TurnsAfterFirstError)),
             ScoreField(s, r => Int(r.OutputCharsAfterFirstError)),
@@ -103,12 +105,14 @@ public static class ScenarioSampleCsv
             ParseNullableEnum<AgentStopReason>(f[15]),
             ParseEnum<FailureClass>(f[16]),
             ParseNullableBool(f[17]),
-            ParseInt(f[18]),
-            ParseInt(f[19]),
             ParseInt(f[20]),
             ParseInt(f[21]),
             ParseInt(f[22]),
-            ParseInt(f[23]));
+            ParseInt(f[23]),
+            ParseInt(f[24]),
+            ParseInt(f[25]),
+            Verdict: ParseNullableEnum<FinalStateVerdict>(f[18]),
+            TurnCapHit: ParseBool(f[19]));
 
         return new ScenarioSample(
             f[0],
@@ -119,10 +123,10 @@ public static class ScenarioSampleCsv
             ParseNullableBool(f[5]),
             f[6],
             score,
-            ParseBool(f[24]),
-            ParseInt(f[25]),
-            f[26],
-            f[27]);
+            ParseBool(f[26]),
+            ParseInt(f[27]),
+            f[28],
+            f[29]);
     }
 
     /// <summary>Appends one row, writing Header first when the file is missing or empty. Not thread-safe: one writer per run.</summary>

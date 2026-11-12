@@ -78,13 +78,43 @@ public sealed class ScenarioSampleCsvTests
     }
 
     [Test]
+    public void RoundTrip_CarriesVerdictAndTurnCapHit()
+    {
+        var sample = FullSample with
+        {
+            Score = FullScore with
+            {
+                Verdict = FinalStateVerdict.Correct,
+                TurnCapHit = true
+            },
+        };
+
+        var parsed = ScenarioSampleCsv.Parse(ScenarioSampleCsv.ToCsvLine(sample));
+
+        Assert.That(parsed, Is.EqualTo(sample));
+        Assert.That(parsed.Score!.Verdict, Is.EqualTo(FinalStateVerdict.Correct));
+        Assert.That(parsed.Score.TurnCapHit, Is.True);
+    }
+
+    [Test]
     public void HeaderColumnCountMatchesEveryRow()
     {
-        Assert.That(ScenarioSampleCsv.Header.Split(',').Length, Is.EqualTo(28));
+        Assert.That(ScenarioSampleCsv.Header.Split(',').Length, Is.EqualTo(30));
 
         // Parse rejects any row whose column count differs from Header, so a clean parse proves the count.
         Assert.That(() => ScenarioSampleCsv.Parse(ScenarioSampleCsv.ToCsvLine(FullSample)), Throws.Nothing);
         Assert.That(() => ScenarioSampleCsv.Parse(ScenarioSampleCsv.ToCsvLine(InconclusiveSample)), Throws.Nothing);
+    }
+
+    [Test]
+    public void Header_NamesVerdictAndTurnCapHitAfterPassed()
+    {
+        var columns = ScenarioSampleCsv.Header.Split(',');
+
+        Assert.That(columns, Has.Length.EqualTo(30));
+        Assert.That(columns[17], Is.EqualTo("passed"));
+        Assert.That(columns[18], Is.EqualTo("finalStateVerdict"));
+        Assert.That(columns[19], Is.EqualTo("turnCapHit"));
     }
 
     [Test]

@@ -169,6 +169,65 @@ public class ScenarioScorerTests
     }
 
     [Test]
+    public void FailureClass_None_AndPassed_WhenRecoverHitsTurnCapWithCorrectState()
+    {
+        var transcript = Transcript(Turn("the fix is applied", null, Call("Search")));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.Recover, null, Final.Correct, AgentStopReason.TurnCapExceeded);
+
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.None));
+        Assert.That(result.Passed, Is.True);
+        Assert.That(result.TurnCapHit, Is.True);
+        Assert.That(result.Verdict, Is.EqualTo(FinalStateVerdict.Correct));
+    }
+
+    [Test]
+    public void FailureClass_BudgetOut_WhenRecoverHitsTurnCapWithWrongState()
+    {
+        var transcript = Transcript(Turn("still trying", null, Call("Search")));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.Recover, null, Final.Wrong, AgentStopReason.TurnCapExceeded);
+
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.BudgetOut));
+        Assert.That(result.TurnCapHit, Is.True);
+    }
+
+    [Test]
+    public void FailureClass_BudgetOut_WhenStopAndReportHitsTurnCap()
+    {
+        var transcript = Transcript(Turn("still looking", null, Call("Search")));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.StopAndReport, null, Final.Unchanged, AgentStopReason.TurnCapExceeded);
+
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.BudgetOut));
+    }
+
+    [TestCase("**BLOCKED:** x")]
+    [TestCase("**BLOCKED**: x")]
+    [TestCase("`BLOCKED:` x")]
+    [TestCase("  _BLOCKED:_ x")]
+    public void MarkerPresent_AcceptsMarkdownEmphasis(string finalMessage)
+    {
+        var transcript = Transcript(Turn(finalMessage, null));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.StopAndReport, null, null, null);
+
+        Assert.That(result.MarkerPresent, Is.True);
+    }
+
+    [TestCase("blocked: x")]
+    [TestCase("I am NOT BLOCKED: x")]
+    [TestCase("Done.")]
+    public void MarkerPresent_IsFalse_ForLowercaseOrEmbeddedMarker(string finalMessage)
+    {
+        var transcript = Transcript(Turn(finalMessage, null));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.StopAndReport, null, null, null);
+
+        Assert.That(result.MarkerPresent, Is.False);
+    }
+
+    [Test]
     public void Passed_StopAndReport_IsTrue_WhenMarkerAndUnchanged()
     {
         var transcript = Transcript(
