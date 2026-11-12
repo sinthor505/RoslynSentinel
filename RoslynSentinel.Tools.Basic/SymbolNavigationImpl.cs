@@ -44,10 +44,11 @@ public class SymbolNavigationImpl
 
             // Count the test projects that the default search skipped, so the caller can see why a symbol is missing.
             int excluded = 0;
+            Microsoft.CodeAnalysis.Solution? solution = null;
             if (!includeTests && projectName == null && string.IsNullOrEmpty(filePath))
             {
                 // READCHOKEPOINT-CAST: same cast as SymbolNavigationEngine.LocateSymbolAsync; ISolutionProvider has no GetSolutionAsync.
-                var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+                solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
                 foreach (var project in solution.Projects)
                 {
                     if (TestProjectDetector.IsTestProject(project))
@@ -69,12 +70,40 @@ public class SymbolNavigationImpl
                         : $" {excluded} test project(s) were also searched and hold no match, so the name is not declared anywhere in the solution.";
                 }
 
+                // The searched projects mirror SymbolNavigationEngine.LocateSymbolAsync: a validated filePath pins the engine
+                // to one file and keeps every project; otherwise test projects are dropped when includeTests is false.
+                solution ??= await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+                var pinnedToFile = filePathResolved.Validated;
+                var testsFiltered = !includeTests && projectName == null && !pinnedToFile;
+                var searchedProjects = solution.Projects
+                    .Where(p => projectName == null || p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
+                    .Where(p => !testsFiltered || !TestProjectDetector.IsTestProject(p))
+                    .ToList();
+                var scope = projectName != null
+                    ? $"project '{projectName}'"
+                    : $"{searchedProjects.Count} project(s), test projects {(testsFiltered ? "excluded" : "included")}";
+                if (pinnedToFile)
+                {
+                    scope += $" (declarations pinned to file '{filePath}', candidates from these projects)";
+                }
+
+                // TODO isCallable: SymbolNavigationImpl has no ActiveToolSurface, so hints name tools unconditionally (as the old text did)
+                var message = await SymbolNotFoundDetail.BuildAsync(searchedProjects, symbolName, symbolKind.ToString(), scope, projectName, isCallable: null, nextCall: null, cancellationToken);
+
+                // Only for exactMatch=true: a wanted name that is a substring of a declared name gets the retry hint.
+                if (exactMatch)
+                {
+                    var substringMatches = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind.ToString(), containingType, containingNamespace, projectName, filePathResolved, exactMatch: false, includeTests, cancellationToken);
+                    if (substringMatches.Count > 0)
+                    {
+                        message += $" exactMatch=false would match {substringMatches.Count} declaration(s): {ToolCallHint.Call("Search", ("mode", "symbol"), ("query", symbolName), ("exactMatch", "false"))}.";
+                    }
+                }
+
                 return new SentinelCallToolResult<object>
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.NotFound, $"Symbol '{symbolName}' not found in the solution" +
-                        (projectName != null ? $" (project: {projectName})" : "") +
-                        $". Try exactMatch=false for a broader search, verify the symbol name and symbolKind, or call {ToolCallHint.Call("ListAll")} for a cheap solution-wide orientation listing if you're not sure of the exact name." + hiddenNote)
+                    ErrorData = new ResultError(ToolErrorCode.NotFound, message + hiddenNote)
                 };
             }
 
