@@ -66,6 +66,10 @@ public static class RoslynSentinelServiceExtensionsBasic
             sp.GetRequiredService<ToolTelemetry>(), logger: sp.GetService<ILogger<ToolTelemetryFlusher>>()));
         services.AddHostedService(sp => new ToolTelemetryFlushService(sp.GetRequiredService<ToolTelemetryFlusher>()));
 
+        // StopServer registers "exit after the response to request id X" here; the outgoing message filter below performs it
+        // once that response has been written. Shared by both flavors and both transports because Advanced calls this method.
+        services.TryAddSingleton(_ => new ResponseGatedProcessExit());
+
         RegisterRoslynSentinelToolsBasic(services, mcpBuilder, activeModes, includeTools, excludeTools, hideTools);
 
         // Add centralized error filters, in CallToolFilterRegistrations order (the first registered is the outermost).
@@ -77,7 +81,31 @@ public static class RoslynSentinelServiceExtensionsBasic
             }
         });
 
+        AddResponseGatedExitMessageFilter(mcpBuilder);
+
         return mcpBuilder;
+    }
+
+    /// <summary>
+    /// Registers the outgoing-message filter that lets <c>McpServerControl(StopServer)</c> exit the process only after its
+    /// JSON-RPC response (or error) has been written: every outgoing message is sent through the rest of the pipeline (the
+    /// transport write and flush) and, when it answers the request id the tool registered on <see cref="ResponseGatedProcessExit"/>,
+    /// the exit starts after a short grace delay. Pass-through for every other message and when no gate is registered.
+    /// An outgoing filter sees every response, notification and request the server sends, so it stays cheap and never throws.
+    /// </summary>
+    private static void AddResponseGatedExitMessageFilter(IMcpServerBuilder mcpBuilder)
+    {
+        mcpBuilder.WithMessageFilters(filters => filters.AddOutgoingFilter(next => async (context, cancellationToken) =>
+        {
+            var gate = context.Services?.GetService<ResponseGatedProcessExit>();
+            if (gate is null || !gate.IsPending)
+            {
+                await next(context, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            await gate.ObserveOutgoingAsync(context.JsonRpcMessage, () => next(context, cancellationToken)).ConfigureAwait(false);
+        }));
     }
 
     /// <summary>

@@ -81,6 +81,12 @@ serialized text. Inside them, `ToolResultMarshaller` turns the typed result into
 `MarshalResult` hook, and owns the size budget, offload and paging. The filter list, the marshaller's decisions and
 `GetLargeResult` paging are in [reference_tool_response_pipeline.md](reference_tool_response_pipeline.md).
 
+One outgoing-message filter sits beside them (`AddResponseGatedExitMessageFilter`, `WithMessageFilters` / `AddOutgoingFilter`, also in
+`AddRoslynSentinelToolsBasic`, so both flavors and both transports get it): it sends every outgoing JSON-RPC message through the rest of the pipeline
+and, when the message answers the request id that `McpServerControl(StopServer)` registered on `Common/ResponseGatedProcessExit.cs`, exits the process
+~200 ms after the write (a 10 s fallback timer exits anyway if the response is never seen). The tool builds its whole response before registering,
+and the blind-timer `ProcessExitScheduler` remains only for `IdleRestartMonitor`.
+
 Tools themselves return `SentinelCallToolResult<T>` (`Common/SentinelCallToolResult.cs`) with `IsError=true`
 instead of throwing; see the CLAUDE.md rule on `ResultError`.
 

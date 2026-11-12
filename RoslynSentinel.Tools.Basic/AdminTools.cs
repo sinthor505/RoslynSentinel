@@ -16,6 +16,7 @@ public class AdminTools
     private readonly RespawnPolicy _respawn;
     private readonly TestInstanceLauncher _testInstances;
     private readonly ActiveToolSurface? _activeToolSurface;
+    private readonly ResponseGatedProcessExit? _gatedExit;
 
     // Property names are the wire contract: camelCase, nulls omitted.
     private static readonly System.Text.Json.JsonSerializerOptions TestInstanceJson = new(SharedJsonOptions.Default)
@@ -27,8 +28,10 @@ public class AdminTools
     /// <param name="hostOptions">Supplies the effective --respawn value for the StopServer text; null (tests) means Auto.</param>
     /// <param name="testInstances">Owns the test-instance registry; null (tests) builds a private one.</param>
     /// <param name="activeToolSurface">Supplies this server's --mode string, the default mode of a launched test instance; null means claude-lean.</param>
-    public AdminTools(IWorkspaceManager workspaceManager, SentinelHostOptions? hostOptions = null, TestInstanceLauncher? testInstances = null, ActiveToolSurface? activeToolSurface = null)
+    /// <param name="gatedExit">Exits the process after StopServer's response is written (the outgoing-message filter drives it); null (tests, hosts without the filter) falls back to the blind-timer <see cref="ProcessExitScheduler"/>.</param>
+    public AdminTools(IWorkspaceManager workspaceManager, SentinelHostOptions? hostOptions = null, TestInstanceLauncher? testInstances = null, ActiveToolSurface? activeToolSurface = null, ResponseGatedProcessExit? gatedExit = null)
     {
+        _gatedExit = gatedExit;
         _workspaceManager = workspaceManager;
         _respawn = hostOptions?.Respawn ?? RespawnPolicy.Auto;
         _testInstances = testInstances ?? new TestInstanceLauncher(workspaceManager, new BuildEngine(workspaceManager));
@@ -481,6 +484,7 @@ public class AdminTools
      string? mode = null,
      string? includeTools = null,
      int? pid = null,
+     RequestContext<CallToolRequestParams>? requestContext = null,
      CancellationToken cancellationToken = default)
     {
         if (operation is McpServerControlOperation.LaunchTestInstance or McpServerControlOperation.StopTestInstance or McpServerControlOperation.ListTestInstances)
@@ -488,11 +492,24 @@ public class AdminTools
             return FromTestInstanceText(await ControlTestInstancesAsync(operation, build, mode, includeTools, pid, cancellationToken));
         }
 
-        // Children are killed before the delayed exit so a stopped server never leaves test instances behind.
+        // Children are killed before the exit so a stopped server never leaves test instances behind. requestContext is
+        // the SDK-injected request (excluded from the schema, see SentinelToolFactory.AugmentedServiceTypes); its JSON-RPC id
+        // is what the outgoing-message filter waits for. Without it (direct calls in tests) or without the gate, the exit
+        // falls back to the blind timer. McpServerControl is not task-eligible (TaskEnabledToolsHelper), so the id is always
+        // the one answered with this call's own response; if it ever became task-augmented the response would be a task
+        // handle for that id and the gate's fallback timer would end the process instead.
+        var requestId = requestContext?.JsonRpcRequest.Id;
         var result = ControlServerResult(operation, confirmServerStop, () =>
         {
             _testInstances.KillAll();
-            ProcessExitScheduler.Schedule();
+            if (_gatedExit is not null && requestId is { } id)
+            {
+                _gatedExit.ExpectResponseTo(id);
+            }
+            else
+            {
+                ProcessExitScheduler.Schedule();
+            }
         }, _workspaceManager.SolutionPath, _respawn, cancellationToken);
 
         return result.IsError
@@ -544,12 +561,15 @@ public class AdminTools
                     + "Re-issue the call with that parameter to stop the server; nothing was stopped.");
             }
 
-            scheduleExit();
+            // scheduleExit is the LAST step before returning: the full response text, including the dirty-source check
+            // (`git status`, up to 5 s), is built first, so a slow git can no longer delay the response past the exit.
             if (respawn == RespawnPolicy.None)
             {
                 // --respawn=none (the HTTP default): no launcher or client restarts this process.
-                return Ok($"Stopping. This instance stays down: nothing will restart it, so there is no fresh instance to call {ToolCallHint.Call("LoadSolution")} on. "
-                    + $"To get another test instance, call {ToolCallHint.Call("McpServerControl", ("operation", "LaunchTestInstance"))} from your own session.");
+                var stays = $"Stopping. This instance stays down: nothing will restart it, so there is no fresh instance to call {ToolCallHint.Call("LoadSolution")} on. "
+                    + $"To get another test instance, call {ToolCallHint.Call("McpServerControl", ("operation", "LaunchTestInstance"))} from your own session.";
+                scheduleExit();
+                return Ok(stays);
             }
 
             var loadHint = string.IsNullOrWhiteSpace(loadedSolutionPath)
@@ -561,7 +581,9 @@ public class AdminTools
             var dirty = string.IsNullOrWhiteSpace(loadedSolutionPath)
                 ? null
                 : ServerBinaryStaleness.DescribeUncommittedServerSource(Path.GetDirectoryName(loadedSolutionPath) ?? string.Empty);
-            return Ok(dirty is null ? stopping : $"{stopping} Warning: {dirty}");
+            var text = dirty is null ? stopping : $"{stopping} Warning: {dirty}";
+            scheduleExit();
+            return Ok(text);
         }
 
         return Refused(ToolErrorCode.InvalidArgument, $"Unknown operation '{operation}'. Valid operations: GetServerStatus, StopServer, LaunchTestInstance, StopTestInstance, ListTestInstances.");

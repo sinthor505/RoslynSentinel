@@ -137,6 +137,23 @@
             "timeout": 15
           }
         ]
+      },
+      {
+        "matcher": "mcp__.*__McpServerControl",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe",
+            "args": [
+              "-NoProfile",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-File",
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/stopserver-connection-closed.ps1"
+            ],
+            "timeout": 10
+          }
+        ]
       }
     ],
     "SessionStart": [

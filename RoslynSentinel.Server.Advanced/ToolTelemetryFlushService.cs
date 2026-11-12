@@ -7,7 +7,7 @@ namespace RoslynSentinel.Server.Advanced;
 /// counters changed, and <see cref="StopAsync"/> does one final bounded flush so a graceful stop loses nothing.
 /// Registered through <c>AddRoslynSentinelToolsBasic</c>, so both flavors and both transports (stdio Generic Host, HTTP
 /// WebApplication) get it. When the flusher is disabled (no explicit --working-dir) the loop exits at once: no timer.
-/// StopServer ends in <c>Environment.Exit(0)</c> (AdminTools.ScheduleProcessExit, 1000 ms after the response is sent).
+/// StopServer ends in <c>Environment.Exit(0)</c> (ResponseGatedProcessExit, ~200 ms after the response was written).
 /// The host's ConsoleLifetime ProcessExit handler is meant to run <see cref="StopAsync"/> on that path, but a stopped
 /// instance was observed with its last telemetry write at the 60 s tick and no final flush, so StopAsync is not relied
 /// on there. When the flusher is enabled, <see cref="StartAsync"/> subscribes to <c>AppDomain.ProcessExit</c> (through
