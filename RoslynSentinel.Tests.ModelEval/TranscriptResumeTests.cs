@@ -163,6 +163,26 @@ public class TranscriptResumeTests
         });
     }
 
+    [Test]
+    public void BuildAuthoredFaultTurn_BuildsOneAuthoredCallWithTheRealResult()
+    {
+        var turn = TranscriptResume.BuildAuthoredFaultTurn(12, "ReplaceSnippet", "{\"filePath\":\"a.cs\"}", Rejection, isError: true);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(turn.TurnNumber, Is.EqualTo(12));
+            Assert.That(turn.ModelMessage.Role, Is.EqualTo("assistant"));
+            Assert.That(turn.ModelMessage.ToolCalls, Has.Count.EqualTo(1));
+            Assert.That(turn.ModelMessage.ToolCalls[0].Id, Is.EqualTo("authored-fault-12"));
+            Assert.That(turn.ModelMessage.ToolCalls[0].Name, Is.EqualTo("ReplaceSnippet"));
+            Assert.That(turn.ModelMessage.ToolCalls[0].ArgumentsJson, Is.EqualTo("{\"filePath\":\"a.cs\"}"));
+            Assert.That(turn.ToolCalls, Has.Count.EqualTo(1));
+            Assert.That(turn.ToolCalls[0].ToolCallId, Is.EqualTo("authored-fault-12"));
+            Assert.That(turn.ToolCalls[0].ResultJson, Is.EqualTo(Rejection));
+            Assert.That(turn.ToolCalls[0].IsError, Is.True);
+        });
+    }
+
     // ---- replay of the kept calls ----
 
     [Test]

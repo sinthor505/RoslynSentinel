@@ -292,6 +292,44 @@ public static class TranscriptResume
                 .ToList(),
         }).ToList();
 
+    /// <summary>
+    /// A turn whose call was authored by the harness, not the model: the call itself is authored by the harness, only
+    /// its <paramref name="resultText"/> is real (executed on the fixture). Used to seed a failed last call.
+    /// </summary>
+    public static AgentTranscriptTurn BuildAuthoredFaultTurn(int turnNumber, string toolName, string argumentsJson, string resultText, bool isError)
+    {
+        var callId = "authored-fault-" + turnNumber;
+        var now = DateTimeOffset.UtcNow;
+        return new AgentTranscriptTurn
+        {
+            TurnNumber = turnNumber,
+            ModelLatency = TimeSpan.Zero,
+            StartedAt = now,
+            CompletedAt = now,
+            ModelMessage = new AgentChatMessage
+            {
+                Role = "assistant",
+                Content = "",
+                ReasoningContent = null,
+                ToolCalls = [new AgentToolCall { Id = callId, Name = toolName, ArgumentsJson = argumentsJson }],
+            },
+            ToolCalls =
+            [
+                new AgentToolCallRecord
+                {
+                    ToolName = toolName,
+                    ArgumentsJson = argumentsJson,
+                    ResultJson = resultText,
+                    IsError = isError,
+                    Latency = TimeSpan.Zero,
+                    StartedAt = now,
+                    CompletedAt = now,
+                    ToolCallId = callId,
+                },
+            ],
+        };
+    }
+
     // TODO delegate to ReplayKeptCallsDetailedAsync once TranscriptResumeAgentTests moves to the detailed result.
     /// <summary>
     /// Re-executes every tool call of <paramref name="turns"/>, turn by turn and in recorded order, through

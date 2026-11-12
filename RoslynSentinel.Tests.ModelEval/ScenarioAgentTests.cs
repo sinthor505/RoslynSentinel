@@ -170,7 +170,7 @@ public class ScenarioAgentTests
         }
 
         var directory = environment.SolutionDirectory;
-        var seed = TranscriptResume.RewriteTurns(kept, directory);
+        var seed = TranscriptResume.RewriteTurns(kept, directory).ToList();
         var systemPrompt = TranscriptResume.RewriteFixtureDirectory(source.SystemPrompt, directory)!;
         var userPrompt = TranscriptResume.RewriteFixtureDirectory(source.UserPrompt, directory)!;
 
@@ -187,30 +187,35 @@ public class ScenarioAgentTests
             return (null, null, schemaDrift, resultDrift, replayReason);
         }
 
-        // Faulted resume: ONE real call on the fresh fixture, not added to seed, so the model never sees it (stale workspace).
+        // Faulted resume: ONE real call on the fresh fixture. Unseeded, it is not added to seed, so the model never sees it (stale workspace).
         if (scenario.ResumeFaultTool is not null)
         {
+            var (faultIsError, faultText, faultArguments) = await ApplyResumeFaultAsync(environment.Client, scenario, directory, cancellationToken);
             if (scenario.ResumeFaultSeeded)
             {
-                return (null, null, schemaDrift, resultDrift, "FaultNotSupported: seeded fault calls are not implemented yet");
+                // Seeded: the failed result is the point, so IsError is expected here. The authored call is appended as the
+                // scenario's first error. Scoring stays at ResumeKeepTurns on purpose (ScenarioSampleLoop passes only that as
+                // seededTurns), so the authored failed call counts as the scenario's first error.
+                seed.Add(TranscriptResume.BuildAuthoredFaultTurn(seed[^1].TurnNumber + 1, scenario.ResumeFaultTool!, faultArguments, faultText, faultIsError));
+                TestContext.Out.WriteLine($"Sample {sampleIndex}: authored fault call seeded ({scenario.ResumeFaultTool}, isError={faultIsError}).");
             }
-
-            var (faultIsError, faultText) = await ApplyResumeFaultAsync(environment.Client, scenario, directory, cancellationToken);
-            if (faultIsError)
+            else if (faultIsError)
             {
                 var excerpt = faultText.Length > 200 ? faultText[..200] : faultText;
                 return (null, null, schemaDrift, resultDrift, "FaultCallFailed: " + excerpt);
             }
-
-            TestContext.Out.WriteLine($"Sample {sampleIndex}: resume fault applied ({scenario.ResumeFaultTool}); not shown to the model.");
+            else
+            {
+                TestContext.Out.WriteLine($"Sample {sampleIndex}: resume fault applied ({scenario.ResumeFaultTool}); not shown to the model.");
+            }
         }
 
-        // turnCap counts the seeded turns, so the live loop gets ContinueTurns more on top of the kept ones.
+        // turnCap counts the seeded turns (the authored fault turn included), so the live loop gets ContinueTurns more on top of them.
         var runner = new ModelAgentRunner(
             environment.AgentClient, environment.Client,
             repeatedFailureLimit: 10,
             maxTokensPerTurn: 16384,
-            turnCap: scenario.ResumeKeepTurns + scenario.TurnCap,
+            turnCap: scenario.ResumeKeepTurns + (scenario.ResumeFaultSeeded ? 1 : 0) + scenario.TurnCap,
             wallClockCap: TimeSpan.FromMinutes(10),
             logger: environment.Host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var result = await runner.RunAsync(systemPrompt, userPrompt, sampleDirectory, cancellationToken, seedTurns: seed);
@@ -220,7 +225,7 @@ public class ScenarioAgentTests
     }
 
     // Runs the ONE resume fault call on the fresh fixture; its result is never added to the seeded turns.
-    private static async Task<(bool IsError, string ResultText)> ApplyResumeFaultAsync(
+    private static async Task<(bool IsError, string ResultText, string ArgumentsJson)> ApplyResumeFaultAsync(
         McpClient client,
         ScenarioDefinition scenario,
         string solutionDirectory,
@@ -228,7 +233,7 @@ public class ScenarioAgentTests
     {
         var arguments = scenario.ResumeFaultArguments!.Replace("{SOLUTION}", solutionDirectory.Replace('\\', '/'));
         var (resultText, isError) = await TranscriptReplayHelper.ReplayToolCallAsync(client, scenario.ResumeFaultTool!, arguments, cancellationToken);
-        return (isError, resultText);
+        return (isError, resultText, arguments);
     }
 
     // Computes the final-state verdict and snapshots the files it was computed from. Must run while the environment is alive.
