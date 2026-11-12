@@ -118,7 +118,7 @@ public static class SyntaxTargetResolver
 
     /// <summary>
     /// Builds the message for a container that could not be found, listing the type names the file
-    /// actually declares.
+    /// actually declares. Names similar to the requested one come first and get a "Did you mean" retry line.
     /// </summary>
     /// <remarks>
     /// Replaces three identical <c>"// Container not found."</c> literals, which said nothing
@@ -129,6 +129,14 @@ public static class SyntaxTargetResolver
     /// <see cref="SyntaxTargetResolver.NormalizeTypeName"/>.
     /// </remarks>
     public static string BuildContainerNotFoundMessage(SyntaxNode root, string requestedName)
+        => BuildContainerNotFoundMessage(root, requestedName, includeReportOption: true);
+
+    /// <summary>
+    /// Shared body of <see cref="SyntaxTargetResolver.BuildContainerNotFoundMessage(SyntaxNode, string)"/>. With
+    /// <paramref name="includeReportOption"/> false the "does not exist" sentence is left out, for callers that
+    /// append other-file hits (the type then exists).
+    /// </summary>
+    private static string BuildContainerNotFoundMessage(SyntaxNode root, string requestedName, bool includeReportOption)
     {
         var declared = root.DescendantNodes()
             .OfType<BaseTypeDeclarationSyntax>()
@@ -136,26 +144,45 @@ public static class SyntaxTargetResolver
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
+        var reportOption = includeReportOption
+            ? $" If no file has a type named '{requestedName}', it does not exist: tell the user so instead of editing a different type."
+            : string.Empty;
+
         if (declared.Count == 0)
         {
             return $"No type named '{requestedName}' was found - this file declares no types at all. " +
-                   "Check the filePath.";
+                   "Check the filePath." + reportOption;
         }
 
-        var shown = declared.Take(10).ToList();
-        var suffix = declared.Count > shown.Count ? $" (+{declared.Count - shown.Count} more)" : "";
-        return $"No type named '{requestedName}' was found in this file. Types declared here: " +
-               $"{string.Join(", ", shown)}{suffix}. Pass one of those as containerName - a type " +
-               "argument list is optional, so both 'Foo' and 'Foo<T>' resolve.";
+        // Similar names first (nearest first), then the rest in source order.
+        var similar = NameCandidates.Rank(NormalizeTypeName(requestedName), declared, name => name)
+            .Select(r => r.Item)
+            .ToList();
+        var ordered = similar.Concat(declared.Where(name => !similar.Contains(name, StringComparer.Ordinal))).ToList();
+        var shown = ordered.Take(10).ToList();
+        var suffix = ordered.Count > shown.Count ? $" (+{ordered.Count - shown.Count} more)" : "";
+        var message = $"No type named '{requestedName}' was found in this file. Types declared here: " +
+                      $"{string.Join(", ", shown)}{suffix}. Pass one of those as containerName - a type " +
+                      "argument list is optional, so both 'Foo' and 'Foo<T>' resolve.";
+
+        if (similar.Count > 0)
+        {
+            return message + string.Concat(similar.Select(name => $" Did you mean '{name}'? Retry with containerName: '{name}'."));
+        }
+
+        var outline = string.IsNullOrEmpty(root.SyntaxTree.FilePath)
+            ? string.Empty
+            : $" To list the file's types and members, call {ToolCallHint.Call("GetFileOutline", ("filePath", root.SyntaxTree.FilePath))}.";
+        return message + " No type declared in this file has a similar name." + outline + reportOption;
     }
 
     /// <summary>
-    /// Async form of <see cref="BuildContainerNotFoundMessage"/>: the same message, plus a pointer to up to three
-    /// other documents in the solution that declare a type with the same bare name.
+    /// Async form of <see cref="SyntaxTargetResolver.BuildContainerNotFoundMessage(SyntaxNode, string)"/>: the same message, plus a pointer to up to three
+    /// other documents in the solution that declare a type with the same bare name. An other-file hit means the type
+    /// exists, so the "does not exist" sentence is then left out.
     /// </summary>
     public static async Task<string> BuildContainerNotFoundMessageAsync(Solution solution, SyntaxNode root, string requestedName, CancellationToken cancellationToken)
     {
-        var message = BuildContainerNotFoundMessage(root, requestedName);
         var bareName = NormalizeTypeName(requestedName);
         var localPath = root.SyntaxTree.FilePath;
         var hits = new List<string>();
@@ -193,10 +220,10 @@ public static class SyntaxTargetResolver
 
         if (hits.Count == 0)
         {
-            return message;
+            return BuildContainerNotFoundMessage(root, requestedName, includeReportOption: true);
         }
 
-        return message + $" A type named '{bareName}' is declared in {string.Join(", ", hits)}; pass that file's path as filePath.";
+        return BuildContainerNotFoundMessage(root, requestedName, includeReportOption: false) + $" A type named '{bareName}' is declared in {string.Join(", ", hits)}; pass that file's path as filePath.";
     }
 
     /// <summary>
@@ -754,7 +781,7 @@ public static class SyntaxTargetResolver
         return formatted switch
         {
             ToolAmbiguousMatchException => new ToolAmbiguousMatchException(message, candidates),
-            ToolNotFoundException => new ToolNotFoundException(message),
+            ToolNotFoundException nf => new ToolNotFoundException(message, nf.MissingTargetKind, nf.MissingTargetName, nf.Snippet, nf.Candidates),
             _ => formatted,
         };
     }

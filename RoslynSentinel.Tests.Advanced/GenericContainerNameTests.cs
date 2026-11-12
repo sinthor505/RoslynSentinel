@@ -86,6 +86,66 @@ public class GenericContainerNameTests
         Assert.That(message, Does.Contain("No type named 'Target' was found in this file"));
         Assert.That(message, Does.Contain("B.cs"));
     }
+
+    [Test]
+    public async Task BuildContainerNotFoundMessageAsync_MisspeltTypeName_ListsTheSimilarTypeFirstWithDidYouMean()
+    {
+        // Candidate case: the requested name is one edit away from a declared type, so that type is listed first and
+        // gets a prefilled retry. The unrelated PlainType keeps its source-order place after it.
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", "public class PlainType {}\npublic class OrderPricingCalculator {}")]);
+        var root = await solution.Projects.First().Documents.First().GetSyntaxRootAsync();
+
+        var message = await SyntaxTargetResolver.BuildContainerNotFoundMessageAsync(solution, root!, "OrderPricingCalculater", CancellationToken.None);
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("Types declared here: OrderPricingCalculator, PlainType"));
+            Assert.That(message, Does.Contain("Did you mean 'OrderPricingCalculator'? Retry with containerName: 'OrderPricingCalculator'."));
+            Assert.That(message, Does.Not.Contain("No type declared in this file has a similar name"));
+            Assert.That(message, Does.Not.Contain("You MUST"));
+        });
+    }
+
+    [Test]
+    public async Task BuildContainerNotFoundMessageAsync_UnrelatedTypeName_SaysNoSimilarNameAndOffersOutlineAndReport()
+    {
+        // No-candidate case: nothing declared here is similar, so the message points at GetFileOutline and tells the
+        // caller how to report a type that exists nowhere, instead of a Did-you-mean line.
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", "public class PlainType {}\npublic class OrderPricingCalculator {}")]);
+        var root = await solution.Projects.First().Documents.First().GetSyntaxRootAsync();
+
+        var message = await SyntaxTargetResolver.BuildContainerNotFoundMessageAsync(solution, root!, "ShippingLabelPrinter", CancellationToken.None);
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("No type declared in this file has a similar name."));
+            Assert.That(message, Does.Contain("GetFileOutline"));
+            Assert.That(message, Does.Contain("tell the user"));
+            Assert.That(message, Does.Not.Contain("Did you mean"));
+            Assert.That(message, Does.Not.Contain("You MUST"));
+        });
+    }
+
+    [Test]
+    [Category("SyntaxNodeCandidate")] // sentinel:auto-category
+    public void ResolveBySnippetWithWarning_NoMatchingSnippet_ThrowsNotFoundThatKeepsSnippetDetail()
+    {
+        // ComposeFailure rebuilds the exception; it must stay a ToolNotFoundException and keep the Snippet detail.
+        var source = """
+            public class Holder
+            {
+                public void Run(int x) { }
+            }
+            """;
+        var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", source)]);
+        var document = compilation.Projects.First().Documents.First();
+        var root = document.GetSyntaxRootAsync().Result!;
+        var sourceText = document.GetTextAsync().Result!;
+        var candidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, "Run");
+
+        var thrown = Assert.Throws<ToolNotFoundException>(() =>
+            SyntaxTargetResolver.ResolveBySnippetWithWarning(candidates, sourceText, "public void Walk(", null, null,
+                (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode), filePath: "Source.cs"));
+        Assert.That(thrown!.Snippet, Is.Not.Null);
+    }
 }
 
 [TestFixture]
