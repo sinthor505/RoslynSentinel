@@ -64,8 +64,9 @@ public static class MemberEditEffectFacts
 
             ISymbol? symbol = node switch
             {
+                // The declarators of one field declaration: a same-named pair is CS0102, so RequireSingle finds at most one; no match keeps the first.
                 BaseFieldDeclarationSyntax field => model.GetDeclaredSymbol(
-                    field.Declaration.Variables.FirstOrDefault(v => v.Identifier.Text == simple) ?? field.Declaration.Variables[0], cancellationToken),
+                    NameTargetLookup.RequireSingle(field.Declaration.Variables.Where(v => v.Identifier.Text == simple).ToList(), "field", simple) ?? field.Declaration.Variables[0], cancellationToken),
                 _ => model.GetDeclaredSymbol(node, cancellationToken),
             };
             return symbol is null ? fallback : (EditEffectNames.Display(symbol), symbol.GetDocumentationCommentId(), simple);

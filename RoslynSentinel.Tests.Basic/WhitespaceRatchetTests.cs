@@ -26,7 +26,7 @@ public class WhitespaceRatchetTests
         // Semantic hash only; the normalized text is compared in memory and never written to disk.
         ["RoslynSentinel.Common/ContentHasher.cs::ComputeHash"] = 1,
         // One sync Formatter.Format in the debug-only divergence diagnostic (its result is only logged, never written).
-        ["RoslynSentinel.Common/PersistentWorkspaceManager.cs::ApplyProposedChangesAsync"] = 1,
+        ["RoslynSentinel.Common/PersistentWorkspaceManager.cs::ApplyProposedChangesCoreAsync"] = 1,
         // Legitimate format-document tools (whole-document format is their job).
         ["RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs::FormatDocumentAsync"] = 1,
         ["RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs::FormatDocumentPreviewAsync"] = 1,

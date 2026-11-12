@@ -283,12 +283,18 @@ public static class EditEffectEvidence
         var name = segments[^1];
         var container = segments.Length >= 2 ? segments[^2] : null;
         var hint = string.IsNullOrEmpty(hintFile) ? null : hintFile.Replace('\\', '/');
+        // The hint file only orders the scan (a case-insensitive suffix test); no document is picked by path here, so a document without a
+        // path is skipped in the loop rather than filtered with a path predicate over .Documents.
         var documents = solution.Projects
             .SelectMany(p => p.Documents)
-            .Where(d => d.FilePath is not null)
-            .OrderByDescending(d => hint is not null && d.FilePath!.Replace('\\', '/').EndsWith(hint, StringComparison.OrdinalIgnoreCase));
+            .OrderByDescending(d => hint is not null && d.FilePath is not null && d.FilePath.Replace('\\', '/').EndsWith(hint, StringComparison.OrdinalIgnoreCase));
         foreach (var document in documents)
         {
+            if (document.FilePath is null)
+            {
+                continue;
+            }
+
             SyntaxNode? root = null;
             try
             {
