@@ -813,7 +813,8 @@ every turn, context at 88% by T60. Nothing written, no Build.
 **Environment gap.** `LoopAssistTracker.Observe` returns at once for a successful call (`if (!Enabled || !isError)`),
 and the repeated-failure breaker counts only failures, so identical successful calls never drew a nudge or a stop. Fix
 (owner approved 2026-11-12): nudge once on the 3rd consecutive identical successful call (same tool, arguments apart
-from `reason`), stop with `RepeatedIdenticalCall` on the next one. In progress.
+from `reason`), stop with `RepeatedIdenticalCall` on the next one. Built in ddcbc9e7, tests `IdenticalSuccessRunnerTests`
+in 77291fac (non-live ModelEval 376/376). Not yet measured live.
 
 ## Out of scope
 
