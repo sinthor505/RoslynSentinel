@@ -225,6 +225,9 @@ public enum AgentStopReason
     /// cut short or empty because the window is full, so this is NOT a genuine finish.
     /// </summary>
     ContextExhausted,
+
+    /// <summary>The model sent tool-call markup as text instead of a tool call on two consecutive turns (the first got a nudge); nothing was parsed.</summary>
+    MalformedToolCall,
 }
 
 /// <summary>

@@ -754,7 +754,28 @@ Not measured as a batch: H6 (30f4622f) and Batch C (c7bddd9e) were both run on c
   (RunTest T40: 9 tests, was 8). Step 10 was done before the first RunTest (T35 constants, T37 literals), so the
   test passed on first sight and its failing case was not seen live. T40 failed only Step 3 (helper private), T42
   9/9. The run FAILED the per-tool budget (ReplaceSnippet 6 > 5; also Member 2, ReadFile 1, 2 guardrail redirects)
-  after 44 turns. Root cause not analysed.
+  after 44 turns. Root causes below.
+
+**Root causes of `20261112-151531-550` (failure-root-cause-analyst).** Counted ReplaceSnippet failures: T3, T4, T13,
+T21, T27, T28; guardrail redirects (not counted): T6 (class rename), T15 (method rename).
+
+| T | Tool / code | Cause | Known / new |
+| --- | --- | --- | --- |
+| 3 | ReplaceSnippet InvalidArgument | `filePath` omitted; schema requires only reason/action, description "File to edit. Do not combine with batchEdits" (`WorkspaceFileEditImpl.cs:1152`) | new |
+| 4, 13 | ReplaceSnippet ValidationFailed (validate) | the validate branch (`WorkspaceFileEditImpl.cs:1311-1323`, batch `:1678-1688`) returns raw diagnostics: no file/line, no EditImpactGate redirect, no CompilerErrorLookupHelper hint (apply runs the gate at `:1368`); T5 and T14 misread it as a stale file | new |
+| 6 vs 15 | redirect | T6 flagged only the class rename; the `CalcDisc` rename in the same edit came back verdict `valid`, `brokenUseCount 0` (hypothesis: the call site's type no longer bound, so no CS1061); T13-T17 redid it | new |
+| 10 | ReadFile FileNotFound | old path after RenameSymbol moved the file; RenameSymbol's callSitesNote prints the pre-move path (hypothesis for why) | known (H5 R1) |
+| 19, 21 | Member / ReplaceSnippet CS0103 | the extracted helper `GetAmountTimesRate` was only called, never declared; the hint (`CompilerErrorLookupHelper.cs:273`) says "needs to be added" without how or order; T23-T24 DeleteFile + CreateFile detour | new |
+| 27 | ReplaceSnippet CS0144 | field type changed to the interface with `= new()` kept; hint (`CompilerErrorLookupHelper.cs:222`) says only "SomeImplementingClass" | known (H5 R4) |
+| 28 | ReplaceSnippet NotFound | own rejected newContent reused as oldContent; `RejectedOriginNote` fired | known |
+| 32 | Member InvalidArgument | stray class `}` in newMemberSource; the generic `ContainsDiagnostics` branch (`MemberRefactoringEngine.cs:2353`) fires before `DetectTrailingUnparsedDeclaration` (`:2357`); the "statement or method body fragment" text is wrong here | new |
+
+Ranked fixes (not approved): (1) validate gets the apply branch's EditImpactGate and hint text (T4/T13 become redirects:
+ReplaceSnippet 6 -> 4, under budget); (2) a multi-rename edit names every rename in the redirect, and a verdict that could
+not be checked is not `valid`; (3) CS0103 for a missing callee names `Member(operation: addMember, ...)` or "declare it
+in the same newContent"; (4) FileNotFound and callSitesNote use the post-move path (existing TODO in
+`FileNotFoundMessage.cs`); (5) wording: `filePath` "required unless batchEdits", CS0144 names the implementing class,
+Member reports an extra `}` before the generic message.
 
 ## Out of scope
 

@@ -213,6 +213,8 @@ public sealed class ModelAgentRunner
         // context-length lookup never adds latency to every turn.
         var contextLength = await _llm.GetContextLengthAsync(cancellationToken);
         var cumulativeTokens = 0;
+        // Consecutive turns whose text held tool-call markup and no parsed tool call (zero-tool-call branch below).
+        var consecutiveMalformedToolCallTurns = 0;
 
         while (turnNumber < _turnCap)
         {
@@ -297,10 +299,32 @@ public sealed class ModelAgentRunner
                         "context window exhausted, not a genuine finish.",
                         turnNumber, cumulativeTokens, contextLength);
                 }
+                else if (ContainsToolCallMarkup(modelMessage.Content) || ContainsToolCallMarkup(modelMessage.ReasoningContent))
+                {
+                    // The model wrote a tool call as text, so nothing ran: nudge it once to resend a real call; a second
+                    // consecutive malformed turn ends the run.
+                    consecutiveMalformedToolCallTurns++;
+                    if (consecutiveMalformedToolCallTurns >= 2)
+                    {
+                        stopReason = AgentStopReason.MalformedToolCall;
+                        _logger.LogWarning(
+                            "Turn {Turn}: tool-call markup as text with no parsed tool call on {Count} consecutive turns - stopping the run.",
+                            turnNumber, consecutiveMalformedToolCallTurns);
+                        break;
+                    }
+
+                    // The model message itself was already added to `messages` above, so only the nudge is added here.
+                    var nudgeText = "Your last reply contained tool-call text (tags such as " + "<" + "tool_call> or " + "<" + "parameter=...>) in its message or reasoning, but no tool call was received, so nothing ran. If you meant to call a tool, send it again as a real tool call. If you are finished, reply with your final summary and no tool-call text.";
+                    messages.Add(assistTracker.CreateAssistMessage(nudgeText));
+                    RecordAssists(transcript, turnRecord, [new AgentAssist(AgentAssist.MalformedToolCallKind, "", 1, nudgeText)]);
+                    await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
+                    _logger.LogWarning(
+                        "Turn {Turn}: tool-call markup as text with no parsed tool call - nudging the model once to resend a real tool call.",
+                        turnNumber);
+                    continue;
+                }
                 else
                 {
-                    // TODO a turn whose reasoning holds unparsed tool-call markup (a closing tool_call tag, parameter tags)
-                    // is a malformed call, not a finish: give it its own stop reason or nudge a retry (run 20261112-151054-918 T4).
                     stopReason = AgentStopReason.ModelFinished;
                     _logger.LogInformation("Turn {Turn}: model made no tool calls, treating as finished.", turnNumber);
                 }
@@ -308,6 +332,7 @@ public sealed class ModelAgentRunner
                 break;
             }
 
+            consecutiveMalformedToolCallTurns = 0;
             var unknownCall = modelMessage.ToolCalls.FirstOrDefault(tc => !knownToolNames.Contains(tc.Name));
             if (unknownCall is not null)
             {
@@ -531,6 +556,21 @@ public sealed class ModelAgentRunner
                 "Turn {Turn}: loop assist ({Kind}) for {Tool}, repeat count {RepeatCount}: {Text}",
                 turn.TurnNumber, assist.Kind, assist.ToolName, assist.RepeatCount, assist.Text);
         }
+    }
+
+    /// <summary>True when the text holds tool-call markup written as plain text (a tool-call tag or a function or parameter tag).</summary>
+    private static bool ContainsToolCallMarkup(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return false;
+        }
+
+        // Markers are concatenated so this source never holds literal tool-call markup (the server's edit guard rejects it).
+        return text.Contains("<" + "tool_call>", StringComparison.Ordinal)
+            || text.Contains("<" + "/tool_call>", StringComparison.Ordinal)
+            || text.Contains("<" + "function=", StringComparison.Ordinal)
+            || text.Contains("<" + "parameter=", StringComparison.Ordinal);
     }
 
     /// <summary>

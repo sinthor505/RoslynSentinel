@@ -20,6 +20,9 @@ public sealed record AgentAssist(string Kind, string ToolName, int RepeatCount, 
 
     /// <summary>A server loop-latch refusal (ToolLoopLatch): the call was not executed. RepeatCount counts this tool's refusals in the run so far; Text is the refusal message.</summary>
     public const string LatchKind = "latch";
+
+    /// <summary>Nudge after a turn whose text held tool-call markup but no parsed tool call.</summary>
+    public const string MalformedToolCallKind = "malformed";
 }
 
 /// <summary>
