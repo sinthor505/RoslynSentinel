@@ -191,6 +191,41 @@ different mechanism, not by the same one:
 Launch two hosts concurrently by running the script twice (background jobs / separate
 terminals) — each gets its own `--artifacts-path` automatically, so they won't collide.
 
+### Shared hosts: queue the run (`scripts/roslynsentinel-evalqueue.ps1`)
+
+A host performs one generation at a time and several sessions use the same hosts, so start a
+model-eval run through the queue. It wraps `roslynsentinel-modeleval.ps1` (one job = one run),
+runs jobs one at a time per host and shows every session what is running and waiting.
+
+```powershell
+# Queue 5 runs; prints each job id, its place and the estimated start
+.\scripts\roslynsentinel-evalqueue.ps1 submit -HostAddress 113 -Test OrderPricingRefactorChain10 -Model qwen3.5-9b-coder -Repeats 5 -Session <your session name> -Purpose '<why>'
+# Other model-eval parameters go in -EvalArgs as one string (paths absolute)
+.\scripts\roslynsentinel-evalqueue.ps1 submit -HostAddress 113 -Test ResumeTranscript -Model qwen3.5-9b-coder -Session <name> -Purpose '<why>' -EvalArgs "-ResumeTranscript 'C:\full\path\transcript.json' -ResumeKeepTurns 4 -Samples 10"
+.\scripts\roslynsentinel-evalqueue.ps1 status                      # running job, queue in order, recent jobs
+.\scripts\roslynsentinel-evalqueue.ps1 wait -Id <id>[,<id>...]     # run in the background: returns when the runs end
+.\scripts\roslynsentinel-evalqueue.ps1 cancel -Id <id> -Session <your session name>
+```
+
+- `-Model`, `-Session` (first line of `ListAgents`) and `-Purpose` are required.
+- `wait` prints each job's state, results folder (`ModelTestingResults\<host>\<TestName>\<timestamp>\`)
+  and log. Exit code 0 = all passed, 1 = a run finished with failing tests, 2 = anything else.
+- A request that matches an existing job (same commit, same uncommitted source changes, host, model,
+  test, arguments and `ROSLYNSENTINEL_*` variables) attaches to it and returns its results instead of
+  running again. `-Force` runs it anyway (more samples).
+- The run tests the working tree as it is when the job starts. If the commit or uncommitted source
+  files (`*.cs`, project and solution files) changed since submit, the job ends `TreeChanged` without
+  running; resubmit, or pass `-OnTreeChange RunAnyway` at submit.
+- `ROSLYNSENTINEL_*` variables set in the submitting shell (for example `ROSLYNSENTINEL_LIFT_RENAMES`)
+  are recorded with the job and applied to its run.
+- `-Priority 1..9` (default 5) orders the queue; a running job is never interrupted.
+- States: `Finished` (`passed` true/false), `Cancelled`, `TimedOut` (`-TimeLimitMinutes`, default 40),
+  `Crashed` (no run folder: build failure or testhost crash; read the log), `TreeChanged`.
+- If the host stops answering, the queue pauses and the jobs stay queued.
+- Queue files: `%LOCALAPPDATA%\RoslynSentinel\evalqueue\<host>\` (`jobs\`, `logs\`, `worker.log`).
+  Tests: `pwsh -NoProfile -File scripts\roslynsentinel-evalqueue.Tests.ps1`.
+- `roslynsentinel-planstep.ps1` runs are not queued yet.
+
 ### Resuming from a saved transcript (`-Test ResumeTranscript`)
 
 Measures loop assist (or any prompt/tool change) at the exact turn a loop starts instead of waiting for it in a full
