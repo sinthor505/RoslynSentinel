@@ -25,7 +25,9 @@ public class ErrorPolicyOptionsTests
     [TearDown]
     public void RestoreEnvAndResetOptions()
     {
-        // Reset while the env vars are still cleared, so the developer's own settings cannot make this teardown throw.
+        // Clear the env vars first: a test may have left an invalid value in them, which would make Configure throw here.
+        Environment.SetEnvironmentVariable(ModeEnv, null);
+        Environment.SetEnvironmentVariable(FileEnv, null);
         ErrorPolicyOptions.Configure(Array.Empty<string>());
         Environment.SetEnvironmentVariable(ModeEnv, _savedMode);
         Environment.SetEnvironmentVariable(FileEnv, _savedFile);
