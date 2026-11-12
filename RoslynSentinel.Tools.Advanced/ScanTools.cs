@@ -1093,7 +1093,8 @@ public class ScanTools
                 return new SentinelCallToolResult<object> { IsError = false, SuccessData = apiResult, TotalRecords = apiResult.Count };
             }
         }
-        catch (Exception ex) when ((ex is ArgumentException or ToolNotFoundException) && ex.Message.Contains("not found in solution"))
+        // Match the exception type, not its message text: only the persistBaseline=false path (DiscoveryEngine) produced this text; the persistBaseline=true path keeps going to the general catch.
+        catch (ToolNotFoundException) when (!persistBaseline)
         {
             return new SentinelCallToolResult<object>
             {

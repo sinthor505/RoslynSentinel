@@ -738,6 +738,26 @@ public class Model {
         //Assert.That(result.TotalRecords > 0);
     }
 
+    [Test]
+    [Category("ScanTools")]
+    public async Task GetPublicApiSurface_UnknownProject_ReturnsNotFoundError()
+    {
+        SetSource(RichSource, "Test.cs");
+        var result = await _scanTools.GetPublicApiSurfaceTool(reason: "test message", projectName: "NoSuchProject");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound.ToString()));
+        Assert.That(result.ErrorData!.Message, Is.EqualTo("GetPublicApiSurface failed: Project 'NoSuchProject' not found in solution."));
+    }
+
+    [Test]
+    [Category("ScanTools")]
+    public async Task GetPublicApiSurface_UnknownProjectWithPersistBaseline_IsStillAnError()
+    {
+        SetSource(RichSource, "Test.cs");
+        var result = await _scanTools.GetPublicApiSurfaceTool(reason: "test message", projectName: "NoSuchProject", persistBaseline: true);
+        Assert.That(result.IsError, Is.True);
+    }
+
     // --- FindServicesNotRegistered (via DependencyInjectionEngine) ---
     [Test]
     [Category("DependencyInjectionEngine")] // sentinel:auto-category
