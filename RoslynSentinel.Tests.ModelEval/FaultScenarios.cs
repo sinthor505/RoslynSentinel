@@ -3,12 +3,15 @@ using RoslynSentinel.Tests.ModelEval.Fixtures;
 namespace RoslynSentinel.Tests.ModelEval;
 
 /// <summary>
-/// Fault-variant scenarios: each prompt names a symbol or file one edit away from the real one, or with
-/// no near match at all, so the tool error text and hints are what is under test. There is no fix to
-/// reproduce (SourceRun says so). The two StopAndReport scenarios grade Unchanged as the good state
-/// (see ScenarioScorer: Passed needs the stop marker plus Unchanged), so any edit there is a guess and
-/// is scored Wrong, even a plausible one. RenameSymbolTypo is seeded (its typo call is the authored first
-/// turn); the other three are cold-start.
+/// Fault-variant scenarios: each prompt names a symbol or file one edit away from the real one, or names
+/// a target that does not exist by that name, so the tool error text and hints are what is under test.
+/// There is no fix to reproduce (SourceRun says so). RenameSymbolNoSuchMethod and
+/// ReplaceSnippetWrongFileNoMatch are misnamed-target scenarios: the described member or file does not
+/// exist by the name in the prompt, and one real member or file matches the description. They are graded
+/// by the same final-state classifiers as their typo and near-match siblings (RenameScenarios and
+/// GuardScenarios), so the model must find the real target and complete the edit there. The truly absent
+/// target (no match at all) lives in StopAdherenceScenarios.cs. RenameSymbolTypo is seeded (its typo call
+/// is the authored first turn); the other three are cold-start.
 /// </summary>
 public static class FaultScenarios
 {
@@ -88,18 +91,17 @@ public static class FaultScenarios
            only changes the method's declaration and misses its caller is not complete.
         """;
 
-    // 12 turns: with a cap of 6-8, 17 of 20 StopAndReport samples ran to the cap before they could end with BLOCKED: (batch B, plan_targeted_tool_scenario_evals).
     public static readonly ScenarioDefinition RenameSymbolNoSuchMethod = new(
         Id: RenameSymbolNoSuchMethodId,
         ScenarioType: 3,
-        FaultKind: "symbol-no-near-match",
+        FaultKind: "symbol-misnamed-description-match",
         ToolUnderTest: "RenameSymbol",
         StagedFiles: ScenarioFixtureFiles.ChainStartingFiles,
         PromptTemplate: RenameSymbolNoSuchMethodPrompt,
-        TurnCap: 12,
-        Expected: ExpectedOutcome.StopAndReport,
+        TurnCap: 8,
+        Expected: ExpectedOutcome.Recover,
         ExpectedRecoveryTool: null,
-        CheckFinalState: (solutionDirectory, ct) => CheckStopAndReportAsync(solutionDirectory, null, ct),
+        CheckFinalState: RenameScenarios.CheckFinalStateAsync,
         SourceRun: CommonSourceRun,
         ReproducesAt: CommonReproducesAt,
         FixedBy: "");
@@ -155,22 +157,22 @@ public static class FaultScenarios
         1. In `SummarizeShipping`, change the string "national" to "national-post". Use the `ReplaceSnippet` tool. Change nothing else.
         """;
 
-    // 12 turns: with a cap of 6-8, 17 of 20 StopAndReport samples ran to the cap before they could end with BLOCKED: (batch B, plan_targeted_tool_scenario_evals).
     public static readonly ScenarioDefinition ReplaceSnippetWrongFileNoMatch = new(
         Id: ReplaceSnippetWrongFileNoMatchId,
         ScenarioType: 3,
-        FaultKind: "file-name-no-match",
+        FaultKind: "file-name-misnamed-file-match",
         ToolUnderTest: "ReplaceSnippet",
         StagedFiles: ScenarioFixtureFiles.ChainStartingFiles,
         PromptTemplate: ReplaceSnippetWrongFileNoMatchPrompt,
-        TurnCap: 12,
-        Expected: ExpectedOutcome.StopAndReport,
+        TurnCap: 8,
+        Expected: ExpectedOutcome.Recover,
         ExpectedRecoveryTool: null,
-        CheckFinalState: (solutionDirectory, ct) => CheckStopAndReportAsync(solutionDirectory, "ContosoOrders.Core/FixtureHelpers/ShippingLabelPrinter.cs", ct),
+        CheckFinalState: GuardScenarios.CheckTwinApplyCallsFinalStateAsync,
         SourceRun: CommonSourceRun,
         ReproducesAt: CommonReproducesAt,
         FixedBy: "");
 
+    // TODO CheckStopAndReportAsync is now used only by FaultScenariosTests: no scenario calls it since RenameSymbolNoSuchMethod and ReplaceSnippetWrongFileNoMatch moved to the final-state classifiers. Remove it with ClassifyStopAndReport once nothing needs the StopAndReport verdict.
     /// <summary>
     /// Reads the calculator and checkout after a StopAndReport run and returns the verdict. The forbidden
     /// file (when given) is a new file the model must not create; cancellation propagates.
@@ -186,7 +188,7 @@ public static class FaultScenarios
     }
 
     /// <summary>
-    /// Pure classification for StopAndReport scenarios. Unchanged (both fixtures still at their starting
+    /// Pure classification for the StopAndReport verdict (no scenario uses it now; tests only). Unchanged (both fixtures still at their starting
     /// contents) is the only good state; any other change is a guess and is Wrong.
     /// </summary>
     public static FinalStateVerdict ClassifyStopAndReport(string? calculatorText, string? checkoutText, bool forbiddenFileExists)

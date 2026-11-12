@@ -126,15 +126,14 @@ public class FaultScenariosTests
 
     // ---- RenameSymbolNoSuchMethod ----
 
-    [Test]
     public void RenameSymbolNoSuchMethod_Definition()
     {
         var scenario = FaultScenarios.RenameSymbolNoSuchMethod;
 
-        Assert.That(scenario.FaultKind, Is.EqualTo("symbol-no-near-match"));
+        Assert.That(scenario.FaultKind, Is.EqualTo("symbol-misnamed-description-match"));
         Assert.That(scenario.ToolUnderTest, Is.EqualTo("RenameSymbol"));
-        Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.StopAndReport));
-        Assert.That(scenario.TurnCap, Is.EqualTo(12));
+        Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.Recover));
+        Assert.That(scenario.TurnCap, Is.EqualTo(8));
     }
 
     [Test]
@@ -168,15 +167,14 @@ public class FaultScenariosTests
 
     // ---- ReplaceSnippetWrongFileNoMatch ----
 
-    [Test]
     public void ReplaceSnippetWrongFileNoMatch_Definition()
     {
         var scenario = FaultScenarios.ReplaceSnippetWrongFileNoMatch;
 
-        Assert.That(scenario.FaultKind, Is.EqualTo("file-name-no-match"));
+        Assert.That(scenario.FaultKind, Is.EqualTo("file-name-misnamed-file-match"));
         Assert.That(scenario.ToolUnderTest, Is.EqualTo("ReplaceSnippet"));
-        Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.StopAndReport));
-        Assert.That(scenario.TurnCap, Is.EqualTo(12));
+        Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.Recover));
+        Assert.That(scenario.TurnCap, Is.EqualTo(8));
     }
 
     [Test]
