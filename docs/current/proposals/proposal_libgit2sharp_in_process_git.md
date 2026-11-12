@@ -195,6 +195,31 @@ production change:
    root with output discarded. Measure what it saves against the CLI commit, which waits for the
    hook's PowerShell to start.
 
+**5b result (2026-11-11): GO.** Throwaway code in `c:\tmp\spike5b`.
+- `Repository.Commit` is NOT compare-and-swap: it creates the commit (`ObjectDatabase.cs:428`,
+  `Proxy.cs:314`), then moves the branch with plain `git_reference_set_target`
+  (`Repository.cs:1112-1134`, `ReferenceCollection.cs:456-476`). Two racing processes lost 111 of
+  600 commits.
+- Chosen route: `ObjectDatabase.CreateCommit`, then P/Invoke `git_reference_create_matching(force=1,
+  current_id=parent)` into the bundled `git2-5853918.dll`. Alternative: `git_commit_create_from_ids`
+  with `update_ref`. Both lost nothing in staged, free-running (300 iterations) and mixed-with-CLI
+  races; `git fsck` clean. Loser errors: -15 "old reference value does not match" (CAS), -14
+  "failed to lock file '...master.lock'" (retryable).
+- Sequence: take `index.lock`, write tree, create commit, CAS the ref, unlock (no index write).
+  LibGit2Sharp cannot hold the lock; the two-process index-lock test was not run.
+- Linked worktree: local config is invisible (`core.hooksPath`, `user.name`, trailer key read null);
+  read `<commondir>/config` as `ConfigValue` already does, or decline.
+- Hooks: resolution matched git in 8 cases; `sh.exe` at `C:\Program Files\Git\usr\bin\sh.exe`;
+  unawaited launch returns in about 13 ms.
+- Median ms, 15 rounds, 1783-file clone, stand-in hook with the real launch line: CLI commit waiting
+  for the hook 812.8; in-process plus unawaited hook 13.0; in-process, no hook 11.3; CLI, no hook
+  206.7.
+
+**5a progress:** slice 1 `737581b3` (HEAD-with-parents and MERGE_HEAD on the seam; trailer config
+read was already there). Remaining: slice 2 (untracked pre-stage `git add`, `FindIgnoredPaths`,
+`ClassifyPaths`), slice 3 (amend upstream check, hash-derivation reads). Timing harness:
+`c:\tmp\commit-baseline\` (README).
+
 **5c - in-process commit for the simple case (after a go from 5b).** Plain commit or
 `--only <paths>` (tree = HEAD tree plus the listed paths' index entries), trailers formatted in
 process with byte-parity tests against `git commit --trailer` (existing `Co-Authored-By` block),
