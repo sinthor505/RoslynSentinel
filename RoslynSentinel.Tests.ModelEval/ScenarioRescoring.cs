@@ -123,7 +123,10 @@ public static class ScenarioRescoring
                     scenario.Expected,
                     scenario.ExpectedRecoveryTool,
                     verdict,
-                    stopReason, seededTurns: scenario.ResumeKeepTurns);
+                    stopReason,
+                    seededTurns: scenario.ResumeKeepTurns,
+                    idealTurns: scenario.IdealTurns,
+                    turnCap: scenario.TurnCap);
                 sample = new ScenarioSample(
                     scenarioId, scenarioType, faultKind, sampleIndex, commit, dirty, liftRenames,
                     score, schemaDrift, resultDrift, inconclusiveReason, transcriptPath);
