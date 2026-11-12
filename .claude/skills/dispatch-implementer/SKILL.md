@@ -102,8 +102,14 @@ exceeds the brief's; the dispatcher then re-slices.
 
 ## Concurrent C# dispatches (trial)
 
-At most two subagents at once. Use disjoint files (a second agent's edits leave the first with a stale
-view and CS errors); only one may run `Build`/`RunTest`. If an error, stale-view mistake or tool failure
+At most two implementing subagents (agents that edit C# or run `Build`) at once; the dispatcher (main
+session or orchestrator) does not count. Start a pair as two `Agent` calls in one message, both with
+`run_in_background: false`; the call returns when both finish. Use disjoint files, preferably different
+projects (a second agent's edits leave the first with a stale view and CS errors). Each may `Build`: the
+server's build semaphore queues the second call. The dispatcher runs no `Build`/`RunTest` of its own
+while a pair is running, then commits each slice separately with its own file list. A `Build` error in
+a file outside the agent's own slice is the other agent's in-progress state: report it as
+`MULTI-AGENT:`, never fix it. If an error, stale-view mistake or tool failure
 looks caused by the second agent, first treat it as a trial finding: report it (`MULTI-AGENT:` plus what
 collided), drop back to one subagent and continue. Do not write a blocker doc or halt for it.
 

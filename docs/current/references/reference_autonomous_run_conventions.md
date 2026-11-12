@@ -65,15 +65,16 @@ Status values: `TODO` / `WIP` / `DONE (hash)` / `PARTIAL (what is left)` / `DEFE
 ### Dispatch modes
 
 - **Direct:** the main session briefs `implementer` / `implementer-sweep` / `test-writer` itself
-  (load `dispatch-implementer` first), one slice at a time, reads the report, runs `Build`, commits,
-  and starts the slice's filtered test run detached (`dispatch-implementer`, "Tests and test runs").
-  For small, tier-sized work.
-- **Batched:** one `orchestrator` per batch; **one batch at a time** (an orchestrator plus its child
-  is already the two-agent limit, and Build/RunTest cannot overlap). Batches group work by code area
+  (load `dispatch-implementer` first), one slice or one disjoint pair at a time, reads the report,
+  runs `Build`, commits, and starts the slice's filtered test run detached (`dispatch-implementer`,
+  "Tests and test runs"). For small, tier-sized work.
+- **Batched:** one `orchestrator` per batch; **one batch at a time**. Batches group work by code area
   so no two touch the same files. The brief points at tracker rows rather than restating them and says:
   - run every child in the foreground (`run_in_background: false`); load `dispatch-implementer`;
     re-verify scoping anchors before briefing; append each dispatch to
     `.claude/journal/implementer-ledger.md`
+  - run two slices at once when their files are disjoint (preferably different projects): two
+    `Agent` calls in one message, both foreground (`dispatch-implementer`, "Concurrent C# dispatches")
   - per slice: implementers write the tests but only `Build`; the orchestrator commits, then starts a
     detached filtered run of the touched classes with `Invoke-WorktreeTests.ps1 -WorktreeRoot` and
     dispatches the next slice without waiting, collecting `summary.json` results before later commits

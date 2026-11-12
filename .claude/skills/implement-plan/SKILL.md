@@ -45,7 +45,8 @@ CLAUDE.md applies throughout.
 - **Direct:** 4 or fewer steps, each within D1 or S0, none needing a senior. The main session
   dispatches implementers step by step (reference, "Dispatch modes").
 - **Batched:** anything larger. Batches are consecutive steps sharing a code area; one orchestrator
-  per batch, one batch at a time.
+  per batch, one batch at a time; inside a batch, up to two slices run in parallel when their files
+  are disjoint.
 
 ## 4. Tracker (write before the first dispatch)
 
