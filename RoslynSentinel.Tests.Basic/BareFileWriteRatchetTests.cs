@@ -32,6 +32,8 @@ public class BareFileWriteRatchetTests
         // Undo and operation blobs (server state, not workspace files).
         ["RoslynSentinel.Common/OperationBlobWriter.cs::WriteAsync"] = 1,
         ["RoslynSentinel.Common/OperationBlobWriter.cs::WriteValidationFailureAsync"] = 1,
+        // Empty .undone marker beside an operation blob (server state under .roslynsentinel/operations, not a workspace file; best-effort, never throws).
+        ["RoslynSentinel.Common/OperationBlobWriter.cs::MarkUndone"] = 1,
         // Full-test marker under .roslynsentinel/ (server state, not a workspace source file): temp file, then atomic replace.
         ["RoslynSentinel.Engines.Basic/FullTestMarkerStore.cs::Write"] = 1,
         // .gitignore inside a throwaway build output directory.
