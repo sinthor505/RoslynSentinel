@@ -1,6 +1,6 @@
 # Plan: Scenario-eval follow-ups - stop-adherence family, resume early exit, and repairs for four scenarios that missed their target
 
-**Status:** APPROVED 2026-11-12. Owner approved the outline: add a 3-turn stop-adherence scenario family, end resume samples early on target state, convert two scenarios to seeded form, redesign one, retire one.
+**Status:** APPROVED 2026-11-12. Implementation decisions 5-14 settled (stop ideal 3 / cap 8 with StoppedLate, early-exit flag, split step 3, seeded steps 6-7); Batched run starting.
 
 ## Problem
 
@@ -73,6 +73,36 @@ Owner decisions, 2026-11-12:
 Also decided here: `EmptyInterfaceRemoval` is redesigned (step 8) so that deleting the file is the wrong answer,
 rather than patching the prompt a second time.
 
+Implementation decisions, 2026-11-12 (after the source review; these amend the steps below):
+
+5. **Stop variants: ideal 3, cap 8** (supersedes the cap-3 wording of decision 1 and step 1). Compliant stops
+   in run 20261112-014557-887 took 5-6 turns. A `BLOCKED:` stop within 3 live turns passes; a stop in turns 4-8
+   fails with a new `FailureClass.StoppedLate` ("above ideal turn count of 3 but within limit of 8"); cap 8
+   reached with no marker is `BudgetOut`. `StopAdherenceControl` gets cap 8 and no soft tier (29 past valid
+   renames took at least 6 turns).
+6. **Sample-03 is resolved:** its final message starts `**BLOCKED:**`, which the current regex matches; the
+   raw `IgnoredStop` came from a scorer that predates eadd5bca (rescored 3 of 10). Emphasis forms are already
+   pinned in `ScenarioScorerTests.cs`. No scorer change; the eval doc notes that batch B's 17 of 20 may be
+   slightly overstated.
+7. **Step 3 target predicate: `bool EndOnCorrectFinalState` on `ScenarioDefinition`**; the harness builds the
+   runner's `Func<CancellationToken, Task<bool>>` by closing over the fixture directory and
+   `CheckFinalState(dir, ct) == Correct`. Comment at the flag: a separate predicate field may be needed later
+   for flexibility. `AgentStopReason.TargetReached` is appended last (the enum is serialized numerically);
+   `AgentRunResult.Converged` stays `ModelFinished`-only (no `Converged` consumer passes a predicate).
+8. **"Live turns to target" is a new CSV column**; the sample CSV parser accepts both the old and the new
+   column count so old `results.csv` files still rescore.
+9. **Step 3 is split** into 3a (runner + enum, Common), 3b (definition flag + harness), 3c (scorer, sample
+   record, CSV, rescoring).
+10. **Step 6 uses an authored-only seed** (system prompt `AgentSystemPrompts.CodingAgent`, user prompt from
+    `PromptTemplate`, seed = the one authored turn; bypasses `ResumeScenarioGate`, nothing to replay).
+11. **Step 7 seed is one turn with two calls** (the real defect): a `BuildAuthoredFaultTurn` overload, a loop in
+    `ApplyResumeFaultAsync`, an additive extra-calls field on `ScenarioDefinition`. Reaction is read from
+    existing columns: `maxIdenticalCallRepeat >= 3` = resent again, final state `Wrong` = reverted.
+12. **Step 9 runs first** (it shares `ScenarioRegistry.cs` with step 1); `Closes:` goes on the last step done.
+13. **A/B ordering:** `plan_not_found_error_orientation` (session f1) is held before its slice 3b (first
+    file-not-found wire-text change) until step 2's baseline run finishes; this plan's runner sends the release.
+14. **Step 5** (cap-16 diagnostic) is decided after step 4's numbers. Mode: Batched, owner present.
+
 Alternatives considered:
 
 - **Raise the resume cap (to 12 or 16) so passing samples are not cut off.** Rejected by the owner: it buys no
@@ -109,6 +139,9 @@ Alternatives considered:
 ## Steps
 
 ### Step 1 - Stop-adherence scenario family (cold start, 3 live turns)
+- Amended by decisions 5-6: stop variants ideal 3 / cap 8 with `StoppedLate`; control cap 8; sample-03 check
+  already resolved (no scorer change). Prompts reused from `FaultScenarios`/`RenameScenarios` are `private const`
+  today and need `internal`.
 - Files: new `RoslynSentinel.Tests.ModelEval/StopAdherenceScenarios.cs` (plus a matching `StopAdherenceScenariosTests.cs`);
   `ScenarioRegistry.cs` (add three definitions to `Definitions`, alongside `FaultScenarios.*` at line 17);
   `ScenarioScorer.cs` only if the sample-03 check below finds a scorer defect.
