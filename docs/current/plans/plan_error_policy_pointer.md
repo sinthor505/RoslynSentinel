@@ -1,6 +1,6 @@
 # Plan: gated error-policy suffix (Off / Pointer / Inline) on not-found tool errors, with eval stamping and an A/B
 
-**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Steps 1-4 done (9856e63c; 22dd662b..cc3fba6c).
+**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Steps 1-6 done (9856e63c; 22dd662b..cc3fba6c; f5be7103..4764839b).
 
 ## Problem
 
@@ -93,6 +93,7 @@ Text-neutral slices first (Steps 1-4, 7-8), behaviour-changing ones after (5, 6,
 - Effect: text-neutral (no wire or text change)
 - Change: add `RecordMissingTarget(kind)` / `MissingTargetKind` to `ToolCallContext`. `ToolErrorMapper.ToResultError` records `ToolNotFoundException.MissingTargetKind` (covers tool `catch` blocks). `CallToolFailureHandler` records it for thrown exceptions. `LocateSymbol`'s not-found `ResultError` records `symbol`. `ReadFile`/`GetFileOutline`/`GetMethodSource` need nothing: their literal `FileNotFound`/`MethodNotFound` codes classify alone. Every other returned not-found route from the Inventory gets `// TODO error-policy: route does not record the missing-target kind` at the spot.
 - Done when: Build 0 errors; tests call `Search(mode: symbol)` for a missing method and a throwing route through the real filter pipeline and assert the context holds the kind after the call; no pinned error text changes.
+- Done: f5be7103 (context + `ToResultError`, which also covers `CallToolFailureHandler`), 751baf7b (TODO markers: `DocumentLookup.cs`, `SymbolWireResolver.cs`, `RefactoringToolHelpers.cs`), 4764839b (`LocateSymbol`; `InspectSymbol` misses marked). `BatchEditFailure` (`MemberRefactoringEngine.cs`) not marked: peer-owned file at the time. A kind recorded by a swallowed not-found stays on the context for the rest of the call (accepted).
 
 ### Step 6 - ErrorPolicyFilter
 - Files: new `RoslynSentinel.Server.Advanced/ErrorPolicyFilter.cs`; `ServiceRegistrationExtensionsBasic.cs` (`CallToolFilterRegistrations`); `ToolTelemetryFilterOrderTests`; new test file.
@@ -100,6 +101,7 @@ Text-neutral slices first (Steps 1-4, 7-8), behaviour-changing ones after (5, 6,
 - Effect: behaviour-changing only when the mode is not `Off`: error text gains one trailing sentence (`Pointer`) or the operator's entry (`Inline`).
 - Change: on an error result, classify via Step 3 from tool name, arguments, the envelope's `errorData.errorCode` (parsed from the first text block) and `ToolCallContext.MissingTargetKind`; append the pointer (D5, pinned here using the Step 4 heading constant) or the `Inline` entry as a separate trailing text block, leaving the first block untouched (precedent `ServiceRegistrationExtensionsBasic.cs:~1209`). Log the classified key. Register only when the mode is not `Off`, directly outside `WorkspaceNotLoaded` (entry 9) so it sees thrown and returned errors alike. Check `EchoReserveChars` for the `Inline` text size (`reference_tool_response_pipeline.md:187,211`).
 - Done when: Build 0 errors; tests: `Off` registers no filter and output is byte-identical on the slice-1 scenarios; `Pointer` and `Inline` per key; no suffix on success results, on non-not-found errors, or when classification returns null.
+- Done: 31a01ffc, cfbd41d6, 9be436a1 (+ a9c454b0 hint-ok ratchet fix for Step 2). The filter reads `isError` from the body (the outer `ToolError` filter has not set `CallToolResult.IsError` yet). Filter count pinned 14 (`Off`) / 15 (`Pointer`). `// TODO` in `AddErrorPolicyFilter` to bound `Inline` text against `EchoReserveChars` once Step 9's entries exist.
 
 ### Step 7 - Harness and PlanStepRunner wiring
 - Files: `RoslynSentinel.Tests.ModelEval/ChainEvalToolSurface.cs`; `RoslynSentinel.Utilities.PlanStepRunner/Program.cs` (child args, `:195-208`); prompt call sites of `AgentSystemPrompts.CodingAgent` in ModelEval.
