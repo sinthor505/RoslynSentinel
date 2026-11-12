@@ -169,6 +169,7 @@ public static class SymbolNotFoundDetail
         IReadOnlyCollection<Project> searchedProjects, string query, string symbolKind, string scopeDescription, string? projectName,
         Func<string, bool>? isCallable = null, Func<SymbolCandidate, string>? nextCall = null, CancellationToken cancellationToken = default)
     {
+        // TODO split ignores generic arguments: Ns.Box<int>.Foo splits at a dot inside <...>; scan for the last '.' outside angle brackets
         var (container, name) = SplitQuery(query);
         var candidates = await FindCandidatesAsync(searchedProjects, name, symbolKind, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (candidates.Count > 0)

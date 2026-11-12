@@ -86,7 +86,7 @@ public class RefactoringSignatureImpl
             // name on the type: use it and say so. Several: list the full ids. Anything else keeps the original error.
             // READCHOKEPOINT-CAST: read the committed solution through the reader view of the workspace manager.
             var committed = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-            var (unique, overloadIds) = await MissingParameterListResolver.FindAsync(committed, projectName, docCommentId, cancellationToken);
+            var (unique, overloadIds) = await RoslynSentinel.Engines.Basic.MissingParameterListResolver.FindAsync(committed, projectName, docCommentId, cancellationToken);
             if (unique?.GetDocumentationCommentId() is { } fullId)
             {
                 var byFullId = await _workspaceManager.ResolveFromWireAsync(projectName, fullId, cancellationToken);

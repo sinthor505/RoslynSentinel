@@ -13,6 +13,7 @@ namespace RoslynSentinel.Engines.Basic;
 /// Other tools that resolve through <c>IWorkspaceManager.ResolveFromWireAsync</c> (DeleteUnusedSymbol, PreviewRenameImpact)
 /// could call this the same way; only RenameSymbol is wired so far.
 /// </remarks>
+[Obsolete("Use RoslynSentinel.Common.MissingParameterListResolver")]
 public static class MissingParameterListResolver
 {
     /// <summary>
