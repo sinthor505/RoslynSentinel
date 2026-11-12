@@ -151,7 +151,7 @@ public static class CompilerErrorLookupHelper
 
         if (diagnostic.Id == "CS0144")
         {
-            return DescribeCs0144(diagnostic);
+            return await DescribeCs0144Async(diagnostic, symbolNavigationEngine, cancellationToken);
         }
 
         return null;
@@ -207,6 +207,55 @@ public static class CompilerErrorLookupHelper
     }
 
     /// <summary>
+    /// Up to 3 non-abstract classes that implement the named interface, ordered by name.
+    /// Empty when the name is not an interface in the committed solution, it has no such implementer, or the lookup fails.
+    /// </summary>
+    private static async Task<List<string>> FindConcreteImplementersAsync(
+        string interfaceName,
+        SymbolNavigationEngine symbolNavigationEngine,
+        CancellationToken cancellationToken)
+    {
+        const int maxNamed = 3;
+        var concrete = new List<string>();
+        try
+        {
+            var report = await symbolNavigationEngine.GetTypeHierarchyAsync(interfaceName, cancellationToken: cancellationToken);
+            if (report.IsError || !report.IsInterface)
+            {
+                return concrete;
+            }
+
+            // TypeHierarchyEntry.Kind is Roslyn's TypeKind name.
+            var classNames = report.ImplementingTypes
+                .Where(t => t.Kind == "Class" && !t.TypeName.Contains('<'))
+                .Select(t => t.TypeName)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(n => n, StringComparer.Ordinal);
+            foreach (var className in classNames)
+            {
+                // The hierarchy entries do not say whether a class is abstract; ask per candidate until enough are found.
+                var classReport = await symbolNavigationEngine.GetTypeHierarchyAsync(className.Split('.').Last(), cancellationToken: cancellationToken);
+                if (classReport.IsError || classReport.IsAbstract)
+                {
+                    continue;
+                }
+
+                concrete.Add(className);
+                if (concrete.Count == maxNamed)
+                {
+                    break;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return [];
+        }
+
+        return concrete;
+    }
+
+    /// <summary>
     /// CS0107 ("More than one protection modifier"): typically a whole-file write that added the new access modifier beside the old one
     /// ("private static internal"). The modifiers found are read from the quoted source line, up to the first '(', '=', '{', '&lt;' or ';',
     /// and left out when the line is not available.
@@ -215,11 +264,21 @@ public static class CompilerErrorLookupHelper
     /// CS0144 ("Cannot create an instance of the abstract type or interface 'X'"): typically a field retyped to an interface
     /// that kept its target-typed <c>new()</c>. 10-chain runs 214 and 216 (2026-11-10) hit it on step 7 and gave the step up.
     /// </summary>
-    private static string DescribeCs0144(DiagnosticInfo diagnostic)
+    private static async Task<string> DescribeCs0144Async(
+        DiagnosticInfo diagnostic,
+        SymbolNavigationEngine symbolNavigationEngine,
+        CancellationToken cancellationToken)
     {
         var quoted = System.Text.RegularExpressions.Regex.Match(diagnostic.Message ?? string.Empty, "'([^']+)'");
         var type = quoted.Success ? quoted.Groups[1].Value : "the interface";
-        return $"  {type} cannot be created with new() or new {type}(). Keep {type} as the declared type and name a concrete class that implements it on the right-hand side, for example: private readonly {type} _field = new SomeImplementingClass();";
+        var implementers = quoted.Success
+            ? await FindConcreteImplementersAsync(type.Split('.').Last(), symbolNavigationEngine, cancellationToken)
+            : [];
+        var example = implementers.Count > 0 ? $"new {implementers[0]}()" : "new SomeImplementingClass()";
+        var named = implementers.Count > 0
+            ? $" Concrete classes in the solution that implement {type}: {string.Join(", ", implementers)}."
+            : string.Empty;
+        return $"  {type} cannot be created with new() or new {type}(). Keep {type} as the declared type and name a concrete class that implements it on the right-hand side, for example: private readonly {type} _field = {example};{named}";
     }
 
     private static string DescribeCs0107(DiagnosticInfo diagnostic)
@@ -243,6 +302,21 @@ public static class CompilerErrorLookupHelper
         return match.Success
             ? $"  The implementing member must be public; make '{match.Groups[1].Value}' public (interface members are implemented by public members)."
             : null;
+    }
+
+    /// <summary>
+    /// True when the quoted source line uses <paramref name="name"/> as an unqualified call (<c>name(</c> or <c>name&lt;T&gt;(</c>).
+    /// The line is the only syntax the diagnostic carries: the committed model may not contain the pending edit, so a syntax
+    /// lookup by line and column could land on different code. No source line means no claim.
+    /// </summary>
+    private static bool IsInvocationUse(string? sourceLine, string name)
+    {
+        if (string.IsNullOrWhiteSpace(sourceLine))
+        {
+            return false;
+        }
+
+        return Regex.IsMatch(sourceLine, $@"(?<![\w.]){Regex.Escape(name)}\s*(<[^<>()]*>)?\s*\(");
     }
 
     private static async Task<string> DescribeCs0103Async(
@@ -270,6 +344,28 @@ public static class CompilerErrorLookupHelper
 
         if (candidates.Count == 0)
         {
+            if (IsInvocationUse(diagnostic.SourceLine, name))
+            {
+                // The committed model may not contain the pending edit, so the enclosing type is best effort; a placeholder keeps the call shape complete.
+                string? callerType = null;
+                try
+                {
+                    callerType = await symbolNavigationEngine.GetEnclosingTypeNameAsync(
+                        diagnostic.FilePath, diagnostic.StartLine, diagnostic.StartColumn, cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // Fall through with the placeholder container name below.
+                }
+
+                var addCall = ToolCallHint.Call(
+                    "Member",
+                    ("operation", "addMember"),
+                    ("containerName", callerType ?? "<the type that contains the call>"),
+                    ("newMemberSource", $"<declaration of {name}>"));
+                return $"  No symbol named '{name}' was found anywhere in the solution, and it is called here, so the method itself is missing. Declare '{name}' in the same newContent as the code that calls it, or add it first with {addCall} and then re-apply this edit.";
+            }
+
             return $"  No symbol named '{name}' was found anywhere in the solution. This is likely a typo, or the member genuinely doesn't exist yet and needs to be added.";
         }
 

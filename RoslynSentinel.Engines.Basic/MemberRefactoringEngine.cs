@@ -853,6 +853,114 @@ public class MemberRefactoringEngine
     }
 
     /// <summary>
+    /// Reports a closing brace with no opening brace in <paramref name="source"/> (typically the closing brace of the enclosing
+    /// type pasted after the member), or null. Braces inside string and char literals and comments are ignored. A stray brace
+    /// makes the parse report a generic "not a valid member declaration"; naming it tells the caller what to remove.
+    /// Eval run 20261112-151531-550 T32.
+    /// </summary>
+    private static string? DetectUnbalancedClosingBrace(string source)
+    {
+        var depth = 0;
+        var i = 0;
+        while (i < source.Length)
+        {
+            var c = source[i];
+            var next = i + 1 < source.Length ? source[i + 1] : '\0';
+            if (c == '/' && next == '/')
+            {
+                while (i < source.Length && source[i] != '\n')
+                {
+                    i++;
+                }
+            }
+            else if (c == '/' && next == '*')
+            {
+                var end = source.IndexOf("*/", i + 2, StringComparison.Ordinal);
+                i = end < 0 ? source.Length : end + 2;
+            }
+            else if (c == '"')
+            {
+                var quotes = 1;
+                while (i + quotes < source.Length && source[i + quotes] == '"')
+                {
+                    quotes++;
+                }
+
+                if (quotes >= 3)
+                {
+                    // Raw string literal: ends at a run of the same number of quotes.
+                    var end = source.IndexOf(new string('"', quotes), i + quotes, StringComparison.Ordinal);
+                    i = end < 0 ? source.Length : end + quotes;
+                }
+                else
+                {
+                    var verbatim = (i >= 1 && source[i - 1] == '@') || (i >= 2 && source[i - 1] == '$' && source[i - 2] == '@');
+                    i++;
+                    while (i < source.Length)
+                    {
+                        if (verbatim && source[i] == '"' && i + 1 < source.Length && source[i + 1] == '"')
+                        {
+                            i += 2;
+                        }
+                        else if (!verbatim && source[i] == '\\')
+                        {
+                            i += 2;
+                        }
+                        else if (source[i] == '"')
+                        {
+                            i++;
+                            break;
+                        }
+                        else if (!verbatim && source[i] == '\n')
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            i++;
+                        }
+                    }
+                }
+            }
+            else if (c == '\'')
+            {
+                i++;
+                while (i < source.Length && source[i] != '\n')
+                {
+                    if (source[i] == '\\')
+                    {
+                        i += 2;
+                    }
+                    else if (source[i] == '\'')
+                    {
+                        i++;
+                        break;
+                    }
+                    else
+                    {
+                        i++;
+                    }
+                }
+            }
+            else
+            {
+                if (c == '{')
+                {
+                    depth++;
+                }
+                else if (c == '}' && --depth < 0)
+                {
+                    return "newMemberSource has an extra or unbalanced '}'. Remove the closing brace of the enclosing type (or any other '}' with no matching '{') and send only the member's own declaration.";
+                }
+
+                i++;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// SyntaxFactory.ParseMemberDeclaration parses only the FIRST declaration in a multi-declaration
     /// string and silently discards the rest - it does not throw and the returned node's FullSpan
     /// covers the whole input (the unconsumed text is folded in as SkippedTokensTrivia, not left as
@@ -867,6 +975,11 @@ public class MemberRefactoringEngine
         if (!parsed.ContainsDiagnostics)
         {
             return null;
+        }
+
+        if (DetectUnbalancedClosingBrace(source) is { } braceIssue)
+        {
+            return braceIssue;
         }
 
         // Reconstructing preview text from SkippedTokensTrivia loses the original inter-token
@@ -2345,6 +2458,13 @@ public class MemberRefactoringEngine
         if (multipleMembersIssue != null)
         {
             throw new ToolInvalidArgumentException(multipleMembersIssue);
+        }
+
+        // A stray '}' would otherwise land in the generic message below; the specific check says what to remove.
+        var braceIssue = DetectUnbalancedClosingBrace(newSource);
+        if (braceIssue != null)
+        {
+            throw new ToolInvalidArgumentException(braceIssue);
         }
 
         var newMember = SyntaxFactory.ParseMemberDeclaration(newSource);

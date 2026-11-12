@@ -267,6 +267,117 @@ public class CompilerErrorLookupHelperTests
     }
 
     /// <summary>
+    /// CS0144 (eval run 20261112-151531-550 T27): the hint named only a placeholder class. It now names concrete implementers
+    /// from the solution - sorted by name, abstract classes left out - and uses the first in the example.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_Cs0144InterfaceWithImplementers_NamesConcreteClassesByNameAndSkipsAbstract()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Checkout.cs", """
+            namespace TestProj;
+
+            public interface IPricing { decimal Total(decimal a); }
+
+            public abstract class BasePricing : IPricing { public abstract decimal Total(decimal a); }
+
+            public class ZetaPricing : IPricing { public decimal Total(decimal a) => a; }
+
+            public class AlphaPricing : IPricing { public decimal Total(decimal a) => a; }
+
+            public class Checkout
+            {
+                private readonly IPricing _calculator = new();
+            }
+            """));
+
+        Assert.That(report.Diagnostics.Select(d => d.Id), Does.Contain("CS0144"), "fixture must produce the CS0144");
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("Concrete classes in the solution that implement IPricing: AlphaPricing, ZetaPricing."));
+        Assert.That(description, Does.Contain("_field = new AlphaPricing();"));
+        Assert.That(description, Does.Not.Contain("BasePricing"), "an abstract class cannot be created either");
+        Assert.That(description, Does.Not.Contain("SomeImplementingClass"));
+    }
+
+    [Test]
+    public async Task DescribeAsync_Cs0144InterfaceWithoutImplementers_KeepsThePlaceholderExample()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Checkout.cs", """
+            namespace TestProj;
+
+            public interface IPricing { decimal Total(decimal a); }
+
+            public class Checkout
+            {
+                private readonly IPricing _calculator = new();
+            }
+            """));
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("_field = new SomeImplementingClass();"));
+        Assert.That(description, Does.Not.Contain("Concrete classes in the solution"));
+    }
+
+    /// <summary>
+    /// CS0103 on a name used as a call (eval run 20261112-151531-550 T19/T21): the missing method is declared in the same edit
+    /// or added first. The call shape comes from the quoted source line, which the write gate attaches.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_Cs0103MissingCallee_SaysToDeclareItInTheSameEditOrAddMemberFirst()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Calc.cs", """
+            namespace TestProj;
+
+            public class Calc
+            {
+                public int Run()
+                {
+                    return ComputeTotal(5);
+                }
+            }
+            """));
+        var cs0103 = report.Diagnostics.Single(d => d.Id == "CS0103");
+        var withLine = new DiagnosticReport(true, [cs0103 with { SourceLine = "return ComputeTotal(5);" }]);
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(withLine, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("No symbol named 'ComputeTotal' was found anywhere in the solution"));
+        Assert.That(description, Does.Contain("is called here, so the method itself is missing"));
+        Assert.That(description, Does.Contain("in the same newContent as the code that calls it"));
+        Assert.That(description, Does.Contain("addMember"));
+        Assert.That(description, Does.Not.Contain("needs to be added"));
+    }
+
+    [Test]
+    public async Task DescribeAsync_Cs0103MissingNameNotCalled_KeepsThePlainNeedsToBeAddedText()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Calc.cs", """
+            namespace TestProj;
+
+            public class Calc
+            {
+                public int Run()
+                {
+                    return missingValue;
+                }
+            }
+            """));
+        var cs0103 = report.Diagnostics.Single(d => d.Id == "CS0103");
+        var withLine = new DiagnosticReport(true, [cs0103 with { SourceLine = "return missingValue;" }]);
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(withLine, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("No symbol named 'missingValue' was found anywhere in the solution. This is likely a typo, or the member genuinely doesn't exist yet and needs to be added."));
+        Assert.That(description, Does.Not.Contain("is called here"));
+    }
+
+    /// <summary>
     /// CS0107 (eval run 20261109-233953-684: a whole-file write produced "private static internal", and the model removed the wrong
     /// modifier). The gate's diagnostics carry the source line, which names the modifiers found.
     /// </summary>

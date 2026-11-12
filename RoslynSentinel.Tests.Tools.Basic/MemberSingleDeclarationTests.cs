@@ -93,6 +93,58 @@ public class MemberSingleDeclarationTests
         });
     }
 
+    /// <summary>
+    /// Eval run 20261112-151531-550 T32: the enclosing type's closing brace pasted after the member gave the generic "not a valid
+    /// member declaration"; the specific message names the stray brace and says what to remove. Braces in a string literal do not count.
+    /// </summary>
+    [Test]
+    public async Task Replace_WithStrayClosingBrace_NamesTheExtraBraceAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var before = workspace.ReadText(FixtureRelativePath);
+
+        var result = await tools.MemberTool(
+            reason: "test stray brace replace",
+            operation: MemberAction.replace,
+            filePath: workspace.PathOf(FixtureRelativePath),
+            memberName: "Alpha",
+            newMemberSource: "public string Alpha() { return \"}\"; }\n}");
+
+        Assert.That(!result.IsError, Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+            Assert.That(result.ErrorData.Message, Does.Contain("newMemberSource has an extra or unbalanced '}'"));
+            Assert.That(result.ErrorData.Message, Does.Contain("closing brace of the enclosing type"));
+            Assert.That(result.ErrorData.Message, Does.Not.Contain("not a valid member declaration"));
+        });
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "A rejected replace must not write anything.");
+    }
+
+    [Test]
+    public async Task AddMember_WithStrayClosingBrace_NamesTheExtraBraceAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var before = workspace.ReadText(FixtureRelativePath);
+
+        var result = await tools.MemberTool(
+            reason: "test stray brace add",
+            operation: MemberAction.addMember,
+            filePath: workspace.PathOf(FixtureRelativePath),
+            containerName: "SingleDeclTarget",
+            newMemberSource: "public int Gamma() { return 3; }\n}");
+
+        Assert.That(!result.IsError, Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+            Assert.That(result.ErrorData.Message, Does.Contain("newMemberSource has an extra or unbalanced '}'"));
+        });
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "A rejected addMember must not write anything.");
+    }
+
     [TestCase(null, null)]
     [TestCase("Alpha", null)]
     [TestCase(null, "Beta")]
