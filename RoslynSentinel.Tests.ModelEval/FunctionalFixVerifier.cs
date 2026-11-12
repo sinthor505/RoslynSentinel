@@ -143,6 +143,28 @@ internal static class FunctionalFixVerifier
         return result;
     }
 
+    /// <summary>
+    /// Builds ContosoOrders.Core and reports whether it compiled; for scenarios whose final state does not call CalculateDiscountedTotal.
+    /// </summary>
+    public static async Task<bool> BuildSucceedsAsync(string coreProjectDirectory, CancellationToken cancellationToken)
+    {
+        var csprojPath = Path.Combine(coreProjectDirectory, "ContosoOrders.Core.csproj");
+        if (!File.Exists(csprojPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            await RunDotnetBuildAsync(csprojPath, cancellationToken);
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
     private static WeakReference InvokeCalculateDiscountedTotalInCollectibleContext(
         string assemblyPath, decimal amount, decimal rate, string calculatorTypeName, out (decimal Preferred, decimal Standard) result)
     {
