@@ -302,7 +302,7 @@ public class CompilerErrorLookupHelperTests
     }
 
     [Test]
-    public async Task DescribeAsync_Cs0144InterfaceWithoutImplementers_KeepsThePlaceholderExample()
+    public async Task DescribeAsync_Cs0144InterfaceWithoutImplementers_StatesNoImplementerFact()
     {
         var report = await CompileAndGetErrorsAsync(
             ("Checkout.cs", """
@@ -318,8 +318,50 @@ public class CompilerErrorLookupHelperTests
 
         var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
 
-        Assert.That(description, Does.Contain("_field = new SomeImplementingClass();"));
+        Assert.That(description, Does.Contain("No class in the solution implements 'IPricing'"));
+        Assert.That(description, Does.Not.Contain("SomeImplementingClass"));
+        Assert.That(description, Does.Not.Contain("does not list"));
         Assert.That(description, Does.Not.Contain("Concrete classes in the solution"));
+    }
+
+    /// <summary>
+    /// CS0144 with no implementer: a class that declares every interface member by name and signature but has no base list is
+    /// named as a structural match; a class that declares only some of the members is not.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_Cs0144InterfaceWithoutImplementersButStructuralMatch_NamesTheMatchingClass()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Checkout.cs", """
+            namespace TestProj;
+
+            public interface IPricing { decimal Total(decimal a); string Label { get; } }
+
+            public class FullPricing
+            {
+                public decimal Total(decimal a) => a;
+                public string Label => "full";
+            }
+
+            public class PartialPricing
+            {
+                public decimal Total(decimal a) => a;
+            }
+
+            public class Checkout
+            {
+                private readonly IPricing _calculator = new();
+            }
+            """));
+
+        Assert.That(report.Diagnostics.Select(d => d.Id), Does.Contain("CS0144"), "fixture must produce the CS0144");
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("No class in the solution implements 'IPricing'"));
+        Assert.That(description, Does.Contain("'FullPricing' declares all of IPricing's members but does not list IPricing as a base type."));
+        Assert.That(description, Does.Contain("Listing IPricing as a base type of FullPricing makes new FullPricing() valid for a IPricing-typed field."));
+        Assert.That(description, Does.Not.Contain("PartialPricing"));
     }
 
     /// <summary>

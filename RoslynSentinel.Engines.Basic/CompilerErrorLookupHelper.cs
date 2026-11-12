@@ -274,11 +274,73 @@ public static class CompilerErrorLookupHelper
         var implementers = quoted.Success
             ? await FindConcreteImplementersAsync(type.Split('.').Last(), symbolNavigationEngine, cancellationToken)
             : [];
-        var example = implementers.Count > 0 ? $"new {implementers[0]}()" : "new SomeImplementingClass()";
-        var named = implementers.Count > 0
-            ? $" Concrete classes in the solution that implement {type}: {string.Join(", ", implementers)}."
-            : string.Empty;
-        return $"  {type} cannot be created with new() or new {type}(). Keep {type} as the declared type and name a concrete class that implements it on the right-hand side, for example: private readonly {type} _field = {example};{named}";
+        if (implementers.Count > 0)
+        {
+            return $"  {type} cannot be created with new() or new {type}(). Keep {type} as the declared type and name a concrete class that implements it on the right-hand side, for example: private readonly {type} _field = new {implementers[0]}();"
+                + $" Concrete classes in the solution that implement {type}: {string.Join(", ", implementers)}.";
+        }
+
+        var text = $"  {type} cannot be created with new() or new {type}(). Keep {type} as the declared type; the right-hand side can name a concrete class that implements it.";
+        if (!quoted.Success)
+        {
+            return text;
+        }
+
+        var shortName = type.Split('.').Last();
+        if (!await HasNoImplementingTypesAsync(shortName, symbolNavigationEngine, cancellationToken))
+        {
+            return text;
+        }
+
+        text += $" No class in the solution implements '{type}'.";
+        var structural = await FindStructuralMatchesAsync(shortName, symbolNavigationEngine, cancellationToken);
+        if (structural.Count > 0)
+        {
+            text += " " + string.Join(" ", structural.Select(n => $"'{n}' declares all of {type}'s members but does not list {type} as a base type."))
+                + (structural.Count == 1
+                    ? $" Listing {type} as a base type of {structural[0]} makes new {structural[0]}() valid for a {type}-typed field."
+                    : $" Listing {type} as a base type of one of them (for example {structural[0]}) makes new {structural[0]}() valid for a {type}-typed field.");
+        }
+
+        return text;
+    }
+
+    /// <summary>
+    /// True when the name resolves to an interface in the committed solution that no type implements; false when it does not
+    /// resolve, is not an interface, has any implementing type (abstract ones included) or the lookup fails.
+    /// </summary>
+    private static async Task<bool> HasNoImplementingTypesAsync(
+        string interfaceName,
+        SymbolNavigationEngine symbolNavigationEngine,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var report = await symbolNavigationEngine.GetTypeHierarchyAsync(interfaceName, cancellationToken: cancellationToken);
+            return !report.IsError && report.IsInterface && report.ImplementingTypes.Count == 0;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Up to 3 classes that declare every member of the named interface without listing it; empty when none or the scan fails.
+    /// </summary>
+    private static async Task<List<string>> FindStructuralMatchesAsync(
+        string interfaceName,
+        SymbolNavigationEngine symbolNavigationEngine,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await symbolNavigationEngine.FindStructuralInterfaceMatchesAsync(interfaceName, 3, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return [];
+        }
     }
 
     private static string DescribeCs0107(DiagnosticInfo diagnostic)

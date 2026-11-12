@@ -3283,6 +3283,117 @@ public class SymbolNavigationEngine
         };
     }
 
+    /// <summary>Upper bound on classes examined by the structural interface-match scan.</summary>
+    private const int MaxStructuralScanClasses = 5000;
+
+    private static bool SameType(ITypeSymbol a, ITypeSymbol b) =>
+    SymbolEqualityComparer.Default.Equals(a, b)
+    || a.ToDisplayString() == b.ToDisplayString();
+
+    private static bool SameParameters(IReadOnlyList<IParameterSymbol> a, IReadOnlyList<IParameterSymbol> b) =>
+    a.Count == b.Count
+    && a.Zip(b, (x, y) => x.RefKind == y.RefKind && SameType(x.Type, y.Type)).All(same => same);
+
+    /// <summary>
+    /// Whether the class itself declares a public instance member matching the interface member by name, kind, parameter types,
+    /// return/property/event type and (for properties) accessor set.
+    /// </summary>
+    private static bool DeclaresPublicInstanceMatch(INamedTypeSymbol candidate, ISymbol required) =>
+        candidate.GetMembers(required.Name).Any(declared =>
+            !declared.IsStatic
+            && declared.DeclaredAccessibility == Accessibility.Public
+            && (required, declared) switch
+            {
+                (IMethodSymbol r, IMethodSymbol d) =>
+                    d.MethodKind == MethodKind.Ordinary
+                    && r.TypeParameters.Length == d.TypeParameters.Length
+                    && SameParameters(r.Parameters, d.Parameters)
+                    && r.ReturnsByRef == d.ReturnsByRef
+                    && SameType(r.ReturnType, d.ReturnType),
+                (IPropertySymbol r, IPropertySymbol d) =>
+                    SameType(r.Type, d.Type)
+                    && SameParameters(r.Parameters, d.Parameters)
+                    && (r.GetMethod == null || d.GetMethod is { DeclaredAccessibility: Accessibility.Public })
+                    && (r.SetMethod == null || d.SetMethod is { DeclaredAccessibility: Accessibility.Public }),
+                (IEventSymbol r, IEventSymbol d) => SameType(r.Type, d.Type),
+                _ => false,
+            });
+
+    /// <summary>
+    /// Non-generic, non-abstract source classes that declare every instance member of the named non-generic interface
+    /// (same name, kind, parameter types, return type and accessor set, public) while not listing the interface among their
+    /// interfaces. Ordered by name, at most <paramref name="maxResults"/>. Empty when the name is not a non-generic interface
+    /// with at least one instance member in the committed solution. The scan examines at most <c>MaxStructuralScanClasses</c> classes.
+    /// </summary>
+    public async Task<List<string>> FindStructuralInterfaceMatchesAsync(
+        string interfaceName,
+        int maxResults,
+        CancellationToken cancellationToken = default)
+    {
+        // READCHOKEPOINT-CAST: see GetTypeHierarchyAsync above for rationale.
+        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var compilations = new List<Compilation>();
+        INamedTypeSymbol? iface = null;
+        foreach (var project in solution.Projects)
+        {
+            var compilation = await project.GetCompilationAsync(cancellationToken);
+            if (compilation == null)
+            {
+                continue;
+            }
+
+            compilations.Add(compilation);
+            iface ??= compilation
+                .GetSymbolsWithName(interfaceName, SymbolFilter.Type, cancellationToken)
+                .OfType<INamedTypeSymbol>()
+                .FirstOrDefault(t => t.TypeKind == TypeKind.Interface);
+        }
+
+        if (iface == null || iface.IsGenericType)
+        {
+            return [];
+        }
+
+        var required = iface.AllInterfaces.Reverse().Append(iface)
+            .SelectMany(i => i.GetMembers())
+            .Where(m => !m.IsStatic && (m is IMethodSymbol { MethodKind: MethodKind.Ordinary } or IPropertySymbol or IEventSymbol))
+            .ToList();
+        if (required.Count == 0)
+        {
+            return [];
+        }
+
+        var matches = new HashSet<string>(StringComparer.Ordinal);
+        var scanned = 0;
+        foreach (var compilation in compilations)
+        {
+            foreach (var candidate in compilation
+                .GetSymbolsWithName(_ => true, SymbolFilter.Type, cancellationToken)
+                .OfType<INamedTypeSymbol>())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (candidate.TypeKind != TypeKind.Class || candidate.IsAbstract || candidate.IsStatic || candidate.IsGenericType
+                    || candidate.DeclaringSyntaxReferences.IsEmpty
+                    || candidate.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, iface)))
+                {
+                    continue;
+                }
+
+                if (++scanned > MaxStructuralScanClasses)
+                {
+                    return matches.OrderBy(n => n, StringComparer.Ordinal).Take(maxResults).ToList();
+                }
+
+                if (required.All(m => DeclaresPublicInstanceMatch(candidate, m)))
+                {
+                    matches.Add(candidate.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat));
+                }
+            }
+        }
+
+        return matches.OrderBy(n => n, StringComparer.Ordinal).Take(maxResults).ToList();
+    }
+
     /// <summary>
     /// Structured form of the candidate hint used in ambiguity errors: up to 10 listed candidates
     /// (Counted=true), then up to 10 narrowed-away candidates (Counted=false). Fields come from the same
