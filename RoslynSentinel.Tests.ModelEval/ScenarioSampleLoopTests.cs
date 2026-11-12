@@ -149,6 +149,67 @@ public class ScenarioSampleLoopTests
             cts.Token));
     }
 
+    [Test]
+    public async Task RunSamplesAsync_InconclusiveReason_BecomesInconclusiveSampleWithDriftKept()
+    {
+        var csv = Path.Combine(_dir, "results.csv");
+        const string reason = "SchemaChanged: ReadFile input changed";
+
+        var samples = await ScenarioSampleLoop.RunSamplesAsync(
+            Scenario(),
+            1,
+            _dir,
+            csv,
+            "off",
+            (i, dir, ct) => Task.FromResult<(AgentRunResult?, FinalStateVerdict?, bool, int, string)>((FakeRun(), null, true, 0, reason)),
+            CancellationToken.None);
+
+        Assert.That(samples.Count, Is.EqualTo(1));
+        Assert.That(samples[0].IsInconclusive, Is.True);
+        Assert.That(samples[0].Score, Is.Null);
+        Assert.That(samples[0].InconclusiveReason, Is.EqualTo(reason));
+        Assert.That(samples[0].SchemaDrift, Is.True);
+
+        var lines = File.ReadAllLines(csv);
+        Assert.That(lines.Length, Is.EqualTo(2));
+        Assert.That(ScenarioSampleCsv.Parse(lines[1]).InconclusiveReason, Is.EqualTo(reason));
+    }
+
+    [Test]
+    public async Task RunSamplesAsync_DriftFlags_ArePassedToTheSample()
+    {
+        var samples = await ScenarioSampleLoop.RunSamplesAsync(
+            Scenario(),
+            1,
+            _dir,
+            Path.Combine(_dir, "results.csv"),
+            "off",
+            (i, dir, ct) => Task.FromResult<(AgentRunResult?, FinalStateVerdict?, bool, int, string)>((FakeRun(), (FinalStateVerdict?)FinalStateVerdict.Correct, true, 3, string.Empty)),
+            CancellationToken.None);
+
+        Assert.That(samples[0].IsInconclusive, Is.False);
+        Assert.That(samples[0].Score, Is.Not.Null);
+        Assert.That(samples[0].SchemaDrift, Is.True);
+        Assert.That(samples[0].ResultDrift, Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task RunSamplesAsync_NullResultWithoutReason_IsHarnessError()
+    {
+        var samples = await ScenarioSampleLoop.RunSamplesAsync(
+            Scenario(),
+            1,
+            _dir,
+            Path.Combine(_dir, "results.csv"),
+            "off",
+            (i, dir, ct) => Task.FromResult<(AgentRunResult?, FinalStateVerdict?, bool, int, string)>((null, null, false, 0, string.Empty)),
+            CancellationToken.None);
+
+        Assert.That(samples[0].IsInconclusive, Is.True);
+        Assert.That(samples[0].Score, Is.Null);
+        Assert.That(samples[0].InconclusiveReason, Is.EqualTo("HarnessError: no run result"));
+    }
+
     private static ScenarioDefinition Scenario() => new(
         Id: "loop-test",
         ScenarioType: 1,

@@ -14,13 +14,45 @@ public static class ScenarioSampleLoop
     /// directory is created by this loop) and returns its run result and the final-state verdict (null when none could be computed).
     /// A thrown exception (other than cancellation) becomes an Inconclusive sample; cancellation propagates.
     /// </summary>
-    public static async Task<IReadOnlyList<ScenarioSample>> RunAsync(
+    public static Task<IReadOnlyList<ScenarioSample>> RunAsync(
         ScenarioDefinition scenario,
         int samples,
         string runDirectory,
         string csvPath,
         string liftRenames,
         Func<int, string, CancellationToken, Task<(AgentRunResult Result, FinalStateVerdict? Verdict)>> runSample,
+        CancellationToken cancellationToken,
+        Action<string>? log = null)
+    {
+        return RunSamplesAsync(
+            scenario,
+            samples,
+            runDirectory,
+            csvPath,
+            liftRenames,
+            async (i, dir, token) =>
+            {
+                var o = await runSample(i, dir, token);
+                return (o.Result, o.Verdict, false, 0, "");
+            },
+            cancellationToken,
+            log);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="samples"/> samples and appends one CSV line per sample. <paramref name="runSample"/> runs one sample
+    /// (sampleIndex is 1-based, the directory is created by this loop) and returns its run result (null when none was produced),
+    /// the final-state verdict (null when none could be computed), the schema and result drift counts, and an inconclusive reason.
+    /// A non-empty reason makes the sample Inconclusive with no score, keeping the reason and drift counts; a null result with no
+    /// reason becomes a HarnessError. A thrown exception (other than cancellation) becomes an Inconclusive sample; cancellation propagates.
+    /// </summary>
+    public static async Task<IReadOnlyList<ScenarioSample>> RunSamplesAsync(
+        ScenarioDefinition scenario,
+        int samples,
+        string runDirectory,
+        string csvPath,
+        string liftRenames,
+        Func<int, string, CancellationToken, Task<(AgentRunResult? Result, FinalStateVerdict? Verdict, bool SchemaDrift, int ResultDrift, string InconclusiveReason)>> runSample,
         CancellationToken cancellationToken,
         Action<string>? log = null)
     {
@@ -35,26 +67,56 @@ public static class ScenarioSampleLoop
             try
             {
                 var outcome = await runSample(i, sampleDirectory, cancellationToken);
-                var score = ScenarioScorer.Score(
-                    outcome.Result.Transcript,
-                    scenario.ToolUnderTest,
-                    scenario.Expected,
-                    scenario.ExpectedRecoveryTool,
-                    outcome.Verdict,
-                    outcome.Result.StopReason);
-                sample = new ScenarioSample(
-                    scenario.Id,
-                    scenario.ScenarioType,
-                    scenario.FaultKind,
-                    i,
-                    outcome.Result.Transcript.CommitHash ?? string.Empty,
-                    outcome.Result.Transcript.WorkingTreeDirty,
-                    liftRenames,
-                    score,
-                    SchemaDrift: false,
-                    ResultDrift: 0,
-                    InconclusiveReason: string.Empty,
-                    outcome.Result.TranscriptPath);
+                var result = outcome.Result;
+                var reason = outcome.InconclusiveReason;
+                if (result is null && reason.Length == 0)
+                {
+                    reason = "HarnessError: no run result";
+                }
+
+                if (result is null || reason.Length > 0)
+                {
+                    // The run did not complete cleanly: keep what was recorded (stamp when there is no result, the
+                    // partial transcript when there is no result path) and the drift counts beside the CSV line.
+                    var stamp = ModelAgentRunner.ProcessStamp;
+                    var partialTranscript = Path.Combine(sampleDirectory, "transcript.json");
+                    sample = new ScenarioSample(
+                        scenario.Id,
+                        scenario.ScenarioType,
+                        scenario.FaultKind,
+                        i,
+                        result is null ? (stamp?.CommitHash ?? string.Empty) : (result.Transcript.CommitHash ?? string.Empty),
+                        result is null ? stamp?.Dirty : result.Transcript.WorkingTreeDirty,
+                        liftRenames,
+                        null,
+                        outcome.SchemaDrift,
+                        outcome.ResultDrift,
+                        reason,
+                        result is not null ? result.TranscriptPath : (File.Exists(partialTranscript) ? partialTranscript : string.Empty));
+                }
+                else
+                {
+                    var score = ScenarioScorer.Score(
+                        result.Transcript,
+                        scenario.ToolUnderTest,
+                        scenario.Expected,
+                        scenario.ExpectedRecoveryTool,
+                        outcome.Verdict,
+                        result.StopReason);
+                    sample = new ScenarioSample(
+                        scenario.Id,
+                        scenario.ScenarioType,
+                        scenario.FaultKind,
+                        i,
+                        result.Transcript.CommitHash ?? string.Empty,
+                        result.Transcript.WorkingTreeDirty,
+                        liftRenames,
+                        score,
+                        outcome.SchemaDrift,
+                        outcome.ResultDrift,
+                        InconclusiveReason: string.Empty,
+                        result.TranscriptPath);
+                }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
