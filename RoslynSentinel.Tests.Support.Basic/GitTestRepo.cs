@@ -48,6 +48,14 @@ public static class GitTestRepo
         return stdOut.Trim();
     }
 
+    /// <summary>A linked worktree of <paramref name="main"/> on a new branch (absolute paths even when the machine's git config asks for relative ones, which libgit2 cannot open).</summary>
+    public static string AddLinkedWorktree(string main, string root, string name, string? branch = null)
+    {
+        var worktree = Path.Combine(root, name);
+        RunGit(main, "-c", "worktree.useRelativePaths=false", "worktree", "add", "--quiet", worktree, "-b", branch ?? name);
+        return worktree;
+    }
+
     /// <summary>Stages everything and commits (empty commits allowed) with the subject and an optional trailer paragraph; returns the full sha.</summary>
     public static string CommitAll(string workingDirectory, string subject, string? trailers = null)
     {

@@ -118,6 +118,7 @@ public class GitCommitSeamParityTests
 
     private static string BranchName(string directory) => RunGit(directory, "rev-parse", "--abbrev-ref", "HEAD");
 
+    // TODO use GitTestRepo.AddLinkedWorktree(main, _root, name, branch) instead of this private copy
     /// <summary>A linked worktree of <paramref name="main"/> on a new branch (absolute paths even when the machine's git config asks for relative ones, which libgit2 cannot open).</summary>
     private string AddLinkedWorktree(string main, string name, string? branch = null)
     {
