@@ -177,7 +177,7 @@ public class GenerationTools
             projectExists = solution.Projects
                 .Any(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
             loadedProjects = solution.Projects
-                .Select(p => p.Name).Take(10).ToList();
+                .Select(p => p.Name).ToList();
         }
         catch (SolutionNotLoadedException)
         {
@@ -186,13 +186,11 @@ public class GenerationTools
         }
         if (!projectExists)
         {
-            var projectList = loadedProjects.Count > 0 ? string.Join(", ", loadedProjects) : "none";
             return new SentinelCallToolResult<object>
             {
                 IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.NotFound,
-                    $"GenerateDefaultConfigJson: project '{projectName}' not found in the loaded solution. " +
-                   $"Loaded projects: {projectList}.")
+                    "GenerateDefaultConfigJson: " + ProjectNotFoundDetail.Build(projectName, loadedProjects))
             };
         }
 

@@ -241,7 +241,8 @@ public interface IOrderRepository
         var result = await _generationTools.GenerateDefaultConfigJsonTool(reason: "test message", "NoSuchProject");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(result.ErrorData.Message, Does.Contain("not found in the loaded solution"), "Tools return a structured not-found error rather than throwing for an unknown project.");
+        Assert.That(result.ErrorData.Message, Does.Contain("Project 'NoSuchProject' was not found"), "Tools return a structured not-found error rather than throwing for an unknown project.");
+        Assert.That(result.ErrorData.Message, Does.Contain("Loaded projects:"));
     }
 
     // --- GenerateAsyncOverload ---

@@ -53,6 +53,33 @@ public sealed class ToolsAdvancedFileMissTests
         Assert.That(message, Does.Not.Contain("You MUST"));
     }
 
+    [Test]
+    public async Task GenerateDefaultConfigJsonProjectNameMisspelt_ReturnsNotFoundWithDidYouMean()
+    {
+        using var workspace = InMemoryWorkspace.Create(("OrderPricingCalculator.cs", Fixture));
+        var result = await BatteryToolFactory.CreateGenerationTools(workspace.Manager).GenerateDefaultConfigJsonTool(reason: "test message", "InMemoryProjct");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        var message = result.ErrorData?.Message ?? string.Empty;
+        Assert.That(message, Does.Contain("Did you mean 'InMemoryProject'"));
+        Assert.That(message, Does.Contain("projectName"));
+    }
+
+    [Test]
+    public async Task GenerateDefaultConfigJsonProjectNameWithNoSimilarName_StatesNoSimilarNameAndListsProjects()
+    {
+        using var workspace = InMemoryWorkspace.Create(("OrderPricingCalculator.cs", Fixture));
+        var result = await BatteryToolFactory.CreateGenerationTools(workspace.Manager).GenerateDefaultConfigJsonTool(reason: "test message", "Zzz.Missing");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        var message = result.ErrorData?.Message ?? string.Empty;
+        Assert.That(message, Does.Contain("No loaded project has a similar name to 'Zzz.Missing'"));
+        Assert.That(message, Does.Contain("Loaded projects:"));
+        Assert.That(message, Does.Not.Contain("Did you mean"));
+        Assert.That(message, Does.Not.Contain("tell the user"));
+        Assert.That(message, Does.Not.Contain("You MUST"));
+    }
+
     private static Task<SentinelCallToolResult<object>> CallAsync(FileMissTool tool, InMemoryWorkspace workspace, string path) => tool switch
     {
         FileMissTool.GenerateHttpClient => BatteryToolFactory.CreateGenerationTools(workspace.Manager).GenerateHttpClientTool(reason: "test message", path, "OrderPricingCalculator"),
