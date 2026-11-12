@@ -1084,6 +1084,39 @@ public class WorkspaceFileEditImpl
         return all;
     }
 
+    /// <summary>
+    /// The <see cref="ToolErrorCode.ValidationFailed"/> error of a ReplaceSnippet whose edit matched but whose resulting code fails the compile gate, shared by
+    /// apply and validate, single and batch alike (a validate that said only "validate failed: &lt;diagnostics&gt;" gave no file:line, no impact verdict, no
+    /// RenameSymbol redirect and no compiler-error hint; eval 20261112-151531-550 T3, T4/T13, T28). Runs the edit-impact analysis for
+    /// <paramref name="changes"/> (the files as they would have been written), then composes <paramref name="headline"/>, the repeat note, the lift note, the
+    /// impact or untouched-file sentence and the "[COMPILER ERROR]" block. Callers own the memories: only apply records into <see cref="RejectedEditMemory"/>
+    /// (and passes <paramref name="isRepeat"/>); a validate is a dry run and passes false. <paramref name="liftText"/> and <paramref name="liftVerdicts"/> are
+    /// null for validate (no rename lifting without a write).
+    /// </summary>
+    private async Task<ResultError> ComposeCompileRejectionAsync(
+        string headline, bool isRepeat, string? liftText, Dictionary<FilePathWrapper, string> changes, DiagnosticReport validation,
+        IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>> editedSpans, IEnumerable<ImpactVerdict>? liftVerdicts, CancellationToken cancellationToken)
+    {
+        var changedPaths = changes.Keys.Select(k => (string)k).ToList();
+        var impact = await EditImpactGate.AnalyzeAsync(_workspaceManager, changes, validation, _activeToolSurface, cancellationToken: cancellationToken,
+            editedSpans: editedSpans,
+            rejectedSiblingTexts: SiblingEditTexts(changedPaths));
+        var impactNote = impact?.Text;
+        // The edit-impact report, when it can attribute the errors to unedited files, replaces the generic untouched-file sentence (it already covers it).
+        var untouchedNote = impactNote
+            ?? ValidateAndApplyHelper.DescribeUntouchedFileErrors(changedPaths, validation.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath");
+        var repeatNote = isRepeat ? RepeatedRejectionNote + (impactNote is null ? RepeatedRejectionChangeApproach : RepeatedRejectionFollowNextStep) + " " : "";
+        return new ResultError(ToolErrorCode.ValidationFailed,
+            headline +
+            repeatNote +
+            (liftText is null ? "" : liftText + " ") +
+            (untouchedNote is null ? "" : untouchedNote + " ") +
+            (impactNote is null ? "Fix the issue(s) below and retry:\n" : "Compiler errors caused by this edit:\n") +
+            "[COMPILER ERROR]\n" +
+            await CompilerErrorLookupHelper.DescribeAsync(validation, _symbolNavigationEngine, cancellationToken, changedPaths, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
+            StructuredDetail: RejectionDetail(impact, liftVerdicts, validation.Diagnostics));
+    }
+
     public async Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippet(
         ToolCallReason reason,
         ProposedChangeAction action,
@@ -1320,7 +1353,10 @@ public class WorkspaceFileEditImpl
                         : new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
                             IsError = true,
-                            ErrorData = new ResultError(ToolErrorCode.ValidationFailed, $"ReplaceSnippet validate failed: {validationResult.Diagnostics.ToInfo()}")
+                            // A dry run: same impact/redirect/hint body as apply, but no _rejectedEdits record or repeat check and no rename lifting (nothing is written).
+                            ErrorData = await ComposeCompileRejectionAsync(
+                                "ReplaceSnippet validate: the edit matched the target file, but the resulting code introduces new compiler errors (nothing was written; the file is unchanged). ",
+                                isRepeat: false, liftText: null, snippetChanges, validationResult, liftSpans, liftVerdicts: null, cancellationToken)
                         };
                     }
 
@@ -1354,40 +1390,22 @@ public class WorkspaceFileEditImpl
                         }
                     }
                     var liftText = liftNote ?? liftRefusalNote;
-                    string? untouchedNote = null;
-                    string? impactNote = null;
-                    EditImpactResult? impact = null;
-                    var isRepeat = false;
                     if (result.IsError && result.ValidationResult != null)
                     {
-                        isRepeat = _rejectedEdits.IsRepeat((string)targetPath, oldContent, newContent);
+                        var isRepeat = _rejectedEdits.IsRepeat((string)targetPath, oldContent, newContent);
                         _rejectedEdits.Remember((string)targetPath, oldContent, newContent);
-                        // The edit-impact report, when it can attribute the errors to unedited files, replaces the generic
-                        // untouched-file sentence (it already covers it); null keeps that sentence.
-                        // Spans only for the model's own text: a lifted (merged) set was changed outside them. Siblings: rejected edits of other files (parallel calls).
-                        impact = await EditImpactGate.AnalyzeAsync(_workspaceManager, snippetChanges, result.ValidationResult, _activeToolSurface, cancellationToken: cancellationToken,
-                            // Batch H5 R5: after a lift the spans are the model's own line ranges mapped onto the merged text, so an error the rename left in the model's file but outside its edit is attributed.
-                            editedSpans: liftNote is null ? liftSpans : await RenameLifter.MergedEditedSpansAsync(_workspaceManager, candidateChanges, snippetChanges, liftSpans, cancellationToken),
-                            rejectedSiblingTexts: SiblingEditTexts(snippetChanges.Keys.Select(k => (string)k).ToList()));
-                        impactNote = impact?.Text;
-                        untouchedNote = impactNote
-                            ?? ValidateAndApplyHelper.DescribeUntouchedFileErrors(snippetChanges.Keys.Select(k => (string)k), result.ValidationResult.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath");
-                    }
-                    var repeatNote = isRepeat ? RepeatedRejectionNote + (impactNote is null ? RepeatedRejectionChangeApproach : RepeatedRejectionFollowNextStep) + " " : "";
-                    if (result.IsError && result.ValidationResult != null)
                         return new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
                             IsError = true,
-                            ErrorData = new ResultError(ToolErrorCode.ValidationFailed,
-                                "ReplaceSnippet: the edit matched the target file, but the resulting code introduces new compiler errors - change not applied. " +
-                                repeatNote +
-                                (liftText is null ? "" : liftText + " ") +
-                                (untouchedNote is null ? "" : untouchedNote + " ") +
-                                (impactNote is null ? "Fix the issue(s) below and retry:\n" : "Compiler errors caused by this edit:\n") +
-                                "[COMPILER ERROR]\n" +
-                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, snippetChanges.Keys.Select(k => (string)k).ToList(), isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
-                                StructuredDetail: RejectionDetail(impact, liftVerdicts, result.ValidationResult.Diagnostics))
+                            ErrorData = await ComposeCompileRejectionAsync(
+                                "ReplaceSnippet: the edit matched the target file, but the resulting code introduces new compiler errors - change not applied. The file is unchanged: take the next oldContent from the file as it is now, not from the rejected newContent. ",
+                                isRepeat, liftText, snippetChanges, result.ValidationResult,
+                                // Spans only for the model's own text: a lifted (merged) set was changed outside them.
+                                // Batch H5 R5: after a lift the spans are the model's own line ranges mapped onto the merged text, so an error the rename left in the model's file but outside its edit is attributed.
+                                liftNote is null ? liftSpans : await RenameLifter.MergedEditedSpansAsync(_workspaceManager, candidateChanges, snippetChanges, liftSpans, cancellationToken),
+                                liftVerdicts, cancellationToken)
                         };
+                    }
                     if (!result.IsError)
                     {
                         ForgetFileMemories((string)targetPath);
@@ -1684,7 +1702,10 @@ public class WorkspaceFileEditImpl
                 : new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.ValidationFailed, $"ReplaceSnippet batch validate failed.", StructuredDetail: validationResult.Diagnostics)
+                    // A dry run: same impact/redirect/hint body as apply, but no _rejectedEdits record or repeat check and no rename lifting (nothing is written).
+                    ErrorData = await ComposeCompileRejectionAsync(
+                        "ReplaceSnippet batch validate: every edit matched, but the resulting code introduces new compiler errors (nothing was written; every file is exactly as you last read it). ",
+                        isRepeat: false, liftText: null, finalContents, validationResult, liftSpans, liftVerdicts: null, cancellationToken)
                 };
         }
 
@@ -1719,42 +1740,24 @@ public class WorkspaceFileEditImpl
                 }
             }
             var liftText = liftNote ?? liftRefusalNote;
-            string? untouchedNote = null;
-            string? impactNote = null;
-            EditImpactResult? impact = null;
-            var isRepeat = false;
             if (result.IsError && result.ValidationResult != null)
             {
-                isRepeat = newContentsByFile.All(kv => kv.Value.All(c => _rejectedEdits.IsRepeat(kv.Key, c.OldContent, c.NewContent)));
+                var isRepeat = newContentsByFile.All(kv => kv.Value.All(c => _rejectedEdits.IsRepeat(kv.Key, c.OldContent, c.NewContent)));
                 foreach (var (rejectedPath, rejectedEdits) in newContentsByFile)
                     foreach (var rejectedEdit in rejectedEdits)
                         _rejectedEdits.Remember(rejectedPath, rejectedEdit.OldContent, rejectedEdit.NewContent);
-                // The edit-impact report, when it can attribute the errors to unedited files, replaces the generic
-                // untouched-file sentence (it already covers it); null keeps that sentence.
-                // Spans only for the model's own text: a lifted (merged) set was changed outside them. Siblings: rejected edits of other files (parallel calls).
-                impact = await EditImpactGate.AnalyzeAsync(_workspaceManager, finalContents, result.ValidationResult, _activeToolSurface, cancellationToken: cancellationToken,
-                    // Batch H5 R5: after a lift the spans are the model's own line ranges mapped onto the merged text, so an error the rename left in the model's file but outside its edit is attributed.
-                    editedSpans: liftNote is null ? liftSpans : await RenameLifter.MergedEditedSpansAsync(_workspaceManager, candidateContents, finalContents, liftSpans, cancellationToken),
-                    rejectedSiblingTexts: SiblingEditTexts(finalContents.Keys.Select(k => (string)k).ToList()));
-                impactNote = impact?.Text;
-                untouchedNote = impactNote
-                    ?? ValidateAndApplyHelper.DescribeUntouchedFileErrors(finalContents.Keys.Select(k => (string)k), result.ValidationResult.Diagnostics.Select(d => d.FilePath.ToString()), "one ReplaceSnippet call with batchEdits, one item per file, each with its own filePath");
-            }
-            var repeatNote = isRepeat ? RepeatedRejectionNote + (impactNote is null ? RepeatedRejectionChangeApproach : RepeatedRejectionFollowNextStep) + " " : "";
-            if (result.IsError && result.ValidationResult != null)
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.ValidationFailed,
-                        "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors, so nothing was changed; every file is exactly as you last read it. " +
-                        repeatNote +
-                        (liftText is null ? "" : liftText + " ") +
-                        (untouchedNote is null ? "" : untouchedNote + " ") +
-                        (impactNote is null ? "Fix the issue(s) below and retry:\n" : "Compiler errors caused by this edit:\n") +
-                        "[COMPILER ERROR]\n" +
-                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken, finalContents.Keys.Select(k => (string)k).ToList(), isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable),
-                        StructuredDetail: RejectionDetail(impact, liftVerdicts, result.ValidationResult.Diagnostics)),
+                    ErrorData = await ComposeCompileRejectionAsync(
+                        "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors, so nothing was changed; every file is exactly as you last read it. ",
+                        isRepeat, liftText, finalContents, result.ValidationResult,
+                        // Spans only for the model's own text: a lifted (merged) set was changed outside them.
+                        // Batch H5 R5: after a lift the spans are the model's own line ranges mapped onto the merged text, so an error the rename left in the model's file but outside its edit is attributed.
+                        liftNote is null ? liftSpans : await RenameLifter.MergedEditedSpansAsync(_workspaceManager, candidateContents, finalContents, liftSpans, cancellationToken),
+                        liftVerdicts, cancellationToken)
                 };
+            }
             if (!result.IsError)
             {
                 // finalContents is the merged set after a lift, so this also forgets the files the lift wrote (batch G R3), not only the edited ones.
