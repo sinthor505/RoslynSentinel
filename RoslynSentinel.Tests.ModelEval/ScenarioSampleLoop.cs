@@ -58,19 +58,23 @@ public static class ScenarioSampleLoop
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                // A harness error still has the process stamp and often a partial transcript the runner wrote
+                // before failing; keep both beside the CSV line.
+                var stamp = ModelAgentRunner.ProcessStamp;
+                var partialTranscript = Path.Combine(sampleDirectory, "transcript.json");
                 sample = new ScenarioSample(
                     scenario.Id,
                     scenario.ScenarioType,
                     scenario.FaultKind,
                     i,
-                    string.Empty,
-                    null,
+                    stamp?.CommitHash ?? string.Empty,
+                    stamp?.Dirty,
                     liftRenames,
                     null,
                     SchemaDrift: false,
                     ResultDrift: 0,
                     InconclusiveReason: "HarnessError: " + FirstLine(ex.Message),
-                    TranscriptPath: string.Empty);
+                    TranscriptPath: File.Exists(partialTranscript) ? partialTranscript : string.Empty);
             }
 
             ScenarioSampleCsv.Append(csvPath, sample);

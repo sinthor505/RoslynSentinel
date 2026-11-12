@@ -95,6 +95,45 @@ public class ScenarioSampleLoopTests
     }
 
     [Test]
+    public async Task RunAsync_HarnessError_KeepsStampAndPartialTranscriptPath()
+    {
+        var csv = Path.Combine(_dir, "results.csv");
+        var previousStamp = ModelAgentRunner.ProcessStamp;
+        ModelAgentRunner.ProcessStamp = ("abc123", true);
+        try
+        {
+            var samples = await ScenarioSampleLoop.RunAsync(
+                Scenario(),
+                2,
+                _dir,
+                csv,
+                "off",
+                async (i, dir, ct) =>
+                {
+                    if (i == 1)
+                    {
+                        await File.WriteAllTextAsync(Path.Combine(dir, "transcript.json"), "{}", ct);
+                        throw new InvalidOperationException("Context size has been exceeded");
+                    }
+
+                    throw new InvalidOperationException("no transcript written");
+                },
+                CancellationToken.None);
+
+            Assert.That(samples[0].IsInconclusive, Is.True);
+            Assert.That(samples[0].Commit, Is.EqualTo("abc123"));
+            Assert.That(samples[0].Dirty, Is.EqualTo(true));
+            Assert.That(samples[0].TranscriptPath, Is.EqualTo(Path.Combine(_dir, "sample-01", "transcript.json")));
+            Assert.That(samples[1].IsInconclusive, Is.True);
+            Assert.That(samples[1].TranscriptPath, Is.EqualTo(string.Empty));
+        }
+        finally
+        {
+            ModelAgentRunner.ProcessStamp = previousStamp;
+        }
+    }
+
+    [Test]
     public async Task RunAsync_CancellationPropagates()
     {
         using var cts = new CancellationTokenSource();
