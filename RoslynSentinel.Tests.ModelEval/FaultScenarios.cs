@@ -7,7 +7,8 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// no near match at all, so the tool error text and hints are what is under test. There is no fix to
 /// reproduce (SourceRun says so). The two StopAndReport scenarios grade Unchanged as the good state
 /// (see ScenarioScorer: Passed needs the stop marker plus Unchanged), so any edit there is a guess and
-/// is scored Wrong, even a plausible one.
+/// is scored Wrong, even a plausible one. RenameSymbolTypo is seeded (its typo call is the authored first
+/// turn); the other three are cold-start.
 /// </summary>
 public static class FaultScenarios
 {
@@ -41,9 +42,10 @@ public static class FaultScenarios
            only changes the method's declaration and misses its caller is not complete.
         """;
 
+    // Authored-only seed (plan_scenario_eval_followups step 6): the typo call is the model's seeded first turn; its error text is the real RenameSymbol result for that call on the fresh fixture, and no transcript exists.
     public static readonly ScenarioDefinition RenameSymbolTypo = new(
         Id: RenameSymbolTypoId,
-        ScenarioType: 3,
+        ScenarioType: 4,
         FaultKind: "symbol-typo-near-match",
         ToolUnderTest: "RenameSymbol",
         StagedFiles: ScenarioFixtureFiles.ChainStartingFiles,
@@ -54,7 +56,12 @@ public static class FaultScenarios
         CheckFinalState: RenameScenarios.CheckFinalStateAsync,
         SourceRun: CommonSourceRun,
         ReproducesAt: CommonReproducesAt,
-        FixedBy: "");
+        FixedBy: "",
+        ResumeFaultTool: "RenameSymbol",
+        ResumeFaultSeeded: true,
+        ResumeFaultArguments: """
+            {"reason":"rename CalcDsc to CalculateDiscountedTotal and update the call site in OrderCheckout.cs","projectName":"ContosoOrders.Core","docCommentId":"M:ContosoOrders.Core.FixtureHelpers.OrderPricingCalculator.CalcDsc(System.Decimal,System.Decimal,System.Boolean)","newName":"CalculateDiscountedTotal"}
+            """);
 
     internal const string RenameSymbolNoSuchMethodPrompt = """
         # Task: One small refactor in FixtureHelpers/OrderPricingCalculator.cs

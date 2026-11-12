@@ -132,7 +132,7 @@ public class ResumeScenariosTests
     [Test]
     public void ColdStartScenario_DoesNotEndOnCorrectFinalState()
     {
-        var scenario = FaultScenarios.RenameSymbolTypo;
+        var scenario = FaultScenarios.RenameSymbolNoSuchMethod;
 
         Assert.Multiple(() =>
         {
@@ -144,7 +144,7 @@ public class ResumeScenariosTests
     [Test]
     public void BuildTargetReached_NullWhenFlagIsFalse()
     {
-        var target = FaultScenarios.RenameSymbolTypo.BuildTargetReached(Path.GetTempPath());
+        var target = FaultScenarios.RenameSymbolNoSuchMethod.BuildTargetReached(Path.GetTempPath());
 
         Assert.That(target, Is.Null);
     }
@@ -251,14 +251,14 @@ public class ResumeScenariosTests
     [Test]
     public void IsResumeSample_TrueForTranscriptAndAuthoredOnlySeed_FalseForColdStart()
     {
-        var authoredOnly = FaultScenarios.RenameSymbolTypo with { ResumeFaultSeeded = true };
+        var authoredOnly = FaultScenarios.RenameSymbolTypo;
 
         Assert.Multiple(() =>
         {
             Assert.That(ResumeScenarios.StaleCallerEditAfterRename.IsResumeSample, Is.True);
             Assert.That(ResumeScenarios.StaleWorkspaceAfterRename.IsResumeSample, Is.True);
             Assert.That(ResumeScenarios.FailedLastCallStaleOldContent.IsResumeSample, Is.True);
-            Assert.That(FaultScenarios.RenameSymbolTypo.IsResumeSample, Is.False);
+            Assert.That(FaultScenarios.RenameSymbolNoSuchMethod.IsResumeSample, Is.False);
             Assert.That(authoredOnly.IsResumeSample, Is.True);
         });
     }
@@ -268,7 +268,7 @@ public class ResumeScenariosTests
     {
         var staleCaller = ResumeScenarios.StaleCallerEditAfterRename;
         var seededTranscript = ResumeScenarios.FailedLastCallStaleOldContent;
-        var authoredOnly = FaultScenarios.RenameSymbolTypo with { ResumeFaultSeeded = true };
+        var authoredOnly = FaultScenarios.RenameSymbolTypo;
 
         Assert.Multiple(() =>
         {

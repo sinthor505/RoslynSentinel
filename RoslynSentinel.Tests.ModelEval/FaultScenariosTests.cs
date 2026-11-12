@@ -14,6 +14,14 @@ public class FaultScenariosTests
 
     private static IEnumerable<ScenarioDefinition> FaultDefinitions =>
     [
+        FaultScenarios.RenameSymbolNoSuchMethod,
+        FaultScenarios.ReplaceSnippetWrongFileNearMatch,
+        FaultScenarios.ReplaceSnippetWrongFileNoMatch,
+    ];
+
+    // All four fault scenarios, including the seeded RenameSymbolTypo (type 4), for the shape tests that do not check ScenarioType.
+    private static IEnumerable<ScenarioDefinition> AllFaultDefinitions =>
+    [
         FaultScenarios.RenameSymbolTypo,
         FaultScenarios.RenameSymbolNoSuchMethod,
         FaultScenarios.ReplaceSnippetWrongFileNearMatch,
@@ -54,13 +62,13 @@ public class FaultScenariosTests
         Assert.That(scenario.ScenarioType, Is.EqualTo(3));
     }
 
-    [TestCaseSource(nameof(FaultDefinitions))]
+    [TestCaseSource(nameof(AllFaultDefinitions))]
     public void Fault_ReproducesAtIsMeasured(ScenarioDefinition scenario)
     {
         Assert.That(scenario.ReproducesAt, Does.StartWith("measured"));
     }
 
-    [TestCaseSource(nameof(FaultDefinitions))]
+    [TestCaseSource(nameof(AllFaultDefinitions))]
     public void Fault_PromptFormatsAndIsAscii(ScenarioDefinition scenario)
     {
         string prompt = null!;
@@ -68,7 +76,7 @@ public class FaultScenariosTests
         Assert.That(prompt.All(c => c <= 127), Is.True, "prompt must be pure ASCII");
     }
 
-    [TestCaseSource(nameof(FaultDefinitions))]
+    [TestCaseSource(nameof(AllFaultDefinitions))]
     public void Fault_StagesExactlyTheChainStartingFiles(ScenarioDefinition scenario)
     {
         Assert.That(scenario.StagedFiles.Keys, Is.EquivalentTo(ScenarioFixtureFiles.ChainStartingFiles.Keys));
@@ -85,6 +93,26 @@ public class FaultScenariosTests
         Assert.That(scenario.FaultKind, Is.EqualTo("symbol-typo-near-match"));
         Assert.That(scenario.ToolUnderTest, Is.EqualTo("RenameSymbol"));
         Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.Recover));
+        Assert.That(scenario.ScenarioType, Is.EqualTo(4));
+        Assert.That(scenario.ResumeFaultSeeded, Is.True);
+        Assert.That(scenario.ResumeFaultTool, Is.EqualTo("RenameSymbol"));
+        Assert.That(scenario.ResumeTranscript, Is.Null);
+        Assert.That(scenario.ResumeKeepTurns, Is.EqualTo(0));
+        Assert.That(scenario.IsResumeSample, Is.True);
+        Assert.That(scenario.ResumeTurnCap, Is.EqualTo(1 + scenario.TurnCap));
+        Assert.That(scenario.EndOnCorrectFinalState, Is.False);
+    }
+
+    [Test]
+    public void RenameSymbolTypo_ResumeFaultArguments_AreValidJsonWithTypoOnlyInDocCommentId()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(FaultScenarios.RenameSymbolTypo.ResumeFaultArguments!);
+        var root = doc.RootElement;
+
+        Assert.That(root.GetProperty("newName").GetString(), Is.EqualTo("CalculateDiscountedTotal"));
+        var docCommentId = root.GetProperty("docCommentId").GetString();
+        Assert.That(docCommentId, Does.Contain("CalcDsc("));
+        Assert.That(docCommentId, Does.Not.Contain("CalcDisc("));
     }
 
     [Test]
