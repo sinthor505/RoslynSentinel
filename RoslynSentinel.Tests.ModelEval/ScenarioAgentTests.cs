@@ -218,7 +218,8 @@ public class ScenarioAgentTests
             turnCap: scenario.ResumeKeepTurns + (scenario.ResumeFaultSeeded ? 1 : 0) + scenario.TurnCap,
             wallClockCap: TimeSpan.FromMinutes(10),
             logger: environment.Host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
-        var result = await runner.RunAsync(systemPrompt, userPrompt, sampleDirectory, cancellationToken, seedTurns: seed);
+        // Early exit: scenarios flagged EndOnCorrectFinalState stop the live loop once CheckFinalState is Correct (null = run to finish or cap).
+        var result = await runner.RunAsync(systemPrompt, userPrompt, sampleDirectory, cancellationToken, seedTurns: seed, targetReached: scenario.BuildTargetReached(directory));
 
         var verdict = await ComputeFinalStateAsync(scenario, sampleIndex, environment.SolutionDirectory, sampleDirectory, cancellationToken);
         return (result, verdict, schemaDrift, resultDrift, "");
