@@ -465,7 +465,7 @@ public class PlanImplementVerifyAgentTests
 
         var planPrompt = string.Format(PlanUserPromptTemplate, fixtureCorePath, DeadCodeCleanupGuidance);
         var planResult = await RunPhaseAsync(
-            "plan", AgentSystemPrompts.CodingAgent, planPrompt, blockMutatingTools: true, turnCap: 15, cancellationToken);
+            "plan", ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgent), planPrompt, blockMutatingTools: true, turnCap: 15, cancellationToken);
 
         Assert.That(planResult.Converged, Is.True,
             $"Plan phase did not converge (stopped: {planResult.StopReason}) within {planResult.TurnCount} turns - " +
@@ -486,7 +486,7 @@ public class PlanImplementVerifyAgentTests
         // WallClockCapExceeded, so raising only the time budget would have left those runs still
         // capped out on turns before finishing.
         var implementResult = await RunPhaseAsync(
-            "implement", AgentSystemPrompts.CodingAgent, implementPrompt, blockMutatingTools: false, turnCap: 35, cancellationToken);
+            "implement", ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgent), implementPrompt, blockMutatingTools: false, turnCap: 35, cancellationToken);
 
         Assert.That(implementResult.Converged, Is.True,
             $"Implement phase did not converge (stopped: {implementResult.StopReason}) within {implementResult.TurnCount} turns. " +

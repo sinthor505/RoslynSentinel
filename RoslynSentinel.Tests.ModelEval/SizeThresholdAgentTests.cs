@@ -389,7 +389,7 @@ public class SizeThresholdAgentTests
             logger: _host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var template = promptVariant == "TwoStep" ? TwoStepUserPromptTemplate : UserPromptTemplate;
         var userPrompt = string.Format(template, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
-        return await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, _runDirectory, cancellationToken);
+        return await runner.RunAsync(ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgent), userPrompt, _runDirectory, cancellationToken);
     }
 
     private void AssertFixApplied(AgentRunResult result)

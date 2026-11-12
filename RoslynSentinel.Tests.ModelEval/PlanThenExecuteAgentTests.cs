@@ -190,7 +190,7 @@ public class PlanThenExecuteAgentTests
             _agentClient, _mcpClient, repeatedFailureLimit: 10, maxTokensPerTurn: 16384, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30),
             logger: _host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var userPrompt = string.Format(PlanThenExecuteUserPromptTemplate, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
-        var result = await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, _runDirectory, TestContext.CurrentContext.CancellationToken);
+        var result = await runner.RunAsync(ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgent), userPrompt, _runDirectory, TestContext.CurrentContext.CancellationToken);
 
         Assert.That(result.Converged, Is.True,
             $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");

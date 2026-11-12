@@ -550,7 +550,7 @@ public class WholeFileRewriteAgentTests
             _agentClient, _mcpClient, repeatedFailureLimit: 10, maxTokensPerTurn: 16384, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30),
             logger: _host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var userPrompt = string.Format(userPromptTemplate, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
-        return await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, _runDirectory, cancellationToken);
+        return await runner.RunAsync(ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgent), userPrompt, _runDirectory, cancellationToken);
     }
 
     private Task AssertFixApplied(AgentRunResult result) => AssertFixApplied(_fixture, _testBaseline, result, TestContext.CurrentContext.CancellationToken);

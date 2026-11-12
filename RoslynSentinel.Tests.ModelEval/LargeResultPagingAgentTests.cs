@@ -438,7 +438,7 @@ public class LargeResultPagingAgentTests
         var runner = new ModelAgentRunner(
             _agentClient, _mcpClient, repeatedFailureLimit: 10, maxTokensPerTurn: 16384, turnCap: 15, wallClockCap: TimeSpan.FromMinutes(15),
             logger: _host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
-        var result = await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, _runDirectory, TestContext.CurrentContext.CancellationToken);
+        var result = await runner.RunAsync(ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgent), userPrompt, _runDirectory, TestContext.CurrentContext.CancellationToken);
 
         var calls = AllToolCalls(result);
         var finalMessage = FinalMessageOf(result);

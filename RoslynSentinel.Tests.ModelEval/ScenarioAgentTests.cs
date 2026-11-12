@@ -131,7 +131,7 @@ public class ScenarioAgentTests
         var userPrompt = string.Format(
             scenario.PromptTemplate,
             Path.Combine(environment.SolutionDirectory, "ContosoOrders.Core"));
-        var result = await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, sampleDirectory, cancellationToken);
+        var result = await runner.RunAsync(ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgent), userPrompt, sampleDirectory, cancellationToken);
 
         var verdict = await ComputeFinalStateAsync(scenario, sampleIndex, environment.SolutionDirectory, sampleDirectory, cancellationToken);
         return (result, verdict, false, 0, "");
@@ -206,7 +206,7 @@ public class ScenarioAgentTests
         {
             // Authored-only seed: nothing to replay, so no schema or replay gate. The prompts are the cold-start prompts.
             seed = [];
-            systemPrompt = AgentSystemPrompts.CodingAgent;
+            systemPrompt = ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgent);
             userPrompt = string.Format(scenario.PromptTemplate, Path.Combine(environment.SolutionDirectory, "ContosoOrders.Core"));
         }
 
