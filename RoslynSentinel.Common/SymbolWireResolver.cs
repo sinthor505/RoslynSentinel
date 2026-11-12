@@ -49,7 +49,7 @@ public static class SymbolWireResolver
                 Handle = handle,
                 Error = new EngineError(
                     EngineErrorCode.SymbolNotResolved,
-                    $"'{docCommentId}' is not a documentation-comment ID: those start with a kind letter and a colon (T: type, M: method, P: property, F: field, E: event, N: namespace), for example 'T:MyApp.Orders.OrderService'. It is not a changeId from an undo hint. Find the symbol with {ToolCallHint.Call("Search", ("mode", "symbol"))} and use the ID it returns.",
+                    NotADocCommentIdText(docCommentId),
                     DataTag.SymbolHandle)
             };
         }
@@ -107,6 +107,31 @@ public static class SymbolWireResolver
         EngineErrorCode.MissingParameterListOverloads => ToolErrorCode.InvalidArgument,
         _ => ToolErrorCode.Exception,
     };
+
+    private static string NotADocCommentIdText(string? docCommentId)
+        => $"'{docCommentId}' is not a documentation-comment ID: those start with a kind letter and a colon (T: type, M: method, P: property, F: field, E: event, N: namespace), for example 'T:MyApp.Orders.OrderService'. It is not a changeId from an undo hint. Find the symbol with {ToolCallHint.Call("Search", ("mode", "symbol"))} and use the ID it returns.";
+
+    /// <summary>
+    /// The not-found text for an engine that resolves a docCommentId itself by walking every project of <paramref name="solution"/>
+    /// (SemanticFindReplace's replaceConstruction and removeNullForgiving, invertBoolean) and has no project name to scope by: an id without a
+    /// kind prefix gets the shape fact; otherwise <see cref="SymbolNotFoundDetail.BuildAsync"/> runs over every project (the ones the walk
+    /// searched), so a similar name is offered with the exact docCommentId and, with <paramref name="retryCall"/>, the calling tool's own
+    /// retry call, and with none the no-similar-name fact and one orientation call.
+    /// </summary>
+    /// <param name="retryCall">As on <see cref="ResolveAsync"/>: maps a candidate's docCommentId to the calling tool's call with only that id corrected, or null.</param>
+    public static async Task<string> DescribeUnresolvedIdAsync(Solution solution, string docCommentId, Func<string, string?>? retryCall, CancellationToken cancellationToken)
+    {
+        if (!Regex.IsMatch(docCommentId ?? "", @"^[NTFPEM]:\S"))
+        {
+            return NotADocCommentIdText(docCommentId);
+        }
+
+        var searched = solution.Projects.ToList();
+        var (query, kind) = ParseId(docCommentId!);
+
+        // TODO isCallable: no ActiveToolSurface is in scope here either, so hints name tools unconditionally
+        return await SymbolNotFoundDetail.BuildAsync(searched, query, kind, $"all {searched.Count} project(s) of the loaded solution", null, isCallable: null, nextCall: null, cancellationToken, retryCall);
+    }
 
     // Runs the shared candidate builder over the named project (every project with that name, so a multi-target load is
     // covered); a project name that matches nothing falls back to every non-test project and says so in the scope text.

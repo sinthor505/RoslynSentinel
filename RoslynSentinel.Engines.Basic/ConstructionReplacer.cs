@@ -43,7 +43,7 @@ public static class ConstructionReplacer
         var (targetSymbol, _) = await ResolveAsync(solution, symbolId, ct);
         if (targetSymbol is null)
         {
-            return Fail(ToolErrorCode.NotFound, $"symbol: no symbol found for docCommentId '{symbolId}'. {SymbolHint}");
+            return Fail(ToolErrorCode.NotFound, await UnresolvedAsync(solution, "symbol", symbolId, retryId => RetryCall(retryId, factoryId, projectFilter), ct));
         }
 
         INamedTypeSymbol targetType;
@@ -81,7 +81,7 @@ public static class ConstructionReplacer
         var (factorySymbol, factoryCompilation) = await ResolveAsync(solution, factoryId, ct);
         if (factorySymbol is null)
         {
-            return Fail(ToolErrorCode.NotFound, $"factory: no symbol found for docCommentId '{factoryId}'. {FactoryHint}");
+            return Fail(ToolErrorCode.NotFound, await UnresolvedAsync(solution, "factory", factoryId, retryId => RetryCall(symbolId, retryId, projectFilter), ct));
         }
 
         if (factorySymbol is not IMethodSymbol { MethodKind: MethodKind.Ordinary } factory)
@@ -481,6 +481,23 @@ public static class ConstructionReplacer
         }
 
         return (null, null);
+    }
+
+    // The docCommentId a parameter carried resolved in no project: the shared text (ranked candidates with their exact ids and the
+    // SemanticFindReplace retry call, or the no-similar-name fact and one orientation call), prefixed with the parameter it concerns.
+    private static async Task<string> UnresolvedAsync(Solution solution, string parameter, string id, Func<string, string?> retryCall, CancellationToken ct)
+        => $"{parameter}: docCommentId '{id}' resolves to no symbol in any project of the loaded solution. " + await SymbolWireResolver.DescribeUnresolvedIdAsync(solution, id, retryCall, ct);
+
+    // The calling tool's own call with only the one id corrected; preview so the retry writes nothing.
+    private static string RetryCall(string symbolId, string factoryId, string? projectFilter)
+    {
+        var pairs = new List<(string Name, string Value)> { ("operation", "replaceConstruction"), ("symbol", symbolId), ("factory", factoryId), ("mode", "preview") };
+        if (!string.IsNullOrWhiteSpace(projectFilter))
+        {
+            pairs.Add(("projectFilter", projectFilter));
+        }
+
+        return ToolCallHint.Call("SemanticFindReplace", pairs.ToArray());
     }
 
     private static SemanticReplaceOutcome Fail(string code, string message) =>

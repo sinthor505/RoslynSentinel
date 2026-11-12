@@ -124,7 +124,7 @@ public sealed class SymbolNavigationMissTests
     public async Task FindReferencesImplementations_FilePinnedMisspeltName_OffersTheNearNameOnceAsync()
     {
         var message = await RunMissAsync(w => RelationshipTools(w).FindReferencesTool(reason: "test message", "IPricd", FindReferencesKind.implementations, filePath: w.PathOf(FileName)));
-        Assert.That(message, Does.StartWith("FindImplementations: "));
+        Assert.That(message, Does.StartWith("FindReferences failed: FindImplementations: "), "The tool's error context precedes the engine text.");
         Assert.That(message, Does.Contain("Did you mean 'IPriced'? Retry with symbolName: 'IPriced'."));
         Assert.That(message, Does.Contain("not a zero-implementations result"));
         Assert.That(message.Split("Did you mean 'IPriced'?").Length - 1, Is.EqualTo(1), "The pinned-file candidates are given once, not repeated by the solution-wide text.");
@@ -137,7 +137,7 @@ public sealed class SymbolNavigationMissTests
     public async Task FindReferencesImplementations_FilePinnedNoSimilarName_StatesTheNoCandidateFactAndOffersTheOutlineAsync()
     {
         var message = await RunMissAsync(w => RelationshipTools(w).FindReferencesTool(reason: "test message", AlienName, FindReferencesKind.implementations, filePath: w.PathOf(FileName)));
-        Assert.That(message, Does.StartWith("FindImplementations: "));
+        Assert.That(message, Does.StartWith("FindReferences failed: FindImplementations: "), "The tool's error context precedes the engine text.");
         Assert.That(message, Does.Contain("similar name"));
         Assert.That(message, Does.Not.Contain("Did you mean"));
         Assert.That(message, Does.Contain("GetFileOutline"));
@@ -149,7 +149,7 @@ public sealed class SymbolNavigationMissTests
     public async Task FindReferencesImplementations_SolutionWideMisspeltName_RanksTheNearSymbolWithAPrefilledCallAsync()
     {
         var message = await RunMissAsync(w => RelationshipTools(w).FindReferencesTool(reason: "test message", "IPricd", FindReferencesKind.implementations));
-        Assert.That(message, Does.StartWith("FindImplementations: symbolName 'IPricd' could not be resolved anywhere in the solution."));
+        Assert.That(message, Does.StartWith("FindReferences failed: FindImplementations: symbolName 'IPricd' could not be resolved anywhere in the solution."));
         Assert.That(message, Does.Contain("not a zero-implementations result"));
         Assert.That(message, Does.Contain("IPriced (type)"));
         Assert.That(message, Does.Contain("FindReferences("));

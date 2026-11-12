@@ -61,7 +61,12 @@ public class SemanticReplaceEngine
 
         if (symbol is null)
         {
-            return (null, new ResultError(ToolErrorCode.NotFound, $"No symbol found for docCommentId: {docCommentId}"));
+            // The retry call needs newName (invertBoolean requires it); the overload without one keeps the neutral Search call.
+            Func<string, string?>? retryCall = newName is null
+                ? null
+                : retryId => ToolCallHint.Call("SemanticFindReplace", ("operation", "invertBoolean"), ("symbol", retryId), ("newName", newName), ("mode", "preview"));
+            var detail = await SymbolWireResolver.DescribeUnresolvedIdAsync(solution, docCommentId, retryCall, ct);
+            return (null, new ResultError(ToolErrorCode.NotFound, $"docCommentId '{docCommentId}' resolves to no symbol in any project of the loaded solution. {detail}"));
         }
 
         // Check if symbol is a property or field
@@ -1246,14 +1251,14 @@ public class SemanticReplaceEngine
         {
             var filePath = fileGroup.Key;
 
-            // Find the document for this file path
-            var document = DocumentLookup.FindDocumentOrNull(solution, filePath);
-
-            if (document is null)
+            // Find the document for this file path; a miss keeps the TargetIneligible code (a reference site sits in a file that is no
+            // document of the loaded solution) and states the file facts of the shared lookup.
+            var lookup = DocumentLookup.TryGetDocument(solution, filePath);
+            if (!lookup.TryGetDocument(out var document))
             {
                 return (sites, new Dictionary<FilePathWrapper, string>(), new ResultError(
                     ToolErrorCode.TargetIneligible,
-                    $"Document not found for file '{filePath}'."));
+                    $"A reference to the symbol sits in '{filePath}', which is not a document of the loaded solution, so the edit cannot be planned there. {lookup.Describe()}"));
             }
 
             // Get the original text

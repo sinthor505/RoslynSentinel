@@ -39,7 +39,8 @@ internal static class NullForgivingRemover
         var (targetSymbol, _) = await ResolveAsync(solution, symbolDocCommentId, ct);
         if (targetSymbol is null)
         {
-            return Fail(ToolErrorCode.NotFound, $"symbol: no symbol found for docCommentId '{symbolDocCommentId}' in any project of the loaded solution. {SymbolHint}");
+            var detail = await SymbolWireResolver.DescribeUnresolvedIdAsync(solution, symbolDocCommentId, retryId => RetryCall(retryId, projectFilter, fileFilter), ct);
+            return Fail(ToolErrorCode.NotFound, $"symbol: docCommentId '{symbolDocCommentId}' resolves to no symbol in any project of the loaded solution. {detail}");
         }
 
         var memberType = targetSymbol switch
@@ -195,6 +196,23 @@ internal static class NullForgivingRemover
 
         sites = sites.OrderBy(s => s.FilePath, StringComparer.Ordinal).ThenBy(s => s.Line).ToList();
         return new SemanticReplaceOutcome(sites, changes, null);
+    }
+
+    // The calling tool's own call with only the symbol id corrected; preview so the retry writes nothing.
+    private static string RetryCall(string symbolId, string? projectFilter, string? fileFilter)
+    {
+        var pairs = new List<(string Name, string Value)> { ("operation", "removeNullForgiving"), ("symbol", symbolId), ("mode", "preview") };
+        if (!string.IsNullOrWhiteSpace(projectFilter))
+        {
+            pairs.Add(("projectFilter", projectFilter));
+        }
+
+        if (!string.IsNullOrWhiteSpace(fileFilter))
+        {
+            pairs.Add(("fileFilter", fileFilter));
+        }
+
+        return ToolCallHint.Call("SemanticFindReplace", pairs.ToArray());
     }
 
     private static SemanticReplaceOutcome Fail(string code, string message) =>

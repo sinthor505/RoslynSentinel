@@ -27,6 +27,7 @@ internal static class ChangeSignatureWrapper
 
         if (symbol == null || methodDecl is not (MethodDeclarationSyntax or ConstructorDeclarationSyntax))
         {
+            // TODO the declared method names are not in scope here (the declaration is already located, only its symbol is missing); when ChangeSignature's lookup passes the file's method names, add the ranked candidates or the no-similar-name fact.
             return Refuse($"could not resolve '{methodName}' to a method or constructor symbol.", $"Retry with {RemoveHint}.");
         }
 

@@ -118,6 +118,7 @@ public class SyntaxUpgradeEngine
         var pos = SnippetLookup.TryResolve(text, contextSnippet, lineBefore, lineAfter, out var snippetMatch, out var snippetError) ? snippetMatch.Start : -1;
         if (pos < 0)
         {
+            // TODO the snippet family wraps ambiguous and no-match outcomes alike as NotFound with SnippetLookup's text; the snippet-sweep slice owns this site.
             throw new ToolNotFoundException($"{snippetError}");
         }
 
@@ -152,13 +153,15 @@ public class SyntaxUpgradeEngine
         var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? [], "Method", methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException("Method not found.");
+            throw MemberRefactoringNotFound.Method(methodName, root, filePath);
         }
 
         var switchStmt = method.DescendantNodes().OfType<SwitchStatementSyntax>().FirstOrDefault();
         if (switchStmt == null)
         {
-            throw new ToolNotFoundException("Switch statement not found.");
+            throw new ToolNotFoundException(
+                $"No switch statement is declared in method '{methodName}' of '{filePath}', so there is nothing to convert. {ToolCallHint.Call("GetMethodSource", ("filePath", filePath), ("methodName", methodName))} shows the method body.",
+                "switch statement", methodName);
         }
 
         var arms = switchStmt.Sections.Select(s =>
@@ -402,7 +405,7 @@ public class SyntaxUpgradeEngine
             .Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         if (classNode == null)
         {
-            throw new ToolNotFoundException("Class '" + className + "' not found in file.", "class", className);
+            throw MemberRefactoringNotFound.Class(className, root, filePath);
         }
 
         // Find the constructor that consists entirely of field assignments
@@ -629,7 +632,7 @@ public class SyntaxUpgradeEngine
             .Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in file.");
+            throw MemberRefactoringNotFound.Method(methodName, root, filePath);
         }
 
         var throwStmts = method.DescendantNodes().OfType<ThrowStatementSyntax>()

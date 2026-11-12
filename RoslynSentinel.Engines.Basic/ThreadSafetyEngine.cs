@@ -32,7 +32,7 @@ public class ThreadSafetyEngine
         var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException("Method '" + methodName + "' not found. " + ToolCallHint.Next("GetFileOutline", "to list the methods in the file.", ("filePath", filePath.ToString())), "method", methodName);
+            throw MemberRefactoringNotFound.Method(methodName, root, filePath);
         }
 
         if (method.Body == null)
@@ -43,7 +43,9 @@ public class ThreadSafetyEngine
         var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
         if (typeNode == null)
         {
-            throw new ToolNotFoundException("Containing type not found for method '" + methodName + "'.");
+            throw new ToolNotFoundException(
+                $"Method '{methodName}' in '{filePath}' has no enclosing class, struct, interface or record declaration, so there is no type to add a lock field to. {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} shows where the method sits.",
+                "type", methodName);
         }
 
         // Check if a field with lockFieldName already exists
@@ -115,12 +117,21 @@ public class ThreadSafetyEngine
             .Where(m => m.Body?.DescendantNodes().OfType<LockStatementSyntax>().Any() ?? false)
             .ToList();
         var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(lockingMatches.Count > 0 ? lockingMatches : nameMatches, "Method", methodName);
-        if (method == null || method.Body == null)
+        if (method == null)
         {
-            throw new ToolNotFoundException($"Method or body not found: {methodName} in file: {filePath}");
+            throw MemberRefactoringNotFound.Method(methodName, root, filePath);
         }
 
-        var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault() ?? throw new ToolNotFoundException($"Type not found for method: {methodName} in file: {filePath}");
+        if (method.Body == null)
+        {
+            throw new ToolNotFoundException(
+                $"Method '{methodName}' in '{filePath}' has no block body (it is abstract, extern or expression-bodied), so it holds no lock statement to convert. {ToolCallHint.Call("GetMethodSource", ("filePath", filePath), ("methodName", methodName))} shows the method as declared.",
+                "method body", methodName);
+        }
+
+        var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault() ?? throw new ToolNotFoundException(
+            $"Method '{methodName}' in '{filePath}' has no enclosing class, struct, interface or record declaration, so there is no type to add a semaphore field to. {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} shows where the method sits.",
+            "type", methodName);
 
         // Find the lock object being used in this method
         var lockStatements = method.Body.DescendantNodes().OfType<LockStatementSyntax>().ToList();
