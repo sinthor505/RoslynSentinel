@@ -116,6 +116,66 @@ public class ResumeScenariosTests
         Assert.That(ScenarioRegistry.All, Does.Contain(ResumeScenarios.FailedLastCallStaleOldContent));
     }
 
+    // ---- EndOnCorrectFinalState and BuildTargetReached ----
+
+    [Test]
+    public void ResumeRecoverScenarios_EndOnCorrectFinalState()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(ResumeScenarios.StaleCallerEditAfterRename.EndOnCorrectFinalState, Is.True);
+            Assert.That(ResumeScenarios.StaleWorkspaceAfterRename.EndOnCorrectFinalState, Is.True);
+            Assert.That(ResumeScenarios.FailedLastCallStaleOldContent.EndOnCorrectFinalState, Is.True);
+        });
+    }
+
+    [Test]
+    public void ColdStartScenario_DoesNotEndOnCorrectFinalState()
+    {
+        var scenario = FaultScenarios.RenameSymbolTypo;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(scenario.ResumeTranscript, Is.Null);
+            Assert.That(scenario.EndOnCorrectFinalState, Is.False);
+        });
+    }
+
+    [Test]
+    public void BuildTargetReached_NullWhenFlagIsFalse()
+    {
+        var target = FaultScenarios.RenameSymbolTypo.BuildTargetReached(Path.GetTempPath());
+
+        Assert.That(target, Is.Null);
+    }
+
+    [Test]
+    public async Task StaleCallerEditAfterRename_BuildTargetReached_IsTrueOnlyForCorrectCheckout()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        try
+        {
+            var checkoutPath = Path.Combine(tempDir, ScenarioFixtureFiles.CheckoutRelativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(checkoutPath)!);
+            var target = ResumeScenarios.StaleCallerEditAfterRename.BuildTargetReached(tempDir);
+
+            Assert.That(target, Is.Not.Null);
+
+            await File.WriteAllTextAsync(checkoutPath, RenamedCheckout);
+            Assert.That(await target!(CancellationToken.None), Is.False);
+
+            await File.WriteAllTextAsync(checkoutPath, RenamedAndInterfaceTypedCheckout);
+            Assert.That(await target!(CancellationToken.None), Is.True);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
     // ---- Capture file ----
 
     [Test]

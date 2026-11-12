@@ -35,7 +35,8 @@ public static class ResumeScenarios
         ReproducesAt: "not measured (regression guard; the capture run hit it at turn 12, resume rate measured by this scenario)",
         FixedBy: "",
         ResumeTranscript: "stale-caller-edit-after-rename.json",
-        ResumeKeepTurns: 11);
+        ResumeKeepTurns: 11,
+        EndOnCorrectFinalState: true);
 
     public static readonly ScenarioDefinition StaleWorkspaceAfterRename = new(
         Id: StaleWorkspaceAfterRenameId,
@@ -57,7 +58,8 @@ public static class ResumeScenarios
         ResumeFaultSeeded: false,
         ResumeFaultArguments: """
             {"reason":"stale workspace fault: another session rewrote the calculator field initializer","action":"apply","filePath":"{SOLUTION}/ContosoOrders.Core/FixtureHelpers/OrderCheckout.cs","oldContent":"private readonly OrderPricingCalculator _calculator = new();","newContent":"private readonly OrderPricingCalculator _calculator = new OrderPricingCalculator();"}
-            """);
+            """,
+        EndOnCorrectFinalState: true);
 
     public static readonly ScenarioDefinition FailedLastCallStaleOldContent = new(
         Id: FailedLastCallStaleOldContentId,
@@ -79,7 +81,8 @@ public static class ResumeScenarios
         ResumeFaultSeeded: true,
         ResumeFaultArguments: """
             {"reason":"update the caller in OrderCheckout.cs to the renamed method","action":"apply","filePath":"{SOLUTION}/ContosoOrders.Core/FixtureHelpers/OrderCheckout.cs","oldContent":"return _calculator.CalcDisc(amount, rate, isPreferredCustomer);","newContent":"return _calculator.CalculateDiscountedTotal(amount, rate, isPreferredCustomer);"}
-            """);
+            """,
+        EndOnCorrectFinalState: true);
 
     /// <summary>
     /// Path of a file in the tracked RoslynSentinel.Tests.ModelEval/ResumeTranscripts folder. Walks up from the
