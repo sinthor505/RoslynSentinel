@@ -63,25 +63,55 @@ public class LmStudioAgentClientInputItemsTests
         Assert.That(items.Select(Type), Is.EqualTo(new[] { "function_call" }));
     }
 
+    private static AgentChatMessage[] PlanTurns(int count) => Enumerable.Range(1, count)
+        .Select(i => new AgentChatMessage
+        {
+            Role = "assistant",
+            ReasoningContent = $"plan {i}",
+            ToolCalls = [new AgentToolCall { Id = $"call_{i}", Name = "ReadFile", ArgumentsJson = "{}" }],
+        })
+        .ToArray();
+
+    private List<string?> ReplayedReasoning(AgentChatMessage[] turns) => Serialize(turns).Where(e => Type(e) == "reasoning")
+        .Select(e => e.GetProperty("content")[0].GetProperty("text").GetString())
+        .ToList();
+
     [Test]
-    public void OnlyTheMostRecentTurnsReplayReasoning()
+    public void ReasoningWindow_KeepsEveryTurn_UntilTwoBlocks()
     {
-        var turns = Enumerable.Range(1, LmStudioAgentClient.ReasoningReplayTurns + 3)
-            .Select(i => new AgentChatMessage
-            {
-                Role = "assistant",
-                ReasoningContent = $"plan {i}",
-                ToolCalls = [new AgentToolCall { Id = $"call_{i}", Name = "ReadFile", ArgumentsJson = "{}" }],
-            })
-            .ToArray();
+        var window = LmStudioAgentClient.ReasoningReplayTurns;
 
-        var reasoning = Serialize(turns).Where(e => Type(e) == "reasoning")
-            .Select(e => e.GetProperty("content")[0].GetProperty("text").GetString())
-            .ToList();
+        var reasoning = ReplayedReasoning(PlanTurns(2 * window - 1));
 
-        Assert.That(reasoning, Has.Count.EqualTo(LmStudioAgentClient.ReasoningReplayTurns));
-        Assert.That(reasoning[0], Is.EqualTo("plan 4"));
-        Assert.That(reasoning[^1], Is.EqualTo($"plan {LmStudioAgentClient.ReasoningReplayTurns + 3}"));
+        Assert.That(reasoning, Has.Count.EqualTo(2 * window - 1));
+        Assert.That(reasoning[0], Is.EqualTo("plan 1"));
+    }
+
+    [Test]
+    public void ReasoningWindow_DropsTheOldestTurnsOneBlockAtATime()
+    {
+        var window = LmStudioAgentClient.ReasoningReplayTurns;
+
+        var reasoning = ReplayedReasoning(PlanTurns(2 * window + 3));
+
+        Assert.That(reasoning, Has.Count.EqualTo(window + 3));
+        Assert.That(reasoning[0], Is.EqualTo($"plan {window + 1}"));
+        Assert.That(reasoning[^1], Is.EqualTo($"plan {2 * window + 3}"));
+    }
+
+    [Test]
+    public void ReasoningWindow_KeepsTheEarlierRequestAsAPrefix_BetweenBlockSteps()
+    {
+        // The prompt cache only reuses an unchanged prefix: inside a block, request n must start with request n-1.
+        var window = LmStudioAgentClient.ReasoningReplayTurns;
+        var turns = PlanTurns(2 * window + 3);
+
+        // Reasoning items get a fresh random id per request; the chat template LM Studio renders (and caches) omits it.
+        static string WithoutId(JsonElement e) => System.Text.RegularExpressions.Regex.Replace(e.GetRawText(), "\"id\":\"rs_[0-9a-f]+\"", "\"id\":\"rs_\"");
+        var earlier = Serialize(turns[..^1]).Select(WithoutId).ToList();
+        var later = Serialize(turns).Select(WithoutId).ToList();
+
+        Assert.That(later.Take(earlier.Count), Is.EqualTo(earlier));
     }
 
     // InputMessageItem carries no "type" property on the wire; report it as "message".

@@ -469,18 +469,28 @@ public sealed class LmStudioAgentClient
         eventType == "response.output_item.added" || eventType.EndsWith(".delta", StringComparison.Ordinal);
 
     /// <summary>
-    /// How many of the most recent assistant turns get their reasoning replayed. Replaying every turn's
-    /// reasoning overflowed a 60k context after 31 turns (10-chain run 20261110-072746, request of 60437
-    /// tokens); the model restates its plan in each turn's reasoning, so the recent turns carry it.
+    /// The fewest recent assistant turns that get their reasoning replayed; the window holds between this many and
+    /// twice this many minus one. Replaying every turn's reasoning overflowed a 60k context after 31 turns (10-chain
+    /// run 20261110-072746, request of 60437 tokens); the model restates its plan in each turn's reasoning, so the
+    /// recent turns carry it.
     /// </summary>
     internal const int ReasoningReplayTurns = 10;
+
+    /// <summary>
+    /// How many of the oldest assistant turns lose their reasoning when <paramref name="assistantTurns"/> turns are replayed.
+    /// It steps by <see cref="ReasoningReplayTurns"/> at a time rather than by one turn: a window sliding every turn changed
+    /// the oldest replayed message on every request, so LM Studio's prompt cache matched only the system prompt and tools
+    /// from turn 12 on (ten-chain runs 20261112-223508-701 and 20261112-200511-234: cached input fell to ~24.1k tokens
+    /// and the time to first token grew to 107 s on a slow host). Stepping breaks the cache once per block.
+    /// </summary>
+    internal static int ReasoningDroppedTurns(int assistantTurns) =>
+        Math.Max(0, (assistantTurns / ReasoningReplayTurns - 1) * ReasoningReplayTurns);
 
     private static List<object> BuildInputItems(IReadOnlyList<AgentChatMessage> messages)
     {
         var assistantIndexes = messages.Select((m, i) => (m, i)).Where(x => x.m.Role == "assistant" && !x.m.IsLoopAssistNote).Select(x => x.i).ToList();
-        var firstReplayed = assistantIndexes.Count > ReasoningReplayTurns
-            ? assistantIndexes[assistantIndexes.Count - ReasoningReplayTurns]
-            : 0;
+        var dropped = ReasoningDroppedTurns(assistantIndexes.Count);
+        var firstReplayed = dropped > 0 ? assistantIndexes[dropped] : 0;
         return messages.SelectMany((m, i) => ToInputItems(m, replayReasoning: i >= firstReplayed)).ToList();
     }
 

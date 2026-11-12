@@ -821,6 +821,34 @@ in 77291fac (non-live ModelEval 376/376). Not yet measured live.
 15m 33s, 2 tool errors (ReplaceSnippet 1, Search 1), no assists, so the identical-success nudge was not exercised.
 Model latency 36 s at T1, 64 s at T30 (host 113 passing runs: about 20-25 s per turn).
 
+## Host comparison and the prompt-cache break at T12 (2026-11-12)
+
+One passing ten-chain run per host. Host 85 moved to 192.168.10.85 (alias updated in 10237f86); its run used the URL,
+so it sits under `ModelTestingResults\http___192_168_10_85_1234_v1\...\20261112-223508-701` (job `20261112-223403-001`,
+dfa5d985 dirty). Host 112: `20261112-214630-218`; host 113: `20261112-200511-234` (Batch X run 4).
+
+| | 85 (qwen3.5-4b-mtp) | 112 (qwen3.5-4b-mtp) | 113 (qwen3.5-9b-coder) |
+| --- | --- | --- | --- |
+| Turns, result | 35, pass | 30, pass | 31, pass |
+| Context window | 40192 | 60160 | 70144 |
+| Model time, total | 2092 s (36m 50s wall) | 869 s | 600 s |
+| Turn latency, first 5 / last 5 | 21 s / 108 s | 13 s / 51 s | 13 s / 26 s |
+| Time to first token, mean / max | 54 s / 107 s | 25 s / 50 s | 7 s / 13 s |
+| Uncached prompt processing | ~220 tok/s | ~440 tok/s | ~1520 tok/s |
+| Generation | 12.8 tok/s | 20.5 tok/s | 9.6 tok/s |
+
+**Prompt cache.** On all three hosts the cached input grows with the conversation until T11 (85: 31829 tokens cached at T11)
+and from T12 on stays at ~24.1k, the system prompt and tool definitions, so every later turn re-processes 10k-22k
+tokens. Cause: `LmStudioAgentClient.ReasoningReplayTurns = 10` slid the reasoning window by one turn per request, so
+from the 11th assistant turn the oldest replayed reasoning item vanished each turn and the prefix diverged right after
+the system prompt. On host 85 that is most of the 44-107 s time to first token.
+
+**Fix (owner approved 2026-11-12).** `ReasoningDroppedTurns` steps the window a block of 10 at a time (10 to 19 turns
+replayed), so the cache breaks once per 10 turns. Tests: `LmStudioAgentClientInputItemsTests` (two-block keep, block
+drop, earlier request is a prefix of the next inside a block) and the updated `LoopAssistTrackerTests` cap test.
+Reasoning item ids are random per request (`"rs_" + Guid`); the live cache data above shows LM Studio's cache ignores
+them. Not yet measured live.
+
 ## Out of scope
 
 - Batch C ran before 31b206a6 and 28391d8c; their effect is unmeasured.

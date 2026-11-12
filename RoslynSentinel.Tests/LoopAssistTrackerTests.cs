@@ -392,7 +392,8 @@ public class LoopAssistTrackerTests
     {
         var tracker = new LoopAssistTracker(new LoopAssistOptions(true, "assistant"));
         var messages = new List<AgentChatMessage>();
-        var turns = LmStudioAgentClient.ReasoningReplayTurns + 3;
+        // One turn short of the first block step: counting the note as a turn would drop a whole block of reasoning.
+        var turns = 2 * LmStudioAgentClient.ReasoningReplayTurns - 1;
         for (var i = 1; i <= turns; i++)
         {
             AddRejectedTurn(tracker, messages, i);
@@ -406,7 +407,7 @@ public class LoopAssistTrackerTests
         messages.Add(tracker.CreateAssistMessage("I have sent the same ReplaceSnippet call 2 times."));
         var items = Items(tracker.CollapseForReplay(messages, []));
 
-        Assert.That(items.Count(i => Type(i) == "reasoning"), Is.EqualTo(LmStudioAgentClient.ReasoningReplayTurns));
+        Assert.That(items.Count(i => Type(i) == "reasoning"), Is.EqualTo(turns));
         Assert.That(items.Count(i => Type(i) == "message" && Role(i) == "assistant"), Is.EqualTo(2), "the collapse note and the injection");
     }
 
