@@ -99,6 +99,9 @@
                           ExtractInterface/CreateFile, which only exist in Advanced - see the
                           class doc comment in OrderPricingRefactorChainAgentTests.cs.
 
+    -Test Scenario also prints a per-scenario summary (Get-ScenarioSummary.ps1) of each archived run's
+    results.csv: Inconclusive samples are listed by reason and kept out of every rate. It is advisory and never fails a run.
+
     Each host gets its own --artifacts-path (RoslynSentinel\_scratchbuild_<host-suffix>) so
     that two hosts can be launched concurrently without racing on shared project references'
     obj/ output - see reference_model_eval_procedure memory / CS2012 "locked by VBCSCompiler"
@@ -574,6 +577,24 @@ for ($i = 1; $i -le $Repeats; $i++) {
     }
 
     Copy-NewRunDirectories -Before $before
+
+    if ($currentTest -eq 'Scenario') {
+        # Advisory only: the per-scenario summary must never fail a run, so any error is a warning.
+        try {
+            . (Join-Path $PSScriptRoot 'Get-ScenarioSummary.ps1')
+            $newestCsv = Get-ChildItem -Path $resultsDir -Recurse -Filter results.csv -File -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            if ($newestCsv) {
+                Write-ScenarioSummary -CsvPath $newestCsv.FullName
+            }
+            else {
+                Write-Warning "No results.csv under $resultsDir - scenario summary skipped."
+            }
+        }
+        catch {
+            Write-Warning "Scenario summary failed (run results are unaffected): $($_.Exception.Message)"
+        }
+    }
 
     if ($i -lt $Repeats) {
         Wait-ForTesthostExit
