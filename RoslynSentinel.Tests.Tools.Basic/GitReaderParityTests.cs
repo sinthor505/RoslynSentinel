@@ -1118,6 +1118,12 @@ public class GitReaderParityTests
             return null;
         }
 
+        public string? GetConfigValue(string workingDirectory, string key, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
         public HeadWithParents? GetHeadWithParents(string workingDirectory, TimeSpan cliTimeout)
         {
             Gate();

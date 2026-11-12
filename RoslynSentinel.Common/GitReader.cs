@@ -204,9 +204,7 @@ internal interface IGitReader
     /// The effective value of <paramref name="key"/> across all config levels, as git resolves it (last value wins for a multi-valued key), or null when the
     /// key is unset or git cannot answer.
     /// </summary>
-    string? GetConfigValue(string workingDirectory, string key, TimeSpan cliTimeout) =>
-        // TODO remove this default once the test double GitReaderParityTests.ScriptedReader implements GetConfigValue (Step 9c)
-        throw new NotSupportedException("This reader does not read config values as text.");
+    string? GetConfigValue(string workingDirectory, string key, TimeSpan cliTimeout);
 
     /// <summary>
     /// HEAD and its parents (<c>git rev-list --parents -n 1 HEAD --</c>): the commit the Git tool reads before and after a commit or revert to prove which commit is its own.
