@@ -5,7 +5,7 @@
 ## What happened
 
 While planning short targeted model-eval scenarios
-([plan_targeted_tool_scenario_evals.md](../plans/plan_targeted_tool_scenario_evals.md)), the owner
+([plan_targeted_tool_scenario_evals.md](../plans/closed/plan_targeted_tool_scenario_evals.md)), the owner
 described the next step: a generic harness a working Claude session can call during implementation.
 
 The owner's example: a session has just changed a `ChangeSignature` error hint. It runs a script with
@@ -46,5 +46,5 @@ design would have to settle:
 
 ## Related
 
-- [plan_targeted_tool_scenario_evals.md](../plans/plan_targeted_tool_scenario_evals.md) - the harness this would sit on.
+- [plan_targeted_tool_scenario_evals.md](../plans/closed/plan_targeted_tool_scenario_evals.md) - the harness this would sit on.
 - [reference_model_eval_procedure.md](../references/reference_model_eval_procedure.md) - hosts, env vars and the eval script.

@@ -18,7 +18,7 @@ The main cost is model time on host 113, not file blocking:
 
 - The host performs one generation at a time. A passing 10-chain run takes 362-546 s, a failing one
   reached 1040 s, and a batch of 10 is about 70 minutes
-  ([plan_targeted_tool_scenario_evals.md](../plans/plan_targeted_tool_scenario_evals.md), "Problem").
+  ([plan_targeted_tool_scenario_evals.md](../plans/closed/plan_targeted_tool_scenario_evals.md), "Problem").
   That plan shortens individual runs (estimate 1 to 1.5 minutes per scenario sample); it does not
   decide whose run goes next.
 - Every session is steered to the same host: "use `-HostAddress 113` (RTX 4060) by default and do not
@@ -184,7 +184,7 @@ under a lock file, stale-lock age, hand-off to a new worker).
 
 ## Related
 
-- [plan_targeted_tool_scenario_evals.md](../plans/plan_targeted_tool_scenario_evals.md) - shorter runs;
+- [plan_targeted_tool_scenario_evals.md](../plans/closed/plan_targeted_tool_scenario_evals.md) - shorter runs;
   edits the model-eval script.
 - [reference_model_eval_procedure.md](../references/reference_model_eval_procedure.md) - hosts, scratch
   build folders.

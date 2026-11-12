@@ -1,6 +1,6 @@
 # Plan: short targeted model-eval scenarios (cold-start and resume, clean and faulted)
 
-**Status:** IN PROGRESS 2026-11-12. Steps 1 to 11 done (batch D: step 9 both scenarios with 10 live samples each, step 10 summary and reference doc, step 11 eval doc). Plan close not done: no full-suite run yet, `schemaDrift` still true until the capture is re-taken, and the owner decisions in the batch D report are open.
+**Status:** IMPLEMENTED 2026-11-11. Steps 1 to 11 done, first commit c095191f, last plan commit d229b2c2 (per-step hashes in the `Done:` lines); full suite at d229b2c2: 9 projects, 0 failed, plus 89 of 89 no-model harness tests. Open follow-ups (stop marker ignored, near-match hints, capture re-take for `schemaDrift`, turn cap for the faulted-resume scenarios) are in [TODO.md](../../TODO.md).
 
 ## Problem
 
@@ -16,8 +16,8 @@
 - No existing eval targets `ReplaceSnippet` directly.
 
 The failure modes 10-chain surfaced are listed in
-[eval_tenchain_reasoning_replay_2026_11_10.md](../evals/eval_tenchain_reasoning_replay_2026_11_10.md) and
-[eval_tenchain_frozen_batch_2026_11_10.md](../evals/eval_tenchain_frozen_batch_2026_11_10.md). Most can be
+[eval_tenchain_reasoning_replay_2026_11_10.md](../../evals/eval_tenchain_reasoning_replay_2026_11_10.md) and
+[eval_tenchain_frozen_batch_2026_11_10.md](../../evals/eval_tenchain_frozen_batch_2026_11_10.md). Most can be
 reproduced with one staged file and a one or two step prompt; the rest need the state left by earlier
 chain steps.
 
@@ -374,7 +374,7 @@ C#; none in `agent.log` or `test-result.txt`).
 
 ### Step 11 - Re-baseline 10-chain under the new system prompt
 
-- Files: [eval_tenchain_reasoning_replay_2026_11_10.md](../evals/eval_tenchain_reasoning_replay_2026_11_10.md).
+- Files: [eval_tenchain_reasoning_replay_2026_11_10.md](../../evals/eval_tenchain_reasoning_replay_2026_11_10.md).
 - Change: one batch of 5 runs of `Model_AppliesTenChainedRefactors` with the step 4 prompt; record pass
   rate, mean turns and how many runs ended with the marker; score each with step 3d.
 - Done when: the batch is in the eval doc, marked as the first batch under the stop-marker prompt.
@@ -389,7 +389,7 @@ C#; none in `agent.log` or `test-result.txt`).
 - Tracing the root cause of the `oldContent`-not-found transcription drift.
 - Scenarios for tools other than `ReplaceSnippet` (the harness is tool-agnostic; they can follow).
 - An ad hoc probe a working session can call with a prompt for quick feedback on a tool or error-hint
-  change: [idea_adhoc_tool_probe_harness.md](../ideas/idea_adhoc_tool_probe_harness.md).
+  change: [idea_adhoc_tool_probe_harness.md](../../ideas/idea_adhoc_tool_probe_harness.md).
 
 ## Risks and open decisions
 

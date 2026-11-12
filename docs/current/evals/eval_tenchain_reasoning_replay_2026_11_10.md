@@ -699,7 +699,7 @@ Not the pre-31b206a6 "batch C" named under "Out of scope"; this label comes from
 (`batchC-blocked-prompt-scores.csv`). Batches A to H4 in this file are not comparable with it, because the CodingAgent system
 prompt changed (2e15938d added the `BLOCKED:` stop instruction). H6 above also ran with that prompt (and the loop latch ON),
 but 2 of its 5 runs were lost to host context errors; this is the first batch under the prompt with 5 usable runs.
-Plan: [plan_targeted_tool_scenario_evals](../plans/plan_targeted_tool_scenario_evals.md), step 11.
+Plan: [plan_targeted_tool_scenario_evals](../plans/closed/plan_targeted_tool_scenario_evals.md), step 11.
 
 **Setup.** 5 runs of `Model_AppliesTenChainedRefactors` (`OrderPricingRefactorChain10`), host 113, model
 `qwen3.5-9b-coder`, commit c7bddd9e (CSV `dirty` is `true`, `liftRenames` is `unset`). Queue jobs `20261112-023432-001` to

@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Targeted tool scenario evals - resolved (2026-11-11)
+
+Targeted tool scenario evals (2026-11-11) - short model-eval scenarios (cold start and resume, clean and faulted): 10 cold-start and 3 resume scenarios, per-call scorer with live-turn-only resume scoring, schema and replay drift gates, run stamp, `BLOCKED:` stop marker in the shared system prompt, batch summary, 10-chain re-baseline - [plan](plans/closed/plan_targeted_tool_scenario_evals.md)
+
+Evidence: c095191f to d229b2c2 (Plan: plan_targeted_tool_scenario_evals); full suite at d229b2c2: 9 projects, 0 failed; 89 of 89 no-model harness tests; live results in the plan Done lines
+
 ## Loop latch: disable a tool that keeps failing the same way until another tool succeeds - resolved (2026-11-10)
 
 Loop latch: disable a tool that keeps failing the same way until another tool succeeds - [doc](proposals/closed/proposal_loop_latch.md)
