@@ -1,6 +1,6 @@
 # Plan: Every not-found error ranks candidates, says plainly when none exist, and prefills one orientation call
 
-**Status:** IN PROGRESS 2026-11-12. Step 2 and Step 3a-3b done (117d7507, 5bc6cc8e, 3d33d265); 3c and further wire-text changes on hold until the plan_scenario_eval_followups live baseline releases them.
+**Status:** IN PROGRESS 2026-11-12. Steps 1, 2 done; 3a, 3b, 4a, 5d-1 done (f45d009b, 2f5165ef, 117d7507, 5bc6cc8e, 3d33d265, 44f5b3ef, f9f6b65b); 3c/3d and further wire-text changes on hold until the plan_scenario_eval_followups live baseline releases them.
 
 Related: [plan_scenario_eval_followups.md](./plan_scenario_eval_followups.md) (written in parallel: the stop-adherence scenario family and the seeded `RenameSymbolTypo` used in Step 6). Commit trailer for every slice: `Plan: plan_not_found_error_orientation` (the last slice adds `Closes:`).
 
@@ -109,6 +109,14 @@ addressed, C = container, K = kind, W = what was searched is stated, X = a next 
 | 21 | Tools.Advanced project miss | `GenerationTools.cs:194-196` (lists loaded projects), `ScanTools.cs:1096-1101` | the list of all project names (`:194-196`), no ranking; `ScanTools` none | no | no | W |
 | 22 | Tools.Advanced other | `AdvancedRefactoringTools.cs:708` (variable not found), `:109` (zero anonymous objects: a zero-result, not a lookup) | no | not read for this plan | - | not read |
 
+Final counts (Step 1, 2026-11-12, [reference_not_found_error_inventory.md](../references/reference_not_found_error_inventory.md)):
+189 rows covering 597 non-test sites; 161 rows (509 sites) are lookup misses, 28 rows (88 sites) are non-miss
+conditions coded NotFound. 83 rows (277 sites) name a next call, 40 rows (56 sites) prefill request values, 37 rows
+(203 sites) list candidates, and 76 miss rows (227 sites) give no orientation at all. Without the shared file
+lookup (157 sites in one row) only 82 rows / 120 sites name a next call. So the answer to the owner question stays
+"partly": about half the miss rows name a next call, a quarter prefill it from the request, and almost half give
+nothing. The seed-table line numbers below have drifted; the inventory doc is authoritative.
+
 Rows 18, 21 (ScanTools) and 22 were classified from the quoted preview line, not the whole message; Step 1
 re-reads each. The 291 + 70 + 160 site counts above are measured; rows 11-19 cover the producers named in the
 brief plus the ones found while verifying it, not all 291. The remaining sites (other engines, other tool
@@ -163,6 +171,10 @@ Owner decisions, 2026-11-12 (implement-plan settle, after a source review of thi
 8. **Run mode:** Batched, owner present. A = Step 1 (read-only explore jobs, then one doc write; runs alongside B),
    B = Steps 2-3, C = Step 4, D = Steps 5a, 5b, 5d, E = Steps 5c, 5e, then Step 6 (needs
    `plan_scenario_eval_followups` Steps 1 and 6). Slice splits are noted in each step.
+
+9. **Step 5e scope (2026-11-12, after the Step 1 inventory):** 5e covers the leftover real-miss producers in
+   Engines.Basic, Tools.Basic and Common only. Engines.Advanced (136 sites), Tools.Experimental and the `GitImpl`
+   family go to a TODO.md line that points at `reference_not_found_error_inventory.md`; the plan closes without them.
 
 Approach: build one ranking helper in `RoslynSentinel.Common` (lifted from `MemberNotFoundDetail`), make the two
 shared lookups (file: `DocumentLookup` + `FileNotFoundMessage`; symbol: `LocateSymbol` + the docCommentId
@@ -220,6 +232,8 @@ Sketch of the two no-candidate texts (wording is the implementer's to refine; th
   site counts and the commands used so the table can be regenerated; rows 11-22 of the seed table are re-read
   and corrected; the owner question has a one-paragraph answer with counts. A reviewer spot-checks 10 random
   rows against source.
+- Done: f45d009b, 2f5165ef (all rows read; 10-row spot-check, 5 corrected). Real text-coupled consumers:
+  `ScanTools.cs:1096` (fixed f9f6b65b) and `AsyncifyTools.cs:2050-2052`; `CodeTransformTools` verified not coupled.
 
 ### Step 2 - Shared name-candidate helper in Common
 - Files: new `RoslynSentinel.Common/NameCandidates.cs` (name open, see Risks) and
@@ -276,6 +290,9 @@ Sketch of the two no-candidate texts (wording is the implementer's to refine; th
   at 5bc6cc8e, owner decision 2026-11-12). 3c HELD: `FileNotFoundConsumerPathTests.cs` written, uncommitted; the
   ReplaceSnippet single/batch cases fail because the `ResolveFromWire` path guard (`WorkspaceFileEditImpl.cs:1164`,
   batch `:1541`/`:1671`) returns "'filePath' could not be resolved." before the candidate lookup runs.
+- 3d (owner decision 2026-11-12, after the hold is released): the ReplaceSnippet path guard (single and batch) routes
+  a file-shaped miss through `DocumentLookup` / `FileNotFoundMessage`; 3c's failing cases then pass and 3c commits
+  with it. Step 6's `ReplaceSnippetWrongFileNoMatch` goes through this path.
 
 ### Step 4 - Symbol-name candidates: Search(mode: symbol) and the docCommentId resolver
 - Files: new shared builder in `RoslynSentinel.Common` (for example `SymbolNotFoundDetail`, name open) that works
@@ -311,6 +328,7 @@ Sketch of the two no-candidate texts (wording is the implementer's to refine; th
   takes the already-filtered project list (or a predicate) from its caller. Slices: 4a Common builder and tests;
   4b the `LocateSymbol` path (`SymbolNavigationImpl`, scope passed in); 4c move `MissingParameterListResolver` to
   Common (decision 3) and the resolver path with its 3 callers.
+- Done: 4a 44f5b3ef (`SymbolNotFoundDetail.BuildAsync`, no callers). 4b, 4c held (wire text).
 
 ### Step 5 - Sweep the bare literals onto the helpers (implementer-sweep lane, slices by project)
 - Files: per slice below. Each slice is one operation across one project, compile-green on its own.
@@ -338,7 +356,9 @@ Sketch of the two no-candidate texts (wording is the implementer's to refine; th
     helper; the rest), dispatched only once no other session has uncommitted edits in `MemberRefactoringEngine.cs`;
     5d three, in order (`ScanTools` catch change; file-miss routing; project-name misses).
   - 5e Anything the Step 1 inventory lists that is not in 5a-5d (other engines, other tool classes), as further
-    slices.
+    slices; scope limited by Decision 9 (Engines.Basic, Tools.Basic, Common). The inventory's corrected anchors
+    (for example MoveMember file lookups now `:2980`/`:4950`, class lookups `:2992`/`:4962`) supersede the line
+    numbers in the seed table and in 5c; re-verify every anchor before briefing.
 - Done when (each slice): `Build` 0 errors, `-Flavor Solution` green; the slice's rows in the reference doc
   are updated to candidates yes, next call yes, arguments prefilled yes, rule items met; one unit test per
   changed producer asserts the candidate case and the no-candidate case through that tool's real entry point
