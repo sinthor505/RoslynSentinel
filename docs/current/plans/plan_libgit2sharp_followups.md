@@ -1,6 +1,6 @@
 # Plan: LibGit2Sharp follow-ups - route trial evidence, audit, default-on, config operation, patch text
 
-**Status:** APPROVED 2026-11-12. Follow-ups to proposal_libgit2sharp_in_process_git; decisions recorded; Steps 22-23 (lists) skipped unless a caller shows cost.
+**Status:** IN PROGRESS 2026-11-12. Steps 1-6 and 9 done (6a58ffd6..b262bccf). Approved 2026-11-12. Follow-ups to proposal_libgit2sharp_in_process_git; decisions recorded; Steps 22-23 (lists) skipped unless a caller shows cost.
 
 ## Problem
 
@@ -195,6 +195,8 @@ edits the Seam and Reads test files that Steps 16 and 17 also edit (7 before 16/
 ## Steps
 
 ### Step 1 (A) - carry kind, listed paths, ref and parent into the log line
+
+- Done: 6a58ffd6
 - Files: `RoslynSentinel.Common/CasCommitResult.cs`, `RoslynSentinel.Common/Libgit2GitReader.CasCommit.cs`,
   `RoslynSentinel.Common/InProcessCommitRoute.cs`
 - Depends on: none
@@ -220,6 +222,8 @@ edits the Seam and Reads test files that Steps 16 and 17 also edit (7 before 16/
 - Size: D1 (3 files, about 8 edits).
 
 ### Step 2 (A) - pass the context from `GitImpl`, and close the double-commit path
+
+- Done: fe85e8a0
 - Files: `RoslynSentinel.Tools.Basic/GitImpl.cs`
 - Depends on: 1
 - Effect: text-neutral
@@ -239,6 +243,8 @@ edits the Seam and Reads test files that Steps 16 and 17 also edit (7 before 16/
 - Size: D1 (1 file, about 8 edits).
 
 ### Step 3 (A) - tests for the new fields and the guard
+
+- Done: c89600f1 (the revert-the-guard proof was not run)
 - Files: `RoslynSentinel.Tests.Tools.Basic/GitInProcessCommitRouteTests.cs`
 - Depends on: 2
 - Effect: text-neutral (tests only)
@@ -254,6 +260,9 @@ edits the Seam and Reads test files that Steps 16 and 17 also edit (7 before 16/
 - Size: D1 (1 file, about 10 edits).
 
 ### Step 4 (A) - every route decline test proves the log line
+
+- Done: d7aac389, fe9dd429, f9580035 (signoff, hook.* and nothing-to-commit declines added; the installed git does
+  not honour `commit.signoff`, so no Signed-off-by assertion)
 - Files: `RoslynSentinel.Tests.Tools.Basic/GitInProcessCommitRouteTests.cs`
 - Depends on: 3
 - Effect: text-neutral (tests only)
@@ -269,6 +278,8 @@ edits the Seam and Reads test files that Steps 16 and 17 also edit (7 before 16/
 - Size: D1 (1 file, about 14 edits).
 
 ### Step 5 (B) - audit script: the checks
+
+- Done: 6fab1959
 - Files: `scripts/Test-CommitRouteLog.ps1` (new)
 - Depends on: none to write; Step 1 for the checks that use `ref`, `parent`, `kind`, `paths` (lines without those
   fields are reported `unchecked: pre-step-1 line`, never FAIL)
@@ -300,6 +311,9 @@ edits the Seam and Reads test files that Steps 16 and 17 also edit (7 before 16/
 - Size: D1 (1 new file; the check logic is what makes it long: split from the summary to stay under 35 calls).
 
 ### Step 6 (B) - audit script: summary, setup header, fixture
+
+- Done: b0391f79 (`Test-CommitRouteLog.Tests.ps1` 9/9; this repo's log 2026-11-12: 89 taken, 2 ok, 87 unchecked
+  because older lines lack paths, 0 fail)
 - Files: `scripts/Test-CommitRouteLog.ps1`; optionally `scripts/Test-CommitRouteLog.Tests.ps1` (new, only if the
   owner wants the self-test: see Risks B1)
 - Depends on: 5
@@ -348,6 +362,10 @@ edits the Seam and Reads test files that Steps 16 and 17 also edit (7 before 16/
 - Size: D1 (1 new file); test-writer fits.
 
 ### Step 9 (E) - read a config value as text through the reader seam
+
+- Done: 9a bab7f3d2; 9b e1c6921c, 573680dd (a valueless key now reads "" and declines to the CLI); 9c 16d773f3,
+  c54cc915, b262bccf (probe-table rows). The [Explicit] global-key-from-linked-worktree test passed when run by hand
+  2026-11-12.
 Why: the only config read on the seam is `GetBoolConfig`, which returns null for "unset", for "not a boolean" and
 for a CLI failure alike (`CliGitReader.cs:360-373`, `Libgit2GitReader.cs:668-690`). The `config get` operation and
 the three-state flip (Step 19) need the text and the distinction.
