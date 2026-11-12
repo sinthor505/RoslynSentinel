@@ -531,6 +531,12 @@ $cases = @(
        p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`nOut of scope: do not commit; no Write/Edit/shell writes on .cs files" } } }
     @{ n = 'implementer brief, RESCOPE but no Write/Edit/shell (warn only)'; want = 'allow'
        p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`nOut of scope: do not commit; reply RESCOPE: if more is needed" } } }
+    @{ n = 'implementer brief, Acceptance names RunTest'; want = 'DENY'; match = "Acceptance names 'RunTest'"
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: x`nCall sites: none`nAcceptance: clean Build, then RunTest on FooTests green`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
+    @{ n = 'implementer brief, Acceptance negates RunTest'; want = 'allow'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: x`nCall sites: none`nAcceptance: clean Build. Do not call RunTest or dotnet test; list the test classes you touched.`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
+    @{ n = 'implementer brief, Acceptance without Build'; want = 'DENY'; match = "Acceptance must be 'clean Build'"
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: x`nCall sites: none`nAcceptance: FooTests pass`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
     @{ n = 'other subagent type: not checked'; want = 'allow'
        p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'Explore'; prompt = 'where is X' } } }
 

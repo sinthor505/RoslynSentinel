@@ -1230,6 +1230,30 @@ docs/current/blockers/blocking_error_<slug>.md, and end the turn.
                 }
             }
 
+            # Acceptance section = text from the label up to the next label. Owner rule 2026-11-11
+            # (dispatch-implementer, "Tests and test runs"): implementer acceptance is a clean Build only;
+            # the dispatcher runs tests detached so no slice waits on a test run. A brief that names RunTest,
+            # dotnet test or passing tests as acceptance is refused unless the mention is negated
+            # ("do not call RunTest"). Added 2026-11-12 after implementers in a batch ran tests themselves.
+            if ($found.ContainsKey('Acceptance')) {
+                $accStart = $found['Acceptance'].Index + $found['Acceptance'].Length
+                $accEnd = $brief.Length
+                foreach ($k in $found.Keys) {
+                    if ($k -ne 'Acceptance' -and $found[$k].Index -gt $accStart -and $found[$k].Index -lt $accEnd) { $accEnd = $found[$k].Index }
+                }
+                $accText = $brief.Substring($accStart, $accEnd - $accStart)
+                if ($accText -notmatch '(?i)\bBuild\b') {
+                    $problems.Add("  Acceptance must be 'clean Build' (0 errors): implementers never run tests; the dispatcher runs the touched test classes detached after the commit (dispatch-implementer, 'Tests and test runs').")
+                }
+                foreach ($tm2 in [regex]::Matches($accText, '(?i)\bRunTest\b|\bdotnet\s+test\b|\btests?\s+(?:pass|passes|passing|green)\b')) {
+                    $before = $accText.Substring([Math]::Max(0, $tm2.Index - 30), [Math]::Min(30, $tm2.Index))
+                    if ($before -notmatch "(?i)\b(?:not|no|never|without|don't|do not)\b") {
+                        $problems.Add("  Acceptance names '$($tm2.Value)': implementers never run tests. Write 'Acceptance: clean Build. Do not call RunTest or dotnet test; list the test classes you touched.'")
+                        break
+                    }
+                }
+            }
+
             # Out of scope section = text from the label to the end of the brief. CLAUDE.md requires it to
             # tell the implementer to reply RESCOPE: instead of editing outside the named symbols
             # (db2b9846:L8 - an implementer edited an out-of-brief branch to make a test pass).
@@ -1260,7 +1284,7 @@ $($problems -join "`n")
 $laneSummary
 $agentType is Haiku-tier. A brief it can finish names, up front: Files (full paths including the
 project, within the tier's file limit), Symbols, Call sites (pre-measured with
-InspectSymbol(aspect: blastRadius) / Search(mode: references)), one Acceptance check, Out of scope,
+InspectSymbol(aspect: blastRadius) / Search(mode: references)), Acceptance (clean Build; no test runs), Out of scope,
 Tier (e.g. D0 or S0) and Limits (copied from $tierFileRel), plus Operation for implementer-sweep.
 Load the dispatch-implementer skill for the full brief template and slice limits.
 Fix the brief and dispatch again. Nothing was dispatched.
