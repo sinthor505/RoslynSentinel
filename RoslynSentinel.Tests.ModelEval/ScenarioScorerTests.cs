@@ -343,6 +343,74 @@ public class ScenarioScorerTests
         Assert.That(result.RetryPhraseCount, Is.EqualTo(3));
     }
 
+    [Test]
+    public void SeededTurns_FirstErrorInSeededHistory_IsIgnored()
+    {
+        var transcript = Transcript(
+            Turn(null, null, Call(Tool, isError: true, resultJson: NotFoundResultJson)),
+            Turn(null, null, Call(Tool, "{\"a\":2}")));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.Recover, null, null, null, seededTurns: 1);
+
+        Assert.That(result.FirstErrorCode, Is.Null);
+        Assert.That(result.FirstErrorClass, Is.Null);
+        Assert.That(result.Recovered, Is.False);
+        Assert.That(result.FirstCallSucceeded, Is.True);
+        Assert.That(result.CallsAfterFirstError, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void SeededTurns_LiveError_IsTheFirstError()
+    {
+        var transcript = Transcript(
+            Turn(null, null, Call(Tool, "{\"a\":1}", isError: true, resultJson: NotFoundResultJson)),
+            Turn(null, null, Call(Tool, "{\"a\":2}", isError: true, resultJson: NotFoundResultJson)),
+            Turn(null, null, Call(Tool, "{\"a\":3}")));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.Recover, null, null, null, seededTurns: 1);
+
+        Assert.That(result.FirstErrorCode, Is.EqualTo("NotFound"));
+        Assert.That(result.Recovered, Is.True);
+        Assert.That(result.CallsToRecover, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void SeededTurns_RecoveryUsedExpectedTool_ReadsTheLiveCallAfterTheLiveError()
+    {
+        var transcript = Transcript(
+            Turn(null, null, Call(Tool, "{\"a\":1}", isError: true, resultJson: NotFoundResultJson)),
+            Turn(null, null, Call(Tool, "{\"a\":2}", isError: true, resultJson: NotFoundResultJson), Call("ReadFile")));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.Recover, "ReadFile", null, null, seededTurns: 1);
+
+        Assert.That(result.RecoveryUsedExpectedTool, Is.True);
+    }
+
+    [Test]
+    public void SeededTurns_LiveRepeatOfSeededFailedCall_IsIdenticalResend()
+    {
+        var transcript = Transcript(
+            Turn(null, null, Call(Tool, "{\"a\":1}", isError: true, resultJson: NotFoundResultJson)),
+            Turn(null, null, Call(Tool, "{\"a\":1}", isError: true, resultJson: NotFoundResultJson)));
+
+        var result = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.Recover, null, Final.Wrong, null, seededTurns: 1);
+
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.IdenticalResend));
+    }
+
+    [Test]
+    public void SeededTurns_Zero_MatchesColdStartBehaviour()
+    {
+        var transcript = Transcript(
+            Turn(null, null, Call(Tool, "{\"a\":1}", isError: true, resultJson: NotFoundResultJson)),
+            Turn(null, null, Call(Tool, "{\"a\":2}")));
+
+        var cold = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.Recover, null, null, null);
+        var zero = ScenarioScorer.Score(transcript, Tool, ExpectedOutcome.Recover, null, null, null, seededTurns: 0);
+
+        Assert.That(zero, Is.EqualTo(cold));
+    }
+
     private static AgentToolCallRecord Call(string toolName, string argumentsJson = "{}", bool isError = false, string? resultJson = null) => new()
     {
         ToolName = toolName,

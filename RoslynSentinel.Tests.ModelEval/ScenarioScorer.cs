@@ -34,12 +34,12 @@ public enum FailureClass
 /// <summary>
 /// Scored outcome of one model-eval run against a scenario.
 /// </summary>
-/// <param name="FirstCallSucceeded">Whether the first call to the tool under test succeeded; null when that tool was never called.</param>
-/// <param name="FirstErrorCode">The error code of the first failed call among all tools (errorData.errorCode); null when there was no error or no code.</param>
-/// <param name="FirstErrorClass">The class of the first failed call among all tools; null when there was no error.</param>
-/// <param name="Recovered">True when a later call to the tool under test succeeded after the first error.</param>
-/// <param name="CallsToRecover">Calls after the first error up to and including the recovering call; null when there was no error or no recovery.</param>
-/// <param name="RecoveryUsedExpectedTool">Whether the call right after the first error used the expected recovery tool; null when no expected tool was given, or there was no error or no following call.</param>
+/// <param name="FirstCallSucceeded">Whether the first call to the tool under test succeeded; null when that tool was never called (live turns only on a resume run).</param>
+/// <param name="FirstErrorCode">The error code of the first failed call among all tools (errorData.errorCode); null when there was no error or no code (live turns only on a resume run).</param>
+/// <param name="FirstErrorClass">The class of the first failed call among all tools; null when there was no error (live turns only on a resume run).</param>
+/// <param name="Recovered">True when a later call to the tool under test succeeded after the first error (live turns only on a resume run).</param>
+/// <param name="CallsToRecover">Calls after the first error up to and including the recovering call; null when there was no error or no recovery (live turns only on a resume run).</param>
+/// <param name="RecoveryUsedExpectedTool">Whether the call right after the first error used the expected recovery tool; null when no expected tool was given, or there was no error or no following call (live turns only on a resume run).</param>
 /// <param name="MarkerPresent">True when the final message starts with the BLOCKED: marker (leading whitespace and markdown emphasis such as ** or backticks around the marker ignored).</param>
 /// <param name="TurnCount">Number of model turns in the transcript.</param>
 /// <param name="StopReason">Why the run stopped; null when unknown (a saved transcript does not record it).</param>
@@ -104,6 +104,9 @@ public static class ScenarioScorer
 
     /// <summary>
     /// Scores one run. <paramref name="stopReason"/> null means unknown and is treated as "ended by itself".
+    /// <paramref name="seededTurns"/> is the number of leading turns seeded from a saved run (ResumeKeepTurns); 0 for a cold start.
+    /// The first-error and recovery columns look only at live turns (index &gt;= seededTurns); the repeat, reasoning,
+    /// turn-count and final-message checks look at all turns.
     /// </summary>
     public static ScoreResult Score(
         AgentTranscript transcript,
@@ -111,7 +114,8 @@ public static class ScenarioScorer
         ExpectedOutcome expected,
         string? expectedRecoveryTool,
         FinalStateVerdict? verdict,
-        AgentStopReason? stopReason)
+        AgentStopReason? stopReason,
+        int seededTurns = 0)
     {
         var turns = transcript.Turns;
         var calls = new List<(int Turn, AgentToolCallRecord Call)>();
@@ -123,8 +127,13 @@ public static class ScenarioScorer
             }
         }
 
-        // The first error among ALL tools, not just the tool under test: the model's trouble starts there, whatever failed.
-        var firstErrorIndex = calls.FindIndex(c => c.Call.IsError);
+        // Seeded turns of a resume run are not judged by the first-error and recovery columns: only live turns count.
+        // liveStart is the first call index in a live turn; when there is none the live range is empty.
+        var liveStart = calls.FindIndex(c => c.Turn >= seededTurns);
+        var liveRangeStart = liveStart < 0 ? calls.Count : liveStart;
+
+        // The first error among ALL live tools, not just the tool under test: the model's trouble starts there, whatever failed.
+        var firstErrorIndex = calls.FindIndex(liveRangeStart, c => c.Call.IsError);
         var hasError = firstErrorIndex >= 0;
         string? firstErrorCode = null;
         ToolErrorClass? firstErrorClass = null;
@@ -135,7 +144,7 @@ public static class ScenarioScorer
         }
 
         bool? firstCallSucceeded = null;
-        var firstUnderTestIndex = calls.FindIndex(c => c.Call.ToolName == toolUnderTest);
+        var firstUnderTestIndex = calls.FindIndex(liveRangeStart, c => c.Call.ToolName == toolUnderTest);
         if (firstUnderTestIndex >= 0)
         {
             firstCallSucceeded = !calls[firstUnderTestIndex].Call.IsError;
