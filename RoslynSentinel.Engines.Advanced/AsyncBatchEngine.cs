@@ -53,6 +53,11 @@ public record UpliftCallerInfo(
 /// <param name="Reason">Human-readable reason for skipping.</param>
 /// <param name="Diagnostics">Roslyn compiler diagnostics that caused the skip (may be empty).</param>
 /// <param name="CallerType">Display text of the type that declares the caller; null when the finder could not bind it.</param>
+/// <param name="Classification">
+/// Typed failure class set by the producer that knows it (today only the caller-file-missing skip sets
+/// <see cref="FailureReason.SymbolNotResolved"/>); null when the producer did not classify, in which case the consumer
+/// falls back to reading <paramref name="Reason"/>. Not serialized: the wire shape of a skip is unchanged.
+/// </param>
 public record UpliftSkippedInfo(
     FilePathWrapper FilePath,
     string CallerMethod,
@@ -60,7 +65,8 @@ public record UpliftSkippedInfo(
     List<DiagnosticInfo> Diagnostics,
     bool NeedsManualReview = false,
     string? AttemptedSource = null,
-    string? CallerType = null
+    string? CallerType = null,
+    [property: System.Text.Json.Serialization.JsonIgnore] FailureReason? Classification = null
 );
 
 /// <summary>
@@ -1206,7 +1212,8 @@ public class AsyncBatchEngine
                 foreach (var (_, cm, ct) in callersInFile)
                 {
                     skipped.Add(new UpliftSkippedInfo(callerFilePath, cm,
-                        "Caller file not found on disk.", new List<DiagnosticInfo>(), CallerType: ct));
+                        "Caller file not found on disk.", new List<DiagnosticInfo>(), CallerType: ct,
+                        Classification: FailureReason.SymbolNotResolved));
                 }
 
                 callerIndex += callersInFile.Count;

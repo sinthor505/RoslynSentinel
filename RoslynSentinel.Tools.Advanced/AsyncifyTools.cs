@@ -1875,7 +1875,7 @@ public class AsyncifyTools
 
             foreach (UpliftSkippedInfo s in pm.Result.Skipped)
             {
-                (ItemOutcome itemOutcome, FailureReason failureReason) = ClassifyUpliftSkipReason(s.Reason);
+                (ItemOutcome itemOutcome, FailureReason failureReason) = ClassifyUpliftSkipReason(s);
 
                 ItemRecordOutcome blobOutcome = itemOutcome == ItemOutcome.AlreadySatisfied
                     ? ItemRecordOutcome.Skipped
@@ -2032,8 +2032,17 @@ public class AsyncifyTools
         return (summary, suggestedPropagateTargets, operationSummary);
     }
 
-    private static (ItemOutcome Outcome, FailureReason Reason) ClassifyUpliftSkipReason(string reason)
+    // Public static (not internal) so tests can call it directly: Tools.Advanced has no InternalsVisibleTo for its tests.
+    public static (ItemOutcome Outcome, FailureReason Reason) ClassifyUpliftSkipReason(UpliftSkippedInfo skip)
     {
+        string reason = skip.Reason;
+
+        // Typed signal first: the producer that knows the cause (the caller file is missing) says so, no text matching needed.
+        if (skip.Classification == FailureReason.SymbolNotResolved)
+        {
+            return (ItemOutcome.Failed, FailureReason.SymbolNotResolved);
+        }
+
         // Already in target state -> not actionable, excluded from failure rate
         if (reason.Contains("already async", StringComparison.OrdinalIgnoreCase)
          || reason.Contains("already has CancellationToken", StringComparison.OrdinalIgnoreCase))
@@ -2047,7 +2056,11 @@ public class AsyncifyTools
             return (ItemOutcome.Blocked, FailureReason.OverloadAlreadyExists);
         }
 
-        // File or symbol not found
+        // File or symbol not found, from the reason text. TODO the text check is kept only for reasons built from other text: the
+        // exception-originated skips in AsyncBatchEngine.TryTransformCallerAsync ("Bridge pre-condition: {ex.Message}", "Unexpected bridge
+        // error: ...", "Event handler in-place: ...", "Body rewrite failed: ...", "Semantic body rewrite failed: ...") and "Validation produced
+        // ... {DiagSummary}" (embeds diagnostic message text, which could carry the phrase). None of the ToolNotFoundException texts reachable there
+        // matches today, so these are not typed (typing them would widen the classification); decide whether they should be, then drop this.
         if (reason.Contains("file not found", StringComparison.OrdinalIgnoreCase)
          || reason.Contains("not found on disk", StringComparison.OrdinalIgnoreCase))
         {
