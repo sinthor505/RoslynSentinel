@@ -1,6 +1,6 @@
 # Plan: Scenario-eval follow-ups - stop-adherence family, resume early exit, and repairs for four scenarios that missed their target
 
-**Status:** APPROVED 2026-11-12. Implementation decisions 5-14 settled (stop ideal 3 / cap 8 with StoppedLate, early-exit flag, split step 3, seeded steps 6-7); Batched run starting.
+**Status:** IN PROGRESS 2026-11-12. Steps 9, 8 (code; LIVE run pending), 3a done (4ae86e64, 23aaa1fb, 8392824f).
 
 ## Problem
 
@@ -190,6 +190,7 @@ Alternatives considered:
   numbers, not asserted).
 
 ### Step 3 - Early exit on target state for resume scenarios
+- 3a done: 8392824f (TargetReached + runner predicate; tests in `LoopAssistRunnerTests`). 3b, 3c pending.
 - Files: `RoslynSentinel.Common/AgentLoop/ModelAgentRunner.cs`, `RoslynSentinel.Common/AgentLoop/AgentTranscript.cs`
   (`AgentStopReason`, line 201); `RoslynSentinel.Tests.ModelEval/ScenarioDefinition.cs`, `ScenarioAgentTests.cs`
   (`RunResumeSampleAsync`), `ScenarioScorer.cs`, `ScenarioSampleLoop.cs`, `ResumeScenarios.cs`, and the CSV/sample
@@ -280,6 +281,7 @@ Alternatives considered:
   reaction (repeat, revert, move on); then LIVE: 10 samples, result row in the eval doc.
 
 ### Step 8 - Redesign `EmptyInterfaceRemoval` so deleting the file is wrong
+- Done (code): 23aaa1fb (second type `PricingAuditEntry`). LIVE run pending, queued with step 2.
 - Files: `GuardScenarios.cs` (`EmptyInterfaceRemoval` `:124`, `ClassifyEmptyInterfaceRemovalFiles` `:160`),
   `InterfaceScenarios` fixture constants, the guard tests.
 - Change: stage the interface in a file that also holds another type, so deleting the file removes a type the
@@ -294,6 +296,7 @@ Alternatives considered:
   (Wrong); then LIVE: 10 samples, result row in the eval doc including how many used `DeleteFile`.
 
 ### Step 9 - Retire `MixedSingleAndBatchShape`
+- Done: 4ae86e64 (run first per decision 12; does not carry `Closes:`).
 - Files: `RoslynSentinel.Tests.ModelEval/ScenarioRegistry.cs` (entry at `:14`), its registry/definition tests.
 - Change: remove `BatchShapeScenarios.MixedSingleAndBatchShape` from `Definitions`, with a comment at that spot
   pointing at this plan (reason: 0 mixed-shape calls in the live run, and e0ceceab now accepts top-level
