@@ -71,6 +71,21 @@ public class MemberNotFoundDetailTests
     }
 
     [Test]
+    public async Task MissingMemberWithASimilarOne_PrefillsAReadCallForTheCandidateAsync()
+    {
+        var message = await MessageForMissingAsync("CalcDisk");
+
+        Assert.That(message, Does.Contain("Did you mean 'CalcDisc' (method)? Read it with ReadFile("));
+        Assert.That(message, Does.Contain("memberName: \"CalcDisc\""));
+        Assert.That(message, Does.Not.Contain("containerName:"), "no containerName was given, so the prefilled call omits it");
+
+        var withContainer = await MessageForMissingAsync("CalcDisk", "OrderPricingCalculator");
+
+        Assert.That(withContainer, Does.Contain("memberName: \"CalcDisc\""));
+        Assert.That(withContainer, Does.Contain("containerName: \"OrderPricingCalculator\""));
+    }
+
+    [Test]
     public async Task MissingMemberDeclaredInAnotherFile_SaysWhichFileAsync()
     {
         // Other.cs declares Helper.CalculateDiscountedTotal; Calc.cs does not.
@@ -80,6 +95,17 @@ public class MemberNotFoundDetailTests
         Assert.That(message, Does.Contain("Other.cs"));
         Assert.That(message, Does.Contain("(method of Helper)"));
         Assert.That(message, Does.Contain("memberName: \"CalculateDiscountedTotal\""), "the next call reads it from the other file");
+    }
+
+    [Test]
+    public async Task MissingMemberWithNoSimilarName_SaysNoMemberIsSimilarAndOffersTheReportOptionAsync()
+    {
+        var message = await MessageForMissingAsync("ZzzNothingLikeThisExists");
+
+        Assert.That(message, Does.Contain("No member of 'Calc.cs' has a similar name to 'ZzzNothingLikeThisExists'."));
+        Assert.That(message, Does.Contain("If 'ZzzNothingLikeThisExists' is not among the members listed above, it does not exist in 'Calc.cs': tell the user so instead of editing a different member."));
+        Assert.That(message, Does.Not.Contain("Closest names"));
+        Assert.That(message, Does.Not.Contain("Did you mean"));
     }
 
     [Test]

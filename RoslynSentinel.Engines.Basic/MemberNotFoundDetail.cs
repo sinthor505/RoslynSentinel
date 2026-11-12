@@ -80,6 +80,17 @@ public static class MemberNotFoundDetail
         if (closest.Count > 0)
         {
             parts.Add("Closest names: " + string.Join(", ", closest.Select(e => $"'{e.Name}' ({SingularKind[e.Kind]})")) + ".");
+            foreach (var candidate in closest)
+            {
+                // Built only when rendered: ToolCallHint.Call records guidance even for a hint that is later discarded.
+                var readArgs = new List<(string Name, string Value)> { ("filePath", path), ("memberName", candidate.Name) };
+                if (!string.IsNullOrWhiteSpace(containerName))
+                {
+                    readArgs.Add(("containerName", containerName));
+                }
+
+                parts.Add($"Did you mean '{candidate.Name}' ({SingularKind[candidate.Kind]})? Read it with {ToolCallHint.Call("ReadFile", readArgs.ToArray())}.");
+            }
         }
 
         if (ranked.Count == 0)
@@ -106,6 +117,11 @@ public static class MemberNotFoundDetail
             parts.Add(string.Join("; ", otherFiles.Select(o => $"'{memberName}' is declared in {o.Path} ({SingularKind[o.Kind]}{(o.Container is null ? string.Empty : " of " + o.Container)})")) + ".");
         }
 
+        if (closest.Count == 0 && otherFiles.Count == 0)
+        {
+            parts.Add($"No member of {scopeText} has a similar name to '{memberName}'.");
+        }
+
         var next = $"Next: {ToolCallHint.Call("ReadFile", ("filePath", path))} without memberName reads the whole file, or {ToolCallHint.Call("GetFileOutline", ("filePath", path))} lists every member";
         if (otherFiles.Count > 0)
         {
@@ -113,6 +129,10 @@ public static class MemberNotFoundDetail
         }
 
         parts.Add(next + ".");
+        if (closest.Count == 0 && otherFiles.Count == 0)
+        {
+            parts.Add($"If '{memberName}' is not among the members listed above, it does not exist in {scopeText}: tell the user so instead of editing a different member.");
+        }
         return string.Join(" ", parts);
     }
 
