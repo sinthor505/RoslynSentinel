@@ -176,7 +176,7 @@ public class MemberInsertAnchorTests
     }
 
     [Test]
-    public async Task Member_AddWithAnchorWithNoSimilarMember_SaysNoCandidateAndTellsUserAndWritesNothingAsync()
+    public async Task Member_AddWithAnchorWithNoSimilarMember_SaysNoCandidateAndStatesItDoesNotExistAndWritesNothingAsync()
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = BuildTools(workspace.Manager);
@@ -196,7 +196,8 @@ public class MemberInsertAnchorTests
             Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
             Assert.That(result.ErrorData?.Message, Does.Contain("has a similar name to 'Archive'"), "the message must say no similar member exists");
             Assert.That(result.ErrorData?.Message, Does.Not.Contain("Did you mean"), "no suggestion when nothing is similar");
-            Assert.That(result.ErrorData?.Message, Does.Contain("tell the user"), "the message must offer the report-it-does-not-exist option");
+            Assert.That(result.ErrorData?.Message, Does.Contain("'Archive' is not among those members, so it does not exist in 'AnchorTarget'."), "the message must state the anchor does not exist in the container");
+            Assert.That(result.ErrorData?.Message, Does.Not.Contain("tell the user"), "the message must not carry policy");
             Assert.That(result.ErrorData?.Message, Does.Contain("Member("), "the message must give the next listing call");
             Assert.That(result.ErrorData?.Message, Does.Not.Contain("You MUST"), "the message must not use mandatory wording");
         });
@@ -246,7 +247,8 @@ public class MemberInsertAnchorTests
             Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
             Assert.That(result.ErrorData?.Message, Does.Contain("No type declared in this file has a similar name"), "the message must say no similar type exists");
             Assert.That(result.ErrorData?.Message, Does.Contain("GetFileOutline"), "the message must give the listing call");
-            Assert.That(result.ErrorData?.Message, Does.Contain("tell the user"), "the message must offer the report-it-does-not-exist option");
+            Assert.That(result.ErrorData?.Message, Does.Contain("A type named 'ShippingLabelPrinter' that no file declares does not exist."), "the message must state the type does not exist");
+            Assert.That(result.ErrorData?.Message, Does.Not.Contain("tell the user"), "the message must not carry policy");
         });
         Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "a not-found container must not write");
     }

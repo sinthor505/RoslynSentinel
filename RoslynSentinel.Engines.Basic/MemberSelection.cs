@@ -243,8 +243,6 @@ public static class MemberSelection
 
     private static string PastTense(string verb) => verb.EndsWith('e') ? verb + "d" : verb + "ed";
 
-    private static string Gerund(string verb) => verb.EndsWith('e') ? verb.Substring(0, verb.Length - 1) + "ing" : verb + "ing";
-
     // Quotes each name as a string literal and joins them into a bracketed array for a retry hint.
     private static string QuoteArray(IEnumerable<string> names) =>
         "[" + string.Join(", ", names.Select(n => "\"" + n.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"")) + "]";
@@ -270,8 +268,8 @@ public static class MemberSelection
     }
 
     // Not-found guidance: a 'Did you mean' per missing entry plus one prefilled retry; with no similar name for any
-    // missing entry, the no-match sentence and the report-it-does-not-exist option instead.
-    private static string BuildNotFoundHints(string[] memberNames, IReadOnlyList<string> missing, List<MemberDeclarationSyntax> members, string className, string toolName, string verb)
+    // missing entry, the no-match fact (and where the member does not exist) instead.
+    private static string BuildNotFoundHints(string[] memberNames, IReadOnlyList<string> missing, List<MemberDeclarationSyntax> members, string className, string toolName)
     {
         var names = members.SelectMany(m => DeclaredNames(m)).Distinct(StringComparer.Ordinal).ToList();
         var topByEntry = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -288,7 +286,7 @@ public static class MemberSelection
 
         if (topByEntry.Count == 0)
         {
-            return $" No member of class '{className}' has a similar name to [{string.Join(", ", missing)}]. If a requested member is not in the found list (and the class is not partial), it does not exist in '{className}': tell the user so instead of {Gerund(verb)} a different member.";
+            return $" No member of class '{className}' has a similar name to [{string.Join(", ", missing)}]. A requested member that is not in the found list (and the class is not partial) does not exist in '{className}'.";
         }
 
         var retryNames = memberNames.Select(n => topByEntry.TryGetValue(n, out var top) ? top : n).Distinct(StringComparer.Ordinal);
@@ -338,7 +336,7 @@ public static class MemberSelection
         if (result.Count == 0)
         {
             // TODO no filePath reaches SelectMembers, so the no-candidate case cannot prefill GetFileOutline(filePath)
-            throw new ToolNotFoundException($"None of the requested member(s) [{string.Join(", ", memberNames)}] were found in class '{className}' (found: [{string.Join(", ", SimilarFirst(DescribeAvailable(members), missing))}]).{BuildNotFoundHints(memberNames, missing, members, className, toolName, verb)}");
+            throw new ToolNotFoundException($"None of the requested member(s) [{string.Join(", ", memberNames)}] were found in class '{className}' (found: [{string.Join(", ", SimilarFirst(DescribeAvailable(members), missing))}]).{BuildNotFoundHints(memberNames, missing, members, className, toolName)}");
         }
 
         // A requested entry that matches no member in this file is otherwise dropped silently while the rest moves (e.g. the
@@ -347,7 +345,7 @@ public static class MemberSelection
         if (missing.Count > 0)
         {
             // TODO no filePath reaches SelectMembers, so the no-candidate case cannot prefill GetFileOutline(filePath)
-            throw new ToolNotFoundException($"Requested member(s) [{string.Join(", ", missing)}] were not found in class '{className}' in this file (found: [{string.Join(", ", SimilarFirst(DescribeAvailable(members), missing))}]). Nothing was {PastTense(verb)}. If the class is partial, the member may be declared in another part; pass that file's path.{BuildNotFoundHints(memberNames, missing, members, className, toolName, verb)}");
+            throw new ToolNotFoundException($"Requested member(s) [{string.Join(", ", missing)}] were not found in class '{className}' in this file (found: [{string.Join(", ", SimilarFirst(DescribeAvailable(members), missing))}]). Nothing was {PastTense(verb)}. If the class is partial, the member may be declared in another part; pass that file's path.{BuildNotFoundHints(memberNames, missing, members, className, toolName)}");
         }
 
         return result;

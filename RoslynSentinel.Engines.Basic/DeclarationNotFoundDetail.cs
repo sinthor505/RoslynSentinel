@@ -4,7 +4,7 @@ namespace RoslynSentinel.Engines.Basic;
 
 /// <summary>
 /// Builds the tail of a not-found error for a declaration lookup (Decision 2 standard): the nearest declared names
-/// with a retry hint, or, when none is similar, a GetFileOutline call and a note not to edit a different declaration.
+/// with a retry hint, or, when none is similar, a GetFileOutline call and the fact that the name is not declared there.
 /// Ranking is delegated to <see cref="NameCandidates.Rank{T}"/>.
 /// </summary>
 public static class DeclarationNotFoundDetail
@@ -24,7 +24,7 @@ public static class DeclarationNotFoundDetail
         }
 
         var outline = ToolCallHint.Call("GetFileOutline", ("filePath", filePath));
-        return $"No {kindLabel} declared in '{filePath}' has a similar name to '{wanted}'. To see what the file declares, call {outline}. If '{wanted}' is not in that outline it does not exist in this file: tell the user so instead of editing a different declaration.";
+        return $"No {kindLabel} declared in '{filePath}' has a similar name to '{wanted}'. To see what the file declares, call {outline}. '{wanted}' is not in that outline, so it does not exist in this file.";
     }
 
     /// <summary>
@@ -33,6 +33,6 @@ public static class DeclarationNotFoundDetail
     public static string BuildNoneDeclared(string kindLabel, string filePath)
     {
         var outline = ToolCallHint.Call("GetFileOutline", ("filePath", filePath));
-        return $"No {kindLabel} is declared in '{filePath}'. To see what the file declares, call {outline}. If the file has none, there is nothing to edit: tell the user so instead of editing a different declaration.";
+        return $"No {kindLabel} is declared in '{filePath}'. To see what the file declares, call {outline}.";
     }
 }

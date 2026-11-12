@@ -145,7 +145,7 @@ public static class SyntaxTargetResolver
             .ToList();
 
         var reportOption = includeReportOption
-            ? $" If no file has a type named '{requestedName}', it does not exist: tell the user so instead of editing a different type."
+            ? $" A type named '{requestedName}' that no file declares does not exist."
             : string.Empty;
 
         if (declared.Count == 0)

@@ -131,7 +131,7 @@ public static class MemberNotFoundDetail
         parts.Add(next + ".");
         if (closest.Count == 0 && otherFiles.Count == 0)
         {
-            parts.Add($"If '{memberName}' is not among the members listed above, it does not exist in {scopeText}: tell the user so instead of editing a different member.");
+            parts.Add($"'{memberName}' is not among the members listed above, so it does not exist in {scopeText}.");
         }
         return string.Join(" ", parts);
     }

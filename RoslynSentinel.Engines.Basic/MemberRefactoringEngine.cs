@@ -2178,7 +2178,7 @@ public class MemberRefactoringEngine
             ? string.Concat(candidateNames.Select(c => $"Did you mean '{c}'? Retry with {anchorParam}: '{c}'. "))
             : $"No member of {containerKind} '{containerName}' has a similar name to '{anchorName}'. ";
         var notFoundNote = candidateNames.Count == 0
-            ? $" If '{anchorName}' is not among those members it does not exist in '{containerName}': tell the user so instead of anchoring on a different member."
+            ? $" '{anchorName}' is not among those members, so it does not exist in '{containerName}'."
             : string.Empty;
         var unnamedNote = unnamedMemberCount > 0
             ? $" {unnamedMemberCount} member(s) have no matchable name (operators, indexers, events, delegates) and cannot be an anchor."

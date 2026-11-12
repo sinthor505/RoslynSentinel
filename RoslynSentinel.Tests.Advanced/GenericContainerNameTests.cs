@@ -106,10 +106,10 @@ public class GenericContainerNameTests
     }
 
     [Test]
-    public async Task BuildContainerNotFoundMessageAsync_UnrelatedTypeName_SaysNoSimilarNameAndOffersOutlineAndReport()
+    public async Task BuildContainerNotFoundMessageAsync_UnrelatedTypeName_SaysNoSimilarNameAndOffersOutlineAndStatesItDoesNotExist()
     {
-        // No-candidate case: nothing declared here is similar, so the message points at GetFileOutline and tells the
-        // caller how to report a type that exists nowhere, instead of a Did-you-mean line.
+        // No-candidate case: nothing declared here is similar, so the message points at GetFileOutline and states that
+        // a type no file declares does not exist, instead of a Did-you-mean line.
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", "public class PlainType {}\npublic class OrderPricingCalculator {}")]);
         var root = await solution.Projects.First().Documents.First().GetSyntaxRootAsync();
 
@@ -118,7 +118,8 @@ public class GenericContainerNameTests
         {
             Assert.That(message, Does.Contain("No type declared in this file has a similar name."));
             Assert.That(message, Does.Contain("GetFileOutline"));
-            Assert.That(message, Does.Contain("tell the user"));
+            Assert.That(message, Does.Contain("A type named 'ShippingLabelPrinter' that no file declares does not exist."));
+            Assert.That(message, Does.Not.Contain("tell the user"));
             Assert.That(message, Does.Not.Contain("Did you mean"));
             Assert.That(message, Does.Not.Contain("You MUST"));
         });

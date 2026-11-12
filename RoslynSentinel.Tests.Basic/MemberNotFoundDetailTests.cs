@@ -98,12 +98,13 @@ public class MemberNotFoundDetailTests
     }
 
     [Test]
-    public async Task MissingMemberWithNoSimilarName_SaysNoMemberIsSimilarAndOffersTheReportOptionAsync()
+    public async Task MissingMemberWithNoSimilarName_SaysNoMemberIsSimilarAndStatesItDoesNotExistAsync()
     {
         var message = await MessageForMissingAsync("ZzzNothingLikeThisExists");
 
         Assert.That(message, Does.Contain("No member of 'Calc.cs' has a similar name to 'ZzzNothingLikeThisExists'."));
-        Assert.That(message, Does.Contain("If 'ZzzNothingLikeThisExists' is not among the members listed above, it does not exist in 'Calc.cs': tell the user so instead of editing a different member."));
+        Assert.That(message, Does.Contain("'ZzzNothingLikeThisExists' is not among the members listed above, so it does not exist in 'Calc.cs'."));
+        Assert.That(message, Does.Not.Contain("tell the user"));
         Assert.That(message, Does.Not.Contain("Closest names"));
         Assert.That(message, Does.Not.Contain("Did you mean"));
     }

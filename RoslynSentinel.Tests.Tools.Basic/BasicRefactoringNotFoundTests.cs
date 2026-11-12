@@ -31,7 +31,8 @@ public sealed class BasicRefactoringNotFoundTests
         var tools = Battery.Basic.TestTools.CoreRefactoringTools(workspace.Manager);
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Calculator.cs"), "ApplyLoyaltyBonus", new[] { new ChangeSignatureParameterInput(originalIndex: 0) });
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.Message, Does.Contain("has a similar name").And.Contain("tell the user").And.Contain("GetFileOutline"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("has a similar name").And.Contain("it does not exist in this file.").And.Contain("GetFileOutline"));
+        Assert.That(result.ErrorData?.Message, Does.Not.Contain("tell the user"));
         Assert.That(result.ErrorData?.Message, Does.Not.Contain("Did you mean").And.Not.Contain("You MUST"));
         Assert.That(workspace.ReadText("Calculator.cs"), Is.EqualTo(CalculatorSource), "A refused call must not write.");
     }
