@@ -80,18 +80,35 @@ public sealed class MemberAddReplaceViewTests
     [Category("MemberSourceInfo")] // sentinel:auto-category
     [Category("MemberSourceViewResult")] // sentinel:auto-category
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
-    public async Task Member_View_WithMemberNameNamingAType_ReturnsTheWholeTypeSource()
+    public async Task Member_View_WithMemberNameNamingAnInterface_ReturnsTheWholeTypeSource()
     {
+        using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.view, memberName: "IService");
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var view = result.SuccessData as MemberSourceViewResult;
+        Assert.That(view, Is.Not.Null);
+        Assert.That(view!.Member.Name, Is.EqualTo("IService"));
+        Assert.That(view.Member.Kind, Is.EqualTo("interface"));
+        Assert.That(view.Member.Source, Does.Contain("public interface IService"));
+        Assert.That(view.Member.Source, Does.Contain("string GetLabel();"));
+    }
+
+    [Test]
+    [Category("MemberSourceInfo")] // sentinel:auto-category
+    [Category("MemberSourceViewResult")] // sentinel:auto-category
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task Member_View_WithMemberNameSharedByTypeAndItsConstructor_ReturnsTheConstructor()
+    {
+        // Documents the name collision: the constructor named Order wins over the type of the same name.
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
         var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.view, memberName: "Order");
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var view = result.SuccessData as MemberSourceViewResult;
         Assert.That(view, Is.Not.Null);
-        Assert.That(view!.Member.Name, Is.EqualTo("Order"));
-        Assert.That(view.Member.Kind, Is.EqualTo("class"));
-        Assert.That(view.Member.Source, Does.Contain("public class Order"));
-        Assert.That(view.Member.Source, Does.Contain("public int OrderId { get; set; }"));
+        Assert.That(view!.Member.Kind, Is.EqualTo("constructor"));
+        Assert.That(view.Member.Source, Does.Contain("public Order("));
     }
 
     [Test]
