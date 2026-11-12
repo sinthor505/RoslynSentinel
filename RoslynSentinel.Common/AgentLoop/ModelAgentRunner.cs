@@ -41,7 +41,9 @@ public sealed class ModelAgentRunner
     /// Null everywhere else (PlanStepRunner and sub-agent runs), so their transcripts omit the stamp.
     /// </summary>
     // Intentional deviation: a mutable static. One stamp per test process, set before any run.
-    public static (string CommitHash, bool Dirty)? ProcessStamp
+    // ErrorPolicyMode is the lowercase mode name (off, pointer, inline); ErrorPolicyHash is the policy file's content hash, empty when there is no policy file.
+    // TODO generic server-options snapshot in the run stamp
+    public static (string CommitHash, bool Dirty, string ErrorPolicyMode, string ErrorPolicyHash)? ProcessStamp
     {
         get; set;
     }
@@ -173,6 +175,8 @@ public sealed class ModelAgentRunner
         {
             transcript.CommitHash = stamp.CommitHash;
             transcript.WorkingTreeDirty = stamp.Dirty;
+            transcript.ErrorPolicyMode = stamp.ErrorPolicyMode;
+            transcript.ErrorPolicyHash = stamp.ErrorPolicyHash;
         }
         transcript.Tools.AddRange(toolDefinitions.Select(t => t.Name));
         transcript.ToolDescriptions = new Dictionary<string, string>(StringComparer.Ordinal);

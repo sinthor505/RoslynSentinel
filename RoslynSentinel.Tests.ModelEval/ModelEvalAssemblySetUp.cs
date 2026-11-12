@@ -34,7 +34,7 @@ public class ModelEvalAssemblySetUp
         LoopLatchOptions.Configure([]);
         // Reads ROSLYNSENTINEL_ERROR_POLICY_MODE / _FILE; unset leaves the policy Off.
         ErrorPolicyOptions.Configure([]);
-        ModelAgentRunner.ProcessStamp = ReadWorkingTreeStamp(AppContext.BaseDirectory);
+        ModelAgentRunner.ProcessStamp = BuildProcessStamp(ReadWorkingTreeStamp(AppContext.BaseDirectory));
 
         if (string.IsNullOrEmpty(LlmOptions.Model))
         {
@@ -56,6 +56,24 @@ public class ModelEvalAssemblySetUp
                 $"LLM server at {LlmOptions.BaseUrl} did not respond within {ReachabilityTimeout.TotalSeconds}s " +
                 $"({ex.GetType().Name}: {ex.Message}) - is LM Studio running with a model loaded?");
         }
+    }
+
+    /// <summary>
+    /// Adds the error policy mode (lowercase name) and policy file content hash (empty when no policy file) to a git stamp.
+    /// Null in, null out: with no git stamp the run stays unstamped. A malformed or unreadable policy file throws from
+    /// <see cref="ErrorPolicyDocument.Load"/> on purpose, so a bad configuration fails the run loudly.
+    /// </summary>
+    internal static (string CommitHash, bool Dirty, string ErrorPolicyMode, string ErrorPolicyHash)? BuildProcessStamp(
+        (string CommitHash, bool Dirty)? gitStamp)
+    {
+        if (gitStamp is not { } git)
+        {
+            return null;
+        }
+
+        var policyFile = ErrorPolicyOptions.PolicyFilePath;
+        var hash = string.IsNullOrEmpty(policyFile) ? string.Empty : ErrorPolicyDocument.Load(policyFile).ContentHash;
+        return (git.CommitHash, git.Dirty, ErrorPolicyOptions.Mode.ToString().ToLowerInvariant(), hash);
     }
 
     /// <summary>

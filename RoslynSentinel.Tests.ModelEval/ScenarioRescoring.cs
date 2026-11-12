@@ -94,6 +94,9 @@ public static class ScenarioRescoring
             var schemaDrift = bool.Parse(Field(columns, fields, "schemaDrift"));
             var resultDrift = int.Parse(Field(columns, fields, "resultDrift"), NumberStyles.Integer, CultureInfo.InvariantCulture);
             var inconclusiveReason = Field(columns, fields, "inconclusiveReason");
+            // Absent in rows written before the run stamp carried the error policy: read as empty and re-written as empty.
+            var errorPolicyMode = Field(columns, fields, "errorPolicyMode");
+            var errorPolicyHash = Field(columns, fields, "errorPolicyHash");
 
             var sampleFolder = Path.Combine(runFolder, "sample-" + sampleIndex.ToString("D2", CultureInfo.InvariantCulture));
             var transcriptPath = Path.Combine(sampleFolder, "transcript.json");
@@ -103,7 +106,8 @@ public static class ScenarioRescoring
             {
                 sample = new ScenarioSample(
                     scenarioId, scenarioType, faultKind, sampleIndex, commit, dirty, liftRenames,
-                    null, schemaDrift, resultDrift, inconclusiveReason, transcriptPath);
+                    null, schemaDrift, resultDrift, inconclusiveReason, transcriptPath,
+                    ErrorPolicyMode: errorPolicyMode, ErrorPolicyHash: errorPolicyHash);
             }
             else
             {
@@ -130,7 +134,9 @@ public static class ScenarioRescoring
                 sample = new ScenarioSample(
                     scenarioId, scenarioType, faultKind, sampleIndex, commit, dirty, liftRenames,
                     score, schemaDrift, resultDrift, inconclusiveReason, transcriptPath,
-                    LiveTurnsToTarget: scenario.LiveTurnsFor(score.TurnCount));
+                    LiveTurnsToTarget: scenario.LiveTurnsFor(score.TurnCount),
+                    ErrorPolicyMode: errorPolicyMode.Length > 0 ? errorPolicyMode : transcript.ErrorPolicyMode ?? string.Empty,
+                    ErrorPolicyHash: errorPolicyHash.Length > 0 ? errorPolicyHash : transcript.ErrorPolicyHash ?? string.Empty);
             }
 
             ScenarioSampleCsv.Append(outputCsvPath, sample);

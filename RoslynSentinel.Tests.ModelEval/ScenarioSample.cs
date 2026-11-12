@@ -21,6 +21,8 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <param name="InconclusiveReason">Why the sample did not run; "" when it ran.</param>
 /// <param name="TranscriptPath">Path of the saved transcript for the sample.</param>
 /// <param name="LiveTurnsToTarget">Live turns the model took (see ScenarioDefinition.LiveTurnsFor); null for an inconclusive sample or an old CSV row without the column.</param>
+/// <param name="ErrorPolicyMode">Error policy mode stamped on the run (off, pointer or inline); "" when unstamped or for an old CSV row without the column.</param>
+/// <param name="ErrorPolicyHash">Content hash of the error policy file stamped on the run; "" when there was no policy file, the run was unstamped, or for an old CSV row without the column.</param>
 public sealed record ScenarioSample(
     string ScenarioId,
     int ScenarioType,
@@ -34,7 +36,9 @@ public sealed record ScenarioSample(
     int ResultDrift,
     string InconclusiveReason,
     string TranscriptPath,
-    int? LiveTurnsToTarget = null)
+    int? LiveTurnsToTarget = null,
+    string ErrorPolicyMode = "",
+    string ErrorPolicyHash = "")
 {
     /// <summary>True when the sample did not run; see InconclusiveReason.</summary>
     public bool IsInconclusive => InconclusiveReason.Length > 0;
@@ -45,10 +49,13 @@ public static class ScenarioSampleCsv
 {
     /// <summary>Column names, in the order ToCsvLine writes them.</summary>
     public const string Header =
-        "scenarioId,scenarioType,faultKind,sampleIndex,commit,dirty,liftRenames,firstCallSucceeded,firstErrorCode,firstErrorClass,recovered,callsToRecover,recoveryUsedExpectedTool,markerPresent,turnCount,stopReason,failureClass,passed,finalStateVerdict,turnCapHit,callsAfterFirstError,turnsAfterFirstError,outputCharsAfterFirstError,maxIdenticalCallRepeat,identicalReasoningBlocks,retryPhraseCount,schemaDrift,resultDrift,inconclusiveReason,transcriptPath,liveTurnsToTarget";
+        "scenarioId,scenarioType,faultKind,sampleIndex,commit,dirty,liftRenames,firstCallSucceeded,firstErrorCode,firstErrorClass,recovered,callsToRecover,recoveryUsedExpectedTool,markerPresent,turnCount,stopReason,failureClass,passed,finalStateVerdict,turnCapHit,callsAfterFirstError,turnsAfterFirstError,outputCharsAfterFirstError,maxIdenticalCallRepeat,identicalReasoningBlocks,retryPhraseCount,schemaDrift,resultDrift,inconclusiveReason,transcriptPath,liveTurnsToTarget,errorPolicyMode,errorPolicyHash";
 
     /// <summary>Column count of rows written before liveTurnsToTarget existed; Parse still accepts them.</summary>
     public const int LegacyColumnCount = 30;
+
+    /// <summary>Column count of rows written after liveTurnsToTarget but before errorPolicyMode and errorPolicyHash existed; Parse still accepts them.</summary>
+    public const int PreErrorPolicyColumnCount = 31;
 
     /// <summary>One CSV line (no line terminator). Score columns are all empty when Score is null.</summary>
     public static string ToCsvLine(ScenarioSample sample)
@@ -86,20 +93,23 @@ public static class ScenarioSampleCsv
             Int(sample.ResultDrift),
             Csv(sample.InconclusiveReason),
             Csv(sample.TranscriptPath),
-            NullableInt(sample.LiveTurnsToTarget));
+            NullableInt(sample.LiveTurnsToTarget),
+            Csv(sample.ErrorPolicyMode),
+            Csv(sample.ErrorPolicyHash));
     }
 
     /// <summary>
-    /// Parses one CSV line written by ToCsvLine. Accepts Header's column count or LegacyColumnCount (rows written before
-    /// liveTurnsToTarget existed; LiveTurnsToTarget is null for those). Throws FormatException for any other count.
+    /// Parses one CSV line written by ToCsvLine. Accepts Header's column count, PreErrorPolicyColumnCount (no error policy
+    /// columns; ErrorPolicyMode and ErrorPolicyHash are empty for those) or LegacyColumnCount (also no liveTurnsToTarget;
+    /// LiveTurnsToTarget is null for those). Throws FormatException for any other count.
     /// </summary>
     public static ScenarioSample Parse(string csvLine)
     {
         var f = SplitFields(csvLine);
         var expected = Header.Split(',').Length;
-        if (f.Count != expected && f.Count != LegacyColumnCount)
+        if (f.Count != expected && f.Count != PreErrorPolicyColumnCount && f.Count != LegacyColumnCount)
         {
-            throw new FormatException($"Expected {LegacyColumnCount} or {expected} CSV columns, found {f.Count}.");
+            throw new FormatException($"Expected {LegacyColumnCount}, {PreErrorPolicyColumnCount} or {expected} CSV columns, found {f.Count}.");
         }
 
         ScoreResult? score = f[14].Length == 0 ? null : new ScoreResult(
@@ -136,7 +146,9 @@ public static class ScenarioSampleCsv
             ParseInt(f[27]),
             f[28],
             f[29],
-            f.Count == expected ? ParseNullableInt(f[30]) : null);
+            f.Count >= PreErrorPolicyColumnCount ? ParseNullableInt(f[30]) : null,
+            f.Count == expected ? f[31] : string.Empty,
+            f.Count == expected ? f[32] : string.Empty);
     }
 
     /// <summary>Appends one row, writing Header first when the file is missing or empty. Not thread-safe: one writer per run.</summary>

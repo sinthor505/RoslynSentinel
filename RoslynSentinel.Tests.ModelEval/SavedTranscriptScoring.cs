@@ -65,7 +65,9 @@ public static class SavedTranscriptScoring
             SchemaDrift: false,
             ResultDrift: 0,
             InconclusiveReason: "",
-            TranscriptPath: path);
+            TranscriptPath: path,
+            ErrorPolicyMode: transcript.ErrorPolicyMode ?? "",
+            ErrorPolicyHash: transcript.ErrorPolicyHash ?? "");
 
         ScenarioSampleCsv.Append(csvPath, sample);
         return sample;

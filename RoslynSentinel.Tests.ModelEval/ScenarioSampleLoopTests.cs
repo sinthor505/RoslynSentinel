@@ -99,7 +99,7 @@ public class ScenarioSampleLoopTests
     {
         var csv = Path.Combine(_dir, "results.csv");
         var previousStamp = ModelAgentRunner.ProcessStamp;
-        ModelAgentRunner.ProcessStamp = ("abc123", true);
+        ModelAgentRunner.ProcessStamp = ("abc123", true, "pointer", "0123456789ab");
         try
         {
             var samples = await ScenarioSampleLoop.RunAsync(
@@ -123,6 +123,8 @@ public class ScenarioSampleLoopTests
             Assert.That(samples[0].IsInconclusive, Is.True);
             Assert.That(samples[0].Commit, Is.EqualTo("abc123"));
             Assert.That(samples[0].Dirty, Is.EqualTo(true));
+            Assert.That(samples[0].ErrorPolicyMode, Is.EqualTo("pointer"));
+            Assert.That(samples[0].ErrorPolicyHash, Is.EqualTo("0123456789ab"));
             Assert.That(samples[0].TranscriptPath, Is.EqualTo(Path.Combine(_dir, "sample-01", "transcript.json")));
             Assert.That(samples[1].IsInconclusive, Is.True);
             Assert.That(samples[1].TranscriptPath, Is.EqualTo(string.Empty));

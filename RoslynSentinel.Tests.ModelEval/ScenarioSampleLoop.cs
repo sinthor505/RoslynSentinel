@@ -92,7 +92,9 @@ public static class ScenarioSampleLoop
                         outcome.SchemaDrift,
                         outcome.ResultDrift,
                         reason,
-                        result is not null ? result.TranscriptPath : (File.Exists(partialTranscript) ? partialTranscript : string.Empty));
+                        result is not null ? result.TranscriptPath : (File.Exists(partialTranscript) ? partialTranscript : string.Empty),
+                        ErrorPolicyMode: result is null ? (stamp?.ErrorPolicyMode ?? string.Empty) : (result.Transcript.ErrorPolicyMode ?? string.Empty),
+                        ErrorPolicyHash: result is null ? (stamp?.ErrorPolicyHash ?? string.Empty) : (result.Transcript.ErrorPolicyHash ?? string.Empty));
                 }
                 else
                 {
@@ -119,7 +121,9 @@ public static class ScenarioSampleLoop
                         outcome.ResultDrift,
                         InconclusiveReason: string.Empty,
                         result.TranscriptPath,
-                        LiveTurnsToTarget: scenario.LiveTurnsFor(score.TurnCount));
+                        LiveTurnsToTarget: scenario.LiveTurnsFor(score.TurnCount),
+                        ErrorPolicyMode: result.Transcript.ErrorPolicyMode ?? string.Empty,
+                        ErrorPolicyHash: result.Transcript.ErrorPolicyHash ?? string.Empty);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -140,7 +144,9 @@ public static class ScenarioSampleLoop
                     SchemaDrift: false,
                     ResultDrift: 0,
                     InconclusiveReason: "HarnessError: " + FirstLine(ex.Message),
-                    TranscriptPath: File.Exists(partialTranscript) ? partialTranscript : string.Empty);
+                    TranscriptPath: File.Exists(partialTranscript) ? partialTranscript : string.Empty,
+                    ErrorPolicyMode: stamp?.ErrorPolicyMode ?? string.Empty,
+                    ErrorPolicyHash: stamp?.ErrorPolicyHash ?? string.Empty);
             }
 
             ScenarioSampleCsv.Append(csvPath, sample);

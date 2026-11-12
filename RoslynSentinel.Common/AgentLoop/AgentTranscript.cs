@@ -59,6 +59,26 @@ public sealed class AgentTranscript
     }
 
     /// <summary>
+    /// Error policy mode in force for the run (off, pointer or inline), stamped like <see cref="CommitHash"/>.
+    /// Null means the run was not stamped (or the transcript predates this), so the property is omitted from the JSON.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ErrorPolicyMode
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Content hash of the error policy file in force for the run; empty when stamped with no policy file.
+    /// Null means the run was not stamped (or the transcript predates this), so the property is omitted from the JSON.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ErrorPolicyHash
+    {
+        get; set;
+    }
+
+    /// <summary>
     /// Tool name to description, for the same tools as <see cref="Tools"/>. Null, and so omitted from the JSON, for transcripts written before this was recorded.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

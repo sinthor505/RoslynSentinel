@@ -145,7 +145,7 @@ public class ContextExhaustedRunnerTests
     {
         var runner = NewRunner(contextLength: 4096, totalTokens: 1000);
 
-        ModelAgentRunner.ProcessStamp = ("abc123", true);
+        ModelAgentRunner.ProcessStamp = ("abc123", true, "inline", "0123456789ab");
         try
         {
             var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
@@ -155,8 +155,12 @@ public class ContextExhaustedRunnerTests
             {
                 Assert.That(result.Transcript.CommitHash, Is.EqualTo("abc123"));
                 Assert.That(result.Transcript.WorkingTreeDirty, Is.EqualTo(true));
+                Assert.That(result.Transcript.ErrorPolicyMode, Is.EqualTo("inline"));
+                Assert.That(result.Transcript.ErrorPolicyHash, Is.EqualTo("0123456789ab"));
                 Assert.That(json.RootElement.TryGetProperty("CommitHash", out _), Is.True);
                 Assert.That(json.RootElement.TryGetProperty("WorkingTreeDirty", out _), Is.True);
+                Assert.That(json.RootElement.GetProperty("ErrorPolicyMode").GetString(), Is.EqualTo("inline"));
+                Assert.That(json.RootElement.GetProperty("ErrorPolicyHash").GetString(), Is.EqualTo("0123456789ab"));
             });
         }
         finally
@@ -178,6 +182,8 @@ public class ContextExhaustedRunnerTests
         {
             Assert.That(json.RootElement.TryGetProperty("CommitHash", out _), Is.False);
             Assert.That(json.RootElement.TryGetProperty("WorkingTreeDirty", out _), Is.False);
+            Assert.That(json.RootElement.TryGetProperty("ErrorPolicyMode", out _), Is.False);
+            Assert.That(json.RootElement.TryGetProperty("ErrorPolicyHash", out _), Is.False);
         });
     }
 
@@ -192,6 +198,8 @@ public class ContextExhaustedRunnerTests
             Assert.That(transcript!.RunId, Is.EqualTo("r1"));
             Assert.That(transcript.CommitHash, Is.Null);
             Assert.That(transcript.WorkingTreeDirty, Is.Null);
+            Assert.That(transcript.ErrorPolicyMode, Is.Null);
+            Assert.That(transcript.ErrorPolicyHash, Is.Null);
         });
     }
 
