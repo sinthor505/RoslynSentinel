@@ -816,6 +816,11 @@ and the repeated-failure breaker counts only failures, so identical successful c
 from `reason`), stop with `RepeatedIdenticalCall` on the next one. Built in ddcbc9e7, tests `IdenticalSuccessRunnerTests`
 in 77291fac (non-live ModelEval 376/376). Not yet measured live.
 
+**Host 112 spot check (one run, not a batch).** `qwen3.5-4b-mtp` (ctx 60160) on f0064f11 (dirty, includes ddcbc9e7), job
+`20261112-214609-001`, folder `ModelTestingResults\112\...\20261112-214630-218`: **passed**, 30 turns, ModelFinished,
+15m 33s, 2 tool errors (ReplaceSnippet 1, Search 1), no assists, so the identical-success nudge was not exercised.
+Model latency 36 s at T1, 64 s at T30 (host 113 passing runs: about 20-25 s per turn).
+
 ## Out of scope
 
 - Batch C ran before 31b206a6 and 28391d8c; their effect is unmeasured.
