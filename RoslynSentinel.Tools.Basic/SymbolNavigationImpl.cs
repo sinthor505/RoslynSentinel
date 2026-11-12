@@ -100,6 +100,9 @@ public class SymbolNavigationImpl
                     }
                 }
 
+                // error-policy side channel (plan_error_policy_pointer Step 5); text-neutral
+                ToolCallContext.Current?.RecordMissingTarget("symbol");
+
                 return new SentinelCallToolResult<object>
                 {
                     IsError = true,
@@ -154,6 +157,7 @@ public class SymbolNavigationImpl
                         "more than one location and lineBefore/lineAfter did not disambiguate. Re-check the snippet " +
                         "against GetMethodSource/GetFileOutline output, or add lineBefore/lineAfter to pin the match."
                         : symbolInfo!.Error;
+                    // TODO error-policy: route does not record the missing-target kind
                     return new SentinelCallToolResult<object>
                     {
                         IsError = true,
@@ -177,6 +181,7 @@ public class SymbolNavigationImpl
 
                 if (!string.IsNullOrEmpty(result.Error))
                 {
+                    // TODO error-policy: route does not record the missing-target kind
                     return new SentinelCallToolResult<object>
                     {
                         IsError = true,
