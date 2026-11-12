@@ -32,6 +32,8 @@ public class ModelEvalAssemblySetUp
         // env vars here (ROSLYNSENTINEL_LIFT_RENAMES, ROSLYNSENTINEL_LOOP_LATCH); unset leaves them off.
         LiftRenamesOptions.Configure([]);
         LoopLatchOptions.Configure([]);
+        // Reads ROSLYNSENTINEL_ERROR_POLICY_MODE / _FILE; unset leaves the policy Off.
+        ErrorPolicyOptions.Configure([]);
         ModelAgentRunner.ProcessStamp = ReadWorkingTreeStamp(AppContext.BaseDirectory);
 
         if (string.IsNullOrEmpty(LlmOptions.Model))

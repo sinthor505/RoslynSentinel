@@ -36,6 +36,7 @@ public class ServerHttp
         ToolCallEchoOptions.Configure(args);
         SchemaOptions.Configure(args);
         EolPolicyOptions.Configure(args);
+        ErrorPolicyOptions.Configure(args);
         AgentOperatingModeOptions.Configure(args);
         FullSuiteStalenessOptions.Configure(args);
 

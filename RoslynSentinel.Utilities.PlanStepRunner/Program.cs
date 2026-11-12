@@ -25,6 +25,7 @@ public static class Program
     public static async Task<int> Main(string[] args)
     {
         LlmOptions.Configure(args);
+        ErrorPolicyOptions.Configure(args);
         if (string.IsNullOrEmpty(LlmOptions.Model))
         {
             Console.Error.WriteLine(
