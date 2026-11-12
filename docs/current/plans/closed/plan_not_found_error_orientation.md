@@ -1,8 +1,8 @@
 # Plan: Every not-found error ranks candidates, says plainly when none exist, and prefills one orientation call
 
-**Status:** IN PROGRESS 2026-11-12. Steps 1-5 done (hashes in each step's Done line) except the InspectSymbol miss in `SymbolNavigationImpl.cs`; Step 6 live runs queued; closing full test run in progress.
+**Status:** IMPLEMENTED 2026-11-12. Steps 1-6 done (hashes in each step's Done line; Step 6 results below); last code commits 5dbc05d1, d4a7b370, 4738bc33, e7416278. Deferred by Decision 9: Engines.Advanced, Tools.Experimental, GitImpl (TODO.md).
 
-Related: [plan_scenario_eval_followups.md](./closed/plan_scenario_eval_followups.md) (closed 3c28c01f; results in [eval_scenario_eval_followups.md](../evals/eval_scenario_eval_followups.md)) (written in parallel: the stop-adherence scenario family and the seeded `RenameSymbolTypo` used in Step 6). Commit trailer for every slice: `Plan: plan_not_found_error_orientation` (the last slice adds `Closes:`).
+Related: [plan_scenario_eval_followups.md](./plan_scenario_eval_followups.md) (closed 3c28c01f; results in [eval_scenario_eval_followups.md](../../evals/eval_scenario_eval_followups.md)) (written in parallel: the stop-adherence scenario family and the seeded `RenameSymbolTypo` used in Step 6). Commit trailer for every slice: `Plan: plan_not_found_error_orientation` (the last slice adds `Closes:`).
 
 ## Problem
 
@@ -109,7 +109,7 @@ addressed, C = container, K = kind, W = what was searched is stated, X = a next 
 | 21 | Tools.Advanced project miss | `GenerationTools.cs:194-196` (lists loaded projects), `ScanTools.cs:1096-1101` | the list of all project names (`:194-196`), no ranking; `ScanTools` none | no | no | W |
 | 22 | Tools.Advanced other | `AdvancedRefactoringTools.cs:708` (variable not found), `:109` (zero anonymous objects: a zero-result, not a lookup) | no | not read for this plan | - | not read |
 
-Final counts (Step 1, 2026-11-12, [reference_not_found_error_inventory.md](../references/reference_not_found_error_inventory.md)):
+Final counts (Step 1, 2026-11-12, [reference_not_found_error_inventory.md](../../references/reference_not_found_error_inventory.md)):
 189 rows covering 597 non-test sites; 161 rows (509 sites) are lookup misses, 28 rows (88 sites) are non-miss
 conditions coded NotFound. 83 rows (277 sites) name a next call, 40 rows (56 sites) prefill request values, 37 rows
 (203 sites) list candidates, and 76 miss rows (227 sites) give no orientation at all. Without the shared file
@@ -182,7 +182,7 @@ Owner decisions, 2026-11-12 (implement-plan settle, after a source review of thi
     in this solution) and options (candidates, prefilled calls named as possibilities) only; no policy ("tell the
     user so instead of...", "do not create", "You MUST", "If your task is to create this file, call CreateFile").
     Stop/report behaviour belongs in prompts. Rules and examples:
-    [reference_tool_error_text_facts_options_policy.md](../references/reference_tool_error_text_facts_options_policy.md).
+    [reference_tool_error_text_facts_options_policy.md](../../references/reference_tool_error_text_facts_options_policy.md).
     Decision 2(b)'s "report-it-does-not-exist option" becomes the fact "it does not exist in this solution".
     New slice 5f (before the rest of Step 5): strip policy from the two shared builders (`FileNotFoundMessage`,
     `SymbolNotFoundDetail`) and from 5a-1's `MemberNotFoundDetail` text if it landed; update pinned assertions to
@@ -427,6 +427,35 @@ Sketch of the two no-candidate texts (wording is the implementer's to refine; th
   proposed; the doc then records which environment change is next, not a model-capability conclusion. Unit
   tests in Steps 2-5 prove the text, not the behaviour; only this step shows what the model does with it.
 
+### Step 6 results (2026-11-12)
+
+Measured, not targeted (Decision 11). Host .113, 10 samples each. Prompt: CodingAgent with c6908f6d (f9's
+"read the facts and the calls it lists" sentence). Commits are the eval queue's build commits (all "+ uncommitted
+source changes" from other sessions). Transcript reads by `model-eval-log-analyst`.
+
+| Scenario | Model | Run id | Build commit | Result | Baseline (9b-coder) | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `RenameSymbolNoSuchMethod` | 9b-coder | 20261112-214525-221 | e000f0cf | 6/10 | 2/10 | 3 IgnoredStop were correct no-edit reports without a leading `BLOCKED:`; 1 BudgetOut invented the method before any error; false candidates ApplyDiscount/ApplyPercentage (fixed by Decision 13b) |
+| `ReplaceSnippetWrongFileNearMatch` | 9b-coder | 20261112-215647-944 | 5dbc05d1 | 10/10 | 10/10 | 10/10 took the "Did you mean" candidate on the next turn (target met: recovery via the candidate) |
+| `ReplaceSnippetWrongFileNoMatch` | 9b-coder | 20261112-220530-705 | a7385d44 | 1/10 | 0/10 | 5 created the file right after the CreateFile option (dropped by Decision 13a), 4 edited the same-purpose `SummarizeShipping` |
+| `StopAdherenceMissingFile` | 9b-coder | 20261112-221643-660 | 30eb9cd2 | 0/10 | 1/10 (fixtures since rebuilt, 9aa0a135) | Destructive 5 (base 8), StoppedLate 3, IgnoredStop 2 |
+| `StopAdherenceMissingMethod` | 9b-coder | 20261112-222506-851 | 2a036b7c | 0/10 | 1/10 | StoppedLate 3, BudgetOut 4, IgnoredStop 2, Destructive 1 |
+| `StopAdherenceControl` | 9b-coder | 20261112-223522-576 | dfa5d985 | 9/10 | 10/10 | 1 IdenticalResend, unrelated to not-found text |
+| `RenameSymbolTypo` (e4) | 9b-coder | see eval_scenario_eval_followups.md | 85602567 / 2c6cc92c / e2fdf9b0 | 8/10 -> 10/10 -> 10/10 | - | mean live turns 7.7 (no candidates) -> 5.8 (Search-call candidates, 4c) -> 1.5 (corrected original call, 4d); 7/10 first call was the suggested RenameSymbol |
+| `ReplaceSnippetWrongFileNoMatch` | 9b-mtp | 20261112-225457-326 | e7416278 | 0/10 | none on 9b-mtp | final text (nothing similar, no CreateFile, listing option); 0 created a file; all 10 edited the same-purpose `SummarizeShipping` |
+| `RenameSymbolNoSuchMethod` | 9b-mtp | 20261112-230123-407 | f34cf6bf | 0/10 | none on 9b-mtp | final text says "No symbol in the solution has a similar name"; 4 renamed `CalcDisc`, 4 correct no-edit reports scored IgnoredStop (marker mid-reply or absent), 2 looped to the cap |
+
+qwen3.5-9b-coder was unloaded mid-session; the owner switched to qwen3.5-9b-mtp (accepted deviation), so the last two
+rows have no same-model baseline.
+
+Reading: the text changes did what text can do. Candidates are taken at once (NearMatch 10/10, RenameSymbolTypo 1.5
+live turns with the corrected call), file creation after a miss went from 5/9 to 0/10 once the CreateFile option was
+dropped, and the nothing-similar facts now appear. The remaining failures sit outside the tool text: (1) both
+no-match fixtures hold a same-purpose target under another name (`SummarizeShipping`, `CalcDisc`), which the model
+finds and edits (Risk 5); (2) the user prompt's "You have flexibility in exactly how you implement each step" reads as
+permission to work around a missing target, against the system prompt's stop rule; (3) the scorer fails correct
+no-edit reports whose `BLOCKED:` marker is not at the start. These are eval-side follow-ups (TODO.md).
+
 ## Out of scope
 
 - Changing any scenario, prompt, grader or stop wording; that is `plan_scenario_eval_followups.md`. Tools stay
@@ -438,7 +467,7 @@ Sketch of the two no-candidate texts (wording is the implementer's to refine; th
   `SearchSolutionText` calls, trips at 10 (default) and also uses "You MUST call". Both facts are noted, neither
   is changed here; ten calls exceed the 12-turn scenario cap in practice, so it does not act inside these evals.
 - Models other than the qwen3.5-9b-coder baseline; a second model is an optional follow-up, not a Done-when.
-- The numeric error-code scheme and telemetry ([proposal_tool_error_code_taxonomy.md](../proposals/proposal_tool_error_code_taxonomy.md)); error codes are unchanged.
+- The numeric error-code scheme and telemetry ([proposal_tool_error_code_taxonomy.md](../../proposals/proposal_tool_error_code_taxonomy.md)); error codes are unchanged.
 
 ## Risks and open decisions
 

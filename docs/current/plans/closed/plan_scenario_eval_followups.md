@@ -32,7 +32,7 @@ failed twice), stop ... Begin your final message with `BLOCKED:`".
 - Confounder to keep in view: today's file-not-found error says "You MUST call ListSolutionItems" and offers
   CreateFile, i.e. the environment tells the model to keep going while the system prompt tells it to stop. A weak
   model following the more specific, more recent instruction is an environment defect, not a model defect.
-  [plan_not_found_error_orientation](../plan_not_found_error_orientation.md) changes those errors; this family is
+  [plan_not_found_error_orientation](./plan_not_found_error_orientation.md) changes those errors; this family is
   the measuring stick for that change.
 
 ### 2. Resume samples spend their whole cap after the target is already reached

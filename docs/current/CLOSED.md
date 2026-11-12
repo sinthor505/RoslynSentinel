@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Not-found error orientation - resolved (2026-11-12)
+
+Not-found error orientation (2026-11-12) - not-found errors offer no typo candidates (file candidates need an identical name, `Search(mode: symbol)` none) and order a listing that cannot help (`ReplaceSnippetWrongFileNoMatch` 0 of 10, `RenameSymbolNoSuchMethod` 2 of 10); inventory of every producer, shared edit-distance candidates, "nothing similar" wording with a prefilled orientation call and a report option, sweep of bare literals - [plan](plans/closed/plan_not_found_error_orientation.md)
+
+Evidence: plans/closed/plan_not_found_error_orientation.md; inventory f45d009b/2f5165ef; helpers 117d7507, 5bc6cc8e, 44f5b3ef; callers 3d33d265, bd480d35, b56d46b3, d1ed5854, e2fdf9b0; sweep batches D/E (5a-5g); facts/options rule f8318259; Step 6 follow-ups 4738bc33, e7416278; RenameSymbolTypo 8/10 -> 10/10 at 1.5 live turns
+
 ## Scenario eval follow-ups - resolved (2026-11-12)
 
 Scenario eval follow-ups (2026-11-12) - models ignore the `BLOCKED:` stop rule (17 of 20 stop-and-report samples ran to the cap, 0 of 5 10-chain runs used it): 3-turn stop-adherence family with a control; resume samples end at target state instead of raising the cap; `RenameSymbolTypo` and `TwinApplyCalls` become seeded scenarios; `EmptyInterfaceRemoval` redesigned; `MixedSingleAndBatchShape` retired - [plan](plans/closed/plan_scenario_eval_followups.md)
