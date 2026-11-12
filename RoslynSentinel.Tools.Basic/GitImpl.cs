@@ -3473,6 +3473,8 @@ public class GitImpl : IGitOperations
     private async Task<GitCommitResult?> TryCommitInProcessAsync(
         string gitRoot, string? message, bool amend, GitStageScope? scope, string? paths, string[]? listedFilePaths, List<ClassifiedPath>? classified, CancellationToken cancellationToken)
     {
+        CommitRouteContext? context = null;
+        (CasCommitResult Outcome, string? Stored)? madeCommit = null;
         try
         {
             if (!await Task.Run(() => _commitRoute.IsEnabled(_gitReader, gitRoot, GitProcessTimeout), cancellationToken))
@@ -3481,16 +3483,19 @@ public class GitImpl : IGitOperations
             }
 
             // From here the route is enabled: every way out that is not a commit is a counted decline.
+            var kind = amend ? "amend" : !string.IsNullOrWhiteSpace(paths) ? "only-paths" : "plain";
+            context = new CommitRouteContext(kind, listedFilePaths);
+            // TODO the condition is amend || IsNullOrWhiteSpace(message), but a blank message without amend is refused at the top of CommitAsync, so only amend reaches this branch; keep the reason text (the Step 5 audit script catalogue reads it)
             if (amend || string.IsNullOrWhiteSpace(message))
             {
-                _commitRoute.RecordDecline("an amend rewrites HEAD; the CLI does it.", gitRoot);
+                _commitRoute.RecordDecline("an amend rewrites HEAD; the CLI does it.", gitRoot, context);
                 return null;
             }
 
             var listed = !string.IsNullOrWhiteSpace(paths);
             if (listed && (scope != GitStageScope.listed || listedFilePaths is not { Length: > 0 } || classified is null))
             {
-                _commitRoute.RecordDecline("paths were given without scope=listed; the CLI decides what they mean.", gitRoot);
+                _commitRoute.RecordDecline("paths were given without scope=listed; the CLI decides what they mean.", gitRoot, context);
                 return null;
             }
 
@@ -3498,7 +3503,7 @@ public class GitImpl : IGitOperations
             var decline = await Task.Run(() => _commitRoute.DeclineBeforeStaging(_gitReader, gitRoot, listedForRoute, GitProcessTimeout), cancellationToken);
             if (decline is not null)
             {
-                _commitRoute.RecordDecline(decline, gitRoot);
+                _commitRoute.RecordDecline(decline, gitRoot, context);
                 return null;
             }
 
@@ -3510,7 +3515,7 @@ public class GitImpl : IGitOperations
                     var staged = await RunIndexStageAsync(gitRoot, IndexStageMode.UpdateListed, tracked, cancellationToken);
                     if (staged.ExitCode != 0)
                     {
-                        _commitRoute.RecordDecline("staging the listed tracked paths failed; the CLI commits them with --only.", gitRoot);
+                        _commitRoute.RecordDecline("staging the listed tracked paths failed; the CLI commits them with --only.", gitRoot, context);
                         return null;
                     }
                 }
@@ -3530,6 +3535,7 @@ public class GitImpl : IGitOperations
             {
                 return null;
             }
+            madeCommit = committed;
 
             // The commit exists: nothing below may fall back to the CLI (it would make a second commit) or fail the call.
             var remainingStaged = new List<string>();
@@ -3553,7 +3559,19 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _commitRoute.RecordDecline($"{ex.GetType().Name}: {ex.Message}", gitRoot);
+            // Once the commit exists the CLI path would make a second commit, so nothing after it may decline or return null.
+            if (madeCommit is { } made)
+            {
+                return new GitCommitResult
+                {
+                    IsError = false,
+                    CommitHash = made.Outcome.CommitId!,
+                    Message = RejoinLines(made.Stored ?? message ?? string.Empty).Trim(),
+                    RemainingStaged = [],
+                };
+            }
+
+            _commitRoute.RecordDecline($"{ex.GetType().Name}: {ex.Message}", gitRoot, context);
             return null;
         }
     }
