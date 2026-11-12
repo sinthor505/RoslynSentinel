@@ -287,7 +287,8 @@ public class GitPatchParityCorpusMoreTests
     [TestCase("diff.algorithm", "patience", true)]
     [TestCase("diff.indentHeuristic", "false", true)]
     [TestCase("diff.noprefix", "true", true)]
-    [TestCase("diff.mnemonicPrefix", "true", true)]
+    // Declined: git ignores mnemonic prefixes for commit-vs-commit (a/ b/ stay), libgit2 applies them to a range too (c/ c/); staged agrees (c/ i/).
+    [TestCase("diff.mnemonicPrefix", "true", false)]
     [TestCase("color.diff", "always", false)]
     [TestCase("color.ui", "always", false)]
     [TestCase("diff.renames", "false", true)]

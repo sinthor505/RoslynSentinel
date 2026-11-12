@@ -13,7 +13,7 @@ namespace RoslynSentinel.Common;
 /// <list type="bullet">
 /// <item>a comparison against the working tree (never reaches this reader's routing: only "staged" and refA..refB are accepted);</item>
 /// <item>GIT_DIFF_OPTS or GIT_EXTERNAL_DIFF in the process environment;</item>
-/// <item>any <c>diff.*</c> or <c>color.*</c> config key (every level) except diff.algorithm, diff.indentHeuristic, diff.noprefix, diff.mnemonicPrefix, diff.renames,
+/// <item>any <c>diff.*</c> or <c>color.*</c> config key (every level) except diff.algorithm, diff.indentHeuristic, diff.noprefix, diff.renames,
 ///       diff.wsErrorHighlight (core.whitespace is not scanned: it is on the verified list) and the two keys named in <see cref="PatchNeutralConfigKeys"/>;
 ///       diff.renames other than a plain boolean (copies), diff.algorithm other than myers/default/patience/minimal, a non-boolean diff.indentHeuristic;</item>
 /// <item>a rename or copy; an added path together with a deleted one while renames are on (git may pair them); a typechange; a symbolic link; a submodule entry;</item>
@@ -29,13 +29,15 @@ internal sealed partial class Libgit2GitReader
 {
     private static readonly string[] PatchEnvironmentVariables = ["GIT_DIFF_OPTS", "GIT_EXTERNAL_DIFF"];
 
-    // The diff.* keys that do not change the text of "git diff" here. The first six are the owner's verified-identical list (Step 12 gate). diff.tool and diff.guitool are the
+    // The diff.* keys that do not change the text of "git diff" here. The first five are the owner's verified-identical list (Step 12 gate) minus diff.mnemonicPrefix: git applies
+    // mnemonic prefixes (c/, i/, w/) only when the index or working tree is compared and keeps a/ and b/ for commit against commit, while libgit2 applies them to a range too
+    // (diff --git c/x c/x), so a set diff.mnemonicPrefix is declined for every patch target. diff.tool and diff.guitool are the
     // two keys git documents as read by git difftool only, which Git for Windows' installer and many global configs set (a diff.<driver>.<var> key, such as the shipped
     // diff.astextplain.textconv, is neutral through IsPatchNeutralConfigKey: it only acts on a path that selects the driver, and such a path is declined by the attribute rule).
     // TODO owner to confirm diff.tool, diff.guitool and the diff.<driver>.<var> exemption (a wider list than the Step 12 decision); without them every Git for Windows machine declines
     private static readonly HashSet<string> PatchNeutralConfigKeys = new(StringComparer.OrdinalIgnoreCase)
     {
-        "diff.algorithm", "diff.indentheuristic", "diff.noprefix", "diff.mnemonicprefix", "diff.renames", "diff.wserrorhighlight",
+        "diff.algorithm", "diff.indentheuristic", "diff.noprefix", "diff.renames", "diff.wserrorhighlight",
         "diff.tool", "diff.guitool",
     };
 
