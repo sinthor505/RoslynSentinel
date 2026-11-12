@@ -305,7 +305,7 @@ $anyFailed = $false
 foreach ($p in $selected) {
     $leaf = Split-Path $p -LeafBase
     $trx = Join-Path $resultsDir "$leaf.trx"
-    $row = [ordered]@{ project = $leaf; total = 0; passed = 0; failed = 0; skipped = 0; failures = @(); note = $null }
+    $row = [ordered]@{ project = $leaf; total = 0; passed = 0; failed = 0; skipped = 0; failures = @(); skippedTests = @(); note = $null }
     if (-not (Test-Path $trx)) {
         $row.note = "no TRX (crash, hang or no tests matched) - see $leaf.log"
         $anyFailed = $true
@@ -316,7 +316,15 @@ foreach ($p in $selected) {
         $row.total = [int]$c.total
         $row.passed = [int]$c.passed
         $row.failed = [int]$c.failed + [int]$c.error + [int]$c.timeout + [int]$c.aborted
-        $row.skipped = [int]$c.notExecuted
+        # The Counters element leaves notExecuted at 0 for NUnit Ignore/Assume skips (each result still says
+        # outcome="NotExecuted"), so skips are counted from the results, with the first line of the reason.
+        foreach ($r in (Select-Xml -Xml $x -XPath "//t:UnitTestResult[@outcome!='Passed' and @outcome!='Failed' and @outcome!='Error' and @outcome!='Timeout' and @outcome!='Aborted']" -Namespace $ns)) {
+            $why = $r.Node.Output.ErrorInfo.Message
+            if (-not $why) { $why = $r.Node.Output.StdOut }
+            $first = if ($why) { ($why -split "`r?`n" | Where-Object { $_.Trim() } | Select-Object -First 1).Trim() } else { '' }
+            $row.skippedTests += [ordered]@{ test = $r.Node.testName; outcome = $r.Node.outcome; reason = $first }
+        }
+        $row.skipped = $row.skippedTests.Count
         foreach ($r in (Select-Xml -Xml $x -XPath "//t:UnitTestResult[@outcome='Failed']" -Namespace $ns)) {
             $msg = $r.Node.Output.ErrorInfo.Message
             $first = if ($msg) { ($msg -split "`r?`n" | Where-Object { $_.Trim() } | Select-Object -First 1).Trim() } else { '' }
