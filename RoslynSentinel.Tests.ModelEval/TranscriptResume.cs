@@ -150,6 +150,22 @@ public static class TranscriptResume
         @"[A-Za-z]:(?:\\\\|\\|/)[^""\r\n<>|`]*?RoslynSentinelTests_[0-9a-fA-F-]+",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    // The volatile keys were found by surveying recorded ReplaceSnippet/RenameSymbol/ReadFile/Build results of 10-chain runs
+    // (toolCallId, changeId, resultId, duration, sizeBytes/sizeChars, workspaceVersion, fixture path); extend the list when
+    // CountResultDrift flags a field that is not a wording change.
+    // TODO: a field this survey missed will show up as drift on every sample; when that happens, add its key to this list.
+    private static readonly Regex VolatileJsonValueRegex = new(
+        @"""(toolCallId|changeId|resultId|duration|durationMs|elapsed|elapsedMs|sizeBytes|sizeChars|workspaceVersion)""\s*:\s*(""(?:[^""\\]|\\.)*""|-?[0-9.]+)",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex IsoTimestampRegex = new(
+    @"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})?",
+    RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex TimeSpanTextRegex = new(
+    @"\b[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3,7}\b",
+    RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     /// <summary>The transcript.json file for a path that is either that file or the folder holding it.</summary>
     public static string ResolveTranscriptPath(string pathOrFolder)
     {
@@ -198,6 +214,23 @@ public static class TranscriptResume
             match.Value.Contains("\\\\", StringComparison.Ordinal) ? newDirectory.Replace("\\", "\\\\")
             : match.Value.Contains('\\') ? newDirectory
             : newDirectory.Replace('\\', '/'));
+    }
+
+    /// <summary>
+    /// Masks what always differs between two runs of the same call: the fixture directory, volatile id, timing and size
+    /// values, ISO-8601 timestamps and .NET TimeSpan text. Null or empty gives "".
+    /// </summary>
+    public static string NormalizeResultText(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        var normalized = RewriteFixtureDirectory(text, "<FIXTURE>") ?? string.Empty;
+        normalized = VolatileJsonValueRegex.Replace(normalized, "\"$1\":\"<v>\"");
+        normalized = IsoTimestampRegex.Replace(normalized, "<time>");
+        return TimeSpanTextRegex.Replace(normalized, "<duration>");
     }
 
     /// <summary>
@@ -334,6 +367,16 @@ public static class TranscriptResume
         return $"Replay mismatch: {count} of {replayed.Count} replayed calls differ from the recording; " +
             $"first at turn {first.TurnNumber} {first.ToolName} (recorded IsError={first.RecordedIsError}, " +
             $"replayed IsError={first.ReplayedIsError}).";
+    }
+
+    /// <summary>
+    /// Counts the replayed calls whose result text still differs from the saved one after <see cref="NormalizeResultText"/>.
+    /// Counted into the CSV <c>resultDrift</c> column.
+    /// </summary>
+    public static int CountResultDrift(IReadOnlyList<ReplayedCall> replayed)
+    {
+        return replayed.Count(call =>
+            !string.Equals(NormalizeResultText(call.RecordedResultText), NormalizeResultText(call.ReplayedResultText), StringComparison.Ordinal));
     }
 
     /// <summary>

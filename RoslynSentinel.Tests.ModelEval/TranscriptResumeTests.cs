@@ -270,6 +270,65 @@ public class TranscriptResumeTests
     }
 
     [Test]
+    public void CountResultDrift_IdenticalTexts_IsZero()
+    {
+        var replayed = new List<ReplayedCall>
+        {
+            new ReplayedCall(1, "ReadFile", false, false, "{\"ok\":true}", "{\"ok\":true}"),
+        };
+
+        Assert.That(TranscriptResume.CountResultDrift(replayed), Is.Zero);
+    }
+
+    [Test]
+    public void CountResultDrift_WordingChange_IsCounted()
+    {
+        var replayed = new List<ReplayedCall>
+        {
+            new ReplayedCall(1, "ReplaceSnippet", true, true, "{\"message\":\"oldContent not found\"}", "{\"message\":\"oldContent was not found; nearest match at line 3\"}"),
+            new ReplayedCall(2, "Build", false, false, "{\"errors\":0}", "{\"errors\":0}"),
+        };
+
+        Assert.That(TranscriptResume.CountResultDrift(replayed), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void CountResultDrift_CallIdAndTimingChanges_AreIgnored()
+    {
+        var replayed = new List<ReplayedCall>
+        {
+            new ReplayedCall(1, "ReplaceSnippet", false, false,
+                "{\"toolCallId\":\"aaa111\",\"changeId\":\"c-1\",\"resultId\":\"r-1\",\"duration\":\"00:00:00.0117245\",\"sizeBytes\":120,\"workspaceVersion\":83,\"ok\":true}",
+                "{\"toolCallId\":\"bbb222\",\"changeId\":\"c-2\",\"resultId\":\"r-2\",\"duration\":\"00:00:04.7317365\",\"sizeBytes\":4096,\"workspaceVersion\":91,\"ok\":true}"),
+        };
+
+        Assert.That(TranscriptResume.CountResultDrift(replayed), Is.Zero);
+    }
+
+    [Test]
+    public void CountResultDrift_FixtureDirectoryDifferences_AreIgnored()
+    {
+        var replayed = new List<ReplayedCall>
+        {
+            new ReplayedCall(1, "ReadFile", false, false,
+                "{\"path\":\"C:\\\\Users\\\\a\\\\AppData\\\\Local\\\\Temp\\\\RoslynSentinelTests_11111111-1111-1111-1111-111111111111\\\\ContosoOrders.Core\\\\X.cs\"}",
+                "{\"path\":\"C:\\\\Users\\\\a\\\\AppData\\\\Local\\\\Temp\\\\RoslynSentinelTests_22222222-2222-2222-2222-222222222222\\\\ContosoOrders.Core\\\\X.cs\"}"),
+            new ReplayedCall(2, "ReadFile", false, false,
+                "{\"path\":\"C:/Users/a/AppData/Local/Temp/RoslynSentinelTests_11111111-1111-1111-1111-111111111111/X.cs\"}",
+                "{\"path\":\"C:/Users/a/AppData/Local/Temp/RoslynSentinelTests_22222222-2222-2222-2222-222222222222/X.cs\"}"),
+        };
+
+        Assert.That(TranscriptResume.CountResultDrift(replayed), Is.Zero);
+    }
+
+    [Test]
+    public void NormalizeResultText_NullAndEmpty_AreEmpty()
+    {
+        Assert.That(TranscriptResume.NormalizeResultText(null), Is.EqualTo(string.Empty));
+        Assert.That(TranscriptResume.NormalizeResultText(string.Empty), Is.EqualTo(string.Empty));
+    }
+
+    [Test]
     public async Task ReplayKeptCallsAsync_CountEqualsDetailedMismatches_OnDoctoredInput()
     {
         // Recorded: success, rejection, success. The fake always replays success, so only turn 2 differs.
