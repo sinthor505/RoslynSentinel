@@ -2277,7 +2277,11 @@ public class BasicRefactoringEngine
         var existing = root.Usings.FirstOrDefault(u => u.Name?.ToString() == targetName && u.StaticKeyword.IsKind(SyntaxKind.StaticKeyword) == isStaticTarget);
         if (existing == null)
         {
-            throw new ToolNotFoundException($"Using directive '{namespaceName}' not found.", "using directive", namespaceName);
+            var usingNames = root.Usings.Select(u => (u.StaticKeyword.IsKind(SyntaxKind.StaticKeyword) ? "static " : "") + u.Name?.ToString()).OfType<string>().ToList();
+            var detail = usingNames.Count == 0
+                ? DeclarationNotFoundDetail.BuildNoneDeclared("using directive", filePath)
+                : DeclarationNotFoundDetail.Build("using directive", "namespaceName", namespaceName, usingNames, filePath);
+            throw new ToolNotFoundException($"Using directive '{namespaceName}' not found. {detail}", "using directive", namespaceName);
         }
 
         return new DocumentEditResult
@@ -2336,7 +2340,7 @@ public class BasicRefactoringEngine
 
         if (target == null)
         {
-            throw new ToolNotFoundException("Cannot edit: target not found.", "declaration", targetName);
+            throw new ToolNotFoundException($"Cannot edit: target not found. {DeclarationNotFoundDetail.Build("declaration", "targetName", targetName, DeclarationNamesIn(root), filePath)}", "declaration", targetName);
         }
 
         // baseIndent is derived first because docText bakes it into every line of the synthetic doc
@@ -2481,7 +2485,7 @@ public class BasicRefactoringEngine
 
         if (target == null)
         {
-            throw new ToolNotFoundException("Cannot edit: target not found.", "declaration", targetName);
+            throw new ToolNotFoundException($"Cannot edit: target not found. {DeclarationNotFoundDetail.Build("declaration", "targetName", targetName, DeclarationNamesIn(root), filePath)}", "declaration", targetName);
         }
 
         if (!target.GetLeadingTrivia().Any(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)))
@@ -2525,7 +2529,7 @@ public class BasicRefactoringEngine
 
         if (target == null)
         {
-            throw new ToolNotFoundException($"Target '{targetName}' not found in '{filePath}'. Searched: symbols named '{targetName}' in the file. Next: {ToolCallHint.Call("Search", ("mode", "symbol"), ("query", targetName))} or {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))}. {DeclarationNotFoundDetail.Build("declaration", "targetName", targetName, root.DescendantNodes().Select(n => n is EnumMemberDeclarationSyntax em ? em.Identifier.Text : n is MemberDeclarationSyntax md ? SyntaxTargetResolver.GetMemberName(md) : null).OfType<string>(), filePath, includeOutlineCall: false)}", "symbol", targetName);
+            throw new ToolNotFoundException($"Target '{targetName}' not found in '{filePath}'. Searched: symbols named '{targetName}' in the file. Next: {ToolCallHint.Call("Search", ("mode", "symbol"), ("query", targetName))} or {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))}. {DeclarationNotFoundDetail.Build("declaration", "targetName", targetName, DeclarationNamesIn(root), filePath, includeOutlineCall: false)}", "symbol", targetName);
         }
 
         var docTrivia = target.GetLeadingTrivia().FirstOrDefault(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
@@ -2542,6 +2546,15 @@ public class BasicRefactoringEngine
             .Where(l => l.Length > 0)
             .ToList();
         return (EditOutcome.Modified, null, string.Join(" ", lines));
+    }
+
+    /// <summary>
+    /// Names of the members and enum members declared under <paramref name="root"/>, the candidate pool for a
+    /// declaration not-found message (see <see cref="DeclarationNotFoundDetail"/>).
+    /// </summary>
+    private static IEnumerable<string> DeclarationNamesIn(SyntaxNode root)
+    {
+        return root.DescendantNodes().Select(n => n is EnumMemberDeclarationSyntax em ? em.Identifier.Text : n is MemberDeclarationSyntax md ? SyntaxTargetResolver.GetMemberName(md) : null).OfType<string>();
     }
 
     public async Task<DocumentEditResult> WrapInTryCatchAsync(FilePathWrapper filePath, int startLine, int endLine, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, CancellationToken cancellationToken = default)

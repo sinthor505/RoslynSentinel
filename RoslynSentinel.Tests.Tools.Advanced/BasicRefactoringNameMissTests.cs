@@ -143,4 +143,89 @@ public class OrderPricingCalculator
         Assert.That(ex!.Message, Does.Contain("Method 'ApplyLoyaltyBonus' not found in 'Calc.cs'"));
         AssertNoCandidateText(ex.Message);
     }
+
+    private const string UsingSource = """
+using System.Linq;
+
+public class Counter
+{
+    public int Count(int[] values) { return values.Length; }
+    public int CalcDisc(int total) { return total; }
+}
+""";
+
+    private static void LoadSource(string fileName, string source, out IWorkspaceManager workspace)
+    {
+        var persistent = Battery.Basic.TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+        persistent.SetTestSolution(solution);
+        workspace = persistent;
+    }
+
+    [Test]
+    public async Task RemoveUsingDirective_CandidateName_ToolNamesNearestUsing()
+    {
+        LoadSource("Counter.cs", UsingSource, out var workspace);
+        var tools = BatteryToolFactory.CreateRefactoringExtractionDocsTools(workspace);
+        var result = await tools.UsingDirectiveTool(reason: "name miss candidate test", "Counter.cs", AddRemoveViewAction.remove, "System.Linqq");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.Message, Does.Contain("Did you mean 'System.Linq'"));
+        Assert.That(result.ErrorData!.Message, Does.Not.Contain("tell the user"));
+    }
+
+    [Test]
+    public async Task RemoveUsingDirective_NoCandidateName_ToolStatesFactsOnly()
+    {
+        LoadSource("Counter.cs", UsingSource, out var workspace);
+        var tools = BatteryToolFactory.CreateRefactoringExtractionDocsTools(workspace);
+        var versionBefore = workspace.WorkspaceVersion;
+        var result = await tools.UsingDirectiveTool(reason: "name miss no-candidate test", "Counter.cs", AddRemoveViewAction.remove, "Contoso.Missing.Zzz");
+        Assert.That(result.IsError, Is.True);
+        AssertNoCandidateText(result.ErrorData!.Message);
+        Assert.That(workspace.WorkspaceVersion, Is.EqualTo(versionBefore));
+    }
+
+    [Test]
+    public async Task SummaryCommentAdd_CandidateName_ToolNamesNearestDeclaration()
+    {
+        LoadCalculator(out var workspace);
+        var tools = BatteryToolFactory.CreateRefactoringExtractionDocsTools(workspace);
+        var result = await tools.SummaryCommentTool(reason: "name miss candidate test", "Calc.cs", AddRemoveViewAction.add, "CalcDsc", "Calculates the discount.");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.Message, Does.Contain("Did you mean 'CalcDisc'"));
+    }
+
+    [Test]
+    public async Task SummaryCommentAdd_NoCandidateName_ToolStatesFactsOnly()
+    {
+        LoadCalculator(out var workspace);
+        var tools = BatteryToolFactory.CreateRefactoringExtractionDocsTools(workspace);
+        var versionBefore = workspace.WorkspaceVersion;
+        var result = await tools.SummaryCommentTool(reason: "name miss no-candidate test", "Calc.cs", AddRemoveViewAction.add, "ApplyLoyaltyBonus", "Adds a loyalty bonus.");
+        Assert.That(result.IsError, Is.True);
+        AssertNoCandidateText(result.ErrorData!.Message);
+        Assert.That(workspace.WorkspaceVersion, Is.EqualTo(versionBefore));
+    }
+
+    [Test]
+    public async Task SummaryCommentRemove_CandidateName_ToolNamesNearestDeclaration()
+    {
+        LoadCalculator(out var workspace);
+        var tools = BatteryToolFactory.CreateRefactoringExtractionDocsTools(workspace);
+        var result = await tools.SummaryCommentTool(reason: "name miss candidate test", "Calc.cs", AddRemoveViewAction.remove, "CalcDsc");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.Message, Does.Contain("Did you mean 'CalcDisc'"));
+    }
+
+    [Test]
+    public async Task SummaryCommentRemove_NoCandidateName_ToolStatesFactsOnly()
+    {
+        LoadCalculator(out var workspace);
+        var tools = BatteryToolFactory.CreateRefactoringExtractionDocsTools(workspace);
+        var versionBefore = workspace.WorkspaceVersion;
+        var result = await tools.SummaryCommentTool(reason: "name miss no-candidate test", "Calc.cs", AddRemoveViewAction.remove, "ApplyLoyaltyBonus");
+        Assert.That(result.IsError, Is.True);
+        AssertNoCandidateText(result.ErrorData!.Message);
+        Assert.That(workspace.WorkspaceVersion, Is.EqualTo(versionBefore));
+    }
 }
