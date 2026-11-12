@@ -19,6 +19,9 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <param name="FixedBy">Provenance: commit that fixed it; "" when not fixed or not applicable.</param>
 /// <param name="ResumeTranscript">File name inside RoslynSentinel.Tests.ModelEval/ResumeTranscripts to seed history from; null for a cold-start scenario. For a resume scenario (types 2 and 4) the system and user prompt come from the transcript and PromptTemplate is unused.</param>
 /// <param name="ResumeKeepTurns">Turns 1..K of ResumeTranscript seeded as history; 0 for cold-start. TurnCap then counts the live turns after the seeded ones.</param>
+/// <param name="ResumeFaultTool">Resume scenarios only: tool name of ONE real call injected after the kept turns are replayed; null for no fault.</param>
+/// <param name="ResumeFaultArguments">Arguments JSON for ResumeFaultTool; the token {SOLUTION} is replaced by the fixture solution directory with forward slashes.</param>
+/// <param name="ResumeFaultSeeded">false: the fault call runs on the fixture but is NOT shown to the model (stale workspace). true: a failed last call shown to the model; not implemented yet, the harness returns Inconclusive.</param>
 public sealed record ScenarioDefinition(
     string Id,
     int ScenarioType,
@@ -34,4 +37,7 @@ public sealed record ScenarioDefinition(
     string ReproducesAt,
     string FixedBy,
     string? ResumeTranscript = null,
-    int ResumeKeepTurns = 0);
+    int ResumeKeepTurns = 0,
+    string? ResumeFaultTool = null,
+    string? ResumeFaultArguments = null,
+    bool ResumeFaultSeeded = false);

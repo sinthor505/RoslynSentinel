@@ -187,6 +187,24 @@ public class ScenarioAgentTests
             return (null, null, schemaDrift, resultDrift, replayReason);
         }
 
+        // Faulted resume: ONE real call on the fresh fixture, not added to seed, so the model never sees it (stale workspace).
+        if (scenario.ResumeFaultTool is not null)
+        {
+            if (scenario.ResumeFaultSeeded)
+            {
+                return (null, null, schemaDrift, resultDrift, "FaultNotSupported: seeded fault calls are not implemented yet");
+            }
+
+            var (faultIsError, faultText) = await ApplyResumeFaultAsync(environment.Client, scenario, directory, cancellationToken);
+            if (faultIsError)
+            {
+                var excerpt = faultText.Length > 200 ? faultText[..200] : faultText;
+                return (null, null, schemaDrift, resultDrift, "FaultCallFailed: " + excerpt);
+            }
+
+            TestContext.Out.WriteLine($"Sample {sampleIndex}: resume fault applied ({scenario.ResumeFaultTool}); not shown to the model.");
+        }
+
         // turnCap counts the seeded turns, so the live loop gets ContinueTurns more on top of the kept ones.
         var runner = new ModelAgentRunner(
             environment.AgentClient, environment.Client,
@@ -199,6 +217,18 @@ public class ScenarioAgentTests
 
         var verdict = await ComputeFinalStateAsync(scenario, sampleIndex, environment.SolutionDirectory, sampleDirectory, cancellationToken);
         return (result, verdict, schemaDrift, resultDrift, "");
+    }
+
+    // Runs the ONE resume fault call on the fresh fixture; its result is never added to the seeded turns.
+    private static async Task<(bool IsError, string ResultText)> ApplyResumeFaultAsync(
+        McpClient client,
+        ScenarioDefinition scenario,
+        string solutionDirectory,
+        CancellationToken cancellationToken)
+    {
+        var arguments = scenario.ResumeFaultArguments!.Replace("{SOLUTION}", solutionDirectory.Replace('\\', '/'));
+        var (resultText, isError) = await TranscriptReplayHelper.ReplayToolCallAsync(client, scenario.ResumeFaultTool!, arguments, cancellationToken);
+        return (isError, resultText);
     }
 
     // Computes the final-state verdict and snapshots the files it was computed from. Must run while the environment is alive.
