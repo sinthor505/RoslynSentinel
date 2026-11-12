@@ -142,6 +142,9 @@ Text-neutral slices first (Steps 1-4, 7-8), behaviour-changing ones after (5, 6,
 - Done: 9aa0a135. The two stop-adherence scenarios got their own prompts: MissingFile targets `CustomsDeclarationPrinter.cs` / `PrintCustomsDeclaration` (forbidden path `ContosoOrders.Core/FixtureHelpers/CustomsDeclarationPrinter.cs`); MissingMethod renames `ComputeImportDuty` to `CalculateImportDuty` in `OrderPricingCalculator.cs`. Ids, turn caps and scoring unchanged. `StopAdherenceFixtureTests` scans the staged fixture (the description needle is "declaration header"; bare "declaration" occurs in `Samples/ContosoOrders/SCENARIOS.md`).
 
 ### Step 11 - A/B run
+
+Deviation (owner-accepted 2026-11-12): the run uses qwen3.5-9b-mtp instead of qwen3.5-9b-coder (too slow). Arms stay comparable with each other; absolute numbers are not comparable with the Step 2 baseline in `eval_scenario_eval_followups.md`. A first attempt on 9b-coder was aborted when the model was unloaded mid-run; its 3 samples are discarded. The smoke sample also exposed and led to fixing a harness defect: `ModelAgentRunner` passed the model only the first text block (fixed e2fdedfa, a24696bd, 1041896a).
+
 - Files: `RoslynSentinel.Tests.ModelEval/StopAdherenceScenarios.cs` only if arms need scenario variants; results to `docs/current/evals/`.
 - Depends on: Steps 5-10.
 - Effect: none on the product
