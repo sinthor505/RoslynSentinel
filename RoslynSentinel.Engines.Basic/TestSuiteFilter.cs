@@ -32,17 +32,29 @@ public static class TestSuiteFilter
     }
 
     /// <summary>
-    /// The zero-match addendum: null unless the suite is fast, the caller gave a filter and no test matched. It says the
-    /// fast suite excludes the OutOfProcess fixtures (which may hold the tests the filter meant) and names the next call.
+    /// The zero-match addendum: null unless the caller gave a filter and no test matched, on any suite. It says no test
+    /// matched, so nothing ran and nothing was verified, and names the next call: check the test name with a Search, or
+    /// drop the filter. On the fast suite only it adds a secondary clause: the fast suite also skips the OutOfProcess
+    /// fixtures, which may hold the test, and it names the full run.
     /// </summary>
     public static string? ZeroMatchHint(TestSuite suite, string? filter, int totalCount)
     {
-        if (suite != TestSuite.fast || string.IsNullOrWhiteSpace(filter) || totalCount != 0)
+        if (string.IsNullOrWhiteSpace(filter) || totalCount != 0)
         {
             return null;
         }
 
-        return $"The fast suite excludes [Category(\"{OutOfProcessCategory}\")] fixtures (git/build/test-run/process tests), which may hold the tests this filter names. "
+        var hint = "No test matched the filter, so nothing ran and nothing was verified. Confirm the test name exists with "
+            + ToolCallHint.Call("Search", ("mode", "method"), ("query", "<TestMethodName>"))
+            + ", or drop the filter.";
+
+        if (suite != TestSuite.fast)
+        {
+            return hint;
+        }
+
+        return hint
+            + $" The fast suite also skips [Category(\"{OutOfProcessCategory}\")] fixtures; if the test lives in one, "
             // TODO the hint drops the caller's filter/scope/scopeName, so a model copying it verbatim runs the whole solution full (~11 min); thread them through.
             + ToolCallHint.Next("RunTest", "to include them.", ("suite", "full"));
     }

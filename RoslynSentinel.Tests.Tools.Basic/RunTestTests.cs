@@ -507,6 +507,37 @@ public class RunTestTests
         Assert.That(WorkspaceBuildTestImpl.SummarizeTestRun(passed), Does.Not.Contain("Next:"));
     }
 
+    // A filter that matched no test ran nothing, so the headline must not claim "Tests passed"; without a filter the wording is unchanged.
+    [Test]
+    public void SummarizeTestRun_FilterMatchedNoTest_SaysNothingWasVerifiedNotTestsPassed()
+    {
+        const string filter = "FullyQualifiedName~Nope";
+        var run = new TestRunResult(
+            RunSucceeded: true, ExitCode: 0, TotalCount: 0, PassedCount: 0, FailedCount: 0, SkippedCount: 0,
+            FailureSummary: [], Results: [], StdoutTail: null, StderrTail: null, Duration: TimeSpan.FromSeconds(1),
+            ProjectSummaries: []);
+
+        var text = WorkspaceBuildTestImpl.SummarizeTestRun(run, filter);
+
+        Assert.That(text, Does.Not.Contain("Tests passed"));
+        Assert.That(text, Does.Contain("No test matched the filter 'FullyQualifiedName~Nope'").And.Contain("nothing was verified"));
+        Assert.That(WorkspaceBuildTestImpl.SummarizeTestRun(run), Does.StartWith("Tests passed"));
+    }
+
+    // A filter that matched tests keeps the normal "Tests passed" headline.
+    [Test]
+    public void SummarizeTestRun_FilterGivenAndTestsRan_KeepsTestsPassed()
+    {
+        var run = new TestRunResult(
+            RunSucceeded: true, ExitCode: 0, TotalCount: 3, PassedCount: 3, FailedCount: 0, SkippedCount: 0,
+            FailureSummary: [], Results: [], StdoutTail: null, StderrTail: null, Duration: TimeSpan.FromSeconds(1),
+            ProjectSummaries: []);
+
+        var text = WorkspaceBuildTestImpl.SummarizeTestRun(run, "FullyQualifiedName~Some");
+
+        Assert.That(text, Does.Contain("Tests passed: 3 tests"));
+    }
+
     [Test]
     public async Task RunTest_EnvironmentParameter_ReachesTestProcessAsync()
     {

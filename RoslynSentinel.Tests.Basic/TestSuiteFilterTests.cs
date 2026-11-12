@@ -30,10 +30,13 @@ public class TestSuiteFilterTests
     // Gives ToolCallHint a catalog that knows RunTest's suite parameter, so the hint text does not depend on which assemblies are loaded.
     private static void UseRunTestCatalog()
     {
-        using var schema = JsonDocument.Parse(
+        using var runTest = JsonDocument.Parse(
             """{"type":"object","properties":{"reason":{"type":"string"},"suite":{"type":"string","enum":["fast","full"]}},"required":["reason"]}""");
+        using var search = JsonDocument.Parse(
+            """{"type":"object","properties":{"reason":{"type":"string"},"mode":{"type":"string","enum":["text","symbol","references","callers","implementations","attribute","all","namespace","class","interface","method","property","struct","record","enum","enum member","constructor","field"]},"query":{"type":"string"}},"required":["reason","mode"]}""");
         ToolCallHint.Current = ToolSignatureCatalog.FromSchemas(
-            [new KeyValuePair<string, JsonElement>("RunTest", schema.RootElement.Clone())]);
+            [new KeyValuePair<string, JsonElement>("RunTest", runTest.RootElement.Clone()),
+             new KeyValuePair<string, JsonElement>("Search", search.RootElement.Clone())]);
     }
 
     [Test]
@@ -59,25 +62,37 @@ public class TestSuiteFilterTests
     }
 
     [Test]
-    public void ZeroMatchHint_FastWithFilterAndZeroTests_ExplainsTheExclusionAndNamesTheFullRun()
+    public void ZeroMatchHint_FastWithFilterAndZeroTests_SaysNothingWasVerifiedAndNamesTheNameCheck()
     {
         UseRunTestCatalog();
 
         var hint = TestSuiteFilter.ZeroMatchHint(TestSuite.fast, "FullyQualifiedName~GitToolsSmoke", totalCount: 0);
 
         Assert.That(hint, Is.Not.Null);
-        Assert.That(hint, Does.Contain("fast suite excludes").And.Contain("OutOfProcess"));
-        Assert.That(hint, Does.Contain("RunTest(").And.Contain("suite: full"));
+        Assert.That(hint, Does.Contain("nothing was verified").And.Contain("Search("));
+        Assert.That(hint, Does.Contain("OutOfProcess").And.Contain("suite: full"));
+        Assert.That(hint!.IndexOf("nothing was verified", StringComparison.Ordinal),
+            Is.LessThan(hint.IndexOf("OutOfProcess", StringComparison.Ordinal)));
     }
 
     [Test]
-    public void ZeroMatchHint_WhenNotFastWithFilterAndZeroTests_IsNull()
+    public void ZeroMatchHint_FullSuiteWithFilterAndZeroTests_SaysNothingWasVerifiedWithoutTheOutOfProcessClause()
+    {
+        UseRunTestCatalog();
+
+        var hint = TestSuiteFilter.ZeroMatchHint(TestSuite.full, "FullyQualifiedName~GitToolsSmoke", totalCount: 0);
+
+        Assert.That(hint, Does.Contain("nothing was verified"));
+        Assert.That(hint, Does.Not.Contain("OutOfProcess"));
+    }
+
+    [Test]
+    public void ZeroMatchHint_NoFilterOrSomeTestsMatched_IsNull()
     {
         UseRunTestCatalog();
 
         Assert.That(TestSuiteFilter.ZeroMatchHint(TestSuite.fast, null, totalCount: 0), Is.Null, "no filter given");
         Assert.That(TestSuiteFilter.ZeroMatchHint(TestSuite.fast, "FullyQualifiedName~Foo", totalCount: 3), Is.Null, "tests matched");
-        Assert.That(TestSuiteFilter.ZeroMatchHint(TestSuite.full, "FullyQualifiedName~Foo", totalCount: 0), Is.Null, "full suite");
     }
 
     [Test]

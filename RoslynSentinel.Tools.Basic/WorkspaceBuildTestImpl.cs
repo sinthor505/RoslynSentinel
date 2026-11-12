@@ -156,12 +156,19 @@ public class WorkspaceBuildTestImpl
     // Short inline headline. The generic offload filter relays StatusMessage into its pointer
     // envelope, so even a response too large to inline (hundreds of failures) still carries the
     // totals without a GetLargeResultTool round trip.
-    public static string SummarizeTestRun(TestRunResult run)
+    public static string SummarizeTestRun(TestRunResult run, string? filter = null)
     {
         var headline =
             $"{(run.RunSucceeded ? "Tests passed" : "Tests FAILED")}: {run.TotalCount} tests, {run.PassedCount} passed, " +
             $"{run.FailedCount} failed, {run.SkippedCount} skipped in {FormatDuration(run.Duration)} " +
             $"across {run.ProjectSummaries?.Count ?? 1} project(s).";
+
+        // A filter that matched no test ran nothing, so "Tests passed" would claim a verification that never happened.
+        // Wording only: runSucceeded/isError deliberately stay as the engine reports them (decision 2026-11-11, wording only).
+        if (!string.IsNullOrWhiteSpace(filter) && run.TotalCount == 0 && run.RunSucceeded)
+        {
+            headline = $"No test matched the filter '{filter}': nothing ran and nothing was verified (0 tests, 0 passed in {FormatDuration(run.Duration)} across {run.ProjectSummaries?.Count ?? 1} project(s)).";
+        }
 
         // A project can exit non-zero (build or adapter error) without any failed test; name it so the
         // caller does not have to open the large result to find out which project broke.
@@ -367,7 +374,7 @@ public class WorkspaceBuildTestImpl
             }
 
             var failedRows = testRunResult.Results.Where(r => r.Outcome == TestOutcome.Failed).ToList();
-            var statusMessage = SummarizeTestRun(testRunResult);
+            var statusMessage = SummarizeTestRun(testRunResult, filter);
             if (TestSuiteFilter.ZeroMatchHint(suite, filter, testRunResult.TotalCount) is { } zeroMatchHint)
             {
                 statusMessage += " " + zeroMatchHint;
