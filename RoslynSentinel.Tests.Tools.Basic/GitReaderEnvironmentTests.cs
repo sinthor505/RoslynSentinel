@@ -54,7 +54,7 @@ public class GitReaderEnvironmentTests
     // The methods that load the index: the ones a split index must decline (GetNameStatus only for "staged").
     private static readonly string[] IndexReaders =
     [
-        "GetStatus", "GetRepositoryStatus", "ListTrackedPaths", "ListIndexPathsMatching", "FindIgnoredPaths", "GetNameStatus(staged)", "StageWholeFiles", "UnstagePaths",
+        "GetStatus", "GetRepositoryStatus", "ListTrackedPaths", "ListIndexPathsMatching", "FindIgnoredPaths", "GetNameStatus(staged)", "HasStagedChanges", "StageWholeFiles", "UnstagePaths",
     ];
 
     private readonly Dictionary<string, string?> _savedEnvironment = [];
@@ -140,6 +140,13 @@ public class GitReaderEnvironmentTests
         new("GetHeadWithParents", nameof(IGitReader.GetHeadWithParents), (r, d) => r.GetHeadWithParents(d, Timeout)),
         // Null while no merge is in progress, which is the fixtures' state: the decline walk still proves libgit2 declines it and the CLI answers.
         new("GetMergeHead", nameof(IGitReader.GetMergeHead), (r, d) => r.GetMergeHead(d, Timeout), MayBeNull: true),
+        // The abbreviation of the fixtures' first commit (a real answer); the message is compared as returned (both readers hand back git's %B text without the record's line break).
+        new("ResolveCommitAbbreviation", nameof(IGitReader.ResolveCommitAbbreviation), (r, d) => r.ResolveCommitAbbreviation(d, firstSha[..12], Timeout)),
+        new("GetCommitMessage", nameof(IGitReader.GetCommitMessage), (r, d) => r.GetCommitMessage(d, "HEAD", Timeout)),
+        // Null: the fixtures have no upstream and nothing in progress. HasStagedChanges is a real answer (false) unless the scenario makes git itself fail (GIT_INDEX_FILE naming an unreadable index).
+        new("GetUpstreamContainingHead", nameof(IGitReader.GetUpstreamContainingHead), (r, d) => r.GetUpstreamContainingHead(d, Timeout), MayBeNull: true),
+        new("GetInProgressOperation", nameof(IGitReader.GetInProgressOperation), (r, d) => r.GetInProgressOperation(d, Timeout), MayBeNull: true),
+        new("HasStagedChanges", nameof(IGitReader.HasStagedChanges), (r, d) => r.HasStagedChanges(d, paths: null, Timeout), MayBeNull: true),
         // The two index writes, projected to exit code and stderr (a GitRunResult carries a byte array, which does not compare or serialize usefully). a.txt is modified in the working
         // tree of the fixtures, so staging it is idempotent whichever reader runs first; the unstaged path is in neither the index nor HEAD, so that reset changes nothing.
         new("StageWholeFiles", nameof(IGitReader.StageWholeFiles), (r, d) => ExitAndStdErr(r.StageWholeFiles(d, IndexStageMode.AddListed, ["a.txt"], Timeout, CancellationToken.None))),

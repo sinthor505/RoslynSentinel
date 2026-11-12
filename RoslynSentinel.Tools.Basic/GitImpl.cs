@@ -2195,12 +2195,9 @@ public class GitImpl : IGitOperations
     /// </summary>
     private async Task<string?> DetectInProgressAsync(string gitRoot, CancellationToken cancellationToken)
     {
-        var dirRaw = await RunGitAsync(gitRoot, ["rev-parse", "--absolute-git-dir"], cancellationToken);
-        if (dirRaw.ExitCode != 0)
-            return null;
-
-        // The same checks the status reader runs (GitOperationState), so every caller agrees on what "in progress" means.
-        return GitOperationState.Detect(dirRaw.Stdout.Trim());
+        // Through the seam (libgit2 reads the per-worktree git dir in process; the CLI's `rev-parse --absolute-git-dir` answers when it declines or fails). Either way it is the
+        // same GitOperationState check the status reader runs, so every caller agrees on what "in progress" means.
+        return await Task.Run(() => _gitReader.GetInProgressOperation(gitRoot, GitProcessTimeout), cancellationToken);
     }
 
     /// <summary>
@@ -2252,17 +2249,16 @@ public class GitImpl : IGitOperations
     /// </summary>
     private async Task<bool> NothingStagedAsync(string gitRoot, string? paths, CancellationToken cancellationToken)
     {
-        string[] args = ["--literal-pathspecs", "diff", "--cached", "--quiet"];
+        string[]? list = null;
         if (!string.IsNullOrWhiteSpace(paths))
         {
-            var list = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var parseError);
+            list = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var parseError);
             if (parseError != null || list == null)
                 return false;
-            args = [.. args, "--", .. list];
         }
 
-        var raw = await RunGitAsync(gitRoot, args, cancellationToken);
-        return raw.ExitCode == 0;
+        // Through the seam: false (no staged changes) only when git, or libgit2 on a plain literal path list, says the index equals HEAD; a failed read is not "nothing staged", as before.
+        return await Task.Run(() => _gitReader.HasStagedChanges(gitRoot, list, GitProcessTimeout), cancellationToken) == false;
     }
 
     /// <summary>
@@ -3201,24 +3197,18 @@ public class GitImpl : IGitOperations
             // to be published, so the amend is allowed.
             if (amend)
             {
-                var upstreamRaw = await RunGitAsync(gitRoot,
-                    ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], cancellationToken);
-                if (upstreamRaw.ExitCode == 0 && !string.IsNullOrWhiteSpace(upstreamRaw.Stdout))
+                // One seam read for both git calls (rev-parse @{upstream}, then merge-base --is-ancestor HEAD @{upstream}): the upstream's name when HEAD is the upstream tip or an
+                // ancestor of it = already pushed; null for no upstream, an upstream that does not contain HEAD, or a failed read (all of which allow the amend, as before).
+                var containingUpstream = await Task.Run(() => _gitReader.GetUpstreamContainingHead(gitRoot, GitProcessTimeout), cancellationToken);
+                if (containingUpstream is not null)
                 {
-                    var upstreamName = upstreamRaw.Stdout.Trim();
-                    // Exit 0 = HEAD is an ancestor of (or equal to) the upstream tip = already pushed.
-                    var containedRaw = await RunGitAsync(gitRoot,
-                        ["merge-base", "--is-ancestor", "HEAD", "@{upstream}"], cancellationToken);
-                    if (containedRaw.ExitCode == 0)
+                    return new GitCommitResult
                     {
-                        return new GitCommitResult
-                        {
-                            IsError = true,
-                            Error = $"HEAD is already contained in its upstream '{upstreamName}', so amending it would rewrite published history, " +
-                                    "and this tool does not expose force-push (the branch would diverge from the remote). " +
-                                    "Make a new commit instead, or use operation=revert to undo the pushed commit. Nothing was amended."
-                        };
-                    }
+                        IsError = true,
+                        Error = $"HEAD is already contained in its upstream '{containingUpstream}', so amending it would rewrite published history, " +
+                                "and this tool does not expose force-push (the branch would diverge from the remote). " +
+                                "Make a new commit instead, or use operation=revert to undo the pushed commit. Nothing was amended."
+                    };
                 }
             }
 
@@ -3381,8 +3371,8 @@ public class GitImpl : IGitOperations
                 string failureNote = "";
                 if (stagedUntrackedFiles)
                 {
-                    var countRaw = await RunGitAsync(gitRoot, new[] { "-c", "core.quotePath=false", "diff", "--cached", "--name-only" }, cancellationToken);
-                    var stagedCount = countRaw.ExitCode == 0 ? countRaw.Stdout.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries).Length : 0;
+                    // The staged file list through the seam (one entry per path, as the old `diff --cached --name-only` printed); a failed read counts 0, as before.
+                    var stagedCount = (await Task.Run(() => _gitReader.GetNameStatus(gitRoot, "staged", null, GitProcessTimeout), cancellationToken))?.Count ?? 0;
                     failureNote = $" Staging already ran; the index now holds {stagedCount} staged paths. Call {ToolCallHint.Call("Git", ("operation", "unstage"))} to undo.";
                 }
 
@@ -3434,9 +3424,10 @@ public class GitImpl : IGitOperations
             var finalMessage = message ?? "";
             if (hash.Length > 0)
             {
-                var msgRaw = await RunGitAsync(gitRoot, new[] { "log", "-1", "--format=%B", hash, "--" }, cancellationToken);
-                if (msgRaw.ExitCode == 0)
-                    finalMessage = msgRaw.Stdout.Trim();
+                // The raw %B text through the seam; RejoinLines keeps the line endings RunGitAsync always gave this text (CRLF on Windows), then the same Trim.
+                var committedMessage = await Task.Run(() => _gitReader.GetCommitMessage(gitRoot, hash, GitProcessTimeout), cancellationToken);
+                if (committedMessage is not null)
+                    finalMessage = RejoinLines(committedMessage).Trim();
             }
 
             // Populate RemainingStaged: list of paths still in the index after the commit.
@@ -3444,16 +3435,10 @@ public class GitImpl : IGitOperations
             // working tree can add or remove paths here. It cannot be made exact without a repo-wide lock, so it is
             // advisory (what the index held when this readback ran), unlike CommitHash/Message which are race-free.
             // core.quotePath=false so non-ASCII paths come back verbatim and can be passed to `paths`.
-            var remainingRaw = await RunGitAsync(gitRoot, new[] { "-c", "core.quotePath=false", "diff", "--cached", "--name-only" }, cancellationToken);
-            var remainingStaged = new List<string>();
-            if (remainingRaw.ExitCode == 0 && !string.IsNullOrWhiteSpace(remainingRaw.Stdout))
-            {
-                // RunGitAsync rebuilds stdout with AppendLine (CRLF on Windows), so split on both
-                // separators; splitting on LF alone left a trailing CR on every entry but the last.
-                remainingStaged = remainingRaw.Stdout
-                    .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                    .ToList();
-            }
+            // Through the seam: the staged name-status list is what `diff --cached --name-only` printed plus a status letter, and a rename lists its new path as Path, like name-only.
+            // A failed read leaves the list empty, as before.
+            var remainingStaged = (await Task.Run(() => _gitReader.GetNameStatus(gitRoot, "staged", null, GitProcessTimeout), cancellationToken))
+                ?.Select(entry => entry.Path).ToList() ?? [];
 
             return new GitCommitResult { IsError = false, CommitHash = hash, Message = finalMessage, RemainingStaged = remainingStaged };
         }
@@ -3650,11 +3635,11 @@ public class GitImpl : IGitOperations
         for (var i = matches.Count - 1; i >= 0; i--)
         {
             var abbrev = matches[i].Groups[1].Value;
-            var raw = await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", abbrev + "^{commit}"], cancellationToken);
-            if (raw.ExitCode != 0)
+            // Through the seam (libgit2 for a unique commit prefix, `rev-parse --verify --quiet <abbrev>^{commit}` for everything it declines: an ambiguous prefix, a ref named alike).
+            var full = await Task.Run(() => _gitReader.ResolveCommitAbbreviation(gitRoot, abbrev, GitProcessTimeout), cancellationToken);
+            if (full is null)
                 continue;
 
-            var full = raw.Stdout.Trim();
             // SHA-1 (40) or SHA-256 (64) object names only.
             if (full.Length is 40 or 64 && full.All(Uri.IsHexDigit))
                 return full;

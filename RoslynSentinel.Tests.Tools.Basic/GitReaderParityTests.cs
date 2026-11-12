@@ -1129,5 +1129,35 @@ public class GitReaderParityTests
             Gate();
             return null;
         }
+
+        public string? ResolveCommitAbbreviation(string workingDirectory, string abbreviation, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
+        public string? GetCommitMessage(string workingDirectory, string revision, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
+        public string? GetUpstreamContainingHead(string workingDirectory, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
+        public string? GetInProgressOperation(string workingDirectory, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
+        public bool? HasStagedChanges(string workingDirectory, IReadOnlyList<string>? paths, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
     }
 }

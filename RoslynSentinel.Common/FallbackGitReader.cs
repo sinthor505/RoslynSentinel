@@ -139,6 +139,21 @@ internal sealed class FallbackGitReader : IGitReader
     public string? GetMergeHead(string workingDirectory, TimeSpan cliTimeout) =>
         Invoke(reader => reader.GetMergeHead(workingDirectory, cliTimeout));
 
+    public string? ResolveCommitAbbreviation(string workingDirectory, string abbreviation, TimeSpan cliTimeout) =>
+        Invoke(reader => reader.ResolveCommitAbbreviation(workingDirectory, abbreviation, cliTimeout));
+
+    public string? GetCommitMessage(string workingDirectory, string revision, TimeSpan cliTimeout) =>
+        Invoke(reader => reader.GetCommitMessage(workingDirectory, revision, cliTimeout));
+
+    public string? GetUpstreamContainingHead(string workingDirectory, TimeSpan cliTimeout) =>
+        Invoke(reader => reader.GetUpstreamContainingHead(workingDirectory, cliTimeout));
+
+    public string? GetInProgressOperation(string workingDirectory, TimeSpan cliTimeout) =>
+        Invoke(reader => reader.GetInProgressOperation(workingDirectory, cliTimeout));
+
+    public bool? HasStagedChanges(string workingDirectory, IReadOnlyList<string>? paths, TimeSpan cliTimeout) =>
+        Invoke(reader => reader.HasStagedChanges(workingDirectory, paths, cliTimeout));
+
     // The two index writes. A decline (NotSupportedException) happens before libgit2 has written anything, so the CLI then runs the whole command; see Libgit2GitReader.IndexWrites.cs.
     public GitRunResult StageWholeFiles(string workingDirectory, IndexStageMode mode, IReadOnlyList<string> paths, TimeSpan cliTimeout, CancellationToken cancellationToken) =>
         Invoke(reader => reader.StageWholeFiles(workingDirectory, mode, paths, cliTimeout, cancellationToken));

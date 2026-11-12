@@ -216,6 +216,44 @@ internal interface IGitReader
     string? GetMergeHead(string workingDirectory, TimeSpan cliTimeout);
 
     /// <summary>
+    /// The full hash of the commit a hex <paramref name="abbreviation"/> (the one git prints in a commit summary line) names (<c>git rev-parse --verify --quiet &lt;abbreviation&gt;^{commit}</c>). Null when it matches no
+    /// commit, when it is ambiguous (git then fails; neither reader ever picks one), or when git cannot answer (not a repository, git missing or timed out). The libgit2 reader serves only 4 to 40
+    /// lower-case hex digits that match exactly one commit and throws <see cref="NotSupportedException"/> for everything else git decides: an ambiguous prefix, a ref named like the abbreviation
+    /// (git reads ref names before hex), a prefix naming a tag or other non-commit object, replace refs, shallow or grafted history, <c>core.disambiguate</c>.
+    /// </summary>
+    string? ResolveCommitAbbreviation(string workingDirectory, string abbreviation, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// The message text git's <c>%B</c> prints for <paramref name="revision"/> (<c>git log -1 --format=%B &lt;revision&gt; --</c>), without the one line break <c>git log</c> ends the record with: the raw message as stored,
+    /// line endings and trailing newlines included. Null when git cannot answer (unknown revision, not a repository, git missing or timed out). The libgit2 reader throws
+    /// <see cref="NotSupportedException"/> for what it cannot reproduce: a revision that is not a plain ref, hash or HEAD~N, a non-commit object, a declared non-UTF-8 encoding, text git and .NET decode
+    /// differently, replace refs or shallow/grafted history, and a repository with <c>log.showSignature</c> set.
+    /// </summary>
+    string? GetCommitMessage(string workingDirectory, string revision, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// The upstream name of the current branch as <c>git rev-parse --abbrev-ref --symbolic-full-name @{upstream}</c> prints it ("origin/main") when HEAD is already contained in that upstream
+    /// (<c>git merge-base --is-ancestor HEAD @{upstream}</c> exits 0: HEAD is the upstream tip or an ancestor of it), else null: no upstream configured, an upstream that does not contain HEAD, or git
+    /// cannot answer. The libgit2 reader answers only the plain case (an attached HEAD on refs/heads, one <c>branch.&lt;name&gt;.remote</c>, one <c>.merge</c> naming refs/heads/, the remote's one standard
+    /// fetch refspec, an existing remote-tracking branch, a short name no other ref shares) or no upstream configured at all; it throws <see cref="NotSupportedException"/> for every other shape
+    /// (detached or unborn HEAD, a half-configured or multi-valued upstream, remote ".", a custom refspec, a missing tracking ref, ambiguous short names, replace refs, shallow or grafted history).
+    /// </summary>
+    string? GetUpstreamContainingHead(string workingDirectory, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// The multi-step operation a conflict left half-finished (<see cref="GitOperationState.Detect"/> over <c>git rev-parse --absolute-git-dir</c>: "rebase", "am", "cherry-pick", "revert", "merge"),
+    /// or null when none is in progress or git cannot answer (not a repository, git missing or timed out).
+    /// </summary>
+    string? GetInProgressOperation(string workingDirectory, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// Whether the index differs from HEAD, optionally limited to literal <paramref name="paths"/> (<c>git --literal-pathspecs diff --cached --quiet [-- paths]</c>: exit 1 is true, exit 0 false). Null when git
+    /// cannot answer (an error exit, not a repository, git missing or timed out). The libgit2 reader serves what <see cref="GetNameStatus"/> serves for "staged" and throws
+    /// <see cref="NotSupportedException"/> for the rest, so pathspec magic or glob characters reach the CLI's literal-pathspecs command.
+    /// </summary>
+    bool? HasStagedChanges(string workingDirectory, IReadOnlyList<string>? paths, TimeSpan cliTimeout);
+
+    /// <summary>
     /// Stages whole files the way the Git tool's <c>stage</c> does (<see cref="IndexStageMode"/> names the exact <c>git add</c> command); a partial (hunk) stage is not part
     /// of the seam. <paramref name="paths"/> are the literal repo-relative paths of the two <c>*Listed</c> modes (empty for the other two). Unlike the reads this
     /// WRITES the index and returns what the git command returned: a <see cref="GitRunResult"/> with exit code and stderr, so the caller maps a failure to its

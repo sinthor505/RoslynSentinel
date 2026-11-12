@@ -164,6 +164,11 @@ public class GitWorktreeRepoLocalConfigTests
         new("GetBoolConfig", nameof(IGitReader.GetBoolConfig), (r, d) => r.GetBoolConfig(d, "core.ignorecase", Timeout)),
         new("GetHeadWithParents", nameof(IGitReader.GetHeadWithParents), (r, d) => r.GetHeadWithParents(d, Timeout)),
         new("GetMergeHead", nameof(IGitReader.GetMergeHead), (r, d) => r.GetMergeHead(d, Timeout)),
+        new("ResolveCommitAbbreviation", nameof(IGitReader.ResolveCommitAbbreviation), (r, d) => r.ResolveCommitAbbreviation(d, _firstSha[..12], Timeout)),
+        new("GetCommitMessage", nameof(IGitReader.GetCommitMessage), (r, d) => r.GetCommitMessage(d, "HEAD", Timeout)),
+        new("GetUpstreamContainingHead", nameof(IGitReader.GetUpstreamContainingHead), (r, d) => r.GetUpstreamContainingHead(d, Timeout)),
+        new("GetInProgressOperation", nameof(IGitReader.GetInProgressOperation), (r, d) => r.GetInProgressOperation(d, Timeout)),
+        new("HasStagedChanges", nameof(IGitReader.HasStagedChanges), (r, d) => r.HasStagedChanges(d, paths: null, Timeout)),
     ];
 
     private static void SetLocal(string directory, string key, string value) => RunGit(directory, "config", "--local", key, value);

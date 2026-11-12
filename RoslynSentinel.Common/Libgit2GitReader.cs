@@ -753,6 +753,208 @@ internal sealed partial class Libgit2GitReader : IGitReader
         };
     }
 
+    private static readonly Regex HexAbbreviation = new("^[0-9a-f]{4,40}$", RegexOptions.CultureInvariant);
+
+    public string? ResolveCommitAbbreviation(string workingDirectory, string abbreviation, TimeSpan cliTimeout)
+    {
+        if (!HexAbbreviation.IsMatch(abbreviation))
+        {
+            throw new NotSupportedException($"'{abbreviation}' is not 4 to 40 lower-case hex digits, so git resolves it.");
+        }
+
+        using var repo = Open(workingDirectory);
+        if (repo is null)
+        {
+            return null;
+        }
+
+        // A replace ref can swap the commit a name resolves to.
+        RequirePlainHistory(repo);
+        if (ConfigValue(repo, "core.disambiguate") is not null)
+        {
+            throw new NotSupportedException("core.disambiguate is configured, so git decides which object a short name means.");
+        }
+
+        // git tries ref names before it reads the text as an object name (and warns); libgit2 reads hex first. A ref (or a pseudo-ref file) that a name of this shape could
+        // also be is left to git, and so is the 40-digit form for the same reason: never decide that precedence here.
+        string[] competing = [$"refs/{abbreviation}", $"refs/tags/{abbreviation}", $"refs/heads/{abbreviation}", $"refs/remotes/{abbreviation}", $"refs/remotes/{abbreviation}/HEAD"];
+        if (competing.Any(name => repo.Refs[name] is not null)
+            || File.Exists(Path.Combine(repo.Info.Path, abbreviation))
+            || File.Exists(Path.Combine(CommonDirectory(repo), abbreviation)))
+        {
+            throw new NotSupportedException($"A ref is named like '{abbreviation}', so git's ref-name rules decide what it means.");
+        }
+
+        GitObject? found;
+        try
+        {
+            found = repo.Lookup(abbreviation);
+        }
+        catch (AmbiguousSpecificationException ex)
+        {
+            // More than one object shares the prefix. git (with ^{commit}) only counts commits and may still find exactly one, so it answers rather than libgit2 picking or failing.
+            throw new NotSupportedException($"'{abbreviation}' matches more than one object, so git decides which commit, if any, it names.", ex);
+        }
+
+        return found switch
+        {
+            // No object has this prefix: git's verify fails quietly (exit 1), which is null.
+            null => null,
+            Commit commit => commit.Sha,
+            // An annotated tag git peels to its commit, a tree or blob it rejects: the CLI decides.
+            _ => throw new NotSupportedException($"'{abbreviation}' names a {found.GetType().Name}, not a commit, so git peels or rejects it."),
+        };
+    }
+
+    public string? GetCommitMessage(string workingDirectory, string revision, TimeSpan cliTimeout)
+    {
+        if (revision.Contains("..", StringComparison.Ordinal) || !SimpleRevision.IsMatch(revision))
+        {
+            throw new NotSupportedException($"'{revision}' is not a plain ref, hash or HEAD~N form, so git resolves it.");
+        }
+
+        using var repo = Open(workingDirectory);
+        if (repo is null)
+        {
+            return null;
+        }
+
+        // The call is "log -1 ... <revision> --": the trailing "--" makes a file of the same name no ambiguity, so there is no path check. grafts, a shallow boundary and replace refs
+        // change what log shows; log.showSignature prints a signed commit's verification ahead of the message.
+        RequirePlainHistory(repo);
+        if (ConfigValue(repo, "log.showSignature") is not null)
+        {
+            throw new NotSupportedException("log.showSignature is configured, so git prints signature output with the message.");
+        }
+
+        var found = repo.Lookup(revision);
+        if (found is null)
+        {
+            return null;
+        }
+
+        if (found is not Commit commit)
+        {
+            throw new NotSupportedException($"'{revision}' is not a plain commit, so git peels it.");
+        }
+
+        RequireStableCommitText(commit);
+        // Commit.Message is the raw message as stored, like git's %B.
+        return commit.Message;
+    }
+
+    /// <summary>Every value of a (possibly multi-valued) config key, in config order, read like <see cref="ConfigValue"/> (the main repository's config in a linked worktree). Keys compare case-insensitively, so a differently cased branch name counts too: more values mean a decline, never a wrong answer.</summary>
+    private static List<string> ConfigValues(Repository repo, string key)
+    {
+        static List<string> Matching(Configuration config, string key) =>
+            [.. config.Where(entry => string.Equals(entry.Key, key, StringComparison.OrdinalIgnoreCase)).Select(entry => entry.Value)];
+
+        if (!IsLinkedWorktree(repo))
+        {
+            return Matching(repo.Config, key);
+        }
+
+        using var config = Configuration.BuildFrom(Path.Combine(CommonDirectory(repo), "config"));
+        return Matching(config, key);
+    }
+
+    public string? GetInProgressOperation(string workingDirectory, TimeSpan cliTimeout)
+    {
+        using var repo = Open(workingDirectory);
+        // The same per-worktree git directory git rev-parse --absolute-git-dir names (what GetRepositoryStatus reads too).
+        return repo is null ? null : GitOperationState.Detect(repo.Info.Path);
+    }
+
+    public bool? HasStagedChanges(string workingDirectory, IReadOnlyList<string>? paths, TimeSpan cliTimeout)
+    {
+        // The staged file list under the same decline rules as the diff read: plain literal paths only (--literal-pathspecs makes them plain for git as well), no rename
+        // candidates, no submodules, no unmerged or intent-to-add entries, no unborn HEAD. Anything else is declined to the CLI's exact command.
+        var rows = GetNameStatus(workingDirectory, "staged", paths, cliTimeout);
+        return rows is null ? null : rows.Count > 0;
+    }
+
+    private static readonly Regex UpstreamBranchName = new(@"^[A-Za-z0-9_][A-Za-z0-9_./-]*$", RegexOptions.CultureInvariant);
+    private static readonly Regex UpstreamRemoteName = new(@"^[A-Za-z0-9_][A-Za-z0-9_-]*$", RegexOptions.CultureInvariant);
+
+    public string? GetUpstreamContainingHead(string workingDirectory, TimeSpan cliTimeout)
+    {
+        using var repo = Open(workingDirectory);
+        if (repo is null)
+        {
+            return null;
+        }
+
+        // Detached or unborn: git has no branch to take an upstream from; the CLI's exact answer (and error) is left to it.
+        if (repo.Info.IsHeadDetached || repo.Head.Tip is null)
+        {
+            throw new NotSupportedException("HEAD is detached or unborn, so git decides what @{upstream} means.");
+        }
+
+        const string headsPrefix = "refs/heads/";
+        var head = repo.Head;
+        if (!head.CanonicalName.StartsWith(headsPrefix, StringComparison.Ordinal))
+        {
+            throw new NotSupportedException($"HEAD points at '{head.CanonicalName}', outside refs/heads.");
+        }
+
+        var branch = head.CanonicalName[headsPrefix.Length..];
+        if (!UpstreamBranchName.IsMatch(branch))
+        {
+            throw new NotSupportedException($"The branch name '{branch}' has characters git quotes in config keys.");
+        }
+
+        var remoteValues = ConfigValues(repo, $"branch.{branch}.remote");
+        var mergeValues = ConfigValues(repo, $"branch.{branch}.merge");
+        if (remoteValues.Count == 0 && mergeValues.Count == 0)
+        {
+            // No upstream configured: git reports "no upstream configured" (exit 128), which the caller reads as nothing is published.
+            return null;
+        }
+
+        // Anything but exactly one remote and one merge value is git's to read (a half-configured upstream, a list of merge refs).
+        if (remoteValues.Count != 1 || mergeValues.Count != 1)
+        {
+            throw new NotSupportedException($"branch.{branch} has {remoteValues.Count} remote and {mergeValues.Count} merge values, so git decides which upstream it means.");
+        }
+
+        var remote = remoteValues[0];
+        var merge = mergeValues[0];
+        if (!UpstreamRemoteName.IsMatch(remote) || !merge.StartsWith(headsPrefix, StringComparison.Ordinal) || !UpstreamBranchName.IsMatch(merge[headsPrefix.Length..]))
+        {
+            throw new NotSupportedException($"branch.{branch} names an upstream (remote '{remote}', merge '{merge}') other than a plain remote and refs/heads/ branch.");
+        }
+
+        // The remote-tracking name comes from the remote's fetch refspec: only the standard one, and only when no legacy remote file could also define the remote.
+        var common = CommonDirectory(repo);
+        var fetchValues = ConfigValues(repo, $"remote.{remote}.fetch");
+        var standardFetch = $"refs/heads/*:refs/remotes/{remote}/*";
+        if (fetchValues.Count != 1 || fetchValues[0].TrimStart('+') != standardFetch
+            || File.Exists(Path.Combine(common, "remotes", remote)) || File.Exists(Path.Combine(common, "branches", remote)))
+        {
+            throw new NotSupportedException($"remote.{remote}.fetch is not the one standard refspec, so git maps the upstream.");
+        }
+
+        var shortName = $"{remote}/{merge[headsPrefix.Length..]}";
+        // The name git prints is the shortest unambiguous form; any other ref that the short name could also be makes it longer.
+        string[] competing = [$"refs/{shortName}", $"refs/tags/{shortName}", $"refs/heads/{shortName}", $"refs/remotes/{shortName}/HEAD"];
+        if (competing.Any(name => repo.Refs[name] is not null) || File.Exists(Path.Combine(common, shortName)))
+        {
+            throw new NotSupportedException($"'{shortName}' is ambiguous with another ref, so git prints a longer upstream name.");
+        }
+
+        // A configured upstream whose tracking ref is missing (never fetched, deleted) is an error for git; which error is the CLI's to say. Symbolic refs and tags are left to it too.
+        if (repo.Refs[$"refs/remotes/{shortName}"] is not DirectReference { Target: Commit upstreamTip })
+        {
+            throw new NotSupportedException($"The tracking ref for '{shortName}' is missing or is not a plain commit ref.");
+        }
+
+        RequirePlainHistory(repo);
+        var tip = head.Tip;
+        // HEAD is contained when it is the upstream tip or an ancestor of it: then the merge base of the two is HEAD itself.
+        var contained = tip.Sha == upstreamTip.Sha || repo.ObjectDatabase.FindMergeBase(tip, upstreamTip)?.Sha == tip.Sha;
+        return contained ? shortName : null;
+    }
+
     /// <summary>
     /// The pathspecs the two path-matching reads accept: ones git reads the same literally and after its own normalisation. A path git rewrites
     /// ("./x", "a//b", "a/../b", an absolute or drive path, a trailing slash) or rejects (empty, outside the repository) is left to git.

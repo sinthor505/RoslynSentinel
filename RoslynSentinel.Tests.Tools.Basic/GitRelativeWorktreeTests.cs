@@ -165,6 +165,12 @@ public class GitRelativeWorktreeTests
         new("GetHeadWithParents", nameof(IGitReader.GetHeadWithParents), (r, d) => r.GetHeadWithParents(d, Timeout)),
         // Null: the fixtures are not mid-merge. The fallback and opens-fine walks only need both readers to agree.
         new("GetMergeHead", nameof(IGitReader.GetMergeHead), (r, d) => r.GetMergeHead(d, Timeout), MayBeNull: true),
+        new("ResolveCommitAbbreviation", nameof(IGitReader.ResolveCommitAbbreviation), (r, d) => r.ResolveCommitAbbreviation(d, _firstSha[..12], Timeout)),
+        new("GetCommitMessage", nameof(IGitReader.GetCommitMessage), (r, d) => r.GetCommitMessage(d, "HEAD", Timeout)),
+        // Null: the fixtures have no upstream and nothing in progress.
+        new("GetUpstreamContainingHead", nameof(IGitReader.GetUpstreamContainingHead), (r, d) => r.GetUpstreamContainingHead(d, Timeout), MayBeNull: true),
+        new("GetInProgressOperation", nameof(IGitReader.GetInProgressOperation), (r, d) => r.GetInProgressOperation(d, Timeout), MayBeNull: true),
+        new("HasStagedChanges", nameof(IGitReader.HasStagedChanges), (r, d) => r.HasStagedChanges(d, paths: null, Timeout)),
         // The two index writes: projected to exit code and stderr (a GitRunResult carries a byte array, which does not compare or serialize usefully). a.txt is tracked, so staging it is
         // an idempotent no-op or one more staged file whichever reader runs first; the unstaged path is in neither the index nor HEAD, so that reset changes nothing.
         new("StageWholeFiles", nameof(IGitReader.StageWholeFiles), (r, d) => ExitAndStdErr(r.StageWholeFiles(d, IndexStageMode.AddListed, ["a.txt"], Timeout, CancellationToken.None))),

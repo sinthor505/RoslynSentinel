@@ -400,6 +400,74 @@ internal sealed class CliGitReader : IGitReader
         return text.Length > 0 ? text : null;
     }
 
+    public string? ResolveCommitAbbreviation(string workingDirectory, string abbreviation, TimeSpan cliTimeout)
+    {
+        // Exactly the command GitImpl.ResolveSummaryHashAsync has always run: --verify --quiet exits 1 without a message when the abbreviation is ambiguous or names no commit.
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, "rev-parse", "--verify", "--quiet", abbreviation + "^{commit}");
+        if (run is not { ExitCode: 0 })
+        {
+            return null;
+        }
+
+        var text = run.Value.StdOut.Trim();
+        return text.Length > 0 ? text : null;
+    }
+
+    public string? GetCommitMessage(string workingDirectory, string revision, TimeSpan cliTimeout)
+    {
+        // Exactly the command GitImpl.CommitAsync has always run for the committed message (with the same encoding config in front); the trailing "--" ends the revision list.
+        var run = GitProcess.Run(workingDirectory, ["log", "-1", "--format=%B", revision, "--"], cliTimeout, default, IndexWriteRunOptions);
+        if (!run.Completed || run.ExitCode != 0)
+        {
+            return null;
+        }
+
+        // git log ends the record with one line break that is not part of the message.
+        var text = run.StdOut;
+        return text.EndsWith('\n') ? text[..^1] : text;
+    }
+
+    public string? GetUpstreamContainingHead(string workingDirectory, TimeSpan cliTimeout)
+    {
+        // Exactly the two commands GitImpl.CommitAsync has always run for an amend: exit 0 of the first = an upstream is configured (and exists); exit 0 of the second = HEAD is an
+        // ancestor of (or equal to) the upstream tip.
+        var upstream = GitProcess.TryRun(workingDirectory, cliTimeout, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}");
+        if (upstream is not { ExitCode: 0 })
+        {
+            return null;
+        }
+
+        var name = upstream.Value.StdOut.Trim();
+        if (name.Length == 0)
+        {
+            return null;
+        }
+
+        var contained = GitProcess.TryRun(workingDirectory, cliTimeout, "merge-base", "--is-ancestor", "HEAD", "@{upstream}");
+        return contained is { ExitCode: 0 } ? name : null;
+    }
+
+    public string? GetInProgressOperation(string workingDirectory, TimeSpan cliTimeout)
+    {
+        // The git dir comes from rev-parse (not workingDirectory + ".git") so a linked worktree, where .git is a file, resolves to its per-worktree git dir.
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, "rev-parse", "--absolute-git-dir");
+        return run is { ExitCode: 0 } ? GitOperationState.Detect(run.Value.StdOut.Trim()) : null;
+    }
+
+    public bool? HasStagedChanges(string workingDirectory, IReadOnlyList<string>? paths, TimeSpan cliTimeout)
+    {
+        // Exactly the command GitImpl.NothingStagedAsync has always run: literal pathspecs, --quiet exits 1 when the index differs from HEAD and 0 when it does not.
+        var args = new List<string> { "--literal-pathspecs", "diff", "--cached", "--quiet" };
+        AddPathLimit(args, paths);
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, [.. args]);
+        return run?.ExitCode switch
+        {
+            0 => false,
+            1 => true,
+            _ => null,
+        };
+    }
+
     // What the stage and unstage commands run with: the resolved git executable and the encoding config GitImpl has always put in front of its commands.
     private static readonly GitRunOptions IndexWriteRunOptions = new()
     {
