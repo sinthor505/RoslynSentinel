@@ -1,6 +1,6 @@
 # Eval: scenario-eval follow-ups - stop-adherence A/B, EmptyInterfaceRemoval redesign, early-exit resume reruns, seeded scenarios
 
-**Status:** OPEN 2026-11-12. All plan runs recorded (steps 2, 4, 6 before/after, 7, 8); recommendations 1-4 and a third RenameSymbolTypo arm (after f1's slice 4d) are open.
+**Status:** OPEN 2026-11-12. All plan runs recorded (steps 2, 4, 6 before/after, 7, 8); recommendations 1-4 are open. Third RenameSymbolTypo arm (f1's slice 4d) recorded: 7/10 sent the corrected call directly.
 
 ## Context
 
@@ -161,6 +161,21 @@ at its slice 4c, d1ed5854, after this commit).
   (not tested): each candidate's next call is a `Search(... query: "CalcDisc" ...)`, not the original
   `RenameSymbol` with the corrected id, so accepting it still costs a lookup turn. Offering the corrected
   original call per candidate is the environment change to try (belongs to `plan_not_found_error_orientation`).
+- **Third arm** (run 20261112-202425-969, pinned e2fdf9b0 = f1's slice 4d: each candidate shows its exact
+  docCommentId and the tool's own call with only the id corrected, e.g. `RenameSymbol(..., docCommentId:
+  "M:...CalcDisc(System.Decimal,System.Decimal,System.Boolean)", newName: "CalculateDiscountedTotal")`; early exit
+  on, which does not change pass rate or first call):
+
+  | Arm | Passed | First live call = suggested corrected call | T2 reasoning: used / verified / not mentioned / dismissed | Real name first | Live turns mean/max |
+  | --- | --- | --- | --- | --- | --- |
+  | Before (85602567) | 8/10 | 0/10 (Search on the typo) | - | T4-T9 | 7.7/8 |
+  | Candidates + Search call (2c6cc92c) | 10/10 | 0/10 | 0 / 4 / 5 / 1 | T2-T4 | 5.8/8 |
+  | Candidates + corrected call (e2fdf9b0) | 10/10 | 7/10 | 7 / 2 / 0 / 1 | T2-T3 | 1.5/4 |
+
+  s05: "The error shows that the method name is `CalcDisc`, not `CalcDsc`. I need to use the correct docCommentId."
+  The one dismissal (s10) trusted the task text over the error: "The task describes a method named `CalcDsc`.
+  Let me search for it directly." Confirms the hypothesis above: a ready-to-send corrected call is used; a lookup
+  call is not.
 
 - **Step 5 (cap-16 diagnostic): skipped** (owner, 2026-11-12). The FailedLastCallStaleOldContent cap hits are
   stuck on ValidationFailed and ReadFile type-name loops, not progressing slowly; cap stays 8.
