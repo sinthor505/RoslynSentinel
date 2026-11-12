@@ -13,6 +13,31 @@ namespace RoslynSentinel.Tests.ModelEval;
 [TestFixture]
 public class ResumeFaultExecutionTests
 {
+    private const string ModelVariable = "ROSLYNSENTINEL_LLM_MODEL";
+    private const string PlaceholderModel = "model-free-test-placeholder";
+    private string? _previousModel;
+
+    [SetUp]
+    public void SetUp()
+    {
+        // The in-process environment builds an LM client that insists on a model name though no model call is made. The placeholder
+        // is never contacted and is undone in TearDown, so the live fixtures' unset-model skip still works.
+        _previousModel = Environment.GetEnvironmentVariable(ModelVariable);
+        if (string.IsNullOrEmpty(_previousModel))
+        {
+            Environment.SetEnvironmentVariable(ModelVariable, PlaceholderModel);
+        }
+
+        LlmOptions.Configure([]);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        Environment.SetEnvironmentVariable(ModelVariable, _previousModel);
+        LlmOptions.Configure([]);
+    }
+
     private const string TwinArguments = """
         {"reason":"change national to national-post in SummarizeShipping","action":"apply","filePath":"{SOLUTION}/ContosoOrders.Core/FixtureHelpers/OrderPricingCalculator.cs","oldContent":"_ => \"national\",","newContent":"_ => \"national-post\","}
         """;
@@ -20,7 +45,6 @@ public class ResumeFaultExecutionTests
     [Test]
     public async Task ApplyResumeFaultCalls_TwinReplaceSnippetInOneTurn_ExecutesBothInOrderWithRealResults()
     {
-        LlmOptions.Configure([]);
         var cancellationToken = TestContext.CurrentContext.CancellationToken;
         var scenario = BuildTwinScenario([("ReplaceSnippet", TwinArguments)], TwinArguments);
         var sampleDirectory = NewSampleDirectory();
@@ -51,7 +75,6 @@ public class ResumeFaultExecutionTests
     [Test]
     public async Task ApplyResumeFaultCalls_NoExtraCalls_ExecutesOnlyThePrimaryCall()
     {
-        LlmOptions.Configure([]);
         var cancellationToken = TestContext.CurrentContext.CancellationToken;
         var validateArguments = TwinArguments.Replace("\"action\":\"apply\"", "\"action\":\"validate\"");
         var scenario = BuildTwinScenario(null, validateArguments);
