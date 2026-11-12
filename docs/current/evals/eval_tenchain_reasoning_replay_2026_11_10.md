@@ -640,6 +640,58 @@ L2. Archive `C:\tmp\rs_eval_h5\ModelTestingResults\113\Model_AppliesTenChainedRe
   (twins, whole-file two-rename, half-extraction, parameter rename), so the fixes have been landing on real defects but
   the rate stays about 80% at this sample size.
 
+## Batch H6: master 30f4622f, lift + loop latch ON ("lift+latch" arm), 3/5 (2 host context errors) (2026-11-11)
+
+**Setup.** Host 113 unchanged since H4/H5: `qwen3.5-9b-coder` context_length **70144**, parallel 4, `reasoning_budget_message`
+listed with no budget value (as in F; not re-verified beyond that). Worktree `C:\tmp\rs_eval_h6` (branch `eval/h6`) at
+master 30f4622f: H5 plus 30f4622f (parameter-rename attribution when the method is renamed too and after a failed
+lift; FileNotFound no longer pushes CreateFile for a renamed file) and 2e15938d (CodingAgent system prompt gains the
+`BLOCKED:` stop instruction; that commit says 10-chain results after it are not comparable with A-H4, so this batch
+changes the prompt as well as turning the latch on). `ROSLYNSENTINEL_LIFT_RENAMES=1` and
+`ROSLYNSENTINEL_LOOP_LATCH=1` (read by `ModelEvalAssemblySetUp` since c05b5ee3), same command as H1 with `-Repeats 5`. L2.
+Archive `C:\tmp\rs_eval_h6\ModelTestingResults\113\Model_AppliesTenChainedRefactors\`, runs `20261111-231241-204`,
+`232454-124`, `233028-056`, `233936-791`, `234801-154` (host-UTC stamps).
+
+| Run | Folder | Result | Turns | Failed | Lifted (turns) | Lift refused | Model RenameSymbol | RunTest (turn: result) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| R1 | 231241-204 | pass | 24 | 1 | 1 (T4) | 1 (T2) | 0 | T14, T15 fail, T19 pass 8/0 |
+| R2 | 232454-124 | pass | 20 | 1 | 2 (T2, T5) | 0 | 0 | T12 fail (Step 7), T16 pass |
+| R3 | 233028-056 | ERROR: LM Studio 500 "Context size has been exceeded" on the request after T25 | 25 | 4 | 1 (T2) | 0 | T20 ok | T25 fail 7/1 (last call before the error) |
+| R4 | 233936-791 | pass | 15 | 2 | 1 (T4) | 1 (T3) | 0 | T8 fail (Step 7), T13 pass |
+| R5 | 234801-154 | ERROR: same context error after T24 | 24 | 4 | 1 (T4) | 1 (T2) | T9 err, T11 ok | T24 pass 8/0 |
+
+| Measure | F off | G | H1 | H2 | H3 (3 valid) | H4 | H5 | H6 lift+latch |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Pass | 8/10 | 8/10 | 4/5 | 4/5 | 3/3 | 4/5 | 4/5 | 3/5 (2 host errors, 0 model failures) |
+| Mean turns | 24.0 | 19.7 | 18.6 | 19.4 | 11.7 | 18.4 | 21.8 | 21.6 |
+| Mean failed calls | 6.9 | 3.7 | 2.8 | 3.8 | 1.0 | 3.6 | 3.2 | 2.4 |
+| Lifts per run (renames lifted of 2) | 0 | 1.4 | 1.6 | 1.4 | 1.0 (2 of 2) | 1.4 (8 of 10) | 1.6 (9 of 10) | 1.2 (6 of 10; 3 refused lifts) |
+| Redirects per run | 1.9 | 0.6 | 0.6 | 2.4 | 0 | 0 | 0 | 0 |
+| Longest identical consecutive call | 1 | 2 | 2 | 10 | 1 | 3 | 2 | 2 (R3 PreviewRenameImpact T18-19) |
+
+- **Latch: 0 firings.** No "latch", "LoopLatch" or assist string in any transcript, agent.log or prompt; no qualifying trigger
+  occurred (the same tool failing the same way twice with no successful different-tool call between; R3 T7/T8 and R5 T2/T8/T13
+  failed with different codes or were separated by successes). So the latch arm tested nothing about resend-despite-note, and
+  nothing was blocked. The H5 R5 situation did not recur.
+- **Parameter-rename attribution: 0 firings.** No result contains "renamed parameter" or "use(s) outside your edit"; no run
+  renamed a parameter in a rejected edit (the CS0103s were `LocalZone`/`RegionalZone`). FileNotFound hint: no ReadFile failed in any
+  run, CreateFile was called only for the new interface (R1 T3, R2 T4, R3 T11, R4 T2, R5 T3). No-op duplicate apply: 0.
+  "was rewritten by": 0. docCommentId shape hint: once, R5 T9 (`contosoorders.core.fixturehelpers.orderpricingcalculator`,
+  no prefix, "is not a documentation-comment ID"), fixed at T11 with `T:ContosoOrders.Core.FixtureHelpers.OrderPricingCalculator`.
+  The `BLOCKED:` stop instruction was never used.
+- **R3 and R5: context overflow, not a model or tool failure.** Recorded totals at the end were 42.9k (R3, T25) and
+  44.3k (R5, T24) against the loaded 70144; growth was smooth (about 0.8k per turn, T1 24.1k of which about 24k is system prompt plus
+  tool schemas), no jump, no whole-file read, no long reasoning (traced, failure-root-cause-analyst). The failing request itself is
+  not recorded; agent.log shows the stream failing after 150 (R3) and 50 (R5) events, and the retry
+  (`LmStudioAgentClient.cs:116-140`, main tree) failing again. Passing R1 in the same batch reached 46.6k, and G/H5 runs reached 58.9k/57.3k
+  without error, so the effective ceiling was lower than 70144 at those moments: the evidence does not support prompt growth
+  (T1 input 24.1k vs 24.0k in H4, so the `BLOCKED` text is ruled out) or a per-slot split (70144/4 would be below T1).
+  Hypothesis: host 113's KV pool was partly used by other traffic (H4 R1 and H5 R2 also report impossible input-token jumps:
+  T2 51.6k, T3 27.6k, T4 88k); not verified from the host side.
+- **Friction (all runs):** helper accessibility "private" (step 1) vs "internal" (step 3) re-read (R3 T2, R4 T3); step 7/8 ordering
+  re-read (R4 T9, R5 T8-T9); R1 T7 "verify what RenameSymbol actually did" after a ReplaceSnippet lift; the one recurring RunTest
+  failure is Step 7 (`OrderCheckout._calculator` declared as the concrete type), fixed next turn in R2 and R4.
+
 ## Out of scope
 
 - Batch C ran before 31b206a6 and 28391d8c; their effect is unmeasured.
