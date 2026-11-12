@@ -1,6 +1,6 @@
 # Plan: short targeted model-eval scenarios (cold-start and resume, clean and faulted)
 
-**Status:** IN PROGRESS 2026-11-12. Steps 1 to 8 done; step 9 not started; step 10 not started; step 11 runs done (4 of 5 passed, mean 29.2 turns, 0 of 5 ended with `BLOCKED:`), eval doc not yet written.
+**Status:** IN PROGRESS 2026-11-12. Steps 1 to 11 done (batch D: step 9 both scenarios with 10 live samples each, step 10 summary and reference doc, step 11 eval doc). Plan close not done: no full-suite run yet, `schemaDrift` still true until the capture is re-taken, and the owner decisions in the batch D report are open.
 
 ## Problem
 
@@ -322,6 +322,12 @@ C#; none in `agent.log` or `test-result.txt`).
     `NormalizeResultText` is incomplete or the replayed wording differs; neither was analysed. The scorer's
     first-error columns read the seeded history (the T2 ReplaceSnippet failure), so for a resume scenario
     `firstErrorCode`, `callsToRecover` and `recoveryUsedExpectedTool` describe the capture, not the sample.
+  - Both findings closed in batch D. Scorer: 98f5dae18b753fb838d686b27a97056ff42ea089 (`Score(..., seededTurns)` reads only live
+    turns for first error and recovery columns; owner decision 2026-11-11) and f6bf295013a67eabf840ce7f704275403d5cb3b0 (the sample
+    loop and rescoring pass `ResumeKeepTurns`). Drift: 5342284b316c3074e62711a0c4312f105406e9b3 (`NormalizeResultText` masks the
+    large-result file name and the changeId and resultId inside prose hints; `resultDrift` 4 to 0 on the capture, with the
+    no-model probe `ResumeDriftProbeTests`). `schemaDrift` was another session's `matchLine` description change since the capture;
+    it stays true until the capture is re-taken.
 
 ### Step 9 - Type 4: faulted resume scenarios
 
@@ -332,6 +338,25 @@ C#; none in `agent.log` or `test-result.txt`).
     symbol name), execute it on the fixture and seed the result the server returned. The call is
     authored; only its result is real. The CSV fault kind says so.
 - Done when: one scenario of each kind runs 10 samples with a declared expected outcome.
+- Done (2026-11-12, batch D; both scenarios resume the `stale-caller-edit-after-rename.json` capture at keep=11,
+  expected outcome `Recover`, `qwen3.5-9b-coder`, host 113, 10 samples each, 0 Inconclusive):
+  - **Harness:** 5bcb4d644b4e300a49607a5f78bb9e2ff2b321ce (`ScenarioDefinition.ResumeFaultTool`/`ResumeFaultArguments`/
+    `ResumeFaultSeeded`; one real call after the replay, `{SOLUTION}` token in the arguments; unseeded = executed on the
+    fixture, not shown to the model), c46fe32d9e9e94f4de8ebdb0355b9308994c3aca (seeded = `TranscriptResume.BuildAuthoredFaultTurn`
+    appended to the history, real result, turn cap counts it, scored as a live turn so it is the scenario's first error),
+    7fd743cd88cbf8bb9786b2777cf25e61f05e5bf8 (doc comment).
+  - **Stale workspace** `StaleWorkspaceAfterRename` (fe06af3a99528ce1d1ce61568915e7a96dcd0947): after the replay a real
+    `ReplaceSnippet` rewrites the `OrderCheckout._calculator` initializer (`new()` to `new OrderPricingCalculator()`), unseen.
+    Measured job 20261112-050354-001, run folder `20261112-050409-984`: 8 of 10 passed, first-call success 6 of 10, mean 3.4
+    calls to recover (9 recovered), failure classes None 8 and BudgetOut 2, final state Correct 8 and Wrong 2, all 10 hit
+    the 8-live-turn cap, first error NotFound in 6 samples (FileNotFound 1, ValidationFailed 2, TargetIneligible 1).
+  - **Failed last call** `FailedLastCallStaleOldContent` (5cebf6c6e1ed5e2d16ed57c8ff91f9685e000c56): after the replay an authored
+    assistant `ReplaceSnippet` turn whose `oldContent` still names `CalcDisc` is seeded with its real NotFound result.
+    Measured job 20261112-053438-001, run folder `20261112-053510-114`: 6 of 10 passed, first-call success 0 of 10 (by
+    construction: the authored call is the first error), mean 4.7 calls to recover (9 recovered), None 6 and BudgetOut 4,
+    final state Correct 6, Wrong 2, Unchanged 2.
+  - **Both:** `schemaDrift` is true on all 20 samples (the capture predates a description change to `matchLine`; the capture
+    has not been re-taken) and `resultDrift` sums to 9 per 10 samples. Neither gates the sample (description-only).
 
 ### Step 10 - Batch summary and reference doc
 
@@ -340,6 +365,12 @@ C#; none in `agent.log` or `test-result.txt`).
   success rate, mean calls to recover, failure-class counts, drift flags. Inconclusive samples are never
   in the denominator. Document how to add a scenario, re-capture a transcript and score a saved one.
 - Done when: a canned CSV with one Inconclusive sample shows it by name in the summary.
+- Done: e50a2da1c931769ec93cf523c63b122af3c88612 (`scripts/Get-ScenarioSummary.ps1`, hooked into
+  `roslynsentinel-modeleval.ps1` after each Scenario run; `scripts/Get-ScenarioSummary.Tests.ps1`, 21 asserts, canned CSV with
+  one Inconclusive sample shown by reason), 61c1b4eccacbb001ebdc9cfd666b77bfd3d0a1d5 (reference doc section "Targeted scenarios",
+  four facts in it are marked unverified: the `final-state\` folder name, the probe output location, the evalqueue submit flags
+  and the rescore test filter). The end-to-end hook was not exercised by a live run's own printout; the summary function was
+  run by hand on both batch D CSVs.
 
 ### Step 11 - Re-baseline 10-chain under the new system prompt
 
@@ -347,6 +378,8 @@ C#; none in `agent.log` or `test-result.txt`).
 - Change: one batch of 5 runs of `Model_AppliesTenChainedRefactors` with the step 4 prompt; record pass
   rate, mean turns and how many runs ended with the marker; score each with step 3d.
 - Done when: the batch is in the eval doc, marked as the first batch under the stop-marker prompt.
+- Done: 9edf19928d90b0aff929aceb7492554d4928ca28 (section "Batch C (stop-marker prompt)" in the eval doc: 4 of 5 passed, mean
+  29.2 turns, 0 of 5 ended with `BLOCKED:`; which run failed is inferred from `recovered=false`, the scorer CSV leaves `passed` blank).
 
 ## Out of scope
 
