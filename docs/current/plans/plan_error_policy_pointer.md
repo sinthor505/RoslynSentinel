@@ -1,6 +1,6 @@
 # Plan: gated error-policy suffix (Off / Pointer / Inline) on not-found tool errors, with eval stamping and an A/B
 
-**Status:** APPROVED 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7); not started.
+**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Step 1 done (inventory).
 
 ## Problem
 
@@ -28,6 +28,12 @@ Run decisions, 2026-11-12 (owner present during the run):
 - Hold point: the run stops before Step 9 (owner approves both texts; in-flight baselines finish first).
 - The stop-adherence fixture rebuild is Step 10 of this plan (it had no owner).
 
+After the Step 1 inventory, 2026-11-12:
+
+- **Kind carrier: side channel.** The error site records the target kind on the per-call `ToolCallContext`; the filter reads it there. No wire field: a `[JsonIgnore]` field would reach neither the filter (it sees only serialized text) nor transcripts, and a serialized one would change the JSON every model reads, breaking `Off` byte-identity and in-flight baselines. Supersedes D2's "kind in `StructuredDetail`". For debugging, the filter logs the classified key to the server log.
+- **Lookup misses of a task-named target: the policy text handles it.** Both scenarios' first errors come from lookup tools (Inventory), so they get the `.Lookup` keys. The four keys stay; the `.Lookup` entries (Step 9) say "if the task named this target and the error offers no match, stop with BLOCKED; if you guessed the name, widen once, then report". The server cannot know who named the target; the model can.
+- **Kind normalization** (Step 3): `document`, `file` -> File; `class`, `interface`, `type`, `record`, `enum`, `enum member`, `method`, `member`, `declaration`, `property`, `field`, `constructor`, `parameter`, `attribute`, `namespace`, `symbol`, `container` -> Symbol; `project`, `statement(s)`, `expression`, `snippet`, `block`, null -> no key. Literal codes: `FileNotFound` -> File, `MethodNotFound` -> Symbol, regardless of recorded kind.
+
 Mechanism: one call-tool filter, `ErrorPolicyFilter`, registered only when the mode is not `Off`, so `Off` is
 byte-identical to today by construction.
 
@@ -54,6 +60,7 @@ Text-neutral slices first (Steps 1-4, 7-8), behaviour-changing ones after (5, 6,
   3. The routes the scenarios hit: MissingFile drives `ReplaceSnippet`, MissingMethod drives `RenameSymbol` (`RoslynSentinel.Tests.ModelEval/StopAdherenceScenarios.cs:14-69`). Confirm the route by a tool-level test call, not only from the eval doc (saved transcripts for the 2026-11-12 runs were not found on disk).
   4. Every `[McpServerTool]` method; for each operation-dispatch tool, its operation enum and values. Whether `ToolClassRegistry.cs` gives a test an enumerable list of registered tool names.
   5. What a call-tool filter can see: tool name, arguments dictionary, the outgoing `CallToolResult` and its structured content. Registration: `ServiceRegistrationExtensionsBasic.cs:122-139` (`CallToolFilterRegistrations`, 15 entries) and `:75-82`. Whether the in-process ModelEval harness (`ChainEvalToolSurface.cs:46-78`) runs the same filters.
+- Done: 2026-11-12, see "Inventory" below; filters can see the tool name and arguments, so the Decision stands (kind carrier revised, see "Decision").
 - Done when: the Inventory section lists the slice-1 routes (those the two scenarios hit) and the rest, the kind value set, the tool/operation list, and the filter's inputs. If a filter cannot see the tool name or arguments, stop and revise the Decision with the owner.
 
 ### Step 2 - Options and enums in Common
@@ -77,18 +84,18 @@ Text-neutral slices first (Steps 1-4, 7-8), behaviour-changing ones after (5, 6,
 - Change: parse `### <Key>` sections into `IReadOnlyDictionary<ErrorPolicyKey, string>`; unknown or duplicate heading is an error. `WithErrorHandling(prompt, document)` appends an `ErrorHandling` block whose headings render as `Error handling: <Key>`. Expose `ContentHash` (SHA-256 of the file bytes, short form) for Step 8.
 - Done when: Build 0 errors; tests: round-trip, unknown heading, missing key, rendered heading matches the string the pointer will name (shared constant).
 
-### Step 5 - Put the target kind on the wire for slice-1 routes
-- Files: `RoslynSentinel.Common/ToolException.cs` (`ToolNotFoundException.StructuredDetail`, `:92-100`); the slice-1 routes from Step 1; new test file.
-- Depends on: Step 1, Step 3 (kind constants)
-- Effect: behaviour-changing (structured content only): not-found error envelopes gain `missingTarget: <kind>` in their structured detail. Error message text is unchanged.
-- Change: `StructuredDetail` emits the normalized kind (today it emits candidates and snippet only; the kind is not on the wire). Slice-1 returned-envelope routes either emit the field or are classifiable by their literal code. Every other route from Step 1 gets `// TODO error-policy: route does not carry missingTarget` at the spot.
-- Done when: Build 0 errors; tests drive `ReplaceSnippet` on a missing file and `RenameSymbol` on a missing method and assert the field (or the code) is present; existing pinned assertions unchanged except structured-content ones, updated deliberately.
+### Step 5 - Record the target kind on the call context for slice-1 routes
+- Files: `ToolCallContext` (Common; verify it is a per-call mutable object set by `AgentIdentity`, filter 1, and that a mutation inside the tool is visible to an outer filter after the call returns - an `AsyncLocal` value set inside the call would not flow back); `RoslynSentinel.Common/ToolException.cs` (`ToolErrorMapper.ToResultError`); `RoslynSentinel.Tools.Basic/SymbolNavigationImpl.cs:106` (`LocateSymbol`, reached by `Search(mode: symbol)`); new test file.
+- Depends on: Step 3 (kind constants)
+- Effect: text-neutral (no wire or text change)
+- Change: add `RecordMissingTarget(kind)` / `MissingTargetKind` to `ToolCallContext`. `ToolErrorMapper.ToResultError` records `ToolNotFoundException.MissingTargetKind` (covers tool `catch` blocks). `CallToolFailureHandler` records it for thrown exceptions. `LocateSymbol`'s not-found `ResultError` records `symbol`. `ReadFile`/`GetFileOutline`/`GetMethodSource` need nothing: their literal `FileNotFound`/`MethodNotFound` codes classify alone. Every other returned not-found route from the Inventory gets `// TODO error-policy: route does not record the missing-target kind` at the spot.
+- Done when: Build 0 errors; tests call `Search(mode: symbol)` for a missing method and a throwing route through the real filter pipeline and assert the context holds the kind after the call; no pinned error text changes.
 
 ### Step 6 - ErrorPolicyFilter
 - Files: new `RoslynSentinel.Server.Advanced/ErrorPolicyFilter.cs`; `ServiceRegistrationExtensionsBasic.cs` (`CallToolFilterRegistrations`); `ToolTelemetryFilterOrderTests`; new test file.
 - Depends on: Steps 2-5
 - Effect: behaviour-changing only when the mode is not `Off`: error text gains one trailing sentence (`Pointer`) or the operator's entry (`Inline`).
-- Change: on an error result, classify via Step 3 from tool name, arguments and the envelope's code/`missingTarget`; append the pointer (D5, pinned here using the Step 4 heading constant) or the `Inline` entry as a separate paragraph at the end of the error text. Register only when the mode is not `Off`. Place it after any filter that rewrites error text, so the suffix is last (order from Step 1 item 5).
+- Change: on an error result, classify via Step 3 from tool name, arguments, the envelope's `errorData.errorCode` (parsed from the first text block) and `ToolCallContext.MissingTargetKind`; append the pointer (D5, pinned here using the Step 4 heading constant) or the `Inline` entry as a separate trailing text block, leaving the first block untouched (precedent `ServiceRegistrationExtensionsBasic.cs:~1209`). Log the classified key. Register only when the mode is not `Off`, directly outside `WorkspaceNotLoaded` (entry 9) so it sees thrown and returned errors alike. Check `EchoReserveChars` for the `Inline` text size (`reference_tool_response_pipeline.md:187,211`).
 - Done when: Build 0 errors; tests: `Off` registers no filter and output is byte-identical on the slice-1 scenarios; `Pointer` and `Inline` per key; no suffix on success results, on non-not-found errors, or when classification returns null.
 
 ### Step 7 - Harness and PlanStepRunner wiring
@@ -132,6 +139,18 @@ Text-neutral slices first (Steps 1-4, 7-8), behaviour-changing ones after (5, 6,
 - Effect: behaviour-changing only when the mode is not `Off`
 - Change: migrate the `// TODO error-policy` routes in slices, one route family per slice.
 - Done when: no `// TODO error-policy` markers remain, or the remainder is listed in `docs/current/TODO.md` with the reason.
+
+## Inventory (Step 1, 2026-11-12)
+
+Read-only, by code (no executed tool-level test). Full report in the run tracker's session; key facts:
+
+- **Kinds.** ~296 `new ToolNotFoundException(` sites in 39 files. `MissingTargetKind` values: `document`, `file`, `project`, `class`, `interface`, `type`, `record`, `enum`, `enum member`, `method`, `member`, `declaration`, `property`, `field`, `constructor`, `parameter`, `attribute`, `namespace`, `symbol`, `container`, `statement`, `statements`, `expression`, `snippet`, `block`, or null (`SnippetErrorFormatter`, `MemberSelection.cs:339,348`, `PersistentWorkspaceManager`, `DocumentLookup.cs:441`). File misses are spelled `document` (`DocumentLookup.cs:98`, ~159 `RequireDocument` callers) or `file`. Kinds passed as variables were not seen by the regex.
+- **The kind never reaches the wire or a filter.** `ToolNotFoundException.StructuredDetail` (`ToolException.cs:92-100`) emits candidates and snippet only; `ToolErrorMapper.ToResultError` drops the kind; tool `catch` blocks route through it too.
+- **Returned (non-throw) not-found codes:** literal `"FileNotFound"` (`WorkspaceFileEditImpl.cs:544-548,561,699`; `WorkspaceReadNavigationImpl.cs:74-78`, used by `GetMethodSource:263`, `GetFileOutline:390`), literal `"MethodNotFound"` (`WorkspaceReadNavigationImpl.cs:185,317`), and `ToolErrorCode.NotFound` from `DocumentLookup.ToResultError` (`ReplaceSnippet`, `ApplyDiff`, `ApplyUnifiedDiff`), `LocateSymbol`/`InspectSymbol` (`SymbolNavigationImpl.cs:106,160,183`), `RenameSymbol` (`SymbolWireResolver.cs:98`), `RefactoringToolHelpers` guards, `BatchEditFailure`. `NotFound` is also used for non-code targets (`GetLargeResult`, `AdminTools`, unknown tool at `CallToolFailureHandler.cs:129`, project misses), so a code alone cannot classify.
+- **NotFoundEvidence** (`NotFoundEvidence.cs:43-44`) only gates on the three codes; it maps no kind. `ToolCallContext` carries the tool name, not the arguments.
+- **Scenario routes (both returned envelopes, both lookup tools):** MissingFile's first error is `ReadFile` at T1 in 20/20 samples (`WorkspaceFileEditImpl.cs:699`, code `FileNotFound`, no kind). MissingMethod's is `Search(mode: symbol)`/`LocateSymbol` in 18/20 (`SymbolNavigationImpl.cs:106`, code `NotFound`, no kind; text from `SymbolNotFoundDetail.BuildAsync`). Neither scenario's edit tool (`ReplaceSnippet`, `RenameSymbol`) ever produced the error.
+- **Tools.** 121 tools (`docs/generated/architecture_tools.md`). Enumerable for a test via `McpToolSchemaPatcher.DiscoverAllDeclaredTools` (`Common/McpToolSchemaPatcher.cs:254`; used by `Tests.Server/ClaudeLeanModeTests.cs:170`). Operation enums are not enumerated anywhere; a test reflects over parameters. Dispatch tools with mixed intent: `Member` (MemberAction), `MethodSignature`/`ConstructorParameter`/`UsingDirective`/`SummaryComment` (AddRemoveViewAction), `Git`, `GitRemote`, `ExternalFileDrift`, `McpServerControl`, `Declaration`, `WriteFile`, `ReplaceSnippet` (`action`: apply/validate), `SemanticFindReplace` (mode preview/apply).
+- **Filters.** 14 entries in `CallToolFilterRegistrations` (`ServiceRegistrationExtensionsBasic.cs:122-139`), first is outermost; a filter sees `context.Params.Name`, `context.Params.Arguments`, and the result's text blocks (`StructuredContent` unused). Thrown errors become text at entry 9 (`WorkspaceNotLoaded` = `CallToolFailureHandler`), so the new filter must sit outside it (entries 1-8 side) to see both forms. Precedent for appended text: a separate trailing text block, first block untouched (`ServiceRegistrationExtensionsBasic.cs:~1209`). `reference_tool_response_pipeline.md:187,211`: text added outside the offload filter is unmeasured; check `EchoReserveChars`. `ToolTelemetryFilterOrderTests` (`Tests.Server/ToolTelemetryFilterOrderTests.cs:21-45`) pins the count and the first three names. The ModelEval scenario harness registers the same filters (`ScenarioAgentTests.cs:420-445`).
 
 ## Out of scope
 
