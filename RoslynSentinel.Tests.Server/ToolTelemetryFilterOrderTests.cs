@@ -44,6 +44,67 @@ public class ToolTelemetryFilterOrderTests
         Assert.That(host.Services.GetService<ToolTelemetry>(), Is.Not.Null, "AddRoslynSentinelToolsBasic must register the ToolTelemetry singleton.");
     }
 
+    /// <summary>Builds the host the way the order test does; returns the filter names and the number of registered call-tool filters.</summary>
+    private static (List<string> Names, int RegisteredCount) BuildCallToolFilters()
+    {
+        var services = new ServiceCollection();
+        services.AddRoslynSentinelEnginesBasic();
+        var mcpBuilder = services.AddMcpServer();
+        mcpBuilder.AddRoslynSentinelToolsBasic(services, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "claude-lean" });
+
+        var hostBuilder = Host.CreateApplicationBuilder();
+        foreach (var descriptor in services)
+        {
+            hostBuilder.Services.Add(descriptor);
+        }
+
+        using var host = hostBuilder.Build();
+        var registered = host.Services.GetRequiredService<IOptions<McpServerOptions>>().Value.Filters.Request.CallToolFilters;
+        return (RoslynSentinelServiceExtensionsBasic.CallToolFilterNames.ToList(), registered.Count);
+    }
+
+    // ErrorPolicyOptions is static process state and the filter list is read at build time, so these tests must not run in parallel.
+    [Test]
+    [NonParallelizable]
+    public void CallToolFilters_InOffMode_HaveNoErrorPolicyFilter()
+    {
+        ErrorPolicyOptions.Configure(new[] { "--error-policy-mode=off" });
+        try
+        {
+            var (names, registeredCount) = BuildCallToolFilters();
+
+            Assert.That(names, Does.Not.Contain("ErrorPolicy"), "Off mode must register no error-policy filter, so Off is byte-identical to today.");
+            Assert.That(registeredCount, Is.EqualTo(names.Count), "Every name in CallToolFilterNames must be one registered call-tool filter, and vice versa.");
+            Assert.That(names.Count, Is.EqualTo(14), "The call-tool filter count before the error-policy slice was 14.");
+        }
+        finally
+        {
+            ErrorPolicyOptions.Configure(new[] { "--error-policy-mode=off" });
+        }
+    }
+
+    // ErrorPolicyOptions is static process state and the filter list is read at build time, so these tests must not run in parallel.
+    [Test]
+    [NonParallelizable]
+    public void CallToolFilters_InPointerMode_PutErrorPolicyDirectlyOutsideWorkspaceNotLoaded()
+    {
+        ErrorPolicyOptions.Configure(new[] { "--error-policy-mode=pointer" });
+        try
+        {
+            var (names, registeredCount) = BuildCallToolFilters();
+
+            var workspaceNotLoaded = names.IndexOf("WorkspaceNotLoaded");
+            Assert.That(workspaceNotLoaded, Is.GreaterThan(0), "WorkspaceNotLoaded must be a registered call-tool filter.");
+            Assert.That(names[workspaceNotLoaded - 1], Is.EqualTo("ErrorPolicy"), "The error-policy filter must sit directly outside WorkspaceNotLoaded so it sees thrown and returned errors alike.");
+            Assert.That(names.Count, Is.EqualTo(15), "Pointer mode adds exactly one call-tool filter to the 14 of Off mode.");
+            Assert.That(registeredCount, Is.EqualTo(names.Count), "Every name in CallToolFilterNames must be one registered call-tool filter, and vice versa.");
+        }
+        finally
+        {
+            ErrorPolicyOptions.Configure(new[] { "--error-policy-mode=off" });
+        }
+    }
+
     [Test]
     public async Task RecordAsync_CountsSuccessAndErrorBodyAndException()
     {

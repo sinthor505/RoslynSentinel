@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 using RoslynSentinel.Common;
+using RoslynSentinel.Common.AgentLoop;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Basic;
 
@@ -75,7 +76,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         // Add centralized error filters, in CallToolFilterRegistrations order (the first registered is the outermost).
         mcpBuilder.WithRequestFilters(filters =>
         {
-            foreach (var (_, add) in CallToolFilterRegistrations)
+            foreach (var (_, add) in BuildCallToolFilterRegistrations())
             {
                 add(filters);
             }
@@ -117,10 +118,13 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// and the breakers (which refuse without calling next), and ToolError, which copies the body's isError onto
     /// CallToolResult.IsError before the telemetry filter reads it. What each filter does, and how they fit with the result
     /// marshaller: docs/current/references/reference_tool_response_pipeline.md.
+    /// The error-policy entry (see AddErrorPolicyFilter) is added only when ErrorPolicyOptions.Mode is not Off, directly outside WorkspaceNotLoaded.
     /// </summary>
     // TODO generate the filter order into docs/generated from CallToolFilterNames so ArchitectureDocFreshnessTests catches a stale filter list in the reference doc.
-    private static readonly (string Name, Action<IMcpRequestFilterBuilder> Add)[] CallToolFilterRegistrations =
-    [
+    private static (string Name, Action<IMcpRequestFilterBuilder> Add)[] BuildCallToolFilterRegistrations()
+    {
+        var registrations = new List<(string Name, Action<IMcpRequestFilterBuilder> Add)>
+        {
         ("AgentIdentity", AddAgentIdentityFilter),
         ("ToolCallEcho", AddToolCallEchoFilter),
         ("ToolTelemetry", AddToolTelemetryFilter),
@@ -137,10 +141,40 @@ public static class RoslynSentinelServiceExtensionsBasic
         ("WirePathRelativize", AddWirePathRelativizeFilter),
         ("OrientationBreaker", AddOrientationBreakerFilter),
         ("UnrecoverableBreaker", AddUnrecoverableBreakerFilter),
-    ];
+        };
+        if (ErrorPolicyOptions.Mode != ErrorPolicyMode.Off)
+        {
+            // Sits directly outside WorkspaceNotLoaded so it sees thrown errors (already mapped to text by the filter inside it)
+            // and returned errors alike. Absent when the mode is Off, so Off is byte-identical to a build without this feature.
+            registrations.Insert(registrations.FindIndex(r => r.Name == "WorkspaceNotLoaded"), ("ErrorPolicy", AddErrorPolicyFilter));
+        }
 
-    /// <summary>Names of the call-tool filters in the order <see cref="AddRoslynSentinelToolsBasic"/> registers them (outermost first).</summary>
-    public static IReadOnlyList<string> CallToolFilterNames => CallToolFilterRegistrations.Select(r => r.Name).ToArray();
+        return [.. registrations];
+    }
+
+    /// <summary>
+    /// Registers the error-policy filter (<see cref="ErrorPolicyFilter"/>): on a not-found error result it appends the operator's
+    /// policy pointer or inline entry as one trailing text block. The mode and policy file are read once here, at startup.
+    /// </summary>
+    private static void AddErrorPolicyFilter(IMcpRequestFilterBuilder filters)
+    {
+        var mode = ErrorPolicyOptions.Mode;
+        // TODO error-policy: Inline text is outside the offload budget; EchoReserveChars (2560) is shared with other stamps, keep entries short
+        ErrorPolicyDocument? document = mode == ErrorPolicyMode.Inline ? ErrorPolicyDocument.Load(ErrorPolicyOptions.PolicyFilePath!) : null;
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            (context, cancellationToken) => ErrorPolicyFilter.InvokeAsync(
+                mode,
+                document,
+                context.Params?.Name,
+                context.Params?.Arguments,
+                context.Server.Services?.GetService<ILoggerFactory>()?.CreateLogger("ErrorPolicyFilter"),
+                () => next(context, cancellationToken))));
+    }
+
+    /// <summary>Names of the call-tool filters in the order <see cref="AddRoslynSentinelToolsBasic"/> registers them (outermost first), for the current error-policy mode.</summary>
+    public static IReadOnlyList<string> CallToolFilterNames => BuildCallToolFilterRegistrations().Select(r => r.Name).ToArray();
 
     private static void RegisterRoslynSentinelToolsBasic(IServiceCollection services, IMcpServerBuilder mcpBuilder, HashSet<string> activeModes, HashSet<string>? includeTools = null, HashSet<string>? excludeTools = null, IReadOnlySet<string>? hideTools = null)
     {
@@ -1175,7 +1209,7 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// Must be registered third - immediately inside the echo filter and before everything else - so it wraps
     /// argument validation and the breakers (which refuse without calling next) and the ToolError filter, whose
     /// body-isError sync means it reads the corrected <c>CallToolResult.IsError</c> (see
-    /// <see cref="CallToolFilterRegistrations"/>). Because it records only after <c>next</c> returns, a McpServerStatus
+    /// <see cref="BuildCallToolFilterRegistrations"/>). Because it records only after <c>next</c> returns, a McpServerStatus
     /// call reports itself only from the following call on. With no <see cref="ToolTelemetry"/> in the container it
     /// passes straight through.
     /// </para>
