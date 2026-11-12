@@ -20,13 +20,14 @@ public class SolutionStructureEngine
     public async Task<DocumentEditResult> FixMismatchedNamespacesAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var project = document.Project;
         var defaultNamespace = project.DefaultNamespace ?? project.Name;
         var projectDir = Path.GetDirectoryName(project.FilePath);
         var fileDir = Path.GetDirectoryName(filePath);
         if (projectDir == null || fileDir == null || !fileDir.StartsWith(projectDir))
         {
+            // TODO not a lookup miss (the file resolved, a precondition failed): reclassify as ToolTargetIneligibleException so the error code is not NotFound
             throw new ToolNotFoundException($"File '{filePath}' is outside the project directory, so its namespace cannot be checked. Next: {ToolCallHint.Call("ListAll")} to confirm the owning project of this file.");
         }
 
@@ -65,6 +66,7 @@ public class SolutionStructureEngine
         var nsNode = root?.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
         if (nsNode == null)
         {
+            // TODO zero-result, not a lookup miss: the file resolved and simply declares no namespace; reclassify as ToolTargetIneligibleException so the error code is not NotFound
             throw new ToolNotFoundException($"No namespace declaration found in '{filePath}', so its target folder cannot be derived. Next: {ToolCallHint.Call("ReadFile")} the file to confirm it declares a namespace.", "namespace");
         }
 
@@ -74,6 +76,7 @@ public class SolutionStructureEngine
         var defaultNamespace = project.DefaultNamespace ?? project.Name;
         if (projectDir == null)
         {
+            // TODO not a lookup miss (the project resolved but has no directory on disk): reclassify as ToolTargetIneligibleException so the error code is not NotFound
             throw new ToolNotFoundException($"Project directory not found for '{filePath}'. Next: {ToolCallHint.Call("ListAll")} to confirm the owning project.", "project");
         }
 
@@ -368,6 +371,14 @@ public class SolutionStructureEngine
     }
 
     /// <summary>
+    /// The not-found error for a project name that did not resolve: the facts and ranked retry options of
+    /// <see cref="ProjectNotFoundDetail"/> over the loaded projects, with kind "project" and the wanted name.
+    /// <paramref name="paramName"/> is the tool parameter a retry sets.
+    /// </summary>
+    internal static ToolNotFoundException ProjectNotFound(string projectName, Solution solution, string paramName = "projectName")
+        => new(ProjectNotFoundDetail.Build(projectName, solution.Projects.Select(p => p.Name).ToList(), paramName), "project", projectName);
+
+    /// <summary>
     /// Extracts all public API members (methods, properties, constructors) from a project or file.
     /// Save the returned list as a JSON baseline to compare against later.
     /// </summary>
@@ -382,7 +393,7 @@ public class SolutionStructureEngine
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
-            var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw new ToolNotFoundException($"Project '{projectName}' not found in the solution.");
+            var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw ProjectNotFound(projectName, solution);
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else
@@ -540,9 +551,9 @@ public class SolutionStructureEngine
     public async Task<DocumentEditResult> ConvertToBackgroundServiceAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax ?? throw new InvalidOperationException("Could not parse syntax root.");
-        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className) ?? throw new ToolNotFoundException("Class not found.");
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className) ?? throw MemberRefactoringNotFound.Class(className, root, filePath.ToString());
         // Existing interfaces must survive the conversion. A base class cannot be told apart from an interface
         // by syntax alone, so classify through the semantic model of the original (unmodified) tree.
         var keptInterfaces = new List<BaseTypeSyntax>();
@@ -1060,7 +1071,7 @@ public class SolutionStructureEngine
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
-            var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw new ToolNotFoundException($"Project '{projectName}' not found in the loaded solution.", "project", projectName);
+            var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw ProjectNotFound(projectName, solution);
             documents = project.Documents.Cast<Document?>();
         }
         else
@@ -1512,7 +1523,7 @@ public class SolutionStructureEngine
     public async Task<ProjectDependencyReport> GetProjectDependenciesAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw new ToolNotFoundException($"Project '{projectName}' not found.");
+        var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw ProjectNotFound(projectName, solution);
         var projectRefs = project.ProjectReferences
             .Select(r => solution.Projects.First(p => p.Id == r.ProjectId).Name)
             .ToList();
@@ -1537,7 +1548,7 @@ public class SolutionStructureEngine
     public async Task<List<string>> FindUnusedReferencesAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var project = ProjectLookup.FindProject(solution, projectName) ?? throw new ToolNotFoundException($"Project '{projectName}' not found.");
+        var project = ProjectLookup.FindProject(solution, projectName) ?? throw ProjectNotFound(projectName, solution);
 
         var compilation = await project.GetCompilationAsync(cancellationToken) ?? throw new InvalidOperationException($"Failed to get compilation for project '{projectName}'.");
         var usedAssemblies = new HashSet<string>();
@@ -1794,6 +1805,7 @@ public class SolutionStructureEngine
     public async Task<ProjectEditResult> CreateProjectAsync(string projectName, string projectType = "console", CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        // TODO the two "Solution path not found." throws below are server-state preconditions, not name lookups: no solution file path is known; reclassify (and give them facts and options) so the error code is not NotFound
         var slnPath = _workspaceManager.SolutionPath ?? solution.FilePath ?? throw new ToolNotFoundException("Solution path not found.");
         var slnDir = Path.GetDirectoryName(slnPath) ?? throw new ToolNotFoundException("Solution path not found.");
         var projectDir = Path.Combine(slnDir, projectName);
@@ -1878,12 +1890,14 @@ public class SolutionStructureEngine
     /// </summary>
     public async Task<ProjectEditResult> SplitProjectByFolderAsync(string sourceProjectName, string folderName, string targetProjectName, CancellationToken cancellationToken = default)
     {
-        // 1. Create target project
+        // 1. Resolve the source project first: a name that does not resolve must not leave a created target project behind.
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var sourceProject = ProjectLookup.FindProject(solution, sourceProjectName) ?? throw ProjectNotFound(sourceProjectName, solution, "sourceProjectName");
+
+        // 2. Create target project
         await CreateProjectAsync(targetProjectName, "classlib", cancellationToken);
 
-        // 2. Identify files to move
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var sourceProject = ProjectLookup.FindProject(solution, sourceProjectName) ?? throw new ToolNotFoundException("Source project not found.");
+        // 3. Identify files to move (creating the target does not change the documents of the source project)
         var filesToMove = sourceProject.Documents.Where(d => d.Folders.Contains(folderName)).ToList();
 
         // 3. Physically move files and update solution (simulated for expansion)

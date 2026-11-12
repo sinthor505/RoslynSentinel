@@ -230,6 +230,7 @@ public class SymbolNavigationImpl
                     return new SentinelCallToolResult<object>
                     {
                         IsError = true,
+                        // TODO hierarchy.Error is the type-not-found text (SymbolNavigationEngine.GetTypeHierarchyAsync), a lookup miss like the others: code it NotFound (TypeHierarchyReport has no error code field yet)
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, hierarchy.Error)
                     };
                 }

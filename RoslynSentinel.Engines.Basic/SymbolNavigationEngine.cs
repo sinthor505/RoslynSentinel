@@ -1221,7 +1221,7 @@ public class SymbolNavigationEngine
         var methodDecl = ResolveCallGraphMethod(root, await document.GetTextAsync(cancellationToken), filePath, methodName, "forward", contextSnippet, lineBefore, lineAfter, cancellationToken);
         if (methodDecl == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Ensure the method name exactly matches (case-sensitive). Next: {ToolCallHint.Call("Search", ("mode", "method"), ("query", methodName))} or {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to list available methods in the file.", "method", methodName);
+            throw MemberRefactoringNotFound.Method(methodName, root, filePath.ToString());
         }
 
         var methodSymbol = model.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
@@ -1354,7 +1354,7 @@ public class SymbolNavigationEngine
         var methodDecl = ResolveCallGraphMethod(root, await document.GetTextAsync(cancellationToken), filePath, methodName, "reverse", contextSnippet, lineBefore, lineAfter, cancellationToken);
         if (methodDecl == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Ensure the method name exactly matches (case-sensitive). Next: {ToolCallHint.Call("Search", ("mode", "method"), ("query", methodName))} or {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to list available methods in the file.", "method", methodName);
+            throw MemberRefactoringNotFound.Method(methodName, root, filePath.ToString());
         }
 
         var methodSymbol = model.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
@@ -1617,9 +1617,8 @@ public class SymbolNavigationEngine
                 if (symbol == null)
                 {
                     throw new ToolNotFoundException(
-                        $"symbolName '{symbolName}' was not found declared in '{filePath}'. " +
-                        "This is NOT a confirmed zero-references result - the lookup never ran. Verify the " +
-                        $"name against {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))}, or omit filePath to search by name across the solution.");
+                        MemberRefactoringNotFound.DeclarationMessage("symbol", symbolName, "symbolName", MemberRefactoringNotFound.MemberNames(root), filePath) +
+                        " The lookup never ran, so this is not a zero-references result. Omitting filePath resolves symbolName by name across the solution.");
                 }
             }
         }
@@ -1740,12 +1739,11 @@ public class SymbolNavigationEngine
 
         if (symbol == null)
         {
-            var nearMissHint = await DescribeNearMissCandidatesAsync(solution, symbolName, "callers", cancellationToken);
+            var missDetail = await DescribeSymbolMissInSolutionAsync(solution, symbolName, "callers", cancellationToken);
             throw new ToolNotFoundException(
                 $"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                 (contextSnippet != null ? " with the supplied contextSnippet" : "") + ". " +
-                "This is NOT a confirmed zero-references result - the lookup never ran. " +
-                $"Verify the name via {ToolCallHint.Call("Search", ("mode", "symbol"))}/{ToolCallHint.Call("GetFileOutline")} before treating this as evidence the symbol is unused. " + nearMissHint);
+                "The lookup never ran, so this is not a zero-references result. " + missDetail);
         }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
@@ -1885,6 +1883,9 @@ public class SymbolNavigationEngine
         // to build an actionable error if every fallback is exhausted, instead of silently returning
         // an empty list that reads identically to a confirmed zero-implementations result.
         string? scopedResolutionFailure = null;
+        // True when scopedResolutionFailure already carries ranked candidates (or the no-similar-name fact) for the pinned file,
+        // so the solution-wide candidate text is not appended a second time.
+        var scopedFailureNamesCandidates = false;
 
         // The MCP tool layer resolves an omitted `filepath` to FilePathWrapper's empty-string default
         // (via ResolveFromWire), not a C# null -> so checking `filePath != null` alone always took this
@@ -1991,7 +1992,8 @@ public class SymbolNavigationEngine
                     symbol ??= FindPositionalRecordProperty(model, root, symbolName);
                     if (symbol == null)
                     {
-                        scopedResolutionFailure = $"symbolName '{symbolName}' was not found declared in '{filePath}'.";
+                        scopedResolutionFailure = MemberRefactoringNotFound.DeclarationMessage("symbol", symbolName, "symbolName", MemberRefactoringNotFound.MemberNames(root), filePath);
+                        scopedFailureNamesCandidates = true;
                     }
                 }
             }
@@ -2133,13 +2135,14 @@ public class SymbolNavigationEngine
 
         if (symbol == null)
         {
-            var nearMissHint = await DescribeNearMissCandidatesAsync(solution, symbolName, "implementations", cancellationToken);
+            var missDetail = scopedFailureNamesCandidates
+                ? string.Empty
+                : await DescribeSymbolMissInSolutionAsync(solution, symbolName, "implementations", cancellationToken);
             throw new ToolNotFoundException(
                 "FindImplementations: " + (scopedResolutionFailure ??
                     ($"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                     (contextSnippet != null ? " with the supplied contextSnippet" : "") + ".")) +
-                " This is NOT a confirmed zero-implementations result - the lookup never ran. " +
-                $"Verify the name via {ToolCallHint.Call("Search", ("mode", "symbol"))}/{ToolCallHint.Call("GetFileOutline")} before treating this as evidence of no implementations. " + nearMissHint);
+                " The lookup never ran, so this is not a zero-implementations result. " + missDetail);
         }
 
         // The resolved symbol may still be structurally incapable of having implementations - e.g.
@@ -2292,7 +2295,7 @@ public class SymbolNavigationEngine
 
         if (symbol == null)
         {
-            return new VariableLifetimeReport { Error = $"Variable '{variableName}' not found near line {lineNumber}.", ErrorCode = ToolErrorCode.NotFound };
+            return new VariableLifetimeReport { Error = DescribeVariableMiss(root, targetLineSpan, variableName, lineNumber, filePath.ToString()), ErrorCode = ToolErrorCode.NotFound };
         }
 
         // Read path: trace the first candidate but never silently; name the others and the retry (lineNumber is the selector).
@@ -2420,6 +2423,55 @@ public class SymbolNavigationEngine
             Warning = ambiguityWarning,
             Accesses = accesses
         };
+    }
+
+    /// <summary>
+    /// The not-found text of TraceVariableLifetimeAsync: what was searched, then the ranked variables and parameters declared in the
+    /// member that contains the requested line (the whole file when the line is outside every member), each with its declaration line
+    /// and a prefilled retry, or the no-similar-name fact with the names the scope does declare. The calling tool appends its own
+    /// GetFileOutline option for a NotFound result, so none is added here. Ranking is <see cref="NameCandidates.Rank{T}"/>.
+    /// </summary>
+    private static string DescribeVariableMiss(SyntaxNode root, TextSpan targetLineSpan, string variableName, int lineNumber, string filePath)
+    {
+        const int MaxListedNames = 15;
+        var scopeNode = root.FindToken(targetLineSpan.Start).Parent?.AncestorsAndSelf().OfType<MemberDeclarationSyntax>().FirstOrDefault() ?? root;
+        var scope = scopeNode is MemberDeclarationSyntax ? $"the member that contains line {lineNumber}" : $"'{filePath}'";
+
+        var declared = new List<(string Name, int Line)>();
+        foreach (var node in scopeNode.DescendantNodesAndSelf())
+        {
+            var identifier = node switch
+            {
+                VariableDeclaratorSyntax declarator => declarator.Identifier,
+                ParameterSyntax parameter => parameter.Identifier,
+                _ => default,
+            };
+            if (identifier.Text.Length > 0)
+            {
+                declared.Add((identifier.Text, identifier.GetLocation().GetLineSpan().StartLinePosition.Line + 1));
+            }
+        }
+
+        var distinct = declared.GroupBy(d => d.Name, StringComparer.Ordinal).Select(g => g.First()).ToList();
+        var parts = new List<string>
+        {
+            $"Variable '{variableName}' was not found near line {lineNumber} in '{filePath}' (searched variable declarations and parameters on that line, then variable declarations within 5 lines of it)."
+        };
+
+        var ranked = NameCandidates.Rank(variableName, distinct, d => d.Name);
+        foreach (var (candidate, _) in ranked)
+        {
+            parts.Add($"Did you mean '{candidate.Name}'? Retry with variableName: '{candidate.Name}'. It is declared at line {candidate.Line}; lineNumber: {candidate.Line} selects it.");
+        }
+
+        if (ranked.Count == 0)
+        {
+            parts.Add(distinct.Count == 0
+                ? $"No variable or parameter is declared in {scope}."
+                : $"No variable or parameter declared in {scope} has a similar name to '{variableName}'. Declared there: {string.Join(", ", distinct.Take(MaxListedNames).Select(d => d.Name))}{(distinct.Count > MaxListedNames ? $" (+{distinct.Count - MaxListedNames} more)" : string.Empty)}.");
+        }
+
+        return string.Join(" ", parts);
     }
 
     private static string DetermineAccessKind(SyntaxNode? node, string varName)
@@ -2580,6 +2632,8 @@ public class SymbolNavigationEngine
     /// <seealso cref="DescribeNameOnlyCandidates"/>
     /// <seealso cref="DescribeCandidateLocations"/>
     /// </summary>
+    // TODO remove DescribeNearMissCandidatesAsync (and the cref mentions of it) once no document refers to it; FindCallers and FindImplementations moved to DescribeSymbolMissInSolutionAsync
+    [Obsolete("Use DescribeSymbolMissInSolutionAsync, which ranks through SymbolNotFoundDetail")]
     public static async Task<string> DescribeNearMissCandidatesAsync(
         Solution solution, string symbolName, string kind, CancellationToken cancellationToken)
     {
@@ -2648,6 +2702,25 @@ public class SymbolNavigationEngine
             first.Locations.FirstOrDefault(l => l.IsInSource)?.SourceTree?.FilePath,
             first.Locations.Any(l => l.IsInSource));
         return $"Did you mean: {string.Join(", ", labels)}?" + BuildFindReferencesNextCall(first.Name, kind, new[] { candidate });
+    }
+
+    /// <summary>
+    /// The detail that follows a by-name symbol miss (FindCallers, FindImplementations): <see cref="SymbolNotFoundDetail.BuildAsync"/>
+    /// over every project of <paramref name="solution"/>, so the ranked "did you mean" candidates (each with a prefilled
+    /// FindReferences call for <paramref name="kind"/> pinned to the candidate's file) or, when none is similar, the no-similar-name
+    /// fact and one orientation call. Replaces <see cref="DescribeNearMissCandidatesAsync"/>.
+    /// </summary>
+    private static async Task<string> DescribeSymbolMissInSolutionAsync(Solution solution, string symbolName, string kind, CancellationToken cancellationToken)
+    {
+        var projects = solution.Projects.ToList();
+
+        // TODO isCallable: SymbolNavigationEngine has no ActiveToolSurface, so hints name tools unconditionally (as the old text did)
+        return await SymbolNotFoundDetail.BuildAsync(
+            projects, symbolName, "any", $"{projects.Count} project(s)", null, isCallable: null,
+            nextCall: candidate => string.IsNullOrEmpty(candidate.FilePath)
+                ? ToolCallHint.Call("FindReferences", ("symbolName", candidate.Name), ("kind", kind))
+                : ToolCallHint.Call("FindReferences", ("symbolName", candidate.Name), ("kind", kind), ("filePath", candidate.FilePath)),
+            cancellationToken: cancellationToken);
     }
 
     private static readonly string[] TestAttributeNames =
@@ -2866,7 +2939,10 @@ public class SymbolNavigationEngine
 
         if (containerNode == null || containerNode is not TypeDeclarationSyntax typeDecl)
         {
-            throw new ToolNotFoundException($"Container '{containerName}' was not found in '{filePath}'. Searched: class, interface, struct, record and enum declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to confirm the type name, or {ToolCallHint.Call("Search", ("mode", "text"), ("query", containerName))}.", "container", containerName);
+            throw new ToolNotFoundException(
+                MemberRefactoringNotFound.DeclarationMessage("container", containerName, "containerName", MemberRefactoringNotFound.TypeNames(root), filePath.ToString()) +
+                " Searched: class, interface, struct, record and enum declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. " +
+                $"{ToolCallHint.Call("Search", ("mode", "text"), ("query", containerName))} finds the name as text.", "container", containerName);
         }
 
         // TODO tuple outcome slot is always Modified; return only the list
@@ -2973,7 +3049,7 @@ public class SymbolNavigationEngine
 
         if (resolved == null)
         {
-            throw new ToolNotFoundException($"Member '{memberName}' not found");
+            throw new ToolNotFoundException(await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken));
         }
 
         var member = resolved.Node;
@@ -3126,7 +3202,15 @@ public class SymbolNavigationEngine
 
         if (typeSymbol == null)
         {
-            return new TypeHierarchyReport { Error = $"Type '{typeName}' not found in solution." };
+            var searched = searchProjects.ToList();
+            var scope = projectName != null ? $"project '{projectName}'" : $"{searched.Count} project(s)";
+
+            // TODO isCallable: SymbolNavigationEngine has no ActiveToolSurface, so hints name tools unconditionally (as the old text did)
+            var detail = await SymbolNotFoundDetail.BuildAsync(
+                searched, typeName, "type", scope, projectName, isCallable: null,
+                nextCall: candidate => candidate.Kind == "type" ? ToolCallHint.Call("GetTypeInfo", ("typeName", candidate.Name)) : string.Empty,
+                cancellationToken: cancellationToken);
+            return new TypeHierarchyReport { Error = detail };
         }
 
         // Base class chain (excluding System.Object)

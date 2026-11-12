@@ -1905,7 +1905,9 @@ public class Foo : IFoo
     void Go();
 }"));
             var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindImplementationsForMemberAsync("A.cs", "Missing", contextSnippet: null));
-            Assert.That(ex!.Message, Does.Contain("not found declared in 'A.cs'"), "The failure must be scoped to the file the caller named");
+            Assert.That(ex!.Message, Does.Contain("was not found in 'A.cs'"), "The failure must be scoped to the file the caller named");
+            Assert.That(ex.Message, Does.Contain("No symbol declared in 'A.cs' has a similar name to 'Missing'"), "No-similar-name fact for the pinned file (Step 5e)");
+            Assert.That(ex.Message, Does.Not.Contain("Did you mean"), "Nothing in A.cs is similar, and the other file's type is not offered");
         }
 
         // -- Fix B4: FindImplementations filePath + sealed class name -> ineligible target, the type check applies on the filePath path too --
@@ -1992,8 +1994,11 @@ public class Foo : IFoo
             var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindCallersAsync(null, "Widge", contextSnippet: null));
             var msg = ex!.Message;
             Assert.That(msg, Does.Contain("Did you mean"));
-            Assert.That(msg, Does.Contain("Did you mean: Widget, WidgetShouldWork (Checks)"));
-            Assert.That(msg.TrimEnd(), Does.EndWith(")"));
+            // Shared candidate list (SymbolNotFoundDetail, Step 5e): the type comes first, the test method after it, each with its own FindReferences call.
+            Assert.That(msg, Does.Contain("Widget (type)"));
+            Assert.That(msg, Does.Contain("WidgetShouldWork (method) in Checks"));
+            Assert.That(msg.IndexOf("Widget (type)", StringComparison.Ordinal), Is.LessThan(msg.IndexOf("WidgetShouldWork (method)", StringComparison.Ordinal)));
+            Assert.That(msg, Does.Contain("it does not exist in this solution."));
             Assert.That(msg, Does.Contain("symbolName: \"Widget\""));
             Assert.That(msg, Does.Contain("filePath:"));
             Assert.That(msg, Does.Contain("B.cs"));

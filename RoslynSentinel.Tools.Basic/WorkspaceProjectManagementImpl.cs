@@ -87,6 +87,7 @@ public class WorkspaceProjectManagementImpl
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = true,
+                            // TODO ListSolutionItems(kind: files) project miss: bare "not found." text; use SolutionStructureEngine.ProjectNotFound's ProjectNotFoundDetail text (plan_not_found_error_orientation, Tools layer, outside the engine slices)
                             ErrorData = new ResultError(ToolErrorCode.NotFound, $"Project '{projectName}' not found.")
                         };
                     }

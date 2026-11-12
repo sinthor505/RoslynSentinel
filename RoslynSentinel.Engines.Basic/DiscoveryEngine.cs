@@ -235,7 +235,7 @@ public class DiscoveryEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<ApiSurfaceEntry>();
         //return results;
-        var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw new ToolNotFoundException($"Project '{projectName}' not found in solution.");
+        var project = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw SolutionStructureEngine.ProjectNotFound(projectName, solution);
         foreach (var doc in project.Documents)
         {
             var root = await doc.GetSyntaxRootAsync(cancellationToken);
@@ -397,9 +397,9 @@ public class DiscoveryEngine
     public async Task<BestInsertionResult> FindBestInsertionPointAsync(FilePathWrapper filePath, string containerName, string memberKind, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException("Could not get syntax root.");
-        var container = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<TypeDeclarationSyntax>().Where(t => t.Identifier.Text == containerName).ToList(), "Type", containerName) ?? throw new ToolNotFoundException($"Type '{containerName}' not found.");
+        var container = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<TypeDeclarationSyntax>().Where(t => t.Identifier.Text == containerName).ToList(), "Type", containerName) ?? throw MemberRefactoringNotFound.Declaration("type", containerName, "containerName", root.DescendantNodes().OfType<TypeDeclarationSyntax>().Select(t => t.Identifier.Text), filePath.ToString());
         // Standard C# ordering: fields(0) -> constructors(1) -> destructors(2) -> properties(3) -> events(4) -> methods(5) -> nested(6)
         static int MemberOrder(MemberDeclarationSyntax m) => m switch
         {
@@ -559,7 +559,7 @@ public class DiscoveryEngine
                 throw new ToolInvalidArgumentException("symbolName is required when docCommentId is not provided.");
             }
 
-            var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
+            var document = DocumentLookup.RequireDocument(solution, filePath);
             var root = await document.GetSyntaxRootAsync(cancellationToken);
             var sourceText = await document.GetTextAsync(cancellationToken);
             // contextSnippet, when omitted, falls back to symbolName as the search text -> either
@@ -611,7 +611,7 @@ public class DiscoveryEngine
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
-            var proj = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw new ToolNotFoundException($"Project '{projectName}' not found in the loaded solution.", "project", projectName);
+            var proj = ProjectLookup.FindProject(solution, projectName, ignoreCase: true) ?? throw SolutionStructureEngine.ProjectNotFound(projectName, solution);
             documents = proj.Documents.Cast<Document?>();
         }
         else

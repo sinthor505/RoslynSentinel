@@ -1094,12 +1094,13 @@ public class ScanTools
             }
         }
         // Match the exception type, not its message text: only the persistBaseline=false path (DiscoveryEngine) produced this text; the persistBaseline=true path keeps going to the general catch.
-        catch (ToolNotFoundException) when (!persistBaseline)
+        catch (ToolNotFoundException ex) when (!persistBaseline)
         {
+            // The engine's message already states the project miss with ranked candidates (ProjectNotFoundDetail); keep it.
             return new SentinelCallToolResult<object>
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.NotFound, $"GetPublicApiSurface failed: Project '{projectName}' not found in solution.")
+                ErrorData = new ResultError(ToolErrorCode.NotFound, $"GetPublicApiSurface failed: {ex.Message}")
             };
         }
         catch (Exception ex)

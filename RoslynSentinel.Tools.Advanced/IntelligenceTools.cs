@@ -253,6 +253,7 @@ public class IntelligenceTools
             var result = await _symbolNavigationEngine.TraceVariableLifetimeAsync(resolvedFilePath, variableName, lineNumber, cancellationToken);
             if (result.IsError)
             {
+                // TODO the NotFound hint below is phrased as an instruction ("then retry with a lineNumber inside it"); reword as a fact plus option (reference_tool_error_text_facts_options_policy)
                 var hint = result.Code switch
                 {
                     ToolErrorCode.NotFound => $" Call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} on the file to confirm the enclosing method's line range, then retry with a lineNumber inside it.",

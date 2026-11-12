@@ -746,7 +746,11 @@ public class Model {
         var result = await _scanTools.GetPublicApiSurfaceTool(reason: "test message", projectName: "NoSuchProject");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound.ToString()));
-        Assert.That(result.ErrorData!.Message, Is.EqualTo("GetPublicApiSurface failed: Project 'NoSuchProject' not found in solution."));
+        // Facts and options of ProjectNotFoundDetail (Step 5e): the miss, the loaded count, the no-similar-name fact and the project list.
+        Assert.That(result.ErrorData!.Message, Does.StartWith("GetPublicApiSurface failed: Project 'NoSuchProject' was not found among the "));
+        Assert.That(result.ErrorData!.Message, Does.Contain("loaded project(s)"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("No loaded project has a similar name to 'NoSuchProject'."));
+        Assert.That(result.ErrorData!.Message, Does.Contain("Loaded projects:"));
     }
 
     [Test]
