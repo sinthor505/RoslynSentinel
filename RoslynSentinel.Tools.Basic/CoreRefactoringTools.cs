@@ -62,7 +62,45 @@ public class CoreRefactoringTools
     /// intermediate staging step). Rolls back any already-written files if a multi-file change
     /// partially fails, so a change never lands half-applied.
     /// </summary>
-    private Task<ApplyOutcome> ValidateAndApplyAsync(Dictionary<FilePathWrapper, string> changes, string description, string operationName, bool dryRun = false, bool returnDiff = false, IProgress<EngineProgress>? progress = default, IReadOnlyCollection<FilePathWrapper>? removePaths = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null, IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits = null) => ValidateAndApplyHelper.ValidateAndApplyAsync(_validationEngine, _workspaceManager, _logger, changes, operationName, dryRun, returnDiff, progress, removePaths, cancellationToken: cancellationToken, deletePaths, describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable), expectedEdits: expectedEdits, describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, removePaths, deletePaths));
+    private Task<ApplyOutcome> ValidateAndApplyAsync(Dictionary<FilePathWrapper, string> changes, string description, string operationName, bool dryRun = false, bool returnDiff = false, IProgress<EngineProgress>? progress = default, IReadOnlyCollection<FilePathWrapper>? removePaths = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null, IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits = null, Action? recordEffects = null) => ValidateAndApplyHelper.ValidateAndApplyAsync(_validationEngine, _workspaceManager, _logger, changes, operationName, dryRun, returnDiff, progress, removePaths, cancellationToken: cancellationToken, deletePaths, describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct, isToolActive: _activeToolSurface is null ? null : _activeToolSurface.IsCallable), expectedEdits: expectedEdits, describeEditImpact: EditImpactGate.Describer(_workspaceManager, changes, _activeToolSurface, removePaths, deletePaths), recordEffects: recordEffects);
+
+    // Edit effect emitter for MoveMember (see EditEffect). Returns the hook ValidateAndApplyHelper runs just before the write chokepoint, so the
+    // effects are recorded only for a real apply and committed only if the write stands. Facts are gathered before the write, while the committed
+    // solution still holds the moved declarations: per moved member its container-qualified display name (the old container) and doc id, and for
+    // all of them the target type and the file that declares it after the move.
+    private async Task<Action> RecordMovedEffectAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath, IReadOnlyDictionary<FilePathWrapper, string> changes, CancellationToken cancellationToken)
+    {
+        // READCHOKEPOINT-CAST: the committed solution still holds the moved declarations (read before the apply).
+        var committed = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var moved = new List<(string Display, string? DocId, string SimpleName)>(memberNames.Length);
+        foreach (var memberName in memberNames)
+        {
+            moved.Add(await MemberEditEffectFacts.DescribeExistingAsync(committed, filePath, memberName, className, contextSnippet: null, lineBefore: null, lineAfter: null, cancellationToken));
+        }
+
+        var targetFile = MoveEditEffectFacts.FindTargetFile(changes, targetClassName, targetFilePath, filePath);
+        var newFilePath = targetFile is null ? null : EditEffectNames.DisplayPath(targetFile, _workspaceManager.GetSolutionRoot());
+        return () =>
+        {
+            foreach (var (display, docId, simpleName) in moved)
+            {
+                ToolCallContext.Current?.RecordEffect(EditEffectKind.Moved, display, docId, simpleName, newName: null, newContainer: targetClassName, newFilePath);
+            }
+        };
+    }
+
+    // Edit effect emitter for ChangeSignature (see EditEffect), same hook shape as RecordMovedEffectAsync. Resolves the target with the call's own
+    // snippets before the write: container-qualified display name, doc id and the declaring file. Recorded as a plain "changed the signature of" fact.
+    private async Task<Action> RecordSignatureChangedEffectAsync(FilePathWrapper filePath, string methodName, string? contextSnippet, string? lineBefore, string? lineAfter, bool isConstructor, CancellationToken cancellationToken)
+    {
+        // READCHOKEPOINT-CAST: the committed solution still holds the old signature (read before the apply).
+        var committed = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var (display, docId, simpleName) = await MemberEditEffectFacts.DescribeExistingAsync(committed, filePath, methodName, containerName: null, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        // A constructor shares its type's name, so DescribeExistingAsync resolves it to the type: its doc id would name the type, not the constructor.
+        var symbolDocId = isConstructor ? null : docId;
+        var path = EditEffectNames.DisplayPath(filePath.Absolute, _workspaceManager.GetSolutionRoot());
+        return () => ToolCallContext.Current?.RecordEffect(EditEffectKind.SignatureChanged, display, symbolDocId, simpleName, newName: null, newContainer: null, path);
+    }
 
     /// <summary>Normalized "fullPath:line" key; relative paths resolve against the solution root. Null if the path is unusable.</summary>
     private static string? FixupLineKey(string? filePath, int line, string? solutionRoot)
@@ -267,7 +305,10 @@ public class CoreRefactoringTools
                 };
             }
 
-            var apply = await ValidateAndApplyAsync(changes, $"Change signature of method '{methodName}'.", "ChangeSignature", dryRun, returnDiff, cancellationToken: cancellationToken);
+            var recordSignatureChanged = !dryRun && ToolCallContext.Current is not null
+                ? await RecordSignatureChangedEffectAsync(resolvedFilePath, methodName, contextSnippet, lineBefore, lineAfter, targetShape is { IsConstructor: true }, cancellationToken)
+                : null;
+            var apply = await ValidateAndApplyAsync(changes, $"Change signature of method '{methodName}'.", "ChangeSignature", dryRun, returnDiff, cancellationToken: cancellationToken, recordEffects: recordSignatureChanged);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary>
                 {
@@ -475,7 +516,11 @@ public class CoreRefactoringTools
                 return UnresolvedCallSitesResult(multiAgentPending, "MultiAgent mode: a move that leaves call sites unresolved needs a multi-step edit, which is refused here, so nothing was written. ");
             }
 
-            var apply = await ValidateAndApplyAsync(result.Changes, $"Move [{string.Join(", ", memberNames)}] from '{className}' to '{targetClassName}'.", "MoveMember", dryRun, returnDiff, cancellationToken: cancellationToken, expectedEdits: result.AppliedEdits);
+            // Moved effects (see EditEffect) only for a real apply that removes the source member: a keep mode leaves a forwarder under the old name, so "moved" would be false for a later lookup.
+            var recordMoved = !dryRun && oldMember == MoveMemberOldMember.remove && ToolCallContext.Current is not null
+                ? await RecordMovedEffectAsync(resolvedFilePath, className, memberNames, targetClassName, targetFilePath, result.Changes, cancellationToken)
+                : null;
+            var apply = await ValidateAndApplyAsync(result.Changes, $"Move [{string.Join(", ", memberNames)}] from '{className}' to '{targetClassName}'.", "MoveMember", dryRun, returnDiff, cancellationToken: cancellationToken, expectedEdits: result.AppliedEdits, recordEffects: recordMoved);
             if (apply.Error is not null)
             {
                 // A collateral-change or EOL-change refusal is the real cause on its own (a step after the engine's edits

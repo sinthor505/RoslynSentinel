@@ -1006,6 +1006,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 }
                 terminal = SolutionLoadStatus.Loaded;
                 SweepLargeResultsInBackground(GetSolutionRoot());
+                SeedEditEffectsInBackground(GetSolutionRoot());
                 // Fire-and-forget: the repo probe is never awaited here and the load response does not depend on it (McpServerStatus is its only waiter).
                 GitBackendWarmup.Shared.StartRepoProbe(solutionDirectory);
             }
@@ -1067,6 +1068,33 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Large-result sweep failed under {Root}", solutionRoot);
+            }
+        });
+    }
+
+    // Reads the last hour of operation blobs into the edit effect index (EditEffectSeeder), so an agent's own renames and removals from before a
+    // server restart still explain a not-found. Off the load path and outside every lock: the load response never waits for it, and the
+    // index has its own gate. Fail-open (the seeder never throws; the catch is for a thread-pool fault only).
+    private void SeedEditEffectsInBackground(string? solutionRoot)
+    {
+        if (string.IsNullOrWhiteSpace(solutionRoot))
+        {
+            return;
+        }
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var offered = EditEffectSeeder.Seed(_editEffects, solutionRoot, DateTime.UtcNow);
+                if (offered > 0 && _logger.IsEnabled(LogLevel.Information))
+                {
+                    _logger.LogInformation("Seeded the edit effect index with {EffectCount} effect(s) from recent operation blobs under {SolutionRoot}", offered, solutionRoot);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Edit effect seeding failed under {Root}", solutionRoot);
             }
         });
     }

@@ -456,6 +456,8 @@ public class WorkspaceFileEditImpl
             if (reverted.Count + noOpFiles.Count > 0)
             {
                 (_workspaceManager as IEditEffectIndexProvider)?.EditEffects.MarkReverted(changeId);
+                // On disk too: the next solution load seeds the index from blobs, and a blob does not otherwise say it was undone.
+                OperationBlobWriter.MarkUndone(blobPath, _logger);
             }
 
             var failedPart = failed.Count > 0 ? $" Failures: {string.Join("; ", failed)}" : "";

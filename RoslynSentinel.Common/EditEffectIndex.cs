@@ -139,7 +139,7 @@ public class EditEffectIndex
     /// Adds effects read from operation blobs at solution load. An effect already held (same call, change, kind, name and time) is
     /// skipped, and the result stays in time order. The bound applies as for <see cref="Append"/>.
     /// </summary>
-    // TODO slice 4: the blob does not record an undo, so a seeded effect of an undone change comes back unreverted; the seeding code must skip changes UndoLastApply already reverted.
+    // A blob does not record an undo itself: EditEffectSeeder skips blobs with an undo marker (OperationBlobWriter.MarkUndone), so effects offered here are active.
     public void Seed(IEnumerable<EditEffect> effects)
     {
         lock (_gate)

@@ -299,4 +299,31 @@ public static class OperationBlobWriter
 
         return Directory.EnumerateFiles(dir, $"*_{changeId}.json").FirstOrDefault();
     }
+
+    /// <summary>Extension of the marker file <see cref="MarkUndone"/> writes beside a blob. Not <c>.json</c>, so every reader that enumerates <c>*.json</c> blobs ignores it.</summary>
+    public const string UndoneMarkerExtension = ".undone";
+
+    /// <summary>True when <see cref="MarkUndone"/> recorded an undo for the blob at <paramref name="blobPath"/>.</summary>
+    public static bool IsUndone(string blobPath) => File.Exists(UndoneMarkerPath(blobPath));
+
+    /// <summary>
+    /// Records that the change behind <paramref name="blobPath"/> was undone: an empty <c>{blob file name without extension}.undone</c> file beside the
+    /// blob. The blob itself is left as written (it is the undo record, and other readers see it unchanged); <see cref="IsUndone"/> reads the marker, so
+    /// edit effect seeding at solution load can skip the effects of a change that no longer holds. Never throws: a missing marker only means a seeded effect
+    /// of an undone change reads as active until the 60-minute window passes.
+    /// </summary>
+    public static void MarkUndone(string blobPath, ILogger? logger = null)
+    {
+        try
+        {
+            File.WriteAllBytes(UndoneMarkerPath(blobPath), []);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            // hint-ok: log message template for operators; the text is never returned to an agent
+            logger?.LogWarning(ex, "Could not write the undo marker for {BlobPath}; effects seeded from it will read as active.", blobPath);
+        }
+    }
+
+    private static string UndoneMarkerPath(string blobPath) => Path.ChangeExtension(blobPath, UndoneMarkerExtension);
 }

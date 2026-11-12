@@ -140,6 +140,7 @@ public class WholeFileWriteTools
                 };
             }
 
+            await RecordDeleteEffectsAsync(filePath, filePathResolved, cancellationToken);
             var result = await _workspaceManager.ApplyProposedChangesAsync(
                 changes: [],
                 cancellationToken: cancellationToken,
@@ -174,6 +175,36 @@ public class WholeFileWriteTools
                 IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"DeleteFile for '{filePathResolved}'")
             };
+        }
+    }
+
+    // Edit effect emitter for DeleteFile (see EditEffect). DeleteFile calls the write chokepoint directly (there is no dry run), which commits the
+    // pending effects only when the delete stands and drops them otherwise. Records one Removed effect per top-level type the file declares (so a
+    // lookup by type name finds the file that held it, with the deleted file as NewFilePath), then FileDeleted: SymbolDisplay is the path as the
+    // caller passed it and SimpleName its file name without extension. Fail-open: a failed fact lookup costs the note, never the delete.
+    private async Task RecordDeleteEffectsAsync(string filePathAsPassed, FilePathWrapper filePathResolved, CancellationToken cancellationToken)
+    {
+        if (ToolCallContext.Current is not { } context)
+        {
+            return;
+        }
+
+        try
+        {
+            // READCHOKEPOINT-CAST: the committed solution still holds the file's declarations (read before the delete).
+            var committed = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            var types = await DeleteFileEditEffectFacts.DescribeDeclaredTypesAsync(committed, filePathResolved, cancellationToken);
+            var path = EditEffectNames.DisplayPath(filePathResolved.Absolute, _workspaceManager.GetSolutionRoot());
+            foreach (var (display, docId, simpleName) in types)
+            {
+                context.RecordEffect(EditEffectKind.Removed, display, docId, simpleName, newName: null, newContainer: null, path);
+            }
+
+            context.RecordEffect(EditEffectKind.FileDeleted, filePathAsPassed, symbolDocId: null, Path.GetFileNameWithoutExtension(filePathAsPassed), newName: null, newContainer: null, path);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "DeleteFile could not record its edit effects for '{FilePath}'; the delete proceeds.", filePathAsPassed);
         }
     }
 

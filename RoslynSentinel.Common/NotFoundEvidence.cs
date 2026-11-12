@@ -354,7 +354,8 @@ public static class NotFoundEvidence
         return $"`{ShortTerm(term)}` is in `{Path.GetFileName(fullPath)}` at HEAD but not on disk: it was changed since the last commit, writer unknown";
     }
 
-    private static DateTime? TimestampOf(string blobPath)
+    // internal: EditEffectSeeder windows blobs by the same filename timestamp.
+    internal static DateTime? TimestampOf(string blobPath)
     {
         var match = BlobTimestamp.Match(Path.GetFileName(blobPath));
         if (!match.Success
