@@ -551,7 +551,8 @@ Worktree `C:\tmp\rs_eval_h1` (H1's, reused), `-Repeats 10`. L1. Archive
   called ChangeAccessibility in the same turn. R9 T21 CreateFile on an existing file. Stale-path ReadFile in R1, R4, R5,
   R8, R9.
 - **Token fields (plan step 6):** `InputTokens`/`OutputTokens` are populated; `CachedInputTokens`/`ReasoningTokens`
-  are absent (hypothesis: LM Studio does not report them).
+  are absent because e9d16dfd predates d5a8966b, which added them. LM Studio does report both: transcripts from builds
+  that include d5a8966b (checked: batches H2, H4 and H5) carry them on every model turn.
 
 **Root causes (failure-root-cause-analyst, 2026-11-11; R1, R2, R8; R4 not traced, rename lifting targets it).** Source
 read in the e9d16dfd worktree.
