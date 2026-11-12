@@ -14,6 +14,10 @@ public static class ScenarioRegistry
         BatchShapeScenarios.MixedSingleAndBatchShape,
         GuardScenarios.TwinApplyCalls,
         GuardScenarios.EmptyInterfaceRemoval,
+        FaultScenarios.RenameSymbolTypo,
+        FaultScenarios.RenameSymbolNoSuchMethod,
+        FaultScenarios.ReplaceSnippetWrongFileNearMatch,
+        FaultScenarios.ReplaceSnippetWrongFileNoMatch,
     ];
 
     /// <summary>All registered scenarios, in declaration order.</summary>
