@@ -1,6 +1,6 @@
 # Plan: Every not-found error ranks candidates, says plainly when none exist, and prefills one orientation call
 
-**Status:** IN PROGRESS 2026-11-12. Steps 1-4 done (f45d009b, 2f5165ef, 117d7507, 5bc6cc8e, 3d33d265, bd480d35, 44f5b3ef, b56d46b3, d1ed5854) plus 5d-1 (f9f6b65b); Decision 10 (facts and options, no policy) adds slice 5f before the rest of Step 5.
+**Status:** IN PROGRESS 2026-11-12. Steps 1-5 done (hashes in each step's Done line) except the InspectSymbol miss in `SymbolNavigationImpl.cs`; Step 6 live runs queued; closing full test run in progress.
 
 Related: [plan_scenario_eval_followups.md](./closed/plan_scenario_eval_followups.md) (closed 3c28c01f; results in [eval_scenario_eval_followups.md](../evals/eval_scenario_eval_followups.md)) (written in parallel: the stop-adherence scenario family and the seeded `RenameSymbolTypo` used in Step 6). Commit trailer for every slice: `Plan: plan_not_found_error_orientation` (the last slice adds `Closes:`).
 
@@ -382,6 +382,12 @@ Sketch of the two no-candidate texts (wording is the implementer's to refine; th
     with many required arguments are written as "Retry with <param>: 'X'" (an option, not a full call).
   - 5g (owner 2026-11-12): `OrientationCircuitBreaker`'s "You MUST call ListAll(" becomes a fact plus an option
     (Decision 10); this moves it out of "Out of scope".
+  - Done (batch E, 2026-11-12): 5c-prep cd7bfcbe, 5c-A d13ed771, 5c-B1 699e760d, 5c-B2 6efd5648, 5c-C 4a754d4f
+    (also fixes the FirstMatchRatchet pick in `MemberRefactoringNotFound.OtherKindFact`); 5g 2b7113c7; 4d e2fdf9b0;
+    5e-1 187c9cdd, 5e-2 7c19972f, 5e-3 30bf3efd, 5e-4 a35cee2a, 5e-5 cebd67dd, 5e-6 06f8a86e (a
+    `PersistentWorkspaceManager.cs` option sentence landed inside another session's d5667196); inventory 4d726ac9.
+    Left: `SymbolNavigationImpl.cs` InspectSymbol unresolved miss (~:131/:160), held by a peer session at the time;
+    untested: `ExtractConstant` (no host tool), MsToolAugment `ReadSource` file miss.
   - 5e Anything the Step 1 inventory lists that is not in 5a-5d (other engines, other tool classes), as further
     slices; scope limited by Decision 9 (Engines.Basic, Tools.Basic, Common). The inventory's corrected anchors
     (for example MoveMember file lookups now `:2980`/`:4950`, class lookups `:2992`/`:4962`) supersede the line
