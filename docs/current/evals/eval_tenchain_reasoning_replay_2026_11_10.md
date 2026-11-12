@@ -770,7 +770,7 @@ T21, T27, T28; guardrail redirects (not counted): T6 (class rename), T15 (method
 | 28 | ReplaceSnippet NotFound | own rejected newContent reused as oldContent; `RejectedOriginNote` fired | known |
 | 32 | Member InvalidArgument | stray class `}` in newMemberSource; the generic `ContainsDiagnostics` branch (`MemberRefactoringEngine.cs:2353`) fires before `DetectTrailingUnparsedDeclaration` (`:2357`); the "statement or method body fragment" text is wrong here | new |
 
-Ranked fixes (owner approved 2026-11-12 as "Build root-cause fixes 1-5"; 1, 2, 3 and 5 built, 4 pending):
+Ranked fixes (owner approved 2026-11-12 as "Build root-cause fixes 1-5"; all five built):
 (1) validate gets the apply branch's EditImpactGate and hint text (T4/T13 become redirects: ReplaceSnippet 6 -> 4,
 under budget) - built in 1594f54f (shared `ComposeCompileRejectionAsync`; validate records nothing and never lifts);
 (2) a multi-rename edit names every rename in the redirect, and a verdict that could not be checked is not `valid` -
@@ -778,10 +778,42 @@ built in b371b8b2 (`EditImpactAnalyzer`; new verdict `unverified` for a member o
 broader "unattributed CS0246/CS0103/CS0234 near the call site" heuristic is a `// TODO` in `BuildVerdicts`);
 (3) CS0103 for a missing callee names `Member(operation: addMember, ...)` or "declare it in the same newContent" -
 built in 64ae244c; (4) FileNotFound and callSitesNote use the post-move path (existing TODO in
-`FileNotFoundMessage.cs`) - pending, handled by the main session; (5) wording - built: `filePath` "required unless
+`FileNotFoundMessage.cs`) - built in b3a80229 (`FileMoveMemory` records RenameSymbol/SyncTypeAndFilename moves;
+FileNotFound names the new path; MoveType-style delete-plus-create moves are a `// TODO`); (5) wording - built: `filePath` "required unless
 batchEdits" and the single-edit rejection's "file is unchanged" sentence in 1594f54f; CS0144 names up to 3 implementing
 classes and Member reports an extra `}` before the generic message in 64ae244c. Worktree test runs of the touched
-classes were green. Not yet measured live.
+classes were green. Measured live in Batch X below.
+
+## Batch X: Batch W fixes live, 4/5 (2026-11-12)
+
+**Setup.** 5 runs of `Model_AppliesTenChainedRefactors` (`OrderPricingRefactorChain10`), host 113, `qwen3.5-9b-coder`,
+rename lifting unset, `BLOCKED:` prompt (compare with Batch C). Queue jobs `20261112-191352-001` to `-005`. Each job built
+the tree at its start, and peer sessions committed between jobs, so the tested commits differ (all dirty, all after
+b3a80229): 6d67baad, 6a58ffd6, 9856e63c, cc3fba6c, 751baf7b. Also in the tree: the Member doc-comment replace fix
+(dc974541) and the malformed-tool-call nudge/stop (e7b45896).
+
+| Run | Folder | Result | Turns | Stop | Tool errors |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 20261112-191423-231 | pass | 28 | ModelFinished | 4 |
+| 2 | 20261112-192512-927 | pass | 37 | ModelFinished | 8 |
+| 3 | 20261112-193953-942 | **fail** | 60 | TurnCapExceeded | 4 |
+| 4 | 20261112-200511-234 | pass | 31 | ModelFinished | 3 |
+| 5 | 20261112-201636-614 | pass | 25 | ModelFinished | 2 |
+
+Pass **4/5**; mean turns of the passing runs 30.25 (Batch C: 4/5, 29.2 over all five). No run repeated the
+`20261112-151531-550` failure modes.
+
+**Run 3 (model-eval-log-analyst).** T2-T8: steps 1-6 bundled into one ReplaceSnippet batch, sent 4 times, all
+ValidationFailed (T2 CS1061 at the `OrderCheckout.cs` call site of the renamed `CalcDisc`; T4/T7/T8 CS1002/CS0501/CS0111
+from a dangling `public string SummarizeShipping(  int   zone  )` line in its own newContent; T8 also "You already sent
+this exact edit"). The errors were accurate. T18-T60: 43 consecutive identical `ReadFile` calls (lines 20-36, same
+arguments and reason, byte-identical results), reasoning "Let me try replacing with a single-line Multiply definition:"
+every turn, context at 88% by T60. Nothing written, no Build.
+
+**Environment gap.** `LoopAssistTracker.Observe` returns at once for a successful call (`if (!Enabled || !isError)`),
+and the repeated-failure breaker counts only failures, so identical successful calls never drew a nudge or a stop. Fix
+(owner approved 2026-11-12): nudge once on the 3rd consecutive identical successful call (same tool, arguments apart
+from `reason`), stop with `RepeatedIdenticalCall` on the next one. In progress.
 
 ## Out of scope
 

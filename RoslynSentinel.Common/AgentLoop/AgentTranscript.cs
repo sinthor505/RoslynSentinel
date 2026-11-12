@@ -249,6 +249,9 @@ public enum AgentStopReason
     /// <summary>The model sent tool-call markup as text instead of a tool call on two consecutive turns (the first got a nudge); nothing was parsed.</summary>
     MalformedToolCall,
 
+    /// <summary>The model repeated the same successful tool call (same tool, same arguments apart from reason) after the runner nudged it for doing so (see ModelAgentRunner.IdenticalSuccessNudgeAt).</summary>
+    RepeatedIdenticalCall,
+
     /// <summary>A caller-supplied target predicate held after a live turn's tool results were appended.</summary>
     TargetReached,
 }

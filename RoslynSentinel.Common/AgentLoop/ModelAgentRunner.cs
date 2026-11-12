@@ -37,6 +37,13 @@ public sealed class ModelAgentRunner
     private const double ContextUsageWarningFraction = 0.8;
 
     /// <summary>
+    /// The runner nudges the model once when this many consecutive tool calls succeed with the same tool and the same
+    /// arguments (reason ignored); the next identical call ends the run with <see cref="AgentStopReason.RepeatedIdenticalCall"/>.
+    /// Any other call, successful or not, resets the count.
+    /// </summary>
+    internal const int IdenticalSuccessNudgeAt = 3;
+
+    /// <summary>
     /// Process-wide value set once by the ModelEval assembly setup; RunAsync copies it into each new transcript.
     /// Null everywhere else (PlanStepRunner and sub-agent runs), so their transcripts omit the stamp.
     /// </summary>
@@ -225,6 +232,10 @@ public sealed class ModelAgentRunner
         var cumulativeTokens = 0;
         // Consecutive turns whose text held tool-call markup and no parsed tool call (zero-tool-call branch below).
         var consecutiveMalformedToolCallTurns = 0;
+        // Consecutive successful calls with the same tool and arguments (reason ignored); any other call resets the streak.
+        string? lastSuccessKey = null;
+        var identicalSuccessCount = 0;
+        var identicalSuccessNudged = false;
 
         while (turnNumber < _turnCap)
         {
@@ -409,8 +420,45 @@ public sealed class ModelAgentRunner
                     lastFailureSignature = null;
                     consecutiveFailures = 0;
                     latchRefusals.Clear();
+
+                    var successKey = toolCall.Name + "\u0001" + LoopAssistTracker.CanonicalArguments(toolCall.ArgumentsJson);
+                    if (successKey == lastSuccessKey)
+                    {
+                        identicalSuccessCount++;
+                    }
+                    else
+                    {
+                        lastSuccessKey = successKey;
+                        identicalSuccessCount = 1;
+                        identicalSuccessNudged = false;
+                    }
+
+                    if (identicalSuccessNudged)
+                    {
+                        stopReason = AgentStopReason.RepeatedIdenticalCall;
+                        _logger.LogWarning(
+                            "Turn {Turn}: {Tool} succeeded with the same arguments {Count} times in a row, again after a nudge - stopping the run.",
+                            turnNumber, toolCall.Name, identicalSuccessCount);
+                        break;
+                    }
+
+                    if (identicalSuccessCount >= IdenticalSuccessNudgeAt)
+                    {
+                        identicalSuccessNudged = true;
+                        var identicalNudgeText = $"You have called {toolCall.Name} with the same arguments {identicalSuccessCount} times in a row, and no other tool call ran in between, so nothing changed what it returns: its last result above is still current. Options: act on that result (for example make the edit), call a different tool, or reply with your final summary.";
+                        pendingInjections.Add(new AgentAssist(AgentAssist.IdenticalCallKind, toolCall.Name, identicalSuccessCount, identicalNudgeText));
+                        _logger.LogWarning(
+                            "Turn {Turn}: {Tool} succeeded with the same arguments {Count} times in a row - nudging the model once.",
+                            turnNumber, toolCall.Name, identicalSuccessCount);
+                    }
+
                     continue;
                 }
+
+                // A failed call ends any identical-success streak.
+                lastSuccessKey = null;
+                identicalSuccessCount = 0;
+                identicalSuccessNudged = false;
 
                 if (ToolLoopLatch.RefusalMessage(toolCall.Name, resultJson) is { } refusalMessage)
                 {
@@ -468,7 +516,7 @@ public sealed class ModelAgentRunner
                 await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
             }
 
-            if (stopReason is AgentStopReason.RepeatedToolFailure or AgentStopReason.LoopLatchIgnored)
+            if (stopReason is AgentStopReason.RepeatedToolFailure or AgentStopReason.LoopLatchIgnored or AgentStopReason.RepeatedIdenticalCall)
             {
                 break;
             }

@@ -23,6 +23,9 @@ public sealed record AgentAssist(string Kind, string ToolName, int RepeatCount, 
 
     /// <summary>Nudge after a turn whose text held tool-call markup but no parsed tool call.</summary>
     public const string MalformedToolCallKind = "malformed";
+
+    /// <summary>Nudge after the same successful tool call ran several times in a row.</summary>
+    public const string IdenticalCallKind = "identical";
 }
 
 /// <summary>
@@ -294,7 +297,7 @@ public sealed class LoopAssistTracker(LoopAssistOptions options)
     private static string NormalizeError(string errorText) =>
         Regex.Replace(RepeatNote.Replace(errorText, ""), @"\s+", " ").Trim();
 
-    private static string CanonicalArguments(string argumentsJson)
+    internal static string CanonicalArguments(string argumentsJson)
     {
         if (string.IsNullOrWhiteSpace(argumentsJson))
         {
