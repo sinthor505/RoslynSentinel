@@ -18,6 +18,24 @@ public sealed class ResumeSource
     /// <summary>Tools the original run offered; empty for a transcript written before that field existed.</summary>
     public List<string> Tools { get; set; } = [];
 
+    /// <summary>Commit the run was captured at, recorded by the runner; null for transcripts written before the field existed.</summary>
+    public string? CommitHash
+    {
+        get; set;
+    }
+
+    /// <summary>Tool-level description text per tool, recorded by the runner; null for transcripts written before the field existed.</summary>
+    public Dictionary<string, string>? ToolDescriptions
+    {
+        get; set;
+    }
+
+    /// <summary>Full JSON schema per tool, recorded by the runner; null for transcripts written before the field existed.</summary>
+    public Dictionary<string, System.Text.Json.JsonElement>? ToolSchemas
+    {
+        get; set;
+    }
+
     public List<AgentTranscriptTurn> Turns { get; set; } = [];
 }
 
