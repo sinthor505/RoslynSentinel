@@ -3,9 +3,10 @@
   Audits the commit-route log (<common git dir>/roslynsentinel/commit-route.jsonl) for taken commits.
 
 .DESCRIPTION
-  Read-only. Runs outside the server and calls only the git CLI. Prints one line per outcome=taken entry
-  with a class: ok, unchecked:<why>, warn:<kind> or fail:<kind>. Declined lines are not checked here.
-  Exits 0 when no FAIL was printed, 1 otherwise.
+  Read-only. Runs outside the server and calls only the git CLI. Prints a setup header, one line per outcome=taken
+  entry with a class: ok, unchecked:<why>, warn:<kind> or fail:<kind>, then a summary: counts by outcome and class,
+  declines grouped by reason (hex ids replaced by <sha>), taken per UTC date and per kind, and the distinct pid count.
+  Declined lines are not checked. Exits 0 when no FAIL was printed, 1 otherwise.
 
   Checks per taken entry:
     fail:missing                  the commit is not in the object store (may be pruned about 2 weeks after a reset)
@@ -30,17 +31,22 @@
   Overrides the log location (default: <common git dir>/roslynsentinel/commit-route.jsonl).
 
 .PARAMETER Since
-  Only check taken entries whose utc is at or after this time.
+  Only count and check entries whose utc is at or after this time (applies to every outcome).
 
 .PARAMETER SkipFsck
   Skips the once-per-log git fsck (slow on large repositories).
+
+.PARAMETER AsJson
+  Prints one JSON object instead of the text: setup, counts, declines, takenPerDate, takenPerKind, pidCount,
+  fsck, entries, exitCode. The exit code rule is unchanged.
 #>
 [CmdletBinding()]
 param(
     [string]$RepoPath = (Get-Location).Path,
     [string]$LogPath,
     [datetime]$Since,
-    [switch]$SkipFsck
+    [switch]$SkipFsck,
+    [switch]$AsJson
 )
 
 $ErrorActionPreference = 'Continue'
@@ -60,6 +66,53 @@ function Invoke-Git([string[]]$GitArgs) {
 
 function Has($Object, [string]$Name) {
     return ($null -ne $Object -and $null -ne $Object.PSObject.Properties[$Name])
+}
+
+function Add-Count($Table, [string]$Key) {
+    if ($Table.ContainsKey($Key)) { $Table[$Key] = $Table[$Key] + 1 } else { $Table[$Key] = 1 }
+}
+
+function ConvertTo-SortedMap($Table) {
+    $map = [ordered]@{}
+    foreach ($k in ($Table.Keys | Sort-Object)) { $map[$k] = $Table[$k] }
+    return $map
+}
+
+function Format-Pairs($Table) {
+    if ($Table.Count -eq 0) { return '(none)' }
+    return (@($Table.GetEnumerator() | Sort-Object -Property Key | ForEach-Object { "$($_.Key) $($_.Value)" }) -join ', ')
+}
+
+function Get-UtcDay($Utc) {
+    try {
+        $when = [datetimeoffset]::Parse([string]$Utc, [Globalization.CultureInfo]::InvariantCulture)
+        return $when.UtcDateTime.ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
+    }
+    catch { return 'unknown' }
+}
+
+function Get-GitConfig([string]$Key) {
+    $value = Invoke-Git @('config', '--get', $Key)
+    if ($script:GitExit -ne 0) { return $null }
+    return ([string]($value | Select-Object -First 1)).Trim()
+}
+
+function Get-Setup {
+    $setup = [ordered]@{}
+    $setup['gitVersion'] = ([string](& git --version 2>$null | Select-Object -First 1)).Trim()
+    $setup['coreAutocrlf'] = Get-GitConfig 'core.autocrlf'
+    $setup['coreHooksPath'] = Get-GitConfig 'core.hooksPath'
+    $hooksDir = [IO.Path]::Combine($script:CommonAbs, 'hooks')
+    $hooks = @()
+    if (Test-Path -LiteralPath $hooksDir -PathType Container) {
+        $hooks = @(Get-ChildItem -LiteralPath $hooksDir -File | Where-Object { $_.Extension -ne '.sample' } | ForEach-Object { $_.Name })
+    }
+    $setup['repoLocalHooks'] = $hooks
+    $wt = Invoke-Git @('worktree', 'list', '--porcelain')
+    $setup['linkedWorktrees'] = if ($script:GitExit -eq 0) {
+        [Math]::Max(0, @($wt | Where-Object { $_ -like 'worktree *' }).Count - 1)
+    } else { $null }
+    return $setup
 }
 
 function Get-ChangedNames([string[]]$GitArgs) {
@@ -168,6 +221,14 @@ function Get-EntryNotes($Entry, [string]$Commit) {
     return $notes.ToArray()
 }
 
+function Format-EntryLine($Entry) {
+    if ($null -eq $Entry.commit) { return ('{0,-30} line {1}' -f $Entry.class, $Entry.line) }
+    $commit = [string]$Entry.commit
+    $short = if ($commit.Length -ge 8) { $commit.Substring(0, 8) } else { $commit }
+    $detail = (@($Entry.notes | ForEach-Object { "$($_.class) ($($_.detail))" }) -join '; ')
+    return ('{0,-30} line {1,-5} {2} {3}' -f $Entry.class, $Entry.line, $short, $detail).TrimEnd()
+}
+
 # ---- locate the repository and the log
 $common = Invoke-Git @('rev-parse', '--git-common-dir')
 if ($script:GitExit -ne 0 -or -not $common) { Write-Host "not a git repository: $script:RepoPath"; exit 1 }
@@ -176,75 +237,160 @@ $gitDir = Invoke-Git @('rev-parse', '--git-dir')
 $script:GitDirAbs = (Resolve-Path -LiteralPath ([IO.Path]::Combine($script:RepoPath, ([string]($gitDir | Select-Object -First 1)).Trim()))).Path
 
 if (-not $LogPath) { $LogPath = [IO.Path]::Combine($script:CommonAbs, 'roslynsentinel', 'commit-route.jsonl') }
-if (-not (Test-Path -LiteralPath $LogPath -PathType Leaf)) {
-    Write-Host "no commit-route log at $LogPath; nothing to check"
-    exit 0
-}
+$logExists = Test-Path -LiteralPath $LogPath -PathType Leaf
+$setup = Get-Setup
 
-# ---- per-entry checks
+# ---- per-entry checks and collection
+$entries = New-Object System.Collections.Generic.List[object]
+$outcomes = @{}
+$declineCounts = @{}
+$perDate = @{}
+$perKind = @{}
+$pidSet = @{}
 $seen = @{}
-$fails = 0
 $lineNo = 0
-foreach ($raw in (Get-Content -LiteralPath $LogPath)) {
-    $lineNo++
-    $text = $raw.Trim()
-    if ($text -eq '') { continue }
-    try { $entry = $text | ConvertFrom-Json -ErrorAction Stop }
-    catch {
-        Write-Host ('{0,-30} line {1}' -f 'unchecked:unparseable-line', $lineNo)
-        continue
-    }
-    if ([string]$entry.outcome -ne 'taken') { continue }
-    if ($PSBoundParameters.ContainsKey('Since')) {
-        try {
-            $when = [datetimeoffset]::Parse([string]$entry.utc, [Globalization.CultureInfo]::InvariantCulture)
-            if ($when.UtcDateTime -lt $Since.ToUniversalTime()) { continue }
+if ($logExists) {
+    foreach ($raw in (Get-Content -LiteralPath $LogPath)) {
+        $lineNo++
+        $text = $raw.Trim()
+        if ($text -eq '') { continue }
+        try { $entry = $text | ConvertFrom-Json -ErrorAction Stop }
+        catch {
+            $entries.Add([pscustomobject]@{ line = $lineNo; commit = $null; class = 'unchecked:unparseable-line'; notes = @() })
+            continue
         }
-        catch { }
-    }
-
-    $commit = [string]$entry.commit
-    $short = if ($commit.Length -ge 8) { $commit.Substring(0, 8) } else { $commit }
-    $shaped = (Has $entry 'ref') -and (Has $entry 'kind') -and (Has $entry 'parent') -and [bool]$entry.ref
-
-    $dupLine = $null
-    if ($seen.ContainsKey($commit)) { $dupLine = $seen[$commit] } else { $seen[$commit] = $lineNo }
-
-    if (-not $shaped) {
-        $notes = @([pscustomobject]@{ Class = 'unchecked:pre-step-1 line'; Detail = 'lacks kind, ref or parent' })
-    }
-    else {
-        $notes = @(Get-EntryNotes $entry $commit)
-        if ($null -ne $dupLine) {
-            $notes += [pscustomobject]@{ Class = 'fail:duplicate'; Detail = "commit already logged at line $dupLine" }
+        if ($PSBoundParameters.ContainsKey('Since')) {
+            try {
+                $when = [datetimeoffset]::Parse([string]$entry.utc, [Globalization.CultureInfo]::InvariantCulture)
+                if ($when.UtcDateTime -lt $Since.ToUniversalTime()) { continue }
+            }
+            catch { }
         }
-    }
 
-    $worst = 'ok'
-    foreach ($n in $notes) {
-        if ($Rank[$n.Class.Split(':')[0]] -gt $Rank[$worst.Split(':')[0]]) { $worst = $n.Class }
+        $outcome = [string]$entry.outcome
+        $outcomeKey = if ($outcome) { $outcome } else { '(none)' }
+        Add-Count $outcomes $outcomeKey
+        if ([string]$entry.pid) { $pidSet[[string]$entry.pid] = $true }
+
+        if ($outcome -eq 'declined') {
+            Add-Count $declineCounts ([regex]::Replace([string]$entry.reason, '\b[0-9a-f]{7,40}\b', '<sha>'))
+            continue
+        }
+        if ($outcome -ne 'taken') { continue }
+
+        $commit = [string]$entry.commit
+        Add-Count $perDate (Get-UtcDay $entry.utc)
+        $kindKey = if ([string]$entry.kind) { [string]$entry.kind } else { '(none)' }
+        Add-Count $perKind $kindKey
+
+        $shaped = (Has $entry 'ref') -and (Has $entry 'kind') -and (Has $entry 'parent') -and [bool]$entry.ref
+
+        $dupLine = $null
+        if ($seen.ContainsKey($commit)) { $dupLine = $seen[$commit] } else { $seen[$commit] = $lineNo }
+
+        if (-not $shaped) {
+            $notes = @([pscustomobject]@{ Class = 'unchecked:pre-step-1 line'; Detail = 'lacks kind, ref or parent' })
+        }
+        else {
+            $notes = @(Get-EntryNotes $entry $commit)
+            if ($null -ne $dupLine) {
+                $notes += [pscustomobject]@{ Class = 'fail:duplicate'; Detail = "commit already logged at line $dupLine" }
+            }
+        }
+
+        $worst = 'ok'
+        foreach ($n in $notes) {
+            if ($Rank[$n.Class.Split(':')[0]] -gt $Rank[$worst.Split(':')[0]]) { $worst = $n.Class }
+        }
+        $entries.Add([pscustomobject]@{
+                line = $lineNo
+                commit = $commit
+                class = $worst
+                notes = @($notes | ForEach-Object { [pscustomobject]@{ class = $_.Class; detail = $_.Detail } })
+            })
     }
-    if ($worst -like 'fail:*') { $fails++ }
-    $detail = (@($notes | ForEach-Object { "$($_.Class) ($($_.Detail))" }) -join '; ')
-    Write-Host ('{0,-30} line {1,-5} {2} {3}' -f $worst, $lineNo, $short, $detail).TrimEnd()
 }
 
 # ---- once per log
-if ($SkipFsck) {
-    Write-Host ('{0,-30} {1}' -f 'fsck', 'skipped (-SkipFsck)')
-}
-else {
-    $fsckOut = & git -C $script:RepoPath fsck --no-dangling 2>&1
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host ('{0,-30} {1}' -f 'ok', 'fsck --no-dangling')
+$fsck = 'not-run'
+$fsckDetail = ''
+if ($logExists) {
+    if ($SkipFsck) {
+        $fsck = 'skipped'
     }
     else {
-        $fails++
-        $sample = (@($fsckOut | Select-Object -First 3 | ForEach-Object { $_.ToString() }) -join ' | ')
-        Write-Host ('{0,-30} {1}' -f 'fail:fsck', "git fsck --no-dangling exit ${LASTEXITCODE}: $sample")
+        $fsckOut = & git -C $script:RepoPath fsck --no-dangling 2>&1
+        $fsckExit = $LASTEXITCODE
+        if ($fsckExit -eq 0) {
+            $fsck = 'ok'
+        }
+        else {
+            $fsck = 'fail'
+            $fsckDetail = (@($fsckOut | Select-Object -First 3 | ForEach-Object { $_.ToString() }) -join ' | ')
+            $fsckDetail = "git fsck --no-dangling exit ${fsckExit}: $fsckDetail"
+        }
     }
 }
 
-# TODO Step 6: summary, -AsJson, setup header
+# ---- summary data
+$classCounts = [ordered]@{ ok = 0; unchecked = 0; warn = 0; fail = 0 }
+$classList = @($entries | ForEach-Object { $_.class.Split(':')[0] })
+if ($fsck -eq 'ok') { $classList += 'ok' } elseif ($fsck -eq 'fail') { $classList += 'fail' }
+foreach ($c in $classList) { $classCounts[$c] = $classCounts[$c] + 1 }
+$fails = [int]$classCounts['fail']
+$exitCode = if ($fails -gt 0) { 1 } else { 0 }
+$declines = @($declineCounts.GetEnumerator() |
+        Sort-Object -Property @{ Expression = 'Value'; Descending = $true }, @{ Expression = 'Key' } |
+        ForEach-Object { [pscustomobject]@{ reason = [string]$_.Key; count = $_.Value } })
+
+if ($AsJson) {
+    $report = [ordered]@{
+        setup = $setup
+        counts = [ordered]@{ outcomes = (ConvertTo-SortedMap $outcomes); classes = $classCounts }
+        declines = $declines
+        takenPerDate = (ConvertTo-SortedMap $perDate)
+        takenPerKind = (ConvertTo-SortedMap $perKind)
+        pidCount = $pidSet.Count
+        fsck = $fsck
+        entries = $entries.ToArray()
+        exitCode = $exitCode
+    }
+    Write-Output ($report | ConvertTo-Json -Depth 8)
+    exit $exitCode
+}
+
+# ---- text output: setup, entries, fsck, summary
+$hooksText = if (@($setup['repoLocalHooks']).Count -eq 0) { '(none)' } else { (@($setup['repoLocalHooks']) -join ', ') }
+$autocrlfText = if ($null -eq $setup['coreAutocrlf']) { '(unset)' } else { $setup['coreAutocrlf'] }
+$hooksPathText = if ($null -eq $setup['coreHooksPath']) { '(unset)' } else { $setup['coreHooksPath'] }
+$worktreeText = if ($null -eq $setup['linkedWorktrees']) { '(unknown)' } else { [string]$setup['linkedWorktrees'] }
+Write-Host 'setup'
+Write-Host ('  {0,-20} {1}' -f 'git version', $setup['gitVersion'])
+Write-Host ('  {0,-20} {1}' -f 'core.autocrlf', $autocrlfText)
+Write-Host ('  {0,-20} {1}' -f 'core.hooksPath', $hooksPathText)
+Write-Host ('  {0,-20} {1}' -f 'repo-local hooks', $hooksText)
+Write-Host ('  {0,-20} {1}' -f 'linked worktrees', $worktreeText)
+
+if (-not $logExists) { Write-Host "no commit-route log at $LogPath; nothing to check" }
+foreach ($e in $entries) { Write-Host (Format-EntryLine $e) }
+if ($fsck -eq 'skipped') { Write-Host ('{0,-30} {1}' -f 'fsck', 'skipped (-SkipFsck)') }
+elseif ($fsck -eq 'ok') { Write-Host ('{0,-30} {1}' -f 'ok', 'fsck --no-dangling') }
+elseif ($fsck -eq 'fail') { Write-Host ('{0,-30} {1}' -f 'fail:fsck', $fsckDetail) }
+
+Write-Host ''
+Write-Host 'summary'
+Write-Host ('  outcomes: {0}' -f (Format-Pairs $outcomes))
+Write-Host ('  classes: ' + (@($classCounts.GetEnumerator() | ForEach-Object { "$($_.Key) $($_.Value)" }) -join ', '))
+Write-Host '  taken per UTC date:'
+if ($perDate.Count -eq 0) { Write-Host '    (none)' }
+foreach ($k in ($perDate.Keys | Sort-Object)) { Write-Host ('    {0,-12} {1}' -f $k, $perDate[$k]) }
+Write-Host '  taken per kind:'
+if ($perKind.Count -eq 0) { Write-Host '    (none)' }
+foreach ($k in ($perKind.Keys | Sort-Object)) { Write-Host ('    {0,-12} {1}' -f $k, $perKind[$k]) }
+Write-Host '  declines by reason:'
+if ($declines.Count -eq 0) { Write-Host '    (none)' }
+foreach ($d in $declines) { Write-Host ('    {0,5}  {1}' -f $d.count, $d.reason) }
+Write-Host ('  distinct pids: {0}' -f $pidSet.Count)
+
 if ($fails -gt 0) { exit 1 }
 exit 0
