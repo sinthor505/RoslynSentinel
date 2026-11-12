@@ -175,6 +175,118 @@ public class GuardScenariosTests
         Assert.That(verdict, Is.EqualTo(FinalStateVerdict.Destructive));
     }
 
+    private static ScoreResult ScoreWith(int maxIdenticalCallRepeat, FinalStateVerdict? verdict) => new(
+    FirstCallSucceeded: true,
+    FirstErrorCode: null,
+    FirstErrorClass: null,
+    Recovered: false,
+    CallsToRecover: null,
+    RecoveryUsedExpectedTool: null,
+    MarkerPresent: false,
+    TurnCount: 8,
+    StopReason: null,
+    FailureClass: FailureClass.None,
+    Passed: true,
+    CallsAfterFirstError: 0,
+    TurnsAfterFirstError: 0,
+    OutputCharsAfterFirstError: 0,
+    MaxIdenticalCallRepeat: maxIdenticalCallRepeat,
+    IdenticalReasoningBlocks: 0,
+    RetryPhraseCount: 0,
+    Verdict: verdict);
+
+    [Test]
+    public void TwinApplyCalls_IsAuthoredOnlySeededScenarioWithTwoIdenticalCalls()
+    {
+        var scenario = GuardScenarios.TwinApplyCalls;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(scenario.ResumeFaultSeeded, Is.True);
+            Assert.That(scenario.ResumeTranscript, Is.Null);
+            Assert.That(scenario.ScenarioType, Is.EqualTo(2));
+            Assert.That(scenario.IsResumeSample, Is.True);
+            Assert.That(scenario.ResumeFaultTool, Is.EqualTo("ReplaceSnippet"));
+            Assert.That(scenario.ResumeFaultExtraCalls!.Count, Is.EqualTo(1));
+            Assert.That(scenario.ResumeFaultExtraCalls![0].Tool, Is.EqualTo("ReplaceSnippet"));
+            Assert.That(scenario.ResumeFaultExtraCalls![0].Arguments, Is.EqualTo(scenario.ResumeFaultArguments));
+            Assert.That(scenario.ResumeFaultArguments, Does.Contain("{SOLUTION}"));
+            Assert.That(scenario.ResumeTurnCap, Is.EqualTo(7));
+        });
+
+        using var document = System.Text.Json.JsonDocument.Parse(scenario.ResumeFaultArguments!);
+        Assert.That(document.RootElement.GetProperty("action").GetString(), Is.EqualTo("apply"));
+    }
+
+    [TestCase(FinalStateVerdict.Correct)]
+    [TestCase(FinalStateVerdict.Wrong)]
+    public void ClassifyTwinApplyReaction_RepeatAtThreshold_IsResentAgain(FinalStateVerdict verdict)
+    {
+        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(3, verdict), Is.EqualTo(GuardScenarios.TwinApplyReaction.ResentAgain));
+    }
+
+    [Test]
+    public void ClassifyTwinApplyReaction_SeedRepeatOnlyAndWrongState_IsReverted()
+    {
+        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(2, FinalStateVerdict.Wrong), Is.EqualTo(GuardScenarios.TwinApplyReaction.Reverted));
+    }
+
+    [TestCase(FinalStateVerdict.Correct)]
+    [TestCase(FinalStateVerdict.Unchanged)]
+    [TestCase(null)]
+    public void ClassifyTwinApplyReaction_SeedRepeatOnlyAndCorrectState_IsMovedOn(FinalStateVerdict? verdict)
+    {
+        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(2, verdict), Is.EqualTo(GuardScenarios.TwinApplyReaction.MovedOn));
+    }
+
+    [Test]
+    public void ClassifyTwinApplyReaction_ScoreOverload_ReadsRepeatCountAndVerdict()
+    {
+        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(ScoreWith(3, FinalStateVerdict.Correct)), Is.EqualTo(GuardScenarios.TwinApplyReaction.ResentAgain));
+        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(ScoreWith(2, FinalStateVerdict.Wrong)), Is.EqualTo(GuardScenarios.TwinApplyReaction.Reverted));
+    }
+
+    [Test]
+    public void ClassifyTwinApplyReaction_InconclusiveSample_IsNull()
+    {
+        var sample = new ScenarioSample(
+            ScenarioId: GuardScenarios.TwinApplyCallsId,
+            ScenarioType: 2,
+            FaultKind: "",
+            SampleIndex: 1,
+            Commit: "",
+            Dirty: null,
+            LiftRenames: "unset",
+            Score: null,
+            SchemaDrift: true,
+            ResultDrift: 0,
+            InconclusiveReason: "schema changed, tool ReplaceSnippet: parameter \"oldContent\" removed",
+            TranscriptPath: "");
+
+        Assert.That(sample.IsInconclusive, Is.True);
+        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(sample), Is.Null);
+    }
+
+    [Test]
+    public void ClassifyTwinApplyReaction_ScoredSample_ClassifiesItsScore()
+    {
+        var sample = new ScenarioSample(
+            ScenarioId: GuardScenarios.TwinApplyCallsId,
+            ScenarioType: 2,
+            FaultKind: "",
+            SampleIndex: 1,
+            Commit: "",
+            Dirty: false,
+            LiftRenames: "on",
+            Score: ScoreWith(2, FinalStateVerdict.Wrong),
+            SchemaDrift: false,
+            ResultDrift: 0,
+            InconclusiveReason: "",
+            TranscriptPath: "");
+
+        Assert.That(GuardScenarios.ClassifyTwinApplyReaction(sample), Is.EqualTo(GuardScenarios.TwinApplyReaction.Reverted));
+    }
+
     // ---- EmptyInterfaceRemoval classifier ----
 
     [Test]

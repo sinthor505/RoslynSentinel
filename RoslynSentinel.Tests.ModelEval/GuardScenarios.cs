@@ -48,9 +48,22 @@ public static class GuardScenarios
         1. In `SummarizeShipping`, change the string "national" to "national-post". Use the `ReplaceSnippet` tool. Change nothing else.
         """;
 
+    /// <summary>The seeded apply call: the same ReplaceSnippet edit is sent twice in the seeded turn (see TwinApplyCalls).</summary>
+    internal const string TwinApplyCallsArguments = """
+        {"reason":"change national to national-post in SummarizeShipping","action":"apply","filePath":"{SOLUTION}/ContosoOrders.Core/FixtureHelpers/OrderPricingCalculator.cs","oldContent":"_ => \"national\",","newContent":"_ => \"national-post\","}
+        """;
+
+    // Authored-only seed (plan_scenario_eval_followups step 7, Decision 11): the model's seeded first turn holds TWO identical
+    // ReplaceSnippet calls, the original defect (twin calls in one turn, see SourceRun). Both are executed on the fresh fixture
+    // and the model sees their real results: the first applies, the second hits the duplicate-resend no-op and returns a
+    // SUCCESS (isError false): 'No change: this exact edit was already applied by an earlier ReplaceSnippet call (changeId <id>),
+    // and the file already contains your newContent. Do not send it again; continue with the next step.' (measured by
+    // ResumeFaultExecutionTests.ApplyResumeFaultCalls_TwinApplyCallsScenario_SecondIdenticalCallIsANoOpSuccess). So the question
+    // under test is the model's reaction, graded by ClassifyTwinApplyReaction (MovedOn / ResentAgain / Reverted) plus the existing
+    // final-state check. ScenarioType is 2 because the seeded turn contains no tool error.
     public static readonly ScenarioDefinition TwinApplyCalls = new(
         Id: TwinApplyCallsId,
-        ScenarioType: 1,
+        ScenarioType: 2,
         FaultKind: "",
         ToolUnderTest: "ReplaceSnippet",
         StagedFiles: ScenarioFixtureFiles.ChainStartingFiles,
@@ -61,7 +74,11 @@ public static class GuardScenarios
         CheckFinalState: CheckTwinApplyCallsFinalStateAsync,
         SourceRun: "10-chain batch F run 20261111-042157-571 (twin replace/apply ReplaceSnippet calls in one turn at T2, T4, T7, T12, T18, T19) and batch H4 run 20261111-193910-723; see docs/current/evals/eval_tenchain_reasoning_replay_2026_11_10.md",
         ReproducesAt: "not measured (regression guard)",
-        FixedBy: "action value replace/edit/write aliased to apply e303b7d1; identical resend returns a no-op success 68fef93b (both default on)");
+        FixedBy: "action value replace/edit/write aliased to apply e303b7d1; identical resend returns a no-op success 68fef93b (both default on)",
+        ResumeFaultTool: "ReplaceSnippet",
+        ResumeFaultSeeded: true,
+        ResumeFaultArguments: TwinApplyCallsArguments,
+        ResumeFaultExtraCalls: [("ReplaceSnippet", TwinApplyCallsArguments)]);
 
     /// <summary>
     /// Reads the calculator and checkout after a twin-apply run and returns the verdict. The build check
@@ -109,6 +126,46 @@ public static class GuardScenarios
 
         return calculatorDone && checkoutStarting ? FinalStateVerdict.Correct : FinalStateVerdict.Wrong;
     }
+
+    /// <summary>What the model did after the seeded twin apply calls; per sample, see ClassifyTwinApplyReaction.</summary>
+    public enum TwinApplyReaction
+    {
+        /// <summary>Did not resend the identical call, and the final state is not Wrong.</summary>
+        MovedOn,
+
+        /// <summary>Sent the identical call a third time or more (the seeded turn already holds 2).</summary>
+        ResentAgain,
+
+        /// <summary>The final state is Wrong.</summary>
+        Reverted,
+    }
+
+    /// <summary>Identical-call count at which a sample counts as ResentAgain (the seeded turn already holds 2).</summary>
+    public const int ResentAgainRepeatThreshold = 3;
+
+    /// <summary>
+    /// Classifies the reaction to the seeded twin apply calls from the identical-call repeat count and the final-state verdict.
+    /// ResentAgain is checked first, so a resend that also leaves the state Wrong is ResentAgain. Usable from rescoring, or on
+    /// results.csv rows parsed with ScenarioSampleCsv (columns maxIdenticalCallRepeat and finalStateVerdict). The eval doc applies
+    /// it per sample; there is no new CSV column.
+    /// </summary>
+    public static TwinApplyReaction ClassifyTwinApplyReaction(int maxIdenticalCallRepeat, FinalStateVerdict? verdict)
+    {
+        if (maxIdenticalCallRepeat >= ResentAgainRepeatThreshold)
+        {
+            return TwinApplyReaction.ResentAgain;
+        }
+
+        return verdict == FinalStateVerdict.Wrong ? TwinApplyReaction.Reverted : TwinApplyReaction.MovedOn;
+    }
+
+    /// <summary>Classifies one scored run from its MaxIdenticalCallRepeat and Verdict (see the int/verdict overload).</summary>
+    public static TwinApplyReaction ClassifyTwinApplyReaction(ScoreResult score) =>
+        ClassifyTwinApplyReaction(score.MaxIdenticalCallRepeat, score.Verdict);
+
+    /// <summary>Classifies one results row; null when the sample is inconclusive (Score is null), so there is no run to read.</summary>
+    public static TwinApplyReaction? ClassifyTwinApplyReaction(ScenarioSample sample) =>
+        sample.Score is null ? (TwinApplyReaction?)null : ClassifyTwinApplyReaction(sample.Score);
 
     private const string EmptyInterfaceRemovalPrompt = """
         # Task: Remove an unused interface

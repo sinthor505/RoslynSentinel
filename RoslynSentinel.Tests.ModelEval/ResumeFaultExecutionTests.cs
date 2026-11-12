@@ -88,6 +88,42 @@ public class ResumeFaultExecutionTests
         Assert.That(calls[0].ToolName, Is.EqualTo("ReplaceSnippet"));
     }
 
+    [Test]
+    public async Task ApplyResumeFaultCalls_TwinApplyCallsScenario_SecondIdenticalCallIsANoOpSuccess()
+    {
+        var cancellationToken = TestContext.CurrentContext.CancellationToken;
+        var scenario = GuardScenarios.TwinApplyCalls;
+        var sampleDirectory = NewSampleDirectory();
+
+        await using var environment = await ScenarioAgentTests.ScenarioEnvironment.CreateAsync(scenario, sampleDirectory, cancellationToken);
+
+        var calls = await ScenarioAgentTests.ApplyResumeFaultCallsAsync(environment.Client, scenario, environment.SolutionDirectory, cancellationToken);
+
+        // Printed before any assertion so the measurement survives a failing run.
+        TestContext.Out.WriteLine($"FIRST: IsError={calls[0].IsError}");
+        TestContext.Out.WriteLine(calls[0].ResultText);
+        TestContext.Out.WriteLine($"SECOND: IsError={calls[1].IsError}");
+        TestContext.Out.WriteLine(calls[1].ResultText);
+
+        Assert.That(calls.Count, Is.EqualTo(2));
+        Assert.That(calls[0].ArgumentsJson, Does.Not.Contain("{SOLUTION}"));
+        Assert.That(calls[1].ArgumentsJson, Does.Not.Contain("{SOLUTION}"));
+        Assert.That(calls[1].ArgumentsJson, Is.EqualTo(calls[0].ArgumentsJson));
+        Assert.That(calls[0].IsError, Is.False);
+        Assert.That(calls[1].IsError, Is.False);
+        Assert.That(calls[1].ResultText, Does.Contain("No change: this exact edit was already applied by an earlier ReplaceSnippet call"));
+        Assert.That(calls[1].ResultText, Does.Contain("continue with the next step"));
+
+        var turn = TranscriptResume.BuildAuthoredFaultTurn(1, calls);
+
+        Assert.That(turn.ToolCalls.Count, Is.EqualTo(2));
+        Assert.That(turn.ToolCalls[1].ResultJson, Is.EqualTo(calls[1].ResultText));
+
+        var calculatorText = await ScenarioFixtureFiles.ReadFileOrNullAsync(environment.SolutionDirectory, ScenarioFixtureFiles.CalculatorRelativePath, cancellationToken);
+        var checkoutText = await ScenarioFixtureFiles.ReadFileOrNullAsync(environment.SolutionDirectory, ScenarioFixtureFiles.CheckoutRelativePath, cancellationToken);
+        Assert.That(GuardScenarios.ClassifyTwinApplyCallsFiles(calculatorText, checkoutText), Is.EqualTo(FinalStateVerdict.Correct));
+    }
+
     private static ScenarioDefinition BuildTwinScenario(IReadOnlyList<(string Tool, string Arguments)>? extraCalls, string primaryArguments) =>
         new(
             Id: "TwinProbe",
