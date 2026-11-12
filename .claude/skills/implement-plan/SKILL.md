@@ -25,8 +25,11 @@ CLAUDE.md applies throughout.
   - rules it touches: DTO conventions (`dto-conventions` skill), the three things a new MCP tool needs,
     a new `[McpServerToolType]` (live check only via `LaunchTestInstance` this session), live-window steps;
   - size: fits implementer tier D1 or S0 (`.claude/implementer-tiers.json`), or needs `implementer-senior`;
+  - parallel-ready (the "Steps" comment in `templates/plan.md`): real prerequisites, disjoint files for
+    pairs, text-neutral vs behaviour-changing; propose the two-lane slice map and the text-neutral-first order;
   - open questions, each with options and a recommendation.
-  Also: is another session working on it (Status IN PROGRESS by someone else, recent `Plan:` commits,
+  Also: another plan or session that needs a baseline before this plan's behaviour changes (an A/B eval)?
+  Agree the hold point up front. Also: is another session working on it (Status IN PROGRESS by someone else, recent `Plan:` commits,
   dirty files in the plan's areas)? If so, stop and ask.
 
 ## 2. Settle
