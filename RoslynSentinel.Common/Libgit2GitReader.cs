@@ -694,6 +694,65 @@ internal sealed partial class Libgit2GitReader : IGitReader
         }
     }
 
+    public HeadWithParents? GetHeadWithParents(string workingDirectory, TimeSpan cliTimeout)
+    {
+        using var repo = Open(workingDirectory);
+        var tip = repo?.Head.Tip;
+        if (repo is null || tip is null)
+        {
+            return null;
+        }
+
+        // git rev-list reports the parents it walks to: grafts, replace refs and a shallow boundary rewrite them, and libgit2's Commit.Parents does not.
+        RequirePlainHistory(repo);
+        return new HeadWithParents(tip.Sha, [.. tip.Parents.Select(parent => parent.Sha)]);
+    }
+
+    // Ref names git's dwim rules would try for the bare name MERGE_HEAD once the pseudo-ref file ($GIT_DIR/MERGE_HEAD, tried first) is missing.
+    private static readonly string[] MergeHeadNameCompetitors =
+        ["refs/MERGE_HEAD", "refs/tags/MERGE_HEAD", "refs/heads/MERGE_HEAD", "refs/remotes/MERGE_HEAD", "refs/remotes/MERGE_HEAD/HEAD"];
+
+    private static readonly Regex PlainObjectLine = new("^[0-9a-f]{40}$", RegexOptions.CultureInvariant);
+
+    public string? GetMergeHead(string workingDirectory, TimeSpan cliTimeout)
+    {
+        using var repo = Open(workingDirectory);
+        if (repo is null)
+        {
+            return null;
+        }
+
+        // MERGE_HEAD is a per-worktree pseudo-ref file: the main working tree's .git/MERGE_HEAD, a linked worktree's <gitdir>/worktrees/<name>/MERGE_HEAD (repo.Info.Path is that directory).
+        var file = Path.Combine(repo.Info.Path, "MERGE_HEAD");
+        if (!File.Exists(file))
+        {
+            if (MergeHeadNameCompetitors.Any(name => repo.Refs[name] is not null))
+            {
+                throw new NotSupportedException("A ref other than the MERGE_HEAD pseudo-ref is named MERGE_HEAD, so git's ref-name rules decide what MERGE_HEAD means.");
+            }
+
+            return null;
+        }
+
+        // git takes the first object name of the file (an octopus merge lists one per line). Anything but a plain hash (a symbolic ref, a SHA-256 name, an empty file) is git's to read.
+        var firstLine = File.ReadLines(file).FirstOrDefault()?.TrimEnd();
+        if (firstLine is null || !PlainObjectLine.IsMatch(firstLine))
+        {
+            throw new NotSupportedException("MERGE_HEAD does not start with one plain lower-case 40-digit object name, so git reads it.");
+        }
+
+        RequirePlainHistory(repo);
+        var target = repo.Lookup(firstLine);
+        return target switch
+        {
+            // The pseudo-ref names an object that does not exist: git's verify fails quietly (exit 1), which is null.
+            null => null,
+            Commit commit => commit.Sha,
+            // A tag git peels to its commit, a tree or blob it rejects: the CLI decides.
+            _ => throw new NotSupportedException($"MERGE_HEAD names a {target.GetType().Name}, not a commit, so git peels or rejects it."),
+        };
+    }
+
     /// <summary>
     /// The pathspecs the two path-matching reads accept: ones git reads the same literally and after its own normalisation. A path git rewrites
     /// ("./x", "a//b", "a/../b", an absolute or drive path, a trailing slash) or rejects (empty, outside the repository) is left to git.

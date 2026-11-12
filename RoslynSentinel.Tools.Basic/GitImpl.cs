@@ -3607,12 +3607,9 @@ public class GitImpl : IGitOperations
     /// </summary>
     private async Task<string[]?> ReadHeadWithParentsAsync(string gitRoot, CancellationToken cancellationToken)
     {
-        var raw = await RunGitAsync(gitRoot, ["rev-list", "--parents", "-n", "1", "HEAD", "--"], cancellationToken);
-        if (raw.ExitCode != 0)
-            return null;
-
-        var tokens = raw.Stdout.Split([' ', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-        return tokens.Length == 0 ? null : tokens;
+        // Through the reader seam (libgit2 in process, the CLI's `rev-list --parents -n 1 HEAD --` when it declines or fails). A null is an unborn HEAD or a failed read, as before.
+        var head = await Task.Run(() => _gitReader.GetHeadWithParents(gitRoot, GitProcessTimeout), cancellationToken);
+        return head is null ? null : [head.Sha, .. head.ParentShas];
     }
 
     /// <summary>
@@ -3701,9 +3698,8 @@ public class GitImpl : IGitOperations
     /// <summary>The full hash MERGE_HEAD names (a merge is waiting to be concluded by the next commit), or null when no merge is in progress.</summary>
     private async Task<string?> ReadMergeHeadAsync(string gitRoot, CancellationToken cancellationToken)
     {
-        var raw = await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", "MERGE_HEAD^{commit}"], cancellationToken);
-        var hash = raw.ExitCode == 0 ? raw.Stdout.Trim() : "";
-        return hash.Length > 0 ? hash : null;
+        // Through the reader seam (libgit2 reads the MERGE_HEAD pseudo-ref file, the CLI's `rev-parse --verify --quiet MERGE_HEAD^{commit}` answers when it declines or fails).
+        return await Task.Run(() => _gitReader.GetMergeHead(gitRoot, GitProcessTimeout), cancellationToken);
     }
 
     /// <summary>

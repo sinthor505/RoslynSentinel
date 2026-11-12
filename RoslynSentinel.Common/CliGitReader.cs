@@ -374,6 +374,32 @@ internal sealed class CliGitReader : IGitReader
         };
     }
 
+    public HeadWithParents? GetHeadWithParents(string workingDirectory, TimeSpan cliTimeout)
+    {
+        // Exactly the command GitImpl.ReadHeadWithParentsAsync has always run; the trailing "--" ends the revision list. Non-zero = unborn HEAD or not a repository.
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, "rev-list", "--parents", "-n", "1", "HEAD", "--");
+        if (run is not { ExitCode: 0 })
+        {
+            return null;
+        }
+
+        var tokens = run.Value.StdOut.Split([' ', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        return tokens.Length == 0 ? null : new HeadWithParents(tokens[0], tokens[1..]);
+    }
+
+    public string? GetMergeHead(string workingDirectory, TimeSpan cliTimeout)
+    {
+        // Exactly the command GitImpl.ReadMergeHeadAsync has always run: --verify --quiet exits 1 without a message when MERGE_HEAD does not exist.
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, "rev-parse", "--verify", "--quiet", "MERGE_HEAD^{commit}");
+        if (run is not { ExitCode: 0 })
+        {
+            return null;
+        }
+
+        var text = run.Value.StdOut.Trim();
+        return text.Length > 0 ? text : null;
+    }
+
     // What the stage and unstage commands run with: the resolved git executable and the encoding config GitImpl has always put in front of its commands.
     private static readonly GitRunOptions IndexWriteRunOptions = new()
     {

@@ -137,6 +137,9 @@ public class GitReaderEnvironmentTests
         new("FindCommitByTrailer", nameof(IGitReader.FindCommitByTrailer), (r, d) => r.FindCommitByTrailer(d, "Tool-Call-Id", "env-1", 50, Timeout)),
         // Null while the opt-in setting is unset: only the scenarios that set it (and the worktree config ones) make it a real answer.
         new("GetBoolConfig(trailers)", nameof(IGitReader.GetBoolConfig), (r, d) => r.GetBoolConfig(d, "roslynsentinel.commitTrailers", Timeout), MayBeNull: true),
+        new("GetHeadWithParents", nameof(IGitReader.GetHeadWithParents), (r, d) => r.GetHeadWithParents(d, Timeout)),
+        // Null while no merge is in progress, which is the fixtures' state: the decline walk still proves libgit2 declines it and the CLI answers.
+        new("GetMergeHead", nameof(IGitReader.GetMergeHead), (r, d) => r.GetMergeHead(d, Timeout), MayBeNull: true),
         // The two index writes, projected to exit code and stderr (a GitRunResult carries a byte array, which does not compare or serialize usefully). a.txt is modified in the working
         // tree of the fixtures, so staging it is idempotent whichever reader runs first; the unstaged path is in neither the index nor HEAD, so that reset changes nothing.
         new("StageWholeFiles", nameof(IGitReader.StageWholeFiles), (r, d) => ExitAndStdErr(r.StageWholeFiles(d, IndexStageMode.AddListed, ["a.txt"], Timeout, CancellationToken.None))),

@@ -135,7 +135,7 @@ public class GitRelativeWorktreeTests
     }
 
     /// <summary>One call per <see cref="IGitReader"/> method (GetHeadSha twice), each chosen so the CLI answer is a real, non-null one.</summary>
-    private sealed record Probe(string Label, string Method, Func<IGitReader, string, object?> Call);
+    private sealed record Probe(string Label, string Method, Func<IGitReader, string, object?> Call, bool MayBeNull = false);
 
     private static (int ExitCode, string StdErr) ExitAndStdErr(GitRunResult run) => (run.ExitCode, run.StdErr);
 
@@ -162,6 +162,9 @@ public class GitRelativeWorktreeTests
         new("GetCommitMessages", nameof(IGitReader.GetCommitMessages), (r, d) => r.GetCommitMessages(d, Timeout)),
         new("FindCommitByTrailer", nameof(IGitReader.FindCommitByTrailer), (r, d) => r.FindCommitByTrailer(d, "Tool-Call-Id", "relwt-1", 50, Timeout)),
         new("GetBoolConfig", nameof(IGitReader.GetBoolConfig), (r, d) => r.GetBoolConfig(d, "worktree.useRelativePaths", Timeout)),
+        new("GetHeadWithParents", nameof(IGitReader.GetHeadWithParents), (r, d) => r.GetHeadWithParents(d, Timeout)),
+        // Null: the fixtures are not mid-merge. The fallback and opens-fine walks only need both readers to agree.
+        new("GetMergeHead", nameof(IGitReader.GetMergeHead), (r, d) => r.GetMergeHead(d, Timeout), MayBeNull: true),
         // The two index writes: projected to exit code and stderr (a GitRunResult carries a byte array, which does not compare or serialize usefully). a.txt is tracked, so staging it is
         // an idempotent no-op or one more staged file whichever reader runs first; the unstaged path is in neither the index nor HEAD, so that reset changes nothing.
         new("StageWholeFiles", nameof(IGitReader.StageWholeFiles), (r, d) => ExitAndStdErr(r.StageWholeFiles(d, IndexStageMode.AddListed, ["a.txt"], Timeout, CancellationToken.None))),
@@ -234,7 +237,11 @@ public class GitRelativeWorktreeTests
 
             Assert.Multiple(() =>
             {
-                Assert.That(viaCli, Is.Not.EqualTo("null"), probe.Label + ": the CLI must have a real answer for the comparison to mean anything");
+                if (!probe.MayBeNull)
+                {
+                    Assert.That(viaCli, Is.Not.EqualTo("null"), probe.Label + ": the CLI must have a real answer for the comparison to mean anything");
+                }
+
                 Assert.That(viaComposite, Is.EqualTo(viaCli), probe.Label + ": composite differs from the CLI-only reader");
                 Assert.That(composite.LastBackend, Is.EqualTo(GitReaderBackend.Cli), probe.Label);
                 Assert.That(composite.CliFallbackCount, Is.EqualTo(1), probe.Label);

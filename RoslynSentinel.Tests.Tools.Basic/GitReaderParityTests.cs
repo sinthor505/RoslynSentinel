@@ -1117,5 +1117,17 @@ public class GitReaderParityTests
             Gate();
             return null;
         }
+
+        public HeadWithParents? GetHeadWithParents(string workingDirectory, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
+
+        public string? GetMergeHead(string workingDirectory, TimeSpan cliTimeout)
+        {
+            Gate();
+            return null;
+        }
     }
 }

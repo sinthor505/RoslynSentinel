@@ -201,6 +201,21 @@ internal interface IGitReader
     bool? GetBoolConfig(string workingDirectory, string key, TimeSpan cliTimeout);
 
     /// <summary>
+    /// HEAD and its parents (<c>git rev-list --parents -n 1 HEAD --</c>): the commit the Git tool reads before and after a commit or revert to prove which commit is its own.
+    /// Null when HEAD does not resolve (an unborn branch, not a repository, git missing or timed out). The libgit2 reader throws <see cref="NotSupportedException"/> for a shallow
+    /// clone, info/grafts or replace refs, where git rewrites the parent list.
+    /// </summary>
+    HeadWithParents? GetHeadWithParents(string workingDirectory, TimeSpan cliTimeout);
+
+    /// <summary>
+    /// The full hash MERGE_HEAD names (<c>git rev-parse --verify --quiet MERGE_HEAD^{commit}</c>): a merge is waiting to be concluded by the next commit. Null when no merge is in progress,
+    /// when MERGE_HEAD names no commit, or when git cannot answer (not a repository, git missing or timed out). The libgit2 reader throws <see cref="NotSupportedException"/> for what it
+    /// cannot reproduce: a MERGE_HEAD file that is not one plain lower-case 40-digit hash, a non-commit object (git peels a tag), replace refs, and a ref of another kind named
+    /// MERGE_HEAD (git's ref-name rules would resolve a branch or tag of that name when the pseudo-ref file is absent).
+    /// </summary>
+    string? GetMergeHead(string workingDirectory, TimeSpan cliTimeout);
+
+    /// <summary>
     /// Stages whole files the way the Git tool's <c>stage</c> does (<see cref="IndexStageMode"/> names the exact <c>git add</c> command); a partial (hunk) stage is not part
     /// of the seam. <paramref name="paths"/> are the literal repo-relative paths of the two <c>*Listed</c> modes (empty for the other two). Unlike the reads this
     /// WRITES the index and returns what the git command returned: a <see cref="GitRunResult"/> with exit code and stderr, so the caller maps a failure to its
@@ -234,3 +249,8 @@ internal enum IndexStageMode
     /// <summary><c>git --literal-pathspecs add -- paths</c>: modifications, deletions and new (non-ignored) files at or under the paths.</summary>
     AddListed,
 }
+/// <summary>
+/// HEAD's full hash and its parents' full hashes, as one <c>git rev-list --parents -n 1 HEAD</c> read, so the pair is consistent. <see cref="ParentShas"/> is empty for a root commit
+/// and has two or more entries for a merge commit, in parent order.
+/// </summary>
+internal sealed record HeadWithParents(string Sha, IReadOnlyList<string> ParentShas);
