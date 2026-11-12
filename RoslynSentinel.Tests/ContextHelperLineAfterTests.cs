@@ -43,7 +43,8 @@ public class ContextHelperLineAfterTests
             Assert.That(ex, Is.InstanceOf<ToolNotFoundException>());
             Assert.That(ex.Message, Does.StartWith("oldContent was found (2 match(es)), but not next to the lineAfter you supplied"));
             Assert.That(ex.Message, Does.Contain("lineAfter removed 2"));
-            Assert.That(ex.Message, Does.Contain("copy the lineBefore/lineAfter shown"));
+            Assert.That(ex.Message, Does.Contain("with the lineBefore/lineAfter values that select each"));
+            Assert.That(ex.Message, Does.Not.Contain("copy the"));
             Assert.That(ex.Message, Does.Contain("matchLine="));
             Assert.That(ex.Message, Does.Not.Contain("verbatim"));
             Assert.That(ex.Message, Does.Not.Contain("Re-read the file"));

@@ -121,7 +121,7 @@ namespace RoslynSentinel.Common.SnippetMatching
             {
                 return new ToolNotFoundException(
                     $"{label} is empty or whitespace only, so there is nothing to look for and nothing was searched. " +
-                    $"No candidates exist. Supply the text to find as {label}, copied verbatim from the file.", snippet: SnippetFailureDetail.From(result));
+                    $"No candidates exist: the file's windows are scored against the text of {label}, and it has none.", snippet: SnippetFailureDetail.From(result));
             }
 
             var sb = new StringBuilder();
@@ -164,13 +164,13 @@ namespace RoslynSentinel.Common.SnippetMatching
                     $"No candidates: no window of the file reaches a similarity of {SnippetCandidateFinder.MinClosestWindowScore.ToString("0.00", CultureInfo.InvariantCulture)} " +
                     $"to your {label}, so there is no close text to show. " +
                     (literalEscapes is null
-                        ? "The text does not appear to be in this file; re-read the file and check the file path before retrying."
-                        : "The unescaped text was matched against the file, so resend it with real newlines and quotes."));
+                        ? "The text does not appear in the file that was searched."
+                        : "Unescaping its literal escape sequences gives text that matches or nearly matches the file."));
                 return new ToolNotFoundException(sb.ToString(), snippet: SnippetFailureDetail.From(result));
             }
 
             sb.Append('\n').Append(
-                $"Closest windows in the file, best first (the file's own text; copy the one you meant, verbatim, as your next {label}):");
+                $"Closest windows in the file, best first (the file's own text, as written in the file):");
             var candidates = result.ClosestWindows
                 .Select((w, i) => new Candidate(
                     $"Window {i + 1} (starts at line {w.StartLine}, score {w.Score.ToString("0.00", CultureInfo.InvariantCulture)}):",
@@ -182,6 +182,9 @@ namespace RoslynSentinel.Common.SnippetMatching
 
         // ---- MatchedLooserThanRequested ----
 
+        // TODO BuildLooser still orders the caller ("Resend ... copied verbatim (do not retype it)"), as do AmbiguityAdvice
+        // and the escaped-quote, literal-escape and tool-markup diagnoses ("Send real newlines", "remove ..."); reword them as facts
+        // and options in a later slice (outside inventory rows C6a-C6e).
         private static ToolMatchedLooserTierException BuildLooser(SnippetMatchResult result, string label)
         {
             var tier = result.NearMatches.Count > 0 ? result.NearMatches[0].LowestTier : result.RequestedTolerance;
@@ -327,7 +330,7 @@ namespace RoslynSentinel.Common.SnippetMatching
             sb.Append($"{label} was found ({matches.Count} match(es)), but not at the {supplied} you supplied; nothing was located.");
             AppendTrail(sb, result);
             sb.Append('\n').Append(
-                $"Candidates in file order (the file's own text; pass the matchLine/withinMember shown for the one you meant, or widen {label}):");
+                $"Candidates in file order (the file's own text, with the matchLine/withinMember values that select each):");
             var listed = ListCandidates(sb, candidates, matches.Count, "candidate(s)");
             AppendTieNote(sb, label, selectorsSupported, adjacentLinesSupported, before, after, listed);
             return new ToolNotFoundException(sb.ToString(), snippet: SnippetFailureDetail.From(result));
@@ -344,12 +347,12 @@ namespace RoslynSentinel.Common.SnippetMatching
             sb.Append("lineBefore/lineAfter must be the single real line immediately before/after the match.");
             if (!adjacentLinesSupported)
             {
-                sb.Append($" lineBefore/lineAfter are deprecated for this tool: omit them and widen {label} or pass matchLine instead.");
+                sb.Append($" lineBefore/lineAfter are deprecated for this tool; matchLine or a wider {label} selects a match instead.");
             }
 
             AppendTrail(sb, result);
             sb.Append('\n').Append(
-                $"Candidates in file order (the file's own text; {(adjacentLinesSupported ? "copy the lineBefore/lineAfter shown for the one you meant" : "copy the matchLine shown for the one you meant")}, or widen {label}):");
+                $"Candidates in file order (the file's own text, with the {(adjacentLinesSupported ? "lineBefore/lineAfter values that select each" : "matchLine value that selects each")}):");
             var listed = ListCandidates(sb, candidates, matches.Count, "candidate(s)");
             AppendTieNote(sb, label, selectorsSupported, adjacentLinesSupported, before, after, listed);
             return new ToolNotFoundException(sb.ToString(), snippet: SnippetFailureDetail.From(result));
@@ -456,6 +459,8 @@ namespace RoslynSentinel.Common.SnippetMatching
 
         // ---- InvalidDisambiguator ----
 
+        // TODO C6f: an invalid selector is an InvalidArgument condition (a malformed matchLine/lineBefore/lineAfter), not a lookup miss;
+        // it is returned as ToolNotFoundException, so the caller sees the NotFound code. Reclassify when the codes are revisited.
         private static ToolNotFoundException BuildInvalidDisambiguator(SnippetMatchResult result, bool selectorsSupported, bool adjacentLinesSupported)
         {
             var name = result.InvalidParameterName ?? "selector";
@@ -914,7 +919,7 @@ namespace RoslynSentinel.Common.SnippetMatching
             sb.Append('\n').Append(fence);
             if (shown < candidate.Lines.Count)
             {
-                sb.Append('\n').Append($"({candidate.Lines.Count - shown} more line(s) of this candidate not shown; copy the rest from ReadFile)");
+                sb.Append('\n').Append($"({candidate.Lines.Count - shown} more line(s) of this candidate not shown; ReadFile returns the rest)");
             }
 
             return sb.ToString();

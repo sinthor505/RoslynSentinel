@@ -440,7 +440,7 @@ public static class DocumentLookup
                 {
                     var key = scope.ProjectId is not null ? scope.ProjectId.ToString() : scope.ProjectName;
                     throw new ToolNotFoundException(
-                        $"Project '{key}' was not found in the loaded solution. Projects: {string.Join(", ", solution.Projects.Select(p => p.Name))}.");
+                        ProjectNotFoundDetail.Build(key ?? string.Empty, solution.Projects.Select(p => p.Name).ToList(), "scopeName"));
                 }
 
                 if (scope.ProjectId is null &&

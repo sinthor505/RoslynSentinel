@@ -1795,7 +1795,7 @@ public class BasicRefactoringEngine
         var pos = SnippetLookup.TryResolve(text, contextSnippet, lineBefore, lineAfter, out var snippetMatch, out var snippetError) ? snippetMatch.Start : -1;
         if (pos < 0)
         {
-            throw new ToolInvalidArgumentException(snippetError ?? "Context snippet not found.");
+            throw new ToolInvalidArgumentException(snippetError ?? "contextSnippet matched no place in the file.");
         }
 
         var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, snippetMatch!.Length));
@@ -1871,9 +1871,10 @@ public class BasicRefactoringEngine
             // or declaration list to enumerate the way SyntaxTargetResolver's candidate
             // hint does, and this tool has no name argument at all (it targets an expression by its
             // literal text, not a named declaration) -> so there is no candidate set to report here
-            // the way there is for the member/type lookups in SyntaxTargetResolver. Point the caller at the tools that
-            // would show it real file content instead of leaving a bare message with nothing to act on.
-            throw new ToolInvalidArgumentException((snippetError ?? "Context snippet not found.") + " Re-check the snippet against GetMethodSource/GetFileOutline " + "output, or add lineBefore/lineAfter (the single verbatim line immediately before/after) to disambiguate.");
+            // the way there is for the member/type lookups in SyntaxTargetResolver. Name the calls that show real file
+            // content as options (facts and options only, no orders), with the request's filePath prefilled.
+            var outline = ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()));
+            throw new ToolInvalidArgumentException((snippetError ?? "contextSnippet matched no place in the file.") + $" {outline} shows what the file declares; lineBefore/lineAfter (the single line immediately before/after) narrow a match to one place.");
         }
 
         // Find the expression that matches the context snippet - use same logic as IntroduceVariableAsync.

@@ -163,7 +163,8 @@ public class SnippetErrorFormatterTests
 
         Assert.That(ex, Is.InstanceOf<ToolNotFoundException>());
         Assert.That(ex.Message, Does.Contain("No candidates: no window of the file reaches a similarity of 0.50"));
-        Assert.That(ex.Message, Does.Contain("re-read the file"));
+        Assert.That(ex.Message, Does.Contain("The text does not appear in the file that was searched."));
+        Assert.That(ex.Message, Does.Not.Contain("re-read the file"));
         Assert.That(ex.Message, Does.Not.Contain("Closest windows"));
         Assert.That(Fences(ex.Message), Is.Empty);
     }
@@ -177,6 +178,9 @@ public class SnippetErrorFormatterTests
 
         Assert.That(ex.Message, Does.Contain("empty or whitespace only"));
         Assert.That(ex.Message, Does.Contain("No candidates exist"));
+        Assert.That(ex.Message, Does.Contain("nothing was searched"));
+        Assert.That(ex.Message, Does.Not.Contain("verbatim"));
+        Assert.That(ex.Message, Does.Not.Contain("Supply"));
     }
 
     [Test]
@@ -635,7 +639,7 @@ public class SnippetErrorFormatterTests
         Assert.That(ex.Message, Does.Contain("literal escape sequences"));
         Assert.That(ex.Message, Does.Contain("real newlines"));
         Assert.That(ex.Message, Does.Contain("found \\r\\n"));
-        Assert.That(ex.Message, Does.Not.Contain("re-read the file and check the file path"));
+        Assert.That(ex.Message, Does.Not.Contain("The text does not appear in the file that was searched."));
     }
 
     [Test]
@@ -652,7 +656,7 @@ public class SnippetErrorFormatterTests
         Assert.That(ex.Message, Does.Contain("literal escape sequences"));
         Assert.That(ex.Message, Does.Contain("real newlines"));
         Assert.That(ex.Message, Does.Contain("found \\n, \\\""));
-        Assert.That(ex.Message, Does.Not.Contain("re-read the file and check the file path"));
+        Assert.That(ex.Message, Does.Not.Contain("The text does not appear in the file that was searched."));
     }
 
     [Test]
