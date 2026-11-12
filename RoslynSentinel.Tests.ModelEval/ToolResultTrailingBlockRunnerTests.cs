@@ -100,8 +100,7 @@ public class ToolResultTrailingBlockRunnerTests
         {
             Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.ModelFinished));
             Assert.That(model.Requests, Has.Count.EqualTo(2));
-            Assert.That(model.Requests[1], Does.Contain("{\\\"ok\\\":true}"), "the first block is the tool output");
-            Assert.That(model.Requests[1], Does.Contain("TRAILING NOTE"), "the trailing block reaches the model");
+            Assert.That(ToolOutput(model.Requests[1]), Is.EqualTo("{\"ok\":true}\n\nTRAILING NOTE"), "the tool output is the first block, then the trailing block");
             Assert.That(record.ResultJson, Is.EqualTo("{\"ok\":true}"));
             Assert.That(record.TrailingText, Is.EqualTo("TRAILING NOTE"));
             Assert.That(record.IsError, Is.False);
@@ -124,8 +123,7 @@ public class ToolResultTrailingBlockRunnerTests
         Assert.Multiple(() =>
         {
             Assert.That(model.Requests, Has.Count.EqualTo(2));
-            Assert.That(model.Requests[1], Does.Contain("{\\\"ok\\\":true}\""), "the tool output ends right after ResultJson");
-            Assert.That(model.Requests[1], Does.Not.Contain("TRAILING"));
+            Assert.That(ToolOutput(model.Requests[1]), Is.EqualTo("{\"ok\":true}"), "the tool output is ResultJson exactly");
             Assert.That(record.ResultJson, Is.EqualTo("{\"ok\":true}"));
             Assert.That(record.TrailingText, Is.Null);
             Assert.That(json, Does.Not.Contain("TrailingText"));
@@ -149,7 +147,7 @@ public class ToolResultTrailingBlockRunnerTests
         {
             Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.ModelFinished));
             Assert.That(model.Requests, Has.Count.GreaterThanOrEqualTo(1));
-            Assert.That(model.Requests[0], Does.Contain("{\\\"ok\\\":true}\\n\\nseed-trailing-NOTE"));
+            Assert.That(ToolOutput(model.Requests[0]), Is.EqualTo("{\"ok\":true}\n\nseed-trailing-NOTE"));
         });
     }
 
@@ -247,6 +245,18 @@ public class ToolResultTrailingBlockRunnerTests
         return $"event: response.completed\ndata: {payload}\n\n";
     }
 
+    /// <summary>The output of the single function_call_output item in a recorded request body: the tool result the model read.</summary>
+    private static string ToolOutput(string body)
+    {
+        using var doc = JsonDocument.Parse(body);
+        return doc.RootElement.GetProperty("input")
+            .EnumerateArray()
+            .Where(item => item.TryGetProperty("type", out var type) && type.GetString() == "function_call_output")
+            .Single()
+            .GetProperty("output")
+            .GetString()!;
+    }
+
     /// <summary>Serves the scripted responses in order (the last one repeats) and records every request body.</summary>
     private sealed class ScriptedHandler(params string[] responses) : HttpMessageHandler
     {
@@ -256,6 +266,16 @@ public class ToolResultTrailingBlockRunnerTests
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            // The client's loaded-model status check is a GET sent before the first POST: answer it without recording it
+            // or consuming a scripted response. Only POSTs are model requests.
+            if (request.Method == HttpMethod.Get)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{\"data\":[]}", Encoding.UTF8, "application/json"),
+                };
+            }
+
             Requests.Add(request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken));
             var next = _responses.Count > 1 ? _responses.Dequeue() : _responses.Peek();
             return new HttpResponseMessage(HttpStatusCode.OK)
