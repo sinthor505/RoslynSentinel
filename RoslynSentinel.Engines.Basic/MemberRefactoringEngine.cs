@@ -1277,7 +1277,8 @@ public class MemberRefactoringEngine
 
         if (memberNode is not MethodDeclarationSyntax methodDecl)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' was not found in '{filePath}'. Searched: method declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. Next: {ToolCallHint.Call("Search", ("mode", "text"), ("query", methodName))} or {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to confirm the method name.", "method", methodName);
+            var methodMiss = MemberRefactoringNotFound.Method(methodName, root, filePath.ToString());
+            throw new ToolNotFoundException($"{methodMiss.Message} Searched: method declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. {ToolCallHint.Call("Search", ("mode", "text"), ("query", methodName))} finds the name as text.", "method", methodName);
         }
         // TODO tuple outcome slot is always Modified; return only the list
 
@@ -1326,7 +1327,7 @@ public class MemberRefactoringEngine
 
         if (memberNode is not MethodDeclarationSyntax methodDecl)
         {
-            throw new ToolNotFoundException($"Cannot edit: method '{methodName}' not found.", "method", methodName);
+            throw MemberRefactoringNotFound.Method(methodName, root, filePath.ToString());
         }
 
         if (methodDecl.ParameterList.Parameters.Any(p => p.Identifier.Text == paramName))
@@ -1388,7 +1389,7 @@ public class MemberRefactoringEngine
 
         if (memberNode is not MethodDeclarationSyntax methodDecl)
         {
-            throw new ToolNotFoundException($"Cannot edit: method '{methodName}' not found.", "method", methodName);
+            throw MemberRefactoringNotFound.Method(methodName, root, filePath.ToString());
         }
 
         var parameters = methodDecl.ParameterList.Parameters;
@@ -2347,7 +2348,8 @@ public class MemberRefactoringEngine
         var container = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<TypeDeclarationSyntax>().Where(c => c.Identifier.Text == containerName).ToList() ?? new List<TypeDeclarationSyntax>(), "Type", containerName);
         if (container == null)
         {
-            throw new ToolNotFoundException("Cannot edit: container not found.", "type", containerName);
+            // Deviation from the factory doc: the only tool that reaches this (ApplyClassCodeTransform sort_members) names the parameter className, so the retry hint says className, not this method's containerName.
+            throw MemberRefactoringNotFound.Type(containerName, root, filePath.ToString(), "className");
         }
 
         static int CategoryOf(MemberDeclarationSyntax m) => m switch
@@ -2407,7 +2409,7 @@ public class MemberRefactoringEngine
         var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? [], "Method", methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException("Method '" + methodName + "' not found. " + ToolCallHint.Next("GetFileOutline", "to list the methods in the file.", ("filePath", filePath.ToString())), "method", methodName);
+            throw MemberRefactoringNotFound.Method(methodName, root, filePath.ToString());
         }
 
         if (!method.ParameterList.Parameters.Any())
@@ -2667,7 +2669,7 @@ public class MemberRefactoringEngine
             targetNamespace = namespaces.FirstOrDefault(n => n.Name.ToString() == namespaceName);
             if (targetNamespace == null)
             {
-                throw new ToolNotFoundException($"Namespace '{namespaceName}' not found. Available: {string.Join(", ", namespaces.Select(n => n.Name.ToString()))}.", "namespace", namespaceName);
+                throw MemberRefactoringNotFound.Namespace(namespaceName, root, filePath.ToString());
             }
         }
         else if (namespaces.Count <= 1)
@@ -4664,7 +4666,7 @@ public class MemberRefactoringEngine
 
         if (methodNode == null)
         {
-            throw new ToolNotFoundException("Method not found.", "method", methodName);
+            throw MemberRefactoringNotFound.Method(methodName, root, filePath.ToString());
         }
 
         throw new ToolTargetIneligibleException($"Could not convert method to property: the method body must be a single return statement or an expression body. Call {ToolCallHint.Call("GetMethodSource", ("filePath", filePath.ToString()), ("methodName", methodName))} to see the body and reduce it to one return statement first.");
@@ -4684,7 +4686,7 @@ public class MemberRefactoringEngine
 
         if (methodNode == null)
         {
-            throw new ToolNotFoundException("Method not found.", "method", methodName);
+            throw MemberRefactoringNotFound.Method(methodName, root, filePath.ToString());
         }
 
         if (methodNode.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
@@ -5532,7 +5534,7 @@ public class MemberRefactoringEngine
 
         if (container == null)
         {
-            throw new ToolNotFoundException("Type not found.", "type", typeName);
+            throw MemberRefactoringNotFound.Type(typeName, root, filePath.ToString());
         }
 
         // Idempotency check
@@ -5579,7 +5581,7 @@ public class MemberRefactoringEngine
 
         if (container == null)
         {
-            throw new ToolNotFoundException("Type not found.", "type", typeName);
+            throw MemberRefactoringNotFound.Type(typeName, root, filePath.ToString());
         }
 
         if (container.BaseList == null)
