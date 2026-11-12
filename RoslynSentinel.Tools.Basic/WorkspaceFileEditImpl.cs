@@ -1191,7 +1191,10 @@ public class WorkspaceFileEditImpl
             }
 
             FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
-            if (!filePathResolved.Validated)
+            // Only a blank path is 'could not be resolved'. A non-blank unvalidated path (misspelt or missing file)
+            // falls through to DocumentLookup below so its near-match or no-match text reaches the model.
+            if (!filePathResolved.Validated
+                && (filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded || string.IsNullOrWhiteSpace(filePathResolved.Absolute)))
             {
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
@@ -1558,7 +1561,10 @@ public class WorkspaceFileEditImpl
         foreach (var fileGroup in editsByFile)
         {
             var filePathResolved = fileGroup.Key;
-            if (!filePathResolved.Validated)
+            // Only a blank path is 'path could not be resolved.'. A non-blank unvalidated path (misspelt or missing file)
+            // falls through to DocumentLookup below so its near-match or no-match text reaches the model.
+            if (!filePathResolved.Validated
+                && (filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded || string.IsNullOrWhiteSpace(filePathResolved.Absolute)))
             {
                 perEditErrors.Add($"'{fileGroup.Key}': {(filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded ? SolutionNotLoadedMessage.Build(_workspaceManager.LoadState) : "path could not be resolved.")}");
                 continue;
