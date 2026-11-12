@@ -45,4 +45,8 @@
     <Using Include="RoslynSentinel.Common" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="error-policy.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
