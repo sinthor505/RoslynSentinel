@@ -200,7 +200,7 @@ internal sealed class FallbackGitReader : IGitReader
 
     /// <summary>A real failure of the primary that the composite answers from the CLI for; any other exception type propagates.</summary>
     internal static bool IsFailure(Exception ex) =>
-        ex is LibGit2SharpException or DllNotFoundException or BadImageFormatException or TypeInitializationException
+        ex is LibGit2SharpException or DllNotFoundException or BadImageFormatException or TypeInitializationException or EntryPointNotFoundException
             or PlatformNotSupportedException or IOException or UnauthorizedAccessException;
 
     private void RecordDecline(Exception ex)

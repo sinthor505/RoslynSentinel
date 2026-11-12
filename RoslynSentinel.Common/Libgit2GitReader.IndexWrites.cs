@@ -63,7 +63,9 @@ internal sealed partial class Libgit2GitReader
             {
                 return new HeldIndexLock(new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.DeleteOnClose));
             }
-            catch (IOException ex) when (File.Exists(path))
+            // The create fails because the file exists; the holder may delete it before the existence check runs, so the error code counts too
+            // (Windows ERROR_FILE_EXISTS 80 / ERROR_ALREADY_EXISTS 183; on Unix the check is all there is).
+            catch (IOException ex) when (File.Exists(path) || (ex.HResult & 0xFFFF) is 80 or 183)
             {
                 throw new NotSupportedException("index.lock exists (another git process holds it); git reports that in its own words.", ex);
             }
