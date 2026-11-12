@@ -1102,9 +1102,12 @@ public class GitCommitSeamParityTests
             .Select(sid => names.GetValueOrDefault(sid, "?"))];
     }
 
-    private async Task<List<string>> RunSpawnScenarioAsync(string scenario)
+    private async Task<List<string>> RunSpawnScenarioAsync(string scenario, bool inProcessRoute = false)
     {
-        var impl = new GitImpl(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, GitReaders.Default);
+        var route = inProcessRoute ? new InProcessCommitRoute() : null;
+        var impl = route is null
+            ? new GitImpl(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, GitReaders.Default)
+            : new GitImpl(new FakeWorkspaceManager(WorkspaceAccess.ReadOnly), NullLogger<GitImpl>.Instance, GitReaders.Default, route);
         var name = "spawn-" + scenario;
         string directory;
         Func<Task<GitCommitResult>> commit;
@@ -1163,10 +1166,18 @@ public class GitCommitSeamParityTests
                 throw new ArgumentException("no scenario " + scenario);
         }
 
+        // NewRepo's InitRepo pins the route off; write the pin for this run after the scenario setup.
+        RunGit(directory, "config", "roslynsentinel.inProcessCommit", inProcessRoute ? "true" : "false");
+
         GitCommitResult? result = null;
         var spawned = await SpawnedGitCommandsAsync(directory, async () => result = await commit());
         var expectError = scenario is "amend-published-is-refused" or "commit-fails";
         Assert.That(result!.IsError, Is.EqualTo(expectError), result.Error);
+        if (route is not null)
+        {
+            Assert.That(route.TakenCount, Is.EqualTo(1));
+            Assert.That(route.DeclineCount, Is.EqualTo(0));
+        }
         return spawned;
     }
 
@@ -1180,9 +1191,21 @@ public class GitCommitSeamParityTests
     [TestCase("commit-fails")]
     public async Task Commit_StartsOnlyGitCommitItself_NoOtherGitProcessAsync(string scenario)
     {
-        var spawned = await RunSpawnScenarioAsync(scenario);
+        // The claim is about the CLI route (pinned off here), so it stays valid after the default flips to in-process.
+        var spawned = await RunSpawnScenarioAsync(scenario, inProcessRoute: false);
 
         Assert.That(spawned, Is.EqualTo(new[] { "commit" }), "every read and check around git commit goes through the in-process seam");
+    }
+
+    [TestCase("plain")]
+    [TestCase("plain-trailers")]
+    [TestCase("untracked")]
+    [TestCase("scope-all")]
+    public async Task Commit_InProcessRoute_StartsNoGitProcessAtAllAsync(string scenario)
+    {
+        var spawned = await RunSpawnScenarioAsync(scenario, inProcessRoute: true);
+
+        Assert.That(spawned, Is.Empty, "the in-process route commits without starting any git process");
     }
 
     [Test]
