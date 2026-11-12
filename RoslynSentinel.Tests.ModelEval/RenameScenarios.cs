@@ -29,7 +29,7 @@ public static class RenameScenarios
         ReproducesAt: "measured by this scenario with ROSLYNSENTINEL_LIFT_RENAMES off and on; see the results recorded in plan_targeted_tool_scenario_evals step 5b",
         FixedBy: "ROSLYNSENTINEL_LIFT_RENAMES flag (default off)");
 
-    private const string CalcDiscRenamePrompt = """
+    internal const string CalcDiscRenamePrompt = """
         # Task: One small refactor in FixtureHelpers/OrderPricingCalculator.cs
 
         The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.

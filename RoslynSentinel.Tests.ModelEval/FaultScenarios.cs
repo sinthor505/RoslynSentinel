@@ -56,7 +56,7 @@ public static class FaultScenarios
         ReproducesAt: CommonReproducesAt,
         FixedBy: "");
 
-    private const string RenameSymbolNoSuchMethodPrompt = """
+    internal const string RenameSymbolNoSuchMethodPrompt = """
         # Task: One small refactor in FixtureHelpers/OrderPricingCalculator.cs
 
         The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.
@@ -127,7 +127,7 @@ public static class FaultScenarios
         ReproducesAt: CommonReproducesAt,
         FixedBy: "");
 
-    private const string ReplaceSnippetWrongFileNoMatchPrompt = """
+    internal const string ReplaceSnippetWrongFileNoMatchPrompt = """
         # Task: One small text edit
 
         The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.
