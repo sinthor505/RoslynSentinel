@@ -61,7 +61,10 @@ public static class FaultScenarios
         ResumeFaultSeeded: true,
         ResumeFaultArguments: """
             {"reason":"rename CalcDsc to CalculateDiscountedTotal and update the call site in OrderCheckout.cs","projectName":"ContosoOrders.Core","docCommentId":"M:ContosoOrders.Core.FixtureHelpers.OrderPricingCalculator.CalcDsc(System.Decimal,System.Decimal,System.Boolean)","newName":"CalculateDiscountedTotal"}
-            """);
+            """,
+        // Early exit (owner, 2026-11-12, plan_scenario_eval_followups): the check is a text classification each turn; the
+        // build + invoke step runs only once the text already classifies Correct, so the per-turn cost stays small.
+        EndOnCorrectFinalState: true);
 
     internal const string RenameSymbolNoSuchMethodPrompt = """
         # Task: One small refactor in FixtureHelpers/OrderPricingCalculator.cs

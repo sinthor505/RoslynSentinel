@@ -100,7 +100,7 @@ public class FaultScenariosTests
         Assert.That(scenario.ResumeKeepTurns, Is.EqualTo(0));
         Assert.That(scenario.IsResumeSample, Is.True);
         Assert.That(scenario.ResumeTurnCap, Is.EqualTo(1 + scenario.TurnCap));
-        Assert.That(scenario.EndOnCorrectFinalState, Is.False);
+        Assert.That(scenario.EndOnCorrectFinalState, Is.True);
     }
 
     [Test]
