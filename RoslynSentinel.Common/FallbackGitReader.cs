@@ -133,6 +133,9 @@ internal sealed class FallbackGitReader : IGitReader
     public bool? GetBoolConfig(string workingDirectory, string key, TimeSpan cliTimeout) =>
         Invoke(reader => reader.GetBoolConfig(workingDirectory, key, cliTimeout));
 
+    public string? GetConfigValue(string workingDirectory, string key, TimeSpan cliTimeout) =>
+    Invoke(reader => reader.GetConfigValue(workingDirectory, key, cliTimeout));
+
     public HeadWithParents? GetHeadWithParents(string workingDirectory, TimeSpan cliTimeout) =>
         Invoke(reader => reader.GetHeadWithParents(workingDirectory, cliTimeout));
 

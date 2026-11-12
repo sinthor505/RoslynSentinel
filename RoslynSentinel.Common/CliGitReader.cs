@@ -374,6 +374,18 @@ internal sealed class CliGitReader : IGitReader
         };
     }
 
+    public string? GetConfigValue(string workingDirectory, string key, TimeSpan cliTimeout)
+    {
+        // Exit 1 = unset, 128 = not a repository: both null.
+        var run = GitProcess.TryRun(workingDirectory, cliTimeout, "config", "--get", key);
+        if (run is not { ExitCode: 0 })
+        {
+            return null;
+        }
+
+        return run.Value.StdOut.TrimEnd('\r', '\n');
+    }
+
     public HeadWithParents? GetHeadWithParents(string workingDirectory, TimeSpan cliTimeout)
     {
         // Exactly the command GitImpl.ReadHeadWithParentsAsync has always run; the trailing "--" ends the revision list. Non-zero = unborn HEAD or not a repository.
