@@ -61,7 +61,7 @@ public static class ToolParams
         "Name of the member containing the intended oldContent match, as printed by the ambiguity error.";
 
     public const string ReplaceSnippetMatchLine =
-        "1-based line where the intended oldContent match starts, as printed by the ambiguity error. Refers to the file before this call.";
+        "Only needed when oldContent matches more than once: the 1-based start line of the intended match, copied from the ambiguity error. Omit it otherwise.";
 
     /*
     public const string OldContent =

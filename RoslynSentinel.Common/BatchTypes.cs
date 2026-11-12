@@ -587,8 +587,8 @@ public class SnippetEdit
     {
         get; set;
     }
-    /// <summary>Optional 1-based line (in the original file) where the intended OldContent match starts.</summary>
-    [BatchItemField("Optional 1-based line (in the original file) where the intended OldContent match starts.")]
+    /// <summary>Only needed when OldContent matches more than once: the 1-based start line of the intended match, copied from the ambiguity error. Omit it otherwise.</summary>
+    [BatchItemField("Only needed when OldContent matches more than once: the 1-based start line of the intended match, copied from the ambiguity error. Omit it otherwise.")]
     public int? MatchLine
     {
         get; set;
