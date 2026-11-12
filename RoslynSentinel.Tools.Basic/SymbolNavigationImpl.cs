@@ -141,6 +141,8 @@ public class SymbolNavigationImpl
         )
     {
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
+        // Prefilled option for a not-found snippet, shared by the info branch, its default text and the catch path.
+        var outlineOption = $"{ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} shows the file's members and their lines; lineBefore/lineAfter pin a match.";
 
         try
         {
@@ -171,7 +173,6 @@ public class SymbolNavigationImpl
                 if (symbolInfo == null || symbolInfo.Kind == "Error")
                 {
                     var snippetPreview = contextSnippet.Length > 60 ? contextSnippet[..60] + "..." : contextSnippet;
-                    var outlineOption = $"{ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} shows the file's members and their lines; lineBefore/lineAfter pin a match.";
                     var errorMsg = string.IsNullOrEmpty(symbolInfo?.Error) ? 
                         $"Could not resolve a symbol in '{filePathResolved}' for contextSnippet \"{snippetPreview}\". " +
                         "This means one of: the snippet text does not appear verbatim in the file, it matched a " +
@@ -226,6 +227,16 @@ public class SymbolNavigationImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "InspectSymbol ({Aspect}) failed in '{FilePathWrapper}'", aspect, filePathResolved);
+            if (ex is ToolNotFoundException && (aspect == InspectSymbolAspect.info || aspect == InspectSymbolAspect.blastRadius))
+            {
+                // The engine throws a snippet miss; the mapped text gets the same prefilled option as the info branch.
+                var mapped = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InspectSymbol");
+                return new SentinelCallToolResult<object>
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.NotFound, mapped.Message + " " + outlineOption)
+                };
+            }
             return new SentinelCallToolResult<object>
             {
                 IsError = true,
