@@ -10,6 +10,13 @@ namespace RoslynSentinel.Tests;
 /// load/watch/write real files without touching the checked-in sample or colliding with other
 /// tests. Dispose() deletes the copy. Prefer <c>RoslynSentinel.Tests.Fakes.InMemoryWorkspace</c> (a FakeWorkspaceManager over
 /// source strings, no disk I/O) unless the test really needs file I/O, MSBuild load or watcher behavior.
+/// <para>
+/// <c>new TestSolutionFixture(restorePackages: true)</c> is opt-in (default off). It runs <c>dotnet restore</c>
+/// once on the copied solution so projects that use NuGet packages get obj/project.assets.json. Without it,
+/// ContosoOrders.Tests has no restore assets and an in-memory quickBuild reports CS0246 for every Xunit type
+/// there. Restore needs the NuGet cache or network access and adds time to construction, so keep it off
+/// unless the test needs package resolution. Throws InvalidOperationException if restore fails or exceeds 5 minutes.
+/// </para>
 /// </summary>
 public sealed class TestSolutionFixture : IDisposable
 {
@@ -23,7 +30,7 @@ public sealed class TestSolutionFixture : IDisposable
 
     public string SolutionDirectory { get; }
 
-    public TestSolutionFixture()
+    public TestSolutionFixture(bool restorePackages = false)
     {
         var sampleRoot = Path.Combine(FindRepoRoot(), "Samples", "ContosoOrders");
         if (!Directory.Exists(sampleRoot))
@@ -43,6 +50,11 @@ public sealed class TestSolutionFixture : IDisposable
         {
             throw new FileNotFoundException(
                 $"TestSolutionFixture copy did not produce a .sln at '{SolutionPath}'.");
+        }
+
+        if (restorePackages)
+        {
+            RestorePackages(SolutionPath, SolutionDirectory);
         }
     }
 
@@ -164,6 +176,52 @@ public sealed class TestSolutionFixture : IDisposable
             var destinationFile = Path.Combine(destinationRoot, relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(destinationFile)!);
             File.Copy(sourceFile, destinationFile);
+        }
+    }
+
+    private static void RestorePackages(string solutionPath, string workingDirectory)
+    {
+        var startInfo = new System.Diagnostics.ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        startInfo.ArgumentList.Add("restore");
+        startInfo.ArgumentList.Add(solutionPath);
+
+        using var process = System.Diagnostics.Process.Start(startInfo)
+            ?? throw new InvalidOperationException("TestSolutionFixture could not start 'dotnet restore'.");
+
+        // Read both streams while the process runs so a full pipe cannot deadlock WaitForExit.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+
+        if (!process.WaitForExit(TimeSpan.FromMinutes(5)))
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+                // Process exited between the timeout and the kill.
+            }
+
+            throw new InvalidOperationException(
+                $"TestSolutionFixture 'dotnet restore' for '{solutionPath}' did not finish within 5 minutes.");
+        }
+
+        var output = stdoutTask.GetAwaiter().GetResult() + stderrTask.GetAwaiter().GetResult();
+        if (process.ExitCode != 0)
+        {
+            var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            var start = Math.Max(0, lines.Length - 40);
+            var tail = string.Join(Environment.NewLine, lines, start, lines.Length - start);
+            throw new InvalidOperationException(
+                $"TestSolutionFixture 'dotnet restore' for '{solutionPath}' exited with code {process.ExitCode}. Last 40 lines of output:{Environment.NewLine}{tail}");
         }
     }
 

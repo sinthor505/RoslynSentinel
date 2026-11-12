@@ -10,7 +10,8 @@ namespace RoslynSentinel.Tests.ModelEval.Fixtures;
 /// failure (e.g. rename done but accessibility step skipped) is distinguishable from total failure.
 /// Uses plain arithmetic rather than real Roslyn APIs so it compiles inside
 /// <see cref="RoslynSentinel.Tests.TestSolutionFixture"/>'s copy of Samples/ContosoOrders, which has
-/// no NuGet packages and no restore step.
+/// no NuGet packages in ContosoOrders.Core, so it compiles without a restore step. ContosoOrders.Tests
+/// references packages and has restore assets only when the fixture is constructed with restorePackages: true.
 /// </summary>
 public static class OrderPricingRefactorReproducer
 {
