@@ -371,6 +371,12 @@ Sketch of the two no-candidate texts (wording is the implementer's to refine; th
     five (file lookups; constructor/class/enum; method parameter; the identical "target not found" sites through one
     helper; the rest), dispatched only once no other session has uncommitted edits in `MemberRefactoringEngine.cs`;
     5d three, in order (`ScanTools` catch change; file-miss routing; project-name misses).
+  - Done (batch D, 2026-11-12): 5a-1 e7446193, 5a-2a 580e2a55, 5a-2b 1df84f16, 5a-3 12a0cc97, 5b-1 9c5fbc1c +
+    0e556f10, 5b-2 ee2edf36, 5b-3 9e213c6b, 5d-1 f9f6b65b, 5d-2 348975ba, 5d-3a 2f60a0a2, 5d-3b a0a54a10, 5f d4378c04 +
+    fe4c572c, inventory rows 2c6cc92c. Also `AsyncifyTools` typed classification 21a5c88f. Candidate hints for tools
+    with many required arguments are written as "Retry with <param>: 'X'" (an option, not a full call).
+  - 5g (owner 2026-11-12): `OrientationCircuitBreaker`'s "You MUST call ListAll(" becomes a fact plus an option
+    (Decision 10); this moves it out of "Out of scope".
   - 5e Anything the Step 1 inventory lists that is not in 5a-5d (other engines, other tool classes), as further
     slices; scope limited by Decision 9 (Engines.Basic, Tools.Basic, Common). The inventory's corrected anchors
     (for example MoveMember file lookups now `:2980`/`:4950`, class lookups `:2992`/`:4962`) supersede the line
