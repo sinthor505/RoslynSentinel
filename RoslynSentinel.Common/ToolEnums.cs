@@ -24,6 +24,7 @@ public enum GitOperation
 /// <summary>
 /// Operations of the GitRemote tool: branch/remote/ref-management operations split out of the Git tool
 /// so the always-loaded Git schema stays small.
+/// config is declared last so the numeric values of the earlier members do not change.
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum GitRemoteOperation
@@ -35,7 +36,10 @@ public enum GitRemoteOperation
     pull,
     tag,
     stash,
-    worktree
+    worktree,
+
+    /// <summary>Read, set or unset one git config value (action get, set or unset). get reads any key except credential-bearing ones; set and unset write only an allowlisted set of keys in the repository's local config.</summary>
+    config
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -393,8 +397,9 @@ public enum GitResetMode
 }
 
 /// <summary>
-/// Action for the tag, stash and worktree operations. Required for those three operations (no default),
+/// Action for the tag, stash, worktree and config operations. Required for those four operations (no default),
 /// so a destructive action can never be reached by omission. Each member lists the operation(s) that use it.
+/// get, set and unset are declared last so the numeric values of the earlier members do not change.
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum GitAction
@@ -421,7 +426,16 @@ public enum GitAction
     add,
 
     /// <summary>Remove a worktree. Used by worktree.</summary>
-    remove
+    remove,
+
+    /// <summary>Read one git config value. Used by config.</summary>
+    get,
+
+    /// <summary>Set one allowlisted git config key in the repository's local config. Used by config.</summary>
+    set,
+
+    /// <summary>Remove one allowlisted git config key from the repository's local config. Used by config.</summary>
+    unset
 }
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum SearchMode

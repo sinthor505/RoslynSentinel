@@ -724,23 +724,22 @@ public class GitImpl : IGitOperations
     /// refused without returning the value.
     /// </summary>
     public async Task<GitConfigResult> ConfigAsync(
-        string gitRoot, string? action, string? key, string? value, CancellationToken cancellationToken)
+        string gitRoot, GitAction? action, string? key, string? value, CancellationToken cancellationToken)
     {
         try
         {
-            if (string.Equals(action, "set", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(action, "unset", StringComparison.OrdinalIgnoreCase))
+            switch (action)
             {
-                var writeAction = string.Equals(action, "set", StringComparison.OrdinalIgnoreCase) ? "set" : "unset";
-                return await ConfigWriteAsync(gitRoot, writeAction, key, value, cancellationToken);
-            }
-
-            if (!string.Equals(action, "get", StringComparison.OrdinalIgnoreCase))
-            {
-                // TODO add the GitRemote(operation: config) call literal once Step 20 adds GitRemoteOperation.config
-                return ConfigFailure(action ?? "", GitErrorCodes.ActionRequired,
-                    $"operation=config needs action to be one of: get, set, unset (got {action ?? "none"}). Nothing was changed.",
-                    "Valid actions are get, set and unset; get takes key, set takes key and value, unset takes key.");
+                case GitAction.get:
+                    break;
+                case GitAction.set:
+                case GitAction.unset:
+                    // ConfigWriteAsync and the result's Action property use the plain words "set" and "unset".
+                    return await ConfigWriteAsync(gitRoot, action == GitAction.set ? "set" : "unset", key, value, cancellationToken);
+                default:
+                    return ConfigFailure(action?.ToString() ?? "", GitErrorCodes.ActionRequired,
+                        $"operation=config needs action to be one of: get, set, unset (got {action?.ToString() ?? "none"}). Nothing was changed.",
+                        $"Valid actions are get, set and unset; get takes configKey, set takes configKey and configValue, unset takes configKey. For example {ToolCallHint.Call("GitRemote", ("operation", "config"), ("action", "get"), ("configKey", "user.name"))}.");
             }
 
             var keyError = ValidateConfigKey(key);
@@ -809,9 +808,8 @@ public class GitImpl : IGitOperations
         if (action == "set")
         {
             if (value is null)
-                // TODO add the GitRemote(operation: config) call literal once Step 20 adds GitRemoteOperation.config
-                return ConfigFailure(action, GitErrorCodes.ActionRequired, "action=set needs value (got none). Nothing was changed.",
-                    "Pass value with action=set; an empty string is a valid value.");
+                return ConfigFailure(action, GitErrorCodes.ActionRequired, "action=set needs configValue (got none). Nothing was changed.",
+                    $"Pass configValue with action=set; an empty string is a valid value. For example {ToolCallHint.Call("GitRemote", ("operation", "config"), ("action", "set"), ("configKey", "user.name"), ("configValue", "Ada"))}.");
             if (value.Contains('\0'))
                 return ConfigFailure(action, GitErrorCodes.InvalidName,
                     "The config value contains a NUL character, which git cannot store. Nothing was changed.",

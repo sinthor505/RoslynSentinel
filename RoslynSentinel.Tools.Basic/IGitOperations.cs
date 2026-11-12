@@ -7,7 +7,7 @@ public interface IGitOperations
     Task<GitCheckoutResult> CheckoutAsync(string gitRoot, string? branchName, bool createBranch, string? startPoint, CancellationToken cancellationToken);
     Task<GitCommitResult> CommitAsync(string gitRoot, string? message, GitStageScope? scope, string? paths, bool amend, CancellationToken cancellationToken);
 
-    Task<GitConfigResult> ConfigAsync(string gitRoot, string? action, string? key, string? value, CancellationToken cancellationToken);
+    Task<GitConfigResult> ConfigAsync(string gitRoot, GitAction? action, string? key, string? value, CancellationToken cancellationToken);
 
     Task<GitDiffResult> DiffAsync(string gitRoot, string target, string? paths, int maxBytes, bool nameOnly, bool stat, CancellationToken cancellationToken);
     Task<GitRemoteResult> FetchAsync(string gitRoot, string remoteName, CancellationToken cancellationToken);

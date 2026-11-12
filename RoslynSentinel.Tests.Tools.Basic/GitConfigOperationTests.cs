@@ -139,7 +139,7 @@ public class GitConfigOperationTests
     {
         RunGit(_repo, "config", Probe, "two words");
 
-        var result = await NewImpl().ConfigAsync(_repo, "get", Probe, null, CancellationToken.None);
+        var result = await NewImpl().ConfigAsync(_repo, GitAction.get, Probe, null, CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -153,7 +153,7 @@ public class GitConfigOperationTests
     [Test]
     public async Task Get_KeyNotSet_ReturnsSuccessWithNullValueAndANoteAsync()
     {
-        var result = await NewImpl().ConfigAsync(_repo, "get", "roslynsentinel.absent", null, CancellationToken.None);
+        var result = await NewImpl().ConfigAsync(_repo, GitAction.get, "roslynsentinel.absent", null, CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -168,7 +168,7 @@ public class GitConfigOperationTests
     {
         SetGlobal(Probe, "global-value");
 
-        var result = await NewImpl().ConfigAsync(_repo, "get", Probe, null, CancellationToken.None);
+        var result = await NewImpl().ConfigAsync(_repo, GitAction.get, Probe, null, CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -183,7 +183,7 @@ public class GitConfigOperationTests
         RunGit(_repo, "config", Probe, "main-value");
         var worktree = AddLinkedWorktree(_repo, _root, "get-wt", "get-branch");
 
-        var result = await NewImpl().ConfigAsync(worktree, "get", Probe, null, CancellationToken.None);
+        var result = await NewImpl().ConfigAsync(worktree, GitAction.get, Probe, null, CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -201,7 +201,7 @@ public class GitConfigOperationTests
     {
         var proxy = DispatchProxy.Create<IGitReader, ThrowingConfigReaderProxy>();
 
-        var result = await NewImpl(proxy).ConfigAsync(_repo, "get", key, null, CancellationToken.None);
+        var result = await NewImpl(proxy).ConfigAsync(_repo, GitAction.get, key, null, CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -222,7 +222,7 @@ public class GitConfigOperationTests
         const string secret = "s3cret-value-xyz";
         RunGit(_repo, "config", key, secret);
 
-        var result = await NewImpl().ConfigAsync(_repo, "get", key, null, CancellationToken.None);
+        var result = await NewImpl().ConfigAsync(_repo, GitAction.get, key, null, CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -239,7 +239,7 @@ public class GitConfigOperationTests
     {
         RunGit(_repo, "config", "url.https://example.com/.insteadOf", "https://token@example.com/");
 
-        var result = await NewImpl().ConfigAsync(_repo, "get", "url.https://example.com/.insteadOf", null, CancellationToken.None);
+        var result = await NewImpl().ConfigAsync(_repo, GitAction.get, "url.https://example.com/.insteadOf", null, CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -257,7 +257,7 @@ public class GitConfigOperationTests
     [TestCase("")]
     public async Task Get_MalformedKey_ReturnsInvalidNameAsync(string key)
     {
-        var result = await NewImpl().ConfigAsync(_repo, "get", key, null, CancellationToken.None);
+        var result = await NewImpl().ConfigAsync(_repo, GitAction.get, key, null, CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -274,7 +274,7 @@ public class GitConfigOperationTests
         const string email = "linked@example.com";
         var worktree = AddLinkedWorktree(_repo, _root, "set-wt", "set-branch");
 
-        var result = await NewImpl().ConfigAsync(worktree, "set", "user.email", email, CancellationToken.None);
+        var result = await NewImpl().ConfigAsync(worktree, GitAction.set, "user.email", email, CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -294,11 +294,11 @@ public class GitConfigOperationTests
     {
         var impl = NewImpl();
 
-        var first = await impl.ConfigAsync(_repo, "set", Probe, "first-value", CancellationToken.None);
+        var first = await impl.ConfigAsync(_repo, GitAction.set, Probe, "first-value", CancellationToken.None);
         Assert.That(first.IsError, Is.False, first.Error);
         Assert.That(File.ReadAllText(LocalConfig(_repo)), Does.Contain("probe = first-value"));
 
-        var second = await impl.ConfigAsync(_repo, "set", Probe, "second-value", CancellationToken.None);
+        var second = await impl.ConfigAsync(_repo, GitAction.set, Probe, "second-value", CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -329,7 +329,7 @@ public class GitConfigOperationTests
     {
         const string value = "sentinel-value";
 
-        var result = await NewImpl().ConfigAsync(_repo, "set", key, value, CancellationToken.None);
+        var result = await NewImpl().ConfigAsync(_repo, GitAction.set, key, value, CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -351,7 +351,7 @@ public class GitConfigOperationTests
     {
         var before = File.ReadAllBytes(LocalConfig(_repo));
 
-        var result = await NewImpl().ConfigAsync(_repo, "set", key, "sentinel-value", CancellationToken.None);
+        var result = await NewImpl().ConfigAsync(_repo, GitAction.set, key, "sentinel-value", CancellationToken.None);
 
         var after = File.ReadAllBytes(LocalConfig(_repo));
         Assert.Multiple(() =>
@@ -368,7 +368,7 @@ public class GitConfigOperationTests
     {
         var before = File.ReadAllBytes(LocalConfig(_repo));
 
-        var result = await NewImpl().ConfigAsync(_repo, "set", "user.email", null, CancellationToken.None);
+        var result = await NewImpl().ConfigAsync(_repo, GitAction.set, "user.email", null, CancellationToken.None);
 
         var after = File.ReadAllBytes(LocalConfig(_repo));
         Assert.Multiple(() =>
@@ -382,7 +382,7 @@ public class GitConfigOperationTests
     [Test]
     public async Task Set_ValueStartingWithDash_IsStoredLiterallyAsync()
     {
-        var result = await NewImpl().ConfigAsync(_repo, "set", "roslynsentinel.testkey", "-x", CancellationToken.None);
+        var result = await NewImpl().ConfigAsync(_repo, GitAction.set, "roslynsentinel.testkey", "-x", CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -399,7 +399,7 @@ public class GitConfigOperationTests
     {
         var before = File.ReadAllBytes(LocalConfig(_repo));
 
-        var result = await NewImpl().ConfigAsync(_repo, "unset", "roslynsentinel.absent", null, CancellationToken.None);
+        var result = await NewImpl().ConfigAsync(_repo, GitAction.unset, "roslynsentinel.absent", null, CancellationToken.None);
 
         var after = File.ReadAllBytes(LocalConfig(_repo));
         Assert.Multiple(() =>
@@ -417,7 +417,7 @@ public class GitConfigOperationTests
     {
         RunGit(_repo, "config", Probe, "old-value");
 
-        var result = await NewImpl().ConfigAsync(_repo, "unset", Probe, null, CancellationToken.None);
+        var result = await NewImpl().ConfigAsync(_repo, GitAction.unset, Probe, null, CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -436,7 +436,7 @@ public class GitConfigOperationTests
         var localBefore = File.ReadAllBytes(LocalConfig(_repo));
         var globalBefore = File.ReadAllBytes(_globalConfig);
 
-        var result = await NewImpl().ConfigAsync(_repo, "unset", Probe, null, CancellationToken.None);
+        var result = await NewImpl().ConfigAsync(_repo, GitAction.unset, Probe, null, CancellationToken.None);
 
         var localAfter = File.ReadAllBytes(LocalConfig(_repo));
         var globalAfter = File.ReadAllBytes(_globalConfig);
@@ -454,9 +454,10 @@ public class GitConfigOperationTests
 
     // ---- action ----
 
-    [TestCase("list")]
+    [TestCase(GitAction.list)]
+    [TestCase(GitAction.create)]
     [TestCase(null)]
-    public async Task UnknownAction_ReturnsActionRequiredAsync(string? action)
+    public async Task UnknownAction_ReturnsActionRequiredAsync(GitAction? action)
     {
         var result = await NewImpl().ConfigAsync(_repo, action, Probe, null, CancellationToken.None);
 
