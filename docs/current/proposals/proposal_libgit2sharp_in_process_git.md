@@ -220,6 +220,22 @@ read was already there). Remaining: slice 2 (untracked pre-stage `git add`, `Fin
 `ClassifyPaths`), slice 3 (amend upstream check, hash-derivation reads). Timing harness:
 `c:\tmp\commit-baseline\` (README).
 
+**5a done (2026-11-11):** slice 2 `1b7879d7` (untracked pre-stage in process), slice 3 `b79263cb`
+(five new seam reads: ResolveCommitAbbreviation, GetCommitMessage, GetUpstreamContainingHead,
+GetInProgressOperation, HasStagedChanges). A plain commit, amend or trailers commit now spawns only
+`git commit`; median 442 -> 117 ms (trailers off, tracked), 439 -> 132 ms (trailers on, untracked).
+An amend with a local `.` upstream still spawns 3 (declined by design).
+
+**5c done (2026-11-12), route DEFAULT OFF:** 5c-1 `a6462ec5` CAS commit primitive
+(`Libgit2GitReader.CasCommit.cs`, `Libgit2Native.cs`); 5c-2 `5d108b73` hook runner (`GitHooks.cs`,
+`GitShellLocator.cs`); 5c-3 `79fae5b2` message cleanup and trailers (`GitCommitMessage.cs`, byte
+parity with git 2.55); 5c-4 `d23e3f15` route in `GitImpl.CommitAsync` (`InProcessCommitRoute.cs`),
+enabled per repo by `git config roslynsentinel.inProcessCommit true`. Extra declines beyond the list
+below: `reference-transaction` or `post-index-change` hook, `commit.signoff`, a `hook.*` config entry
+(predicate Unknown). Open: whether to default it on; listed tracked paths are staged before a late
+decline (stay staged if the CLI fallback then fails); a failed post-commit launch is ignored;
+`RequireWorkingTreeMatchesIndex` status-scan scope is a TODO in code.
+
 **5c - in-process commit for the simple case (after a go from 5b).** Plain commit or
 `--only <paths>` (tree = HEAD tree plus the listed paths' index entries), trailers formatted in
 process with byte-parity tests against `git commit --trailer` (existing `Co-Authored-By` block),
