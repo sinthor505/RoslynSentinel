@@ -37,18 +37,11 @@ public static class FileNotFoundMessage
         if (candidatePaths.Count > 0)
         {
             return declaring + $"File '{requestedPath}' was not found in the loaded solution (searched {searchedProjectCount} project(s); path comparison ignores case, so casing is not the cause). " +
-                   "A file with the same name exists at a different path. You MUST retry with the exact path of the file you meant:\n" + list;
+                   "A file with the same name exists at a different path. Retry with the exact path of the file you meant:\n" + list;
         }
 
         var notFound = declaring + $"File '{requestedPath}' was not found anywhere in the loaded solution (searched {searchedProjectCount} project(s), no file-name match; path comparison ignores case, so casing is not the cause). ";
-        // Batch H3 R2/R3 T1: the model read a file its task asks it to create later. Say so before the listing advice.
-        // Batch H5 R1 T11.1/T16.1: the file had been renamed by an earlier type rename, and "does not exist yet" read as "create it".
-        // TODO remember server-side file renames (old path -> new path) and name the new path here instead of hedging.
-        if (Callable(isCallable, "CreateFile"))
-            notFound += $"If your task is to create this file, call {ToolCallHint.Call("CreateFile")} instead of reading it. If you read or edited it earlier, an earlier rename or move has changed its name: do not recreate it, find its current path. ";
-        return Callable(isCallable, "ListSolutionItems")
-            ? notFound + $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path."
-            : notFound + "Retry with a path you have already seen in an earlier result; do not guess another one.";
+        return notFound + NoMatchFactsAndOptions(requestedPath, isCallable);
     }
 
     /// <summary>
@@ -66,6 +59,15 @@ public static class FileNotFoundMessage
         IReadOnlyList<(string TypeName, string FilePath)>? declaringTypeFiles = null,
         string? movedToPath = null, string? movedByTool = null)
     {
+        // TODO optional per-error-code operator policy suffix (idea_error_policy_pointer)
+        return BuildCore(requestedPath, candidates, searchedProjectCount, isCallable, declaringTypeFiles, movedToPath, movedByTool);
+    }
+
+    private static string BuildCore(
+        string requestedPath, IReadOnlyList<FileCandidate> candidates, int searchedProjectCount, Func<string, bool>? isCallable = null,
+        IReadOnlyList<(string TypeName, string FilePath)>? declaringTypeFiles = null,
+        string? movedToPath = null, string? movedByTool = null)
+    {
         var sameNamePaths = candidates.Where(c => c.SameFileName).Select(c => c.Path).ToList();
         var diskText = TryDiskBranch(requestedPath, sameNamePaths, isCallable);
         if (diskText is not null)
@@ -77,7 +79,7 @@ public static class FileNotFoundMessage
         {
             // Eval run 20261112-151531-550 T8: RenameSymbol moved the file, the model read the old path and the hedged text below cost it two more calls.
             var movedText = $"File '{requestedPath}' was moved to '{movedToPath}' by an earlier {movedByTool} call in this session" +
-                            (movedByTool == "RenameSymbol" ? " (a rename of the type it declares)" : string.Empty) + $". Use the new path.\n  - {movedToPath}";
+                            (movedByTool == "RenameSymbol" ? " (a rename of the type it declares)" : string.Empty) + $". The file is now at '{movedToPath}'.\n  - {movedToPath}";
             return Callable(isCallable, "ReadFile")
                 ? movedText + $" -> {ToolCallHint.Call("ReadFile", ("filePath", movedToPath))}"
                 : movedText;
@@ -103,18 +105,32 @@ public static class FileNotFoundMessage
                 }
             }
 
-            return text + "\nRetry with the exact path of the file you meant. If none of these is the file you meant, it does not exist in this solution: tell the user so instead of editing a different file.";
+            return text + "\nRetry with the exact path of the file you meant. If none of these is the file you meant, it does not exist in this solution.";
         }
 
         var notFound = intro + "No file in the solution has a similar name. ";
-        // Batch H3 R2/R3 T1: the model read a file its task asks it to create later. Say so before the listing advice.
-        // Batch H5 R1 T11.1/T16.1: the file had been renamed by an earlier type rename, and "does not exist yet" read as "create it".
-        // A rename the server itself made is named above (movedToPath); this hedge covers a move made outside this server's record.
+        return notFound + NoMatchFactsAndOptions(requestedPath, isCallable);
+    }
+
+    // The facts and options that follow a "no file matches" statement: CreateFile creates the file (an option, named only when callable),
+    // a file read earlier may have been renamed or moved (a fact; the server records only its own moves, see movedToPath above), and
+    // ListSolutionItems lists every file (an option, named only when callable). Hints are built only when rendered.
+    // TODO remember server-side file renames (old path -> new path) and name the new path here instead of hedging.
+    private static string NoMatchFactsAndOptions(string requestedPath, Func<string, bool>? isCallable)
+    {
+        var text = string.Empty;
         if (Callable(isCallable, "CreateFile"))
-            notFound += $"If your task is to create this file, call {ToolCallHint.Call("CreateFile")} instead of reading it. If you read or edited it earlier, an earlier rename or move has changed its name: do not recreate it, find its current path. ";
-        return Callable(isCallable, "ListSolutionItems")
-            ? notFound + $"To see every file in the solution, call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))}. If the file is not in that list it does not exist in this solution: tell the user so instead of editing a different file."
-            : notFound + "Retry only with a path you have already seen in an earlier result. If there is none, the file does not exist in this solution: tell the user so instead of editing a different file.";
+        {
+            text += $"{ToolCallHint.Call("CreateFile", ("filePath", requestedPath))} creates a new file at this path. ";
+        }
+
+        text += "A file read earlier under this name may since have been renamed or moved.";
+        if (Callable(isCallable, "ListSolutionItems"))
+        {
+            text += $" {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} lists every file in the solution. A file not in that list does not exist in this solution.";
+        }
+
+        return text;
     }
 
     // Probes the disk for a rooted path and returns the text of the first branch that applies (directory, project or solution
@@ -159,10 +175,10 @@ public static class FileNotFoundMessage
         var typeName = declaringTypeFiles[0].TypeName;
         if (declaringTypeFiles.Count == 1)
         {
-            return $"Type '{typeName}' is declared in {declaringTypeFiles[0].FilePath}; read that file. ";
+            return $"Type '{typeName}' is declared in {declaringTypeFiles[0].FilePath}. ";
         }
 
-        return $"Type '{typeName}' is declared in {declaringTypeFiles.Count} files: {string.Join("; ", declaringTypeFiles.Select(d => d.FilePath))}; read the one you meant. ";
+        return $"Type '{typeName}' is declared in {declaringTypeFiles.Count} files: {string.Join("; ", declaringTypeFiles.Select(d => d.FilePath))}. ";
     }
 
     private static string OutsideSolutionText(string requestedPath, IReadOnlyList<string> candidatePaths, Func<string, bool>? isCallable)

@@ -36,7 +36,7 @@ public class FileNotFoundDeclaringTypeTests
     public void ReadFileAndNavigationReads_NameTheDeclaringFileFirst()
     {
         var solution = SolutionWith((Declaring, DeclaringSource));
-        var expected = $"Type 'StandardOrderPricingCalculator' is declared in {Declaring}; read that file. ";
+        var expected = $"Type 'StandardOrderPricingCalculator' is declared in {Declaring}. ";
 
         var read = WorkspaceFileEditImpl.BuildFileNotFoundError(solution, Missing);
         var navigation = WorkspaceReadNavigationImpl.BuildFileNotFoundError(solution, Missing);
@@ -56,7 +56,7 @@ public class FileNotFoundDeclaringTypeTests
         var lookup = DocumentLookup.TryGetDocument(solution, Missing);
 
         Assert.That(lookup.Status, Is.EqualTo(DocumentLookupStatus.NotFound));
-        Assert.That(lookup.Describe(), Does.StartWith($"Type 'StandardOrderPricingCalculator' is declared in {Declaring}; read that file. "));
+        Assert.That(lookup.Describe(), Does.StartWith($"Type 'StandardOrderPricingCalculator' is declared in {Declaring}. "));
     }
 
     [Test]
@@ -69,7 +69,7 @@ public class FileNotFoundDeclaringTypeTests
 
         var message = WorkspaceFileEditImpl.BuildFileNotFoundError(solution, Missing).Message;
 
-        Assert.That(message, Does.StartWith("Type 'StandardOrderPricingCalculator' is declared in 3 files: C:\\repo\\Core\\Part1.cs; C:\\repo\\Core\\Part2.cs; C:\\repo\\Core\\Part3.cs; read the one you meant. "));
+        Assert.That(message, Does.StartWith("Type 'StandardOrderPricingCalculator' is declared in 3 files: C:\\repo\\Core\\Part1.cs; C:\\repo\\Core\\Part2.cs; C:\\repo\\Core\\Part3.cs. "));
         Assert.That(message, Does.Not.Contain("Part4.cs"));
     }
 

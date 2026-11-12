@@ -63,16 +63,19 @@ public class FileNotFoundConsumerPathTests
         Assert.That(message, Does.Contain(OrderPricingFixture.FileName), "the real path of the file the misspelling meant is named");
         Assert.That(message, Does.Contain(ToolCallHint.Call("ReadFile", ("filePath", OrderPricingFixture.FileName))), "the candidate carries a prefilled ReadFile call");
         Assert.That(message, Does.Contain("does not exist in this solution"));
+        Assert.That(message, Does.Not.Contain("tell the user"));
         Assert.That(message, Does.Not.Contain("You MUST"));
     }
 
-    // The NONE text: says no similar name exists, offers the listing, and says how to report a file that does not exist.
+    // The NONE text: says no similar name exists, offers the listing and CreateFile, and states the facts about a file that is not in the solution.
     private static void AssertNoCandidateText(string? message)
     {
         Assert.That(message, Does.Contain("No file in the solution has a similar name"));
         Assert.That(message, Does.Contain(ToolCallHint.Call("ListSolutionItems", ("kind", "all"))), "the listing is offered as a prefilled call");
         Assert.That(message, Does.Contain("does not exist in this solution"));
-        Assert.That(message, Does.Contain("tell the user"));
+        Assert.That(message, Does.Contain("may since have been renamed or moved"));
+        Assert.That(message, Does.Not.Contain("tell the user"));
+        Assert.That(message, Does.Not.Contain("If your task is to create this file"));
         Assert.That(message, Does.Not.Contain("You MUST"));
     }
 

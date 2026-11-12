@@ -93,7 +93,8 @@ public class DocCommentIdNotFoundCandidateTests
             Assert.That(message, Does.Contain("No symbol in the solution has a similar name"));
             Assert.That(message, Does.Contain(ToolCallHint.Call("GetFileOutline", ("filePath", OrderPricingFixture.FileName))),
                 "the container resolves, so the one orientation call is the outline of its file");
-            Assert.That(message, Does.Contain("tell the user"));
+            Assert.That(message, Does.Contain("the symbol does not exist in this solution."));
+            Assert.That(message, Does.Not.Contain("tell the user"));
             Assert.That(message, Does.Not.Contain("no longer resolves"));
         });
     }

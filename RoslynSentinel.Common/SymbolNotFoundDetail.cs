@@ -20,7 +20,7 @@ public sealed record SymbolCandidate(string Name, string Kind, string? Container
 /// </summary>
 public static class SymbolNotFoundDetail
 {
-    private const string DoesNotExistSentence = "the symbol does not exist in this solution: tell the user so instead of renaming or editing another symbol.";
+    private const string DoesNotExistSentence = "the symbol does not exist in this solution.";
 
     /// <summary>
     /// Collects declared named types, ordinary methods, properties (not indexers), fields (including constants and enum
@@ -122,7 +122,7 @@ public static class SymbolNotFoundDetail
             }
         }
 
-        text.Append("\nRetry with the exact symbol you meant. If none of these is the symbol you meant, it does not exist in this solution: tell the user so instead of renaming or editing another symbol.");
+        text.Append("\nRetry with the exact symbol you meant. If none of these is the symbol you meant, it does not exist in this solution.");
         return text.ToString();
     }
 
@@ -131,8 +131,8 @@ public static class SymbolNotFoundDetail
     /// <paramref name="orientationFilePath"/> is not null and GetFileOutline is callable the call is GetFileOutline of that
     /// file; otherwise, when ListAll is callable, ListAll with the kind mapped from <paramref name="symbolKind"/>
     /// (method, property and field map to themselves; type, event and any map to "all", ListAll's nearest values) and
-    /// <paramref name="projectName"/> when not null; with neither tool callable there is no call. The text always ends by
-    /// telling the agent to report that the symbol does not exist.
+    /// <paramref name="projectName"/> when not null; with neither tool callable there is no call. With a call, the text ends
+    /// with the fact that a symbol missing from what that call shows does not exist in this solution.
     /// </summary>
     public static string RenderNoCandidates(
         string wantedName, string symbolKind, string scopeDescription, string? orientationFilePath, string? projectName,
@@ -155,7 +155,8 @@ public static class SymbolNotFoundDetail
             return text + $"To see what exists, call {ToolCallHint.Call("ListAll", pairs.ToArray())}. If it is not in that list, {DoesNotExistSentence}";
         }
 
-        return text + $"If you have not already seen it in an earlier result, {DoesNotExistSentence}";
+        // No orientation call is callable: the no-similar-name fact above is all that is true for every caller.
+        return text.TrimEnd();
     }
 
     /// <summary>
@@ -165,7 +166,15 @@ public static class SymbolNotFoundDetail
     /// type gives GetFileOutline of that type's file; otherwise ListAll. <paramref name="scopeDescription"/> states what
     /// was searched (for example "3 project(s), test projects excluded"); <paramref name="projectName"/> is passed to ListAll.
     /// </summary>
-    public static async Task<string> BuildAsync(
+    public static Task<string> BuildAsync(
+        IReadOnlyCollection<Project> searchedProjects, string query, string symbolKind, string scopeDescription, string? projectName,
+        Func<string, bool>? isCallable = null, Func<SymbolCandidate, string>? nextCall = null, CancellationToken cancellationToken = default)
+    {
+        // TODO optional per-error-code operator policy suffix (idea_error_policy_pointer)
+        return BuildAsyncCore(searchedProjects, query, symbolKind, scopeDescription, projectName, isCallable, nextCall, cancellationToken);
+    }
+
+    private static async Task<string> BuildAsyncCore(
         IReadOnlyCollection<Project> searchedProjects, string query, string symbolKind, string scopeDescription, string? projectName,
         Func<string, bool>? isCallable = null, Func<SymbolCandidate, string>? nextCall = null, CancellationToken cancellationToken = default)
     {

@@ -77,7 +77,8 @@ public class CallableToolHintTests
 
         AssertNamesNoListingTool(text);
         Assert.That(text, Does.Not.Contain("You MUST call"));
-        Assert.That(text, Does.Contain("already seen"));
+        Assert.That(text, Does.Not.Contain("tell the user"));
+        Assert.That(text, Does.Contain("may since have been renamed or moved"));
     }
 
     [Test]
@@ -86,8 +87,10 @@ public class CallableToolHintTests
         var lookup = NotFoundWithoutCandidates();
 
         var unchanged = lookup.Describe();
-        Assert.That(unchanged, Does.Contain("call ListSolutionItems("), "null = every tool callable: the text callers saw before");
+        Assert.That(unchanged, Does.Contain("ListSolutionItems("), "null = every tool callable: the listing is offered");
+        Assert.That(unchanged, Does.Contain(" lists every file in the solution."));
         Assert.That(unchanged, Does.Not.Contain("You MUST"));
+        Assert.That(unchanged, Does.Not.Contain("tell the user"));
         Assert.That(unchanged, Does.Contain("does not exist in this solution"));
         Assert.That(lookup.Describe(Everything), Is.EqualTo(unchanged), "a permissive delegate gives the same text as none");
         Assert.That(lookup.Message, Is.EqualTo(unchanged), "the Message property keeps the default text");
@@ -112,7 +115,8 @@ public class CallableToolHintTests
         Assert.That(error.ErrorCode, Is.EqualTo("FileNotFound"));
         AssertNamesNoListingTool(error.Message);
         Assert.That(error.Message, Does.Not.Contain("You MUST call"));
-        Assert.That(error.Message, Does.Contain("already seen"));
+        Assert.That(error.Message, Does.Not.Contain("tell the user"));
+        Assert.That(error.Message, Does.Contain("may since have been renamed or moved"));
     }
 
     [Test]
@@ -121,14 +125,16 @@ public class CallableToolHintTests
         var solution = SolutionWithoutTheRequestedFile();
 
         var unchanged = WorkspaceReadNavigationImpl.BuildFileNotFoundError(solution, "C:\\x\\Missing.cs");
-        Assert.That(unchanged.Message, Does.Contain("call ListSolutionItems("));
+        Assert.That(unchanged.Message, Does.Contain("ListSolutionItems("));
+        Assert.That(unchanged.Message, Does.Contain(" lists every file in the solution."));
         Assert.That(unchanged.Message, Does.Not.Contain("You MUST"));
+        Assert.That(unchanged.Message, Does.Not.Contain("tell the user"));
         Assert.That(unchanged.Message, Does.Contain("does not exist in this solution"));
 
-        Assert.That(unchanged.Message, Does.Contain("CreateFile("), "every tool callable: the not-yet-created hint is shown");
+        Assert.That(unchanged.Message, Does.Contain("CreateFile("), "every tool callable: the create option is shown");
 
         var onlyListing = WorkspaceReadNavigationImpl.BuildFileNotFoundError(solution, "C:\\x\\Missing.cs", name => name == "ListSolutionItems");
-        Assert.That(onlyListing.Message, Does.Contain("call ListSolutionItems("));
+        Assert.That(onlyListing.Message, Does.Contain("ListSolutionItems("));
         Assert.That(onlyListing.Message, Does.Not.Contain("CreateFile"), "CreateFile is not callable, so it is not named");
     }
 
@@ -142,7 +148,8 @@ public class CallableToolHintTests
         Assert.That(error.ErrorCode, Is.EqualTo("FileNotFound"));
         AssertNamesNoListingTool(error.Message);
         Assert.That(error.Message, Does.Not.Contain("You MUST call"));
-        Assert.That(error.Message, Does.Contain("Retry only with a path you have already seen"));
+        Assert.That(error.Message, Does.Not.Contain("tell the user"));
+        Assert.That(error.Message, Does.Contain("may since have been renamed or moved"));
     }
 
     [Test]
@@ -151,8 +158,10 @@ public class CallableToolHintTests
         var solution = SolutionWithoutTheRequestedFile();
 
         var unchanged = WorkspaceFileEditImpl.BuildFileNotFoundError(solution, "C:\\x\\Missing.cs");
-        Assert.That(unchanged.Message, Does.Contain("call ListSolutionItems("));
+        Assert.That(unchanged.Message, Does.Contain("ListSolutionItems("));
+        Assert.That(unchanged.Message, Does.Contain(" lists every file in the solution."));
         Assert.That(unchanged.Message, Does.Not.Contain("You MUST"));
+        Assert.That(unchanged.Message, Does.Not.Contain("tell the user"));
         Assert.That(unchanged.Message, Does.Contain("does not exist in this solution"));
 
         var viaSurface = WorkspaceFileEditImpl.BuildFileNotFoundError(solution, "C:\\x\\Missing.cs",

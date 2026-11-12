@@ -132,6 +132,7 @@ public class FileNotFoundCandidatesTests
         Assert.That(text, Does.Contain("Did you mean"));
         Assert.That(text, Does.Contain("does not exist in this solution"));
         Assert.That(text, Does.Not.Contain("You MUST"));
+        Assert.That(text, Does.Not.Contain("tell the user"));
     }
 
     [Test]
@@ -142,8 +143,10 @@ public class FileNotFoundCandidatesTests
         Assert.That(text, Does.Contain("No file in the solution has a similar name"));
         Assert.That(text, Does.Contain(ToolCallHint.Call("ListSolutionItems", ("kind", "all"))));
         Assert.That(text, Does.Contain("does not exist in this solution"));
-        Assert.That(text, Does.Contain("tell the user"));
-        Assert.That(text, Does.Contain("If your task is to create this file"));
+        Assert.That(text, Does.Contain($"{ToolCallHint.Call("CreateFile", ("filePath", MissingPath))} creates a new file at this path."));
+        Assert.That(text, Does.Contain("may since have been renamed or moved"));
+        Assert.That(text, Does.Not.Contain("tell the user"));
+        Assert.That(text, Does.Not.Contain("If your task is to create this file"));
         Assert.That(text, Does.Not.Contain("You MUST"));
     }
 
@@ -153,7 +156,9 @@ public class FileNotFoundCandidatesTests
         var text = FileNotFoundMessage.Build(MissingPath, NoCandidates, 3, name => name != "ListSolutionItems");
 
         Assert.That(text, Does.Not.Contain("ListSolutionItems"));
-        Assert.That(text, Does.Contain("does not exist in this solution"));
+        Assert.That(text, Does.Contain("No file in the solution has a similar name"));
+        Assert.That(text, Does.Contain("may since have been renamed or moved"));
+        Assert.That(text, Does.Not.Contain("tell the user"));
         Assert.That(text, Does.Not.Contain("You MUST"));
     }
 
@@ -176,7 +181,8 @@ public class FileNotFoundCandidatesTests
 
         var text = FileNotFoundMessage.Build(MissingPath, candidates, 2, declaringTypeFiles: declaring);
 
-        Assert.That(text, Does.Contain($"Type 'StandardOrderPricingCalculator' is declared in {OrderPricingFixture.FileName}; read that file. "));
+        Assert.That(text, Does.Contain($"Type 'StandardOrderPricingCalculator' is declared in {OrderPricingFixture.FileName}. "));
+        Assert.That(text, Does.Not.Contain("read that file"));
     }
 
     [Test]
@@ -186,7 +192,8 @@ public class FileNotFoundCandidatesTests
 
         var text = FileNotFoundMessage.Build(MissingPath, NoCandidates, 3, declaringTypeFiles: declaring);
 
-        Assert.That(text, Does.Contain($"Type 'StandardOrderPricingCalculator' is declared in {OrderPricingFixture.FileName}; read that file. "));
+        Assert.That(text, Does.Contain($"Type 'StandardOrderPricingCalculator' is declared in {OrderPricingFixture.FileName}. "));
+        Assert.That(text, Does.Not.Contain("read that file"));
         Assert.That(text, Does.Contain("No file in the solution has a similar name"));
     }
 

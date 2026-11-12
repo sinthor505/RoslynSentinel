@@ -108,7 +108,8 @@ public class RenameSymbolMissingParameterListTests
         {
             Assert.That(result.ErrorData.Message, Does.Contain("Nope"), "the wanted name is echoed");
             Assert.That(result.ErrorData.Message, Does.Contain("No symbol in the solution has a similar name"));
-            Assert.That(result.ErrorData.Message, Does.Contain("tell the user"), "the report-it-does-not-exist option is offered");
+            Assert.That(result.ErrorData.Message, Does.Contain("the symbol does not exist in this solution."), "the fact that a symbol missing from the orientation result does not exist is stated");
+            Assert.That(result.ErrorData.Message, Does.Not.Contain("tell the user"));
             Assert.That(result.ErrorData.Message, Does.Not.Contain("no longer resolves"));
         });
     }

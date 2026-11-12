@@ -193,7 +193,7 @@ public class FileMoveMemoryTests
         var text = FileNotFoundMessage.Build(P("Calc.cs"), NoCandidates, 3, movedToPath: P("StandardCalc.cs"), movedByTool: "RenameSymbol");
 
         Assert.That(text, Is.EqualTo(
-            $"File '{P("Calc.cs")}' was moved to '{P("StandardCalc.cs")}' by an earlier RenameSymbol call in this session (a rename of the type it declares). Use the new path.\n" +
+            $"File '{P("Calc.cs")}' was moved to '{P("StandardCalc.cs")}' by an earlier RenameSymbol call in this session (a rename of the type it declares). The file is now at '{P("StandardCalc.cs")}'.\n" +
             $"  - {P("StandardCalc.cs")} -> {ToolCallHint.Call("ReadFile", ("filePath", P("StandardCalc.cs")))}"));
     }
 
@@ -202,7 +202,8 @@ public class FileMoveMemoryTests
     {
         var text = FileNotFoundMessage.Build(P("Calc.cs"), NoCandidates, 3, name => name != "ReadFile", movedToPath: P("StandardCalc.cs"), movedByTool: "RenameSymbol");
 
-        Assert.That(text, Does.EndWith($"Use the new path.\n  - {P("StandardCalc.cs")}"));
+        Assert.That(text, Does.EndWith($"The file is now at '{P("StandardCalc.cs")}'.\n  - {P("StandardCalc.cs")}"));
+        Assert.That(text, Does.Not.Contain("Use the new path"));
         Assert.That(text, Does.Not.Contain("ReadFile"));
     }
 
@@ -211,7 +212,8 @@ public class FileMoveMemoryTests
     {
         var text = FileNotFoundMessage.Build(P("Calc.cs"), NoCandidates, 3, movedToPath: P("StandardCalc.cs"), movedByTool: "SyncTypeAndFilename");
 
-        Assert.That(text, Does.Contain("by an earlier SyncTypeAndFilename call in this session. Use the new path."));
+        Assert.That(text, Does.Contain($"by an earlier SyncTypeAndFilename call in this session. The file is now at '{P("StandardCalc.cs")}'."));
+        Assert.That(text, Does.Not.Contain("Use the new path"));
         Assert.That(text, Does.Not.Contain("a rename of the type it declares"));
     }
 
@@ -235,8 +237,9 @@ public class FileMoveMemoryTests
         Assert.That(text, Is.EqualTo(
             $"File '{P("Calc.cs")}' was not found in the loaded solution (searched 3 project(s) by exact path, bare file name and similar file name; path comparison ignores case, so casing is not the cause). " +
             "No file in the solution has a similar name. " +
-            $"If your task is to create this file, call {ToolCallHint.Call("CreateFile")} instead of reading it. If you read or edited it earlier, an earlier rename or move has changed its name: do not recreate it, find its current path. " +
-            $"To see every file in the solution, call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))}. If the file is not in that list it does not exist in this solution: tell the user so instead of editing a different file."));
+            $"{ToolCallHint.Call("CreateFile", ("filePath", P("Calc.cs")))} creates a new file at this path. " +
+            "A file read earlier under this name may since have been renamed or moved. " +
+            $"{ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} lists every file in the solution. A file not in that list does not exist in this solution."));
     }
 
     [Test]
@@ -250,7 +253,7 @@ public class FileMoveMemoryTests
             $"File '{P("Calc.cs")}' was not found in the loaded solution (searched 2 project(s) by exact path, bare file name and similar file name; path comparison ignores case, so casing is not the cause). " +
             "Did you mean one of these?" +
             $"\n  - {P("Similar.cs")} -> {ToolCallHint.Call("ReadFile", ("filePath", P("Similar.cs")))}" +
-            "\nRetry with the exact path of the file you meant. If none of these is the file you meant, it does not exist in this solution: tell the user so instead of editing a different file."));
+            "\nRetry with the exact path of the file you meant. If none of these is the file you meant, it does not exist in this solution."));
     }
 
     [Test]

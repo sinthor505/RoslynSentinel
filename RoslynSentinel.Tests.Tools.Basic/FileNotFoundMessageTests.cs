@@ -155,6 +155,8 @@ public class FileNotFoundMessageTests
         Assert.That(text, Does.Contain("  - " + @"C:\loaded\a\Thing.cs" + " -> " + ToolCallHint.Call("ReadFile", ("filePath", @"C:\loaded\a\Thing.cs"))));
         Assert.That(text, Does.Contain("  - " + @"C:\loaded\b\Thing.cs" + " -> " + ToolCallHint.Call("ReadFile", ("filePath", @"C:\loaded\b\Thing.cs"))));
         Assert.That(text, Does.Contain("Retry with the exact path of the file you meant."));
+        Assert.That(text, Does.Contain("it does not exist in this solution."));
+        Assert.That(text, Does.Not.Contain("tell the user"));
         Assert.That(text, Does.Not.Contain("You MUST"));
     }
 
@@ -167,8 +169,11 @@ public class FileNotFoundMessageTests
 
         Assert.That(text, Does.Contain("was not found in the loaded solution (searched 3 project(s) by exact path"));
         Assert.That(text, Does.Contain("No file in the solution has a similar name"));
-        Assert.That(text, Does.Contain("call " + ToolCallHint.Call("ListSolutionItems", ("kind", "all"))));
-        Assert.That(text, Does.Contain("does not exist in this solution"));
+        Assert.That(text, Does.Contain(ToolCallHint.Call("ListSolutionItems", ("kind", "all")) + " lists every file in the solution."));
+        Assert.That(text, Does.Contain("A file not in that list does not exist in this solution."));
+        Assert.That(text, Does.Contain("may since have been renamed or moved"));
+        Assert.That(text, Does.Not.Contain("CreateFile"), "CreateFile is not callable on this surface, so it is not named");
+        Assert.That(text, Does.Not.Contain("tell the user"));
         Assert.That(text, Does.Not.Contain("You MUST"));
     }
 
@@ -182,8 +187,9 @@ public class FileNotFoundMessageTests
         Assert.That(text, Does.Contain("was not found in the loaded solution"));
         Assert.That(text, Does.Contain("No file in the solution has a similar name"));
         Assert.That(text, Does.Not.Contain("ListSolutionItems"));
-        Assert.That(text, Does.Contain("Retry only with a path you have already seen"));
-        Assert.That(text, Does.Contain("does not exist in this solution"));
+        Assert.That(text, Does.Contain("may since have been renamed or moved"));
+        Assert.That(text, Does.Not.Contain("CreateFile"), "CreateFile is not callable on this surface, so it is not named");
+        Assert.That(text, Does.Not.Contain("tell the user"));
         Assert.That(text, Does.Not.Contain("You MUST"));
     }
 

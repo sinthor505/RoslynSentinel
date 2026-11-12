@@ -63,7 +63,8 @@ public class LocateSymbolNotFoundCandidateTests
         Assert.That(message, Does.Contain("1 project(s)"), "the scope names the one project searched");
         Assert.That(message, Does.Contain("No symbol in the solution has a similar name"));
         Assert.That(message, Does.Contain("ListAll"), "the single orientation call is ListAll");
-        Assert.That(message, Does.Contain("tell the user"));
+        Assert.That(message, Does.Contain("If it is not in that list, the symbol does not exist in this solution."));
+        Assert.That(message, Does.Not.Contain("tell the user"));
         Assert.That(message, Does.Not.Contain("Try exactMatch=false"));
         Assert.That(message, Does.Not.Contain("exactMatch=false would match"));
     }

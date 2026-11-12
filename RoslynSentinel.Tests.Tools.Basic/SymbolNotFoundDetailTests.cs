@@ -201,6 +201,7 @@ public class SymbolNotFoundDetailTests
         Assert.That(text, Does.Contain("CalcDisc (method) in OrderPricingCalculator, " + OrderPricingFixture.FileName));
         Assert.That(text, Does.Contain(ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDisc"), ("filePath", OrderPricingFixture.FileName))));
         Assert.That(text, Does.Contain("does not exist in this solution"));
+        Assert.That(text, Does.Not.Contain("tell the user"));
         Assert.That(text, Does.Not.Contain("You MUST"));
     }
 
@@ -219,7 +220,8 @@ public class SymbolNotFoundDetailTests
         Assert.That(listAll, Does.Contain("kind: method"));
         Assert.That(listAll, Does.Contain("projectName: \"" + ProjectName + "\""));
         Assert.That(text, Does.Contain("does not exist"));
-        Assert.That(text, Does.Contain("tell the user so"));
+        Assert.That(text, Does.Contain("If it is not in that list, the symbol does not exist in this solution."));
+        Assert.That(text, Does.Not.Contain("tell the user"));
         Assert.That(text, Does.Not.Contain("exactMatch"));
         Assert.That(text, Does.Not.Contain("MUST"));
         Assert.That(text, Does.Not.Contain("GetFileOutline"));
@@ -252,7 +254,7 @@ public class SymbolNotFoundDetailTests
     }
 
     [Test]
-    public async Task BuildAsync_NoCandidatesNeitherOrientationToolCallable_NamesNoCallButStillSaysItDoesNotExist()
+    public async Task BuildAsync_NoCandidatesNeitherOrientationToolCallable_NamesNoCallAndStatesNoSimilarName()
     {
         var projects = Projects(BuildSolution());
 
@@ -262,7 +264,9 @@ public class SymbolNotFoundDetailTests
 
         Assert.That(text, Does.Not.Contain("GetFileOutline"));
         Assert.That(text, Does.Not.Contain("ListAll"));
-        Assert.That(text, Does.Contain("does not exist in this solution"));
+        Assert.That(text, Does.Contain("No symbol in the solution has a similar name."));
+        Assert.That(text, Does.Not.Contain("tell the user"));
+        Assert.That(text, Does.Not.Contain("If you have not already seen it"));
         Assert.That(text, Does.Contain(ScopeDescription));
     }
 
@@ -348,6 +352,7 @@ public class SymbolNotFoundDetailTests
 
         Assert.That(text, Does.Contain("To see what exists in the file you named, call " + ToolCallHint.Call("GetFileOutline", ("filePath", "Some/File.cs"))));
         Assert.That(text, Does.Not.Contain("ListAll"));
-        Assert.That(text, Does.EndWith("the symbol does not exist in this solution: tell the user so instead of renaming or editing another symbol."));
+        Assert.That(text, Does.EndWith("If it is not there, the symbol does not exist in this solution."));
+        Assert.That(text, Does.Not.Contain("tell the user"));
     }
 }

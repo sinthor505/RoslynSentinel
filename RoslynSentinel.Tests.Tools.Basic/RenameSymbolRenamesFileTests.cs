@@ -291,7 +291,8 @@ public class RenameSymbolRenamesFileTests
         Assert.Multiple(() =>
         {
             Assert.That(message, Does.Contain("was moved to '").And.Contain("StandardCalc.cs' by an earlier RenameSymbol call in this session"));
-            Assert.That(message, Does.Contain("(a rename of the type it declares). Use the new path."));
+            Assert.That(message, Does.Contain("(a rename of the type it declares). The file is now at '"));
+            Assert.That(message, Does.Not.Contain("Use the new path"));
             Assert.That(message, Does.Contain("ReadFile"));
             Assert.That(message, Does.Not.Contain("find its current path"), "the hedged wording must not appear when the new path is known");
             Assert.That(message, Does.Not.Contain("Did you mean"));

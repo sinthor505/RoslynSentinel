@@ -52,7 +52,7 @@ public sealed class RenameSymbolTests
         // FakeWorkspaceManager shares the production not-found path (SymbolWireResolver): the wanted name is echoed and, with no
         // similar declared name in the project, the text says so and offers to report the symbol as non-existent.
         Assert.That(result.ErrorData!.Message, Does.Contain("NoSuchSymbol"));
-        Assert.That(result.ErrorData!.Message, Does.Contain("No symbol in the solution has a similar name").And.Contain("tell the user"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("No symbol in the solution has a similar name").And.Contain("the symbol does not exist in this solution.").And.Not.Contain("tell the user"));
         Assert.That(result.ErrorData!.Message, Does.Not.Contain("no longer resolves"));
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("NotFound"));
     }
