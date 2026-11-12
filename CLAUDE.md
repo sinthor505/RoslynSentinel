@@ -25,7 +25,8 @@ checks it; the `tidy-guidance` skill cleans up and promotes memory entries).
 - Batch small edits onto one subagent and resume it with `SendMessage` rather than one agent per item.
 - Report a finished subagent in a few lines (changed, built/passed, decisions needed); flag high-token
   work before starting it.
-- A substantial new topic mid-session: sketch it and suggest a fresh chat; do not deep-dive in place.
+- A large or unrelated design topic in an implementation session (or one with work in flight): sketch
+  it and suggest a fresh chat. An exploratory or design session continues in place.
 - A new `[McpServerToolType]` class needs a fresh chat session as well as a server restart.
 - Comment intentional deviations from a codebase pattern, and a `[Test]` that fails only on full/parallel runs.
 - A tool param added to stop a known model failure is mandatory unless a concrete usage needs the fallback.
