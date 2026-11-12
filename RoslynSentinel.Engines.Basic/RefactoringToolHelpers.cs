@@ -172,6 +172,7 @@ public static class RefactoringToolHelpers
 
         var reason = EngineReason(result);
         var message = reason.Length > 0 ? $"{noOp.Message} {hint} Engine detail: {reason}" : $"{noOp.Message} {hint}";
+        // TODO error-policy: route does not record the missing-target kind
         return new SentinelCallToolResult<object>
         {
             IsError = true,
@@ -184,6 +185,7 @@ public static class RefactoringToolHelpers
         var reason = EngineReason(result);
         var head = $"{operationName} failed for {subject} ({result.Outcome})";
         var detail = reason.Length > 0 ? $"{head}: {EndSentence(reason)}" : $"{head}.";
+        // TODO error-policy: route does not record the missing-target kind
         return new SentinelCallToolResult<object>
         {
             IsError = true,

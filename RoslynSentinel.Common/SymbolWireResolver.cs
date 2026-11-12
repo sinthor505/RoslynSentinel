@@ -100,6 +100,7 @@ public static class SymbolWireResolver
     /// The tool-level error code for an unresolved <see cref="SymbolResolution"/>: a symbol that is not there is NotFound; a
     /// method id with several overloads is InvalidArgument (the caller must pass one full id); anything else is Exception.
     /// </summary>
+    // TODO error-policy: route does not record the missing-target kind
     public static string ToToolErrorCode(EngineError error) => error.Code switch
     {
         EngineErrorCode.SymbolNotResolved => ToolErrorCode.NotFound,

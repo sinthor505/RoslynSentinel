@@ -127,6 +127,7 @@ public sealed record DocumentLookupResult(
     /// <see cref="ToolErrorCode.Ambiguous"/>, with <see cref="Describe"/> as the message. Only call
     /// when <see cref="IsFound"/> is false.
     /// </summary>
+    // TODO error-policy: route does not record the missing-target kind
     public ResultError ToResultError(Func<string, bool>? isCallable = null)
         => new(Status == DocumentLookupStatus.Ambiguous ? ToolErrorCode.Ambiguous : ToolErrorCode.NotFound, Describe(isCallable));
 }
