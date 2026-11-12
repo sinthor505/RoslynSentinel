@@ -2080,7 +2080,7 @@ public class BasicRefactoringEngine
         method ??= RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations in the file by name. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to list its methods, or {ToolCallHint.Call("Search", ("mode", "method"), ("query", methodName))}.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations in the file by name. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to list its methods, or {ToolCallHint.Call("Search", ("mode", "method"), ("query", methodName))}. {DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath, includeOutlineCall: false)}", "method", methodName);
         }
 
         if (method.Body == null)
@@ -2122,7 +2122,7 @@ public class BasicRefactoringEngine
         method ??= RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations in the file by name. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to list its methods, or {ToolCallHint.Call("Search", ("mode", "method"), ("query", methodName))}.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations in the file by name. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to list its methods, or {ToolCallHint.Call("Search", ("mode", "method"), ("query", methodName))}. {DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath, includeOutlineCall: false)}", "method", methodName);
         }
 
         if (method.Body == null)
@@ -2525,7 +2525,7 @@ public class BasicRefactoringEngine
 
         if (target == null)
         {
-            throw new ToolNotFoundException($"Target '{targetName}' not found in '{filePath}'. Searched: symbols named '{targetName}' in the file. Next: {ToolCallHint.Call("Search", ("mode", "symbol"), ("query", targetName))} or {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))}.", "symbol", targetName);
+            throw new ToolNotFoundException($"Target '{targetName}' not found in '{filePath}'. Searched: symbols named '{targetName}' in the file. Next: {ToolCallHint.Call("Search", ("mode", "symbol"), ("query", targetName))} or {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))}. {DeclarationNotFoundDetail.Build("declaration", "targetName", targetName, root.DescendantNodes().Select(n => n is EnumMemberDeclarationSyntax em ? em.Identifier.Text : n is MemberDeclarationSyntax md ? SyntaxTargetResolver.GetMemberName(md) : null).OfType<string>(), filePath, includeOutlineCall: false)}", "symbol", targetName);
         }
 
         var docTrivia = target.GetLeadingTrivia().FirstOrDefault(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
@@ -2786,7 +2786,7 @@ public class BasicRefactoringEngine
         var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException("Method not found.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. {DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath)}", "method", methodName);
         }
 
         var currentParams = method.ParameterList.Parameters.Select(p => p.Identifier.Text).ToList();

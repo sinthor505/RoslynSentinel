@@ -13,7 +13,7 @@ public static class DeclarationNotFoundDetail
     /// Returns the nearest of <paramref name="declaredNames"/> to <paramref name="wanted"/> as retry hints that name
     /// <paramref name="paramName"/>; with no similar name, says so and points at GetFileOutline for <paramref name="filePath"/>.
     /// </summary>
-    public static string Build(string kindLabel, string paramName, string wanted, IEnumerable<string> declaredNames, string filePath)
+    public static string Build(string kindLabel, string paramName, string wanted, IEnumerable<string> declaredNames, string filePath, bool includeOutlineCall = true)
     {
         var names = declaredNames.Distinct(StringComparer.Ordinal).ToList();
         var candidates = NameCandidates.Rank(wanted, names, name => name);
@@ -24,6 +24,11 @@ public static class DeclarationNotFoundDetail
         }
 
         var outline = ToolCallHint.Call("GetFileOutline", ("filePath", filePath));
+        if (!includeOutlineCall)
+        {
+            return $"No {kindLabel} declared in '{filePath}' has a similar name to '{wanted}'. '{wanted}' is not declared in that file, so it does not exist there.";
+        }
+
         return $"No {kindLabel} declared in '{filePath}' has a similar name to '{wanted}'. To see what the file declares, call {outline}. '{wanted}' is not in that outline, so it does not exist in this file.";
     }
 
