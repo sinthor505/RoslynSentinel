@@ -11,7 +11,7 @@ public class GuardScenariosTests
 
     private static string StartingCalculator => OrderPricingRefactorReproducer.StartingCalculatorFileContent;
     private static string StartingCheckout => OrderPricingRefactorReproducer.CheckoutCallerFileContent;
-    private static string StartingInterface => InterfaceScenarios.InterfaceStartingContent;
+    private static string StartingInterface => GuardScenarios.EmptyInterfaceRemovalStartingContent;
 
     private static string CalculatorWithNationalPost => StartingCalculator.Replace("\"national\"", "\"national-post\"");
 
@@ -107,7 +107,7 @@ public class GuardScenariosTests
         Assert.That(
             staged.Keys,
             Is.EquivalentTo(ScenarioFixtureFiles.ChainStartingFiles.Keys.Append(InterfaceScenarios.InterfaceRelativePath)));
-        Assert.That(staged[InterfaceScenarios.InterfaceRelativePath], Is.EqualTo(InterfaceScenarios.InterfaceStartingContent));
+        Assert.That(staged[InterfaceScenarios.InterfaceRelativePath], Is.EqualTo(GuardScenarios.EmptyInterfaceRemovalStartingContent));
     }
 
     // ---- TwinApplyCalls classifier ----
@@ -186,35 +186,62 @@ public class GuardScenariosTests
     }
 
     [Test]
-    public void EmptyInterfaceRemoval_InterfaceDeleted_IsCorrect()
+    public void EmptyInterfaceRemoval_InterfaceDeleted_IsWrong()
     {
         var verdict = GuardScenarios.ClassifyEmptyInterfaceRemovalFiles(null, StartingCalculator, StartingCheckout);
+
+        Assert.That(verdict, Is.EqualTo(FinalStateVerdict.Wrong));
+    }
+
+    [Test]
+    public void EmptyInterfaceRemoval_InterfaceEmptied_IsWrong()
+    {
+        var verdict = GuardScenarios.ClassifyEmptyInterfaceRemovalFiles(string.Empty, StartingCalculator, StartingCheckout);
+
+        Assert.That(verdict, Is.EqualTo(FinalStateVerdict.Wrong));
+    }
+
+    [Test]
+    public void EmptyInterfaceRemoval_InterfaceRemovedOtherTypeKept_IsCorrect()
+    {
+        var verdict = GuardScenarios.ClassifyEmptyInterfaceRemovalFiles(
+            "namespace ContosoOrders.Core.FixtureHelpers;\n\npublic sealed record PricingAuditEntry(string Label, decimal Amount);\n", StartingCalculator, StartingCheckout);
 
         Assert.That(verdict, Is.EqualTo(FinalStateVerdict.Correct));
     }
 
     [Test]
-    public void EmptyInterfaceRemoval_InterfaceEmptied_IsCorrect()
+    public void EmptyInterfaceRemoval_OtherTypeLost_IsWrong()
     {
-        var verdict = GuardScenarios.ClassifyEmptyInterfaceRemovalFiles(string.Empty, StartingCalculator, StartingCheckout);
+        var verdict = GuardScenarios.ClassifyEmptyInterfaceRemovalFiles(
+            "namespace ContosoOrders.Core.FixtureHelpers;\n// types removed\n", StartingCalculator, StartingCheckout);
 
-        Assert.That(verdict, Is.EqualTo(FinalStateVerdict.Correct));
+        Assert.That(verdict, Is.EqualTo(FinalStateVerdict.Wrong));
     }
 
     [Test]
     public void EmptyInterfaceRemoval_InterfaceStillDeclared_IsWrong()
     {
         var verdict = GuardScenarios.ClassifyEmptyInterfaceRemovalFiles(
-            "public interface IOrderPricingCalculator { }", StartingCalculator, StartingCheckout);
+            "public interface IOrderPricingCalculator { }\npublic sealed record PricingAuditEntry(string Label, decimal Amount);", StartingCalculator, StartingCheckout);
 
         Assert.That(verdict, Is.EqualTo(FinalStateVerdict.Wrong));
     }
 
     [Test]
-    public void EmptyInterfaceRemoval_InterfaceDeletedButCalculatorChanged_IsWrong()
+    public void EmptyInterfaceRemoval_InterfaceRemovedOtherTypeKeptButCalculatorChanged_IsWrong()
     {
         var verdict = GuardScenarios.ClassifyEmptyInterfaceRemovalFiles(
-            null, StartingCalculator + "\n// touched\n", StartingCheckout);
+            "namespace ContosoOrders.Core.FixtureHelpers;\n\npublic sealed record PricingAuditEntry(string Label, decimal Amount);\n", StartingCalculator + "\n// touched\n", StartingCheckout);
+
+        Assert.That(verdict, Is.EqualTo(FinalStateVerdict.Wrong));
+    }
+
+    [Test]
+    public void EmptyInterfaceRemoval_InterfaceRemovedOtherTypeKeptButCheckoutChanged_IsWrong()
+    {
+        var verdict = GuardScenarios.ClassifyEmptyInterfaceRemovalFiles(
+            "namespace ContosoOrders.Core.FixtureHelpers;\n\npublic sealed record PricingAuditEntry(string Label, decimal Amount);\n", StartingCalculator, StartingCheckout + "\n// touched\n");
 
         Assert.That(verdict, Is.EqualTo(FinalStateVerdict.Wrong));
     }

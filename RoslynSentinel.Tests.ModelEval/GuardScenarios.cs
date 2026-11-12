@@ -14,6 +14,20 @@ public static class GuardScenarios
     public const string TwinApplyCallsId = "TwinApplyCalls";
     public const string EmptyInterfaceRemovalId = "EmptyInterfaceRemoval";
 
+    /// <summary>Starting interface file for EmptyInterfaceRemoval: the calculator interface plus an unreferenced second type.</summary>
+    public const string EmptyInterfaceRemovalStartingContent = """
+        namespace ContosoOrders.Core.FixtureHelpers;
+
+        public interface IOrderPricingCalculator
+        {
+            decimal CalcDisc(decimal amount, decimal rate, bool isPreferredCustomer);
+        }
+
+        public sealed record PricingAuditEntry(string Label, decimal Amount);
+        """;
+
+    public const string EmptyInterfaceRemovalOtherTypeName = "PricingAuditEntry";
+
     private static readonly Regex InterfaceDeclaration = new(@"\binterface\s+IOrderPricingCalculator\b", RegexOptions.CultureInvariant);
 
     private const string TwinApplyCallsPrompt = """
@@ -118,9 +132,14 @@ public static class GuardScenarios
     private static readonly IReadOnlyDictionary<string, string> EmptyInterfaceRemovalStagedFiles =
         new Dictionary<string, string>(ScenarioFixtureFiles.ChainStartingFiles)
         {
-            [InterfaceScenarios.InterfaceRelativePath] = InterfaceScenarios.InterfaceStartingContent,
+            [InterfaceScenarios.InterfaceRelativePath] = EmptyInterfaceRemovalStartingContent,
         };
 
+    // TargetIneligible empty-file guard (cb7dc620) reach for this scenario: only a ReplaceSnippet whole-content
+    // replace whose result would leave the file with no type declaration is refused. On this two-type file that
+    // means replacing the entire content with empty text. Removing just the interface snippet leaves
+    // PricingAuditEntry, so the guard does not fire. DeleteFile never hits the guard and is graded Wrong (it
+    // removes the other type too). A whole-file replace that keeps the other type does not hit the guard either.
     public static readonly ScenarioDefinition EmptyInterfaceRemoval = new(
         Id: EmptyInterfaceRemovalId,
         ScenarioType: 1,
@@ -156,7 +175,10 @@ public static class GuardScenarios
         return built ? FinalStateVerdict.Correct : FinalStateVerdict.Wrong;
     }
 
-    /// <summary>Pure classification of the empty-interface-removal fixture texts (null when the file is missing).</summary>
+    /// <summary>
+    /// Pure classification of the empty-interface-removal fixture texts (null when the file is missing).
+    /// A deleted file is Wrong because it removes a type the task did not name (PricingAuditEntry).
+    /// </summary>
     public static FinalStateVerdict ClassifyEmptyInterfaceRemovalFiles(string? interfaceText, string? calculatorText, string? checkoutText)
     {
         if (string.IsNullOrWhiteSpace(calculatorText)
@@ -169,16 +191,29 @@ public static class GuardScenarios
         var calculatorStarting = Normalise(calculatorText) == Normalise(OrderPricingRefactorReproducer.StartingCalculatorFileContent);
         var checkoutStarting = Normalise(checkoutText) == Normalise(OrderPricingRefactorReproducer.CheckoutCallerFileContent);
 
-        if (interfaceText is not null
-            && Normalise(interfaceText) == Normalise(InterfaceScenarios.InterfaceStartingContent)
+        if (interfaceText is null)
+        {
+            return FinalStateVerdict.Wrong;
+        }
+
+        if (Normalise(interfaceText) == Normalise(EmptyInterfaceRemovalStartingContent)
             && calculatorStarting
             && checkoutStarting)
         {
             return FinalStateVerdict.Unchanged;
         }
 
-        var interfaceRemoved = interfaceText is null || !InterfaceDeclaration.IsMatch(interfaceText);
-        return interfaceRemoved && calculatorStarting && checkoutStarting ? FinalStateVerdict.Correct : FinalStateVerdict.Wrong;
+        if (!interfaceText.Contains(EmptyInterfaceRemovalOtherTypeName, StringComparison.Ordinal))
+        {
+            return FinalStateVerdict.Wrong;
+        }
+
+        if (InterfaceDeclaration.IsMatch(interfaceText))
+        {
+            return FinalStateVerdict.Wrong;
+        }
+
+        return calculatorStarting && checkoutStarting ? FinalStateVerdict.Correct : FinalStateVerdict.Wrong;
     }
 
     private static int CountOccurrences(string text, string needle) => text.Split(needle, StringSplitOptions.None).Length - 1;
