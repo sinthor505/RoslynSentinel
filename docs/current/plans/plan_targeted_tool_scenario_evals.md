@@ -1,6 +1,6 @@
 # Plan: short targeted model-eval scenarios (cold-start and resume, clean and faulted)
 
-**Status:** IN PROGRESS 2026-11-11. Steps 1, 3 and 4 done (3f87a527, 1506ed14, 56ab9526, bf403f75, 030c70d6, f4a69c16, 2e15938d); step 2 waits on another session's uncommitted edits in `ModelAgentRunner.cs`; steps 5 to 11 not started.
+**Status:** IN PROGRESS 2026-11-11. Steps 1 to 7 done; steps 8 to 11 not started.
 
 ## Problem
 
@@ -140,8 +140,8 @@ C#; none in `agent.log` or `test-result.txt`).
 - Done when: Build 0 errors; a unit test with a fake client shows all three recorded; a transcript
   without them deserializes (`Turns` and `Tools` are get-only: read back with
   `PreferredObjectCreationHandling = Populate`, as step 3d does).
-- Waiting 2026-11-11: `ModelAgentRunner.cs` carries another session's uncommitted edits. Needed before
-  step 8d only.
+- Done: 58e9085f798f5c749f48fe4cdaf9740022a30735; follow-up fe7342657c96c6a628ca60568a5a308ba773ea8d
+  (saved-transcript scoring uses the recorded stop reason).
 
 ### Step 3 - Per-call scorer, recovery telemetry and results CSV
 
@@ -228,6 +228,8 @@ C#; none in `agent.log` or `test-result.txt`).
       the scenario sample count. Keep the run-folder leaf in the timestamp form the archiver expects
       (`:437-446`).
   - Done when: Build 0 errors; a non-live unit test runs the sample loop with a fake client and gets a CSV line.
+  - Done: 68597f1b, c4b2e505, 87272254, 9cfdc1a4e4743293e78e6891b6b35fb79de6b068; follow-ups c1c8b7d7,
+    f661adb4, 4eb4fa79 (final-state snapshot per sample).
 - **5b - first scenario: method rename written inside a snippet**
   - Files: scenario definition.
   - Change: stage `OrderPricingRefactorReproducer.StartingCalculatorFileContent` (`:26`) and
@@ -243,6 +245,7 @@ C#; none in `agent.log` or `test-result.txt`).
     scenarios ran 18 to 88 s per sample (the one-line edit scenarios fastest). Each job also pays about 15 s
     of build and start. One sample in each job ended Inconclusive (LM Studio HTTP 500, "Context size has been
     exceeded", on the first request).
+  - Done: 07b9fa1e934db59949d7bba62efaace9f4079816 (times recorded in 8dce4ca1364ff7bb3e410de0874b73307065edf1).
 
 ### Step 6 - Remaining type 1 scenarios
 
@@ -254,6 +257,7 @@ C#; none in `agent.log` or `test-result.txt`).
   - slice 2 (regression guards, reproduces-at "not measured"): twin `replace`/`apply` calls in one turn;
     whole-file `oldContent` with empty `newContent`.
 - Done when: each runs 10 samples; provenance fields are filled.
+- Done: slice 1 64038559975d69a17d2947a7e46df9a2c76a58ef; slice 2 40576086fc1b4812544968fb313b479a80d9a3d9.
 
 ### Step 7 - Type 3: faults in the prompt
 
@@ -264,6 +268,7 @@ C#; none in `agent.log` or `test-result.txt`).
   - wrong file name, with a near match (`Recover`) and without (`StopAndReport`).
 - Done when: each runs 10 samples; the CSV shows the error code the model received, the call it made
   next and the marker result.
+- Done: 80672a1f1a43ef72228d2eeebc3f741cbcfe7f03.
 
 ### Step 8 - Type 2: resume scenarios with drift gates
 
