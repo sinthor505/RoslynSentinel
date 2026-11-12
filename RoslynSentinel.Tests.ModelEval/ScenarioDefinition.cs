@@ -21,7 +21,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <param name="ResumeKeepTurns">Turns 1..K of ResumeTranscript seeded as history; 0 for cold-start. TurnCap then counts the live turns after the seeded ones.</param>
 /// <param name="ResumeFaultTool">Resume scenarios only: tool name of ONE real call injected after the kept turns are replayed; null for no fault.</param>
 /// <param name="ResumeFaultArguments">Arguments JSON for ResumeFaultTool; the token {SOLUTION} is replaced by the fixture solution directory with forward slashes.</param>
-/// <param name="ResumeFaultSeeded">false: the fault call runs on the fixture but is NOT shown to the model (stale workspace). true: a failed last call shown to the model; not implemented yet, the harness returns Inconclusive.</param>
+/// <param name="ResumeFaultSeeded">false: stale workspace; the fault call is executed on the fixture but is NOT shown to the model. true: authored failed last call; the call is appended to the history as an assistant turn authored by the harness, with its real result. The turn cap counts it and it is scored as a live turn, so it is the scenario's first error.</param>
 public sealed record ScenarioDefinition(
     string Id,
     int ScenarioType,
