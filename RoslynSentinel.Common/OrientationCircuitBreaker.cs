@@ -60,8 +60,7 @@ public class OrientationCircuitBreaker : IAutomaticCircuitBreaker
     /// <summary>
     /// Same directive, naming only tools the server can actually serve: <paramref name="isCallable"/> says whether a
     /// tool name is callable (null = every tool is, the text of a full surface). With neither ListAll nor
-    /// ListSolutionItems callable the text carries no tool call to make, only the instruction to reuse a path
-    /// already seen.
+    /// ListSolutionItems callable the text states that no listing tool is callable and names no tool call.
     /// </summary>
     public string? StateMessage(Func<string, bool>? isCallable)
     {
@@ -99,8 +98,8 @@ public class OrientationCircuitBreaker : IAutomaticCircuitBreaker
             var text = $"Search(mode: text) is DISABLED after {_consecutiveZeroMatchSearches} consecutive calls returned " +
                        "no matches. It will not run again until one of the tools below succeeds. ";
             text += browse.Count > 0
-                ? $"You MUST call {string.Join(" or ", browse)} now - browse the returned list for what you're looking for. "
-                : "No listing tool is available here: use a path you have already seen in an earlier result. ";
+                ? $"{string.Join(" and ", browse)} {(browse.Count == 1 ? "lists" : "list")} what exists. "
+                : "No listing tool is callable on this surface. ";
             if (follow.Count > 0)
             {
                 text += $"{string.Join(" and ", follow)} {(follow.Count == 1 ? "is" : "are")} also available once you have a real path" +

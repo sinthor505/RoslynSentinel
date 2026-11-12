@@ -187,8 +187,9 @@ public class CallableToolHintTests
         Assert.That(text, Is.Not.Null);
         AssertNamesNoListingTool(text);
         Assert.That(text, Does.Not.Contain("GetFileOutline"), "GetFileOutline is not callable either");
-        Assert.That(text, Does.Not.Contain("You MUST call"), "no listing tool to call, so no instruction to call one");
-        Assert.That(text, Does.Contain("already seen"));
+        Assert.That(text, Does.Not.Contain("MUST"), "no listing tool to call, and no order in the text");
+        Assert.That(text, Does.Contain("No listing tool is callable on this surface."));
+        Assert.That(text, Does.Contain("Search(mode: text) is DISABLED after"), "the disabled-search fact stays");
         Assert.That(text, Does.Contain("ReadFile("), "the one callable follow-up tool is still named");
     }
 
@@ -197,7 +198,9 @@ public class CallableToolHintTests
     {
         var text = TrippedBreaker().StateMessage(name => name is "ListAll" or "ReadFile");
 
-        Assert.That(text, Does.Contain("You MUST call ListAll("));
+        Assert.That(text, Does.Contain("ListAll("));
+        Assert.That(text, Does.Contain(" lists what exists."));
+        Assert.That(text, Does.Not.Contain("MUST"));
         Assert.That(text, Does.Not.Contain("ListSolutionItems"));
         Assert.That(text, Does.Not.Contain(" or "), "a single browse tool is not joined with 'or'");
     }
@@ -208,8 +211,10 @@ public class CallableToolHintTests
         var breaker = TrippedBreaker();
 
         var unchanged = breaker.StateMessage();
-        Assert.That(unchanged, Does.Contain("You MUST call ListAll("));
-        Assert.That(unchanged, Does.Contain(" or ListSolutionItems("));
+        Assert.That(unchanged, Does.Contain("ListAll("));
+        Assert.That(unchanged, Does.Contain(" and ListSolutionItems("), "both listing tools are named and joined with 'and'");
+        Assert.That(unchanged, Does.Contain(" list what exists."));
+        Assert.That(unchanged, Does.Not.Contain("MUST"));
         Assert.That(unchanged, Does.Contain("GetFileOutline and ReadFile("));
         Assert.That(unchanged, Does.EndWith("once you have a real path from that list."));
         Assert.That(breaker.StateMessage(Everything), Is.EqualTo(unchanged));
