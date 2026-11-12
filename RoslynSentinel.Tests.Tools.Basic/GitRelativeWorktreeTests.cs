@@ -162,6 +162,7 @@ public class GitRelativeWorktreeTests
         new("GetCommitMessages", nameof(IGitReader.GetCommitMessages), (r, d) => r.GetCommitMessages(d, Timeout)),
         new("FindCommitByTrailer", nameof(IGitReader.FindCommitByTrailer), (r, d) => r.FindCommitByTrailer(d, "Tool-Call-Id", "relwt-1", 50, Timeout)),
         new("GetBoolConfig", nameof(IGitReader.GetBoolConfig), (r, d) => r.GetBoolConfig(d, "worktree.useRelativePaths", Timeout)),
+        new("GetConfigValue", nameof(IGitReader.GetConfigValue), (r, d) => r.GetConfigValue(d, "worktree.useRelativePaths", Timeout)),
         new("GetHeadWithParents", nameof(IGitReader.GetHeadWithParents), (r, d) => r.GetHeadWithParents(d, Timeout)),
         // Null: the fixtures are not mid-merge. The fallback and opens-fine walks only need both readers to agree.
         new("GetMergeHead", nameof(IGitReader.GetMergeHead), (r, d) => r.GetMergeHead(d, Timeout), MayBeNull: true),
