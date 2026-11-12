@@ -1,6 +1,6 @@
 # Plan: gated error-policy suffix (Off / Pointer / Inline) on not-found tool errors, with eval stamping and an A/B
 
-**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Steps 1-6 done (9856e63c; 22dd662b..cc3fba6c; f5be7103..4764839b).
+**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Steps 1-8 done (9856e63c; 22dd662b..cc3fba6c; f5be7103..4764839b; d69f765b..7a6fbc8d); holding before Step 9 for owner texts.
 
 ## Problem
 
@@ -109,6 +109,7 @@ Text-neutral slices first (Steps 1-4, 7-8), behaviour-changing ones after (5, 6,
 - Effect: text-neutral while mode is `Off` and no policy file is set
 - Change: ModelEval reads the same env vars and passes them to the in-process server; when mode is not `Off` it composes the prompt with `WithErrorHandling`. PlanStepRunner forwards `--error-policy-mode` / `--error-policy-file` to the child server when set.
 - Done when: Build 0 errors; a harness test shows mode `Off` yields today's prompt and tool surface.
+- Done: d69f765b, 1fe351d3. New `ErrorPolicyWiring` (Common) composes the prompt and builds child-server args; all 11 ModelEval `CodingAgent` call sites go through `ComposePrompt`. `Pointer`/`Inline` without a policy file throws (a pointer to a rule not in the prompt); a file with mode `Off` still adds the block (arm A). Not wrapped: `SubAgentEvalImpl.cs` and the saved-transcript resume path still pass the raw prompt.
 
 ### Step 8 - Run stamps
 - Files: `RoslynSentinel.Common/AgentLoop/ModelAgentRunner.cs` (`ProcessStamp`, `:44-47`, copied at `:172`); `RoslynSentinel.Tests.ModelEval/ScenarioSample.cs` (`ScenarioSampleCsv`, 31-column header, `LegacyColumnCount = 30`); `ModelEvalAssemblySetUp.cs:35`.
@@ -116,6 +117,7 @@ Text-neutral slices first (Steps 1-4, 7-8), behaviour-changing ones after (5, 6,
 - Effect: text-neutral for models; `results.csv` gains columns
 - Change: add `ErrorPolicyMode` and `ErrorPolicyHash` to the stamp and two CSV columns; parsing keeps accepting the 30- and 31-column legacy rows. Leave `// TODO generic server-options snapshot in the run stamp` beside the stamp.
 - Done when: Build 0 errors; CSV round-trip test for new and legacy rows.
+- Done: 7a6fbc8d. `ProcessStamp` carries mode and hash; transcript fields are omitted when unset; `results.csv` has 33 columns (`errorPolicyMode`, `errorPolicyHash`), 30/31/33-column rows parse.
 
 ### Step 9 - Baseline prompt reword and policy file content
 - Files: `RoslynSentinel.Common/AgentLoop/AgentSystemPrompts.cs:108`; new policy file in `RoslynSentinel.Tests.ModelEval/` (copied to output).
