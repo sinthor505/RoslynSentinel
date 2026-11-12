@@ -22,6 +22,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <param name="ResumeFaultTool">Resume scenarios only: tool name of ONE real call injected after the kept turns are replayed; null for no fault.</param>
 /// <param name="ResumeFaultArguments">Arguments JSON for ResumeFaultTool; the token {SOLUTION} is replaced by the fixture solution directory with forward slashes.</param>
 /// <param name="ResumeFaultSeeded">false: stale workspace; the fault call is executed on the fixture but is NOT shown to the model. true: authored failed last call; the call is appended to the history as an assistant turn authored by the harness, with its real result. The turn cap counts it and it is scored as a live turn, so it is the scenario's first error.</param>
+/// <param name="IdealTurns">Soft pass bound in live turns for a StopAndReport scenario: a BLOCKED: stop at or below it passes; a stop above it but within TurnCap fails as FailureClass.StoppedLate. null = no soft tier (the existing behaviour).</param>
 public sealed record ScenarioDefinition(
     string Id,
     int ScenarioType,
@@ -40,4 +41,5 @@ public sealed record ScenarioDefinition(
     int ResumeKeepTurns = 0,
     string? ResumeFaultTool = null,
     string? ResumeFaultArguments = null,
-    bool ResumeFaultSeeded = false);
+    bool ResumeFaultSeeded = false,
+    int? IdealTurns = null);
