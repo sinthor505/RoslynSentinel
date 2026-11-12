@@ -43,7 +43,7 @@ Files: full paths including the project (distinct .cs files must not exceed the 
 Symbols: exact types/members to change
 Call sites: pre-measured list (file:line), or "none"
 Operation: (sweep only) the exact tool call or repeated edit pattern
-Acceptance: a clean Build, or one named test/diagnostic (a second check only where the tier allows it)
+Acceptance: a clean Build (or one named diagnostic); never a test run - the dispatcher runs tests (below)
 DTOs: (only when the slice adds or reshapes a data type) "reuse <ExistingName>" or the full NEW-DTO:
   block from the dto-conventions skill; the agent copies it into the creating call's reason
 Out of scope: what not to touch (e.g. "do not commit", "items 5-7") - always include "edit nothing
@@ -72,20 +72,30 @@ otherwise reads as "zero blast radius".
   fit a tier. See `docs/current/proposals/proposal_parallel_change_deprecated_wrappers.md`.
 - Over the lane's limits: split again, or use the other lane, or go to `implementer-senior`.
 
-## Tests and test runs (owner rule, 2026-11-09)
+## Tests and test runs (owner rule, 2026-11-11; replaces 2026-11-09)
+
+Implementers never run tests; dispatchers run them in the background so no slice waits on a test run.
 
 - **Code and its tests in one dispatch** when the test file fits in the tier's `Files:` limit: list the
-  test file, name the tests to add/invert in `Symbols:`, and make them the `Acceptance:`. A separate
-  `test-writer` dispatch only when the tests would exceed the limit or need new fixture design.
-- **Per slice: `Build` plus `RunTest` filtered to the touched test classes** (`filter` with
-  `FullyQualifiedName~<Class>` alternatives, plus any tests the slice inverts). No full project runs inside a slice.
-  `RunTest` defaults to `suite: "fast"`, which skips `[Category("OutOfProcess")]` fixtures (Git, Build,
-  RunTest, process launch); when the touched classes are OutOfProcess fixtures, put `suite: "full"` in the brief.
+  test file and name the tests to add/invert in `Symbols:`. A separate `test-writer` dispatch only when
+  the tests would exceed the limit or need new fixture design.
+- **Implementer acceptance is a clean `Build` only** (0 errors). Its report lists the test classes it
+  added or touched (plus any tests the slice inverts). Write `Acceptance: clean Build` in the brief.
+- **Per slice, the dispatcher** (orchestrator, or the main session in Direct mode) commits the green
+  slice, then starts a filtered run of the touched classes detached and dispatches the next slice at once:
+  `Start-Process pwsh -ArgumentList '-NoProfile','-File','<repo>\scripts\Invoke-WorktreeTests.ps1','-WorktreeRoot','c:\tmp\rs-testtrees','-Ref','<commit>','-Projects','<project>','-Filter','FullyQualifiedName~<ClassA>|FullyQualifiedName~<ClassB>' -WindowStyle Hidden`.
+  Each run gets a fresh worktree (own bin/obj, removed afterwards); at most 2 run at once machine-wide,
+  the rest queue. Results: `c:\tmp\rs-testtrees\_results\<commit8>-<timestamp>-<pid>\summary.json`.
+  Keep the filter to the touched classes (a namespace-wide filter like `~.Git` ran 800 tests).
+- **Collect results without waiting:** before each later commit and at the end of the batch, read the
+  `summary.json` files that exist and log them. A failure: re-run that test alone; still red means a
+  fix slice ahead of the next queue item. A run with exit 2 or no `summary.json` is a setup failure: report it.
 - **Per batch: one full run** of each affected test project, NOT by the orchestrator: when a batch
-  reports, the main session starts `scripts/Invoke-WorktreeTests.ps1 -RepoPath c:\tmp\rs-testtree -Ref <last
-  commit> -Projects ...` in the background (own worktree, own bin/obj) and dispatches the next batch
-  at once (the script calls `dotnet test` directly, so it covers every category). Re-run failures alone; known full-run flakes are commented in their tests. A failure found
-  late is narrowed by bisecting the batch's commits (the script takes any `-Ref`).
+  reports, the main session starts the same script with `-WorktreeRoot c:\tmp\rs-testtrees -Ref <last
+  commit>` (no `-Filter`; `-Projects` optional) in the background and dispatches the next batch at once
+  (the script calls `dotnet test` directly, so it covers every category). Re-run failures alone; known
+  full-run flakes are commented in their tests. A failure found late is narrowed by bisecting the
+  batch's commits (the script takes any `-Ref`).
 
 The agent re-measures before editing and replies `RESCOPE:` (with its numbers) if the real blast radius
 exceeds the brief's; the dispatcher then re-slices.

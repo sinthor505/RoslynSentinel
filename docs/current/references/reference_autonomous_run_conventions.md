@@ -65,17 +65,20 @@ Status values: `TODO` / `WIP` / `DONE (hash)` / `PARTIAL (what is left)` / `DEFE
 ### Dispatch modes
 
 - **Direct:** the main session briefs `implementer` / `implementer-sweep` / `test-writer` itself
-  (load `dispatch-implementer` first), one slice at a time, reads the report, then runs `Build` and
-  the relevant `RunTest` and commits. For small, tier-sized work.
+  (load `dispatch-implementer` first), one slice at a time, reads the report, runs `Build`, commits,
+  and starts the slice's filtered test run detached (`dispatch-implementer`, "Tests and test runs").
+  For small, tier-sized work.
 - **Batched:** one `orchestrator` per batch; **one batch at a time** (an orchestrator plus its child
   is already the two-agent limit, and Build/RunTest cannot overlap). Batches group work by code area
   so no two touch the same files. The brief points at tracker rows rather than restating them and says:
   - run every child in the foreground (`run_in_background: false`); load `dispatch-implementer`;
     re-verify scoping anchors before briefing; append each dispatch to
     `.claude/journal/implementer-ledger.md`
-  - per slice: `Build` plus `RunTest` filtered to the touched test classes, with code and tests in one
-    implementer dispatch when they fit the tier (`dispatch-implementer`, "Tests and test runs"); no
-    full project runs (the main session runs them in a worktree after the batch)
+  - per slice: implementers write the tests but only `Build`; the orchestrator commits, then starts a
+    detached filtered run of the touched classes with `Invoke-WorktreeTests.ps1 -WorktreeRoot` and
+    dispatches the next slice without waiting, collecting `summary.json` results before later commits
+    (`dispatch-implementer`, "Tests and test runs"); no full project runs (the main session runs them
+    after the batch)
   - commit each finished slice with `Git` scope `listed`,
     the skill's message rule and the `Co-Authored-By` trailer; never push
   - leave `// TODO` markers per CLAUDE.md; defer anything needing design or owner judgement and keep
@@ -88,10 +91,11 @@ Status values: `TODO` / `WIP` / `DONE (hash)` / `PARTIAL (what is left)` / `DEFE
 ### After each batch (or each Direct step that changed code)
 
 One full run per affected test project after a batch, started by the main session in the background
-with `scripts/Invoke-WorktreeTests.ps1 -RepoPath c:\tmp\rs-testtree -Ref <batch's last commit>` (separate
-worktree, so it does not block the next batch's builds); the next batch is dispatched at once. Inside a batch and
-after a Direct step, filtered runs of the touched test classes only (owner rule 2026-11-09: catching a
-failure one batch late is acceptable; bisect the batch's commits to locate it). Baseline is 0 failures. Re-run a failure alone: if it passes, record it as a flake; if
+with `scripts/Invoke-WorktreeTests.ps1 -WorktreeRoot c:\tmp\rs-testtrees -Ref <batch's last commit>` (fresh
+worktree per run, so it does not block the next batch's builds or other runs); the next batch is dispatched at once. Inside a batch and
+after a Direct step, detached filtered runs of the touched test classes only, started by the dispatcher,
+never by an implementer (owner rules 2026-11-09 and 2026-11-11: catching a failure late is acceptable;
+bisect the commits to locate it). Baseline is 0 failures. Re-run a failure alone: if it passes, record it as a flake; if
 it comes from another session's commits, say so; otherwise it is the next thing to fix.
 
 ### Failures and stalls

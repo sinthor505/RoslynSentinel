@@ -20,8 +20,23 @@
     Does not stop or touch any running RoslynSentinel server (unlike build.ps1).
 
 .PARAMETER RepoPath
-    Absolute path of the worktree, e.g. c:\tmp\rs-testtree. Keep it outside the repo so searches
-    and diffs of the main tree never see it.
+    Absolute path of a reusable worktree, e.g. c:\tmp\rs-testtree. Keep it outside the repo so
+    searches and diffs of the main tree never see it. Two runs on the same -RepoPath must not
+    overlap; use -WorktreeRoot for concurrent runs. Exactly one of -RepoPath / -WorktreeRoot.
+
+.PARAMETER WorktreeRoot
+    Absolute parent folder for a fresh, unique worktree per run (e.g. c:\tmp\rs-testtrees), named
+    <commit8>-<yyyyMMdd-HHmmss>-<pid>, so several runs (one per committed slice) never block each
+    other on a folder. Results go to <WorktreeRoot>\_results\<name>\ (summary.json, TRX, logs) and
+    the worktree is removed afterwards unless -KeepWorktree. At most -MaxConcurrent runs build and
+    test at once (machine-wide slots); later runs wait for a slot, which keeps CPU contention from
+    turning load-sensitive tests into timeouts.
+
+.PARAMETER MaxConcurrent
+    With -WorktreeRoot: number of runs allowed to build/test at the same time. Default 2.
+
+.PARAMETER KeepWorktree
+    With -WorktreeRoot: keep the worktree after the run (for debugging a failure in place).
 
 .PARAMETER Ref
     Commit, branch or tag to test (checked out detached). Omit to test the worktree as it is.
@@ -51,11 +66,20 @@
 
 .EXAMPLE
     pwsh -File scripts/Invoke-WorktreeTests.ps1 -RepoPath c:\tmp\rs-testtree -Ref 3e4ed6fa -Filter "FullyQualifiedName~FoldPending"
+
+.EXAMPLE
+    pwsh -File scripts/Invoke-WorktreeTests.ps1 -WorktreeRoot c:\tmp\rs-testtrees -Ref 1b7879d7 -Projects RoslynSentinel.Tests.Tools.Basic -Filter "FullyQualifiedName~GitCommitSeamParityTests"
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
     [string]$RepoPath,
+
+    [string]$WorktreeRoot,
+
+    [ValidateRange(1, 8)]
+    [int]$MaxConcurrent = 2,
+
+    [switch]$KeepWorktree,
 
     [string]$Ref,
 
@@ -77,9 +101,38 @@ $ErrorActionPreference = 'Stop'
 $mainRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path.TrimEnd('\')
 $excludedByDefault = @('ModelEval', 'PlanStepRunner', 'SubAgent')
 
+$isolated = $false
+$slot = $null
+
+# Every exit after setup goes through here: release the concurrency slot and, for a -WorktreeRoot
+# run, remove the per-run worktree (results live outside it).
+function Finish([int]$code) {
+    if ($script:slot) { try { $script:slot.ReleaseMutex() } catch { } ; $script:slot.Dispose(); $script:slot = $null }
+    if ($script:isolated -and -not $KeepWorktree -and (Test-Path $script:RepoPath)) {
+        & git -C $script:mainRoot worktree remove --force $script:RepoPath 2>&1 | Out-Null
+        if (Test-Path $script:RepoPath) { Remove-Item $script:RepoPath -Recurse -Force -ErrorAction SilentlyContinue }
+        & git -C $script:mainRoot worktree prune 2>&1 | Out-Null
+    }
+    exit $code
+}
+
 function Fail([string]$message) {
     Write-Host "ERROR: $message"
-    exit 2
+    Finish 2
+}
+
+if ([bool]$RepoPath -eq [bool]$WorktreeRoot) { Fail "pass exactly one of -RepoPath (reusable worktree) or -WorktreeRoot (fresh worktree per run)." }
+if ($WorktreeRoot) {
+    if (-not [System.IO.Path]::IsPathRooted($WorktreeRoot)) { Fail "-WorktreeRoot must be absolute: $WorktreeRoot" }
+    $WorktreeRoot = [System.IO.Path]::GetFullPath($WorktreeRoot).TrimEnd('\')
+    $refToTest = if ($Ref) { $Ref } else { 'HEAD' }
+    $commit = (& git -C $mainRoot rev-parse --verify "$refToTest^{commit}" 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not $commit) { Fail "cannot resolve -Ref '$refToTest' in $mainRoot" }
+    $Ref = $commit
+    $runName = '{0}-{1:yyyyMMdd-HHmmss}-{2}' -f $commit.Substring(0, 8), (Get-Date), $PID
+    New-Item -ItemType Directory -Path $WorktreeRoot -Force | Out-Null
+    $RepoPath = Join-Path $WorktreeRoot $runName
+    $isolated = $true
 }
 
 function Get-CommonDir([string]$path) {
@@ -166,9 +219,30 @@ if ($Projects) {
     }
 }
 
-$resultsDir = Join-Path $RepoPath 'TestResults\worktree-run'
+$resultsDir = if ($isolated) { Join-Path $WorktreeRoot "_results\$runName" } else { Join-Path $RepoPath 'TestResults\worktree-run' }
 if (Test-Path $resultsDir) { Remove-Item $resultsDir -Recurse -Force }
 New-Item -ItemType Directory -Path $resultsDir | Out-Null
+
+# --- Concurrency slot (-WorktreeRoot runs) ------------------------------------------------------
+# Named mutexes, one per slot: the OS releases a slot when its process dies (abandoned mutex), so a
+# killed run never leaks one (a named semaphore would).
+if ($isolated) {
+    $waitStart = Get-Date
+    $announced = $false
+    while (-not $slot) {
+        for ($i = 0; $i -lt $MaxConcurrent -and -not $slot; $i++) {
+            $m = [System.Threading.Mutex]::new($false, "Global\RoslynSentinelWorktreeTests-slot$i")
+            $got = $false
+            try { $got = $m.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $got = $true }
+            if ($got) { $slot = $m } else { $m.Dispose() }
+        }
+        if (-not $slot) {
+            if (-not $announced) { Write-Host "Waiting for a test slot ($MaxConcurrent in use)..."; $announced = $true }
+            Start-Sleep -Seconds 5
+        }
+    }
+    if ($announced) { Write-Host ("Got a slot after {0:n0}s" -f ((Get-Date) - $waitStart).TotalSeconds) }
+}
 
 # Keep this run's MSBuild/compiler processes private to it, so they cannot lock files that the
 # main tree's builds use, and do not outlive the run.
@@ -185,7 +259,7 @@ if (-not $SkipBuild) {
     if ($LASTEXITCODE -ne 0) {
         Write-Host "BUILD FAILED - see $buildLog"
         Get-Content $buildLog | Select-String -Pattern ': error ' | Select-Object -First 20 | ForEach-Object { Write-Host "  $($_.Line.Trim())" }
-        exit 2
+        Finish 2
     }
     Write-Host ("Build OK in {0:n0}s" -f $sw.Elapsed.TotalSeconds)
 }
@@ -288,4 +362,4 @@ foreach ($row in $summary.projects | Where-Object { $_.failures.Count -gt 0 }) {
 }
 Write-Host ''
 Write-Host ("Commit {0} - {1} in {2:n0}s. Results: {3}" -f $head.Substring(0, 8), $(if ($anyFailed) { 'FAILURES' } else { 'all passed' }), $sw.Elapsed.TotalSeconds, $resultsDir)
-exit $(if ($anyFailed) { 1 } else { 0 })
+Finish $(if ($anyFailed) { 1 } else { 0 })
