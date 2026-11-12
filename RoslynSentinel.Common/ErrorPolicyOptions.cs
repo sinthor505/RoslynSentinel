@@ -64,6 +64,7 @@ public static class ErrorPolicyOptions
             return ErrorPolicyMode.Inline;
         }
 
+        // hint-ok: startup option validation message, not a tool-call hint
         throw new ArgumentException(
             $"Unknown --error-policy-mode value '{raw}'. Expected Off, Pointer or Inline (set with --error-policy-mode or ROSLYNSENTINEL_ERROR_POLICY_MODE).");
     }
