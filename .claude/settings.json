@@ -85,6 +85,23 @@
         ]
       },
       {
+        "matcher": "ListAgents|SendMessage",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe",
+            "args": [
+              "-NoProfile",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-File",
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/peer-names.ps1"
+            ],
+            "timeout": 15
+          }
+        ]
+      },
+      {
         "matcher": ".*__Build",
         "hooks": [
           {
