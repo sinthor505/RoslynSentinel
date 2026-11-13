@@ -249,7 +249,7 @@ public static class MemberRefactoringNotFound
             parts.Add($"Declared in {scope}: {JoinNames(names)}.");
             if (candidates.Count == 0)
             {
-                parts.Add($"'{wanted}' is not among them, so it does not exist in {scope}.");
+                parts.Add(SpeculativeAdvice.Resolve($"'{wanted}' is not among them, so it does not exist in {scope}."));
             }
         }
 

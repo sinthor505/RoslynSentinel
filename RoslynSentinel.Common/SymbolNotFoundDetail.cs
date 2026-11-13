@@ -134,7 +134,8 @@ public static class SymbolNotFoundDetail
             }
         }
 
-        text.Append("\nRetry with the exact symbol you meant. If none of these is the symbol you meant, it does not exist in this solution.");
+        text.Append("\nRetry with the exact symbol you meant. ");
+        text.Append(SpeculativeAdvice.Resolve("If none of these is the symbol you meant, it does not exist in this solution."));
         return text.ToString();
     }
 
@@ -153,7 +154,7 @@ public static class SymbolNotFoundDetail
         var text = $"Symbol '{wantedName}' ({symbolKind}) was not found in {scopeDescription}. No symbol in the solution has a similar name. ";
         if (orientationFilePath is not null && Callable(isCallable, "GetFileOutline"))
         {
-            return text + $"To see what exists in the file you named, call {ToolCallHint.Call("GetFileOutline", ("filePath", orientationFilePath))}. If it is not there, {DoesNotExistSentence}";
+            return text + $"To see what exists in the file you named, call {ToolCallHint.Call("GetFileOutline", ("filePath", orientationFilePath))}. " + SpeculativeAdvice.Resolve($"If it is not there, {DoesNotExistSentence}");
         }
 
         if (Callable(isCallable, "ListAll"))
@@ -164,7 +165,7 @@ public static class SymbolNotFoundDetail
                 pairs.Add(("projectName", projectName));
             }
 
-            return text + $"To see what exists, call {ToolCallHint.Call("ListAll", pairs.ToArray())}. If it is not in that list, {DoesNotExistSentence}";
+            return text + $"To see what exists, call {ToolCallHint.Call("ListAll", pairs.ToArray())}. " + SpeculativeAdvice.Resolve($"If it is not in that list, {DoesNotExistSentence}");
         }
 
         // No orientation call is callable: the no-similar-name fact above is all that is true for every caller.

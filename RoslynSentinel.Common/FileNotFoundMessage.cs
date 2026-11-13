@@ -105,7 +105,7 @@ public static class FileNotFoundMessage
                 }
             }
 
-            return text + "\nRetry with the exact path of the file you meant. If none of these is the file you meant, it does not exist in this solution.";
+            return text + "\nRetry with the exact path of the file you meant. " + SpeculativeAdvice.Resolve("If none of these is the file you meant, it does not exist in this solution.");
         }
 
         var notFound = intro + "No file in the solution has a similar name. ";
@@ -119,7 +119,7 @@ public static class FileNotFoundMessage
     private static string NoMatchFactsAndOptions(string requestedPath, Func<string, bool>? isCallable)
     {
         // CreateFile is deliberately not offered here: in ReplaceSnippetWrongFileNoMatch 5 of 9 failing samples created the missing file right after the option.
-        var text = "A file read earlier under this name may since have been renamed or moved.";
+        var text = SpeculativeAdvice.Resolve("A file read earlier under this name may since have been renamed or moved.");
         if (Callable(isCallable, "ListSolutionItems"))
         {
             text += $" {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} lists every file in the solution. A file not in that list does not exist in this solution.";

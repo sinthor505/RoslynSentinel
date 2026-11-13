@@ -286,7 +286,7 @@ public static class MemberSelection
 
         if (topByEntry.Count == 0)
         {
-            return $" No member of class '{className}' has a similar name to [{string.Join(", ", missing)}]. A requested member that is not in the found list (and the class is not partial) does not exist in '{className}'.";
+            return $" No member of class '{className}' has a similar name to [{string.Join(", ", missing)}]. " + SpeculativeAdvice.Resolve($"A requested member that is not in the found list (and the class is not partial) does not exist in '{className}'.");
         }
 
         var retryNames = memberNames.Select(n => topByEntry.TryGetValue(n, out var top) ? top : n).Distinct(StringComparer.Ordinal);

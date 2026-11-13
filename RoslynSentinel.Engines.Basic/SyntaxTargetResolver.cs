@@ -145,7 +145,7 @@ public static class SyntaxTargetResolver
             .ToList();
 
         var reportOption = includeReportOption
-            ? $" A type named '{requestedName}' that no file declares does not exist."
+            ? " " + SpeculativeAdvice.Resolve($"A type named '{requestedName}' that no file declares does not exist.")
             : string.Empty;
 
         if (declared.Count == 0)

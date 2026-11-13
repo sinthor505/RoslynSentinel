@@ -26,10 +26,10 @@ public static class DeclarationNotFoundDetail
         var outline = ToolCallHint.Call("GetFileOutline", ("filePath", filePath));
         if (!includeOutlineCall)
         {
-            return $"No {kindLabel} declared in '{filePath}' has a similar name to '{wanted}'. '{wanted}' is not declared in that file, so it does not exist there.";
+            return $"No {kindLabel} declared in '{filePath}' has a similar name to '{wanted}'. " + SpeculativeAdvice.Resolve($"'{wanted}' is not declared in that file, so it does not exist there.");
         }
 
-        return $"No {kindLabel} declared in '{filePath}' has a similar name to '{wanted}'. To see what the file declares, call {outline}. '{wanted}' is not in that outline, so it does not exist in this file.";
+        return $"No {kindLabel} declared in '{filePath}' has a similar name to '{wanted}'. To see what the file declares, call {outline}. " + SpeculativeAdvice.Resolve($"'{wanted}' is not in that outline, so it does not exist in this file.");
     }
 
     /// <summary>
