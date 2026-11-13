@@ -76,6 +76,9 @@ public static class ErrorVariantReplay
             ? new LmStudioAgentClient(http, modelKey!, NullLogger<LmStudioAgentClient>.Instance)
             : null;
 
+        // Cut turn 0: no seed, the model generates every turn live (see RunRegeneratedCellAsync).
+        var regenerate = options.CutTurn == ErrorVariantReplayOptions.RegenerateCutTurn;
+
         var rows = new List<VariantSampleRow>();
         foreach (var source in sources)
         {
@@ -124,6 +127,7 @@ public static class ErrorVariantReplay
                         LatencyMs = 0,
                         HarnessError = string.Empty,
                         SourceSettings = settingsState,
+                        Mode = regenerate ? VariantSampleRow.RegeneratedMode : VariantSampleRow.SeededMode,
                     };
 
                     VariantSampleRow row;
@@ -146,7 +150,9 @@ public static class ErrorVariantReplay
                             Sanitize(variant.ErrorCode + "-" + variant.Id),
                             Sanitize(Path.GetFileName(source.RunFolder) + "_" + source.Sample),
                             $"sample-{sampleIndex:D2}");
-                        row = await RunCellAsync(template, transcript!, variant, sampleDirectory, llm, options, cancellationToken);
+                        row = regenerate
+                            ? await RunRegeneratedCellAsync(template, transcript!, variant, sampleDirectory, llm, options, cancellationToken)
+                            : await RunCellAsync(template, transcript!, variant, sampleDirectory, llm, options, cancellationToken);
                     }
 
                     VariantSampleRow.Append(csvPath, row);
@@ -239,6 +245,145 @@ public static class ErrorVariantReplay
                 HarnessError = $"{ex.GetType().Name}: {ex.Message}",
             };
         }
+    }
+
+    /// <summary>
+    /// One regenerated sample (cut turn 0): no seed, the model generates every turn live from the source's prompts and tools, and the
+    /// host scripts ALL recorded turns with the source's first error call carrying the variant text
+    /// (<see cref="TranscriptToolHost.ScriptedInFull"/>). turnCap is E + ContinueTurns, E being the source's first error turn.
+    /// The row is a next-turn sample only when the model's call was served as the overridden error call in a turn of 1..E, before any
+    /// off-script call; then the first live turn AFTER that turn is classified. Otherwise DecisionClass is
+    /// <c>RegenMiss:&lt;first off-script tool or none&gt;</c> and nothing is classified. Never throws except for cancellation.
+    /// </summary>
+    /// <remarks>
+    /// The turn the overridden call was served in comes from the host's call index (<see cref="TranscriptToolHost.OverriddenServedCallIndex"/>)
+    /// mapped onto the run's recorded calls; the row's CutTurn is E (nothing is cut) and its token columns sum every live turn.
+    /// </remarks>
+    private static async Task<VariantSampleRow> RunRegeneratedCellAsync(
+        VariantSampleRow template,
+        AgentTranscript transcript,
+        ErrorVariant variant,
+        string sampleDirectory,
+        LmStudioAgentClient llm,
+        ErrorVariantReplayOptions options,
+        CancellationToken cancellationToken)
+    {
+        var row = template;
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            var solutionDirectory = ResolveSolutionDirectory(transcript, variant);
+            var errorTurn = ResultOverride.FirstErrorTurn(transcript);
+            var recordedMessage = ResultOverride.FindErrorCall(transcript.Turns[errorTurn - 1], errorTurn).Message;
+            var host = TranscriptToolHost.ScriptedInFull(transcript, variant, solutionDirectory);
+            row = row with { CutTurn = errorTurn, RecordedMessageHash = ErrorVariantLoader.HashOf(recordedMessage) };
+
+            var runner = new ModelAgentRunner(
+                llm, host,
+                repeatedFailureLimit: RepeatedFailureLimit,
+                maxTokensPerTurn: MaxTokensPerTurn,
+                turnCap: errorTurn + options.ContinueTurns,
+                wallClockCap: TimeSpan.FromMinutes(10),
+                logger: NullLogger<ModelAgentRunner>.Instance,
+                loopAssist: LoopAssistOptions.Off);
+
+            Directory.CreateDirectory(sampleDirectory);
+            var result = await runner.RunAsync(
+                transcript.SystemPrompt,
+                transcript.UserPrompt,
+                sampleDirectory,
+                cancellationToken,
+                targetReached: _ => Task.FromResult(host.OffScript));
+
+            var turns = result.Transcript.Turns;
+            var servedIndex = host.OverriddenServedCallIndex;
+            var servedTurn = servedIndex is { } index ? TurnOfHostCall(turns, index) : null;
+            var servedBeforeOffScript = host.OffScriptCallIndex is not { } offIndex || servedIndex < offIndex;
+            var inputTokens = SumOrNull(turns, turn => turn.ModelMessage.InputTokens);
+            var outputTokens = SumOrNull(turns, turn => turn.ModelMessage.OutputTokens);
+
+            if (servedTurn is not { } regenTurn || regenTurn > errorTurn || !servedBeforeOffScript)
+            {
+                var offScriptTool = host.OffScriptTool;
+                return row with
+                {
+                    DecisionClass = "RegenMiss:" + (offScriptTool ?? "none"),
+                    StopTurn = turns.Count == 0 ? null : turns[^1].TurnNumber,
+                    StopReason = offScriptTool is not null ? "OffScript:" + offScriptTool : result.StopReason.ToString(),
+                    LatencyMs = stopwatch.ElapsedMilliseconds,
+                    InputTokens = inputTokens,
+                    OutputTokens = outputTokens,
+                    HarnessError = string.Empty,
+                };
+            }
+
+            row = row with { RegenTurn = regenTurn };
+            var newTurns = turns.Where(turn => turn.TurnNumber > regenTurn).ToList();
+            if (newTurns.Count == 0)
+            {
+                return row with
+                {
+                    LatencyMs = stopwatch.ElapsedMilliseconds,
+                    InputTokens = inputTokens,
+                    OutputTokens = outputTokens,
+                    HarnessError = $"The run produced no turn after the regenerated error (served in turn {regenTurn}); it stopped with {result.StopReason}.",
+                };
+            }
+
+            var decision = NextTurnDecision.Classify(newTurns, options.AbsentTargets, result.StopReason, host.OffScriptTool);
+            return row with
+            {
+                DecisionClass = decision.DecisionClass,
+                FirstTool = decision.FirstTool ?? string.Empty,
+                CallCount = decision.CallCount,
+                BlockedAnywhere = decision.BlockedAnywhere,
+                StopTurn = decision.StopTurn,
+                StopReason = decision.StopReason,
+                LatencyMs = stopwatch.ElapsedMilliseconds,
+                InputTokens = inputTokens,
+                OutputTokens = outputTokens,
+                HarnessError = string.Empty,
+            };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return row with
+            {
+                LatencyMs = stopwatch.ElapsedMilliseconds,
+                HarnessError = $"{ex.GetType().Name}: {ex.Message}",
+            };
+        }
+    }
+
+    // The runner answers a call whose arguments are not valid JSON itself, without asking the host; such a call does not count as a host call.
+    // TODO couples to the error text ModelAgentRunner.ExecuteToolCallAsync writes for malformed arguments; expose it as a constant there if it ever changes.
+    private const string MalformedArgumentsResultPrefix = "{\"isError\":true,\"error\":\"Malformed tool-call arguments JSON";
+
+    /// <summary>The turn number of the call the host received at zero-based position <paramref name="hostCallIndex"/>, or null when the run has fewer host calls.</summary>
+    private static int? TurnOfHostCall(IReadOnlyList<AgentTranscriptTurn> turns, int hostCallIndex)
+    {
+        var seen = 0;
+        foreach (var turn in turns)
+        {
+            foreach (var call in turn.ToolCalls)
+            {
+                if (call.ResultJson.StartsWith(MalformedArgumentsResultPrefix, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (seen++ == hostCallIndex)
+                {
+                    return turn.TurnNumber;
+                }
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

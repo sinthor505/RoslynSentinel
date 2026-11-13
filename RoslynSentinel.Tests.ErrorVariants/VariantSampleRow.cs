@@ -88,9 +88,31 @@ public sealed record VariantSampleRow
     /// <summary>
     /// How the source transcript's recorded model key, temperature and top-p compare with this run's:
     /// "matched", "unknown" (the header records none: transcripts written before the fields existed) or "mismatch" (the sample was refused).
-    /// Last column so earlier cell positions did not move.
+    /// Added after the first columns so earlier cell positions did not move.
     /// </summary>
     public required string SourceSettings { get; init; }
+
+    /// <summary>
+    /// <see cref="SeededMode"/> (the transcript is cut and the model continues from the seed) or <see cref="RegeneratedMode"/> (cut turn 0:
+    /// the model generates every turn live and the variant is served when it re-issues the source's error call). Rows written before
+    /// the column existed read as seeded.
+    /// </summary>
+    public string Mode { get; init; } = SeededMode;
+
+    /// <summary>
+    /// Regenerated mode only: the turn in which the live model's call was served as the overridden error call (normally 1); empty cell
+    /// for seeded rows and for a regenerated row that never served it (DecisionClass RegenMiss:...).
+    /// </summary>
+    public int? RegenTurn { get; init; }
+
+    /// <summary>Value of <see cref="Mode"/> for a cut-and-seeded sample.</summary>
+    public const string SeededMode = "seeded";
+
+    /// <summary>Value of <see cref="Mode"/> for a sample whose every turn was generated live (cut turn 0).</summary>
+    public const string RegeneratedMode = "regenerated";
+
+    // Cell count of rows written before Mode and RegenTurn existed; Parse still accepts it.
+    private const int LegacyColumnCount = 26;
 
     private static readonly string[] ColumnNames =
     {
@@ -99,6 +121,7 @@ public sealed record VariantSampleRow
         nameof(SourceRunFolder), nameof(SourceSample), nameof(SourceCommitHash), nameof(CutTurn), nameof(RecordedMessageHash),
         nameof(SampleIndex), nameof(DecisionClass), nameof(FirstTool), nameof(CallCount), nameof(BlockedAnywhere), nameof(StopTurn), nameof(StopReason),
         nameof(LatencyMs), nameof(InputTokens), nameof(OutputTokens), nameof(HarnessError), nameof(SourceSettings),
+        nameof(Mode), nameof(RegenTurn),
     };
 
     private static readonly Regex LineBreaks = new("[\\r\\n]+");
@@ -130,6 +153,7 @@ public sealed record VariantSampleRow
             OutputTokens?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
             Flatten(HarnessError),
             Flatten(SourceSettings),
+            Flatten(Mode), RegenTurn?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
         };
 
         return string.Join(",", cells.Select(Quote));
@@ -142,10 +166,12 @@ public sealed record VariantSampleRow
     public static VariantSampleRow Parse(string line)
     {
         var cells = SplitCells(line);
-        if (cells.Count != ColumnNames.Length)
+        if (cells.Count != ColumnNames.Length && cells.Count != LegacyColumnCount)
         {
-            throw new FormatException($"variants.csv row has {cells.Count} cells; expected {ColumnNames.Length}.");
+            throw new FormatException($"variants.csv row has {cells.Count} cells; expected {ColumnNames.Length} (or {LegacyColumnCount} for a row written before Mode and RegenTurn).");
         }
+
+        var legacy = cells.Count == LegacyColumnCount;
 
         return new VariantSampleRow
         {
@@ -175,6 +201,8 @@ public sealed record VariantSampleRow
             OutputTokens = ReadNullableLong(cells, 23),
             HarnessError = cells[24],
             SourceSettings = cells[25],
+            Mode = legacy || cells[26].Length == 0 ? SeededMode : cells[26],
+            RegenTurn = legacy ? null : ReadNullableInt(cells, 27),
         };
     }
 

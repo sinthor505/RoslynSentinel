@@ -39,6 +39,7 @@ public sealed class TranscriptToolHost : IAgentToolHost
     private readonly ErrorVariant? _variant;
     private readonly string? _solutionDirectory;
     private readonly string? _overriddenMessage;
+    private readonly AgentToolCallRecord? _overriddenCall;
     private readonly Dictionary<(string Tool, string Arguments), List<AgentToolCallRecord>> _scripted = [];
     private readonly Dictionary<(string Tool, string Arguments), int> _served = [];
 
@@ -51,30 +52,47 @@ public sealed class TranscriptToolHost : IAgentToolHost
     /// A variant was given and the source's cut turn has no single erroring call, or its errorCode differs from the variant's.
     /// </exception>
     public TranscriptToolHost(AgentTranscript source, int cutTurn, ErrorVariant? variant = null, string? solutionDirectory = null)
+        : this(source, cutTurn, cutTurn, variant, solutionDirectory)
+    {
+    }
+
+    /// <summary>
+    /// A host for regenerate mode (cut turn 0): EVERY recorded turn of <paramref name="source"/> is scripted, and the variant is applied
+    /// to the source's first erroring call (the turn <see cref="ResultOverride.FirstErrorTurn"/> names) wherever it is served, so a model
+    /// that re-issues that call live is answered with the variant text. The sticky rule then covers later repeats as in the seeded host.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The source has no single erroring call at its first error turn, or its errorCode differs from the variant's.</exception>
+    public static TranscriptToolHost ScriptedInFull(AgentTranscript source, ErrorVariant variant, string? solutionDirectory = null) =>
+        new(source, 0, ResultOverride.FirstErrorTurn(source), variant, solutionDirectory);
+
+    // scriptedFromTurn: number of leading source turns NOT scripted (the seed; 0 scripts everything). overrideTurn: 1-based turn holding
+    // the call the variant overrides (the cut turn when seeded, the first error turn when scripted in full).
+    private TranscriptToolHost(AgentTranscript source, int scriptedFromTurn, int overrideTurn, ErrorVariant? variant, string? solutionDirectory)
     {
         _source = source;
         _variant = variant;
         _solutionDirectory = solutionDirectory;
-        if (cutTurn < 1 || cutTurn > source.Turns.Count)
+        if (overrideTurn < 1 || overrideTurn > source.Turns.Count)
         {
             throw new ArgumentOutOfRangeException(
-                nameof(cutTurn), cutTurn, $"The transcript has {source.Turns.Count} turn(s); cut between 1 and {source.Turns.Count}.");
+                nameof(overrideTurn), overrideTurn, $"The transcript has {source.Turns.Count} turn(s); cut between 1 and {source.Turns.Count}.");
         }
 
         if (variant is not null)
         {
-            var (callIndex, call, code, message) = ResultOverride.FindErrorCall(source.Turns[cutTurn - 1], cutTurn);
+            var (callIndex, call, code, message) = ResultOverride.FindErrorCall(source.Turns[overrideTurn - 1], overrideTurn);
             if (!string.Equals(code, variant.ErrorCode, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
-                    $"Turn {cutTurn}, call {callIndex + 1} ({call.ToolName}): the recorded errorData.errorCode is '{code}' but variant '{variant.Id}' targets '{variant.ErrorCode}'.");
+                    $"Turn {overrideTurn}, call {callIndex + 1} ({call.ToolName}): the recorded errorData.errorCode is '{code}' but variant '{variant.Id}' targets '{variant.ErrorCode}'.");
             }
 
             _overriddenMessage = message;
+            _overriddenCall = call;
         }
 
-        // Turn numbers are 1-based, so the 0-based indexes cutTurn.. are the turns after the cut.
-        for (var i = cutTurn; i < source.Turns.Count; i++)
+        // Turn numbers are 1-based, so the 0-based indexes scriptedFromTurn.. are the turns after the seed.
+        for (var i = scriptedFromTurn; i < source.Turns.Count; i++)
         {
             foreach (var call in source.Turns[i].ToolCalls)
             {
@@ -107,6 +125,16 @@ public sealed class TranscriptToolHost : IAgentToolHost
     /// answered from the script by then; null while on script.
     /// </summary>
     public int? OffScriptCallIndex
+    {
+        get; private set;
+    }
+
+    /// <summary>
+    /// Zero-based position, among all calls the host received, of the call that was answered with the overridden error call's recorded
+    /// record (served with the variant text); null until that happens. Only the first serve is kept. The overridden call is the one of
+    /// the cut turn when seeded (never scripted, so never served) or the first error turn when built by <see cref="ScriptedInFull"/>.
+    /// </summary>
+    public int? OverriddenServedCallIndex
     {
         get; private set;
     }
@@ -149,6 +177,11 @@ public sealed class TranscriptToolHost : IAgentToolHost
                 _served.TryGetValue(key, out var servedSoFar);
                 var chosen = servedSoFar < recorded.Count ? recorded[servedSoFar] : recorded[^1];
                 _served[key] = servedSoFar + 1;
+                if (ReferenceEquals(chosen, _overriddenCall))
+                {
+                    OverriddenServedCallIndex ??= callIndex;
+                }
+
                 return Task.FromResult(ToResult(chosen));
             }
         }

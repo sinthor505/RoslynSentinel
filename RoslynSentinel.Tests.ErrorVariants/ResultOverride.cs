@@ -201,7 +201,12 @@ public static class ResultOverride
     /// <summary>True when <paramref name="resultJson"/> parses as an object whose top-level isError is true.</summary>
     public static bool IsErrorResult(string resultJson) => Scan(Encoding.UTF8.GetBytes(resultJson)).IsError;
 
-    private static int FirstErrorTurn(AgentTranscript transcript)
+    /// <summary>
+    /// The 1-based number of the first turn with a call whose ResultJson has isError:true: the default cut of <see cref="Apply"/>
+    /// and the error turn E of regenerate mode (cut turn 0).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No turn has an erroring call.</exception>
+    public static int FirstErrorTurn(AgentTranscript transcript)
     {
         for (var i = 0; i < transcript.Turns.Count; i++)
         {

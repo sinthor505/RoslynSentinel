@@ -43,6 +43,11 @@
 
 .PARAMETER CutTurn
     VARIANT_CUT_TURN: cut every source after this turn number. Default: each transcript's first turn with an erroring call.
+    0 = REGENERATE (cut 0): no seed turns; the model generates every turn live from the source's system prompt, user prompt and
+    tools, and the host scripts all recorded turns with the first error call carrying the variant text. A sample is a next-turn
+    sample only when the model re-issues that error call in turns 1..E (E = the source's first error turn); the first live turn
+    after it is classified. Otherwise DecisionClass is RegenMiss:<first off-script tool or none> and nothing is classified.
+    turnCap = E + ContinueTurns. variants.csv columns: mode (seeded|regenerated) and regenTurn (turn the error call was served in).
 
 .PARAMETER AbsentTargets
     VARIANT_ABSENT_TARGETS: names the task says are absent (for example CustomsDeclarationPrinter.cs); a reply that names one and
@@ -85,7 +90,7 @@ param(
     [ValidateRange(1, 100)]
     [int]$ContinueTurns = 1,
 
-    [ValidateRange(1, 1000)]
+    [ValidateRange(0, 1000)]
     [int]$CutTurn,
 
     [string[]]$AbsentTargets,

@@ -13,12 +13,39 @@ public sealed class VariantSampleRowTests
         "SourceRunFolder", "SourceSample", "SourceCommitHash", "CutTurn", "RecordedMessageHash",
         "SampleIndex", "DecisionClass", "FirstTool", "CallCount", "BlockedAnywhere", "StopTurn", "StopReason",
         "LatencyMs", "InputTokens", "OutputTokens", "HarnessError", "SourceSettings",
+        "Mode", "RegenTurn",
     };
 
     [Test]
-    public void Header_ListsAll26ColumnsInOrder()
+    public void Header_ListsAll28ColumnsInOrder()
     {
         Assert.That(VariantSampleRow.Header.Split(','), Is.EqualTo(ExpectedColumns));
+        Assert.That(ExpectedColumns, Has.Length.EqualTo(28));
+    }
+
+    [Test]
+    public void ToCsvLine_ThenParse_RoundTripsARegeneratedRow()
+    {
+        var row = BuildFullRow() with { Mode = VariantSampleRow.RegeneratedMode, RegenTurn = 1 };
+
+        var line = row.ToCsvLine();
+
+        Assert.That(line, Does.EndWith(",matched,regenerated,1"));
+        Assert.That(VariantSampleRow.Parse(line), Is.EqualTo(row));
+    }
+
+    [Test]
+    public void Parse_AcceptsALegacy26CellRow_AsSeededWithNoRegenTurn()
+    {
+        var current = BuildFullRow().ToCsvLine();
+        var legacy = current[..current.LastIndexOf(",seeded,", StringComparison.Ordinal)];
+        Assert.That(legacy.Split(','), Has.Length.EqualTo(26), "the fixture row has no quoted commas");
+
+        var parsed = VariantSampleRow.Parse(legacy);
+
+        Assert.That(parsed, Is.EqualTo(BuildFullRow()));
+        Assert.That(parsed.Mode, Is.EqualTo(VariantSampleRow.SeededMode));
+        Assert.That(parsed.RegenTurn, Is.Null);
     }
 
     [Test]
@@ -44,8 +71,8 @@ public sealed class VariantSampleRowTests
         };
         var line = row.ToCsvLine();
 
-        // HarnessError is empty and SourceSettings (the last column) is "matched", so the empty cell sits just before it.
-        Assert.That(line, Does.EndWith(",,matched"));
+        // HarnessError is empty and SourceSettings is "matched", so the empty cell sits just before it; Mode is seeded and RegenTurn empty after it.
+        Assert.That(line, Does.EndWith(",,matched,seeded,"));
         var parsed = VariantSampleRow.Parse(line);
         Assert.That(parsed.StopTurn, Is.Null);
         Assert.That(parsed.InputTokens, Is.Null);
