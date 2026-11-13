@@ -264,4 +264,46 @@ public class ZeroHitSearchHintToolTests
         Assert.That(notes, Has.Count.EqualTo(1));
         Assert.That(notes[0].Message, Does.Contain("Foo(").And.Contain("other-agent"));
     }
+
+    [Test]
+    public void SearchSymbol_ZeroHit_AfterARecordedRename_AddsTheEditEffectFinding()
+    {
+        var file = FileIn("A.cs");
+        File.WriteAllText(file, Original);
+        using var manager = NewManager(file, Original);
+        var readNav = Battery.Basic.TestTools.WorkspaceReadNavigationImpl(manager);
+
+        // A rename of Bar to Baz by an earlier call in the same session, committed to the index the lookup reads.
+        var index = new EditEffectIndex();
+        var writer = new ToolCallContext("agent-1", null, "RenameSymbol", "rename", 0) { SessionId = "s1" };
+        writer.AssignToolCallId("a76e9f1c");
+        writer.RecordEffect(EditEffectKind.Renamed, "N.Foo.Bar", "M:N.Foo.Bar", "Bar", "Baz", null, "Foo.cs");
+        writer.CommitPendingEffects(index);
+        ToolCallContext.Set(new ToolCallContext("me", null, "Search", null, 0) { SessionId = "s1", MissingTerm = "Bar", EditEffects = index });
+
+        var input = new SentinelCallToolResult<object> { IsError = false, TotalRecords = 0 };
+        var result = readNav.AddZeroHitEvidence(SearchMode.symbol, "Bar", input);
+
+        Assert.That(result.TotalRecords, Is.EqualTo(0));
+        var notes = result.Findings.Where(f => f.Source == "EditEffect").ToList();
+        Assert.That(notes, Has.Count.EqualTo(1));
+        Assert.That(notes[0].Message, Does.Contain("Baz"));
+    }
+
+    [Test]
+    public void SearchSymbol_ZeroHit_WithNoEffect_AddsNoEditEffectFinding()
+    {
+        var file = FileIn("A.cs");
+        File.WriteAllText(file, Original);
+        using var manager = NewManager(file, Original);
+        var readNav = Battery.Basic.TestTools.WorkspaceReadNavigationImpl(manager);
+
+        // The index holds no effects, so the lookup for Bar finds nothing and no EditEffect note is added.
+        ToolCallContext.Set(new ToolCallContext("me", null, "Search", null, 0) { SessionId = "s1", MissingTerm = "Bar", EditEffects = new EditEffectIndex() });
+
+        var input = new SentinelCallToolResult<object> { IsError = false, TotalRecords = 0 };
+        var result = readNav.AddZeroHitEvidence(SearchMode.symbol, "Bar", input);
+
+        Assert.That(result.Findings, Is.Null.Or.Empty);
+    }
 }

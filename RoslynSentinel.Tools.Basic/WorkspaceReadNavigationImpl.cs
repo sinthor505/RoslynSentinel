@@ -1316,12 +1316,23 @@ public class WorkspaceReadNavigationImpl
     }
 
     // Adds the zero-hit EditAttribution note to a non-text search that matched nothing. Text mode adds its own notes inside SearchSolutionText.
+    // A symbol search first tries the recorded edit effect for its query (EditEffectEvidence); when that names a rename or move, it replaces the attribution lookup.
     public SentinelCallToolResult<object> AddZeroHitEvidence(SearchMode mode, string? query, SentinelCallToolResult<object> result)
     {
         // FindReferences leaves TotalRecords null on a zero-reference success; its ListSummary still reports TotalCount 0.
         if (result.IsError || !(result.TotalRecords == 0 || (result.TotalRecords is null && result.ListSummary is { TotalCount: 0 })) || mode == SearchMode.text || string.IsNullOrWhiteSpace(query))
         {
             return result;
+        }
+
+        if (mode == SearchMode.symbol && EditEffectEvidence.ForCurrentCall(ToolErrorCode.NotFound) is { Count: > 0 } effectNotes)
+        {
+            if (ToolCallContext.Current is { } effectContext)
+            {
+                effectContext.HasEditEffectFact = true;
+            }
+
+            return result with { Findings = [.. (result.Findings ?? []), .. effectNotes] };
         }
 
         var notes = NotFoundEvidence.ForZeroHitSearch(_workspaceManager.GetSolutionRoot(), query, isRegex: false);
