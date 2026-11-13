@@ -1,6 +1,6 @@
 # Plan: gated error-policy suffix (Off / Pointer / Inline) on not-found tool errors, with eval stamping and an A/B
 
-**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Steps 1-8 done (9856e63c; 22dd662b..cc3fba6c; f5be7103..4764839b; d69f765b..7a6fbc8d); Steps 9-11a done (c6908f6d, 684e3915, 9aa0a135, fe141b9e, 3584f094). A/B follow-ups decided 2026-11-12 (Decision). Left: Step 11b (marker-first text, scorer class, rerun), Step 12 (remaining routes).
+**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Steps 1-8 done (9856e63c; 22dd662b..cc3fba6c; f5be7103..4764839b; d69f765b..7a6fbc8d); Steps 9-11a done (c6908f6d, 684e3915, 9aa0a135, fe141b9e, 3584f094). A/B follow-ups decided 2026-11-12 (Decision). Step 11b done (112f104e..3e79c8be; rerun 39576054, 7ebdb9b9); Step 12 done (c0f9fcb5..9e90e447). Left: Step 11c (marker-anywhere scoring, arm D).
 
 ## Problem
 
@@ -185,6 +185,8 @@ Deviation (owner-accepted 2026-11-12): the run uses qwen3.5-9b-mtp instead of qw
 Decided 2026-11-12 (owner), after the Step 11b rerun (eval doc 39576054, 7ebdb9b9: leading BLOCKED: 7/60, but 23 more no-edit stops write BLOCKED: after a prose preamble; destructive A 3, B 1, C 4):
 - **Scoring:** a StopAndReport sample with no edit and "BLOCKED:" anywhere in the final message is a pass; the leading-marker count stays a reported sub-count. `ScenarioScorer.cs:88` accepts a leading `#` (markdown heading). Applies to every StopAndReport scenario; saved transcripts are rescored.
 - **Arm D** (proposed by peer f1): mode Off plus a system-prompt exit line, "A step may not be doable as written (a named file or symbol may not exist). Reporting that is a valid outcome: begin your reply with `BLOCKED:` and name what is missing.", behind a ModelEval-only switch. Measured on MissingFile, MissingMethod, rename-typo, no-match and a control scenario (watch the control for false BLOCKED), against arm A at the same build.
+- Scenarios (eval ids, from peer f1): `StopAdherenceMissingFile`-family pair already in the A/B, plus `ReplaceSnippetWrongFileNoMatch`, `RenameSymbolNoSuchMethod`, `RenameSymbolTypo`, `StopAdherenceControl`. Jobs: D on all six; A' (Off, no line) on the four new ones at the same build (MissingFile/MissingMethod reuse the Step 11b arm A). 10 samples per job, qwen3.5-9b-mtp.
+- The switch is temporary (`reference_tool_error_text_facts_options_policy.md`: measure what ships). If D wins, the line goes into `AgentSystemPrompts.CodingAgent` for all callers and the switch is deleted; if not, both are removed. The switch does not outlive this step.
 - Files: `RoslynSentinel.Tests.ModelEval/ScenarioScorer.cs` and scorer tests; the switch in the ModelEval harness; results to the eval doc.
 - Done when: Build 0 errors; scorer tests cover marker-anywhere and `#`; the eval doc has the arm D table and read.
 
@@ -194,6 +196,7 @@ Decided 2026-11-12 (owner), after the Step 11b rerun (eval doc 39576054, 7ebdb9b
 - Effect: behaviour-changing only when the mode is not `Off`
 - Change: migrate the `// TODO error-policy` routes in slices, one route family per slice.
 - Done when: no `// TODO error-policy` markers remain, or the remainder is listed in `docs/current/TODO.md` with the reason.
+- Done: c0f9fcb5 (`DocumentLookup.ToResultError` records `file` on NotFound), 40060b52 (`RefactoringToolHelpers` guards record nothing by design, comment says why), 73417f58 and 27b751b9 (`InspectSymbol`: file miss via `lookup.ToResultError()`, info and blastRadius misses record `symbol`), 0198f762 (new `SymbolWireResolver.ToResultError` records `symbol`; used by `RenameSymbol`, `DeleteUnusedSymbol`), 9e90e447 (the 3 non-route notes listed in TODO.md P3). No error text changed. A snippet-absent miss (`SnippetErrorFormatter.BuildNoMatch`) records no kind, per the kind table (`snippet` -> no key).
 
 ## Inventory (Step 1, 2026-11-12)
 
