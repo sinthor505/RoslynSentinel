@@ -14,7 +14,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 [TestFixture]
 public class ErrorPolicyInspectSymbolRouteTests
 {
-    // Line 2 is a comment: a snippet on it matches text but binds to no symbol.
+    // Line 2 is a comment that no test targets (a snippet on it resolves to the Widget class via its leading trivia).
     private const string Source = "namespace Sample;\n// marker comment\npublic class Widget\n{\n    public int Run() => 1;\n}\n";
 
     private FakeWorkspaceManager _fake;
@@ -71,7 +71,7 @@ public class ErrorPolicyInspectSymbolRouteTests
     }
 
     [Test]
-    public async Task InspectSymbol_InfoSnippetNotInFile_RecordsSymbolKind()
+    public async Task InspectSymbol_InfoSnippetNotInFile_RecordsTheThrownMissKind()
     {
         var path = Path.Combine(_dir, "Widget.cs");
         UseSolutionWithDocuments((path, Source));
@@ -80,8 +80,11 @@ public class ErrorPolicyInspectSymbolRouteTests
         var result = await _symbols.InspectSymbol(
             reason: "test error policy info snippet not in file", path, "this snippet is not in the file", InspectSymbolAspect.info);
 
+        // The throw comes from SnippetErrorFormatter.BuildNoMatch (RoslynSentinel.Common/SnippetMatching/SnippetErrorFormatter.cs), whose
+        // ToolNotFoundException calls at lines 122, 169 and 180 pass no missingTargetKind. ToolErrorMapper.ToResultError (ToolException.cs:270)
+        // records that null, and ToolCallContext.RecordMissingTarget ignores null (ToolCallContext.cs:128-129), so no kind is recorded.
         Assert.That(result.IsError, Is.True);
-        Assert.That(ctx.MissingTargetKind, Is.EqualTo("symbol"));
+        Assert.That(ctx.MissingTargetKind, Is.Null);
     }
 
     [Test]
@@ -91,8 +94,9 @@ public class ErrorPolicyInspectSymbolRouteTests
         UseSolutionWithDocuments((path, Source));
         var ctx = StartCall();
 
+        // "=> 1" matches the arrow clause of Run, whose node has no declared or referenced symbol: GetSymbolInfoAsync returns an Error hover (branch b).
         var result = await _symbols.InspectSymbol(
-            reason: "test error policy info snippet on comment", path, "// marker comment", InspectSymbolAspect.info);
+            reason: "test error policy info snippet on arrow clause", path, "=> 1", InspectSymbolAspect.info);
 
         Assert.That(result.IsError, Is.True);
         Assert.That(ctx.MissingTargetKind, Is.EqualTo("symbol"));
@@ -105,11 +109,12 @@ public class ErrorPolicyInspectSymbolRouteTests
         UseSolutionWithDocuments((path, Source));
         var ctx = StartCall();
 
+        // "int" binds to the predefined type, which has no source declaration: AnalyzeImpactAsync returns ErrorCode NotFound (branch c, metadata path).
         var result = await _symbols.InspectSymbol(
-            reason: "test error policy blast radius symbol miss", path, "// marker comment", InspectSymbolAspect.blastRadius);
+            reason: "test error policy blast radius symbol miss", path, "int", InspectSymbolAspect.blastRadius);
 
         Assert.That(result.IsError, Is.True);
-        Assert.That(ctx.MissingTargetKind, Is.Not.Null);
+        Assert.That(ctx.MissingTargetKind, Is.EqualTo("symbol"));
     }
 
     [Test]
