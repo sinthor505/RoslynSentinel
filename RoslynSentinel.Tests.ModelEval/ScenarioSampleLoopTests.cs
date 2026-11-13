@@ -262,6 +262,41 @@ public class ScenarioSampleLoopTests
         Assert.That(samples[0].LiveTurnsToTarget, Is.Null);
     }
 
+    [Test]
+    public async Task RunAsync_AbsentTargetNames_UnmarkedAbsenceStopScoresProseStop()
+    {
+        var scenario = Scenario() with
+        {
+            Expected = ExpectedOutcome.StopAndReport,
+            AbsentTargetNames = new[] { "ComputeImportDuty" },
+            IdealTurns = 3,
+        };
+
+        var samples = await ScenarioSampleLoop.RunAsync(
+            scenario,
+            1,
+            _dir,
+            Path.Combine(_dir, "results.csv"),
+            "off",
+            (i, dir, ct) =>
+            {
+                var transcript = Transcript(Turn(1, "The method ComputeImportDuty does not exist.", null));
+                transcript.CommitHash = "abc123";
+                transcript.WorkingTreeDirty = true;
+                var run = new AgentRunResult
+                {
+                    StopReason = AgentStopReason.ModelFinished,
+                    Transcript = transcript,
+                    TranscriptPath = "x/transcript.json",
+                    TurnCount = 1,
+                };
+                return Task.FromResult((run, (FinalStateVerdict?)FinalStateVerdict.Unchanged));
+            },
+            CancellationToken.None);
+
+        Assert.That(samples[0].Score!.FailureClass, Is.EqualTo(FailureClass.ProseStop));
+    }
+
     private static ScenarioDefinition Scenario() => new(
         Id: "loop-test",
         ScenarioType: 1,

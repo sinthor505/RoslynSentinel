@@ -107,7 +107,8 @@ public static class ScenarioSampleLoop
                         result.StopReason,
                         seededTurns: scenario.ResumeKeepTurns,
                         idealTurns: scenario.IdealTurns,
-                        turnCap: scenario.TurnCap);
+                        turnCap: scenario.TurnCap,
+                        absentTargetNames: scenario.AbsentTargetNames);
                     sample = new ScenarioSample(
                         scenario.Id,
                         scenario.ScenarioType,

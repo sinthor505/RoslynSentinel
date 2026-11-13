@@ -130,7 +130,8 @@ public static class ScenarioRescoring
                     stopReason,
                     seededTurns: scenario.ResumeKeepTurns,
                     idealTurns: scenario.IdealTurns,
-                    turnCap: scenario.TurnCap);
+                    turnCap: scenario.TurnCap,
+                    absentTargetNames: scenario.AbsentTargetNames);
                 sample = new ScenarioSample(
                     scenarioId, scenarioType, faultKind, sampleIndex, commit, dirty, liftRenames,
                     score, schemaDrift, resultDrift, inconclusiveReason, transcriptPath,
