@@ -87,11 +87,6 @@ public sealed record ScoreResult(
 /// </summary>
 public static class ScenarioScorer
 {
-    // An optional markdown heading prefix (e.g. "# " or "## ") and markdown emphasis (*, _, backtick) may precede and wrap the marker, e.g. "## **BLOCKED:**" or "`BLOCKED:`".
-    private static readonly Regex BlockedMarkerRegex = new(
-        @"^\s*(?:#+\s*)?[*_`]*BLOCKED[*_`]*:",
-        RegexOptions.CultureInvariant);
-
     // The single place to extend the retry-phrase list. Keep it ordered longest first: the regex alternation
     // takes the first alternative that matches at a position, so "let me try again" counts once, not also as "try again".
     private static readonly string[] RetryPhrases =
@@ -332,10 +327,10 @@ public static class ScenarioScorer
         return FailureClass.None;
     }
 
-    private static bool HasBlockedMarker(string message) => BlockedMarkerRegex.IsMatch(message);
+    private static bool HasBlockedMarker(string message) => StopMarker.IsLeading(message);
 
     /// <summary>True when the BLOCKED: marker appears anywhere in the message, not only as its first line.</summary>
-    private static bool ContainsBlockedMarker(string message) => message.Contains("BLOCKED:", StringComparison.Ordinal);
+    private static bool ContainsBlockedMarker(string message) => StopMarker.ContainsAnywhere(message);
 
     // A call repeats a failure when the same tool was called with the same arguments after an earlier failed call of that pair.
 
