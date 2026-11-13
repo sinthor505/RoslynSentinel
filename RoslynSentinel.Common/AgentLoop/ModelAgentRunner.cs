@@ -220,7 +220,16 @@ public sealed class ModelAgentRunner
             transcriptDirectory, toolDefinitions.Count, string.Join(", ", knownToolNames), userPrompt);
         _logger.LogInformation("RunId: {RunId}", runId);
 
-        var transcript = new AgentTranscript { RunId = runId, SystemPrompt = systemPrompt, UserPrompt = userPrompt };
+        // TODO no runner-level test pins the ModelKey/Temperature/TopP header fields yet (ContextExhaustedRunnerTests is the place)
+        var transcript = new AgentTranscript
+        {
+            RunId = runId,
+            SystemPrompt = systemPrompt,
+            UserPrompt = userPrompt,
+            ModelKey = _llm.Model,
+            Temperature = LlmOptions.Temperature,
+            TopP = LlmOptions.TopP,
+        };
         if (ProcessStamp is { } stamp)
         {
             transcript.CommitHash = stamp.CommitHash;

@@ -97,6 +97,10 @@ public static class ScenarioRescoring
             // Absent in rows written before the run stamp carried the error policy: read as empty and re-written as empty.
             var errorPolicyMode = Field(columns, fields, "errorPolicyMode");
             var errorPolicyHash = Field(columns, fields, "errorPolicyHash");
+            // Same for the sampling columns: absent in older rows, read as empty/null; a transcript header fills the gap below.
+            var modelKey = Field(columns, fields, "modelKey");
+            var temperature = ParseOptionalDouble(Field(columns, fields, "temperature"));
+            var topP = ParseOptionalDouble(Field(columns, fields, "topP"));
 
             var sampleFolder = Path.Combine(runFolder, "sample-" + sampleIndex.ToString("D2", CultureInfo.InvariantCulture));
             var transcriptPath = Path.Combine(sampleFolder, "transcript.json");
@@ -107,7 +111,8 @@ public static class ScenarioRescoring
                 sample = new ScenarioSample(
                     scenarioId, scenarioType, faultKind, sampleIndex, commit, dirty, liftRenames,
                     null, schemaDrift, resultDrift, inconclusiveReason, transcriptPath,
-                    ErrorPolicyMode: errorPolicyMode, ErrorPolicyHash: errorPolicyHash);
+                    ErrorPolicyMode: errorPolicyMode, ErrorPolicyHash: errorPolicyHash,
+                    ModelKey: modelKey, Temperature: temperature, TopP: topP);
             }
             else
             {
@@ -137,7 +142,10 @@ public static class ScenarioRescoring
                     score, schemaDrift, resultDrift, inconclusiveReason, transcriptPath,
                     LiveTurnsToTarget: scenario.LiveTurnsFor(score.TurnCount),
                     ErrorPolicyMode: errorPolicyMode.Length > 0 ? errorPolicyMode : transcript.ErrorPolicyMode ?? string.Empty,
-                    ErrorPolicyHash: errorPolicyHash.Length > 0 ? errorPolicyHash : transcript.ErrorPolicyHash ?? string.Empty);
+                    ErrorPolicyHash: errorPolicyHash.Length > 0 ? errorPolicyHash : transcript.ErrorPolicyHash ?? string.Empty,
+                    ModelKey: modelKey.Length > 0 ? modelKey : transcript.ModelKey ?? string.Empty,
+                    Temperature: temperature ?? transcript.Temperature,
+                    TopP: topP ?? transcript.TopP);
             }
 
             ScenarioSampleCsv.Append(outputCsvPath, sample);
@@ -149,6 +157,9 @@ public static class ScenarioRescoring
 
     private static string Field(IReadOnlyDictionary<string, int> columns, List<string> fields, string name) =>
         columns.TryGetValue(name, out var index) && index < fields.Count ? fields[index] : string.Empty;
+
+    private static double? ParseOptionalDouble(string value) =>
+        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
 
     private static AgentStopReason? ParseStopReason(string value) =>
         Enum.TryParse<AgentStopReason>(value, out var parsed) && Enum.IsDefined(parsed) ? parsed : null;

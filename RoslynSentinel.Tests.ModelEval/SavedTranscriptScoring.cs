@@ -67,7 +67,10 @@ public static class SavedTranscriptScoring
             InconclusiveReason: "",
             TranscriptPath: path,
             ErrorPolicyMode: transcript.ErrorPolicyMode ?? "",
-            ErrorPolicyHash: transcript.ErrorPolicyHash ?? "");
+            ErrorPolicyHash: transcript.ErrorPolicyHash ?? "",
+            ModelKey: transcript.ModelKey ?? "",
+            Temperature: transcript.Temperature,
+            TopP: transcript.TopP);
 
         ScenarioSampleCsv.Append(csvPath, sample);
         return sample;

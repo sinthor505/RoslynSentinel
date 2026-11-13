@@ -23,6 +23,9 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <param name="LiveTurnsToTarget">Live turns the model took (see ScenarioDefinition.LiveTurnsFor); null for an inconclusive sample or an old CSV row without the column.</param>
 /// <param name="ErrorPolicyMode">Error policy mode stamped on the run (off, pointer or inline); "" when unstamped or for an old CSV row without the column.</param>
 /// <param name="ErrorPolicyHash">Content hash of the error policy file stamped on the run; "" when there was no policy file, the run was unstamped, or for an old CSV row without the column.</param>
+/// <param name="ModelKey">LM Studio model key from the transcript header; "" when the transcript has none (it predates the field), the sample is inconclusive, or for an old CSV row without the column.</param>
+/// <param name="Temperature">Sampling temperature from the transcript header; null means the server default (or an unknown value: old transcript, inconclusive sample, old CSV row).</param>
+/// <param name="TopP">Top-p from the transcript header; null means the server default (or an unknown value, as for Temperature).</param>
 public sealed record ScenarioSample(
     string ScenarioId,
     int ScenarioType,
@@ -38,7 +41,10 @@ public sealed record ScenarioSample(
     string TranscriptPath,
     int? LiveTurnsToTarget = null,
     string ErrorPolicyMode = "",
-    string ErrorPolicyHash = "")
+    string ErrorPolicyHash = "",
+    string ModelKey = "",
+    double? Temperature = null,
+    double? TopP = null)
 {
     /// <summary>True when the sample did not run; see InconclusiveReason.</summary>
     public bool IsInconclusive => InconclusiveReason.Length > 0;
@@ -49,13 +55,16 @@ public static class ScenarioSampleCsv
 {
     /// <summary>Column names, in the order ToCsvLine writes them.</summary>
     public const string Header =
-        "scenarioId,scenarioType,faultKind,sampleIndex,commit,dirty,liftRenames,firstCallSucceeded,firstErrorCode,firstErrorClass,recovered,callsToRecover,recoveryUsedExpectedTool,markerPresent,turnCount,stopReason,failureClass,passed,finalStateVerdict,turnCapHit,callsAfterFirstError,turnsAfterFirstError,outputCharsAfterFirstError,maxIdenticalCallRepeat,identicalReasoningBlocks,retryPhraseCount,schemaDrift,resultDrift,inconclusiveReason,transcriptPath,liveTurnsToTarget,errorPolicyMode,errorPolicyHash";
+        "scenarioId,scenarioType,faultKind,sampleIndex,commit,dirty,liftRenames,firstCallSucceeded,firstErrorCode,firstErrorClass,recovered,callsToRecover,recoveryUsedExpectedTool,markerPresent,turnCount,stopReason,failureClass,passed,finalStateVerdict,turnCapHit,callsAfterFirstError,turnsAfterFirstError,outputCharsAfterFirstError,maxIdenticalCallRepeat,identicalReasoningBlocks,retryPhraseCount,schemaDrift,resultDrift,inconclusiveReason,transcriptPath,liveTurnsToTarget,errorPolicyMode,errorPolicyHash,modelKey,temperature,topP";
 
     /// <summary>Column count of rows written before liveTurnsToTarget existed; Parse still accepts them.</summary>
     public const int LegacyColumnCount = 30;
 
     /// <summary>Column count of rows written after liveTurnsToTarget but before errorPolicyMode and errorPolicyHash existed; Parse still accepts them.</summary>
     public const int PreErrorPolicyColumnCount = 31;
+
+    /// <summary>Column count of rows written after errorPolicyMode and errorPolicyHash but before modelKey, temperature and topP existed; Parse still accepts them.</summary>
+    public const int PreSamplingColumnCount = 33;
 
     /// <summary>One CSV line (no line terminator). Score columns are all empty when Score is null.</summary>
     public static string ToCsvLine(ScenarioSample sample)
@@ -95,21 +104,25 @@ public static class ScenarioSampleCsv
             Csv(sample.TranscriptPath),
             NullableInt(sample.LiveTurnsToTarget),
             Csv(sample.ErrorPolicyMode),
-            Csv(sample.ErrorPolicyHash));
+            Csv(sample.ErrorPolicyHash),
+            Csv(sample.ModelKey),
+            NullableDouble(sample.Temperature),
+            NullableDouble(sample.TopP));
     }
 
     /// <summary>
-    /// Parses one CSV line written by ToCsvLine. Accepts Header's column count, PreErrorPolicyColumnCount (no error policy
-    /// columns; ErrorPolicyMode and ErrorPolicyHash are empty for those) or LegacyColumnCount (also no liveTurnsToTarget;
-    /// LiveTurnsToTarget is null for those). Throws FormatException for any other count.
+    /// Parses one CSV line written by ToCsvLine. Accepts Header's column count, PreSamplingColumnCount (no modelKey,
+    /// temperature or topP columns; ModelKey is empty and Temperature and TopP are null for those), PreErrorPolicyColumnCount
+    /// (also no error policy columns; ErrorPolicyMode and ErrorPolicyHash are empty for those) or LegacyColumnCount (also no
+    /// liveTurnsToTarget; LiveTurnsToTarget is null for those). Throws FormatException for any other count.
     /// </summary>
     public static ScenarioSample Parse(string csvLine)
     {
         var f = SplitFields(csvLine);
         var expected = Header.Split(',').Length;
-        if (f.Count != expected && f.Count != PreErrorPolicyColumnCount && f.Count != LegacyColumnCount)
+        if (f.Count != expected && f.Count != PreSamplingColumnCount && f.Count != PreErrorPolicyColumnCount && f.Count != LegacyColumnCount)
         {
-            throw new FormatException($"Expected {LegacyColumnCount}, {PreErrorPolicyColumnCount} or {expected} CSV columns, found {f.Count}.");
+            throw new FormatException($"Expected {LegacyColumnCount}, {PreErrorPolicyColumnCount}, {PreSamplingColumnCount} or {expected} CSV columns, found {f.Count}.");
         }
 
         ScoreResult? score = f[14].Length == 0 ? null : new ScoreResult(
@@ -147,8 +160,11 @@ public static class ScenarioSampleCsv
             f[28],
             f[29],
             f.Count >= PreErrorPolicyColumnCount ? ParseNullableInt(f[30]) : null,
-            f.Count == expected ? f[31] : string.Empty,
-            f.Count == expected ? f[32] : string.Empty);
+            f.Count >= PreSamplingColumnCount ? f[31] : string.Empty,
+            f.Count >= PreSamplingColumnCount ? f[32] : string.Empty,
+            f.Count == expected ? f[33] : string.Empty,
+            f.Count == expected ? ParseNullableDouble(f[34]) : null,
+            f.Count == expected ? ParseNullableDouble(f[35]) : null);
     }
 
     /// <summary>Appends one row, writing Header first when the file is missing or empty. Not thread-safe: one writer per run.</summary>
@@ -182,6 +198,10 @@ public static class ScenarioSampleCsv
 
     private static string NullableInt(int? value) => value is int i ? Int(i) : string.Empty;
 
+    // Round-trip ("R") format so a sampling value such as 0.1 reads back as the same double.
+    private static string NullableDouble(double? value) =>
+        value is double d ? d.ToString("R", CultureInfo.InvariantCulture) : string.Empty;
+
     private static string EnumName<T>(T? value) where T : struct, Enum =>
         value.HasValue ? value.Value.ToString() : string.Empty;
 
@@ -208,6 +228,9 @@ public static class ScenarioSampleCsv
     private static int ParseInt(string value) => int.Parse(value, NumberStyles.Integer, CultureInfo.InvariantCulture);
 
     private static int? ParseNullableInt(string value) => value.Length == 0 ? null : ParseInt(value);
+
+    private static double? ParseNullableDouble(string value) =>
+        value.Length == 0 ? null : double.Parse(value, NumberStyles.Float, CultureInfo.InvariantCulture);
 
     private static T ParseEnum<T>(string value) where T : struct, Enum =>
         Enum.TryParse(value, out T parsed) && Enum.IsDefined(parsed)

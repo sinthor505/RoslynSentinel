@@ -25,6 +25,10 @@ public sealed class LmStudioAgentClient
     private readonly HttpClient _httpClient;
     private readonly ILogger<LmStudioAgentClient> _logger;
     private readonly string _model;
+
+    /// <summary>The LM Studio model key this client targets (the per-instance value passed to the constructor).</summary>
+    public string Model => _model;
+
     private readonly Task _loadedModelStatusCheck;
     private readonly SemaphoreSlim _contextLengthLock = new(1, 1);
     private int _cachedContextLength;

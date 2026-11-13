@@ -79,6 +79,36 @@ public sealed class AgentTranscript
     }
 
     /// <summary>
+    /// LM Studio model key the run used, stamped from the client by <see cref="ModelAgentRunner.RunAsync"/>.
+    /// Null means the transcript predates this field, so the property is omitted from the JSON.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ModelKey
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Sampling temperature sent for the run (<see cref="LlmOptions.Temperature"/>). Null means the server default was
+    /// used (nothing was sent) or the transcript predates this field; either way it is omitted from the JSON.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? Temperature
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Nucleus sampling top-p sent for the run (<see cref="LlmOptions.TopP"/>). Null means the server default was
+    /// used (nothing was sent) or the transcript predates this field; either way it is omitted from the JSON.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? TopP
+    {
+        get; set;
+    }
+
+    /// <summary>
     /// Tool name to description, for the same tools as <see cref="Tools"/>. Null, and so omitted from the JSON, for transcripts written before this was recorded.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

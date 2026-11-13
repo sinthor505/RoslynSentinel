@@ -80,6 +80,7 @@ public static class ScenarioSampleLoop
                     // partial transcript when there is no result path) and the drift counts beside the CSV line.
                     var stamp = ModelAgentRunner.ProcessStamp;
                     var partialTranscript = Path.Combine(sampleDirectory, "transcript.json");
+                    // TODO sampling columns empty on inconclusive rows (no transcript object; a partial transcript.json may exist on disk)
                     sample = new ScenarioSample(
                         scenario.Id,
                         scenario.ScenarioType,
@@ -94,7 +95,10 @@ public static class ScenarioSampleLoop
                         reason,
                         result is not null ? result.TranscriptPath : (File.Exists(partialTranscript) ? partialTranscript : string.Empty),
                         ErrorPolicyMode: result is null ? (stamp?.ErrorPolicyMode ?? string.Empty) : (result.Transcript.ErrorPolicyMode ?? string.Empty),
-                        ErrorPolicyHash: result is null ? (stamp?.ErrorPolicyHash ?? string.Empty) : (result.Transcript.ErrorPolicyHash ?? string.Empty));
+                        ErrorPolicyHash: result is null ? (stamp?.ErrorPolicyHash ?? string.Empty) : (result.Transcript.ErrorPolicyHash ?? string.Empty),
+                        ModelKey: result?.Transcript.ModelKey ?? string.Empty,
+                        Temperature: result?.Transcript.Temperature,
+                        TopP: result?.Transcript.TopP);
                 }
                 else
                 {
@@ -124,7 +128,10 @@ public static class ScenarioSampleLoop
                         result.TranscriptPath,
                         LiveTurnsToTarget: scenario.LiveTurnsFor(score.TurnCount),
                         ErrorPolicyMode: result.Transcript.ErrorPolicyMode ?? string.Empty,
-                        ErrorPolicyHash: result.Transcript.ErrorPolicyHash ?? string.Empty);
+                        ErrorPolicyHash: result.Transcript.ErrorPolicyHash ?? string.Empty,
+                        ModelKey: result.Transcript.ModelKey ?? string.Empty,
+                        Temperature: result.Transcript.Temperature,
+                        TopP: result.Transcript.TopP);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -133,6 +140,7 @@ public static class ScenarioSampleLoop
                 // before failing; keep both beside the CSV line.
                 var stamp = ModelAgentRunner.ProcessStamp;
                 var partialTranscript = Path.Combine(sampleDirectory, "transcript.json");
+                // TODO sampling columns empty on inconclusive rows (no transcript object; a partial transcript.json may exist on disk)
                 sample = new ScenarioSample(
                     scenario.Id,
                     scenario.ScenarioType,
