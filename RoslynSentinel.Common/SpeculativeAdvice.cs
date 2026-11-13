@@ -20,7 +20,6 @@ public static class SpeculativeAdvice
     /// </summary>
     public static string Resolve(string hedge)
     {
-        // TODO slice A: match FileDeleted/file-move effects by TargetFilePath
         // TODO Resolve keys on ToolCallContext.MissingTerm only, so a builder whose hedge is about a different name (an insert anchor, a member list) could get a fact about the call's term.
         try
         {
@@ -40,6 +39,35 @@ public static class SpeculativeAdvice
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Speculative advice lookup failed: {ex}");
+            return hedge;
+        }
+    }
+
+    /// <summary>
+    /// Like <see cref="Resolve"/>, for a hedge about a missing FILE: the fact sentence is a recorded file delete or move of the current call's
+    /// <see cref="ToolCallContext.TargetFilePath"/> (<see cref="EditEffectEvidence.FileFactForCurrentCall"/>); otherwise
+    /// <paramref name="hedge"/> unchanged. Sets <see cref="ToolCallContext.HasEditEffectFact"/> when the fact is returned. Never throws.
+    /// </summary>
+    public static string ResolveForFile(string hedge)
+    {
+        try
+        {
+            var fact = EditEffectEvidence.FileFactForCurrentCall();
+            if (fact is null)
+            {
+                return hedge;
+            }
+
+            if (ToolCallContext.Current is { } context)
+            {
+                context.HasEditEffectFact = true;
+            }
+
+            return fact;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Speculative advice file lookup failed: {ex}");
             return hedge;
         }
     }

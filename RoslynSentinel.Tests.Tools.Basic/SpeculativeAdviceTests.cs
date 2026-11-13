@@ -205,4 +205,91 @@ public class SpeculativeAdviceTests
         Assert.That(notes[0].Source, Is.EqualTo("EditEffect"));
         Assert.That(ToolCallContext.Current!.HasEditEffectFact, Is.True);
     }
+
+    // Records a DeleteFile of Common/Foo.cs by writer session writerSession and attaches a lookup context whose target path is targetPath (no MissingTerm).
+    private static void AttachFileLookup(string targetPath, string? lookupSession, string? writerSession, bool withIndex = true)
+    {
+        var index = new EditEffectIndex();
+        var writer = new ToolCallContext("agent-1", null, "DeleteFile", "delete", 0) { SessionId = writerSession };
+        writer.AssignToolCallId("d41f7a02");
+        writer.RecordEffect(EditEffectKind.FileDeleted, "RoslynSentinel.Common/Foo.cs", null, "Foo", null, null, "RoslynSentinel.Common/Foo.cs");
+        writer.CommitPendingEffects(index);
+        ToolCallContext.Set(new ToolCallContext("agent-1", null, "GetMethodSource", "look", 0)
+        {
+            SessionId = lookupSession,
+            TargetFilePath = targetPath,
+            EditEffects = withIndex ? index : null,
+        });
+    }
+
+    [Test]
+    public void ResolveForFile_WithARecordedFileDelete_ReturnsTheFactAndSetsTheFlag()
+    {
+        AttachFileLookup(@"C:\repo\RoslynSentinel.Common\Foo.cs", "s1", "s1");
+
+        var text = SpeculativeAdvice.ResolveForFile(Hedge);
+
+        Assert.That(text, Does.StartWith("Call `d41f7a02` (`DeleteFile`, this agent, "));
+        Assert.That(text, Does.EndWith(" ago) deleted `RoslynSentinel.Common/Foo.cs`."));
+        Assert.That(text, Does.Not.Contain(Hedge));
+        Assert.That(ToolCallContext.Current!.HasEditEffectFact, Is.True);
+    }
+
+    [Test]
+    public void ResolveForFile_WithoutAMatchingFileEffect_ReturnsTheHedgeUnchangedAndLeavesTheFlagFalse()
+    {
+        ToolCallContext.Set(null);
+        Assert.That(SpeculativeAdvice.ResolveForFile(Hedge), Is.EqualTo(Hedge));
+
+        AttachFileLookup(@"C:\repo\RoslynSentinel.Common\Bar.cs", "s1", "s1");
+        Assert.That(SpeculativeAdvice.ResolveForFile(Hedge), Is.EqualTo(Hedge));
+        Assert.That(ToolCallContext.Current!.HasEditEffectFact, Is.False);
+
+        AttachFileLookup(@"C:\repo\RoslynSentinel.Common\Foo.cs", "s2", "s1");
+        Assert.That(SpeculativeAdvice.ResolveForFile(Hedge), Is.EqualTo(Hedge));
+
+        AttachFileLookup(@"C:\repo\RoslynSentinel.Common\Foo.cs", "s1", "s1", withIndex: false);
+        Assert.That(SpeculativeAdvice.ResolveForFile(Hedge), Is.EqualTo(Hedge));
+    }
+
+    [Test]
+    public void FileNotFoundMessage_WithoutCandidates_AfterADeleteOfTheFile_ReplacesTheRenamedOrMovedHedgeWithTheFact()
+    {
+        const string target = @"C:\repo\RoslynSentinel.Common\Foo.cs";
+        AttachFileLookup(target, "s1", "s1");
+        IReadOnlyList<FileCandidate> noCandidates = [];
+
+        var text = FileNotFoundMessage.Build(target, noCandidates, 3, name => name != "ListSolutionItems");
+
+        Assert.That(text, Does.Contain("No file in the solution has a similar name. Call `d41f7a02` (`DeleteFile`, this agent, "));
+        Assert.That(text, Does.EndWith(" ago) deleted `RoslynSentinel.Common/Foo.cs`."));
+        Assert.That(text, Does.Not.Contain("may since have been renamed or moved"));
+        Assert.That(ToolCallContext.Current!.HasEditEffectFact, Is.True);
+    }
+
+    [Test]
+    public void FileNotFoundMessage_WithCandidates_AfterADeleteOfTheFile_ReplacesTheDoesNotExistHedgeWithTheFact()
+    {
+        const string target = @"C:\repo\RoslynSentinel.Common\Foo.cs";
+        AttachFileLookup(target, "s1", "s1");
+        IReadOnlyList<FileCandidate> candidates = [new FileCandidate("OtherFoo.cs", 1, false)];
+
+        var text = FileNotFoundMessage.Build(target, candidates, 2);
+
+        Assert.That(text, Does.Contain("\nRetry with the exact path of the file you meant. Call `d41f7a02` (`DeleteFile`, this agent, "));
+        Assert.That(text, Does.Not.Contain("it does not exist in this solution"));
+    }
+
+    [Test]
+    public void NotFoundEvidence_ForCurrentCall_ForAFileNotFoundAfterADelete_AttachesTheFileFactWithoutAMissingTerm()
+    {
+        AttachFileLookup(@"RoslynSentinel.Common\Foo.cs", "s1", "s1");
+
+        var notes = NotFoundEvidence.ForCurrentCall("FileNotFound");
+
+        Assert.That(notes, Has.Count.EqualTo(1));
+        Assert.That(notes[0].Source, Is.EqualTo("EditEffect"));
+        Assert.That(notes[0].Message, Does.StartWith("`RoslynSentinel.Common\\Foo.cs` was not found. Call `d41f7a02` (`DeleteFile`, this agent, "));
+        Assert.That(ToolCallContext.Current!.HasEditEffectFact, Is.True);
+    }
 }

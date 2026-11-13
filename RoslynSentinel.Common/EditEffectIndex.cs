@@ -125,6 +125,30 @@ public class EditEffectIndex
         }
     }
 
+    /// <summary>Like <see cref="Find"/> but ignoring case: for a file name without extension, where the file system may not distinguish case.</summary>
+    public IReadOnlyList<EditEffect> FindIgnoreCase(string simpleName)
+    {
+        if (string.IsNullOrEmpty(simpleName))
+        {
+            return [];
+        }
+
+        lock (_gate)
+        {
+            var found = new List<EditEffect>();
+            for (var i = _effects.Count - 1; i >= 0; i--)
+            {
+                var effect = _effects[i];
+                if (!effect.Reverted && string.Equals(effect.SimpleName, simpleName, StringComparison.OrdinalIgnoreCase))
+                {
+                    found.Add(effect);
+                }
+            }
+
+            return found;
+        }
+    }
+
     /// <summary>Non-reverted <see cref="EditEffectKind.Renamed"/> effects whose <see cref="EditEffect.NewName"/> equals <paramref name="newName"/> (case-sensitive), newest first. A rename to a name makes that name declared again, so a note for the name's earlier removal or rename is stale.</summary>
     public IReadOnlyList<EditEffect> FindByNewName(string newName)
     {
@@ -140,6 +164,33 @@ public class EditEffectIndex
             {
                 var effect = _effects[i];
                 if (!effect.Reverted && effect.Kind == EditEffectKind.Renamed && string.Equals(effect.NewName, newName, StringComparison.Ordinal))
+                {
+                    found.Add(effect);
+                }
+            }
+
+            return found;
+        }
+    }
+
+    /// <summary>Non-reverted <see cref="EditEffectKind.FileMoved"/> effects whose <see cref="EditEffect.NewFilePath"/> has the file name (without extension) <paramref name="fileStem"/> (case-insensitive), newest first. A file moved to a path makes that path exist again, so a note for the path's earlier deletion or move is stale.</summary>
+    public IReadOnlyList<EditEffect> FindFileMovesByNewFileStem(string fileStem)
+    {
+        if (string.IsNullOrEmpty(fileStem))
+        {
+            return [];
+        }
+
+        lock (_gate)
+        {
+            var found = new List<EditEffect>();
+            for (var i = _effects.Count - 1; i >= 0; i--)
+            {
+                var effect = _effects[i];
+                if (!effect.Reverted
+                    && effect.Kind == EditEffectKind.FileMoved
+                    && !string.IsNullOrEmpty(effect.NewFilePath)
+                    && string.Equals(Path.GetFileNameWithoutExtension(effect.NewFilePath.Replace('\\', '/')), fileStem, StringComparison.OrdinalIgnoreCase))
                 {
                     found.Add(effect);
                 }

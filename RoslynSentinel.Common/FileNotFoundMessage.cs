@@ -105,7 +105,7 @@ public static class FileNotFoundMessage
                 }
             }
 
-            return text + "\nRetry with the exact path of the file you meant. " + SpeculativeAdvice.Resolve("If none of these is the file you meant, it does not exist in this solution.");
+            return text + "\nRetry with the exact path of the file you meant. " + SpeculativeAdvice.ResolveForFile("If none of these is the file you meant, it does not exist in this solution.");
         }
 
         var notFound = intro + "No file in the solution has a similar name. ";
@@ -119,10 +119,11 @@ public static class FileNotFoundMessage
     private static string NoMatchFactsAndOptions(string requestedPath, Func<string, bool>? isCallable)
     {
         // CreateFile is deliberately not offered here: in ReplaceSnippetWrongFileNoMatch 5 of 9 failing samples created the missing file right after the option.
-        var text = SpeculativeAdvice.Resolve("A file read earlier under this name may since have been renamed or moved.");
+        var text = SpeculativeAdvice.ResolveForFile("A file read earlier under this name may since have been renamed or moved.");
         if (Callable(isCallable, "ListSolutionItems"))
         {
-            // TODO route "A file not in that list does not exist in this solution." through SpeculativeAdvice.Resolve once slice A lands file effects
+            // "A file not in that list does not exist in this solution." is deliberately not routed through SpeculativeAdvice: it states what the list means (it
+            // stays true after a delete or move), not a hedge about the target file, and a fact here would repeat the one already substituted above.
             text += $" {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} lists every file in the solution. A file not in that list does not exist in this solution.";
         }
 

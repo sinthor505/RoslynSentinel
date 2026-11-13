@@ -22,6 +22,7 @@ public static class AgentIdentityCapture
     public const string SessionIdKey = "_sessionId";
 
     // Tools whose not-found error can carry an evidence note (NotFoundEvidence): the argument naming what the call looks for in filePath. An unlisted tool gets no note.
+    // TODO a file miss with no mapped term (GetFileOutline, ReadFile without memberName) gets no TargetFilePath/EditEffects, so the FileDeleted/FileMoved fact (EditEffectEvidence.FileFactForCurrentCall) never reaches it; capture TargetFilePath and the index for file tools whenever filePath is present
     private static readonly Dictionary<string, string> MissingTermArgument = new(StringComparer.Ordinal)
     {
         ["GetMethodSource"] = "methodName",

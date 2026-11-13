@@ -50,6 +50,72 @@ public class EditEffectEvidenceTests
         return EditEffectEvidence.Find(index, term, session, instance, agent, solution, Root, Now);
     }
 
+    // A whole-file effect: SymbolDisplay is the (old) path, SimpleName its file name without extension, newFile the new path of a move.
+    private static EditEffect FileEffect(
+        EditEffectKind kind,
+        string path,
+        string? newFile = null,
+        string callId = "d41f7a02",
+        string tool = "DeleteFile",
+        string? session = "s1",
+        int secondsAgo = 180)
+    {
+        return new EditEffect(kind, path, null, Path.GetFileNameWithoutExtension(path.Replace('\\', '/')), null, null, newFile, callId, tool, null, session, "inst-1", "agent-1", Now.AddSeconds(-secondsAgo));
+    }
+
+    private static string? FileNote(EditEffectIndex index, string path, string? session = "s1")
+    {
+        return EditEffectEvidence.FindFileFactSentence(index, path, session, "inst-1", "agent-1", Now);
+    }
+
+    [TestCase(@"C:\repo\Common\Foo.cs")]
+    [TestCase("Common/Foo.cs")]
+    [TestCase("c:/REPO/common/foo.CS")]
+    [TestCase("Foo.cs")]
+    public void FileDeleted_MatchesTheTargetPathAbsoluteOrRelative(string target)
+    {
+        var index = IndexOf(FileEffect(EditEffectKind.FileDeleted, "Common/Foo.cs", newFile: "Common/Foo.cs"));
+
+        var note = FileNote(index, target);
+
+        Assert.That(note, Is.EqualTo("Call `d41f7a02` (`DeleteFile`, this agent, 3m ago) deleted `Common/Foo.cs`."));
+        Assert.That(note, Does.Not.Contain("stop").And.Not.Contain("must").And.Not.Contain("do not").And.Not.Contain("because"));
+    }
+
+    [Test]
+    public void FileDeleted_ByAnotherSession_OrForAnotherFile_OrWithNoEffects_HasNoNote()
+    {
+        var index = IndexOf(FileEffect(EditEffectKind.FileDeleted, "Common/Foo.cs", session: "s1"));
+
+        Assert.That(FileNote(index, "Common/Foo.cs", session: "s2"), Is.Null);
+        Assert.That(FileNote(index, "Other/Foo.cs"), Is.Null);
+        Assert.That(FileNote(index, "Common/Bar.cs"), Is.Null);
+        Assert.That(FileNote(new EditEffectIndex(), "Common/Foo.cs"), Is.Null);
+        Assert.That(FileNote(index, ""), Is.Null);
+    }
+
+    [Test]
+    public void FileMoved_NoteNamesTheOldAndTheNewPath_ForTheOldPathOnly()
+    {
+        var index = IndexOf(FileEffect(EditEffectKind.FileMoved, "Common/Foo.cs", newFile: "Common/Bar.cs", callId: "b7c3e5a1", tool: "RenameSymbol"));
+
+        Assert.That(FileNote(index, @"C:\repo\Common\Foo.cs"), Is.EqualTo("Call `b7c3e5a1` (`RenameSymbol`, this agent, 3m ago) moved file `Common/Foo.cs` to `Common/Bar.cs`."));
+        // The new path exists, so a miss for it is not explained by the move.
+        Assert.That(FileNote(index, "Common/Bar.cs"), Is.Null);
+    }
+
+    [Test]
+    public void FileNote_WhenAFileWasMovedBackToThePath_HasNoNote_UntilItIsDeletedAgain()
+    {
+        var moved = FileEffect(EditEffectKind.FileMoved, "Common/Foo.cs", newFile: "Common/Bar.cs", callId: "c1", tool: "RenameSymbol", secondsAgo: 300);
+        var movedBack = FileEffect(EditEffectKind.FileMoved, "Common/Bar.cs", newFile: "Common/Foo.cs", callId: "c2", tool: "RenameSymbol", secondsAgo: 200);
+
+        Assert.That(FileNote(IndexOf(moved, movedBack), "Common/Foo.cs"), Is.Null);
+
+        var deletedAgain = FileEffect(EditEffectKind.FileDeleted, "Common/Foo.cs", newFile: "Common/Foo.cs", callId: "c3", secondsAgo: 60);
+        Assert.That(FileNote(IndexOf(moved, movedBack, deletedAgain), "Common/Foo.cs"), Is.EqualTo("Call `c3` (`DeleteFile`, this agent, 1m ago) deleted `Common/Foo.cs`."));
+    }
+
     private static Solution SolutionWith(string source)
     {
         var workspace = new AdhocWorkspace();

@@ -26,18 +26,34 @@ public static class EditEffectEvidence
 
     /// <summary>
     /// The note for the current tool call, read from <see cref="ToolCallContext.Current"/>. Empty unless the error code is a not-found code
-    /// and the call carries a mapped term and the effect index. Identity is the context's session id, falling back to the server instance.
+    /// and the call carries the effect index plus a mapped term or (for FileNotFound) a target file path. For FileNotFound a recorded
+    /// file delete or move for the target path (<see cref="FileFactForCurrentCall"/>) is tried first, then the term fact.
+    /// Identity is the context's session id, falling back to the server instance.
     /// </summary>
     public static IReadOnlyList<Finding> ForCurrentCall(string? errorCode)
     {
         var context = ToolCallContext.Current;
-        if (context is not { MissingTerm: { } term, EditEffects: { } index }
+        if (context is not { EditEffects: { } index }
             || errorCode is not (ToolErrorCode.NotFound or "MethodNotFound" or "FileNotFound"))
         {
             return [];
         }
 
-        var note = Find(index, term, context.SessionId, ServerInstanceIdentity.Id, context.AgentId, ReadSolution(context), context.SolutionRoot, DateTime.UtcNow);
+        string? note = null;
+        if (errorCode == "FileNotFound" && context.TargetFilePath is { } filePath)
+        {
+            var fileFact = FileFactForCurrentCall();
+            if (fileFact is not null)
+            {
+                note = $"`{filePath}` was not found. {fileFact}";
+            }
+        }
+
+        if (note is null && context.MissingTerm is { } term)
+        {
+            note = Find(index, term, context.SessionId, ServerInstanceIdentity.Id, context.AgentId, ReadSolution(context), context.SolutionRoot, DateTime.UtcNow);
+        }
+
         return note is null ? [] : [new Finding(FindingSource, note, FindingSeverity.Info)];
     }
 
@@ -62,6 +78,31 @@ public static class EditEffectEvidence
         catch (Exception ex)
         {
             Debug.WriteLine($"Edit effect fact failed: {ex}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The fact sentence about the current call's <see cref="ToolCallContext.TargetFilePath"/>: a recorded <see cref="EditEffectKind.FileDeleted"/>
+    /// or <see cref="EditEffectKind.FileMoved"/> of that path by the same caller (<see cref="FindFileFactSentence"/>). Null when there is no
+    /// context, no target path, no effect index or no such effect. No error-code gate (a file-miss builder is only reached on a not-found).
+    /// Never throws.
+    /// </summary>
+    public static string? FileFactForCurrentCall()
+    {
+        try
+        {
+            var context = ToolCallContext.Current;
+            if (context is not { TargetFilePath: { } path, EditEffects: { } index })
+            {
+                return null;
+            }
+
+            return FindFileFactSentence(index, path, context.SessionId, ServerInstanceIdentity.Id, context.AgentId, DateTime.UtcNow);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Edit effect file fact failed: {ex}");
             return null;
         }
     }
@@ -114,6 +155,52 @@ public static class EditEffectEvidence
         DateTime utcNow)
     {
         return FindParts(index, term, sessionId, serverInstanceId, callerAgentId, solution, solutionRoot, utcNow)?.Fact;
+    }
+
+    /// <summary>
+    /// The fact sentence (ending in a period) for a missing file path: the newest <see cref="EditEffectKind.FileDeleted"/> or
+    /// <see cref="EditEffectKind.FileMoved"/> effect of the same caller (same identity rule as <see cref="Find"/>) among the effects of the
+    /// path's file name without extension whose path matches <paramref name="filePath"/>. Paths match ignoring separator style and case, when one
+    /// path's trailing segments equal the other's (absolute against relative). Null when none matches, or when a newer move (or declaration) put a
+    /// file at that path again. Never throws.
+    /// </summary>
+    public static string? FindFileFactSentence(
+        EditEffectIndex index,
+        string filePath,
+        string? sessionId,
+        string serverInstanceId,
+        string? callerAgentId,
+        DateTime utcNow)
+    {
+        try
+        {
+            var stem = Path.GetFileNameWithoutExtension(filePath.Replace('\\', '/'));
+            if (string.IsNullOrEmpty(stem))
+            {
+                return null;
+            }
+
+            var sameStem = index.FindIgnoreCase(stem).Where(e => IsSameCaller(e, sessionId, serverInstanceId)).ToList();
+            var head = sameStem.FirstOrDefault(e =>
+                (e.Kind == EditEffectKind.FileDeleted && (PathsMatch(filePath, e.SymbolDisplay) || PathsMatch(filePath, e.NewFilePath)))
+                || (e.Kind == EditEffectKind.FileMoved && PathsMatch(filePath, e.SymbolDisplay)));
+            if (head is null)
+            {
+                return null;
+            }
+
+            // A file moved here (possibly from another file name) or a symbol declared in this file path after the head: the path exists again.
+            var recreated = sameStem.Concat(index.FindFileMovesByNewFileStem(stem).Where(e => IsSameCaller(e, sessionId, serverInstanceId)))
+                .Any(e => e.UtcTime > head.UtcTime
+                    && e.Kind is EditEffectKind.FileMoved or EditEffectKind.Added
+                    && PathsMatch(filePath, e.NewFilePath));
+            return recreated ? null : $"{Phrase(head, true, callerAgentId, utcNow)}.";
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Edit effect file evidence failed: {ex}");
+            return null;
+        }
     }
 
     private static (string Shown, string Fact)? FindParts(
@@ -195,6 +282,35 @@ public static class EditEffectEvidence
         return sessionId is not null && effect.SessionId is not null
             ? string.Equals(sessionId, effect.SessionId, StringComparison.Ordinal)
             : string.Equals(effect.ServerInstanceId, serverInstanceId, StringComparison.Ordinal);
+    }
+
+    private static string[] PathSegments(string? path)
+    {
+        return string.IsNullOrWhiteSpace(path)
+            ? []
+            : path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries).Where(s => s != ".").ToArray();
+    }
+
+    // Separator-insensitive, case-insensitive, trailing-segment match: "src/A/Foo.cs" matches "C:\repo\src\A\Foo.cs" and "A/Foo.cs".
+    private static bool PathsMatch(string? left, string? right)
+    {
+        var a = PathSegments(left);
+        var b = PathSegments(right);
+        if (a.Length == 0 || b.Length == 0)
+        {
+            return false;
+        }
+
+        var shorter = Math.Min(a.Length, b.Length);
+        for (var i = 1; i <= shorter; i++)
+        {
+            if (!string.Equals(a[^i], b[^i], StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // Reduces a term to its qualifier and simple name. Accepts a documentation comment id ("M:Foo.Bar(System.Int32)"), generics, arity and a
@@ -333,6 +449,7 @@ public static class EditEffectEvidence
                 + (string.IsNullOrEmpty(effect.NewFilePath) ? string.Empty : $" in `{effect.NewFilePath}`"),
             EditEffectKind.SignatureChanged => $"{actor} changed the signature of `{effect.SymbolDisplay}`",
             EditEffectKind.FileDeleted => $"{actor} deleted `{effect.SymbolDisplay}`",
+            EditEffectKind.FileMoved => $"{actor} moved file `{effect.SymbolDisplay}`" + (string.IsNullOrEmpty(effect.NewFilePath) ? string.Empty : $" to `{effect.NewFilePath}`"),
             _ => $"{actor} recorded {effect.Kind} for `{effect.SymbolDisplay}`",
         };
     }

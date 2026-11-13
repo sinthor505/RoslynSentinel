@@ -23,6 +23,9 @@ public enum EditEffectKind
 
     /// <summary>A whole file was deleted.</summary>
     FileDeleted,
+
+    /// <summary>A whole file was renamed or moved on disk: <see cref="EditEffect.SymbolDisplay"/> is the old path, <see cref="EditEffect.SimpleName"/> the old file name without extension, <see cref="EditEffect.NewFilePath"/> the new path.</summary>
+    FileMoved,
 }
 
 /// <summary>
