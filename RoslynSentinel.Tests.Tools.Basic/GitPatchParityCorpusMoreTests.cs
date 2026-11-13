@@ -291,6 +291,9 @@ public class GitPatchParityCorpusMoreTests
     [TestCase("diff.mnemonicPrefix", "true", false)]
     [TestCase("color.diff", "always", false)]
     [TestCase("color.ui", "always", false)]
+    // Owner decision 2026-11-12: measure, then widen. auto (git colours only a terminal; the tool reads a pipe) and false print the same text as unset.
+    [TestCase("color.ui", "auto", true)]
+    [TestCase("color.ui", "false", true)]
     [TestCase("diff.renames", "false", true)]
     [TestCase("diff.external", "true", false)]
     [TestCase("diff.wsErrorHighlight", "all", true)]

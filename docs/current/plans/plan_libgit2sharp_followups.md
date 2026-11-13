@@ -117,6 +117,7 @@ Text-neutral steps run first; the 3-day trial gate overlaps with them; behaviour
   `git diff` output; this machine's global config sets `diff.tool`), so the `TODO owner to confirm` at
   `PatchNeutralConfigKeys` is settled. `color.ui`: add corpus scenarios for `color.ui=auto` and `color.ui=false`; if the
   tool text is identical, treat those two values as neutral (`color.ui=always` and `color.diff` stay declined).
+  Done 2026-11-12: scenario 14 measured both identical; `IsPatchNeutralColorUi` serves them (the corpus cases are routed).
   `diff.mnemonicPrefix` came off the identical list (git keeps `a/ b/` for `refA..refB`, libgit2 prints `c/ c/`).
 
 ### Main-session technical defaults (2026-11-12; planner-adopted, not owner decisions)

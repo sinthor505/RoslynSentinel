@@ -14,7 +14,7 @@ namespace RoslynSentinel.Common;
 /// <item>a comparison against the working tree (never reaches this reader's routing: only "staged" and refA..refB are accepted);</item>
 /// <item>GIT_DIFF_OPTS or GIT_EXTERNAL_DIFF in the process environment;</item>
 /// <item>any <c>diff.*</c> or <c>color.*</c> config key (every level) except diff.algorithm, diff.indentHeuristic, diff.noprefix, diff.renames,
-///       diff.wsErrorHighlight (core.whitespace is not scanned: it is on the verified list) and the two keys named in <see cref="PatchNeutralConfigKeys"/>;
+///       diff.wsErrorHighlight (core.whitespace is not scanned: it is on the verified list) the two keys named in <see cref="PatchNeutralConfigKeys"/>, and color.ui when its effective value is auto or false;
 ///       diff.renames other than a plain boolean (copies), diff.algorithm other than myers/default/patience/minimal, a non-boolean diff.indentHeuristic;</item>
 /// <item>a rename or copy; an added path together with a deleted one while renames are on (git may pair them); a typechange; a symbolic link; a submodule entry;</item>
 /// <item>a file that is empty on either side (empty-file add/delete, and an intent-to-add entry);</item>
@@ -201,7 +201,7 @@ internal sealed partial class Libgit2GitReader
 
         foreach (var key in ConfigKeys(repo))
         {
-            if (!IsPatchNeutralConfigKey(key))
+            if (!IsPatchNeutralConfigKey(key) && !IsPatchNeutralColorUi(repo, key))
             {
                 throw Decline($"{key} is configured; its effect on patch text is not reproduced, so git answers.");
             }
@@ -218,6 +218,15 @@ internal sealed partial class Libgit2GitReader
         var renamesPossible = PatchBool("diff.renames", ConfigValue(repo, "diff.renames"), unsetValue: true);
         return (algorithm, indentHeuristic, renamesPossible);
     }
+
+    /// <summary>
+    /// color.ui is neutral for the two values the corpus measured as identical (GitPatchParityCorpusMoreTests scenario 14): auto, because the tool reads git's stdout through a pipe and
+    /// git colours only a terminal, and false. always (and never, which the corpus did not measure) stays declined; an unmeasured value is not guessed. The effective value is the one
+    /// git itself would use, since the last level wins.
+    /// </summary>
+    private static bool IsPatchNeutralColorUi(Repository repo, string key) =>
+        key.Equals("color.ui", StringComparison.OrdinalIgnoreCase)
+        && ConfigValue(repo, "color.ui")?.Trim().ToLowerInvariant() is "auto" or "false";
 
     /// <summary>A key is neutral outside the diff and color sections, or when it is one of <see cref="PatchNeutralConfigKeys"/>, or a <c>diff.&lt;driver&gt;.&lt;var&gt;</c> driver setting.</summary>
     private static bool IsPatchNeutralConfigKey(string key)
