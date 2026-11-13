@@ -246,6 +246,11 @@ Settled here (owner may overturn):
   - Confirm the texts are identical across each run's 10 transcripts.
   - Recover each job's temperature, top-p and model key from the eval-queue records or `agent.log`. If they are not found, say so and validate with the env unset (the server default), which is what a job launched without `-Temperature`/`-TopP` used.
 - Done when: the three files load; Step 5's identity test passes on their own transcripts; the settings are written in the eval doc.
+- Harvest done 2026-11-13. Two checks remain: loading the files (Step 4) and the identity test (Step 5).
+  - **Texts.** In each run, the message and the trailing text are byte-identical across all 10 samples. The trailing text is the same 422 characters in E, F and G.
+  - **`{SOLUTION}` not needed.** No fixture path appears in `errorData.message`, which carries only the relative path.
+  - **Sampling settings.** The queue job records (`%LOCALAPPDATA%\RoslynSentinel\evalqueue\113\jobs\20261113-050504-001`, `-061048-001`, `-064033-001`) show `evalArgs` `-Scenario StopAdherenceMissingFile -Samples 10`, with no `-Temperature`/`-TopP`. The server default applied, so validation runs with the env unset.
+  - **Model and policy.** All three ran `qwen3.5-9b-mtp` on host 113 with policy mode Inline. E's job set `ROSLYNSENTINEL_ERROR_POLICY_FILE=error-policy-v2.md`.
 
 ### Step 12 - LIVE validation: identity and known contrast (one-step)
 - Files: new `docs/current/evals/eval_error_variant_replay_validation.md`.
