@@ -48,7 +48,7 @@ public class ErrorVariantReplayPipelineTests
         var runDirectory = Path.Combine(_tempRoot, "run");
 
         var rows = await ErrorVariantReplay.RunAsync(
-            NewOptions(ArmESource(), "FileNotFound/armF"), handler, runDirectory, TestContext.CurrentContext.CancellationToken);
+            NewOptions(FullHeaderSource(), "FileNotFound/armF"), handler, runDirectory, TestContext.CurrentContext.CancellationToken);
 
         var csvLines = File.ReadAllLines(Path.Combine(runDirectory, "variants.csv"));
         var transcripts = Directory.GetFiles(runDirectory, "transcript.json", SearchOption.AllDirectories);
@@ -66,7 +66,7 @@ public class ErrorVariantReplayPipelineTests
             Assert.That(rows[0].ErrorCode, Is.EqualTo("FileNotFound"));
             Assert.That(rows[0].ModelKey, Is.EqualTo(ModelKey));
             Assert.That(rows[0].Temperature, Is.EqualTo("0.2"));
-            Assert.That(rows[0].SourceSettings, Is.EqualTo("unknown"), "the armE source header records no model key");
+            Assert.That(rows[0].SourceSettings, Is.EqualTo("unknown"), "the source header records no model key");
             Assert.That(rows[0].CutTurn, Is.GreaterThanOrEqualTo(1));
             Assert.That(rows[0].RecordedMessageHash, Has.Length.EqualTo(12));
             Assert.That(handler.Requests, Has.Count.EqualTo(1), "exactly one model request: one continuation turn");
@@ -99,7 +99,7 @@ public class ErrorVariantReplayPipelineTests
         var runDirectory = Path.Combine(_tempRoot, "run");
 
         var rows = await ErrorVariantReplay.RunAsync(
-            NewOptions(ArmESource(), "FileNotFound/armF"), handler, runDirectory, TestContext.CurrentContext.CancellationToken);
+            NewOptions(FullHeaderSource(), "FileNotFound/armF"), handler, runDirectory, TestContext.CurrentContext.CancellationToken);
 
         var csvLines = File.ReadAllLines(Path.Combine(runDirectory, "variants.csv"));
         Assert.Multiple(() =>
@@ -310,14 +310,16 @@ public class ErrorVariantReplayPipelineTests
         ContinueTurns = 1,
     };
 
-    private static string ArmESource() =>
-        Path.Combine(AppContext.BaseDirectory, "TestData", "FileNotFound.armE.sample-01.transcript.json");
+    // armF's checked-in transcript is the one with a full header (ToolDescriptions and ToolSchemas); the armE and armG test
+    // copies have both trimmed to empty, so TranscriptToolHost cannot rebuild their tool list. Real run folders have them.
+    private static string FullHeaderSource() =>
+        Path.Combine(AppContext.BaseDirectory, "TestData", "FileNotFound.armF.sample-01.transcript.json");
 
-    // A run folder holding sample-01/transcript.json: the armE transcript with a settings header, as a post-Step-10 live run writes it.
+    // A run folder holding sample-01/transcript.json: the full-header transcript with a settings header, as a post-Step-10 live run writes it.
     // TopP follows LlmOptions so an inherited ROSLYNSENTINEL_LLM_TOP_P does not turn a "matched" case into a mismatch.
     private string WriteSourceWithHeader(double temperature)
     {
-        var transcript = SavedTranscript.Load(ArmESource());
+        var transcript = SavedTranscript.Load(FullHeaderSource());
         transcript.ModelKey = ModelKey;
         transcript.Temperature = temperature;
         transcript.TopP = LlmOptions.TopP;

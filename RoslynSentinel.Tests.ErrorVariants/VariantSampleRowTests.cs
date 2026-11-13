@@ -44,7 +44,8 @@ public sealed class VariantSampleRowTests
         };
         var line = row.ToCsvLine();
 
-        Assert.That(line, Does.EndWith(","));
+        // HarnessError is empty and SourceSettings (the last column) is "matched", so the empty cell sits just before it.
+        Assert.That(line, Does.EndWith(",,matched"));
         var parsed = VariantSampleRow.Parse(line);
         Assert.That(parsed.StopTurn, Is.Null);
         Assert.That(parsed.InputTokens, Is.Null);
