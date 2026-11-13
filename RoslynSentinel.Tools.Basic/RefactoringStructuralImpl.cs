@@ -588,6 +588,7 @@ public class RefactoringStructuralImpl
         bool autoStage = true,
         bool dryRun = false,
         bool returnDiff = false,
+        PreferredTarget preferredTarget = PreferredTarget.constructor,
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -603,7 +604,7 @@ public class RefactoringStructuralImpl
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: insertAfterMemberName/insertBeforeMemberName apply only to operation 'addMember', not '{operation}'{(operation == MemberAction.addTopLevelType ? " (the type is always appended)" : string.Empty)}. Nothing was written; omit them for '{operation}'.") };
 
             if (operation == MemberAction.view)
-                return await MemberViewAsync(filePathResolved, containerName, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                return await MemberViewAsync(filePathResolved, containerName, memberName, contextSnippet, lineBefore, lineAfter, preferredTarget, cancellationToken);
 
             if (operation == MemberAction.replace)
                 return await MemberReplaceAsync(filePathResolved, containerName, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, dryRun, returnDiff, requestParams, cancellationToken);
@@ -642,14 +643,15 @@ public class RefactoringStructuralImpl
     string? contextSnippet,
     string? lineBefore,
     string? lineAfter,
+    PreferredTarget preferredTarget,
     CancellationToken cancellationToken)
     {
         if (!string.IsNullOrEmpty(memberName))
         {
             // TODO Member(view) keeps the lenient container fallback; Step 5e of plan_unknown_parameter_rejection_reduction flips the flag to true and removes this
             // TODO: GetMemberSourceAsync still returns a 4-tuple; return MemberSourceInfo directly (S3 item h, callers: this, WorkspaceFileEditImpl, 11 test sites in MemberRefactoringTests)
-            var (_, _, _, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, contextSnippet, lineBefore, lineAfter, false, cancellationToken: cancellationToken);
-            return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source!) };
+            var (_, message, _, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, contextSnippet, lineBefore, lineAfter, false, preferredTarget: preferredTarget, cancellationToken: cancellationToken);
+            return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source!), Findings = message is null ? null : [new Finding("MemberSource", message)] };
         }
 
         if (string.IsNullOrEmpty(containerName))

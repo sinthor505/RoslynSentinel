@@ -100,7 +100,7 @@ public sealed class MemberAddReplaceViewTests
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Member_View_WithMemberNameSharedByTypeAndItsConstructor_ReturnsTheConstructor()
     {
-        // Documents the name collision: the constructor named Order wins over the type of the same name.
+        // Documents the name collision: the constructor named Order wins over the type of the same name, and the view carries a hint naming the preferredTarget: class option.
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
         var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.view, memberName: "Order");
@@ -109,6 +109,26 @@ public sealed class MemberAddReplaceViewTests
         Assert.That(view, Is.Not.Null);
         Assert.That(view!.Member.Kind, Is.EqualTo("constructor"));
         Assert.That(view.Member.Source, Does.Contain("public Order("));
+        Assert.That(result.Findings, Has.Count.EqualTo(1));
+        Assert.That(result.Findings[0].Message, Does.Contain("preferredTarget: class"));
+    }
+
+    [Test]
+    [Category("MemberSourceInfo")] // sentinel:auto-category
+    [Category("MemberSourceViewResult")] // sentinel:auto-category
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task Member_View_WithMemberNameSharedByTypeAndPreferredTargetClass_ReturnsTheType()
+    {
+        // With preferredTarget: class the type declaration wins over the same-named constructor, and no hint is raised.
+        using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
+        var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.view, memberName: "Order", preferredTarget: RoslynSentinel.Common.PreferredTarget.@class);
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var view = result.SuccessData as MemberSourceViewResult;
+        Assert.That(view, Is.Not.Null);
+        Assert.That(view!.Member.Kind, Is.EqualTo("class"));
+        Assert.That(view.Member.Source, Does.Contain("class Order"));
+        Assert.That(result.Findings, Is.Empty);
     }
 
     [Test]

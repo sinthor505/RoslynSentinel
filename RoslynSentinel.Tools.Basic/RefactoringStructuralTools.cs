@@ -136,6 +136,7 @@ public class RefactoringStructuralTools
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
+        [Description("view with memberName: constructor (default) returns a constructor that shares its type's name; class returns the type's source.")] PreferredTarget preferredTarget = PreferredTarget.constructor,
         // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
         // [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
@@ -147,7 +148,7 @@ public class RefactoringStructuralTools
         bool autoStage = true;
         return _impl.Member(reason, filePath, operation, containerName, namespaceName, memberName, newMemberSource, insertAfterMemberName, insertBeforeMemberName,
             skipPrecheck, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff,
-            requestParams, cancellationToken);
+            preferredTarget, requestParams, cancellationToken);
     }
 
     [McpServerTool(Name = "ModifyEnum")]
