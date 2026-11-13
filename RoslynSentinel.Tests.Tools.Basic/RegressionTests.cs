@@ -596,6 +596,16 @@ public class RegressionTests
     private MsToolAugmentEngine CreateAugmentEngine()
         => Battery.Basic.TestEngines.MsToolAugmentEngine(_workspaceManager);
 
+    // Deliberate deviation from SetSource: SortAndDeduplicateUsingsAsync applies through the workspace manager, and the
+    // persistent manager writes the bare "Test.cs" into the process working directory (caught by LeakDetectorSetUp).
+    // An in-memory workspace applies the edit to its own solution only.
+    private static async Task<UsingsCleanupResult> SortAndDeduplicateUsingsInMemoryAsync(string source)
+    {
+        using var workspace = RoslynSentinel.Tests.Fakes.InMemoryWorkspace.Create(("Test.cs", source));
+        var engine = Battery.Basic.TestEngines.MsToolAugmentEngine(workspace.Manager);
+        return await engine.SortAndDeduplicateUsingsAsync(workspace.PathOf("Test.cs"));
+    }
+
     // ── EncapsulateFieldSafe ──────────────────────────────────────────────────
 
     [Test]
@@ -913,16 +923,13 @@ public class RegressionTests
     public async Task SortAndDeduplicateUsings_DuplicatesAreRemoved()
     {
         // Standard sort_usings does NOT remove duplicates -> ours does
-        SetSource("""
+        var result = await SortAndDeduplicateUsingsInMemoryAsync("""
             using System.Collections.Generic;
             using System.Linq;
             using System.Collections.Generic;
             using System;
             public class Foo { }
             """);
-
-        var engine = CreateAugmentEngine();
-        var result = await engine.SortAndDeduplicateUsingsAsync("Test.cs");
 
         Assert.That(result.RemovedDuplicates, Is.GreaterThan(0),
             "Must report removed duplicate count");
@@ -945,16 +952,13 @@ public class RegressionTests
     public async Task SortAndDeduplicateUsings_SystemUsingsFirst()
     {
         // System.* usings must come before non-system usings after sort
-        SetSource("""
+        var result = await SortAndDeduplicateUsingsInMemoryAsync("""
             using Newtonsoft.Json;
             using System.Collections.Generic;
             using System;
             using MyApp.Services;
             public class Foo { }
             """);
-
-        var engine = CreateAugmentEngine();
-        var result = await engine.SortAndDeduplicateUsingsAsync("Test.cs");
 
         Assert.That(result.UpdatedContent, Is.Not.Null);
         var systemIdx = result.UpdatedContent!.IndexOf("using System", StringComparison.Ordinal);
@@ -971,15 +975,12 @@ public class RegressionTests
     [Category("UsingsCleanupResult")] // sentinel:auto-category
     public async Task SortAndDeduplicateUsings_NoDuplicates_OriginalCountMatchesResult()
     {
-        SetSource("""
+        var result = await SortAndDeduplicateUsingsInMemoryAsync("""
             using System;
             using System.Collections.Generic;
             using System.Linq;
             public class Foo { }
             """);
-
-        var engine = CreateAugmentEngine();
-        var result = await engine.SortAndDeduplicateUsingsAsync("Test.cs");
 
         Assert.That(result.RemovedDuplicates, Is.Zero,
             "No duplicates -> RemovedDuplicates must be 0");
