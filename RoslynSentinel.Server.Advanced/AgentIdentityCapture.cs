@@ -22,7 +22,6 @@ public static class AgentIdentityCapture
     public const string SessionIdKey = "_sessionId";
 
     // Tools whose not-found error can carry an evidence note (NotFoundEvidence): the argument naming what the call looks for in filePath. An unlisted tool gets no note.
-    // TODO a file miss with no mapped term (GetFileOutline, ReadFile without memberName) gets no TargetFilePath/EditEffects, so the FileDeleted/FileMoved fact (EditEffectEvidence.FileFactForCurrentCall) never reaches it; capture TargetFilePath and the index for file tools whenever filePath is present
     private static readonly Dictionary<string, string> MissingTermArgument = new(StringComparer.Ordinal)
     {
         ["GetMethodSource"] = "methodName",
@@ -35,6 +34,9 @@ public static class AgentIdentityCapture
         ["ModifyModifier"] = "targetName",
         ["ModifyEnum"] = "enumName",
     };
+
+    // Tools with a filePath whose miss can be explained by a file effect but that name no mapped term.
+    private static readonly HashSet<string> FilePathOnlyTools = new(StringComparer.Ordinal) { "GetFileOutline", "InspectSymbol" };
 
     // Symbol tools with no file to search: the argument naming the symbol, read only for the edit effect note (EditEffectEvidence). They
     // set MissingTerm but not TargetFilePath, so NotFoundEvidence (which needs a file) behaves as before for them.
@@ -77,14 +79,16 @@ public static class AgentIdentityCapture
                     ? ReadString(arguments, symbolArgument)
                     : null;
             var term = fileTerm ?? symbolTerm;
+            var filePath = toolName is not null && (MissingTermArgument.ContainsKey(toolName) || FilePathOnlyTools.Contains(toolName)) ? ReadString(arguments, "filePath") : null;
+            var lookup = term is not null || filePath is not null;
             ToolCallContext.Set(new ToolCallContext(agentId, agentType, toolName ?? string.Empty, ReadString(arguments, "reason"), currentSeq())
             {
                 SessionId = sessionId,
-                TargetFilePath = fileTerm is null ? null : ReadString(arguments, "filePath"),
+                TargetFilePath = filePath,
                 MissingTerm = term,
-                SolutionRoot = term is null ? null : TryGetSolutionRoot(solutionRoot),
-                EditEffects = term is null ? null : TryGet(editEffects),
-                CurrentSolution = term is null ? null : currentSolution,
+                SolutionRoot = lookup ? TryGetSolutionRoot(solutionRoot) : null,
+                EditEffects = lookup ? TryGet(editEffects) : null,
+                CurrentSolution = lookup ? currentSolution : null,
             });
         }
         catch (Exception ex)

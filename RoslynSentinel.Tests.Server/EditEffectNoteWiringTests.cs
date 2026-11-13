@@ -105,6 +105,32 @@ public class EditEffectNoteWiringTests
         Assert.That(context.EditEffects, Is.SameAs(index));
     }
 
+    [Test]
+    public void Enter_GetFileOutline_SetsTargetFileAndIndex_ButNoTerm()
+    {
+        var index = new EditEffectIndex();
+
+        EnterAs("GetFileOutline", index, ("filePath", "Foo.cs"));
+
+        var context = ToolCallContext.Current!;
+        Assert.That(context.TargetFilePath, Is.EqualTo("Foo.cs"));
+        Assert.That(context.MissingTerm, Is.Null);
+        Assert.That(context.EditEffects, Is.SameAs(index));
+    }
+
+    [Test]
+    public void Enter_ReadFileWithoutMemberName_SetsTargetFileAndIndex()
+    {
+        var index = new EditEffectIndex();
+
+        EnterAs("ReadFile", index, ("filePath", "Foo.cs"));
+
+        var context = ToolCallContext.Current!;
+        Assert.That(context.TargetFilePath, Is.EqualTo("Foo.cs"));
+        Assert.That(context.MissingTerm, Is.Null);
+        Assert.That(context.EditEffects, Is.SameAs(index));
+    }
+
     // A MoveMember call as the filter sees it: className plus a memberNames array (the array is not a string, so Args cannot build it).
     private static void EnterMoveMember(EditEffectIndex? index, string className, string[] memberNames)
     {
