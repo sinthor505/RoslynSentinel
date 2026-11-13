@@ -12,11 +12,11 @@ public sealed class VariantSampleRowTests
         "VariantId", "VariantHash", "ErrorCode",
         "SourceRunFolder", "SourceSample", "SourceCommitHash", "CutTurn", "RecordedMessageHash",
         "SampleIndex", "DecisionClass", "FirstTool", "CallCount", "BlockedAnywhere", "StopTurn", "StopReason",
-        "LatencyMs", "InputTokens", "OutputTokens", "HarnessError",
+        "LatencyMs", "InputTokens", "OutputTokens", "HarnessError", "SourceSettings",
     };
 
     [Test]
-    public void Header_ListsAll25ColumnsInOrder()
+    public void Header_ListsAll26ColumnsInOrder()
     {
         Assert.That(VariantSampleRow.Header.Split(','), Is.EqualTo(ExpectedColumns));
     }
@@ -176,5 +176,6 @@ public sealed class VariantSampleRowTests
         InputTokens = 5000,
         OutputTokens = 300,
         HarnessError = string.Empty,
+        SourceSettings = "matched",
     };
 }

@@ -18,15 +18,42 @@ internal sealed class ScriptedModelHandler(params string[] responses) : HttpMess
 
     public List<string> Requests { get; } = [];
 
+    /// <summary>Body served for every GET (the loaded-model checks). The default has no model list.</summary>
+    public string ModelsJson { get; init; } = "{\"data\":[]}";
+
+    /// <summary>When set, every request (GET and POST) throws this instead of answering: a model host that cannot be reached.</summary>
+    public Exception? FailWith { get; init; }
+
+    /// <summary>When set, every request (GET and POST) answers with this status and an empty body.</summary>
+    public HttpStatusCode? FailStatus { get; init; }
+
+    /// <summary>A GET body that lists <paramref name="modelKey"/> with one loaded instance, in the shape of LM Studio's /api/v1/models.</summary>
+    internal static string LoadedModelsJson(string modelKey) =>
+        JsonSerializer.Serialize(new
+        {
+            models = new[] { new { key = modelKey, loaded_instances = new[] { new { id = modelKey } } } },
+            data = Array.Empty<object>(),
+        });
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        if (FailWith is not null)
+        {
+            throw FailWith;
+        }
+
+        if (FailStatus is { } status)
+        {
+            return new HttpResponseMessage(status) { Content = new StringContent("", Encoding.UTF8, "text/plain") };
+        }
+
         // The client's loaded-model status check is a GET sent before the first POST: answer it without recording it
         // or consuming a scripted response. Only POSTs are model requests.
         if (request.Method == HttpMethod.Get)
         {
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent("{\"data\":[]}", Encoding.UTF8, "application/json"),
+                Content = new StringContent(ModelsJson, Encoding.UTF8, "application/json"),
             };
         }
 

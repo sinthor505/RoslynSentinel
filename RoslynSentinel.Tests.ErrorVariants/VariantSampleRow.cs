@@ -85,13 +85,20 @@ public sealed record VariantSampleRow
     /// <summary>Harness fault text; empty when none. May span lines in the source, flattened on write.</summary>
     public required string HarnessError { get; init; }
 
+    /// <summary>
+    /// How the source transcript's recorded model key, temperature and top-p compare with this run's:
+    /// "matched", "unknown" (the header records none: transcripts written before the fields existed) or "mismatch" (the sample was refused).
+    /// Last column so earlier cell positions did not move.
+    /// </summary>
+    public required string SourceSettings { get; init; }
+
     private static readonly string[] ColumnNames =
     {
         nameof(RunStamp), nameof(ModelKey), nameof(Temperature), nameof(TopP), nameof(MaxTokens), nameof(ContinueTurns),
         nameof(VariantId), nameof(VariantHash), nameof(ErrorCode),
         nameof(SourceRunFolder), nameof(SourceSample), nameof(SourceCommitHash), nameof(CutTurn), nameof(RecordedMessageHash),
         nameof(SampleIndex), nameof(DecisionClass), nameof(FirstTool), nameof(CallCount), nameof(BlockedAnywhere), nameof(StopTurn), nameof(StopReason),
-        nameof(LatencyMs), nameof(InputTokens), nameof(OutputTokens), nameof(HarnessError),
+        nameof(LatencyMs), nameof(InputTokens), nameof(OutputTokens), nameof(HarnessError), nameof(SourceSettings),
     };
 
     private static readonly Regex LineBreaks = new("[\\r\\n]+");
@@ -122,6 +129,7 @@ public sealed record VariantSampleRow
             InputTokens?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
             OutputTokens?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
             Flatten(HarnessError),
+            Flatten(SourceSettings),
         };
 
         return string.Join(",", cells.Select(Quote));
@@ -166,6 +174,7 @@ public sealed record VariantSampleRow
             InputTokens = ReadNullableLong(cells, 22),
             OutputTokens = ReadNullableLong(cells, 23),
             HarnessError = cells[24],
+            SourceSettings = cells[25],
         };
     }
 
