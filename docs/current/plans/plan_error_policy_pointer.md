@@ -1,6 +1,6 @@
 # Plan: gated error-policy suffix (Off / Pointer / Inline) on not-found tool errors, with eval stamping and an A/B
 
-**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Steps 1-8 done (9856e63c; 22dd662b..cc3fba6c; f5be7103..4764839b; d69f765b..7a6fbc8d); Steps 9-10 done (c6908f6d, 684e3915, 9aa0a135). Left: Step 11 (A/B), Step 12 (remaining routes).
+**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Steps 1-8 done (9856e63c; 22dd662b..cc3fba6c; f5be7103..4764839b; d69f765b..7a6fbc8d); Steps 9-11a done (c6908f6d, 684e3915, 9aa0a135, fe141b9e, 3584f094). Left: owner decisions on the A/B follow-ups (eval doc), Step 12 (remaining routes).
 
 ## Problem
 
@@ -159,6 +159,7 @@ Deviation (owner-accepted 2026-11-12): the run uses qwen3.5-9b-mtp instead of qw
 - Change: add `ToolCallContext.HasEditEffectFact` (settable, default false). `ErrorPolicyFilter` appends nothing when it is true, because "the task named it, stop" is wrong when the target was renamed this session. Peer session roslynsentinel-cc (`proposal_not_found_cause_from_prior_tool_call`) sets the flag from `NotFoundEvidence` when it attaches an `EditEffect` finding.
 - Owner approved 2026-11-12.
 - Done when: Build 0 errors; filter test: flag true gives no block in `Pointer` and `Inline`, flag false is unchanged.
+- Done: 3584f094 (`ErrorPolicyFilterTests` 22/22). The peer sets the flag (pending in their plan).
 
 ### Step 12 - Remaining routes
 - Files: the routes marked in Step 5.
