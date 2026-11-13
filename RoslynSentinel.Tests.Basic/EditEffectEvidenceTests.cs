@@ -305,7 +305,7 @@ public class EditEffectEvidenceTests
         var note = Note(index, "Foo.Bar", solution: solution);
         var fact = EditEffectEvidence.FindFactSentence(index, "Foo.Bar", "s1", "inst-1", "agent-1", solution, Root, Now);
 
-        Assert.That(fact, Does.StartWith("Call `a76e9f1c` (`RenameSymbol`, this agent, 3 min ago) renamed `N.Foo.Bar` to `N.Foo.Baz`, declared at `Foo.cs:4`"));
+        Assert.That(fact, Does.StartWith("Call `a76e9f1c` (`RenameSymbol`, this agent, 3m ago) renamed `N.Foo.Bar` to `N.Foo.Baz`, declared at `Foo.cs:4`"));
         Assert.That(note, Is.EqualTo("`Foo.Bar` was not found. " + fact));
         Assert.That(EditEffectEvidence.FindFactSentence(index, "Unrelated", "s1", "inst-1", "agent-1", null, Root, Now), Is.Null);
     }
