@@ -51,7 +51,8 @@ public sealed record DocumentLookupResult(
     IReadOnlyList<string> CandidatePaths,
     int SearchedProjectCount,
     [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<(string TypeName, string FilePath)>? DeclaringTypeFiles = null, [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<FileCandidate>? FileCandidates = null,
-    [property: System.Text.Json.Serialization.JsonIgnore] (string NewPath, string ToolName)? MovedTo = null) : IOperationResult
+    [property: System.Text.Json.Serialization.JsonIgnore] (string NewPath, string ToolName)? MovedTo = null,
+    [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<string>? FolderFileNames = null) : IOperationResult
 {
     /// <summary>True when the lookup failed; mirrors <see cref="IsFound"/>.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -119,7 +120,7 @@ public sealed record DocumentLookupResult(
         }
 
         // The shared builder also probes the disk (directory / project file / file outside the solution) before falling back to the lookup wording.
-        return FileNotFoundMessage.Build(RequestedPath, FileCandidates ?? CandidatePaths.Select(p => new FileCandidate(p, 0, true)).ToList(), SearchedProjectCount, isCallable, DeclaringTypeFiles, MovedTo?.NewPath, MovedTo?.ToolName);
+        return FileNotFoundMessage.Build(RequestedPath, FileCandidates ?? CandidatePaths.Select(p => new FileCandidate(p, 0, true)).ToList(), SearchedProjectCount, isCallable, DeclaringTypeFiles, MovedTo?.NewPath, MovedTo?.ToolName, FolderFileNames);
     }
 
     /// <summary>
@@ -269,7 +270,7 @@ public static class DocumentLookup
         }
 
         var candidates = FindFileCandidates(solution, requested);
-        return new DocumentLookupResult(DocumentLookupStatus.NotFound, requested, null, candidates.Where(c => c.SameFileName).Select(c => c.Path).ToList(), projectCount, FindDeclaringTypeFiles(solution, requested), candidates, FindMovedTo(solution, requested));
+        return new DocumentLookupResult(DocumentLookupStatus.NotFound, requested, null, candidates.Where(c => c.SameFileName).Select(c => c.Path).ToList(), projectCount, FindDeclaringTypeFiles(solution, requested), candidates, FindMovedTo(solution, requested), FindFolderFileNames(solution, requested));
     }
 
     /// <summary>
@@ -363,6 +364,61 @@ public static class DocumentLookup
         }
 
         return result;
+    }
+
+    // TODO plan_error_policy_pointer arm I: temporary A/B switch; resolve at plan close
+    /// <summary>
+    /// Arm I of plan_error_policy_pointer (Step 11g): the file names (no directory part, de-duplicated, sorted ordinal-ignoring-case) of every loaded
+    /// document of any project that sits directly in the folder <paramref name="requestedPath"/> names, i.e. its directory. A path with no directory part
+    /// (and a relative one) is resolved against the solution root of the current tool call. Returns null, doing no work, while
+    /// <see cref="NotFoundInventoryOptions.Enabled"/> is off, and when the folder cannot be determined (bare name with no known solution root).
+    /// An empty list means no loaded document is in that folder.
+    /// </summary>
+    public static IReadOnlyList<string>? FindFolderFileNames(Solution solution, string requestedPath)
+    {
+        if (!NotFoundInventoryOptions.Enabled)
+        {
+            return null;
+        }
+
+        var folder = FolderOf(requestedPath);
+        if (folder is null)
+        {
+            return null;
+        }
+
+        return solution.Projects
+            .SelectMany(p => p.Documents)
+            .Where(d => !string.IsNullOrEmpty(d.FilePath) && PathComparison.Comparer.Equals(FolderOf(d.FilePath!), folder))
+            .Select(d => Path.GetFileName(d.FilePath!))
+            .Distinct(PathComparison.Comparer)
+            .OrderBy(n => n, PathComparison.Comparer)
+            .ToList();
+    }
+
+    // The directory part of a path with '/' read as '\' and no trailing separator; a path with no directory part names the solution root of the
+    // current tool call (null when unknown), and a relative one is anchored at that root.
+    private static string? FolderOf(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        var normalized = path.Replace('/', '\\');
+        var root = ToolCallContext.Current?.SolutionRoot;
+        if (!Path.IsPathRooted(normalized))
+        {
+            if (root is null)
+            {
+                return null;
+            }
+
+            normalized = Path.Combine(root, normalized).Replace('/', '\\');
+        }
+
+        var directory = Path.GetDirectoryName(normalized);
+        return string.IsNullOrEmpty(directory) ? null : directory.TrimEnd('\\');
     }
 
     /// <summary>

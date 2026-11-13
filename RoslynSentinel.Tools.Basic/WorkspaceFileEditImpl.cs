@@ -554,7 +554,7 @@ public class WorkspaceFileEditImpl
     {
         // A file the server itself moved (RenameSymbol, SyncTypeAndFilename) is named at its new path instead of hedged.
         var moved = DocumentLookup.FindMovedTo(solution, normalizedPath);
-        return new("FileNotFound", FileNotFoundMessage.Build(normalizedPath, DocumentLookup.FindFileCandidates(solution, normalizedPath), solution.Projects.Count(), isCallable, DocumentLookup.FindDeclaringTypeFiles(solution, normalizedPath), moved?.NewPath, moved?.ToolName));
+        return new("FileNotFound", FileNotFoundMessage.Build(normalizedPath, DocumentLookup.FindFileCandidates(solution, normalizedPath), solution.Projects.Count(), isCallable, DocumentLookup.FindDeclaringTypeFiles(solution, normalizedPath), moved?.NewPath, moved?.ToolName, DocumentLookup.FindFolderFileNames(solution, normalizedPath)));
     }
 
     private async Task<SentinelCallToolResult<object>> ReadFileWithoutSolutionAsync(string absolutePath, int? startLine, int? endLine, CancellationToken cancellationToken)

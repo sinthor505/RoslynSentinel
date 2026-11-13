@@ -106,6 +106,43 @@ public class LocateSymbolNotFoundCandidateTests
         }
     }
 
+    // Arm I (plan_error_policy_pointer Step 11g): the containingType argument reaches the inventory; the switch is forced per async flow and the context cleared in the finally.
+    [Test]
+    public async Task Search_InventorySwitchOnWithContainingType_AppendsTheTypesMembers()
+    {
+        try
+        {
+            ToolCallContext.Set(new ToolCallContext(null, null, "Search", null, 0) { WorkspaceCurrent = true });
+            using var on = NotFoundInventoryOptions.OverrideForCurrentContext(true);
+
+            var result = await _tools.SearchSolutionTool(reason: "test message", mode: SearchMode.symbol, query: "ApplyLoyaltyBonus", containingType: "OrderPricingCalculator", includeTests: true);
+
+            Assert.That(result.ErrorData?.Message, Does.EndWith(" Type `Fixture.OrderPricingCalculator` declares 3 members: CalcDisc, GetTotal, OrderCheckout"));
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
+    [Test]
+    public async Task Search_InventorySwitchOffWithContainingType_AppendsNothing()
+    {
+        try
+        {
+            ToolCallContext.Set(new ToolCallContext(null, null, "Search", null, 0) { WorkspaceCurrent = true });
+            using var off = NotFoundInventoryOptions.OverrideForCurrentContext(false);
+
+            var result = await _tools.SearchSolutionTool(reason: "test message", mode: SearchMode.symbol, query: "ApplyLoyaltyBonus", containingType: "OrderPricingCalculator", includeTests: true);
+
+            Assert.That(result.ErrorData?.Message, Does.Not.Contain("declares"));
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
     [Test]
     public async Task Search_SubstringOfDeclaredName_OffersExactMatchFalseRetry()
     {

@@ -45,6 +45,8 @@ namespace RoslynSentinel.Server.Advanced
             OrientationBreakerOptions.Configure(args);
             LoopLatchOptions.Configure(args);
             LiftRenamesOptions.Configure(args);
+            // TODO plan_error_policy_pointer arm I: temporary A/B switch; resolve at plan close
+            NotFoundInventoryOptions.Configure(args);
             ToolCallEchoOptions.Configure(args);
             SchemaOptions.Configure(args);
             EolPolicyOptions.Configure(args);

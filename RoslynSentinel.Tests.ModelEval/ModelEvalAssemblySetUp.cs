@@ -31,6 +31,9 @@ public class ModelEvalAssemblySetUp
         // The in-process eval server never runs ServerStdio/ServerHttp, so read the experimental server flags'
         // env vars here (ROSLYNSENTINEL_LIFT_RENAMES, ROSLYNSENTINEL_LOOP_LATCH); unset leaves them off.
         LiftRenamesOptions.Configure([]);
+        // TODO plan_error_policy_pointer arm I: temporary A/B switch; resolve at plan close
+        // Reads ROSLYNSENTINEL_NOTFOUND_INVENTORY (1 or true turns the not-found inventory on; the stamp below carries +inventory).
+        NotFoundInventoryOptions.Configure([]);
         LoopLatchOptions.Configure([]);
         // Reads ROSLYNSENTINEL_ERROR_POLICY_MODE / _FILE; unset leaves the policy Off. For Pointer/Inline with no file,
         // the harness defaults the file to ErrorPolicyFile.OutputPath (deviation from production startup, harness convenience only).
@@ -77,7 +80,9 @@ public class ModelEvalAssemblySetUp
             return null;
         }
 
-        return (s.CommitHash, s.Dirty, EvalExitLine.StampMode(s.ErrorPolicyMode, EvalExitLine.IsEnabled()), s.ErrorPolicyHash);
+        // TODO plan_error_policy_pointer arm I: temporary A/B switch; resolve at plan close (the +inventory suffix follows +exitline, so a run with both reads off+exitline+inventory)
+        var mode = NotFoundInventoryOptions.StampMode(EvalExitLine.StampMode(s.ErrorPolicyMode, EvalExitLine.IsEnabled()), NotFoundInventoryOptions.Enabled);
+        return (s.CommitHash, s.Dirty, mode, s.ErrorPolicyHash);
     }
 
     /// <summary>

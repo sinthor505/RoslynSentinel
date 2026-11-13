@@ -100,6 +100,52 @@ public class FileNotFoundConsumerPathTests
         AssertNoCandidateText(result.ErrorData?.Message);
     }
 
+    // Arm I (plan_error_policy_pointer Step 11g): ReadFile of a missing absolute path in a folder of the solution, with the workspace current.
+    // The solution here has real absolute document paths; the switch is forced per async flow and the ambient context cleared in the finally.
+    private static async Task<string?> ReadMissingInFolderAsync(bool inventorySwitch)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "nfinv_" + Guid.NewGuid().ToString("N"));
+        using var manager = FakeWorkspaceManager.ReadOnly();
+        manager.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", Path.Combine(root, "TestProj.csproj"),
+        [
+            ("B.cs", "class B { }", Path.Combine(root, "Helpers", "B.cs")),
+            ("A.cs", "class A { }", Path.Combine(root, "Helpers", "A.cs")),
+        ]));
+        var tools = TestTools.WorkspaceTools(manager);
+        try
+        {
+            ToolCallContext.Set(new ToolCallContext(null, null, "ReadFile", null, 0) { WorkspaceCurrent = true, SolutionRoot = root });
+            using var scope = NotFoundInventoryOptions.OverrideForCurrentContext(inventorySwitch);
+
+            var result = await tools.ReadFileTool(reason: "test message", Path.Combine(root, "Helpers", "Missing.cs"));
+
+            Assert.That(result.IsError, Is.True);
+            return result.ErrorData?.Message;
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
+    [Test]
+    public async Task ReadFile_InventorySwitchOn_ListsTheFolderOfTheMissingPath()
+    {
+        var message = await ReadMissingInFolderAsync(inventorySwitch: true);
+
+        Assert.That(message, Does.StartWith("Your tool call and file path were well-formed, but file `"));
+        Assert.That(message, Does.EndWith($" `Helpers{Path.DirectorySeparatorChar}` contains 2 files: A.cs, B.cs"));
+    }
+
+    [Test]
+    public async Task ReadFile_InventorySwitchOff_TextHasNoInventory()
+    {
+        var message = await ReadMissingInFolderAsync(inventorySwitch: false);
+
+        Assert.That(message, Does.StartWith("Your tool call and file path were well-formed, but file `"));
+        Assert.That(message, Does.Not.Contain("contains"));
+    }
+
     // ---- GetFileOutline (WorkspaceReadNavigationImpl.BuildFileNotFoundError) ----
 
     [Test]

@@ -199,20 +199,24 @@ public static class SymbolNotFoundDetail
     /// was searched (for example "3 project(s), test projects excluded"); <paramref name="projectName"/> is passed to ListAll.
     /// <paramref name="wholeSolution"/> is true only when the caller's search was not narrowed by project, file, containing type or namespace, or test
     /// exclusion (a qualified query still counts: the name search is solution-wide); see <see cref="RenderNoCandidates"/>.
+    /// <paramref name="containingType"/> and <paramref name="containerFilePath"/> (arm I of plan_error_policy_pointer, Step 11g; the call's containing-type and pinned-file
+    /// arguments, default null) name the container the symbol was looked up in. They matter only while <see cref="NotFoundInventoryOptions"/> is on, the workspace
+    /// is current and no candidate was found: the no-candidates text then ends with that container's member inventory (<see cref="NotFoundMemberInventory"/>; a
+    /// qualified query supplies the container itself when neither argument is given). Without a container nothing is appended.
     /// </summary>
     public static Task<string> BuildAsync(
         IReadOnlyCollection<Project> searchedProjects, string query, string symbolKind, string scopeDescription, string? projectName,
         Func<string, bool>? isCallable = null, Func<SymbolCandidate, string>? nextCall = null, CancellationToken cancellationToken = default,
-        Func<string, string?>? retryCall = null, bool wholeSolution = false)
+        Func<string, string?>? retryCall = null, bool wholeSolution = false, string? containingType = null, string? containerFilePath = null)
     {
         // TODO optional per-error-code operator policy suffix (idea_error_policy_pointer)
-        return BuildAsyncCore(searchedProjects, query, symbolKind, scopeDescription, projectName, isCallable, nextCall, cancellationToken, retryCall, wholeSolution);
+        return BuildAsyncCore(searchedProjects, query, symbolKind, scopeDescription, projectName, isCallable, nextCall, cancellationToken, retryCall, wholeSolution, containingType, containerFilePath);
     }
 
     private static async Task<string> BuildAsyncCore(
         IReadOnlyCollection<Project> searchedProjects, string query, string symbolKind, string scopeDescription, string? projectName,
         Func<string, bool>? isCallable = null, Func<SymbolCandidate, string>? nextCall = null, CancellationToken cancellationToken = default,
-        Func<string, string?>? retryCall = null, bool wholeSolution = false)
+        Func<string, string?>? retryCall = null, bool wholeSolution = false, string? containingType = null, string? containerFilePath = null)
     {
         // TODO split ignores generic arguments: Ns.Box<int>.Foo splits at a dot inside <...>; scan for the last '.' outside angle brackets
         var (container, name) = SplitQuery(query);
@@ -225,7 +229,9 @@ public static class SymbolNotFoundDetail
         var containerFile = container is null
             ? null
             : await FindContainerFileAsync(searchedProjects, container, cancellationToken).ConfigureAwait(false);
-        return RenderNoCandidates(name, symbolKind, scopeDescription, containerFile, projectName, isCallable, wholeSolution);
+        var text = RenderNoCandidates(name, symbolKind, scopeDescription, containerFile, projectName, isCallable, wholeSolution);
+        var inventory = await NotFoundMemberInventory.BuildAsync(searchedProjects, container, containingType, containerFilePath, cancellationToken).ConfigureAwait(false);
+        return inventory is null ? text : text + " " + inventory;
     }
 
     private static bool Callable(Func<string, bool>? isCallable, string toolName) => isCallable is null || isCallable(toolName);

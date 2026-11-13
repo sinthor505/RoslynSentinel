@@ -90,7 +90,8 @@ public class SymbolNavigationImpl
                 // TODO isCallable: SymbolNavigationImpl has no ActiveToolSurface, so hints name tools unconditionally (as the old text did)
                 // wholeSolution: true only when nothing narrowed the search (project, pinned file, test exclusion, containing type or namespace), so "does not exist in the solution" is a settled fact.
                 var wholeSolution = projectName == null && !pinnedToFile && !testsFiltered && string.IsNullOrEmpty(containingType) && string.IsNullOrEmpty(containingNamespace);
-                var message = await SymbolNotFoundDetail.BuildAsync(searchedProjects, symbolName, symbolKind.ToString(), scope, projectName, isCallable: null, nextCall: null, cancellationToken, wholeSolution: wholeSolution);
+                var message = await SymbolNotFoundDetail.BuildAsync(searchedProjects, symbolName, symbolKind.ToString(), scope, projectName, isCallable: null, nextCall: null, cancellationToken, wholeSolution: wholeSolution,
+                    containingType: containingType, containerFilePath: pinnedToFile ? filePathResolved.Absolute : null); // arm I container arguments; ignored while the inventory switch is off
 
                 // Only for exactMatch=true: a wanted name that is a substring of a declared name gets the retry hint.
                 if (exactMatch)

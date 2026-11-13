@@ -53,20 +53,23 @@ public static class FileNotFoundMessage
     /// missing file earlier in this session and the new path is still a loaded document): after the disk branches, the text names the new
     /// path and the tool and returns, instead of the "did you mean" / "it may have been renamed" wording. Both null leaves every other
     /// branch's text exactly as it was.
+    /// <paramref name="folderFileNames"/> (arm I of plan_error_policy_pointer, Step 11g; null = no inventory, the default) are the file names of the loaded documents sitting directly in the
+    /// folder the requested path names (<see cref="DocumentLookup.FindFolderFileNames"/>, which returns null while <see cref="NotFoundInventoryOptions"/> is off). They are
+    /// rendered only in the current-workspace no-candidates text, after the arm H text; every other branch ignores them.
     /// </summary>
     public static string Build(
         string requestedPath, IReadOnlyList<FileCandidate> candidates, int searchedProjectCount, Func<string, bool>? isCallable = null,
         IReadOnlyList<(string TypeName, string FilePath)>? declaringTypeFiles = null,
-        string? movedToPath = null, string? movedByTool = null)
+        string? movedToPath = null, string? movedByTool = null, IReadOnlyList<string>? folderFileNames = null)
     {
         // TODO optional per-error-code operator policy suffix (idea_error_policy_pointer)
-        return BuildCore(requestedPath, candidates, searchedProjectCount, isCallable, declaringTypeFiles, movedToPath, movedByTool);
+        return BuildCore(requestedPath, candidates, searchedProjectCount, isCallable, declaringTypeFiles, movedToPath, movedByTool, folderFileNames);
     }
 
     private static string BuildCore(
         string requestedPath, IReadOnlyList<FileCandidate> candidates, int searchedProjectCount, Func<string, bool>? isCallable = null,
         IReadOnlyList<(string TypeName, string FilePath)>? declaringTypeFiles = null,
-        string? movedToPath = null, string? movedByTool = null)
+        string? movedToPath = null, string? movedByTool = null, IReadOnlyList<string>? folderFileNames = null)
     {
         var sameNamePaths = candidates.Where(c => c.SameFileName).Select(c => c.Path).ToList();
         var diskText = TryDiskBranch(requestedPath, sameNamePaths, isCallable);
@@ -111,7 +114,7 @@ public static class FileNotFoundMessage
         // Current workspace (arm H of plan_error_policy_pointer, Step 11g): the server has validated the call and searched the whole solution, so the text leads with that fact.
         if (ToolCallContext.Current?.WorkspaceCurrent == true)
         {
-            return WorkspaceCurrentNoMatchText(requestedPath, searchedProjectCount, declaring);
+            return WorkspaceCurrentNoMatchText(requestedPath, searchedProjectCount, declaring, folderFileNames);
         }
 
         var notFound = intro + "No file in the solution has a similar name. ";
@@ -120,14 +123,46 @@ public static class FileNotFoundMessage
 
     // The no-candidates text for a current workspace: the well-formed-call fact first, then the declaring-type sentence (when any), then the search facts. The
     // "renamed or moved" hedge is dropped; a recorded edit-effect fact for the target file (ResolveForFile) still follows. The requested path is shown solution-relative
-    // when the call context knows the solution root (the path as given otherwise). A later slice appends an optional inventory here.
-    private static string WorkspaceCurrentNoMatchText(string requestedPath, int searchedProjectCount, string declaring)
+    // when the call context knows the solution root (the path as given otherwise). With folderFileNames (arm I) the folder inventory follows.
+    private static string WorkspaceCurrentNoMatchText(string requestedPath, int searchedProjectCount, string declaring, IReadOnlyList<string>? folderFileNames)
     {
         var shownPath = EditEffectNames.DisplayPath(requestedPath, ToolCallContext.Current?.SolutionRoot);
         var text = $"Your tool call and file path were well-formed, but file `{shownPath}` does not exist in the solution. " + declaring +
                    $"Searched {searchedProjectCount} project(s) by exact path, bare file name and similar file name; path comparison ignores case, so casing is not the cause; no file in the solution has a similar name.";
         var effectFact = SpeculativeAdvice.ResolveForFile(string.Empty);
-        return effectFact.Length > 0 ? text + " " + effectFact : text;
+        if (effectFact.Length > 0)
+        {
+            text += " " + effectFact;
+        }
+
+        return folderFileNames is null ? text : text + " " + FolderInventoryText(shownPath, folderFileNames);
+    }
+
+    /// <summary>The most file names one folder inventory lists; a longer folder says "first 30 of N".</summary>
+    internal const int MaxFolderInventoryNames = 30;
+
+    // Arm I: the files of the folder the missing path names, as a fact. shownPath is the requested path as displayed in the lead sentence (solution-relative when
+    // it lies under the solution root); its directory part names the folder, and none (or the solution root itself) names the solution root folder.
+    // Names are file names only, de-duplicated and sorted ordinal-ignoring-case, at most MaxFolderInventoryNames.
+    private static string FolderInventoryText(string shownPath, IReadOnlyList<string> folderFileNames)
+    {
+        var directory = Path.GetDirectoryName(shownPath);
+        var folder = string.IsNullOrEmpty(directory)
+            ? "the solution root folder"
+            : $"`{directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)}{Path.DirectorySeparatorChar}`";
+        var names = folderFileNames
+            .Distinct(PathComparison.Comparer)
+            .OrderBy(n => n, PathComparison.Comparer)
+            .ToList();
+        if (names.Count == 0)
+        {
+            return $"No file in the solution is in {folder}.";
+        }
+
+        var noun = names.Count == 1 ? "file" : "files";
+        var shown = names.Take(MaxFolderInventoryNames).ToList();
+        var count = names.Count > shown.Count ? $"{names.Count} {noun} (first {shown.Count} of {names.Count})" : $"{names.Count} {noun}";
+        return $"{char.ToUpperInvariant(folder[0])}{folder[1..]} contains {count}: {string.Join(", ", shown)}";
     }
 
     // The facts and options that follow a "no file matches" statement: a file read earlier may have been renamed or moved (a fact; the

@@ -87,17 +87,50 @@ public sealed class EvalExitLineTests
             Environment.SetEnvironmentVariable(EvalExitLine.EnvironmentVariable, "1");
             var on = ModelEvalAssemblySetUp.BuildProcessStamp(("abc123", false));
             Assert.That(on, Is.Not.Null);
-            Assert.That(on.Value.ErrorPolicyMode, Does.EndWith(EvalExitLine.StampSuffix));
+            Assert.That(on.Value.ErrorPolicyMode, Does.Contain(EvalExitLine.StampSuffix));
 
             Environment.SetEnvironmentVariable(EvalExitLine.EnvironmentVariable, null);
             var off = ModelEvalAssemblySetUp.BuildProcessStamp(("abc123", false));
             Assert.That(off, Is.Not.Null);
-            Assert.That(off.Value.ErrorPolicyMode, Does.Not.EndWith(EvalExitLine.StampSuffix));
+            Assert.That(off.Value.ErrorPolicyMode, Does.Not.Contain(EvalExitLine.StampSuffix));
         }
         finally
         {
             Environment.SetEnvironmentVariable(EvalExitLine.EnvironmentVariable, previous);
         }
 
+    }
+
+    // TODO plan_error_policy_pointer arm I: temporary A/B switch; resolve at plan close
+    [Test]
+    public void BuildProcessStamp_InventorySwitchOn_AddsTheInventorySuffixAfterTheExitLineOne()
+    {
+        // Mutates process-wide state (the environment variable); the previous value is restored in finally. The inventory switch is an AsyncLocal override.
+        var previous = Environment.GetEnvironmentVariable(EvalExitLine.EnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(EvalExitLine.EnvironmentVariable, "1");
+            using (NotFoundInventoryOptions.OverrideForCurrentContext(true))
+            {
+                Assert.That(ModelEvalAssemblySetUp.BuildProcessStamp(("abc123", false))!.Value.ErrorPolicyMode, Does.EndWith("+exitline+inventory"));
+            }
+
+            Environment.SetEnvironmentVariable(EvalExitLine.EnvironmentVariable, null);
+            using (NotFoundInventoryOptions.OverrideForCurrentContext(true))
+            {
+                var on = ModelEvalAssemblySetUp.BuildProcessStamp(("abc123", false))!.Value.ErrorPolicyMode;
+                Assert.That(on, Does.EndWith(NotFoundInventoryOptions.StampSuffix));
+                Assert.That(on, Does.Not.Contain(EvalExitLine.StampSuffix));
+            }
+
+            using (NotFoundInventoryOptions.OverrideForCurrentContext(false))
+            {
+                Assert.That(ModelEvalAssemblySetUp.BuildProcessStamp(("abc123", false))!.Value.ErrorPolicyMode, Does.Not.Contain("inventory"));
+            }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(EvalExitLine.EnvironmentVariable, previous);
+        }
     }
 }
