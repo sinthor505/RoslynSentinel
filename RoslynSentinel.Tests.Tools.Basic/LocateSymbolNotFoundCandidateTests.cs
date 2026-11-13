@@ -1,3 +1,6 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Text;
+
 using RoslynSentinel.Common;
 using RoslynSentinel.Tests.Battery.Basic;
 using RoslynSentinel.Tests.Fakes;
@@ -16,6 +19,15 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 public class LocateSymbolNotFoundCandidateTests
 {
     private const string ProjectName = "OrderApp";
+
+    private const string TestSdkCsproj =
+        "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"18.10.1\" />\n  </ItemGroup>\n</Project>\n";
+
+    private const string PlainCsproj =
+        "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <PackageReference Include=\"Newtonsoft.Json\" Version=\"13.0.3\" />\n  </ItemGroup>\n</Project>\n";
+
+    private const string TestOnlySource = "public class TestMarkerType { }";
+    private const string AppSource = "public class AppMarkerType { }";
 
     private FakeWorkspaceManager _workspaceManager = null!;
     private WorkspaceTools _tools = null!;
@@ -156,5 +168,77 @@ public class LocateSymbolNotFoundCandidateTests
         Assert.That(message, Does.Contain("exactMatch=false would match 1 declaration(s)"));
         Assert.That(message, Does.Contain(ToolCallHint.Call("Search", ("mode", "symbol"), ("query", "CalcDis"), ("exactMatch", "false"))),
             "the retry is a prefilled Search call with exactMatch false");
+    }
+
+    // Arm H, commit fb239287: TestProjectDetector reads the csproj from disk, so the test project's file must exist. Returns the temp directory for the caller to delete.
+    private string SetSolutionWithTestProject()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "LocateSymbolNotFoundCandidateTests_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "TestsProj"));
+        Directory.CreateDirectory(Path.Combine(dir, ProjectName));
+        File.WriteAllText(Path.Combine(dir, "TestsProj", "TestsProj.csproj"), TestSdkCsproj);
+        File.WriteAllText(Path.Combine(dir, ProjectName, ProjectName + ".csproj"), PlainCsproj);
+
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestsProj",
+            Path.Combine(dir, "TestsProj", "TestsProj.csproj"),
+            [("UnitTest1.cs", TestOnlySource, Path.Combine(dir, "TestsProj", "UnitTest1.cs"))]);
+
+        var appProjectId = ProjectId.CreateNewId();
+        var appProject = ProjectInfo.Create(appProjectId, VersionStamp.Default, ProjectName, ProjectName, LanguageNames.CSharp)
+            .WithFilePath(Path.Combine(dir, ProjectName, ProjectName + ".csproj"));
+        solution = solution.AddProject(appProject)
+            .AddDocument(DocumentId.CreateNewId(appProjectId, "App.cs"), "App.cs",
+                SourceText.From(AppSource), filePath: Path.Combine(dir, ProjectName, "App.cs"));
+
+        _workspaceManager.SetTestSolution(solution);
+        return dir;
+    }
+
+    // Arm H, commit fb239287: includeTests false in a solution with a test project still counts as whole-solution when the include-tests retry also finds nothing.
+    [Test]
+    public async Task Search_IncludeTestsFalseTestProjectMiss_LeadsWithTheWellFormedFact()
+    {
+        var dir = SetSolutionWithTestProject();
+        try
+        {
+            ToolCallContext.Set(new ToolCallContext(null, null, "Search", null, 0) { WorkspaceCurrent = true });
+
+            var result = await _tools.SearchSolutionTool(reason: "test message", mode: SearchMode.symbol, query: "ApplyLoyaltyBonus", includeTests: false);
+
+            Assert.That(result.IsError, Is.True);
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+            Assert.That(result.ErrorData?.Message, Does.StartWith("Your tool call was well-formed, but symbol `ApplyLoyaltyBonus` does not exist in the solution."));
+            Assert.That(result.ErrorData?.Message, Does.Contain("test project(s) were also searched and hold no match"), "the test-project note follows the lead");
+            Assert.That(result.ErrorData?.Message, Does.Not.Contain("ListAll"));
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // Arm H, commit fb239287: a name the include-tests retry finds is not a whole-solution miss, so no lead and the hidden-declaration note stays.
+    [Test]
+    public async Task Search_IncludeTestsFalseTestOnlyName_KeepsHiddenNoteAndNoLead()
+    {
+        var dir = SetSolutionWithTestProject();
+        try
+        {
+            ToolCallContext.Set(new ToolCallContext(null, null, "Search", null, 0) { WorkspaceCurrent = true });
+
+            var result = await _tools.SearchSolutionTool(reason: "test message", mode: SearchMode.symbol, query: "TestMarkerType", includeTests: false);
+
+            Assert.That(result.IsError, Is.True);
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+            Assert.That(result.ErrorData?.Message, Does.Contain("hidden because includeTests is false"));
+            Assert.That(result.ErrorData?.Message, Does.Not.Contain("well-formed"));
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+            Directory.Delete(dir, recursive: true);
+        }
     }
 }
