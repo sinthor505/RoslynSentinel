@@ -1,6 +1,6 @@
 # Plan: replay a saved transcript with a substituted error text through the real agent loop and a fake tool host, in a Common-only test project
 
-**Status:** IN PROGRESS 2026-11-13. Steps 1-8 and 11 done (a99ed363, d1b30b9f, 51d6edb0, 6dc49057, 129da71e, cca1ac06, 1845498c, 2215c3dc, e1e8aac8, 8c773d97, 09ebacf1); Steps 9-10 next.
+**Status:** IN PROGRESS 2026-11-13. Steps 1-11 done (a99ed363, d1b30b9f, 51d6edb0, 6dc49057, 129da71e, cca1ac06, 1845498c, 2215c3dc, e1e8aac8, 8c773d97, 09ebacf1, c3efa20e, e5c85478, 069455d6); Steps 12-14 (live) remain, after the two open decisions below.
 
 ## Problem
 
@@ -238,6 +238,12 @@ Settled here (owner may overturn):
   - Record the model key, temperature and top-p in the transcript header and in `results.csv`; `null` means the server default.
   - Step 9 refuses a source whose recorded settings differ from the run's, and records `unknown` for older sources.
 - Done when: `Build` 0 errors; a header round-trip test passes; the pins are updated in this slice.
+- Done: c3efa20e. `AgentTranscript.ModelKey`/`Temperature`/`TopP` come from the new `LmStudioAgentClient.Model` and `LlmOptions`. `results.csv` gains `modelKey`, `temperature` and `topP` (36 columns; 33 is accepted as legacy).
+- Step 9 done: e5c85478, test fix 069455d6.
+  - **Extra column.** `variants.csv` gained a 26th column, `SourceSettings` (`matched`/`mismatch`/`unknown`).
+  - **Harness errors.** A settings mismatch or a failed model check is written as a harness-error row, not thrown.
+  - **Loop assist** is off in replay.
+  - **Smoke run** (2026-11-13, host 112, `qwen3.5-2b`; no `qwen3.5-9b` was loaded): one E sample with armE classified `Widen:ListSolutionItems`, stopped at `TurnCap`, no harness error, 27 s. Run `ModelTestingResults\112\ReplayVariants_SamplesAndClassifies\20261113-195930-964`.
 
 ### Step 11 - Harvest E/F/G variants and recover their sampling settings
 - Files: `RoslynSentinel.Tests.ErrorVariants/ErrorVariants/FileNotFound/armE.md`, `armF.md`, `armG.md`; the eval doc of Step 12.
