@@ -2249,8 +2249,18 @@ public class SymbolNavigationEngine
                 $"same-named candidate ('{symbolName}') with its containing type and kind.");
         }
 
-        // TODO a virtual (non-abstract) class method returns no implementations here even when derived classes override it (seen with Beta.Run overridden in Gamma); union SymbolFinder.FindOverridesAsync for a virtual member
         IEnumerable<ISymbol> implementations = await SymbolFinder.FindImplementationsAsync(symbol, solution, null, cancellationToken);
+
+        // FindImplementationsAsync returns nothing for the overrides of a class member, so a virtual or abstract
+        // method/property/event (or an override that is itself overridden) would read as zero implementations
+        // with derived overrides present. Union in its overrides (FindOverridesAsync is transitive).
+        if (symbol is IMethodSymbol or IPropertySymbol or IEventSymbol
+            && symbol.ContainingType is { TypeKind: TypeKind.Class }
+            && (symbol.IsVirtual || symbol.IsAbstract || symbol.IsOverride))
+        {
+            var overrides = await SymbolFinder.FindOverridesAsync(symbol, solution, null, cancellationToken);
+            implementations = implementations.Concat(overrides).Distinct(SymbolEqualityComparer.Default).ToList();
+        }
 
         // SymbolFinder.FindImplementationsAsync only finds interface implementers and returns nothing for a
         // class symbol, so an abstract/non-sealed class would read as "confirmed zero implementations" even

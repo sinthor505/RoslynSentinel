@@ -1583,6 +1583,21 @@ public class Second { public void Run() { } }";
         }
 
         [Test]
+        public async Task FindImplementationsForMemberAsync_VirtualClassMethod_ReturnsTransitiveOverrides()
+        {
+            // A virtual class method's overrides are its implementations; FindImplementationsAsync alone returns none.
+            SetMultipleFiles(
+                ("Beta.cs", "public class Beta\r\n{\r\n    public virtual void Run() { }\r\n}"),
+                ("Gamma.cs", "public class Gamma : Beta\r\n{\r\n    public override void Run() { }\r\n}"),
+                ("Delta.cs", "public class Delta : Gamma\r\n{\r\n    public override void Run() { }\r\n}"));
+            var results = await _navigationEngine.FindImplementationsForMemberAsync("Beta.cs", "Run", contextSnippet: null);
+            var typeNames = results.Select(r => r.TypeName).ToList();
+            Assert.That(typeNames, Has.Some.Contains("Gamma.Run"));
+            Assert.That(typeNames, Has.Some.Contains("Delta.Run"));
+            Assert.That(typeNames, Has.None.Contains("Beta.Run"));
+        }
+
+        [Test]
         public async Task FindCallersAsync_NoFilePath_UnknownName_ThrowsNotFound()
         {
             const string src = @"public class Only { public void Run() { } }";
