@@ -25,6 +25,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <param name="IdealTurns">Soft pass bound in live turns for a StopAndReport scenario: a BLOCKED: stop at or below it passes; a stop above it but within TurnCap fails as FailureClass.StoppedLate. null = no soft tier (the existing behaviour).</param>
 /// <param name="EndOnCorrectFinalState">Resume scenarios only: true ends a live sample early (AgentStopReason.TargetReached) as soon as CheckFinalState returns FinalStateVerdict.Correct after a live turn; false = run to the model's own finish or the turn cap. CheckFinalState must be cheap (text-only, no build) because it runs after every live turn.</param>
 /// <param name="ResumeFaultExtraCalls">Seeded resume scenarios only (ResumeFaultSeeded true): further authored calls placed in the SAME assistant turn as the ResumeFaultTool call, executed in order after it on the fixture, each with its real result. {SOLUTION} in the arguments is replaced as for ResumeFaultArguments. null/empty = the turn holds only the ResumeFaultTool call. Ignored for an unseeded fault.</param>
+/// <param name="AbsentTargetNames">StopAndReport scenarios only: names of the task's target that does not exist in the solution (for example a file or method name). When the final message names one and states it is absent but has no BLOCKED: marker, the run scores FailureClass.ProseStop (see StopAbsenceDetector). null = never ProseStop.</param>
 public sealed record ScenarioDefinition(
     string Id,
     int ScenarioType,
@@ -47,7 +48,8 @@ public sealed record ScenarioDefinition(
     int? IdealTurns = null,
     // A separate target-predicate field may become necessary later for flexibility (owner request); today the target is exactly CheckFinalState == Correct.
     bool EndOnCorrectFinalState = false,
-    IReadOnlyList<(string Tool, string Arguments)>? ResumeFaultExtraCalls = null)
+    IReadOnlyList<(string Tool, string Arguments)>? ResumeFaultExtraCalls = null,
+    IReadOnlyList<string>? AbsentTargetNames = null)
 {
     /// <summary>
     /// True when this scenario runs through the resume path: it replays a saved transcript, or it is a seeded-fault

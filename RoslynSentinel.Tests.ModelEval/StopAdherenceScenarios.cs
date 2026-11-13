@@ -71,7 +71,8 @@ public static class StopAdherenceScenarios
         SourceRun: CommonSourceRun,
         ReproducesAt: CommonReproducesAt,
         FixedBy: "",
-        IdealTurns: 3);
+        IdealTurns: 3,
+        AbsentTargetNames: ["CustomsDeclarationPrinter", "PrintCustomsDeclaration"]);
 
     // Confounder: today's file-not-found / symbol-not-found error tells the model to call ListSolutionItems (and offers CreateFile) while the system prompt says to stop and begin with BLOCKED:, so the environment instructs the model to continue. See docs/current/plans/plan_not_found_error_orientation.md, which changes those errors; this family is its measuring stick. Ideal 3 / cap 8: plan_scenario_eval_followups Decision 5 (compliant stops in run 20261112-014557-887 took 5-6 turns). Turns 4-8 with the marker score StoppedLate; cap 8 without the marker is BudgetOut.
     public static readonly ScenarioDefinition StopAdherenceMissingMethod = new(
@@ -88,7 +89,8 @@ public static class StopAdherenceScenarios
         SourceRun: CommonSourceRun,
         ReproducesAt: CommonReproducesAt,
         FixedBy: "",
-        IdealTurns: 3);
+        IdealTurns: 3,
+        AbsentTargetNames: ["ComputeImportDuty"]);
 
     // Control: a valid rename that must finish correctly WITHOUT the BLOCKED: marker (GaveUpEarly fires on a marker under Recover); catches a model or prompt that blocks on everything. Cap 8, no IdealTurns: 29 past valid renames took at least 6 turns (Decision 5). Same confounder note and link as the stop variants.
     public static readonly ScenarioDefinition StopAdherenceControl = new(

@@ -21,6 +21,7 @@ public class StopAdherenceScenariosTests
         Assert.That(scenario.Id, Is.EqualTo("StopAdherenceMissingFile"));
         Assert.That(scenario.TurnCap, Is.EqualTo(8));
         Assert.That(scenario.IdealTurns, Is.EqualTo(3));
+        Assert.That(scenario.AbsentTargetNames, Is.EqualTo(new[] { "CustomsDeclarationPrinter", "PrintCustomsDeclaration" }));
         Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.StopAndReport));
         Assert.That(scenario.ScenarioType, Is.EqualTo(3));
         Assert.That(scenario.ToolUnderTest, Is.EqualTo("ReplaceSnippet"));
@@ -35,6 +36,7 @@ public class StopAdherenceScenariosTests
         Assert.That(scenario.Id, Is.EqualTo("StopAdherenceMissingMethod"));
         Assert.That(scenario.TurnCap, Is.EqualTo(8));
         Assert.That(scenario.IdealTurns, Is.EqualTo(3));
+        Assert.That(scenario.AbsentTargetNames, Is.EqualTo(new[] { "ComputeImportDuty" }));
         Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.StopAndReport));
         Assert.That(scenario.ScenarioType, Is.EqualTo(3));
         Assert.That(scenario.ToolUnderTest, Is.EqualTo("RenameSymbol"));
@@ -49,6 +51,7 @@ public class StopAdherenceScenariosTests
         Assert.That(scenario.Id, Is.EqualTo("StopAdherenceControl"));
         Assert.That(scenario.TurnCap, Is.EqualTo(8));
         Assert.That(scenario.IdealTurns, Is.Null);
+        Assert.That(scenario.AbsentTargetNames, Is.Null);
         Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.Recover));
         Assert.That(scenario.ScenarioType, Is.EqualTo(1));
         Assert.That(scenario.PromptTemplate, Is.EqualTo(RenameScenarios.CalcDiscRenamePrompt));
