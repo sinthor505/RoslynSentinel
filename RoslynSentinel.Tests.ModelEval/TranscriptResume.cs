@@ -6,6 +6,7 @@ using RoslynSentinel.Common.AgentLoop;
 
 namespace RoslynSentinel.Tests.ModelEval;
 
+// TODO fold ResumeSource into AgentTranscript once the 8 consumers move (plan_error_variant_replay Step 3a)
 /// <summary>
 /// A saved transcript.json read back for resuming. <see cref="AgentTranscript"/> cannot be used for this: its Turns
 /// list is get-only, so System.Text.Json silently leaves it empty.
@@ -194,23 +195,24 @@ public static class TranscriptResume
 
     public static ResumeSource Load(string transcriptJsonPath)
     {
-        var json = File.ReadAllText(transcriptJsonPath);
-        return JsonSerializer.Deserialize<ResumeSource>(json)
-            ?? throw new InvalidOperationException($"Transcript at '{transcriptJsonPath}' deserialized to null.");
+        var t = SavedTranscript.Load(transcriptJsonPath);
+        return new ResumeSource
+        {
+            SystemPrompt = t.SystemPrompt,
+            UserPrompt = t.UserPrompt,
+            Tools = [.. t.Tools],
+            CommitHash = t.CommitHash,
+            ToolDescriptions = t.ToolDescriptions,
+            ToolSchemas = t.ToolSchemas,
+            Turns = [.. t.Turns],
+        };
     }
 
     /// <summary>Turns 1..<paramref name="keepTurns"/> of the source, in order.</summary>
     /// <exception cref="ArgumentOutOfRangeException">The source has fewer than <paramref name="keepTurns"/> turns, or it is below 1.</exception>
     public static IReadOnlyList<AgentTranscriptTurn> KeepTurns(ResumeSource source, int keepTurns)
     {
-        if (keepTurns < 1 || keepTurns > source.Turns.Count)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(keepTurns), keepTurns,
-                $"The transcript has {source.Turns.Count} turn(s); keep between 1 and {source.Turns.Count}.");
-        }
-
-        return source.Turns.Take(keepTurns).ToList();
+        return SavedTranscript.KeepTurns(source.Turns, keepTurns);
     }
 
     /// <summary>
