@@ -1,6 +1,22 @@
 # Give ModelEval a from-scratch 15-tool surface instead of the 55-tool Refactor+Workspace+WholeFileWrite set
 
-**Status:** PROPOSED 2026-11-13. The owner asked for the ModelEval tool list to be rebuilt from scratch. This doc proposes the list from a prompt, assertion and usage review; nothing is built.
+**Status:** PROPOSED 2026-11-13. The owner asked for the ModelEval tool list to be rebuilt from scratch and implemented in a fresh session. This doc proposes the list from a prompt, assertion and usage review; nothing is built.
+
+## Starting in a fresh session
+
+- **Entry.** Run the `implement-plan` skill on this proposal. It drafts `plans/plan_modeleval_lean_tool_surface.md` from the "Proposal" section, reviews it against source and settles "Open questions" with the owner.
+- **Anchors are from HEAD e5b0661c (2026-11-13).** Re-verify the `file:line` references before briefing, because line numbers drift.
+- **Decide first:**
+  - (a) Keep the three hedges, or start at 12 tools?
+  - (b) Resume family: keep `ChangeAccessibility`/`ModifyModifier`, or re-record the capture?
+  - (c) Is PlanStepRunner in scope now, or later?
+- **Suggested order.** These slices change no output:
+  1. the env switch and allow-list in `ChainEvalToolSurface` (default stays full);
+  2. the surface-aware hint fixes, which make no change on the full surface;
+  3. the prompt rewording (`ListAll` to `ListSolutionItems`/`Search`).
+  Then the A/B on a host with `qwen3.5-9b-mtp` loaded (113), then the default switch.
+- **Peers.** The prompt strings live in `Common/AgentLoop/AgentSystemPrompts.cs` and the scenario files, which live eval jobs build from. Check `ListAgents` before committing.
+- **The tally scripts behind the evidence** are in `c:\tmp\tally\`, a temporary location. Re-run or copy them if the numbers need refreshing.
 
 ## Motivation
 
