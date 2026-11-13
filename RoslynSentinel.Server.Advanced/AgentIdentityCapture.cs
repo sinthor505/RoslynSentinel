@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 using RoslynSentinel.Common;
 
@@ -40,9 +41,8 @@ public static class AgentIdentityCapture
 
     // Symbol tools with no file to search: the argument naming the symbol, read only for the edit effect note (EditEffectEvidence). They
     // set MissingTerm but not TargetFilePath, so NotFoundEvidence (which needs a file) behaves as before for them.
-    // TODO InspectSymbol has no name argument (filePath + contextSnippet only), so it gets no effect note until a name can be taken from the snippet
+    // InspectSymbol names no symbol either: its term is picked from the identifiers of contextSnippet by InspectSymbolTerm.
     // MoveMember is not in this map: its term is chosen from className and memberNames by MoveMemberTerm.
-    // TODO Search symbol mode returns zero rows as success, not an error, so its effect note never reaches the not-found path
     private static readonly Dictionary<string, string> SymbolTermArgument = new(StringComparer.Ordinal)
     {
         ["LocateSymbol"] = "symbolName",
@@ -74,6 +74,8 @@ public static class AgentIdentityCapture
             // Search names a symbol only in symbol mode; its text and declaration-listing modes put a pattern or filter in query.
             var symbolTerm = fileTerm is null && toolName == "MoveMember"
                 ? MoveMemberTerm(arguments, TryGet(editEffects), sessionId)
+                : fileTerm is null && toolName == "InspectSymbol"
+                ? InspectSymbolTerm(arguments, TryGet(editEffects), sessionId)
                 : fileTerm is null && toolName is not null && SymbolTermArgument.TryGetValue(toolName, out var symbolArgument)
                     && (toolName != "Search" || string.Equals(ReadString(arguments, "mode"), "symbol", StringComparison.OrdinalIgnoreCase))
                     ? ReadString(arguments, symbolArgument)
@@ -151,6 +153,30 @@ public static class AgentIdentityCapture
         }
 
         return candidates.Count > 0 ? candidates[0] : null;
+    }
+
+    // InspectSymbol names no symbol: contextSnippet is a source line such as "public int Bar(int x)". Its identifier tokens are candidates in
+    // order; the first with a recorded effect for this caller's session or server instance wins. With none (or no index or snippet) there is
+    // no term, so the call gets no effect note.
+    private static readonly Regex IdentifierToken = new(@"[A-Za-z_]\w*", RegexOptions.CultureInvariant);
+
+    private static string? InspectSymbolTerm(IDictionary<string, JsonElement>? arguments, EditEffectIndex? index, string? sessionId)
+    {
+        var snippet = ReadString(arguments, "contextSnippet");
+        if (index is null || snippet is null)
+        {
+            return null;
+        }
+
+        foreach (Match match in IdentifierToken.Matches(snippet))
+        {
+            if (EditEffectEvidence.HasEffectFor(index, match.Value, sessionId, ServerInstanceIdentity.Id))
+            {
+                return match.Value;
+            }
+        }
+
+        return null;
     }
 
     private static List<string> ReadStringArray(IDictionary<string, JsonElement>? arguments, string key)

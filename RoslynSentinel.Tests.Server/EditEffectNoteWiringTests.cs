@@ -77,7 +77,7 @@ public class EditEffectNoteWiringTests
     }
 
     [Test]
-    public void Enter_SearchSymbolMode_SetsTerm_OtherModesAndInspectSymbolDoNot()
+    public void Enter_SearchSymbolMode_SetsTerm_OtherModesDoNot()
     {
         var index = new EditEffectIndex();
 
@@ -87,9 +87,24 @@ public class EditEffectNoteWiringTests
         EnterAs("Search", index, ("mode", "text"), ("query", "Bar"));
         Assert.That(ToolCallContext.Current!.MissingTerm, Is.Null);
         Assert.That(ToolCallContext.Current.EditEffects, Is.Null);
+    }
 
-        EnterAs("InspectSymbol", index, ("filePath", "Foo.cs"), ("contextSnippet", "public void Bar()"));
+    [Test]
+    public void Enter_InspectSymbol_TermIsTheSnippetIdentifierWithAnEffect()
+    {
+        EnterAs("InspectSymbol", IndexWithRename(), ("filePath", "Foo.cs"), ("contextSnippet", "public int Bar(int x)"));
+
+        Assert.That(ToolCallContext.Current!.MissingTerm, Is.EqualTo("Bar"));
+        Assert.That(ToolCallContext.Current.TargetFilePath, Is.EqualTo("Foo.cs"));
+    }
+
+    [Test]
+    public void Enter_InspectSymbol_WithNoEffectForAnyIdentifier_HasNoTerm()
+    {
+        EnterAs("InspectSymbol", IndexWithRename(), ("filePath", "Foo.cs"), ("contextSnippet", "public int Quux(int x)"));
+
         Assert.That(ToolCallContext.Current!.MissingTerm, Is.Null);
+        Assert.That(ToolCallContext.Current.TargetFilePath, Is.EqualTo("Foo.cs"));
     }
 
     [Test]
