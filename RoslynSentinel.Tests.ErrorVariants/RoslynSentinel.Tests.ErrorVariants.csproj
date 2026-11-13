@@ -43,4 +43,8 @@
     <Using Include="NUnit.Framework" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="ErrorVariants\**\*.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
