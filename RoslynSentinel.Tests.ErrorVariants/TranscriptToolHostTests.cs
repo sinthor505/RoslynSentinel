@@ -196,6 +196,22 @@ public sealed class TranscriptToolHostTests
     }
 
     [Test]
+    public async Task CallTool_RecordedMemberViewCallAfterTheCut_IsServed()
+    {
+        const string viewArguments = "{\"operation\":\"view\",\"filePath\":\"A.cs\",\"memberName\":\"X\",\"reason\":\"r r r r r\"}";
+        const string viewResult = "{\"isError\":false,\"successData\":{\"source\":\"public void X() { }\"}}";
+        var transcript = BuildTranscript(
+            MakeTurn(1, MakeCall("ReadFile", "{\"filePath\":\"a.cs\"}", "{\"isError\":false}", false)),
+            MakeTurn(2, MakeCall("Member", viewArguments, viewResult, false)));
+        var host = new TranscriptToolHost(transcript, cutTurn: 1);
+
+        var result = await host.CallToolAsync("Member", RunnerArguments(viewArguments), CancellationToken.None);
+
+        Assert.That(host.OffScript, Is.False);
+        Assert.That(Blocks(result), Is.EqualTo(new[] { viewResult }));
+    }
+
+    [Test]
     public void Constructor_CutTurnOutOfRange_Throws()
     {
         var transcript = BuildTranscript(MakeTurn(1), MakeTurn(2));

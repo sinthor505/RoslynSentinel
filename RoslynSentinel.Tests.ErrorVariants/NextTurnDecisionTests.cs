@@ -121,6 +121,39 @@ public sealed class NextTurnDecisionTests
     }
 
     [Test]
+    public void Classify_ViewOnlyMemberCall_IsWidenMember()
+    {
+        var turn = TurnWithArguments("Member", "{\"operation\":\"view\",\"filePath\":\"A.cs\",\"memberName\":\"X\",\"reason\":\"r r r r r\"}");
+
+        var decision = NextTurnDecision.Classify(new[] { turn }, null, AgentStopReason.ModelFinished, null);
+
+        Assert.That(decision.DecisionClass, Is.EqualTo("Widen:Member"));
+        Assert.That(decision.FirstTool, Is.EqualTo("Member"));
+    }
+
+    [Test]
+    public void Classify_ReplaceMemberCall_IsWriteMember()
+    {
+        var turn = TurnWithArguments("Member", "{\"operation\":\"replace\",\"filePath\":\"A.cs\",\"memberName\":\"X\",\"reason\":\"r r r r r\"}");
+
+        var decision = NextTurnDecision.Classify(new[] { turn }, null, AgentStopReason.ModelFinished, null);
+
+        Assert.That(decision.DecisionClass, Is.EqualTo("Write:Member"));
+        Assert.That(decision.FirstTool, Is.EqualTo("Member"));
+    }
+
+    [Test]
+    public void Classify_ProjectDocListCall_IsWidenProjectDoc()
+    {
+        var turn = TurnWithArguments("ProjectDoc", "{\"action\":\"list\",\"docType\":\"plan\"}");
+
+        var decision = NextTurnDecision.Classify(new[] { turn }, null, AgentStopReason.ModelFinished, null);
+
+        Assert.That(decision.DecisionClass, Is.EqualTo("Widen:ProjectDoc"));
+        Assert.That(decision.FirstTool, Is.EqualTo("ProjectDoc"));
+    }
+
+    [Test]
     public void Classify_UnlistedTool_IsOther()
     {
         var decision = NextTurnDecision.Classify(
@@ -197,6 +230,30 @@ public sealed class NextTurnDecisionTests
         Assert.Throws<ArgumentException>(() =>
             NextTurnDecision.Classify(new List<AgentTranscriptTurn>(), null, AgentStopReason.ModelFinished, null));
     }
+
+    private static AgentTranscriptTurn TurnWithArguments(string toolName, string argumentsJson) => new()
+    {
+        TurnNumber = 1,
+        ModelMessage = new AgentChatMessage { Role = "assistant", Content = "" },
+        ModelLatency = TimeSpan.FromMilliseconds(10),
+        StartedAt = Now,
+        CompletedAt = Now,
+        ToolCalls =
+        [
+            new AgentToolCallRecord
+            {
+                ToolName = toolName,
+                ArgumentsJson = argumentsJson,
+                ResultJson = "{}",
+                IsError = false,
+                Latency = TimeSpan.FromMilliseconds(5),
+                StartedAt = Now,
+                CompletedAt = Now,
+                ToolCallId = "call-" + toolName,
+                TrailingText = null,
+            },
+        ],
+    };
 
     private static AgentTranscriptTurn Turn(int turnNumber, string? content, params string[] toolNames) => new()
     {

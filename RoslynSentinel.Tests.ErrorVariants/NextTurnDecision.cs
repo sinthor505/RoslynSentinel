@@ -53,7 +53,7 @@ public sealed record NextTurnDecision(
         else
         {
             firstTool = first.ToolCalls[0].ToolName;
-            decisionClass = ToolEffectList.Classify(firstTool) switch
+            decisionClass = ToolEffectList.ClassifyCall(firstTool, first.ToolCalls[0].ArgumentsJson) switch
             {
                 ToolEffect.Read => "Widen:" + firstTool,
                 ToolEffect.Write => "Write:" + firstTool,
