@@ -45,8 +45,9 @@ punctuation, `Git` tool with scope `listed`, `CommitHashLength` off the result).
 
 Path: `.claude/handoff/<yyyy-MM-dd>_<sid8>.md` (`<sid8>` = the 8-char id from this session's
 journal filename; create the folder if missing). Local-only, like the journal. Use the Write tool
-(non-C# file). Also overwrite `.claude/handoff/LATEST.md` with a single line: the filename of this
-log, so a new session can find it without listing the folder.
+(non-C# file). Then append (never overwrite; several sessions share the folder) one line to
+`.claude/handoff/INDEX.md`: `<yyyy-MM-dd HH:mm> | <sid8> | open | <topic, 3-6 words> | <log filename>`.
+The SessionStart hook lists open entries so a new session can find it without listing the folder.
 
 Everything the next session needs must be *in the file* - it must not require this chat. Use
 absolute dates, `file:line` or symbol names for code, quoted text for errors. Template:
@@ -105,4 +106,4 @@ Rules for the log:
 
 Reply with 3-6 lines: commit hash(es) (or "not committed: <reason>"), build/test status, the
 handoff log path, and the single first NEXT item. Tell the user to start the next session with:
-"Resume from .claude/handoff/LATEST.md".
+"Resume from handoff <sid8>" (or the full log path).

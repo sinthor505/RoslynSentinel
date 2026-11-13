@@ -37,7 +37,8 @@ step in the tracker's morning checklist. Restarting your own idle instance is no
 ### Tracker
 
 - Path `.claude/handoff/<yyyy-MM-dd>_<kind>_<slug>_<sid8>.progress.md` (`<sid8>` from the journal
-  filename; the folder is git-ignored). Overwrite `.claude/handoff/LATEST.md` with its filename.
+  filename; the folder is git-ignored). Append (never overwrite) a line to `.claude/handoff/INDEX.md`:
+  `<yyyy-MM-dd HH:mm> | <sid8> | open | <topic> | <tracker filename>`; the SessionStart hook lists open entries.
 - Add a `project_` memory file and a MEMORY.md line "READ <tracker> first" so it survives
   compaction; at the end mark it closed and move the index line to MEMORY_CLOSED.md.
 - Only the main session writes it, after every state change (dispatch, report, commit, decision).

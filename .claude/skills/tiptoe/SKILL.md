@@ -18,8 +18,9 @@ ASCII-only punctuation, `Git` tool with scope `listed`).
    create the folder if missing). `<sid8>` is the 8-char id in this session's journal filename
    (`.claude/journal/<date>_<sid8>.md`). The usage hook reads it and switches its limit notices
    from "run wrapup" to "keep going, stay interruptible".
-2. Build the work queue: the NEXT list in `.claude/handoff/LATEST.md`'s log if one exists
-   (i.e. you just ran wrapup or resumed from one), otherwise what the user asked for. Order it
+2. Build the work queue: the NEXT list in this session's handoff log
+   (`.claude/handoff/<yyyy-MM-dd>_<sid8>.md`, if you just ran wrapup) or in the log you resumed
+   from, otherwise what the user asked for. Order it
    safest-first.
 3. Create or reuse the progress log `.claude/handoff/<yyyy-MM-dd>_<sid8>.progress.md`: queue on
    top, then one line per finished step. This file, not this chat, is the recovery point.

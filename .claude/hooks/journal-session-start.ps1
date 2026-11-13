@@ -38,6 +38,37 @@ parameter; an error message that did (or did not) get you unstuck; reaching for 
 or built-in tool on C# because no MCP tool fit. Brief, high-level - not a blocker/finding.
 "@)
 
+    # Open handoffs from .claude/handoff/INDEX.md (append-only; replaces the old LATEST.md, which
+    # concurrent sessions overwrote). Line: "<time> | <sid8> | open|resumed|closed | <topic> | <file>".
+    # An entry is open while the newest line for its file says open. Startup/clear only.
+    if ([string]$payload.source -in @('startup', 'clear')) {
+        try {
+            $index = Join-Path (Split-Path $PSScriptRoot -Parent) 'handoff/INDEX.md'
+            if (Test-Path -LiteralPath $index) {
+                $latest = [ordered]@{}
+                foreach ($line in Get-Content -LiteralPath $index) {
+                    $parts = $line -split '\s*\|\s*'
+                    if ($parts.Count -lt 5) { continue }
+                    $file = $parts[4].Trim()
+                    if ($latest.Contains($file)) { $latest.Remove($file) }
+                    $latest[$file] = $parts
+                }
+                $open = @($latest.Values | Where-Object { $_[2].Trim() -eq 'open' })
+                if ($open.Count -gt 0) {
+                    [array]::Reverse($open)
+                    $rows = ($open | Select-Object -First 6 | ForEach-Object { "  {0} | {1} | {2} | .claude/handoff/{3}" -f $_[0].Trim(), $_[1].Trim(), $_[3].Trim(), $_[4].Trim() }) -join "`n"
+                    [Console]::Out.WriteLine(@"
+
+Open handoffs (.claude/handoff/INDEX.md, newest first):
+$rows
+To resume one, read it, then append to INDEX.md: "<yyyy-MM-dd HH:mm> | <your sid8> | resumed | <topic> | <file>".
+"@)
+                }
+            }
+        }
+        catch { }
+    }
+
     # After compaction the deferred MCP tool schemas are unloaded; calls made from memory miss
     # required params (e.g. 'reason') and get refused. A just-in-time line beats a CLAUDE.md rule.
     if ([string]$payload.source -eq 'compact') {
