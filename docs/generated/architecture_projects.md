@@ -15,6 +15,7 @@
 | RoslynSentinel.Tests.Basic | RoslynSentinel.Common, RoslynSentinel.Engines.Basic, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic, RoslynSentinel.Utilities.AgentIdentityHook |
 | RoslynSentinel.Tests.Battery.Advanced | RoslynSentinel.Engines.Advanced, RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Advanced, RoslynSentinel.Tests.Support.Basic |
 | RoslynSentinel.Tests.Battery.Basic | RoslynSentinel.Tests, RoslynSentinel.Tests.Support.Basic |
+| RoslynSentinel.Tests.ErrorVariants | RoslynSentinel.Common |
 | RoslynSentinel.Tests.Integration | RoslynSentinel.Common, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests |
 | RoslynSentinel.Tests.ModelEval | RoslynSentinel.Common, RoslynSentinel.Server.Advanced, RoslynSentinel.Tests |
 | RoslynSentinel.Tests.PlanStepRunner | RoslynSentinel.Tests, RoslynSentinel.Utilities.PlanStepRunner |
