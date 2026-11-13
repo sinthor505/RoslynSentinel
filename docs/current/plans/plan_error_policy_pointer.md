@@ -189,6 +189,7 @@ Decided 2026-11-12 (owner), after the Step 11b rerun (eval doc 39576054, 7ebdb9b
 - The switch is temporary (`reference_tool_error_text_facts_options_policy.md`: measure what ships). If D wins, the line goes into `AgentSystemPrompts.CodingAgent` for all callers and the switch is deleted; if not, both are removed. The switch does not outlive this step.
 - Files: `RoslynSentinel.Tests.ModelEval/ScenarioScorer.cs` and scorer tests; the switch in the ModelEval harness; results to the eval doc.
 - Done when: Build 0 errors; scorer tests cover marker-anywhere and `#`; the eval doc has the arm D table and read.
+- Code done: a0fd8fe4 (`FailureClass.MarkerNotFirst`, a pass: no edit, `BLOCKED:` after the first line; `FailureClass.None` and `MarkerPresent` keep meaning a leading marker; `ProseStop` now means no `BLOCKED:` anywhere; leading `#` accepted; a marker over the ideal turn count scores `StoppedLate` either way), 1364bbe7 (temporary switch `ROSLYNSENTINEL_EVAL_EXIT_LINE=1` in `EvalExitLine.cs`, set in the submitting shell; stamps `errorPolicyMode` as `off+exitline`). ModelEval fast tests 190 passed, 2 skipped.
 
 ### Step 12 - Remaining routes
 - Files: the routes marked in Step 5.
