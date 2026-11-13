@@ -127,9 +127,16 @@ public sealed record DocumentLookupResult(
     /// <see cref="ToolErrorCode.Ambiguous"/>, with <see cref="Describe"/> as the message. Only call
     /// when <see cref="IsFound"/> is false.
     /// </summary>
-    // TODO error-policy: route does not record the missing-target kind
     public ResultError ToResultError(Func<string, bool>? isCallable = null)
-        => new(Status == DocumentLookupStatus.Ambiguous ? ToolErrorCode.Ambiguous : ToolErrorCode.NotFound, Describe(isCallable));
+    {
+        // error-policy side channel (plan_error_policy_pointer Step 12); text-neutral
+        if (Status == DocumentLookupStatus.NotFound)
+        {
+            ToolCallContext.Current?.RecordMissingTarget("file");
+        }
+
+        return new(Status == DocumentLookupStatus.Ambiguous ? ToolErrorCode.Ambiguous : ToolErrorCode.NotFound, Describe(isCallable));
+    }
 }
 
 /// <summary>What <see cref="DocumentScope"/> selects.</summary>
