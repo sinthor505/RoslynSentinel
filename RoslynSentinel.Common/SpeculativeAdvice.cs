@@ -15,16 +15,27 @@ public static class SpeculativeAdvice
     /// <summary>
     /// Returns the sentence to render in place of <paramref name="hedge"/>: the fact sentence of a recorded edit effect for the current
     /// call's missing term (<see cref="EditEffectEvidence.FactForCurrentCall"/>) when there is one, otherwise <paramref name="hedge"/>
-    /// unchanged, as given (an empty or multi-line string included). Never throws.
+    /// unchanged, as given (an empty or multi-line string included). When the fact is returned, the current call's
+    /// <see cref="ToolCallContext.HasEditEffectFact"/> is set so that <see cref="NotFoundEvidence"/> does not add the same fact again. Never throws.
     /// </summary>
     public static string Resolve(string hedge)
     {
         // TODO slice A: match FileDeleted/file-move effects by TargetFilePath
         // TODO Resolve keys on ToolCallContext.MissingTerm only, so a builder whose hedge is about a different name (an insert anchor, a member list) could get a fact about the call's term.
-        // TODO slice E step 3: set ToolCallContext.Current.HasEditEffectFact when the fact replaces the hedge.
         try
         {
-            return EditEffectEvidence.FactForCurrentCall() ?? hedge;
+            var fact = EditEffectEvidence.FactForCurrentCall();
+            if (fact is null)
+            {
+                return hedge;
+            }
+
+            if (ToolCallContext.Current is { } context)
+            {
+                context.HasEditEffectFact = true;
+            }
+
+            return fact;
         }
         catch (Exception ex)
         {

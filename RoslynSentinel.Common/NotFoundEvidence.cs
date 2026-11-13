@@ -36,13 +36,26 @@ public static class NotFoundEvidence
     /// <summary>
     /// Notes for the current tool call, read from <see cref="ToolCallContext.Current"/>. Empty unless the error code is a
     /// not-found code and the call carries an agent id, a target file, a mapped term and a solution root. A recorded edit effect for the
-    /// same term (<see cref="EditEffectEvidence"/>: needs no agent id or file path) is returned instead of the text note.
+    /// same term (<see cref="EditEffectEvidence"/>: needs no agent id or file path) is returned instead of the text note, and
+    /// it sets <see cref="ToolCallContext.HasEditEffectFact"/>. Empty when the flag is already set, because a builder embedded
+    /// the fact in its message (<see cref="SpeculativeAdvice.Resolve"/>).
     /// </summary>
     public static IReadOnlyList<Finding> ForCurrentCall(string? errorCode)
     {
+        // A builder that already embedded the fact in its message sets the flag, so neither the effect note nor the text note is added twice.
+        if (ToolCallContext.Current?.HasEditEffectFact == true)
+        {
+            return [];
+        }
+
         // Wired here rather than at the two call sites (ToolResultMarshaller, CallToolFailureHandler) so both get the same order: effect note first.
         if (EditEffectEvidence.ForCurrentCall(errorCode) is { Count: > 0 } effectNotes)
         {
+            if (ToolCallContext.Current is { } effectContext)
+            {
+                effectContext.HasEditEffectFact = true;
+            }
+
             return effectNotes;
         }
 

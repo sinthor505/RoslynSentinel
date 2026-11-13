@@ -162,4 +162,47 @@ public class SpeculativeAdviceTests
 
         Assert.That(text, Does.EndWith(". If it is not in that list, the symbol does not exist in this solution."));
     }
+
+    [Test]
+    public void Resolve_WithARecordedRename_SetsHasEditEffectFact()
+    {
+        AttachLookup("Bar", "s1", "s1", RecordRename);
+
+        SpeculativeAdvice.Resolve(Hedge);
+
+        Assert.That(ToolCallContext.Current!.HasEditEffectFact, Is.True);
+    }
+
+    [Test]
+    public void Resolve_WithNoFact_LeavesHasEditEffectFactFalse()
+    {
+        AttachLookup("Unrelated", "s1", "s1", RecordRename);
+
+        SpeculativeAdvice.Resolve(Hedge);
+
+        Assert.That(ToolCallContext.Current!.HasEditEffectFact, Is.False);
+    }
+
+    [Test]
+    public void NotFoundEvidence_ForCurrentCall_SkipsTheFindingWhenABuilderAlreadyEmbeddedTheFact()
+    {
+        AttachLookup("Bar", "s1", "s1", RecordRename);
+        SpeculativeAdvice.Resolve(Hedge);
+
+        var notes = NotFoundEvidence.ForCurrentCall("NotFound");
+
+        Assert.That(notes, Is.Empty);
+    }
+
+    [Test]
+    public void NotFoundEvidence_ForCurrentCall_WithoutAPriorResolve_AttachesTheFindingAndSetsTheFlag()
+    {
+        AttachLookup("Bar", "s1", "s1", RecordRename);
+
+        var notes = NotFoundEvidence.ForCurrentCall("NotFound");
+
+        Assert.That(notes, Has.Count.EqualTo(1));
+        Assert.That(notes[0].Source, Is.EqualTo("EditEffect"));
+        Assert.That(ToolCallContext.Current!.HasEditEffectFact, Is.True);
+    }
 }
