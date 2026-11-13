@@ -51,6 +51,38 @@ public static class ResultOverride
         var kept = SavedTranscript.KeepTurns(transcript.Turns, cut);
         var turn = kept[^1];
 
+        var (errorIndex, recorded, recordedCode, recordedMessage) = FindErrorCall(turn, cut);
+
+        if (!string.Equals(recordedCode, variant.ErrorCode, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Turn {cut}, call {errorIndex + 1} ({recorded.ToolName}): the recorded errorData.errorCode is '{recordedCode}' but variant '{variant.Id}' targets '{variant.ErrorCode}'.");
+        }
+
+        var (newResultJson, newTrailing) = ApplyToCall(recorded, variant, solutionDirectory);
+
+        var newCalls = new List<AgentToolCallRecord>(turn.ToolCalls);
+        newCalls[errorIndex] = CopyCall(recorded, newResultJson, newTrailing);
+
+        var turns = new List<AgentTranscriptTurn>(kept);
+        turns[^1] = CopyTurn(turn, newCalls);
+        return (turns, ErrorVariantLoader.HashOf(recordedMessage));
+    }
+
+    /// <summary>
+    /// Finds the single call of <paramref name="turn"/> whose ResultJson has isError:true and reads its errorData. Shared by
+    /// <see cref="Apply"/> and the transcript tool host so both pick the same overridden call.
+    /// </summary>
+    /// <param name="turn">The cut turn.</param>
+    /// <param name="turnNumber">1-based turn number, for the messages.</param>
+    /// <exception cref="InvalidOperationException">
+    /// A call's IsError flag disagrees with its ResultJson, the turn has zero or several erroring calls, or the call has no
+    /// errorData.errorCode and errorData.message strings.
+    /// </exception>
+    public static (int CallIndex, AgentToolCallRecord Call, string ErrorCode, string Message) FindErrorCall(
+        AgentTranscriptTurn turn,
+        int turnNumber)
+    {
         var errorIndexes = new List<int>();
         for (var i = 0; i < turn.ToolCalls.Count; i++)
         {
@@ -59,7 +91,7 @@ public static class ResultOverride
             if (parsedIsError != call.IsError)
             {
                 throw new InvalidOperationException(
-                    $"Turn {cut}, call {i + 1} ({call.ToolName}): the record says IsError={call.IsError} but its ResultJson has isError:{(parsedIsError ? "true" : "false or absent")}.");
+                    $"Turn {turnNumber}, call {i + 1} ({call.ToolName}): the record says IsError={call.IsError} but its ResultJson has isError:{(parsedIsError ? "true" : "false or absent")}.");
             }
 
             if (parsedIsError)
@@ -71,32 +103,30 @@ public static class ResultOverride
         if (errorIndexes.Count != 1)
         {
             throw new InvalidOperationException(
-                $"Turn {cut} has {errorIndexes.Count} call(s) whose ResultJson has isError:true (of {turn.ToolCalls.Count} call(s)); exactly one is required.");
+                $"Turn {turnNumber} has {errorIndexes.Count} call(s) whose ResultJson has isError:true (of {turn.ToolCalls.Count} call(s)); exactly one is required.");
         }
 
         var recorded = turn.ToolCalls[errorIndexes[0]];
         if (!TryReadError(recorded.ResultJson, out var recordedCode, out var recordedMessage))
         {
             throw new InvalidOperationException(
-                $"Turn {cut}, call {errorIndexes[0] + 1} ({recorded.ToolName}): the erroring ResultJson has no errorData.errorCode and errorData.message strings.");
+                $"Turn {turnNumber}, call {errorIndexes[0] + 1} ({recorded.ToolName}): the erroring ResultJson has no errorData.errorCode and errorData.message strings.");
         }
 
-        if (!string.Equals(recordedCode, variant.ErrorCode, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"Turn {cut}, call {errorIndexes[0] + 1} ({recorded.ToolName}): the recorded errorData.errorCode is '{recordedCode}' but variant '{variant.Id}' targets '{variant.ErrorCode}'.");
-        }
-
-        var newResultJson = SpliceMessage(recorded.ResultJson, ReplaceSolutionToken(variant.Message, solutionDirectory));
-        var newTrailing = ApplyTrailing(recorded.TrailingText, variant, solutionDirectory);
-
-        var newCalls = new List<AgentToolCallRecord>(turn.ToolCalls);
-        newCalls[errorIndexes[0]] = CopyCall(recorded, newResultJson, newTrailing);
-
-        var turns = new List<AgentTranscriptTurn>(kept);
-        turns[^1] = CopyTurn(turn, newCalls);
-        return (turns, ErrorVariantLoader.HashOf(recordedMessage));
+        return (errorIndexes[0], recorded, recordedCode, recordedMessage);
     }
+
+    /// <summary>
+    /// The ResultJson and TrailingText <paramref name="recorded"/> would carry under <paramref name="variant"/>: the variant's
+    /// message (with <see cref="SolutionToken"/> replaced) spliced into the recorded ResultJson, and
+    /// <see cref="ApplyTrailing"/> on the trailing text. The caller has already checked the call is the one to override.
+    /// </summary>
+    public static (string ResultJson, string? TrailingText) ApplyToCall(
+        AgentToolCallRecord recorded,
+        ErrorVariant variant,
+        string? solutionDirectory) =>
+        (SpliceMessage(recorded.ResultJson, ReplaceSolutionToken(variant.Message, solutionDirectory)),
+         ApplyTrailing(recorded.TrailingText, variant, solutionDirectory));
 
     /// <summary>
     /// Returns <paramref name="resultJson"/> with only the bytes of the errorData.message string value replaced by
