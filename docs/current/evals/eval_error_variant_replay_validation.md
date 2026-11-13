@@ -1,6 +1,11 @@
 # Eval: error-variant replay validation (Step 12) - F identity cell drifts from live
 
-**Status:** OPEN 2026-11-13. Verdict: the replay is faithful for large wording effects and for arm G, but loses arm F's live effect in both seeded and regenerate mode (live Search 19/20, replay 0.60-0.68), so it cannot rank close candidates. The cause is not traced; Steps 13-14 wait for an owner decision.
+**Status:** OPEN 2026-11-13. The replay is a coarse screen only.
+- It reproduces large first-call effects.
+- It loses arm F's live effect; the cause is not traced.
+- It cannot see late stops: NoSuchMethod on 9b ends BLOCKED in 5 of 10 live runs, yet none stops at the turn the replay classifies.
+
+Wording decisions stay with live arms.
 
 ## Context
 
@@ -148,6 +153,44 @@ Done by `failure-root-cause-analyst`, read-only.
 As built, a replay screen can reject texts that clearly do not move the model, but it cannot pick between close candidates. A live arm of 20-30 samples stays the deciding step.
 
 Step 13 (cross-history) and Step 14 (screening) are on hold pending an owner decision: either accept the replay as a coarse screen and continue, or stop the screening use until F's gap is explained.
+
+### Step 14 coarse screen: arms H and I, and the guards (9b, regenerate, 2026-11-13 late)
+
+- **Guard histories, recorded live on 9b at HEAD with Inline policy.**
+  - NoSuchMethod (`ModelTestingResults\113\RunScenario_SamplesAndScores\20261113-231321-920`): **final BLOCKED in 5 of 10 samples, which are false stops**, and a pass in only 1 of 10. The stopping samples quote the inline policy rule in their reasoning.
+  - Typo (`-231943-097`): 10 of 10 pass, 0 BLOCKED.
+- **Variants.**
+  - `FileNotFound/armH`, `armI`, `NotFound/armH` and `preH` were harvested in cf95c8ff. Arm I's symbol text equals arm H's.
+  - `NotFound/nsmH` is the actual NoSuchMethod text, taken from the modal text (9 of 10 samples).
+  - `NotFound/nsmPreH` is hand-derived: `preH` with the symbol renamed.
+- **Runs** in `ModelTestingResults\113\ReplayVariants_SamplesAndClassifies\`: A `20261113-232328-766`, B `-232908-073`, C `-233646-253`. Each has 60 rows, 30 per text.
+
+| Cell | Replay (turn after the error) | Live (turn after the error) |
+| --- | --- | --- |
+| MissingFile H | Search 24, LSI 5, ListAll 1; stops 0 | Search 26, LSI 3, ListAll 1; stops 0/30 |
+| MissingFile I | Search 24, LSI 5; stops 1 | Search 25, LSI 4; stops 1/30 |
+| MissingMethod H | stops 4/21 classified (RegenMiss 8, 1 harness error); Search 7, LSI 6 | stops 8/30; LSI 14, Search 2 |
+| MissingMethod preH | stops 1/20 (RegenMiss 10); LSI 13 | stops 2/10; LSI 6 |
+| NoSuchMethod H (guard) | stops 1/19 (RegenMiss 10, 1 harness error); LSI 15 | stops 0/10 at that turn |
+| NoSuchMethod preH (guard) | stops 0/23 (RegenMiss 7); LSI 16 | not run live |
+
+**Reading.**
+- **MissingFile.** H and I are indistinguishable in replay, and also in live. The first-call mix replays faithfully.
+- **MissingMethod.** H stops more than pre-H in replay (0.19 against 0.05) and in live (0.27 against 0.20). The direction agrees; neither difference is significant.
+  - **Regenerate drops many rows here.** Its `RegenMiss` rate is 23-33%, because the model must reproduce the turn-1 reads and the exact `Search` arguments.
+  - **The surviving rows skew toward `Search`.** Replay H gives Search 7/21 against live 2/30, so the regenerate filter selects samples.
+- **NoSuchMethod guard: one-step replay cannot see the failure.** Live 9b ends BLOCKED in 5 of 10 samples, yet 0 of 10 stopped at the turn right after the first miss. The false stops come later in the run. A one-step screen therefore cannot act as the false-stop guard; the guard needs multi-turn live runs.
+
+## Conclusions for the harness
+
+1. **What replay is good for.** It reproduces large first-call effects, such as E against F/G or the MissingFile first-call mix, and is cheap: about 2-8 s per row, with no build of the code under test.
+2. **Where it falls short.**
+   - It loses arm F's live effect.
+   - It cannot separate close candidates.
+   - It cannot see stops later than the turn after the error.
+   - Regenerate mode drops 23-33% of rows when the first error comes after turn 1.
+3. **Not-found wording decisions** keep going through live arms of 20-30 samples. Replay serves only to reject texts that do not move the first call at all.
+4. **New finding for the TODO list.** Current production wording plus the Inline policy gives 5 of 10 false stops on NoSuchMethod (9b), consistent with arms H/I on 4b (6/30, 5/30). This is the live false-stop risk the guard was meant to catch.
 
 ### Sibling-model replicate: qwen3.5-4b-mtp on host 112 (exploratory)
 
