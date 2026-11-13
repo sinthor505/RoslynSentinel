@@ -44,6 +44,37 @@ public sealed class ModelAgentRunner
     internal const int IdenticalSuccessNudgeAt = 3;
 
     /// <summary>
+    /// Fixed allowance, in tokens, on top of twice the estimated growth before a reported usage jump counts as
+    /// implausible (see <see cref="IsUsageJumpImplausible"/>). Covers estimator error on turns that add little.
+    /// </summary>
+    internal const int UsageJumpSlackTokens = 4000;
+
+    /// <summary>
+    /// True when the backend's reported running total grew far more than the content added since the last accepted
+    /// report can explain. LM Studio has reported one request's input at about twice the real prompt (10-chain batch Y
+    /// run 4, T3), which would otherwise trip the context warning and the context-exhausted check. A shrinking total is
+    /// never implausible: the reasoning replay window and loop-assist collapsing both shorten the prompt.
+    /// </summary>
+    internal static bool IsUsageJumpImplausible(int previousTotal, int reportedTotal, int estimatedGrowthTokens) =>
+        previousTotal > 0 && reportedTotal - previousTotal > 2 * estimatedGrowthTokens + UsageJumpSlackTokens;
+
+    /// <summary>Chars-based token estimate of one message: text, reasoning and tool-call names and arguments.</summary>
+    internal static int EstimateMessageTokens(AgentChatMessage message)
+    {
+        var text = new System.Text.StringBuilder();
+        text.Append(message.Content).Append(message.ReasoningContent);
+        if (message.ToolCalls is { } calls)
+        {
+            foreach (var call in calls)
+            {
+                text.Append(call.Name).Append(call.ArgumentsJson);
+            }
+        }
+
+        return PromptTokenEstimator.EstimateTokens(LlmOptions.Model ?? "", text.ToString());
+    }
+
+    /// <summary>
     /// Process-wide value set once by the ModelEval assembly setup; RunAsync copies it into each new transcript.
     /// Null everywhere else (PlanStepRunner and sub-agent runs), so their transcripts omit the stamp.
     /// </summary>
@@ -230,6 +261,8 @@ public sealed class ModelAgentRunner
         // context-length lookup never adds latency to every turn.
         var contextLength = await _llm.GetContextLengthAsync(cancellationToken);
         var cumulativeTokens = 0;
+        // messages.Count when cumulativeTokens was last updated: the messages after it are the growth since then.
+        var usageMessageCount = 0;
         // Consecutive turns whose text held tool-call markup and no parsed tool call (zero-tool-call branch below).
         var consecutiveMalformedToolCallTurns = 0;
         // Consecutive successful calls with the same tool and arguments (reason ignored); any other call resets the streak.
@@ -291,7 +324,31 @@ public sealed class ModelAgentRunner
             // heuristic's estimate (never correctness), so it is left as-is.
             if (modelMessage.TotalTokens is not null)
             {
-                cumulativeTokens = modelMessage.TotalTokens.Value;
+                var reported = modelMessage.TotalTokens.Value;
+                var growthEstimate = 0;
+                if (cumulativeTokens > 0)
+                {
+                    for (var i = usageMessageCount; i < messages.Count; i++)
+                    {
+                        growthEstimate += EstimateMessageTokens(messages[i]);
+                    }
+                }
+
+                if (IsUsageJumpImplausible(cumulativeTokens, reported, growthEstimate))
+                {
+                    // The transcript keeps the raw report; only the context bookkeeping uses the estimate.
+                    _logger.LogWarning(
+                        "Turn {Turn}: backend reported {Reported} total tokens, {Jump} more than the previous {Previous}, " +
+                        "but the content added since is estimated at ~{Growth}; treating the report as a miscount and " +
+                        "using ~{Estimate} for the context checks.",
+                        turnNumber, reported, reported - cumulativeTokens, cumulativeTokens, growthEstimate,
+                        cumulativeTokens + growthEstimate);
+                    cumulativeTokens += growthEstimate;
+                }
+                else
+                {
+                    cumulativeTokens = reported;
+                }
             }
             else
             {
@@ -299,6 +356,8 @@ public sealed class ModelAgentRunner
                     LlmOptions.Model ?? "", (modelMessage.Content ?? "") + (modelMessage.ReasoningContent ?? ""));
 
             }
+
+            usageMessageCount = messages.Count;
 
             if (contextLength > 0 && cumulativeTokens >= contextLength * ContextUsageWarningFraction)
             {
