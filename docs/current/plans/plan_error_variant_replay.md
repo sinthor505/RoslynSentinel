@@ -333,6 +333,11 @@ Settled here (owner may overturn):
   - `action` `verify`: `SyncInterface`;
   - `action` `read`, `list`, `trailers` or `validate`: `ProjectDoc`.
   Any other value, or a missing value, counts as Write. The values come from the checked-in transcript header's enums. Done: 1367cda4 (`ToolEffectList.ClassifyCall`/`IsReadCall`, which the fake host uses), 379ffebe (`NextTurnDecision`).
+- **Replay use after Step 12: DECIDED 2026-11-13 (owner), coarse screen.**
+  - **How the screen is used.** The replay may drop texts that clearly do not move the model. Close candidates, roughly within 0.25 on the deciding class, go to a live arm of 20-30 samples. The reason is that replay loses arm F's live effect (`evals/eval_error_variant_replay_validation.md`, "Verdict").
+  - **Screening mode is regenerate (cut 0).** It is closer to live for F (0.68 against seeded 0.60), matches G, and does not depend on the source history's turn 1.
+  - **Step 13** shrinks to a regenerate sanity cell on G histories.
+  - **Typo guard.** `RenameSymbolTypo`'s first error is an authored call the model would not make itself, so it uses seeded mode.
 - **Guard scenarios: DECIDED 2026-11-13 (owner), option (b).** Record 10 NoSuchMethod/Typo histories on 9b in one live job before Step 14.
 - **Batch C additions: DECIDED 2026-11-13 (owner), keep.** These are the `SourceSettings` column, the harness-error row on a settings mismatch or failed model check, and loop assist off in replay.
 - **Replay fidelity is unproven** until Steps 12-13. No wording ships on replay alone.
