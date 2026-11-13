@@ -332,7 +332,7 @@ Settled here (owner may overturn):
   - `operation` `view`: `Member`, `MethodSignature`, `ConstructorParameter`, `UsingDirective`, `SummaryComment`;
   - `action` `verify`: `SyncInterface`;
   - `action` `read`, `list`, `trailers` or `validate`: `ProjectDoc`.
-  Any other value, or a missing value, counts as Write. The values come from the checked-in transcript header's enums.
+  Any other value, or a missing value, counts as Write. The values come from the checked-in transcript header's enums. Done: 1367cda4 (`ToolEffectList.ClassifyCall`/`IsReadCall`, which the fake host uses), 379ffebe (`NextTurnDecision`).
 - **Guard scenarios: DECIDED 2026-11-13 (owner), option (b).** Record 10 NoSuchMethod/Typo histories on 9b in one live job before Step 14.
 - **Batch C additions: DECIDED 2026-11-13 (owner), keep.** These are the `SourceSettings` column, the harness-error row on a settings mismatch or failed model check, and loop assist off in replay.
 - **Replay fidelity is unproven** until Steps 12-13. No wording ships on replay alone.
