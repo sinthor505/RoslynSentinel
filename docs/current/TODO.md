@@ -36,6 +36,9 @@ Committed, not started.
 
 Ideas and low priority.
 
+- [OPEN] Error-policy filter known limit: unenumerated kind strings (2026-11-12) - `ErrorPolicyClassifier` (`SymbolKinds`/`FileKinds`): kind values passed to `ToolNotFoundException` as variables were not enumerated by the Step 1 inventory; an unknown kind maps to null (no policy key, no pointer) - [doc](plans/plan_error_policy_pointer.md)
+- [OPEN] Error-policy filter known limit: numeric intent selector (2026-11-12) - `ErrorPolicyIntentTable.Resolve`: an enum ordinal passed as a number falls back to the tool's default intent; only string values are matched - [doc](plans/plan_error_policy_pointer.md)
+- [OPEN] Error-policy filter known limit: `Inline` text outside the offload budget (2026-11-12) - `AddErrorPolicyFilter` (`ServiceRegistrationExtensionsBasic.cs`): `Inline` text is not counted by the offload budget and `EchoReserveChars` (2560) is shared with other stamps, so policy entries must stay short - [doc](plans/plan_error_policy_pointer.md)
 - [PARKED] Stale-read ledger: per-snapshot hashes (2026-11-09) - follow-up F5 of the closed read-ledger plan; once staged writes make `Committed` and `IncludeStaged` text diverge, `_observedHashes` needs one hash per snapshot; parked until staged writes are built - [doc](plans/closed/plan_read_ledger_stale_read_guard.md)
 
 - [PARKED] Dispatch-table unification (2026-09-20) - proposal section 6; the resolver scope is RESOLVED (2026-10-03); parked because no defect stems from the three tables diverging; unpark on such a bug - [doc](proposals/proposal_universal_symbol_resolver.md)
