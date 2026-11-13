@@ -27,7 +27,7 @@ public class ToolsetControlTools
         "projectAdmin = CreateProject, SplitProjectByFolder, ListSolutionItems, ListWorkspaceSolutions, ListProjectFrameworkTargets, Features, ProjectDoc, GetWorkspaceHealth, GetOperationDetail, RetryFailedChanges, GetTypeInfo, QuerySymbolRelationships, GetBestInsertionPoint. " +
         "testCategories = TagTestCategories (dry run by default). " +
         "modelEval = SubAgent (Advanced only). " +
-        "git = GitRemote (branch, checkout, push, fetch, pull, tag, stash, worktree). Already on the startup surface, no enable needed: SemanticFindReplace, InspectSymbol, MoveMember, UsingDirective, GetDiagnostics.")]
+        "git = GitRemote (branch, checkout, push, fetch, pull, tag, stash, worktree, config). Already on the startup surface, no enable needed: SemanticFindReplace, InspectSymbol, MoveMember, UsingDirective, GetDiagnostics.")]
     public SentinelCallToolResult<object> McpToolsetControlTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("The toolset to switch.")] ToolSetName toolSet,

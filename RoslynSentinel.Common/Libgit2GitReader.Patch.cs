@@ -34,7 +34,7 @@ internal sealed partial class Libgit2GitReader
     // (diff --git c/x c/x), so a set diff.mnemonicPrefix is declined for every patch target. diff.tool and diff.guitool are the
     // two keys git documents as read by git difftool only, which Git for Windows' installer and many global configs set (a diff.<driver>.<var> key, such as the shipped
     // diff.astextplain.textconv, is neutral through IsPatchNeutralConfigKey: it only acts on a path that selects the driver, and such a path is declined by the attribute rule).
-    // TODO owner to confirm diff.tool, diff.guitool and the diff.<driver>.<var> exemption (a wider list than the Step 12 decision); without them every Git for Windows machine declines
+    // Owner decided 2026-11-12 (plan_libgit2sharp_followups.md Decision): diff.tool and the related keys are neutral; without them every Git for Windows machine declines.
     private static readonly HashSet<string> PatchNeutralConfigKeys = new(StringComparer.OrdinalIgnoreCase)
     {
         "diff.algorithm", "diff.indentheuristic", "diff.noprefix", "diff.renames", "diff.wserrorhighlight",

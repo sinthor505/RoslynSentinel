@@ -92,7 +92,7 @@ public static class ErrorPolicyIntentTable
         ["GetTypeInfo"] = Fixed(L),
         ["GetWorkspaceHealth"] = Fixed(L),
         ["Git"] = Dispatch("operation", E, lookup: "status,log,diff,show,hunks", edit: "stage,add,unstage,commit,revert,reset,abort", ignored: "mode"),
-        ["GitRemote"] = Dispatch("operation", E, lookup: "", edit: "branch,checkout,push,fetch,pull,tag,stash,worktree", ignored: "action"),
+        ["GitRemote"] = Dispatch("operation", E, lookup: "", edit: "branch,checkout,push,fetch,pull,tag,stash,worktree,config", ignored: "action"),
         ["Inline"] = Fixed(E),
         ["InlineClass"] = Fixed(E),
         ["InspectSymbol"] = Fixed(L),

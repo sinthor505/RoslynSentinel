@@ -27,9 +27,11 @@ public class ClaudeLeanSchemaBudgetTests
     // 2026-11-08: +~440 for batch-item field descriptions/required (finding_batch_edit_item_schema_hides_required_fields)
     // Raised on 2026-11-10 (todo punchlist #9): measured 44948 chars (Advanced; Basic was 39703 until the core split moved ChangeSignature and MoveMember into it, then also 44948), largest tool SemanticFindReplace 5450, after SemanticFindReplace, InspectSymbol, MoveMember, UsingDirective and GetDiagnostics joined the claude-lean startup surface (~12k chars; SemanticFindReplace alone ~5.4k).
     // Trimmed 2026-11-10 (proposal_reduce_tool_schema_token_cost.md): SemanticFindReplace 5450 -> 3864, MoveMember 3356 -> 3112; both flavors now measure 43118 total, largest tool Git 4261. Budgets are measured + at least 300 rounded up to the next 500: total 43500, per tool 5000 (Git sets it).
-    private const int AdvancedTotalBudget = 43500;
+    // Raised 43500 -> 44000 on 2026-11-12: measured 43519 after GitRemoteOperation.config and the GitAction get/set/unset
+    // values (plan_libgit2sharp_followups.md Step 20: GitRemote +514 chars).
+    private const int AdvancedTotalBudget = 44000;
     // Basic raised 40000 -> 45000 on 2026-11-10 (core split slice 1): ChangeSignature (~1.9k) and MoveMember (3356) moved from Tools.Advanced to Tools.Basic (CoreRefactoringTools), so the Basic flavor now serves them and measures 44948 chars, the same as Advanced.
-    private const int BasicTotalBudget = 43500;
+    private const int BasicTotalBudget = 44000;
     private const int AdvancedMaxToolBudget = 5000;
     private const int BasicMaxToolBudget = 5000;
     // Search per-tool budget.

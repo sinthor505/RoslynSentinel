@@ -78,7 +78,7 @@ public static class ToolsetCatalog
             [ToolSetName.projectAdmin] = "projects and workspace: create/split projects, solution and framework listings, Features, ProjectDoc, workspace health, operation details, retry, type info, symbol relationships",
             [ToolSetName.testCategories] = "plan test-category attributes (NUnit/xUnit/MSTest) from the production types each test references (TagTestCategories, dry run by default, dryRun: false applies)",
             [ToolSetName.modelEval] = "dispatch a task to a local model in a child server (SubAgent, Advanced only)",
-            [ToolSetName.git] = "git branch, checkout, push, fetch, pull, tag, stash and worktree (GitRemote)",
+            [ToolSetName.git] = "git branch, checkout, push, fetch, pull, tag, stash, worktree and config (GitRemote)",
         };
 
     /// <summary>Every on-demand tool name across all sets.</summary>
