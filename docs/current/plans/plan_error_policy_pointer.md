@@ -199,6 +199,15 @@ Decided 2026-11-12 (owner): inject a user turn after the first not-found result 
 - Part 2, live arm: a temporary ModelEval switch makes the loop inject that turn (wording informed by part 1) after the first not-found result; run against A' on the stop scenarios plus Control; the same remove-after rule as the arm D switch.
 - Done when: part 1 answers are in the eval doc; part 2 has its table and read; both temporary switches are resolved (shipped or removed).
 
+- Part 1 done: 8eb2379f (`scripts/roslynsentinel-interrogate.ps1 -StopAfterTurn`, TrailingText in replays; 12 replays in the eval doc). Part 2 ON HOLD until Step 11e's result (owner 2026-11-12): an explicit stop rule may make the injection unnecessary.
+
+### Step 11e - Unconditional stop rule (arm E)
+Decided 2026-11-12 (owner), from the replays: the model weighs "the task names it, so it exists", the error's confirmation option (`ListSolutionItems`/`ListAll`), "doesn't exist" read as a mistake to work around, "stop only after recovery fails", and the conditional "If you stop because of this error..." (plus "if you chose the path yourself", which the model can always claim because it builds the absolute path).
+- New policy file `RoslynSentinel.Tests.ModelEval/error-policy-v2.md`: one unconditional rule keyed on the error's own fact: the task names the target AND the error says nothing in the solution has a similar name -> no further calls (no listing, searching, re-reading or creating), the reply starts with BLOCKED:. A similar name, or a name the model chose, is still corrected. Same text under all four keys (file/symbol wording). Feeds both the prompt block and the Inline text; `AgentSystemPrompts.cs` is unchanged for this arm.
+- Arm E = Inline + v2 file; control = arm C (Inline + current file); both without the arm D exit line. Scenarios: MissingFile, MissingMethod, StopAdherenceControl, RenameSymbolTypo, ReplaceSnippetWrongFileNoMatch (10 jobs, 10 samples each). Hosts (owner): 113 (qwen3.5-9b-mtp) runs the MissingFile and MissingMethod pairs; 85 and 112 (both qwen3.5-4b, owner-accepted) run the other three pairs. Each E/C pair runs on the same model.
+- Measure: destructive count, BLOCKED: turn, passes; false BLOCKED on the three doable scenarios must stay 0.
+- Separately proposed to peer f1 (owner of the not-found text): in the no-similar-name case, state the exhaustive search as a fact and drop the "call ListSolutionItems to confirm" option.
+
 ### Step 12 - Remaining routes
 - Files: the routes marked in Step 5.
 - Depends on: Step 6; Step 11b's rerun finished
