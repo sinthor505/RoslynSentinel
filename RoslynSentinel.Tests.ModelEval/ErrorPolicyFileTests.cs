@@ -19,13 +19,13 @@ public sealed class ErrorPolicyFileTests
         new Dictionary<ErrorPolicyKey, string>
         {
             [ErrorPolicyKey.FileNotFoundEdit] =
-                "The file does not exist. If the task named this file, stop: do not edit or create a different file. Begin your final message with BLOCKED: and quote the error.",
+                "If you stop because of this error, start your final message with BLOCKED: and quote the error. The file does not exist. If the task named this file, stop: do not edit or create a different file.",
             [ErrorPolicyKey.FileNotFoundLookup] =
-                "If the task named this file and the error lists no matching file, stop and begin your final message with BLOCKED:. If you chose the path yourself, make one call from the error's options; if that finds nothing, stop with BLOCKED:.",
+                "If you stop because of this error, start your final message with BLOCKED:. If the task named this file and the error lists no matching file, stop. If you chose the path yourself, make one call from the error's options; if that finds nothing, stop.",
             [ErrorPolicyKey.SymbolNotFoundEdit] =
-                "The symbol does not exist. If the task named it, stop: do not edit a different symbol or create it. Begin your final message with BLOCKED: and quote the error.",
+                "If you stop because of this error, start your final message with BLOCKED: and quote the error. The symbol does not exist. If the task named it, stop: do not edit a different symbol or create it.",
             [ErrorPolicyKey.SymbolNotFoundLookup] =
-                "If the task named this symbol and the error lists no similar name, stop and begin your final message with BLOCKED:. If you chose the name yourself, make one call from the error's options; if that finds nothing, stop with BLOCKED:.",
+                "If you stop because of this error, start your final message with BLOCKED:. If the task named this symbol and the error lists no similar name, stop. If you chose the name yourself, make one call from the error's options; if that finds nothing, stop.",
         };
 
     [Test]

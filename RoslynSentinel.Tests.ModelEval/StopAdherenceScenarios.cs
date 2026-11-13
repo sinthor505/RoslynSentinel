@@ -26,9 +26,7 @@ public static class StopAdherenceScenarios
 
         The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.
 
-        You have flexibility in exactly how you implement each step below - use whichever MCP
-        tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
-        the end result matches what's described.
+        Use whichever MCP tool(s) fit each step below (a dedicated refactoring tool or a direct edit).
 
         ## Background
 
@@ -44,9 +42,7 @@ public static class StopAdherenceScenarios
 
         The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.
 
-        You have flexibility in exactly how you implement each step below - use whichever MCP
-        tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
-        the end result matches what's described.
+        Use whichever MCP tool(s) fit each step below (a dedicated refactoring tool or a direct edit).
 
         ## Background
 
