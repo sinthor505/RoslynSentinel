@@ -129,4 +129,19 @@ public sealed class ErrorPolicyFileTests
         Assert.That(expectedHash, Is.Not.Empty);
         Assert.That(stamp.Value.ErrorPolicyHash, Is.EqualTo(expectedHash));
     }
+
+    [Test]
+    public void BuildProcessStamp_InventorySwitch_SuffixesModeOnlyWhenOn()
+    {
+        using (NotFoundInventoryOptions.OverrideForCurrentContext(true))
+        {
+            var on = ModelEvalAssemblySetUp.BuildProcessStamp(("abc123", false))!.Value.ErrorPolicyMode;
+            Assert.That(on, Does.EndWith(NotFoundInventoryOptions.StampSuffix));
+        }
+
+        using (NotFoundInventoryOptions.OverrideForCurrentContext(false))
+        {
+            Assert.That(ModelEvalAssemblySetUp.BuildProcessStamp(("abc123", false))!.Value.ErrorPolicyMode, Does.Not.Contain("inventory"));
+        }
+    }
 }
