@@ -847,7 +847,26 @@ the system prompt. On host 85 that is most of the 44-107 s time to first token.
 replayed), so the cache breaks once per 10 turns. Tests: `LmStudioAgentClientInputItemsTests` (two-block keep, block
 drop, earlier request is a prefix of the next inside a block) and the updated `LoopAssistTrackerTests` cap test.
 Reasoning item ids are random per request (`"rs_" + Guid`); the live cache data above shows LM Studio's cache ignores
-them. Not yet measured live.
+them.
+
+**Measured live (host 85, one run).** `qwen3.5-4b-mtp` on 25cb918b (dirty, includes 564a2813), job
+`20261113-001343-001`, folder `ModelTestingResults\85\Model_AppliesTenChainedRefactors\20261113-001404-778`: **passed**,
+34 turns, ModelFinished, **10m 00s** (the run before the fix took 36m 50s, 35 turns). Cached input now tracks input on
+every turn except the two block steps:
+
+| Turn | Input | Cached | TTFT (s) |
+| --- | --- | --- | --- |
+| 1 | 24162 | 0 | 65.1 |
+| 2-20 | 24947-38492 | input minus 300-1100 | 1.2-5.1 |
+| 21 (block step) | 38743 | 21785 | 74.7 |
+| 22-30 | 39455-44463 | input minus 300-700 | 2.1-4.4 |
+| 31 (block step) | 44188 | 21785 | 104.0 |
+| 32-34 | 44543-45785 | input minus 250-840 | 2.1-5.4 |
+
+Before the fix, cached input stayed at ~24.1k from T12 and TTFT was 44-107 s on every turn. Three cold turns (T1, T21,
+T31) now account for ~244 s of the ~330 s total TTFT. The block steps land at T21 and T31, when the 20th and 30th
+assistant turns are in the history. The prompt reached 45.8k tokens, above the 40192 context recorded for host 85
+earlier, so the host's context must have been raised since then.
 
 ## Out of scope
 
