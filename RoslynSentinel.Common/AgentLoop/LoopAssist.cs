@@ -71,6 +71,12 @@ public sealed class LoopAssistTracker(LoopAssistOptions options)
         @"You already sent this exact (?:edit|call) and it was rejected the same way; sending it again cannot succeed\.(?: Do what the next step below says instead\.| Change the edit to fix the errors below, or take a different approach\.)?",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
+    // The no-solution text ("freshly (re)started at HH:mm:ss UTC (12s ago)") carries the server process age, which
+    // moves every second, so the same rejection would never match itself. The age is blanked before comparing.
+    private static readonly Regex ProcessAge = new(
+        @"\((?:\d+s|\d+ min|\d+h \d+ min) ago\)",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     private const string NextStepMarker = "Next step: ";
 
     private sealed class RepeatGroup(string toolName)
@@ -295,7 +301,7 @@ public sealed class LoopAssistTracker(LoopAssistOptions options)
     }
 
     private static string NormalizeError(string errorText) =>
-        Regex.Replace(RepeatNote.Replace(errorText, ""), @"\s+", " ").Trim();
+        Regex.Replace(ProcessAge.Replace(RepeatNote.Replace(errorText, ""), "(ago)"), @"\s+", " ").Trim();
 
     internal static string CanonicalArguments(string argumentsJson)
     {

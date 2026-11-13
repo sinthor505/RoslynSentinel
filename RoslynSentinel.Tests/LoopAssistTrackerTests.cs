@@ -80,6 +80,21 @@ public class LoopAssistTrackerTests
     }
 
     [Test]
+    public void Observe_SameNoSolutionRejectionAtAnotherProcessAge_StillRepeats()
+    {
+        // The fresh-start text names the process age ("(7s ago)"), which moves between calls; it must not split the repeat.
+        var tracker = On();
+        const string first = "No solution is loaded. This server process was freshly (re)started at 06:16:35 UTC (7s ago) and no solution has been loaded since. Files on disk are unaffected.";
+        const string second = "No solution is loaded. This server process was freshly (re)started at 06:16:35 UTC (9s ago) and no solution has been loaded since. Files on disk are unaffected.";
+
+        tracker.Observe(Call("c1", tool: "LocateSymbol", args: "{}"), Rejection("c1", first), isError: true);
+        var repeat = tracker.Observe(Call("c2", tool: "LocateSymbol", args: "{}"), Rejection("c2", second), isError: true);
+
+        Assert.That(repeat, Is.Not.Null);
+        Assert.That(repeat!.RepeatCount, Is.EqualTo(2));
+    }
+
+    [Test]
     public void Observe_ServerRepeatNoteOnTheSecondRejection_StillCountsAsARepeat()
     {
         // The server prepends "You already sent this exact edit ..." from the 2nd identical rejection on, so the
