@@ -726,4 +726,19 @@ public class ReadFileTests
         Assert.That(view.Member.Kind, Is.EqualTo("constructor"));
         Assert.That(result.Findings.Any(f => f.Message.Contains("preferredTarget: class")), Is.True);
     }
+
+    [Test]
+    public async Task ReadFile_MemberNameOfClassWithTwoConstructors_AmbiguityNamesReadFileOptionsAndPreferredTargetClass()
+    {
+        UseDocumentSource("public class Order { public Order() { } public Order(int id) { } public int Id; }\n");
+
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Order");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        var message = result.ErrorData!.Message;
+        Assert.That(message, Does.Contain("startLine"));
+        Assert.That(message, Does.Contain("preferredTarget: class"));
+        Assert.That(message, Does.Not.Contain("Provide a more specific contextSnippet"));
+    }
 }

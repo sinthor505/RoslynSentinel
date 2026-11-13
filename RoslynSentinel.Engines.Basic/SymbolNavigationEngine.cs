@@ -3046,8 +3046,9 @@ public class SymbolNavigationEngine
     /// since a read that returns the wrong overload is worse than an error. Output is capped at
     /// 200 lines; past the cap Source is the first 200 lines, IsComplete is false, and EndLine is
     /// still the member's real last line so a follow-up file-read call is one precise call.
+    /// callingTool names the tool whose ambiguity text is built: "Member" (default) or "ReadFile" (its memberName read).
     /// </summary>
-    public async Task<(EditOutcome Outcome, string? Message, string? ErrorCode, MemberSourceInfo? Source)> GetMemberSourceAsync(FilePathWrapper filePath, string memberName, string? containerName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, bool requireContainerMatch = false, PreferredTarget preferredTarget = PreferredTarget.constructor, CancellationToken cancellationToken = default)
+    public async Task<(EditOutcome Outcome, string? Message, string? ErrorCode, MemberSourceInfo? Source)> GetMemberSourceAsync(FilePathWrapper filePath, string memberName, string? containerName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, bool requireContainerMatch = false, PreferredTarget preferredTarget = PreferredTarget.constructor, string callingTool = "Member", CancellationToken cancellationToken = default)
     {
         const int MaxSourceLines = 200;
 
@@ -3114,9 +3115,39 @@ public class SymbolNavigationEngine
             }
         }
 
-        // TODO overload ambiguity here still gets the generic contextSnippet hint: this method is shared by Member(view) and the ReadFile memberName read, so use SyntaxTargetResolver.BuildOverloadHintForCandidates once the calling tool is passed in
         var resolved = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode), filePath: document.FilePath ?? string.Empty);
+            (candidates, matches, failureMode) =>
+            {
+                string hint;
+                if (callingTool == "ReadFile")
+                {
+                    // ReadFile takes no contextSnippet, so its ambiguity text lists the declaration lines and the options that do select one.
+                    if (failureMode == "ambiguous")
+                    {
+                        var entries = candidates.Select(c =>
+                        {
+                            var text = c.Preview.Length > 50 ? c.Preview.Substring(0, 47) + "..." : c.Preview;
+                            return $"line {c.StartLine} `{text}`";
+                        });
+                        hint = $"'{memberName}' matches {candidates.Count} declarations in this file: {string.Join(", ", entries)}. ReadFile takes no contextSnippet; ReadFile with startLine/endLine reads one of these lines, and Member(operation: view, memberName, contextSnippet: <its declaration line>) returns one by its declaration line.";
+                    }
+                    else
+                    {
+                        hint = SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode);
+                    }
+                }
+                else
+                {
+                    hint = SyntaxTargetResolver.BuildOverloadHintForCandidates(candidates, matches, failureMode, sourceText, document.FilePath ?? string.Empty, "view", memberName);
+                }
+
+                if (failureMode == "ambiguous" && candidates.All(c => c.Kind == CandidateKind.Constructor) && allNameCandidates.Any(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum))
+                {
+                    hint += " preferredTarget: class returns the type's source.";
+                }
+
+                return hint;
+            }, filePath: document.FilePath ?? string.Empty);
 
         if (resolved == null)
         {
