@@ -172,7 +172,7 @@ public static class RefactoringToolHelpers
 
         var reason = EngineReason(result);
         var message = reason.Length > 0 ? $"{noOp.Message} {hint} Engine detail: {reason}" : $"{noOp.Message} {hint}";
-        // TODO error-policy: route does not record the missing-target kind
+        // error-policy: records no missing-target kind on purpose. Nothing-to-do / engine-failure does not say a code target is absent (one outcome also covers "not eligible"); a real miss throws ToolNotFoundException, which ToolErrorMapper.ToResultError records.
         return new SentinelCallToolResult<object>
         {
             IsError = true,
@@ -185,7 +185,7 @@ public static class RefactoringToolHelpers
         var reason = EngineReason(result);
         var head = $"{operationName} failed for {subject} ({result.Outcome})";
         var detail = reason.Length > 0 ? $"{head}: {EndSentence(reason)}" : $"{head}.";
-        // TODO error-policy: route does not record the missing-target kind
+        // error-policy: records no missing-target kind on purpose; see GuardNothingToDo.
         return new SentinelCallToolResult<object>
         {
             IsError = true,
