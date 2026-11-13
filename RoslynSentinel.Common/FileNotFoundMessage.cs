@@ -53,9 +53,9 @@ public static class FileNotFoundMessage
     /// missing file earlier in this session and the new path is still a loaded document): after the disk branches, the text names the new
     /// path and the tool and returns, instead of the "did you mean" / "it may have been renamed" wording. Both null leaves every other
     /// branch's text exactly as it was.
-    /// <paramref name="folderFileNames"/> (arm I of plan_error_policy_pointer, Step 11g; null = no inventory, the default) are the file names of the loaded documents sitting directly in the
-    /// folder the requested path names (<see cref="DocumentLookup.FindFolderFileNames"/>, which returns null while <see cref="NotFoundInventoryOptions"/> is off). They are
-    /// rendered only in the current-workspace no-candidates text, after the arm H text; every other branch ignores them.
+    /// <paramref name="folderFileNames"/> (null = no list) are the file names of the loaded documents sitting directly in the
+    /// folder the requested path names (<see cref="DocumentLookup.FindFolderFileNames"/>, which the lookup always computes). They are
+    /// rendered only in the current-workspace no-candidates text, after the well-formed lead and search facts; every other branch ignores them.
     /// </summary>
     public static string Build(
         string requestedPath, IReadOnlyList<FileCandidate> candidates, int searchedProjectCount, Func<string, bool>? isCallable = null,
@@ -123,7 +123,7 @@ public static class FileNotFoundMessage
 
     // The no-candidates text for a current workspace: the well-formed-call fact first, then the declaring-type sentence (when any), then the search facts. The
     // "renamed or moved" hedge is dropped; a recorded edit-effect fact for the target file (ResolveForFile) still follows. The requested path is shown solution-relative
-    // when the call context knows the solution root (the path as given otherwise). With folderFileNames (arm I) the folder inventory follows.
+    // when the call context knows the solution root (the path as given otherwise). With folderFileNames the folder file list follows.
     private static string WorkspaceCurrentNoMatchText(string requestedPath, int searchedProjectCount, string declaring, IReadOnlyList<string>? folderFileNames)
     {
         var shownPath = EditEffectNames.DisplayPath(requestedPath, ToolCallContext.Current?.SolutionRoot);
@@ -141,7 +141,7 @@ public static class FileNotFoundMessage
     /// <summary>The most file names one folder inventory lists; a longer folder says "first 30 of N".</summary>
     internal const int MaxFolderInventoryNames = 30;
 
-    // Arm I: the files of the folder the missing path names, as a fact. shownPath is the requested path as displayed in the lead sentence (solution-relative when
+    // The files of the folder the missing path names, as a fact. shownPath is the requested path as displayed in the lead sentence (solution-relative when
     // it lies under the solution root); its directory part names the folder, and none (or the solution root itself) names the solution root folder.
     // Names are file names only, de-duplicated and sorted ordinal-ignoring-case, at most MaxFolderInventoryNames.
     private static string FolderInventoryText(string shownPath, IReadOnlyList<string> folderFileNames)

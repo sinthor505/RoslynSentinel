@@ -5,12 +5,9 @@ using RoslynSentinel.Tests.Battery.Basic;
 
 namespace RoslynSentinel.Tests.Basic;
 
-// TODO plan_error_policy_pointer arm I: temporary A/B switch; resolve at plan close
+// TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses
 /// <summary>
-/// Arm I of plan_error_policy_pointer (Step 11g): the scoped inventory appended to the arm H no-candidates not-found text, behind
-/// <see cref="NotFoundInventoryOptions"/>. With the switch off every text equals the arm H text. The switch is forced per test through
-/// <see cref="NotFoundInventoryOptions.OverrideForCurrentContext"/> (an AsyncLocal scope, so parallel fixtures never see it) and the ambient
-/// <see cref="ToolCallContext"/> is cleared in TearDown.
+/// Step 11g arm I of plan_error_policy_pointer. The file-miss folder list is always on (no switch): it follows the well-formed lead and search facts of the current-workspace no-candidates text. The symbol member inventory stays behind <see cref="NotFoundInventoryOptions"/>; with that switch off every symbol text equals the text without the member list. The symbol switch is forced per test through <see cref="NotFoundInventoryOptions.OverrideForCurrentContext"/> (an AsyncLocal scope, so parallel fixtures never see it) and the ambient <see cref="ToolCallContext"/> is cleared in TearDown.
 /// </summary>
 [TestFixture]
 [Category("WorkspaceTools")] // Not parallel: shares ToolCallHint's process-wide catalog with the other hint tests.
@@ -60,7 +57,7 @@ public class NotFoundInventoryTests
     private static string InventoryFolder(params string[] parts) => $"`{Path.Combine(parts)}{Path.DirectorySeparatorChar}`";
 
     [Test]
-    public void FindFolderFileNames_SwitchOff_ReturnsNullAndTextEqualsArmH()
+    public void FindFolderFileNames_SymbolSwitchOff_StillListsTheFolder()
     {
         var solution = FolderSolution();
         var missing = P("ContosoOrders.Core", "FixtureHelpers", "Missing.cs");
@@ -68,38 +65,35 @@ public class NotFoundInventoryTests
         using var off = NotFoundInventoryOptions.OverrideForCurrentContext(false);
         var names = DocumentLookup.FindFolderFileNames(solution, missing);
 
-        Assert.That(names, Is.Null);
-        Assert.That(BuildFileText(missing, names), Is.EqualTo(BuildFileText(missing, null)));
-        Assert.That(BuildFileText(missing, names), Does.Not.Contain("contains"));
+        Assert.That(names, Is.EqualTo(new[] { "a.cs", "B.cs", "C.cs" }));
+        var folder = InventoryFolder("ContosoOrders.Core", "FixtureHelpers");
+        Assert.That(BuildFileText(missing, names), Does.EndWith($" {folder} contains 3 files: a.cs, B.cs, C.cs"));
     }
 
     [Test]
-    public void FindFolderFileNames_SwitchOn_ListsOnlyTheFilesDirectlyInTheFolderSortedIgnoringCase()
+    public void FindFolderFileNames_ListsOnlyTheFilesDirectlyInTheFolderSortedIgnoringCase()
     {
-        using var on = NotFoundInventoryOptions.OverrideForCurrentContext(true);
-
         var names = DocumentLookup.FindFolderFileNames(FolderSolution(), P("ContosoOrders.Core", "FixtureHelpers", "Missing.cs"));
 
         Assert.That(names, Is.EqualTo(new[] { "a.cs", "B.cs", "C.cs" }));
     }
 
     [Test]
-    public void Build_SwitchOnFolderWithFiles_AppendsTheCountedSortedListAfterTheArmHText()
+    public void Build_FolderWithFiles_AppendsTheCountedSortedListAfterTheLeadText()
     {
-        using var on = NotFoundInventoryOptions.OverrideForCurrentContext(true);
         var missing = P("ContosoOrders.Core", "FixtureHelpers", "Missing.cs");
         var names = DocumentLookup.FindFolderFileNames(FolderSolution(), missing);
 
         var text = BuildFileText(missing, names);
-        var armH = BuildFileText(missing, null);
+        var lead = BuildFileText(missing, null);
 
         var folder = InventoryFolder("ContosoOrders.Core", "FixtureHelpers");
-        Assert.That(text, Is.EqualTo(armH + $" {folder} contains 3 files: a.cs, B.cs, C.cs"));
+        Assert.That(text, Is.EqualTo(lead + $" {folder} contains 3 files: a.cs, B.cs, C.cs"));
         Assert.That(text, Does.StartWith("Your tool call and file path were well-formed, but file `"));
     }
 
     [Test]
-    public void Build_SwitchOnFolderWithOneFile_UsesTheSingular()
+    public void Build_FolderWithOneFile_UsesTheSingular()
     {
         var text = BuildFileText(P("Lone", "Missing.cs"), ["Only.cs"]);
 
@@ -140,7 +134,6 @@ public class NotFoundInventoryTests
     [Test]
     public void FindFolderFileNames_FolderWithNoSolutionFile_ReturnsEmptyAndTextStatesIt()
     {
-        using var on = NotFoundInventoryOptions.OverrideForCurrentContext(true);
         var missing = P("ContosoOrders.Core", "NoSuchFolder", "Missing.cs");
 
         var names = DocumentLookup.FindFolderFileNames(FolderSolution(), missing);
@@ -153,7 +146,6 @@ public class NotFoundInventoryTests
     [Test]
     public void Build_PathAtTheSolutionRoot_NamesTheSolutionRootFolder()
     {
-        using var on = NotFoundInventoryOptions.OverrideForCurrentContext(true);
         var missing = P("Missing.cs");
         SetContext(true, _root);
 
@@ -167,7 +159,6 @@ public class NotFoundInventoryTests
     [Test]
     public void FindFolderFileNames_BareNameWithoutKnownSolutionRoot_ReturnsNull()
     {
-        using var on = NotFoundInventoryOptions.OverrideForCurrentContext(true);
         ToolCallContext.Set(null);
 
         Assert.That(DocumentLookup.FindFolderFileNames(FolderSolution(), "Missing.cs"), Is.Null);
@@ -184,9 +175,8 @@ public class NotFoundInventoryTests
     }
 
     [Test]
-    public void DescribeOfALookupMiss_SwitchOn_CarriesTheFolderInventory()
+    public void DescribeOfALookupMiss_CarriesTheFolderList()
     {
-        using var on = NotFoundInventoryOptions.OverrideForCurrentContext(true);
         var missing = P("ContosoOrders.Core", "FixtureHelpers", "Missing.cs");
         SetContext(true, _root);
 

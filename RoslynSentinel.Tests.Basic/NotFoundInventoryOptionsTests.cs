@@ -2,7 +2,7 @@ using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tests.Basic;
 
-// TODO plan_error_policy_pointer arm I: temporary A/B switch; resolve at plan close
+// TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses
 // NotFoundInventoryOptions is static (process-wide state) and reads a process environment variable, so this fixture must not run in parallel with other tests.
 [NonParallelizable]
 public class NotFoundInventoryOptionsTests
@@ -108,7 +108,7 @@ public class NotFoundInventoryOptionsTests
 
     [TestCase("off", true, "off+inventory")]
     [TestCase("off", false, "off")]
-    [TestCase("inline+exitline", true, "inline+exitline+inventory")]
+    [TestCase("inline", true, "inline+inventory")]
     public void StampMode_AppendsSuffixOnlyWhenEnabled(string mode, bool enabled, string expected)
     {
         Assert.That(NotFoundInventoryOptions.StampMode(mode, enabled), Is.EqualTo(expected));

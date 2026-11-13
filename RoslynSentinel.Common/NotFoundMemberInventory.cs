@@ -2,7 +2,7 @@ using Microsoft.CodeAnalysis;
 
 namespace RoslynSentinel.Common;
 
-// TODO plan_error_policy_pointer arm I: temporary A/B switch; resolve at plan close
+// TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses
 /// <summary>
 /// Arm I of plan_error_policy_pointer (Step 11g): the member inventory appended to a no-candidates symbol-not-found text by
 /// <see cref="SymbolNotFoundDetail.BuildAsync"/>. <see cref="BuildAsync"/> returns null (nothing is appended) unless

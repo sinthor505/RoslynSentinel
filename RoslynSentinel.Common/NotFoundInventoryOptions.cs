@@ -1,12 +1,11 @@
 namespace RoslynSentinel.Common;
 
-// TODO plan_error_policy_pointer arm I: temporary A/B switch; resolve at plan close
+// TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses
 /// <summary>
-/// Startup switch for arm I of plan_error_policy_pointer (Step 11g): when on, a no-candidates not-found text for a current workspace
-/// ends with a scoped inventory (the files of the folder a missing path names; the members of the container a missing symbol was
-/// looked up in). Populated once at startup via <see cref="Configure"/>: <c>--notfound-inventory</c> first, then the
-/// <c>ROSLYNSENTINEL_NOTFOUND_INVENTORY</c> environment variable. Only "1" and "true" (case-insensitive, trimmed) turn it on; anything
-/// else, and unset, leaves it off, and the off text is exactly the arm H text.
+/// Startup switch for the symbol member inventory of plan_error_policy_pointer (Step 11g, arm I): when on, a no-candidates symbol-not-found text for a current workspace
+/// ends with the member names of the container the symbol was looked up in. The file-miss folder list is NOT behind this switch (it is always on).
+/// Populated once at startup via <see cref="Configure"/>: <c>--notfound-inventory</c> first, then the <c>ROSLYNSENTINEL_NOTFOUND_INVENTORY</c> environment variable.
+/// Only "1" and "true" (case-insensitive, trimmed) turn it on; anything else, and unset, leaves it off, and the off text is exactly the text without the member list.
 /// </summary>
 public static class NotFoundInventoryOptions
 {

@@ -366,21 +366,11 @@ public static class DocumentLookup
         return result;
     }
 
-    // TODO plan_error_policy_pointer arm I: temporary A/B switch; resolve at plan close
     /// <summary>
-    /// Arm I of plan_error_policy_pointer (Step 11g): the file names (no directory part, de-duplicated, sorted ordinal-ignoring-case) of every loaded
-    /// document of any project that sits directly in the folder <paramref name="requestedPath"/> names, i.e. its directory. A path with no directory part
-    /// (and a relative one) is resolved against the solution root of the current tool call. Returns null, doing no work, while
-    /// <see cref="NotFoundInventoryOptions.Enabled"/> is off, and when the folder cannot be determined (bare name with no known solution root).
-    /// An empty list means no loaded document is in that folder.
+    /// The file names (no directory part, de-duplicated, sorted ordinal-ignoring-case) of every loaded document of any project that sits directly in the folder <paramref name="requestedPath"/> names, i.e. its directory. A path with no directory part (and a relative one) is resolved against the solution root of the current tool call. Returns null, doing no work, when the folder cannot be determined (bare name with no known solution root); an empty list means no loaded document is in that folder. FileNotFoundMessage renders it only in the current-workspace no-candidates text.
     /// </summary>
     public static IReadOnlyList<string>? FindFolderFileNames(Solution solution, string requestedPath)
     {
-        if (!NotFoundInventoryOptions.Enabled)
-        {
-            return null;
-        }
-
         var folder = FolderOf(requestedPath);
         if (folder is null)
         {

@@ -33,7 +33,7 @@ public class ServerHttp
         OrientationBreakerOptions.Configure(args);
         LoopLatchOptions.Configure(args);
         LiftRenamesOptions.Configure(args);
-        // TODO plan_error_policy_pointer arm I: temporary A/B switch; resolve at plan close
+        // TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses
         NotFoundInventoryOptions.Configure(args);
         ToolCallEchoOptions.Configure(args);
         SchemaOptions.Configure(args);

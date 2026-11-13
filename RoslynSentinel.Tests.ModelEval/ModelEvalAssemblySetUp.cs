@@ -31,8 +31,8 @@ public class ModelEvalAssemblySetUp
         // The in-process eval server never runs ServerStdio/ServerHttp, so read the experimental server flags'
         // env vars here (ROSLYNSENTINEL_LIFT_RENAMES, ROSLYNSENTINEL_LOOP_LATCH); unset leaves them off.
         LiftRenamesOptions.Configure([]);
-        // TODO plan_error_policy_pointer arm I: temporary A/B switch; resolve at plan close
-        // Reads ROSLYNSENTINEL_NOTFOUND_INVENTORY (1 or true turns the not-found inventory on; the stamp below carries +inventory).
+        // TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses
+        // Reads ROSLYNSENTINEL_NOTFOUND_INVENTORY (1 or true turns the symbol member inventory on; the file-miss folder list is always on; the stamp below carries +inventory).
         NotFoundInventoryOptions.Configure([]);
         LoopLatchOptions.Configure([]);
         // Reads ROSLYNSENTINEL_ERROR_POLICY_MODE / _FILE; unset leaves the policy Off. For Pointer/Inline with no file,
@@ -78,7 +78,8 @@ public class ModelEvalAssemblySetUp
             return null;
         }
 
-        // TODO plan_error_policy_pointer arm I: the +inventory suffix marks the symbol member inventory switch (ROSLYNSENTINEL_NOTFOUND_INVENTORY) in the errorPolicyMode column
+        // TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses
+        // The +inventory suffix in the errorPolicyMode column marks the symbol member inventory switch.
         var mode = NotFoundInventoryOptions.StampMode(s.ErrorPolicyMode, NotFoundInventoryOptions.Enabled);
         return (s.CommitHash, s.Dirty, mode, s.ErrorPolicyHash);
     }
