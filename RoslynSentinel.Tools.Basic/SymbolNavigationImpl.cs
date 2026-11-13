@@ -163,7 +163,7 @@ public class SymbolNavigationImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsError = true,
-                    ErrorData = new ResultError(lookup.Status == DocumentLookupStatus.Ambiguous ? ToolErrorCode.Ambiguous : ToolErrorCode.NotFound, lookup.Describe())
+                    ErrorData = lookup.ToResultError()
                 };
             }
 
@@ -180,7 +180,8 @@ public class SymbolNavigationImpl
                         "more than one location and lineBefore/lineAfter did not disambiguate. " +
                         outlineOption
                         : symbolInfo!.Error + " " + outlineOption;
-                    // TODO error-policy: route does not record the missing-target kind
+                    // error-policy side channel (plan_error_policy_pointer Step 5); text-neutral
+                    ToolCallContext.Current?.RecordMissingTarget("symbol");
                     return new SentinelCallToolResult<object>
                     {
                         IsError = true,
@@ -204,7 +205,9 @@ public class SymbolNavigationImpl
 
                 if (!string.IsNullOrEmpty(result.Error))
                 {
-                    // TODO error-policy: route does not record the missing-target kind
+                    // error-policy side channel (plan_error_policy_pointer Step 5); text-neutral
+                    // Only a symbol-resolution miss (ErrorCode NotFound) counts; a null code is a lookup miss or a syntax-root failure.
+                    if (result.ErrorCode == ToolErrorCode.NotFound) { ToolCallContext.Current?.RecordMissingTarget("symbol"); }
                     return new SentinelCallToolResult<object>
                     {
                         IsError = true,
