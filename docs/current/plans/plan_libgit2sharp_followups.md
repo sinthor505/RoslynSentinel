@@ -113,6 +113,11 @@ Text-neutral steps run first; the 3-day trial gate overlaps with them; behaviour
   `diff.*` or `color.*` key, or `core.whitespace`, unless it is on the verified-identical list (`diff.algorithm`,
   `diff.indentHeuristic`, `diff.noprefix`, `diff.mnemonicPrefix`, `diff.renames=false`, `diff.wsErrorHighlight`,
   `core.whitespace`), widened only by a new corpus scenario. An untested key goes to git.
+- **2026-11-12, after batch 3:** `diff.tool`, `diff.guitool` and `diff.<driver>.<var>` are neutral (they never change
+  `git diff` output; this machine's global config sets `diff.tool`), so the `TODO owner to confirm` at
+  `PatchNeutralConfigKeys` is settled. `color.ui`: add corpus scenarios for `color.ui=auto` and `color.ui=false`; if the
+  tool text is identical, treat those two values as neutral (`color.ui=always` and `color.diff` stay declined).
+  `diff.mnemonicPrefix` came off the identical list (git keeps `a/ b/` for `refA..refB`, libgit2 prints `c/ c/`).
 
 ### Main-session technical defaults (2026-11-12; planner-adopted, not owner decisions)
 
