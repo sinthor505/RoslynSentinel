@@ -61,7 +61,8 @@ public static class AgentIdentityCapture
         Func<long> currentSeq,
         Func<string?>? solutionRoot = null,
         Func<EditEffectIndex?>? editEffects = null,
-        Func<Microsoft.CodeAnalysis.Solution?>? currentSolution = null)
+        Func<Microsoft.CodeAnalysis.Solution?>? currentSolution = null,
+        Func<bool?>? workspaceCurrent = null)
     {
         try
         {
@@ -91,6 +92,7 @@ public static class AgentIdentityCapture
                 SolutionRoot = lookup ? TryGetSolutionRoot(solutionRoot) : null,
                 EditEffects = lookup ? TryGet(editEffects) : null,
                 CurrentSolution = lookup ? currentSolution : null,
+                WorkspaceCurrent = TryGetWorkspaceCurrent(workspaceCurrent),
             });
         }
         catch (Exception ex)
@@ -110,6 +112,20 @@ public static class AgentIdentityCapture
         catch (Exception ex)
         {
             Debug.WriteLine($"Solution root lookup failed: {ex}");
+            return null;
+        }
+    }
+
+    // Guarded on its own: a failed lookup leaves WorkspaceCurrent unknown (null), which keeps the file-not-found text as it was.
+    private static bool? TryGetWorkspaceCurrent(Func<bool?>? workspaceCurrent)
+    {
+        try
+        {
+            return workspaceCurrent?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Workspace state lookup failed: {ex}");
             return null;
         }
     }

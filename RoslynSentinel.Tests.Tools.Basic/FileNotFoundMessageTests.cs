@@ -193,6 +193,60 @@ public class FileNotFoundMessageTests
         Assert.That(text, Does.Not.Contain("You MUST"));
     }
 
+    // Builds the no-candidate text with the ambient ToolCallContext carrying the given WorkspaceCurrent (null = no context at all). The slot is
+    // an AsyncLocal that other tests may set, so it is always cleared afterwards.
+    private string BuildNoCandidateText(bool? workspaceCurrent, Func<string, bool>? isCallable)
+    {
+        var missing = Path.Combine(_root, "NoSuchDir", "Thing.cs");
+        try
+        {
+            ToolCallContext.Set(workspaceCurrent is null
+                ? null
+                : new ToolCallContext(null, null, "ReadFile", null, 0) { WorkspaceCurrent = workspaceCurrent });
+            return FileNotFoundMessage.Build(missing, NoCandidates, 3, isCallable);
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
+    [Test]
+    public void Build_MissingFileNoCandidatesWorkspaceCurrent_OmitsListingSentenceKeepsFacts()
+    {
+        var text = BuildNoCandidateText(workspaceCurrent: true, name => name == "ListSolutionItems");
+
+        Assert.That(text, Does.Contain("was not found in the loaded solution (searched 3 project(s) by exact path"));
+        Assert.That(text, Does.Contain("No file in the solution has a similar name"));
+        Assert.That(text, Does.Contain("may since have been renamed or moved"));
+        Assert.That(text, Does.Not.Contain("ListSolutionItems"));
+        Assert.That(text, Does.Not.Contain("does not exist in this solution"));
+        Assert.That(text, Does.Not.Contain("lists every file"));
+    }
+
+    [Test]
+    public void Build_MissingFileNoCandidatesWorkspaceStale_TextEqualsUnknownStateText()
+    {
+        var stale = BuildNoCandidateText(workspaceCurrent: false, name => name == "ListSolutionItems");
+        var unknown = BuildNoCandidateText(workspaceCurrent: null, name => name == "ListSolutionItems");
+
+        Assert.That(stale, Is.EqualTo(unknown));
+        Assert.That(stale, Does.Contain(ToolCallHint.Call("ListSolutionItems", ("kind", "all")) + " lists every file in the solution."));
+        Assert.That(stale, Does.Contain("A file not in that list does not exist in this solution."));
+    }
+
+    [Test]
+    public void Build_MissingFileNoCandidatesListingNotCallable_WorkspaceStateDoesNotChangeText()
+    {
+        var current = BuildNoCandidateText(workspaceCurrent: true, name => name is "ReadFile" or "GetLargeResult");
+        var stale = BuildNoCandidateText(workspaceCurrent: false, name => name is "ReadFile" or "GetLargeResult");
+        var unknown = BuildNoCandidateText(workspaceCurrent: null, name => name is "ReadFile" or "GetLargeResult");
+
+        Assert.That(current, Is.EqualTo(unknown));
+        Assert.That(stale, Is.EqualTo(unknown));
+        Assert.That(unknown, Does.Not.Contain("ListSolutionItems"));
+    }
+
     [Test]
     public void Build_NonRootedPath_SkipsTheDiskBranches()
     {

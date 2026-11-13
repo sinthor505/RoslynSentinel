@@ -114,12 +114,20 @@ public static class FileNotFoundMessage
 
     // The facts and options that follow a "no file matches" statement: a file read earlier may have been renamed or moved (a fact; the
     // server records only its own moves, see movedToPath above), and ListSolutionItems lists every file (an option, named only when
-    // callable). Hints are built only when rendered.
+    // callable and when the workspace is not known to be current). Hints are built only when rendered.
     // TODO remember server-side file renames (old path -> new path) and name the new path here instead of hedging.
     private static string NoMatchFactsAndOptions(string requestedPath, Func<string, bool>? isCallable)
     {
         // CreateFile is deliberately not offered here: in ReplaceSnippetWrongFileNoMatch 5 of 9 failing samples created the missing file right after the option.
         var text = SpeculativeAdvice.ResolveForFile("A file read earlier under this name may since have been renamed or moved.");
+        // The intro already states the exhaustive search (exact path, bare file name, similar file name), so with a current workspace the
+        // listing only repeats it; eval replays show weak models take the option every time and then widen their search. A stale
+        // workspace (a reload failure is recorded) or an unknown state (WorkspaceCurrent null) keeps the listing, whose answer may differ.
+        if (ToolCallContext.Current?.WorkspaceCurrent == true)
+        {
+            return text;
+        }
+
         if (Callable(isCallable, "ListSolutionItems"))
         {
             // "A file not in that list does not exist in this solution." is deliberately not routed through SpeculativeAdvice: it states what the list means (it

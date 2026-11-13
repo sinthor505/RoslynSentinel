@@ -1105,7 +1105,9 @@ public static class RoslynSentinelServiceExtensionsBasic
                     () => context.Server.Services?.GetService<PersistentWorkspaceManager>()?.GetSolutionRoot(),
                     // The edit effect note (EditEffectEvidence) needs the index and the in-memory solution; both are read lazily or only for mapped-term calls.
                     () => (context.Server.Services?.GetService<PersistentWorkspaceManager>() as IEditEffectIndexProvider)?.EditEffects,
-                    () => context.Server.Services?.GetService<PersistentWorkspaceManager>()?.CurrentSolution);
+                    () => context.Server.Services?.GetService<PersistentWorkspaceManager>()?.CurrentSolution,
+                    // True when the manager reports no recorded reload failure, false when one is recorded, null (unknown) with no manager.
+                    () => context.Server.Services?.GetService<PersistentWorkspaceManager>() is { } manager ? manager.ReloadFailure is null : null);
                 return await next(context, cancellationToken);
             }));
     }

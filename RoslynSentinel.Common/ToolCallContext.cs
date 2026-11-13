@@ -81,6 +81,13 @@ public sealed class ToolCallContext : IDetachedPayloadSource
     public string? SolutionRoot { get; init; }
 
     /// <summary>
+    /// Whether the workspace was current at call start: true = no reload failure was recorded, false = a reload failure is recorded (the
+    /// workspace may not match disk), null = unknown (engines, tests, other hosts, or a manager that does not report it). Read by the
+    /// file-not-found text to decide whether "the solution has no such file" is a settled fact. Side channel only; never serialized.
+    /// </summary>
+    public bool? WorkspaceCurrent { get; init; }
+
+    /// <summary>
     /// The server's edit effect index, for the effect note on a not-found error (<see cref="EditEffectEvidence"/>). Set by the agent identity
     /// filter only for calls with a mapped term; null otherwise, and for engines, tests and other hosts. Carried here because the two readers
     /// (the result marshaller and the failure handler) are static and have no service access.
