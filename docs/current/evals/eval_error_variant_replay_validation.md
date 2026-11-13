@@ -54,6 +54,32 @@ Not traced. Hypotheses, each untested:
 2. **Live F's 10/10 was a small-sample extreme.** The test above makes this unlikely, though not impossible.
 3. **The replayed request differs from the live turn-2 request in something F's wording is sensitive to.** Candidates: the reasoning item for turn 1, the order of tool definitions, or the request parameters. All three builds share the code path (`SeedConversation`, `BuildInputItems`), which is why E and G matching makes a general replay defect less likely.
 
+### Trace 2026-11-13: the replayed request equals the live turn-2 request
+
+Done by `failure-root-cause-analyst`, read-only.
+
+**Confirmed from artifacts.**
+- **Token counts equal.** In all 10 F histories, the replay's turn-2 `InputTokens` equals the live turn-2 `InputTokens` exactly: 23105, 23072, 23090, 23084, 23079, 23073, 23071, 23048, 23083 and 23070. The E-text and G-text replays differ, as they should.
+- **Content equal.** Live sample-01 and its replay have the same `SystemPrompt` (8876 characters) and `UserPrompt`, and the same 55 tools in the same order with equal descriptions and schemas. Turn 1 is byte-identical, including `ReasoningContent`, `ResultJson` and `TrailingText`.
+- **No hidden prompt composition.** `ErrorPolicyWiring.ComposePrompt` runs only in `PlanStepRunner/Program.cs:248`. `ModelAgentRunner.cs:219-225` sends the passed strings unchanged.
+- **Same request path and parameters.** Both sides use `BuildInputItems`/`ToInputItems` (`LmStudioAgentClient.cs:493-547`), `max_output_tokens` 16384, temperature and top-p null, and loop assist off.
+- **Cache state ruled out.** Search counts by sample index are 6, 5 and 7 of 10, so a cold versus warm prompt cache does not matter.
+
+**Ruled out:** hidden system-prompt composition; tool order, descriptions and schemas; replay of turn-1 reasoning; tool-output bytes; turn and token limits; loop assist; the E job's policy-file env var (it changes only `ErrorPolicyHash`).
+
+**Ranked candidates.**
+1. **Live F's 10/10 was an extreme draw.** In replay, F text and G text are indistinguishable: F gives Search 36/60 (0.60) across both history sets, G gives 59/90 (0.66). F's message differs from G's only by G's appended absence sentence. At a true rate near 0.65, P(10/10) is about 0.013-0.03. The p ~ 0.016 above is also one of three live-versus-replay comparisons, so it should be read with that in mind.
+2. **Host or LM Studio state between 06:11 and 20:17.** Effective sampling defaults are not recorded: the echoed response `Temperature`/`TopP` are parsed (`LmStudioAgentClient.cs:683-691`) but never stored. E and G matching argues against this.
+3. **KV or numeric effects from prefilling the seeded turn instead of decoding it.** Weak; the per-sample-index counts argue against it.
+
+**Unexplained.** One F-on-F row (sample-08, index 2) reports 46,229 input tokens with a first-token time of 0.144 s. This looks like an LM Studio usage-accounting artifact.
+
+**Harness changes it suggests:**
+- a `SourceTurnInputTokens` column next to the replay's input tokens: in an identity cell, a mismatch means the request differs;
+- a request-body hash logged on both sides;
+- storing the echoed temperature and top-p in the transcript header;
+- live arms of 30 samples, or a same-session F-versus-G comparison, because 10 live samples cannot separate 0.6 from 0.8.
+
 ## Why it matters
 
 The replay is meant to screen wording before a live arm. A text whose live effect is strong (F: Search 10/10) shows up weaker in replay (0.60), so a screen could under-rank exactly the texts that work. Until this is explained, replay results carry a known bias.
