@@ -29,9 +29,11 @@ public class ClaudeLeanSchemaBudgetTests
     // Trimmed 2026-11-10 (proposal_reduce_tool_schema_token_cost.md): SemanticFindReplace 5450 -> 3864, MoveMember 3356 -> 3112; both flavors now measure 43118 total, largest tool Git 4261. Budgets are measured + at least 300 rounded up to the next 500: total 43500, per tool 5000 (Git sets it).
     // Raised 43500 -> 44000 on 2026-11-12: measured 43519 after GitRemoteOperation.config and the GitAction get/set/unset
     // values (plan_libgit2sharp_followups.md Step 20: GitRemote +514 chars).
-    private const int AdvancedTotalBudget = 44000;
+    // Raised 44000 -> 44100 on 2026-11-13 (owner): measured 44089 (Advanced and Basic) after 4de54d93 (Search
+    // containingType description).
+    private const int AdvancedTotalBudget = 44100;
     // Basic raised 40000 -> 45000 on 2026-11-10 (core split slice 1): ChangeSignature (~1.9k) and MoveMember (3356) moved from Tools.Advanced to Tools.Basic (CoreRefactoringTools), so the Basic flavor now serves them and measures 44948 chars, the same as Advanced.
-    private const int BasicTotalBudget = 44000;
+    private const int BasicTotalBudget = 44100; // raised with AdvancedTotalBudget on 2026-11-13, same measurement
     private const int AdvancedMaxToolBudget = 5000;
     private const int BasicMaxToolBudget = 5000;
     // Search per-tool budget.
