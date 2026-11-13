@@ -128,7 +128,7 @@ public class WorkspaceReadNavigationTools
         [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
     [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200,
     [ExternalInputRequired(DataTag.SymbolKind)] SymbolKindFilter symbolKind = SymbolKindFilter.any,
-    [Description("symbol mode.")]
+    [Description("symbol, references, callers, implementations modes: the type that declares the name.")]
         [ExternalInputRequired(DataTag.ContainingType)] string? containingType = null,
     [Description("symbol mode.")]
         [ExternalInputRequired(DataTag.ContainingNamespace)] string? containingNamespace = null,
@@ -182,11 +182,11 @@ public class WorkspaceReadNavigationTools
             case SearchMode.symbol:
                 return _symbolNavigation.LocateSymbol(reason, query ?? string.Empty, symbolKind, containingType, containingNamespace, projectName, filePath, exactMatch, includeTests: includeTests, cancellationToken: cancellationToken);
             case SearchMode.references:
-                return _symbolRelationship.FindReferences(reason, query ?? string.Empty, FindReferencesKind.all, filePath, contextSnippet, lineBefore, lineAfter, includeTests: includeTests, cancellationToken: cancellationToken);
+                return _symbolRelationship.FindReferences(reason, query ?? string.Empty, FindReferencesKind.all, filePath, contextSnippet, lineBefore, lineAfter, containingType: containingType, includeTests: includeTests, cancellationToken: cancellationToken);
             case SearchMode.callers:
-                return _symbolRelationship.FindReferences(reason, query ?? string.Empty, FindReferencesKind.callers, filePath, contextSnippet, lineBefore, lineAfter, includeTests: includeTests, cancellationToken: cancellationToken);
+                return _symbolRelationship.FindReferences(reason, query ?? string.Empty, FindReferencesKind.callers, filePath, contextSnippet, lineBefore, lineAfter, containingType: containingType, includeTests: includeTests, cancellationToken: cancellationToken);
             case SearchMode.implementations:
-                return _symbolRelationship.FindReferences(reason, query ?? string.Empty, FindReferencesKind.implementations, filePath, contextSnippet, lineBefore, lineAfter, includeTests: includeTests, cancellationToken: cancellationToken);
+                return _symbolRelationship.FindReferences(reason, query ?? string.Empty, FindReferencesKind.implementations, filePath, contextSnippet, lineBefore, lineAfter, containingType: containingType, includeTests: includeTests, cancellationToken: cancellationToken);
             case SearchMode.attribute:
                 return _symbolRelationship.QuerySymbolRelationships(reason, query ?? string.Empty, FindUsagesSearchKind.attributeUsages, projectName, filePath, includeTests: includeTests, hasAttribute: hasAttribute, cancellationToken: cancellationToken);
             default:
@@ -259,7 +259,7 @@ public class WorkspaceReadNavigationTools
         // maxResults is a cap, so ignoring it outside text mode is harmless; an error only costs a weak model a turn.
         Check("contextLines", contextLines != 0, mode == SearchMode.text, "mode text only");
         Check("symbolKind", symbolKind != SymbolKindFilter.any, mode == SearchMode.symbol, "mode symbol only");
-        Check("containingType", !string.IsNullOrWhiteSpace(containingType), mode == SearchMode.symbol, "mode symbol only");
+        Check("containingType", !string.IsNullOrWhiteSpace(containingType), mode == SearchMode.symbol || isUsageMode, "modes symbol, references, callers, implementations only");
         Check("containingNamespace", !string.IsNullOrWhiteSpace(containingNamespace), mode == SearchMode.symbol, "mode symbol only");
         Check("hasAttribute", !string.IsNullOrWhiteSpace(hasAttribute), mode == SearchMode.attribute, "mode attribute only");
         Check("contextSnippet", !string.IsNullOrWhiteSpace(contextSnippet), isUsageMode, "modes references, callers, implementations only");

@@ -337,7 +337,7 @@ public class SymbolRelationshipImpl
         return $" +{hiddenTestProjects.Count} more in test projects ({string.Join(", ", perProject)}), hidden because includeTests is false - rerun with includeTests: true to include them.";
     }
 
-    public async Task<SentinelCallToolResult<object>> FindReferences(ToolCallReason reason, string symbolName, FindReferencesKind kind, string? filePath = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, bool includeTests = true, CancellationToken cancellationToken = default)
+    public async Task<SentinelCallToolResult<object>> FindReferences(ToolCallReason reason, string symbolName, FindReferencesKind kind, string? filePath = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containingType = null, bool includeTests = true, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -348,7 +348,7 @@ public class SymbolRelationshipImpl
             var droppedProjectNames = new List<string>();
             if (kind == FindReferencesKind.callers)
             {
-                var result = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                var result = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, containingType: containingType, cancellationToken: cancellationToken);
                 result = ExcludeTestHits(result, c => c.FilePath, testDocProjects, droppedProjectNames);
                 var summary = SummarizeListResult.Build(result, c => c.FilePath);
                 return new SentinelCallToolResult<object>
@@ -362,7 +362,7 @@ public class SymbolRelationshipImpl
 
             if (kind == FindReferencesKind.implementations)
             {
-                var result = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                var result = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, containingType: containingType, cancellationToken: cancellationToken);
                 result = ExcludeTestHits(result, i => i.FilePath, testDocProjects, droppedProjectNames);
                 var summary = SummarizeListResult.Build(result, i => i.FilePath ?? "(unknown)");
                 return new SentinelCallToolResult<object>
@@ -376,7 +376,7 @@ public class SymbolRelationshipImpl
 
             if (kind == FindReferencesKind.all)
             {
-                var callers = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                var callers = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, containingType: containingType, cancellationToken: cancellationToken);
                 // The implementations half is structurally inapplicable for a concrete target (sealed type,
                 // struct, non-virtual member): that is "nothing to implement", not a failure of the whole
                 // all-query, so the callers half must still be returned.
@@ -384,7 +384,7 @@ public class SymbolRelationshipImpl
                 List<ImplementationInfo> implementations;
                 try
                 {
-                    implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                    implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, containingType: containingType, cancellationToken: cancellationToken);
                 }
                 catch (ToolTargetIneligibleException)
                 {

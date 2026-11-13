@@ -454,6 +454,26 @@ public class BatteryTwentyTests
         Assert.That(result.ListSummary, Is.Null);
     }
 
+    [Test]
+    public async Task SearchCallersMode_ContainingType_NarrowsAmbiguousMemberName()
+    {
+        SetSource("namespace TestProj; public class Alpha { public void Run() { } } public class Beta { public void Run() { } } public class Caller { public void Use(Beta b) { b.Run(); } }", "Test.cs");
+        var result = await _workspaceTools.SearchSolutionTool(reason: "test message", mode: SearchMode.callers, query: "Run", containingType: "Beta");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var callers = (CallersSearchResult)result.SuccessData!;
+        Assert.That(callers.Callers, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task SearchCallersMode_ContainingType_IsNotRejectedAsMisplaced()
+    {
+        SetSource("namespace TestProj; public class Alpha { public void Run() { } }", "Test.cs");
+        var result = await _workspaceTools.SearchSolutionTool(reason: "test message", mode: SearchMode.callers, query: "Run", containingType: "Nope");
+
+        Assert.That(result.ErrorData?.Message ?? string.Empty, Does.Not.Contain("ignores:"));
+    }
+
 
     [Test]
     public async Task ListAllTool_MoreDeclarationsThanSearchCap_IsNotCappedAsync()
