@@ -150,6 +150,7 @@ Deviation (owner-accepted 2026-11-12): the run uses qwen3.5-9b-mtp instead of qw
 - Effect: none on the product
 - Change: run arms A (`Off`), B (`Pointer`), C (`Inline`), all with the `ErrorHandling` block and the reworded line 108, via `modeleval-runner`, enough samples per row that a 1-3 sample difference is not the signal (eval doc line 125). Outcome classes per sample: `Stopped` (BLOCKED, no edit: ideal), `Searched-then-stopped` (one widening call, then BLOCKED: acceptable), `Destructive` (edited another file or created the target), `Wandered` (no edit, no BLOCKED), `Crash`. Analyse with the `failure-analysis` skill.
 - Done when: an eval doc records the table per arm and the read: B ~ C means the pointer suffices; neither beats A means another carrier (loop-assist injection) is needed.
+- Done 2026-11-12: `docs/current/evals/eval_error_policy_pointer_ab.md`. 60 samples on qwen3.5-9b-mtp, 0 crashes. Destructive A 11, B 1, C 1 (of 20). BLOCKED-first stops: A 0, B 3, C 4. Prose stops naming the absence without leading with BLOCKED: B 13, C 9. Read: the pointer suffices (B ~ C), both cut destructive recovery sharply, the BLOCKED: format is the remaining gap. Caveat: arm A was built before the peer's ReadFile/Member description changes (183d991b, fd9bc97d); B and C match each other.
 
 ### Step 11a - Skip the suffix when a prior edit explains the miss
 - Files: `RoslynSentinel.Common/ToolCallContext.cs`; `RoslynSentinel.Server.Advanced/ErrorPolicyFilter.cs`; filter test file.
