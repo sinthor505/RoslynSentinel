@@ -69,7 +69,15 @@ public class ModelEvalAssemblySetUp
     internal static (string CommitHash, bool Dirty, string ErrorPolicyMode, string ErrorPolicyHash)? BuildProcessStamp(
         (string CommitHash, bool Dirty)? gitStamp)
     {
-        return BuildProcessStamp(gitStamp, ErrorPolicyOptions.Mode, ErrorPolicyOptions.PolicyFilePath);
+        // TODO error-policy arm D: temporary A/B switch; remove after Step 11c (ship the line in CodingAgent if D wins)
+        // The arm D suffix lands in the errorPolicyMode csv column and the transcript; the string column is free-form, nothing parses it.
+        var stamp = BuildProcessStamp(gitStamp, ErrorPolicyOptions.Mode, ErrorPolicyOptions.PolicyFilePath);
+        if (stamp is not { } s)
+        {
+            return null;
+        }
+
+        return (s.CommitHash, s.Dirty, EvalExitLine.StampMode(s.ErrorPolicyMode, EvalExitLine.IsEnabled()), s.ErrorPolicyHash);
     }
 
     /// <summary>
