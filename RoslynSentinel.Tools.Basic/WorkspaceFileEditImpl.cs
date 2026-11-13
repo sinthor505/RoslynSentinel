@@ -638,7 +638,7 @@ public class WorkspaceFileEditImpl
         _workspaceManager.RecordWholeFileObservedAsync(path, cancellationToken);
 
     public async Task<SentinelCallToolResult<object>> ReadFile(ToolCallReason reason, string filePath, int? startLine = null,
-        int? endLine = null, string? memberName = null, string? containerName = null, LineEndingDisplay showLineEndings = LineEndingDisplay.None, CancellationToken cancellationToken = default)
+        int? endLine = null, string? memberName = null, string? containerName = null, LineEndingDisplay showLineEndings = LineEndingDisplay.None, PreferredTarget preferredTarget = PreferredTarget.constructor, CancellationToken cancellationToken = default)
     {
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         if (!string.IsNullOrEmpty(memberName))
@@ -665,10 +665,10 @@ public class WorkspaceFileEditImpl
                 await _workspaceManager.FlushPendingFoldsAsync(cancellationToken);
                 await _workspaceManager.SyncFileFromDiskIfStaleAsync(filePathResolved, cancellationToken);
                 // GetMemberSourceAsync throws on failure and returns Modified with a non-null source.
-                var (_, _, _, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, null, null, null, true, cancellationToken: cancellationToken);
+                var (_, message, _, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, null, null, null, true, preferredTarget: preferredTarget, cancellationToken: cancellationToken);
                 // Extra whole-file fetch the member read costs (the member slice alone cannot be recorded).
                 await RecordWholeFileObservedAsync(filePathResolved, cancellationToken);
-                return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source!) };
+                return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source!), Findings = message is null ? [] : [new Finding("MemberSource", message)] };
             }
             catch (Exception ex)
             {

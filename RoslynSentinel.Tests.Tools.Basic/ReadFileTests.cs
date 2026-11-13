@@ -700,4 +700,30 @@ public class ReadFileTests
         Assert.That(view.Member.Source, Does.Contain("public int Keep()"));
         Assert.That(view.Member.Source, Does.Contain("public int Other()"));
     }
+
+    [Test]
+    public async Task ReadFile_MemberNameSharedByTypeAndConstructor_PreferredTargetClass_ReturnsTypeAsync()
+    {
+        UseDocumentSource("public class Order { public Order() { } public int Id; }\n");
+
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Order", preferredTarget: PreferredTarget.@class);
+
+        Assert.That(result.IsError, Is.False);
+        var view = (MemberSourceViewResult)result.SuccessData!;
+        Assert.That(view.Member.Kind, Is.EqualTo("class"));
+        Assert.That(view.Member.Source, Does.Contain("public int Id;"));
+    }
+
+    [Test]
+    public async Task ReadFile_MemberNameSharedByTypeAndConstructor_ReturnsConstructorWithHint()
+    {
+        UseDocumentSource("public class Order { public Order() { } public int Id; }\n");
+
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Order");
+
+        Assert.That(result.IsError, Is.False);
+        var view = (MemberSourceViewResult)result.SuccessData!;
+        Assert.That(view.Member.Kind, Is.EqualTo("constructor"));
+        Assert.That(result.Findings.Any(f => f.Message.Contains("preferredTarget: class")), Is.True);
+    }
 }
