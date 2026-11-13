@@ -883,7 +883,34 @@ like), clean tree at 734bc33f (includes ddcbc9e7 and 564a2813), jobs `20261113-0
 
 All five ended ModelFinished. None drew the identical-call nudge, so the identical-success stop has still not fired live.
 In every run that reached 20 assistant turns, the only cache break was the block step at T21 (cached 21785). Run 4
-lost about 4.2k cached tokens at T4. That is not a block step, and its cause has not been traced.
+lost about 4.2k cached tokens at T4. That is not a block step.
+
+**Run 4's T4 drop traced: not a cache break.** The cached count at T4 (26346) equals the real T3 prompt (T2's 25424
+input, plus its output and the CreateFile result). The 4.25k uncached tokens are the new content: T3's two ReplaceSnippet
+calls (3.2k characters of arguments each) and their two error results (about 4.6k characters each). LM Studio
+misreported T3's usage. The agent log shows one POST for T3, yet the usage reads input 53720 (about twice the real prompt)
+and output 196 (the tool-call arguments alone were 6.4k characters). The inflated input tripped the runner's
+"cumulative conversation tokens ... 90 %" warning (`ModelAgentRunner.cs:306`, log only). The same spike-then-fall
+pattern appears once more in this test's results: run `113\20261112-031134-405` at T8 (66381, then 34027). Hypothesis,
+not traced: the token-based full-window check for turns with no tool calls uses the same count, so an inflated
+report on a final turn could be misread.
+
+**Identical-success stop measured live (resume run).** Job `20261113-005825-001`, folder
+`ModelTestingResults\113\ResumeFromTranscript_SamplesTheNextTurns\20261113-005840-986`: `qwen3.5-9b-mtp` at a49ab3ec, a
+resume of batch X run 3 (`20261112-193953-942`) keeping turns 1-14 (T12-T14 are already identical ReadFile calls), 5
+samples of up to 6 live turns. The runner's streak starts at zero after the kept turns.
+
+| Sample | New calls | Assists | Stop |
+| --- | --- | --- | --- |
+| 1 | ReadFile, 2 rejected ReplaceSnippet, 3 ReadFile | 1 | TurnCapExceeded |
+| 2 | 4 identical ReadFile | 1 | RepeatedIdenticalCall |
+| 3 | ReplaceSnippet, CreateFile and Member rejected, 2 ReadFile | 0 | TurnCapExceeded |
+| 4 | 6 successful ReadFile | 1 | RepeatedIdenticalCall |
+| 5 | 3 ReadFile, 3 rejected ReplaceSnippet | 0 | TurnCapExceeded |
+
+The stop fired in 2 of 5 samples, each time after the one nudge, and ended the loop that previously ran to the turn cap
+(43 repeats in batch X run 3). In both, the model repeated the call once more after the nudge, so the nudge alone did
+not change course. The stop did.
 
 ## Out of scope
 
