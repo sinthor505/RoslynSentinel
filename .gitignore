@@ -36,6 +36,10 @@ ClaudeFiles/
 !RoslynSentinel.Tests.ModelEval/ResumeTranscripts/
 !RoslynSentinel.Tests.ModelEval/ResumeTranscripts/*.json
 
+# Real recorded transcripts the error-variant replay tests load (plan_error_variant_replay steps 5-6); tracked so a clean clone can run them.
+!RoslynSentinel.Tests.ErrorVariants/TestData/
+!RoslynSentinel.Tests.ErrorVariants/TestData/*.json
+
 *.trx
 
 TestResults/
