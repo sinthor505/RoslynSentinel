@@ -868,6 +868,23 @@ T31) now account for ~244 s of the ~330 s total TTFT. The block steps land at T2
 assistant turns are in the history. The prompt reached 45.8k tokens, above the 40192 context recorded for host 85
 earlier, so the host's context must have been raised since then.
 
+## Batch Y: identical-success stop and block-stepped window live, 5/5
+
+Host 113, `qwen3.5-9b-mtp` (the loaded model; batch X used `qwen3.5-9b-coder`, so wall times do not compare like for
+like), clean tree at 734bc33f (includes ddcbc9e7 and 564a2813), jobs `20261113-003349-001..005`.
+
+| Run folder | Result | Turns | Tool calls | Wall | Sum TTFT (s) | Turns with > 3k uncached |
+| --- | --- | --- | --- | --- | --- | --- |
+| 20261113-003402-988 | passed | 28 | 28 | 3m 48s | 41.2 | T21 |
+| 20261113-003751-283 | passed | 22 | 24 | 3m 23s | 28.3 | T21 |
+| 20261113-004115-937 | passed | 25 | 27 | 3m 31s | 31.5 | T21 |
+| 20261113-004446-932 | passed | 20 | 27 | 4m 22s | 22.3 | T4 (26346 of 30597 cached) |
+| 20261113-004907-737 | passed | 21 | 23 | 3m 11s | 28.3 | T21 |
+
+All five ended ModelFinished. None drew the identical-call nudge, so the identical-success stop has still not fired live.
+In every run that reached 20 assistant turns, the only cache break was the block step at T21 (cached 21785). Run 4
+lost about 4.2k cached tokens at T4. That is not a block step, and its cause has not been traced.
+
 ## Out of scope
 
 - Batch C ran before 31b206a6 and 28391d8c; their effect is unmeasured.
