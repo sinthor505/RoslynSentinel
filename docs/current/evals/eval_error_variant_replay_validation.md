@@ -95,6 +95,27 @@ Done by `failure-root-cause-analyst`, read-only.
   - None is tested.
 - **Ranking also differs.** Live: F (19/20 Search) above G (7/10). Replay on F histories: G (22/30) above F (18/30). As built, the replay does not preserve the live ranking of F against G, so it cannot be trusted to screen texts.
 
+### Regenerate mode (cut 0), 2026-11-13 evening
+
+- **What ran.** The model generates turn 1 itself, and the fake host serves the recorded `ReadFile` miss with the variant text. Built in 3246bedc.
+- **Setup.** Host 113, `qwen3.5-9b-mtp`, the 10 F histories (they supply the recorded results and the user prompt), 3 samples per text. Run `ModelTestingResults\113\ReplayVariants_SamplesAndClassifies\20261113-205612-315`, 90 rows, 0 harness errors.
+- **Turn 1.** Every row re-issued the recorded `ReadFile` at turn 1, except one G row (`RegenMiss:Search`).
+
+| Text | Regenerate | Seeded (same histories) | Live |
+| --- | --- | --- | --- |
+| E | ListSolutionItems 27/30 (0.90), Search 3 | ListSolutionItems 23/30 | ListSolutionItems 7/10 |
+| F | **Search 23/30 (0.77)**, ListSolutionItems 7 | Search 18/30 (0.60) | **Search 19/20 (0.95)** |
+| G | Search 22/29 (0.76), ListSolutionItems 7 | Search 22/30 | Search 7/10 |
+
+- **Reading.**
+  - **F moves toward live but does not reach it.** It goes 0.60 to 0.77. Regenerate against seeded gives one-sided p ~ 0.13, and live against regenerate gives p ~ 0.09. Neither difference is significant at n=30.
+  - **E and G sit near live.** E is 0.90 against 0.70, G is 0.76 against 0.70.
+  - **F against G is still a tie in replay** (0.77 against 0.76), while live F is far above G (0.95 against 0.70).
+  - **So the KV hypothesis is not confirmed.** With turn 1 decoded live, the hypothesis predicted F near 0.95.
+- **What it leaves open.** Either part of the live gap is something else, or live G's 7/10 understates G.
+  - The only live G data is 10 samples from the morning, and live F against live G has never been compared in the same session.
+  - The next discriminating data is a live G re-run (commit `5e4694cb`, 20 samples) beside a larger regenerate F/G cell (60 each).
+
 ### Sibling-model replicate: qwen3.5-4b-mtp on host 112 (exploratory)
 
 - **What ran.** The same 210 rows and settings as above, on host 112 with `qwen3.5-4b-mtp`; the owner chose this model because 9b is too slow on 112. There is no live 4b baseline on these 9b histories, so this is not a fidelity check. The run had 0 harness errors, 0 `Stop*`, 0 `Malformed` and 0 `Write:*`.
