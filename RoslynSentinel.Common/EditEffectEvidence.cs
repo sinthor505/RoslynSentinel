@@ -37,19 +37,47 @@ public static class EditEffectEvidence
             return [];
         }
 
-        Solution? solution = null;
+        var note = Find(index, term, context.SessionId, ServerInstanceIdentity.Id, context.AgentId, ReadSolution(context), context.SolutionRoot, DateTime.UtcNow);
+        return note is null ? [] : [new Finding(FindingSource, note, FindingSeverity.Info)];
+    }
+
+    /// <summary>
+    /// The fact sentence (without the leading "`X` was not found." clause) for the current tool call, read from <see cref="ToolCallContext.Current"/>,
+    /// or null when there is no context, no mapped term, no effect index or no recorded effect explains the term. Same identity rule and
+    /// chain/cancel logic as <see cref="ForCurrentCall"/>, but with no error-code gate: the caller (a not-found builder) is only reached on a
+    /// not-found. Never throws.
+    /// </summary>
+    public static string? FactForCurrentCall()
+    {
         try
         {
-            solution = context.CurrentSolution?.Invoke();
+            var context = ToolCallContext.Current;
+            if (context is not { MissingTerm: { } term, EditEffects: { } index })
+            {
+                return null;
+            }
+
+            return FindFactSentence(index, term, context.SessionId, ServerInstanceIdentity.Id, context.AgentId, ReadSolution(context), context.SolutionRoot, DateTime.UtcNow);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Edit effect fact failed: {ex}");
+            return null;
+        }
+    }
+
+    private static Solution? ReadSolution(ToolCallContext context)
+    {
+        try
+        {
+            return context.CurrentSolution?.Invoke();
         }
         catch (Exception ex)
         {
             // A failed solution read costs only the "declared at" part of the note.
             Debug.WriteLine($"Edit effect note: solution read failed: {ex}");
+            return null;
         }
-
-        var note = Find(index, term, context.SessionId, ServerInstanceIdentity.Id, context.AgentId, solution, context.SolutionRoot, DateTime.UtcNow);
-        return note is null ? [] : [new Finding(FindingSource, note, FindingSeverity.Info)];
     }
 
     /// <summary>
@@ -58,6 +86,37 @@ public static class EditEffectEvidence
     /// null means the declaration of a renamed symbol is not looked up.
     /// </summary>
     public static string? Find(
+        EditEffectIndex index,
+        string term,
+        string? sessionId,
+        string serverInstanceId,
+        string? callerAgentId,
+        Solution? solution,
+        string? solutionRoot,
+        DateTime utcNow)
+    {
+        var parts = FindParts(index, term, sessionId, serverInstanceId, callerAgentId, solution, solutionRoot, utcNow);
+        return parts is { } p ? $"`{p.Shown}` was not found. {p.Fact}" : null;
+    }
+
+    /// <summary>
+    /// Same lookup as <see cref="Find"/>, but returns only the fact sentence, without the leading "`X` was not found. " clause
+    /// (for a builder whose message already says not found). Null when no recorded effect explains the term. Never throws.
+    /// </summary>
+    public static string? FindFactSentence(
+        EditEffectIndex index,
+        string term,
+        string? sessionId,
+        string serverInstanceId,
+        string? callerAgentId,
+        Solution? solution,
+        string? solutionRoot,
+        DateTime utcNow)
+    {
+        return FindParts(index, term, sessionId, serverInstanceId, callerAgentId, solution, solutionRoot, utcNow)?.Fact;
+    }
+
+    private static (string Shown, string Fact)? FindParts(
         EditEffectIndex index,
         string term,
         string? sessionId,
@@ -97,7 +156,7 @@ public static class EditEffectEvidence
                 ? DeclaredNow(solution, solutionRoot, last)
                 : string.Empty;
             var shown = qualifier.Length == 0 ? simple : $"{string.Join('.', qualifier)}.{simple}";
-            return $"`{shown}` was not found. {string.Join("; ", phrases)}{suffix}.";
+            return (shown, $"{string.Join("; ", phrases)}{suffix}.");
         }
         catch (Exception ex)
         {

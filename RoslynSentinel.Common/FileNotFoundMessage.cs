@@ -122,6 +122,7 @@ public static class FileNotFoundMessage
         var text = SpeculativeAdvice.Resolve("A file read earlier under this name may since have been renamed or moved.");
         if (Callable(isCallable, "ListSolutionItems"))
         {
+            // TODO route "A file not in that list does not exist in this solution." through SpeculativeAdvice.Resolve once slice A lands file effects
             text += $" {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} lists every file in the solution. A file not in that list does not exist in this solution.";
         }
 

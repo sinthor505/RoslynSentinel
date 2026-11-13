@@ -297,6 +297,43 @@ public class EditEffectEvidenceTests
     }
 
     [Test]
+    public void FindFactSentence_IsTheNoteWithoutTheLeadingNotFoundClause()
+    {
+        var index = IndexOf(Effect(EditEffectKind.Renamed, "N.Foo.Bar", newName: "Baz", newFile: "Foo.cs"));
+        var solution = SolutionWith(FooSource);
+
+        var note = Note(index, "Foo.Bar", solution: solution);
+        var fact = EditEffectEvidence.FindFactSentence(index, "Foo.Bar", "s1", "inst-1", "agent-1", solution, Root, Now);
+
+        Assert.That(fact, Does.StartWith("Call `a76e9f1c` (`RenameSymbol`, this agent, 3 min ago) renamed `N.Foo.Bar` to `N.Foo.Baz`, declared at `Foo.cs:4`"));
+        Assert.That(note, Is.EqualTo("`Foo.Bar` was not found. " + fact));
+        Assert.That(EditEffectEvidence.FindFactSentence(index, "Unrelated", "s1", "inst-1", "agent-1", null, Root, Now), Is.Null);
+    }
+
+    [Test]
+    public void FactForCurrentCall_ReturnsTheFactWithoutAnErrorCodeGate_AndNullWithoutContextTermOrIndex()
+    {
+        var index = new EditEffectIndex();
+        var writer = new ToolCallContext("agent-1", null, "RenameSymbol", "rename", 0) { SessionId = "s1" };
+        writer.RecordEffect(EditEffectKind.Renamed, "N.Foo.Bar", "M:N.Foo.Bar", "Bar", "Baz", null, "Foo.cs");
+        writer.CommitPendingEffects(index);
+        ToolCallContext.Set(new ToolCallContext("agent-1", null, "LocateSymbol", "look", 0) { SessionId = "s1", MissingTerm = "Bar", EditEffects = index });
+
+        var fact = EditEffectEvidence.FactForCurrentCall();
+
+        Assert.That(fact, Does.StartWith("A `RenameSymbol` call (this agent, "));
+        Assert.That(fact, Does.EndWith("renamed `N.Foo.Bar` to `N.Foo.Baz`."));
+        Assert.That(fact, Does.Not.Contain("was not found"));
+
+        ToolCallContext.Set(new ToolCallContext("agent-1", null, "LocateSymbol", "look", 0) { SessionId = "s1", MissingTerm = "Bar" });
+        Assert.That(EditEffectEvidence.FactForCurrentCall(), Is.Null);
+        ToolCallContext.Set(new ToolCallContext("agent-1", null, "LocateSymbol", "look", 0) { SessionId = "s1", EditEffects = index });
+        Assert.That(EditEffectEvidence.FactForCurrentCall(), Is.Null);
+        ToolCallContext.Set(null);
+        Assert.That(EditEffectEvidence.FactForCurrentCall(), Is.Null);
+    }
+
+    [Test]
     public void ForCurrentCall_SolutionAccessorThrows_StillReturnsTheNoteWithoutLocation()
     {
         var index = new EditEffectIndex();
