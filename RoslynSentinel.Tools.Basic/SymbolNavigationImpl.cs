@@ -62,9 +62,11 @@ public class SymbolNavigationImpl
             {
                 // Only the empty path pays for the retry: say where the hidden test-project hits are, or that none exist.
                 var hiddenNote = "";
+                var testRetryFoundNothing = false;
                 if (excluded > 0)
                 {
                     var withTests = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind.ToString(), containingType, containingNamespace, projectName, filePathResolved, exactMatch, true, cancellationToken);
+                    testRetryFoundNothing = withTests.Count == 0;
                     hiddenNote = withTests.Count > 0
                         ? $" {withTests.Count} declaration(s) were found in test project(s) ({string.Join(", ", withTests.GroupBy(l => l.ProjectName).Select(g => $"{g.Key} {g.Count()}"))}), hidden because includeTests is false; pass includeTests: true to see them."
                         : $" {excluded} test project(s) were also searched and hold no match, so the name is not declared anywhere in the solution.";
@@ -88,8 +90,10 @@ public class SymbolNavigationImpl
                 }
 
                 // TODO isCallable: SymbolNavigationImpl has no ActiveToolSurface, so hints name tools unconditionally (as the old text did)
-                // wholeSolution: true only when nothing narrowed the search (project, pinned file, test exclusion, containing type or namespace), so "does not exist in the solution" is a settled fact.
-                var wholeSolution = projectName == null && !pinnedToFile && !testsFiltered && string.IsNullOrEmpty(containingType) && string.IsNullOrEmpty(containingNamespace);
+                // wholeSolution: true only when nothing narrowed the search (project, pinned file, containing type or namespace), so "does not exist in the solution" is a settled fact.
+                // Test exclusion does not narrow it when the solution has no test projects or the include-tests retry above also found nothing (plan_error_policy_pointer Step 11g).
+                var testsCovered = !testsFiltered || excluded == 0 || testRetryFoundNothing;
+                var wholeSolution = projectName == null && !pinnedToFile && testsCovered && string.IsNullOrEmpty(containingType) && string.IsNullOrEmpty(containingNamespace);
                 var message = await SymbolNotFoundDetail.BuildAsync(searchedProjects, symbolName, symbolKind.ToString(), scope, projectName, isCallable: null, nextCall: null, cancellationToken, wholeSolution: wholeSolution,
                     containingType: containingType, containerFilePath: pinnedToFile ? filePathResolved.Absolute : null); // arm I container arguments; ignored while the inventory switch is off
 
