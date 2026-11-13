@@ -107,7 +107,7 @@ New classifier, `NextTurnDecision`, over the first assistant turn after the over
 ## Related
 
 - `docs/current/evals/eval_error_policy_pointer_ab.md` (arms A-G; "Explain-the-error replay").
-- `docs/current/plans/plan_error_policy_pointer.md` (Step 11g, arms H and I).
+- `docs/current/plans/closed/plan_error_policy_pointer.md` (Step 11g, arms H and I).
 - `docs/current/references/reference_interrogate_script.md`.
 - `docs/current/plans/plan_not_found_error_orientation.md` (the not-found error rewrite whose measuring stick is the stop-adherence family).
 - Memory: `project_modeleval_testhost_gotchas`, `reference_model_eval_procedure`.

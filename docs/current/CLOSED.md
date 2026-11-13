@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Not-found listing offer, S1 fd279396 - resolved (2026-11-13)
+
+Not-found listing offer, S1 `fd279396` (2026-11-13) - owner of the decision is plan_error_policy_pointer (session f9); S1 drops the `ListSolutionItems` confirmation from the file not-found text when `ToolCallContext.WorkspaceCurrent` is true. Measured on qwen3.5-9b-mtp: alone it did not stop the listing call (10/10 still list), and with the stop rule it hurt (passes 3 -> 0, BudgetOut 2 -> 6; the removed sentence was the stop trigger). Next: replace the offer with a stated fact ("No file with this name or a similar name exists in this solution ...", arm G) or `Git revert fd279396` (clean). Symbol-text equivalent (`SymbolNotFoundDetail.RenderNoCandidates`) not started; a "searched every project" fact is true only for whole-solution misses - [plan](plans/plan_error_policy_pointer.md)
+
+Evidence: superseded by arm H (1f3451c1, 9592c94d, fb239287): the no-similar-name text leads with "Your tool call ... was well-formed, but X does not exist in the solution", plus the file-miss folder list (b005a220); results eval_error_policy_pointer_ab.md 93404d12; plan_error_policy_pointer closed
+
 ## Scenario eval follow-up findings - resolved (2026-11-12)
 
 Scenario eval follow-up findings (2026-11-12) - (1) both stop-adherence StopAndReport fixtures hold a semantic match (`SummarizeShipping` really exists in `OrderPricingCalculator.cs`; `ApplyLoyaltyBonus` is described as `CalcDisc`), so error-text A/Bs on them cannot be read: rebuild them as truly absent targets, then rerun old/current/stripped text; (2) the system prompt says "follow the recovery step the error names" (`AgentSystemPrompts.cs:108`) right before the stop rule; (3) empty-file guard hint suggests `DeleteFile` on a multi-type file; (4) fixture `ContosoOrders.Tests\ModelEvalGenerated\OrderCheckoutTests.cs` fails a solution build (CS0246 Xunit); (5) resume cap hits loop on ReplaceSnippet ValidationFailed and ReadFile with a type name as memberName. (Third `RenameSymbolTypo` arm done 2026-11-12: corrected-call candidates used directly 7/10.) - [doc](evals/eval_scenario_eval_followups.md)

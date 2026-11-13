@@ -1,6 +1,6 @@
 # Finding: A trailing pointer or inline policy text at the miss cuts destructive recovery (11 of 20 to 1 of 20) and makes the model stop, but almost never in the BLOCKED: format
 
-**Status:** OPEN 2026-11-12. Step 11 of `docs/current/plans/plan_error_policy_pointer.md` ran once (60 samples); the carrier question is answered in part (see The read); the BLOCKED: format gap and the arm A build straddle are open.
+**Status:** CLOSED 2026-11-13. Arms A-I of `docs/current/plans/closed/plan_error_policy_pointer.md` ran; testing concluded (owner). Final read in "Arms H and I (Step 11g, overnight, 2026-11-13)". Earlier status: OPEN 2026-11-12 after the first 60-sample run.
 
 ## Context
 
