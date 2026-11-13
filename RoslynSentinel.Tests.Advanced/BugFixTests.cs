@@ -1573,11 +1573,13 @@ public class Second { public void Run() { } }";
         [Test]
         public async Task FindImplementationsForMemberAsync_NoFilePath_ContainingTypeNarrowsAmbiguousName_Resolves()
         {
+            // Run is declared in IAlpha, IBeta and their implementers; containingType IBeta picks IBeta.Run, implemented only by Beta.
             SetMultipleFiles(
-                ("Alpha.cs", "public class Alpha\r\n{\r\n    public virtual void Run() { }\r\n}"),
-                ("Beta.cs", "public class Beta\r\n{\r\n    public virtual void Run() { }\r\n}"));
-            var ex = await Assert.CatchAsync(async () => await _navigationEngine.FindImplementationsForMemberAsync(null, "Run", contextSnippet: null, containingType: "Beta"));
-            Assert.That(ex, Is.Not.InstanceOf<ToolAmbiguousMatchException>());
+                ("Alpha.cs", "public interface IAlpha\r\n{\r\n    void Run();\r\n}\r\npublic class Alpha : IAlpha\r\n{\r\n    public void Run() { }\r\n}"),
+                ("Beta.cs", "public interface IBeta\r\n{\r\n    void Run();\r\n}\r\npublic class Beta : IBeta\r\n{\r\n    public void Run() { }\r\n}"));
+            var results = await _navigationEngine.FindImplementationsForMemberAsync(null, "Run", contextSnippet: null, containingType: "IBeta");
+            Assert.That(results.Select(r => r.TypeName), Has.Some.Contains("Beta.Run"));
+            Assert.That(results.Select(r => r.TypeName), Has.None.Contains("Alpha"));
         }
 
         [Test]

@@ -2249,6 +2249,7 @@ public class SymbolNavigationEngine
                 $"same-named candidate ('{symbolName}') with its containing type and kind.");
         }
 
+        // TODO a virtual (non-abstract) class method returns no implementations here even when derived classes override it (seen with Beta.Run overridden in Gamma); union SymbolFinder.FindOverridesAsync for a virtual member
         IEnumerable<ISymbol> implementations = await SymbolFinder.FindImplementationsAsync(symbol, solution, null, cancellationToken);
 
         // SymbolFinder.FindImplementationsAsync only finds interface implementers and returns nothing for a

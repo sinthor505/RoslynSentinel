@@ -651,7 +651,7 @@ public class RefactoringStructuralImpl
             // TODO Member(view) keeps the lenient container fallback; Step 5e of plan_unknown_parameter_rejection_reduction flips the flag to true and removes this
             // TODO: GetMemberSourceAsync still returns a 4-tuple; return MemberSourceInfo directly (S3 item h, callers: this, WorkspaceFileEditImpl, 11 test sites in MemberRefactoringTests)
             var (_, message, _, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, contextSnippet, lineBefore, lineAfter, false, preferredTarget: preferredTarget, cancellationToken: cancellationToken);
-            return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source!), Findings = message is null ? null : [new Finding("MemberSource", message)] };
+            return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source!), Findings = message is null ? [] : [new Finding("MemberSource", message)] };
         }
 
         if (string.IsNullOrEmpty(containerName))
