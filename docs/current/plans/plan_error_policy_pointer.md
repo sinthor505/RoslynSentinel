@@ -1,6 +1,6 @@
 # Plan: gated error-policy suffix (Off / Pointer / Inline) on not-found tool errors, with eval stamping and an A/B
 
-**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Steps 1-8 done (9856e63c; 22dd662b..cc3fba6c; f5be7103..4764839b; d69f765b..7a6fbc8d); Steps 9-11a done (c6908f6d, 684e3915, 9aa0a135, fe141b9e, 3584f094). A/B follow-ups decided 2026-11-12 (Decision). Step 11b done (112f104e..3e79c8be; rerun 39576054, 7ebdb9b9); Step 12 done (c0f9fcb5..9e90e447). Step 11c done (a0fd8fe4, 1364bbe7; arm D 2e594d1d, switch kept). Left: Step 11d (explain-the-error injection: replay diagnostic, then a live arm), then resolve both temporary switches and close.
+**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Steps 1-8 done (9856e63c; 22dd662b..cc3fba6c; f5be7103..4764839b; d69f765b..7a6fbc8d); Steps 9-11a done (c6908f6d, 684e3915, 9aa0a135, fe141b9e, 3584f094). A/B follow-ups decided 2026-11-12 (Decision). Step 11b done (112f104e..3e79c8be; rerun 39576054, 7ebdb9b9); Step 12 done (c0f9fcb5..9e90e447). Step 11c done (a0fd8fe4, 1364bbe7; arm D 2e594d1d, switch kept). Steps 11d part 1, 11e, 11f (arms F, G) done. Left: Step 11g (arms H and I overnight), then resolve the temporary switches and close (owner 2026-11-13: testing concludes after 11g; Step 11d part 2 dropped).
 
 ## Problem
 
@@ -217,6 +217,15 @@ Decided 2026-11-12 (owner), from the replays: the model weighs "the task names i
 - Result (eval doc 000ac882): F vs E on MissingFile: passes 0 vs 3, cap 6 vs 2, first call after the miss Search 10/10 (E: ListSolutionItems 7); 0 of 20 stopped at the first miss. The model plans its own lookup either way; the removed sentence was what turned the listing result into a turn-3 stop. S1 is not a stop lever on its own.
 - Owner 2026-11-12: arm G. Peer f1 is asked to state the conclusion as a fact when the workspace is current ("No file with this name or a similar name exists in this solution (every project searched ...)"), no call offered. Run G (Inline + v2) on MissingFile, 10 samples on 113. Success = one confirming lookup then BLOCKED: at turn 3 (the Searched-then-stopped class of Step 11) or a first-miss stop.
 - Also fixed on the way: 64a4b2d5 (TranscriptResumeTests path style, ours from a24696bd), be995216 (LoopAssist.NormalizeError blanks the per-call "(Ns ago)" in the no-solution text, so repeated rejections match).
+
+- Arm G result (eval doc 20b2ecbb): the fact sentence did not produce stops either (turn-3 stops E 3 / F 0 / G 0; 0 of 30 first-miss stops across E, F, G; only 2 of 10 G samples mention the fact).
+
+### Step 11g - Arms H and I (final experiment), then conclude
+Decided 2026-11-13 (owner). After this run the testing concludes (diminishing returns); follow-up idea: `docs/current/proposals/` "fake server responses" proposal.
+- **H (wording):** in the no-similar-name case with a current workspace, the not-found text leads with "Your tool call and file path were well-formed, but file `<path>` does not exist in the solution." (files) or "Your tool call was well-formed, but symbol `<name>` does not exist in the solution." (symbols, only when the search covered the whole solution: not narrowed by projectName, filePath or test exclusion). The "renamed or moved" hedge is dropped in that case (a recorded edit-effect fact still replaces it); arm G's trailing sentence and the symbol text's ListAll confirmation offer go. Other cases keep today's text.
+- **I (H + scoped inventory):** a file miss also lists the files in the folder the path names (cap 30 plus the total count); a symbol miss with a known container (containingType, filePath or a qualified name) lists that type's or file's members (cap 30 plus count); no container, no list. Behind a temporary switch so H and I share a build; the switch is resolved at close.
+- **Run (overnight, owner):** 30 samples per scenario per arm, Inline + adopted v2, no exit line. MissingFile and MissingMethod on 113 (qwen3.5-9b-mtp); StopAdherenceControl, RenameSymbolTypo and RenameSymbolNoSuchMethod on 85 and 112 (qwen3.5-4b-mtp). Each scenario stays on one model; H and I jobs interleave.
+- **Close after the run:** remove the arm D switch; keep or remove the inventory switch and the H text per the result; full test run; close the plan.
 
 ### Step 12 - Remaining routes
 - Files: the routes marked in Step 5.
