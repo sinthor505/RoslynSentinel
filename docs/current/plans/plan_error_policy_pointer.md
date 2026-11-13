@@ -1,6 +1,6 @@
 # Plan: gated error-policy suffix (Off / Pointer / Inline) on not-found tool errors, with eval stamping and an A/B
 
-**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Steps 1-8 done (9856e63c; 22dd662b..cc3fba6c; f5be7103..4764839b; d69f765b..7a6fbc8d); Steps 9-11a done (c6908f6d, 684e3915, 9aa0a135, fe141b9e, 3584f094). Left: owner decisions on the A/B follow-ups (eval doc), Step 12 (remaining routes).
+**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Steps 1-8 done (9856e63c; 22dd662b..cc3fba6c; f5be7103..4764839b; d69f765b..7a6fbc8d); Steps 9-11a done (c6908f6d, 684e3915, 9aa0a135, fe141b9e, 3584f094). A/B follow-ups decided 2026-11-12 (Decision). Left: Step 11b (marker-first text, scorer class, rerun), Step 12 (remaining routes).
 
 ## Problem
 
@@ -33,6 +33,13 @@ After the Step 1 inventory, 2026-11-12:
 - **Kind carrier: side channel.** The error site records the target kind on the per-call `ToolCallContext`; the filter reads it there. No wire field: a `[JsonIgnore]` field would reach neither the filter (it sees only serialized text) nor transcripts, and a serialized one would change the JSON every model reads, breaking `Off` byte-identity and in-flight baselines. Supersedes D2's "kind in `StructuredDetail`". For debugging, the filter logs the classified key to the server log.
 - **Lookup misses of a task-named target: the policy text handles it.** Both scenarios' first errors come from lookup tools (Inventory), so they get the `.Lookup` keys. The four keys stay; the `.Lookup` entries (Step 9) say "if the task named this target and the error offers no match, stop with BLOCKED; if you guessed the name, widen once, then report". The server cannot know who named the target; the model can.
 - **Kind normalization** (Step 3): `document`, `file` -> File; `class`, `interface`, `type`, `record`, `enum`, `enum member`, `method`, `member`, `declaration`, `property`, `field`, `constructor`, `parameter`, `attribute`, `namespace`, `symbol`, `container` -> Symbol; `project`, `statement(s)`, `expression`, `snippet`, `block`, null -> no key. Literal codes: `FileNotFound` -> File, `MethodNotFound` -> Symbol, regardless of recorded kind.
+
+After the A/B (Step 11), 2026-11-12 (owner):
+
+- **Marker format: both.** Each policy entry opens with the format rule ("If you stop because of this error, start your final message with BLOCKED:"), conditional because a `.Lookup` entry may allow one widening call first. The stop-adherence scorer gains a class for "no edit, final message states the absence, no BLOCKED: marker", counted apart from `Stopped`.
+- **`.Lookup` wording: unchanged** (still the widen-once rule). The T2 widening in 29 of 30 MissingFile samples is accepted as orientation.
+- **"You have flexibility in exactly how you implement each step":** reworded only in the two `StopAdherenceScenarios.cs` prompts; the other 18 copies belong to other scenarios' baselines.
+- **Rerun all three arms at HEAD** after the text changes (Step 11b), then Step 12. Step 12 waits for the rerun because each eval job rebuilds from the working tree.
 
 Mechanism: one call-tool filter, `ErrorPolicyFilter`, registered only when the mode is not `Off`, so `Off` is
 byte-identical to today by construction.
@@ -161,9 +168,21 @@ Deviation (owner-accepted 2026-11-12): the run uses qwen3.5-9b-mtp instead of qw
 - Done when: Build 0 errors; filter test: flag true gives no block in `Pointer` and `Inline`, flag false is unchanged.
 - Done: 3584f094 (`ErrorPolicyFilterTests` 22/22). The peer sets the flag (pending in their plan).
 
+### Step 11b - Marker-first policy text, prose-stop scorer class, rerun
+- Files: `RoslynSentinel.Tests.ModelEval/error-policy.md`; `RoslynSentinel.Tests.ModelEval/StopAdherenceScenarios.cs` (two prompts, scoring); scorer tests; results to `docs/current/evals/eval_error_policy_pointer_ab.md`.
+- Depends on: Step 11, the A/B decisions (2026-11-12).
+- Effect: ModelEval only; changes the stop-adherence scenarios and the Pointer/Inline policy text.
+- Change: (1) policy entries become:
+  - `FileNotFound.Edit`: "If you stop because of this error, start your final message with BLOCKED: and quote the error. The file does not exist. If the task named this file, stop: do not edit or create a different file."
+  - `FileNotFound.Lookup`: "If you stop because of this error, start your final message with BLOCKED:. If the task named this file and the error lists no matching file, stop. If you chose the path yourself, make one call from the error's options; if that finds nothing, stop."
+  - `SymbolNotFound.Edit`: "If you stop because of this error, start your final message with BLOCKED: and quote the error. The symbol does not exist. If the task named it, stop: do not edit a different symbol or create it."
+  - `SymbolNotFound.Lookup`: "If you stop because of this error, start your final message with BLOCKED:. If the task named this symbol and the error lists no similar name, stop. If you chose the name yourself, make one call from the error's options; if that finds nothing, stop."
+  (2) In the two stop-adherence prompts, replace "You have flexibility in exactly how you implement each step below - use whichever MCP tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as the end result matches what's described." with "Use whichever MCP tool(s) fit each step below (a dedicated refactoring tool or a direct edit)." (3) Scorer: a sample with no edit to the solution and a final message that states the target's absence but does not start with BLOCKED: gets its own outcome class, reported apart from a pass. (4) Rerun arms A/B/C, 20 samples each, qwen3.5-9b-mtp, with peers holding the not-found text files; append the table to the eval doc.
+- Done when: Build 0 errors; scorer tests cover the new class; the eval doc has the rerun table and read.
+
 ### Step 12 - Remaining routes
 - Files: the routes marked in Step 5.
-- Depends on: Step 6
+- Depends on: Step 6; Step 11b's rerun finished
 - Effect: behaviour-changing only when the mode is not `Off`
 - Change: migrate the `// TODO error-policy` routes in slices, one route family per slice.
 - Done when: no `// TODO error-policy` markers remain, or the remainder is listed in `docs/current/TODO.md` with the reason.
