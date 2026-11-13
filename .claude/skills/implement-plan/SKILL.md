@@ -17,7 +17,8 @@ CLAUDE.md applies throughout.
   `Glob` on `docs/current/**/*<name>*.md`; built-in tools are fine for Markdown). Several matches:
   ask which.
 - **Proposal with no steps:** dispatch `design-doc-scribe` to draft `plans/plan_<slug>.md` from
-  `templates/plan.md`, linking the proposal. Show the owner the step list before reviewing.
+  `templates/plan.md`, linking the proposal, and to follow `.claude/skills/plan-writer/SKILL.md`.
+  Show the owner the step list before reviewing.
 - Dispatch `explore-tier2` (`model: sonnet` for a plan over ~6 steps or crossing projects) to review
   the plan against the current source. Per step, at most 6 lines:
   - status: done already (`Git` log for `Plan: <id>` trailers, and the code), stale anchors, or not started;
@@ -27,6 +28,7 @@ CLAUDE.md applies throughout.
   - size: fits implementer tier D1 or S0 (`.claude/implementer-tiers.json`), or needs `implementer-senior`;
   - parallel-ready (the "Steps" comment in `templates/plan.md`): real prerequisites, disjoint files for
     pairs, text-neutral vs behaviour-changing; propose the two-lane slice map and the text-neutral-first order;
+  - new code: a contract-skeleton first step and a closing stub sweep (`plan-writer` skill, section 2);
   - open questions, each with options and a recommendation.
   Also: another plan or session that needs a baseline before this plan's behaviour changes (an A/B eval)?
   Agree the hold point up front. Also: is another session working on it (Status IN PROGRESS by someone else, recent `Plan:` commits,

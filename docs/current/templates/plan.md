@@ -22,7 +22,10 @@
      - New tests go in per-slice test files; update shared pinned assertions in one slice.
      - Mark each slice text-neutral (new members with no callers, consumer fixes) or behaviour-changing (wire text,
        output shape) and schedule text-neutral slices first, so a hold (another plan's A/B baseline, a review)
-       does not idle the run. Name any cross-plan baseline dependency in Risks. -->
+       does not idle the run. Name any cross-plan baseline dependency in Risks.
+     - New types/members that reference each other: Step 1 is a compile-green contract skeleton (final signatures,
+       `throw new NotImplementedException(); // TODO implement (Step n)` bodies); the last step finds no stubs left.
+     Checks before handing over (verified names, tier sizing, lane per slice): the plan-writer skill. -->
 
 ### Step 1 - <name>
 - Files: <paths>

@@ -70,6 +70,11 @@ otherwise reads as "zero blast radius".
   callers in slices (a sweep slice per project or folder), remove the old member in a final slice once
   nothing references it. Prefer this over any "everything at once" change; it is what makes each slice
   fit a tier. See `docs/current/proposals/proposal_parallel_change_deprecated_wrappers.md`.
+- **Skeleton first for new code.** New types/members that reference each other land first as one
+  compile-green skeleton (final signatures, `throw new NotImplementedException(); // TODO implement`
+  bodies). Validation rejects only introduced errors, so body slices, callers and tests then run in any
+  order and pair on disjoint files. Brief the skeleton signatures as fixed; a slice that needs one
+  changed replies `RESCOPE:`. Detail: `plan-writer` skill, section 2.
 - Over the lane's limits: split again, or use the other lane, or go to `implementer-senior`.
 
 ## Tests and test runs (owner rule, 2026-11-11; replaces 2026-11-09)
