@@ -459,4 +459,105 @@ public class SymbolNotFoundDetailTests
         Assert.That(text, Does.EndWith("If it is not there, the symbol does not exist in this solution."));
         Assert.That(text, Does.Not.Contain("tell the user"));
     }
+
+    // ── Arm H (plan_error_policy_pointer Step 11g): current workspace + whole-solution search ─────────────
+
+    // The ambient ToolCallContext is an AsyncLocal that other tests may set, so it is always cleared afterwards.
+    [TearDown]
+    public void ClearToolCallContext() => ToolCallContext.Set(null);
+
+    private static void SetWorkspaceCurrent(bool? workspaceCurrent, EditEffectIndex? index = null, string? missingTerm = null, string? sessionId = null)
+    {
+        ToolCallContext.Set(workspaceCurrent is null && index is null
+            ? null
+            : new ToolCallContext("agent-1", null, "LocateSymbol", null, 0) { WorkspaceCurrent = workspaceCurrent, EditEffects = index, MissingTerm = missingTerm, SessionId = sessionId });
+    }
+
+    private const string ArmHLead = "Your tool call was well-formed, but symbol `FormatInvoiceTotal` does not exist in the solution. ";
+
+    [Test]
+    public void RenderNoCandidates_WorkspaceCurrentAndWholeSolution_LeadsWithTheFactAndDropsTheOffer()
+    {
+        SetWorkspaceCurrent(true);
+
+        var text = SymbolNotFoundDetail.RenderNoCandidates("FormatInvoiceTotal", "method", "40 project(s), test projects included", "Some/File.cs", ProjectName, wholeSolution: true);
+
+        Assert.That(text, Is.EqualTo(ArmHLead + "Searched 40 project(s), test projects included (symbol kind: method); no symbol in the solution has a similar name."));
+        Assert.That(text, Does.Not.Contain("ListAll"));
+        Assert.That(text, Does.Not.Contain("GetFileOutline"));
+        Assert.That(text, Does.Not.Contain("does not exist in this solution"));
+        Assert.That(text, Does.Not.Contain("Symbol 'FormatInvoiceTotal'"));
+    }
+
+    [Test]
+    public void RenderNoCandidates_WorkspaceCurrentButNarrowedSearch_KeepsTodaysText()
+    {
+        ToolCallContext.Set(null);
+        var today = SymbolNotFoundDetail.RenderNoCandidates("FormatInvoiceTotal", "method", ScopeDescription, null, ProjectName);
+
+        SetWorkspaceCurrent(true);
+        var narrowed = SymbolNotFoundDetail.RenderNoCandidates("FormatInvoiceTotal", "method", ScopeDescription, null, ProjectName, wholeSolution: false);
+
+        Assert.That(narrowed, Is.EqualTo(today));
+        Assert.That(narrowed, Does.Contain("If it is not in that list, the symbol does not exist in this solution."));
+    }
+
+    [Test]
+    public void RenderNoCandidates_WorkspaceStaleOrUnknownEvenWhenWholeSolution_KeepsTodaysText()
+    {
+        ToolCallContext.Set(null);
+        var today = SymbolNotFoundDetail.RenderNoCandidates("FormatInvoiceTotal", "method", ScopeDescription, null, ProjectName);
+
+        SetWorkspaceCurrent(false);
+        var stale = SymbolNotFoundDetail.RenderNoCandidates("FormatInvoiceTotal", "method", ScopeDescription, null, ProjectName, wholeSolution: true);
+        ToolCallContext.Set(null);
+        var unknown = SymbolNotFoundDetail.RenderNoCandidates("FormatInvoiceTotal", "method", ScopeDescription, null, ProjectName, wholeSolution: true);
+
+        Assert.That(stale, Is.EqualTo(today));
+        Assert.That(unknown, Is.EqualTo(today));
+    }
+
+    [Test]
+    public async Task BuildAsync_WorkspaceCurrentWholeSolutionWithResolvingContainer_LeadsWithTheFactAndDropsGetFileOutline()
+    {
+        var projects = Projects(BuildSolution());
+        SetWorkspaceCurrent(true);
+
+        var text = await SymbolNotFoundDetail.BuildAsync(projects, "OrderPricingCalculator.ApplyLoyaltyBonus", "method", ScopeDescription, ProjectName, wholeSolution: true);
+
+        Assert.That(text, Does.StartWith("Your tool call was well-formed, but symbol `ApplyLoyaltyBonus` does not exist in the solution. Searched " + ScopeDescription));
+        Assert.That(text, Does.Not.Contain("GetFileOutline"));
+        Assert.That(text, Does.Not.Contain("ListAll"));
+    }
+
+    [Test]
+    public async Task BuildAsync_WorkspaceCurrentWithCandidates_KeepsTheCandidateText()
+    {
+        var projects = Projects(BuildSolution());
+        ToolCallContext.Set(null);
+        var today = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName);
+
+        SetWorkspaceCurrent(true);
+        var current = await SymbolNotFoundDetail.BuildAsync(projects, "CalcDsc", "method", ScopeDescription, ProjectName, wholeSolution: true);
+
+        Assert.That(current, Is.EqualTo(today));
+    }
+
+    [Test]
+    public void RenderNoCandidates_WorkspaceCurrentWithARecordedRename_KeepsTheEditEffectFact()
+    {
+        var index = new EditEffectIndex();
+        var writer = new ToolCallContext("agent-1", null, "RenameSymbol", "rename", 0) { SessionId = "s1" };
+        writer.AssignToolCallId("a76e9f1c");
+        writer.RecordEffect(EditEffectKind.Renamed, "N.Foo.Bar", "M:N.Foo.Bar", "Bar", "Baz", null, "Foo.cs");
+        writer.CommitPendingEffects(index);
+        SetWorkspaceCurrent(true, index, missingTerm: "Bar", sessionId: "s1");
+
+        var text = SymbolNotFoundDetail.RenderNoCandidates("Bar", "method", ScopeDescription, null, null, wholeSolution: true);
+
+        Assert.That(text, Does.StartWith("Your tool call was well-formed, but symbol `Bar` does not exist in the solution. Searched "));
+        Assert.That(text, Does.Contain("no symbol in the solution has a similar name. Call `a76e9f1c` (`RenameSymbol`, this agent, "));
+        Assert.That(text, Does.EndWith(" ago) renamed `N.Foo.Bar` to `N.Foo.Baz`."));
+        Assert.That(ToolCallContext.Current!.HasEditEffectFact, Is.True);
+    }
 }

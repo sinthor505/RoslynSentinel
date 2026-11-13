@@ -2197,7 +2197,7 @@ public class SymbolNavigationEngine
         {
             var missDetail = scopedFailureNamesCandidates
                 ? string.Empty
-                : await DescribeSymbolMissInSolutionAsync(solution, symbolName, "implementations", cancellationToken);
+                : await DescribeSymbolMissInSolutionAsync(solution, symbolName, "implementations", cancellationToken, wholeSolutionMiss: scopedResolutionFailure == null);
             throw new ToolNotFoundException(
                 "FindImplementations: " + (scopedResolutionFailure ??
                     ($"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
@@ -2781,8 +2781,9 @@ public class SymbolNavigationEngine
     /// FindReferences call for <paramref name="kind"/> pinned to the candidate's file) or, when none is similar, the no-similar-name
     /// fact and one orientation call. Replaces <see cref="DescribeNearMissCandidatesAsync"/>.
     /// </summary>
-    private static async Task<string> DescribeSymbolMissInSolutionAsync(Solution solution, string symbolName, string kind, CancellationToken cancellationToken)
+    private static async Task<string> DescribeSymbolMissInSolutionAsync(Solution solution, string symbolName, string kind, CancellationToken cancellationToken, bool wholeSolutionMiss = true)
     {
+        // wholeSolutionMiss: false when the resolution that missed was scoped to a file (FindImplementations with a filePath/contextSnippet); the candidates here are still solution-wide.
         var projects = solution.Projects.ToList();
 
         // TODO isCallable: SymbolNavigationEngine has no ActiveToolSurface, so hints name tools unconditionally (as the old text did)
@@ -2791,7 +2792,7 @@ public class SymbolNavigationEngine
             nextCall: candidate => string.IsNullOrEmpty(candidate.FilePath)
                 ? ToolCallHint.Call("FindReferences", ("symbolName", candidate.Name), ("kind", kind))
                 : ToolCallHint.Call("FindReferences", ("symbolName", candidate.Name), ("kind", kind), ("filePath", candidate.FilePath)),
-            cancellationToken: cancellationToken);
+            cancellationToken: cancellationToken, wholeSolution: wholeSolutionMiss);
     }
 
     private static readonly string[] TestAttributeNames =
@@ -3334,7 +3335,7 @@ public class SymbolNavigationEngine
             var detail = await SymbolNotFoundDetail.BuildAsync(
                 searched, typeName, "type", scope, projectName, isCallable: null,
                 nextCall: candidate => candidate.Kind == "type" ? ToolCallHint.Call("GetTypeInfo", ("typeName", candidate.Name)) : string.Empty,
-                cancellationToken: cancellationToken);
+                cancellationToken: cancellationToken, wholeSolution: projectName == null);
             return new TypeHierarchyReport { Error = detail };
         }
 

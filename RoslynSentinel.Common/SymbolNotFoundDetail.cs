@@ -146,11 +146,19 @@ public static class SymbolNotFoundDetail
     /// (method, property and field map to themselves; type, event and any map to "all", ListAll's nearest values) and
     /// <paramref name="projectName"/> when not null; with neither tool callable there is no call. With a call, the text ends
     /// with the fact that a symbol missing from what that call shows does not exist in this solution.
+    /// <paramref name="wholeSolution"/> says the search was not narrowed by project, file, containing type or namespace, or test exclusion (default false, last
+    /// parameter so positional callers compile). With a current workspace (<see cref="ToolCallContext.WorkspaceCurrent"/>) and a whole-solution search the text
+    /// leads with the well-formed-call fact and drops the orientation call (arm H of plan_error_policy_pointer, Step 11g); every other case is unchanged.
     /// </summary>
     public static string RenderNoCandidates(
         string wantedName, string symbolKind, string scopeDescription, string? orientationFilePath, string? projectName,
-        Func<string, bool>? isCallable = null)
+        Func<string, bool>? isCallable = null, bool wholeSolution = false)
     {
+        if (wholeSolution && ToolCallContext.Current?.WorkspaceCurrent == true)
+        {
+            return WorkspaceCurrentNoMatchText(wantedName, symbolKind, scopeDescription);
+        }
+
         var text = $"Symbol '{wantedName}' ({symbolKind}) was not found in {scopeDescription}. No symbol in the solution has a similar name. ";
         if (orientationFilePath is not null && Callable(isCallable, "GetFileOutline"))
         {
@@ -172,26 +180,39 @@ public static class SymbolNotFoundDetail
         return text.TrimEnd();
     }
 
+    // The no-candidates text for a current workspace and a whole-solution search: the well-formed-call fact first (the name is the bare name after SplitQuery),
+    // then the search facts. No orientation call and no "does not exist if not in that list" hedge; a recorded edit-effect fact (SpeculativeAdvice.Resolve) still
+    // follows. A later slice appends an optional inventory here.
+    private static string WorkspaceCurrentNoMatchText(string wantedName, string symbolKind, string scopeDescription)
+    {
+        var text = $"Your tool call was well-formed, but symbol `{wantedName}` does not exist in the solution. " +
+                   $"Searched {scopeDescription} (symbol kind: {symbolKind}); no symbol in the solution has a similar name.";
+        var effectFact = SpeculativeAdvice.Resolve(string.Empty);
+        return effectFact.Length > 0 ? text + " " + effectFact : text;
+    }
+
     /// <summary>
     /// The one entry point for a symbol-not-found error. Splits <paramref name="query"/> into a container (text before the
     /// last '.', ignoring anything from the first '(') and a name, looks for similar symbols by name, and renders either
     /// the candidate list or the no-candidate text. For no candidates a container that resolves to exactly one declared
     /// type gives GetFileOutline of that type's file; otherwise ListAll. <paramref name="scopeDescription"/> states what
     /// was searched (for example "3 project(s), test projects excluded"); <paramref name="projectName"/> is passed to ListAll.
+    /// <paramref name="wholeSolution"/> is true only when the caller's search was not narrowed by project, file, containing type or namespace, or test
+    /// exclusion (a qualified query still counts: the name search is solution-wide); see <see cref="RenderNoCandidates"/>.
     /// </summary>
     public static Task<string> BuildAsync(
         IReadOnlyCollection<Project> searchedProjects, string query, string symbolKind, string scopeDescription, string? projectName,
         Func<string, bool>? isCallable = null, Func<SymbolCandidate, string>? nextCall = null, CancellationToken cancellationToken = default,
-        Func<string, string?>? retryCall = null)
+        Func<string, string?>? retryCall = null, bool wholeSolution = false)
     {
         // TODO optional per-error-code operator policy suffix (idea_error_policy_pointer)
-        return BuildAsyncCore(searchedProjects, query, symbolKind, scopeDescription, projectName, isCallable, nextCall, cancellationToken, retryCall);
+        return BuildAsyncCore(searchedProjects, query, symbolKind, scopeDescription, projectName, isCallable, nextCall, cancellationToken, retryCall, wholeSolution);
     }
 
     private static async Task<string> BuildAsyncCore(
         IReadOnlyCollection<Project> searchedProjects, string query, string symbolKind, string scopeDescription, string? projectName,
         Func<string, bool>? isCallable = null, Func<SymbolCandidate, string>? nextCall = null, CancellationToken cancellationToken = default,
-        Func<string, string?>? retryCall = null)
+        Func<string, string?>? retryCall = null, bool wholeSolution = false)
     {
         // TODO split ignores generic arguments: Ns.Box<int>.Foo splits at a dot inside <...>; scan for the last '.' outside angle brackets
         var (container, name) = SplitQuery(query);
@@ -204,7 +225,7 @@ public static class SymbolNotFoundDetail
         var containerFile = container is null
             ? null
             : await FindContainerFileAsync(searchedProjects, container, cancellationToken).ConfigureAwait(false);
-        return RenderNoCandidates(name, symbolKind, scopeDescription, containerFile, projectName, isCallable);
+        return RenderNoCandidates(name, symbolKind, scopeDescription, containerFile, projectName, isCallable, wholeSolution);
     }
 
     private static bool Callable(Func<string, bool>? isCallable, string toolName) => isCallable is null || isCallable(toolName);

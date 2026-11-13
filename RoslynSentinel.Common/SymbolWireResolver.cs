@@ -145,7 +145,7 @@ public static class SymbolWireResolver
         var (query, kind) = ParseId(docCommentId!);
 
         // TODO isCallable: no ActiveToolSurface is in scope here either, so hints name tools unconditionally
-        return await SymbolNotFoundDetail.BuildAsync(searched, query, kind, $"all {searched.Count} project(s) of the loaded solution", null, isCallable: null, nextCall: null, cancellationToken, retryCall);
+        return await SymbolNotFoundDetail.BuildAsync(searched, query, kind, $"all {searched.Count} project(s) of the loaded solution", null, isCallable: null, nextCall: null, cancellationToken, retryCall, wholeSolution: true);
     }
 
     // Runs the shared candidate builder over the named project (every project with that name, so a multi-target load is
@@ -172,6 +172,7 @@ public static class SymbolWireResolver
         var (query, kind) = ParseId(docCommentId);
 
         // TODO isCallable: the workspace manager has no ActiveToolSurface, so hints name tools unconditionally (as the old text did)
+        // wholeSolution stays false: a named project, or the non-test fallback, is a narrowed search.
         return await SymbolNotFoundDetail.BuildAsync(searched, query, kind, scope, listAllProject, isCallable: null, nextCall: null, cancellationToken, retryCall);
     }
 

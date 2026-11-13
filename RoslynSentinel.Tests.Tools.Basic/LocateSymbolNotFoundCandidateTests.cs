@@ -69,6 +69,43 @@ public class LocateSymbolNotFoundCandidateTests
         Assert.That(message, Does.Not.Contain("exactMatch=false would match"));
     }
 
+    // Arm H (plan_error_policy_pointer Step 11g): the ambient context is an AsyncLocal, cleared in the finally so no other test sees it.
+    [Test]
+    public async Task Search_WorkspaceCurrentAndSolutionWideMiss_LeadsWithTheWellFormedFact()
+    {
+        try
+        {
+            ToolCallContext.Set(new ToolCallContext(null, null, "Search", null, 0) { WorkspaceCurrent = true });
+
+            var result = await SearchSymbolAsync("ApplyLoyaltyBonus");
+
+            Assert.That(result.ErrorData?.Message, Does.StartWith("Your tool call was well-formed, but symbol `ApplyLoyaltyBonus` does not exist in the solution. Searched 1 project(s), test projects included"));
+            Assert.That(result.ErrorData?.Message, Does.Not.Contain("ListAll"));
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
+    [Test]
+    public async Task Search_WorkspaceCurrentButNarrowedByProjectName_KeepsTheListAllText()
+    {
+        try
+        {
+            ToolCallContext.Set(new ToolCallContext(null, null, "Search", null, 0) { WorkspaceCurrent = true });
+
+            var result = await _tools.SearchSolutionTool(reason: "test message", mode: SearchMode.symbol, query: "ApplyLoyaltyBonus", projectName: ProjectName, includeTests: true);
+
+            Assert.That(result.ErrorData?.Message, Does.Not.Contain("well-formed"));
+            Assert.That(result.ErrorData?.Message, Does.Contain("If it is not in that list, the symbol does not exist in this solution."));
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
     [Test]
     public async Task Search_SubstringOfDeclaredName_OffersExactMatchFalseRetry()
     {
