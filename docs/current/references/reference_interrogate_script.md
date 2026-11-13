@@ -1,4 +1,4 @@
-Added `roslynsentinel-interrogate.ps1` (repo root, 2026-09-07) to automate the transcript-
+Added `roslynsentinel-interrogate.ps1` (`scripts/`, 2026-09-07) to automate the transcript-
 replay-and-interrogate technique that found the root cause in
 eval_qwen36_35b_ladder_preferred_branch_extract_bug.md — previously done via one-off
 hand-written Python per investigation.
@@ -11,6 +11,13 @@ layout), `-Question` (the follow-up asked after replaying the conversation), `-M
 `-TimeoutSec` (default 1800 — CPU-only inference needs a long timeout), and `-DryRun` (skips
 the API call, still writes a human-readable `.txt` reconstruction plus the request JSON, for
 sanity-checking or just reading a transcript without spending inference time).
+`-StopAfterTurn N` (2026-11-12; default 0 = replay all turns) keeps turn N's assistant message and
+tool results and drops later turns, to ask the question at the moment of a failure (it throws when no
+turn has that number). Each tool message now also carries the call's `TrailingText` (the extra result
+blocks, e.g. an error-policy pointer) after a blank line, as `ModelAgentRunner` builds it for the model;
+older transcripts have none, and `-OmitTrailingText` restores the ResultJson-only replay. The script is
+`scripts/roslynsentinel-interrogate.ps1`. Pass a per-sample `-OutDir`: outputs are named after the run
+folder (`sample-NN-...`), so samples of different runs collide in one directory.
 
 Reconstructs `SystemPrompt`/`UserPrompt`/`Turns` into an OpenAI chat/completions message array:
 system, user, then per-turn assistant messages (folding `ReasoningContent` into `<think>` tags

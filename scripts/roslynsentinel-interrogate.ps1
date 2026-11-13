@@ -61,6 +61,20 @@
     Directory to write the request/response JSON into. Default: alongside the source
     transcript.json (same directory as -TranscriptPath resolves to).
 
+.PARAMETER StopAfterTurn
+    Stop the replay after this turn number (TurnNumber in transcript.json): that turn's assistant
+    message and its tool results are kept, every later turn is dropped, then -Question is appended.
+    Default 0 = replay every turn (the original behavior). Use it to ask a question at the moment
+    of a failure, e.g. right after the first not-found tool result (before the model's next call).
+    The script throws if no turn has that number.
+
+.PARAMETER OmitTrailingText
+    By default each tool message is rebuilt the way ModelAgentRunner builds it for the model: the
+    first result block (ResultJson), then the call's TrailingText (AgentToolCallRecord.TrailingText,
+    the extra text blocks of the result, for example an error-policy pointer) after a blank line,
+    when the transcript has one. Transcripts written before TrailingText existed have none, so
+    they replay unchanged. Pass -OmitTrailingText to replay from ResultJson only (the pre-2026-11-12 behavior).
+
 .EXAMPLE
     .\roslynsentinel-interrogate.ps1 -HostAddress 113 `
         -TranscriptPath "ModelTestingResults\113\Model_AppliesSevenChainedRefactors\20260907-114903-737" `
@@ -104,7 +118,11 @@ param(
 
     [switch]$DryRun,
 
-    [string]$OutDir
+    [string]$OutDir,
+
+    [int]$StopAfterTurn = 0,
+
+    [switch]$OmitTrailingText
 )
 
 $ErrorActionPreference = 'Stop'
@@ -163,6 +181,10 @@ $humanReadable = [System.Text.StringBuilder]::new()
 [void]$humanReadable.AppendLine($transcript.UserPrompt)
 [void]$humanReadable.AppendLine()
 
+if ($StopAfterTurn -gt 0 -and -not (@($transcript.Turns) | Where-Object { $_.TurnNumber -eq $StopAfterTurn })) {
+    throw "-StopAfterTurn ${StopAfterTurn}: transcript has no turn with that number (turns: $((@($transcript.Turns) | ForEach-Object { $_.TurnNumber }) -join ', '))."
+}
+
 $callCounter = 0
 foreach ($turn in $transcript.Turns) {
     $mm = $turn.ModelMessage
@@ -217,13 +239,26 @@ foreach ($turn in $transcript.Turns) {
     for ($i = 0; $i -lt $toolCalls.Count; $i++) {
         $resultJson = $toolCalls[$i].ResultJson
         [void]$humanReadable.AppendLine("[tool_result] $resultJson")
+        $toolContent = $(if ($resultJson) { $resultJson } else { '' })
+        # Same join as ModelAgentRunner.ModelFacingToolContent: first block, blank line, trailing blocks.
+        $trailingText = $toolCalls[$i].TrailingText
+        if (-not $OmitTrailingText -and $trailingText) {
+            [void]$humanReadable.AppendLine("[tool_result trailing text] $trailingText")
+            $toolContent = $toolContent + "`n`n" + $trailingText
+        }
         $messages.Add([ordered]@{
             role         = 'tool'
             tool_call_id = $replayIds[$i]
-            content      = $(if ($resultJson) { $resultJson } else { '' })
+            content      = $toolContent
         })
     }
     [void]$humanReadable.AppendLine()
+
+    if ($StopAfterTurn -gt 0 -and $turn.TurnNumber -eq $StopAfterTurn) {
+        [void]$humanReadable.AppendLine("[replay stopped after turn $StopAfterTurn; later turns dropped]")
+        [void]$humanReadable.AppendLine()
+        break
+    }
 }
 
 $messages.Add([ordered]@{ role = 'user'; content = $Question })
