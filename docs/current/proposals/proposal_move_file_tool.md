@@ -125,3 +125,12 @@ through model output.
   private helpers (the owner is editing that file separately; not touched here).
 - `.claude/handoff/2026-11-10_todo_punchlist_91761378.progress.md` - the punchlist that hit the gap.
 - CLAUDE.md - "Tool gaps: report, don't brute-force" and the migration-first pattern.
+
+## Decisions (todo review 2026-11-13)
+
+### MoveType ownFile ignores targetFolder for a single-type file
+
+- **Question:** `MoveType` ownFile silently ignores `targetFolder` when the type name equals the file name (`BasicRefactoringEngine.cs:1219-1222` returns an empty dictionary before `targetFolder` is read at ~1245; the caller sees `no_changes`).
+- **Choice:** Refuse with a facts+options error when `targetFolder` differs from the source folder (nothing to split; `MoveType` does not move files; options: create/delete by hand, or `MoveFile` once built). No or same `targetFolder` keeps `no_changes`. Fix the hardcoded description "Moves 'X' to its own file." (`AdvancedRefactoringTools.cs:1132`) for the `no_changes` case.
+- **Why:** Honouring it would duplicate `MoveFile`, which this proposal says is not a type operation.
+- **Acceptance:** In `MoveTypeToFileTests`, `Solo.cs` with `class Solo` plus a differing `targetFolder` gives an error naming `targetFolder`. The two existing empty-return tests (`REG_MoveTypeToFile_SingleTypeFile_ReturnsEmpty` in `BugFixTests.cs`, `MoveTypeToFile_SingleTypeFile_ReturnsEmptyDict` in `RegressionTests.cs`) stay green. Once `MoveFile` exists, update the error to name it.

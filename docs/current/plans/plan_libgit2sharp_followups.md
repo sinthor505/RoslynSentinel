@@ -872,3 +872,12 @@ Open items carry options and a recommendation (the planner's, not a decision). I
 - This plan advances the TODO.md item "LibGit2Sharp in-process git: trial review and next stages (2026-11-12)"
   (`docs/current/TODO.md:15`). When the last non-optional step closes the plan, move that entry to `CLOSED.md`; the
   entry stays open while Steps 22-23 are SKIPPED-UNLESS only if the owner wants them tracked there.
+
+## Decisions (todo review 2026-11-13)
+
+### Flip the in-process commit route to default-on
+
+- **Question:** Flip the in-process commit route to default-on now?
+- **Choice:** No. First run Step 14 in a second repo with a different setup (`core.autocrlf=false`, or commits from a linked worktree) through the manual checklist (plain commit, only-paths commit, commit-msg hook decline, amend, merge in progress) until 10 or more are taken there, run `scripts/Test-CommitRouteLog.ps1` with fsck, then Step 19 once D.1-D.5 hold. Steps 22-23 (in-process tag/worktree lists) stay skipped.
+- **Why:** Trial data in this repo is clean (319 taken, 1 declined CR-byte rule dropped in d8b112e6, 0 fallbacks/errors, audit exit 0 with `-SkipFsck`) but D.2 (two setups, 10+ taken in the second) is unmet and D.3 (fsck) was not run; D.1 is met once 2026-11-14 UTC has taken lines.
+- **Acceptance:** D.1-D.5 hold and the audit with fsck exits 0.

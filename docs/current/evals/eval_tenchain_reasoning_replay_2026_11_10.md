@@ -917,3 +917,12 @@ not change course. The stop did.
 
 - Batch C ran before 31b206a6 and 28391d8c; their effect is unmeasured.
 - Host 112 batches (40k context) are summarised in the session report, not here.
+
+## Decisions (todo review 2026-11-13)
+
+### LM Studio "Context size has been exceeded" (HTTP 500)
+
+- **Question:** How should a LM Studio HTTP 500 "Context size has been exceeded" be handled (batch H6 R3/R5 died at ~44k of a 70144 load)?
+- **Choice:** `LmStudioAgentClient.CompleteOnceAsync` throws a dedicated exception type (`ContextSizeExceededException`) that the retry filter in `CompleteAsync` excludes. `ModelAgentRunner` (~line 310) catches it and finishes the run as `AgentStopReason.ContextExhausted` (transcript written, `Converged` false) and records `cumulativeTokens` plus the context length in the log/transcript note. No new enum value.
+- **Why:** It reuses the existing stop reason the scorer/archiver already treat as a non-genuine finish, and records the datum (44.3k of 70144) that is lost today.
+- **Acceptance:** A ModelEval runner test next to `ContextExhaustedRunnerTests` with a scripted handler returning 500 "Context size has been exceeded" asserts one request, `StopReason == ContextExhausted`, transcript written, `Converged` false. A client-level test asserts any other 500 or an IO error still retries once.

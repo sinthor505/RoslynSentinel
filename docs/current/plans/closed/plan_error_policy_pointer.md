@@ -265,3 +265,40 @@ Read-only, by code (no executed tool-level test). Full report in the run tracker
 - **Kind value set incomplete:** only four `MissingTargetKind` values are confirmed; Step 1 completes it.
 - **Saved transcripts not found:** the routes the scenarios hit are confirmed by tool-level tests in Step 1, not by transcripts.
 - **Uncommitted peer work:** `MemberRefactoringNotFound.cs` and related builders are in flight in another plan; Step 5 must not collide with them.
+
+## Decisions (todo review 2026-11-13)
+
+### (a) RenameSymbolNoSuchMethod pre-H baseline
+
+- **Question:** `RenameSymbolNoSuchMethod` stopped in 6/30 (arm H) and 5/30 (arm I) on qwen3.5-4b-mtp with no pre-H baseline - run one?
+- **Choice:** Yes. 3 x 10 samples on host 112 with `ROSLYNSENTINEL_ERROR_POLICY_MODE=Inline` from a worktree at 44e5a1cc (parent of 1f3451c1) via `scripts/roslynsentinel-modeleval.ps1 -Scenario RenameSymbolNoSuchMethod -Samples 10` (run the script directly; the eval queue builds the main tree).
+- **Why:** It is the only open measurement that can show the "well-formed, but X does not exist" lead causes false stops.
+- **Acceptance:** Baseline BLOCKED / FalseDoneClaim / pass counts recorded next to H (6/30 BLOCKED) and I (5/30). A baseline of 1/30 or fewer BLOCKED (Fisher p about 0.04 vs 6/30) means revisit the lead.
+
+### (b) ROSLYNSENTINEL_NOTFOUND_INVENTORY default
+
+- **Question:** Default of `ROSLYNSENTINEL_NOTFOUND_INVENTORY` (off; member list never fired in 60 bare-query samples)?
+- **Choice:** Add a scenario whose not-found query carries `containingType` or `filePath` and A/B inventory on vs off at n=30 on qwen3.5-4b-mtp (~40 min), then decide the default.
+- **Why:** No eval evidence exists; only unit tests (`NotFoundInventoryTests`) cover it.
+- **Acceptance:** Scenario in Tests.ModelEval, two 30-sample cells, default decision recorded here.
+
+### (c) Unenumerated kind strings
+
+- **Question:** Unenumerated kind strings (`ErrorPolicyClassifier` `SymbolKinds`/`FileKinds`) - accept or guard?
+- **Choice:** Both. A Tests.Basic source-scan ratchet (pattern `BareFileWriteRatchetTests`) fails when a literal kind passed to `ToolNotFoundException` or `MemberRefactoringNotFound.Unresolved`/`Declaration` is in neither `FileKinds`/`SymbolKinds` nor a test-owned deliberately-unmapped set (project, statement, expression, snippet, block). Plus a shared `MissingTargetKinds` constant set used by throw sites and classifier, implemented only for Basic tools/engines first, migrated in slices. `using directive` (`BasicRefactoringEngine.cs:2285`) is the one unmapped kind not pinned null: map it or list it.
+- **Why:** The ratchet is the cheapest real guard; the shared set removes the drift source.
+- **Acceptance:** Ratchet test green on current sources and red when a new unknown literal kind is added; every `MissingTargetKinds` member is classified by a test.
+
+### (d1) Numeric enum selector
+
+- **Question:** A numeric enum ordinal falls back to the tool default intent in `ErrorPolicyIntentTable.Resolve` - fix?
+- **Choice:** `ToolArgumentValidator.Validate` rejects a numeric value for a string-enum schema parameter with a facts+options error listing the members.
+- **Why:** Root fix: numeric calls never run with a wrong intent.
+- **Acceptance:** `Member` operation 4 is rejected, "view" passes.
+
+### (d2) Inline entry length
+
+- **Question:** Inline entries are outside the offload budget and share `EchoReserveChars` (2560) - guard?
+- **Choice:** Log a warning at load (`AddErrorPolicyFilter` after `ErrorPolicyDocument.Load`: key and length of any entry over ~1000 chars; resolves the TODO at `ServiceRegistrationExtensionsBasic.cs:162`). No failing test bound, no offload change.
+- **Why:** The policy block is appended by `ErrorPolicyFilter` after `LargeResultOffload` has run (`ErrorPolicyFilter.cs:87`, filter order `ServiceRegistrationExtensionsBasic.cs:127-141`), so it is already exempt from offload by construction; a failing bound on the shipped file would block wording changes between eval arms.
+- **Acceptance:** A test asserts the warning is logged for an over-long entry. Also add the ErrorPolicy filter to `docs/current/references/reference_tool_response_pipeline.md` (it says 14 filters and omits it).

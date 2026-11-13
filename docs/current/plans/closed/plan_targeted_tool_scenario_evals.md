@@ -416,3 +416,19 @@ C#; none in `agent.log` or `test-result.txt`).
 - **Not verified:** that `TryReadStringProperty` finds a nested `errorCode` (step 3a checks it); whether
   the transcript records reasoning blocks; whether the `Tools` list order is stable across runs; every
   user of `AgentSystemPrompts.CodingAgent` (step 4 lists them).
+
+## Decisions (todo review 2026-11-13)
+
+### (a) schemaDrift true on every resume-scenario sample
+
+- **Question:** What about `schemaDrift` being true on every resume-scenario sample (`matchLine` description changed after capture, 2659562f)?
+- **Choice:** Re-take the stale-caller-edit-after-rename capture from a new 10-chain run that reproduces the stale-caller failure (owner decision; the alternative of accepting description-only drift as informational was recommended and declined).
+- **Why:** The owner wants a capture that matches current tool descriptions; cost is Large (nondeterministic, tens of minutes of host time per attempt) and `schemaDrift` returns at the next description edit.
+- **Acceptance:** `ResumeScenarioGate` reports `schemaDrift` false for the three resume scenarios on the new capture.
+
+### (b) Live resultDrift residual
+
+- **Question:** Trace the live `resultDrift` residual (~9 replayed calls per 10 samples that the no-model probe does not reproduce)?
+- **Choice:** First re-run `ResumeDriftProbeTests.Probe_ReplaysTheCaptureAndPrintsDrift` at HEAD (explicit, no model), then one live `StaleCallerEditAfterRename` sample, before the re-take.
+- **Why:** The old measurement predates a24696bd (`RewriteTurns` trailing text) and the error-policy filter work, so it may be stale.
+- **Acceptance:** The probe prints "result drift: 0 of 11 replayed calls differ after normalization" and the live sample shows `resultDrift` 0; otherwise record the nonzero count here.
