@@ -292,6 +292,9 @@ public class ScenarioScorerTests
     [TestCase("**BLOCKED**: x")]
     [TestCase("`BLOCKED:` x")]
     [TestCase("  _BLOCKED:_ x")]
+    [TestCase("# BLOCKED: x")]
+    [TestCase("## **BLOCKED:** x")]
+    [TestCase("###BLOCKED: x")]
     public void MarkerPresent_AcceptsMarkdownEmphasis(string finalMessage)
     {
         var transcript = Transcript(Turn(finalMessage, null));

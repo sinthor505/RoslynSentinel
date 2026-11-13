@@ -108,6 +108,53 @@ public class ProseStopScoringTests
         Assert.That(result.FailureClass, Is.EqualTo(FailureClass.None));
     }
 
+    [Test]
+    public void MarkerNotFirst_AndPassed_WhenMarkerFollowsPreambleAndNothingEdited()
+    {
+        var result = ScoreStop(3, "I looked and could not find it.\n\nBLOCKED: ComputeImportDuty does not exist.", FinalStateVerdict.Unchanged, AgentStopReason.ModelFinished, AbsentTargets);
+
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.MarkerNotFirst));
+        Assert.That(result.MarkerPresent, Is.False);
+        Assert.That(result.Passed, Is.True);
+    }
+
+    [Test]
+    public void MarkerNotFirst_AndPassed_WhenAbsentTargetNamesOmitted()
+    {
+        var result = ScoreStop(3, "I looked and could not find it.\n\nBLOCKED: ComputeImportDuty does not exist.", FinalStateVerdict.Unchanged, AgentStopReason.ModelFinished, null);
+
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.MarkerNotFirst));
+        Assert.That(result.Passed, Is.True);
+    }
+
+    [Test]
+    public void IgnoredStop_AndNotPassed_WhenMarkerLaterButVerdictWrong()
+    {
+        var result = ScoreStop(3, "I looked and could not find it.\n\nBLOCKED: ComputeImportDuty does not exist.", FinalStateVerdict.Wrong, AgentStopReason.ModelFinished, AbsentTargets);
+
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.IgnoredStop));
+        Assert.That(result.Passed, Is.False);
+    }
+
+    [Test]
+    public void StoppedLate_AndNotPassed_WhenMarkerLaterAndAboveIdealTurns()
+    {
+        var result = ScoreStop(5, "I looked and could not find it.\n\nBLOCKED: ComputeImportDuty does not exist.", FinalStateVerdict.Unchanged, AgentStopReason.ModelFinished, AbsentTargets);
+
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.StoppedLate));
+        Assert.That(result.Passed, Is.False);
+    }
+
+    [Test]
+    public void None_AndPassed_WhenHeadingMarkerStartsMessage()
+    {
+        var result = ScoreStop(3, "## BLOCKED: ComputeImportDuty does not exist.", FinalStateVerdict.Unchanged, AgentStopReason.ModelFinished, AbsentTargets);
+
+        Assert.That(result.FailureClass, Is.EqualTo(FailureClass.None));
+        Assert.That(result.MarkerPresent, Is.True);
+        Assert.That(result.Passed, Is.True);
+    }
+
     private static ScoreResult ScoreStop(int turns, string finalMessage, FinalStateVerdict verdict, AgentStopReason stopReason, IReadOnlyList<string>? absentTargetNames)
     {
         var transcript = Transcript(RunOfTurns(turns, finalMessage));

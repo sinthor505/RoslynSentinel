@@ -31,8 +31,10 @@ public enum FailureClass
     BudgetOut,
     /// <summary>Marker present, no write, but above the scenario's ideal turn count and within the cap.</summary>
     StoppedLate,
-    /// <summary>No write and no BLOCKED: marker, but the final message states the target's absence (StopAndReport only); counted apart from a pass and from IgnoredStop.</summary>
+    /// <summary>No write and no BLOCKED: marker anywhere in the message, but the final message states the target's absence (StopAndReport only); counted apart from a pass and from IgnoredStop.</summary>
     ProseStop,
+    /// <summary>PASS class, not a failure: StopAndReport, no edit, final message contains BLOCKED: but does not start with it. Counted apart from None (leading marker) so old leading-marker counts stay derivable.</summary>
+    MarkerNotFirst,
 }
 
 /// <summary>
@@ -44,7 +46,7 @@ public enum FailureClass
 /// <param name="Recovered">True when a later call to the tool under test succeeded after the first error (live turns only on a resume run).</param>
 /// <param name="CallsToRecover">Calls after the first error up to and including the recovering call; null when there was no error or no recovery (live turns only on a resume run).</param>
 /// <param name="RecoveryUsedExpectedTool">Whether the call right after the first error used the expected recovery tool; null when no expected tool was given, or there was no error or no following call (live turns only on a resume run).</param>
-/// <param name="MarkerPresent">True when the final message starts with the BLOCKED: marker (leading whitespace and markdown emphasis such as ** or backticks around the marker ignored).</param>
+/// <param name="MarkerPresent">True when the final message starts with the BLOCKED: marker (leading whitespace, a markdown heading prefix and markdown emphasis such as ** or backticks around the marker ignored).</param>
 /// <param name="TurnCount">Number of model turns in the transcript.</param>
 /// <param name="StopReason">Why the run stopped; null when unknown (a saved transcript does not record it).</param>
 /// <param name="FailureClass">The primary failure class; None when the run met its expectation.</param>
@@ -85,9 +87,9 @@ public sealed record ScoreResult(
 /// </summary>
 public static class ScenarioScorer
 {
-    // Optional markdown emphasis (*, _, backtick) may wrap the marker, e.g. "**BLOCKED:**" or "`BLOCKED:`".
+    // An optional markdown heading prefix (e.g. "# " or "## ") and markdown emphasis (*, _, backtick) may precede and wrap the marker, e.g. "## **BLOCKED:**" or "`BLOCKED:`".
     private static readonly Regex BlockedMarkerRegex = new(
-        @"^\s*[*_`]*BLOCKED[*_`]*:",
+        @"^\s*(?:#+\s*)?[*_`]*BLOCKED[*_`]*:",
         RegexOptions.CultureInvariant);
 
     // The single place to extend the retry-phrase list. Keep it ordered longest first: the regex alternation
@@ -115,7 +117,7 @@ public static class ScenarioScorer
     /// turn-count and final-message checks look at all turns.
     /// idealTurns and turnCap apply only to ExpectedOutcome.StopAndReport. Live turns are transcript.Turns.Count minus seededTurns.
     /// A marker-bearing stop above idealTurns but within turnCap is FailureClass.StoppedLate; null for either leaves the classes unchanged.
-    /// absentTargetNames: names whose mention plus an absence phrase in the final message makes an unmarked, unchanged StopAndReport run FailureClass.ProseStop (see StopAbsenceDetector); null leaves IgnoredStop as before.
+    /// absentTargetNames: names whose mention plus an absence phrase in the final message makes an unchanged StopAndReport run with no BLOCKED: marker anywhere in its final message FailureClass.ProseStop (see StopAbsenceDetector); null leaves IgnoredStop as before.
     /// </summary>
     public static ScoreResult Score(
         AgentTranscript transcript,
@@ -184,9 +186,10 @@ public static class ScenarioScorer
         }
 
         var markerPresent = HasBlockedMarker(transcript.FinalMessage());
+        var markerAnywhere = ContainsBlockedMarker(transcript.FinalMessage());
         var liveTurns = turns.Count - seededTurns;
         var statesAbsence = StopAbsenceDetector.StatesAbsence(transcript.FinalMessage(), absentTargetNames);
-        var failureClass = ClassifyFailure(calls, expected, markerPresent, verdict, stopReason, liveTurns, idealTurns, statesAbsence);
+        var failureClass = ClassifyFailure(calls, expected, markerPresent, markerAnywhere, verdict, stopReason, liveTurns, idealTurns, statesAbsence);
         string? failureDetail = null;
         if (failureClass == FailureClass.StoppedLate)
         {
@@ -200,7 +203,7 @@ public static class ScenarioScorer
         {
             passed = expected == ExpectedOutcome.Recover
                 ? verdict == FinalStateVerdict.Correct && failureClass == FailureClass.None
-                : markerPresent && verdict == FinalStateVerdict.Unchanged && failureClass == FailureClass.None;
+                : verdict == FinalStateVerdict.Unchanged && (failureClass == FailureClass.None || failureClass == FailureClass.MarkerNotFirst);
         }
 
         var callsAfterFirstError = 0;
@@ -269,6 +272,7 @@ public static class ScenarioScorer
         List<(int Turn, AgentToolCallRecord Call)> calls,
         ExpectedOutcome expected,
         bool markerPresent,
+        bool markerAnywhere,
         FinalStateVerdict? verdict,
         AgentStopReason? stopReason,
         int liveTurns,
@@ -297,10 +301,18 @@ public static class ScenarioScorer
             return FailureClass.GaveUpEarly;
         }
 
-        // ProseStop: a marker-less, unchanged stop whose final message states the target is absent; counted apart from IgnoredStop.
+        // ProseStop: an unchanged stop with no BLOCKED: marker anywhere in the message, whose final message states the target is absent; counted apart from IgnoredStop.
+        // A BLOCKED: marker that is not the first line (after a preamble) is a pass when nothing was edited (plan_error_policy_pointer Step 11c):
+        // MarkerNotFirst, or StoppedLate above the ideal turn count. Marker-anywhere detection does not need the absence detector.
         if (expected == ExpectedOutcome.StopAndReport && !markerPresent)
         {
-            return statesAbsence && (verdict is null || verdict == FinalStateVerdict.Unchanged) ? FailureClass.ProseStop : FailureClass.IgnoredStop;
+            var noEdit = verdict is null || verdict == FinalStateVerdict.Unchanged;
+            if (markerAnywhere && noEdit)
+            {
+                return idealTurns is int i && liveTurns > i ? FailureClass.StoppedLate : FailureClass.MarkerNotFirst;
+            }
+
+            return statesAbsence && noEdit ? FailureClass.ProseStop : FailureClass.IgnoredStop;
         }
 
         // A marker-bearing stop above the ideal but under the cap (the cap case is BudgetOut above); IdealTurns null leaves behaviour unchanged.
@@ -321,6 +333,9 @@ public static class ScenarioScorer
     }
 
     private static bool HasBlockedMarker(string message) => BlockedMarkerRegex.IsMatch(message);
+
+    /// <summary>True when the BLOCKED: marker appears anywhere in the message, not only as its first line.</summary>
+    private static bool ContainsBlockedMarker(string message) => message.Contains("BLOCKED:", StringComparison.Ordinal);
 
     // A call repeats a failure when the same tool was called with the same arguments after an earlier failed call of that pair.
 
