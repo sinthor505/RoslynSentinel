@@ -1,6 +1,6 @@
 # Eval: error-variant replay validation (Step 12) - F identity cell drifts from live
 
-**Status:** OPEN 2026-11-13. Step 12 ran in full. E and G replays match their live runs, but the F identity cell does not: replay gives Search 18 of 30 where live gave 10 of 10. Cause not traced; Step 13 is on hold.
+**Status:** OPEN 2026-11-13. Replay does not reproduce live arm F, even though the request is token-identical: live gives Search 19 of 20 (two sessions), replay 18 of 30. The cause lies outside the request content and is untested; Step 13 is on hold.
 
 ## Context
 
@@ -79,6 +79,40 @@ Done by `failure-root-cause-analyst`, read-only.
 - a request-body hash logged on both sides;
 - storing the echoed temperature and top-p in the transcript header;
 - live arms of 30 samples, or a same-session F-versus-G comparison, because 10 live samples cannot separate 0.6 from 0.8.
+
+### Live re-run of arm F, 2026-11-13 evening: the drift is in the replay, not the host or the day
+
+- **What ran.** Commit `5923cff9` from a worktree, `-Scenario StopAdherenceMissingFile -Samples 10`, `ROSLYNSENTINEL_ERROR_POLICY_MODE=Inline` (the morning job's only env var), host 113, `qwen3.5-9b-mtp`, about 20:27. Run `ModelTestingResults\113\RunScenario_SamplesAndScores\20261113-202713-260`.
+- **Result.** First call at turn 2: Search 9 of 10, ListSolutionItems 1 of 10.
+  - Every turn 1 was a single `ReadFile` error.
+  - `errorData.message` and `TrailingText` equal `armF.md` byte for byte in 10 of 10.
+  - Run outcomes: StoppedLate 7, BudgetOut 3.
+- **Setup difference.** `ErrorPolicyHash` is `12f620a79f87` against the morning's `2c1da955f696`. The worktree checkout has CRLF line endings in `error-policy.md`; the text the model saw is identical.
+- **Pooled live.** F live is Search 19 of 20 (morning 10/10, evening 9/10) against replay 18 of 30: one-sided Fisher p ~ 0.005. Evening live alone against replay: p ~ 0.08.
+- **Reading.** The live rate held across the day, so candidates 1 (extreme draw) and 2 (host or day state) are now unlikely. The replay request is token-identical to the live one (trace above), yet the answer distribution differs. What remains is a difference outside the request content.
+  - The leading hypothesis is cache/KV state. Live turn 2 reuses the KV of turn 1's decoded tokens on the same slot. Replay prefills turn 1 from text.
+  - Other hypotheses: a tokenization difference that leaves the count unchanged, or server-side state tied to the conversation.
+  - None is tested.
+- **Ranking also differs.** Live: F (19/20 Search) above G (7/10). Replay on F histories: G (22/30) above F (18/30). As built, the replay does not preserve the live ranking of F against G, so it cannot be trusted to screen texts.
+
+### Sibling-model replicate: qwen3.5-4b-mtp on host 112 (exploratory)
+
+- **What ran.** The same 210 rows and settings as above, on host 112 with `qwen3.5-4b-mtp`; the owner chose this model because 9b is too slow on 112. There is no live 4b baseline on these 9b histories, so this is not a fidelity check. The run had 0 harness errors, 0 `Stop*`, 0 `Malformed` and 0 `Write:*`.
+- **Output** in `ModelTestingResults\112\ReplayVariants_SamplesAndClassifies\`: `20261113-202207-143` (E histories), `-202722-264` (F histories), `-203147-620` (G histories).
+
+| Cell | ListSolutionItems | Search | ListAll |
+| --- | --- | --- | --- |
+| E on E | 29 | 1 | 0 |
+| F on E | 10 | 18 | 2 |
+| G on E | 10 | 16 | 4 |
+| E on F | 28 | 2 | 0 |
+| F on F | 3 | 21 | 6 |
+| G on F | 6 | 24 | 0 |
+| G on G | 5 | 21 | 4 |
+
+- **Text effect.** The E text drives `ListSolutionItems` on 57 of 60 rows. F and G drive `Search` or `ListAll` on most rows.
+- **F still below 0.8.** F's Search share is 0.60 and 0.70, below the bar on this model too.
+- **F against G.** They stay close, as on 9b replay: on F histories G has more Search (24 against 21), though F has more `ListAll`.
 
 ## Why it matters
 
