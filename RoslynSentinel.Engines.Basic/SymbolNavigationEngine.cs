@@ -3140,7 +3140,7 @@ public class SymbolNavigationEngine
                             var text = c.Preview.Length > 50 ? c.Preview.Substring(0, 47) + "..." : c.Preview;
                             return $"line {c.StartLine} `{text}`";
                         });
-                        hint = $"'{memberName}' matches {candidates.Count} declarations in this file: {string.Join(", ", entries)}. ReadFile takes no contextSnippet; ReadFile with startLine/endLine reads one of these lines, and Member(operation: view, memberName, contextSnippet: <its declaration line>) returns one by its declaration line.";
+                        hint = $"'{memberName}' matches {candidates.Count} declarations in this file: {string.Join(", ", entries)}. ReadFile takes no contextSnippet; ReadFile with startLine/endLine reads one of these lines, and {ToolCallHint.Call("Member", ("operation", "view"), ("memberName", memberName), ("contextSnippet", "<its declaration line>"))} returns one by its declaration line.";
                     }
                     else
                     {
