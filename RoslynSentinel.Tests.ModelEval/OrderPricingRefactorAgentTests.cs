@@ -144,7 +144,8 @@ public class OrderPricingRefactorAgentTests
                 "server with a loaded model and are skipped rather than failed when unconfigured.");
         }
 
-        _fixture = new RoslynSentinel.Tests.TestSolutionFixture();
+        // restorePackages: ContosoOrders.Tests needs restore assets or a solution-scope build reports CS0246 for every Xunit file
+        _fixture = new RoslynSentinel.Tests.TestSolutionFixture(restorePackages: true);
 
         var clientToServer = new Pipe();
         var serverToClient = new Pipe();
