@@ -20,9 +20,10 @@
     Does not stop or touch any running RoslynSentinel server (unlike build.ps1).
 
 .PARAMETER RepoPath
-    Absolute path of a reusable worktree, e.g. c:\tmp\rs-testtree. Keep it outside the repo so
-    searches and diffs of the main tree never see it. Two runs on the same -RepoPath must not
-    overlap; use -WorktreeRoot for concurrent runs. Exactly one of -RepoPath / -WorktreeRoot.
+    Absolute path of a reusable worktree, e.g. c:\tmp\rs-testtree-debug. Keep it outside the repo so
+    searches and diffs of the main tree never see it. Two runs (or two sessions) on the same -RepoPath
+    collide: prefer -WorktreeRoot, which gives every run its own worktree. Use -RepoPath only for a
+    persistent worktree you debug in yourself. Exactly one of -RepoPath / -WorktreeRoot.
 
 .PARAMETER WorktreeRoot
     Absolute parent folder for a fresh, unique worktree per run (e.g. c:\tmp\rs-testtrees), named
@@ -62,10 +63,10 @@
     Reuse the worktree's existing build (only valid when -Ref did not move it).
 
 .EXAMPLE
-    pwsh -File scripts/Invoke-WorktreeTests.ps1 -RepoPath c:\tmp\rs-testtree -Ref HEAD -Projects RoslynSentinel.Tests.Basic,RoslynSentinel.Tests.Tools.Basic
+    pwsh -File scripts/Invoke-WorktreeTests.ps1 -WorktreeRoot c:\tmp\rs-testtrees -Ref HEAD -Projects RoslynSentinel.Tests.Basic,RoslynSentinel.Tests.Tools.Basic
 
 .EXAMPLE
-    pwsh -File scripts/Invoke-WorktreeTests.ps1 -RepoPath c:\tmp\rs-testtree -Ref 3e4ed6fa -Filter "FullyQualifiedName~FoldPending"
+    pwsh -File scripts/Invoke-WorktreeTests.ps1 -RepoPath c:\tmp\rs-testtree-debug -Ref 3e4ed6fa -Filter "FullyQualifiedName~FoldPending"
 
 .EXAMPLE
     pwsh -File scripts/Invoke-WorktreeTests.ps1 -WorktreeRoot c:\tmp\rs-testtrees -Ref 1b7879d7 -Projects RoslynSentinel.Tests.Tools.Basic -Filter "FullyQualifiedName~GitCommitSeamParityTests"
@@ -144,7 +145,7 @@ function Get-CommonDir([string]$path) {
 # --- 1. Worktree ---------------------------------------------------------------------------
 if (-not [System.IO.Path]::IsPathRooted($RepoPath)) { Fail "-RepoPath must be absolute: $RepoPath" }
 $RepoPath = [System.IO.Path]::GetFullPath($RepoPath).TrimEnd('\')
-if ($RepoPath -ieq $mainRoot) { Fail "-RepoPath is the main working tree; use a separate worktree (e.g. c:\tmp\rs-testtree)." }
+if ($RepoPath -ieq $mainRoot) { Fail "-RepoPath is the main working tree; use a separate worktree (prefer -WorktreeRoot c:\tmp\rs-testtrees)." }
 
 $mainCommon = Get-CommonDir $mainRoot
 if (-not $mainCommon) { Fail "cannot read the git common dir of $mainRoot" }

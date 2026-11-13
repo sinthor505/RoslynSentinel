@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Invoke-WorktreeTests.ps1 shared worktree path - resolved (2026-11-13)
+
+`scripts/Invoke-WorktreeTests.ps1` worktree path is shared by every session (2026-11-10) - NOT DESIGNED; the skills and the reference doc all name `c:\tmp\rs-testtree`, so a second session's `-Ref` moved it mid-run (7 projects produced no TRX) and later `-SkipBuild` runs silently tested the other session's commit; suggested change: default `-RepoPath` to `c:\tmp\rs-testtree-<session id>` (or refuse when another process holds the worktree) and update `reference_autonomous_run_conventions.md` and `dispatch-implementer`
+
+Evidence: 53715a38 added -WorktreeRoot (unique worktree per run, machine-wide -MaxConcurrent cap); dispatch-implementer skill and reference_autonomous_run_conventions.md already use it; script help now prefers -WorktreeRoot (owner decision, todo review 2026-11-13)
+
+## Not-found Step 6 eval-side findings - resolved (2026-11-13)
+
+Not-found Step 6 eval-side findings (2026-11-12) - items (1) and (2) are covered by plan_error_policy_pointer Step 11 (scorer counts BLOCKED anywhere, `a0fd8fe4`; "flexibility" sentence reworded); remaining failures are outside tool text: (1) the scorer fails correct no-edit reports whose `BLOCKED:` marker is not at the start of the reply; (2) the user prompt's "You have flexibility in exactly how you implement each step" reads as permission to work around a missing target, against the system prompt's stop rule; (3) one model passed a call's `toolCallId` to `GetLargeResult` as a `resultId`; (4) a model misread `includeTests` and swapped `fileGlob` for `filePath` in a copied Search call; also no 9b-mtp baseline for the two no-match scenarios - [plan](plans/closed/plan_not_found_error_orientation.md)
+
+Evidence: (1) scorer counts BLOCKED anywhere: ScenarioScorer.cs:184, a0fd8fe4; (2) flexibility sentence removed from StopAdherenceScenarios.cs:27,46; (3) toolCallId-as-resultId and (4) includeTests/fileGlob confusion dropped by owner 2026-11-13: single observed instance each, DescribeLargeResultMiss and the Search statusMessage already name the fix; 9b-mtp baseline superseded by arms H/I (todo review 2026-11-13)
+
 ## Tool schema budget exceeded - resolved (2026-11-13)
 
 Tool schema budget exceeded (2026-11-13) - `ClaudeLeanSchemaBudgetTests.CoreSurface_TotalSchemaSize_IsWithinBudget` fails at b005a220: claude-lean total schema 44089 chars, budget 44000 (largest: Git 4302, SemanticFindReplace 3864, MoveMember 3112, ReplaceSnippet 3029, Member 2653); growth since the last raise (7f758ec5) includes 4de54d93 (Search containingType description); trim descriptions or raise the constant with a reason - [doc](plans/closed/plan_error_policy_pointer.md)
