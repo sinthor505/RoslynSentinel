@@ -1,6 +1,6 @@
 # Test error-message wording by substituting the tool result in a saved transcript, not by editing production code
 
-**Status:** PROPOSED 2026-11-13. Owner idea (2026-11-13), awaiting review; nothing built. Step 11g of `plan_error_policy_pointer` names this as the follow-up once arms H and I finish.
+**Status:** PROPOSED 2026-11-13. Reviewed 2026-11-13; one-step replay planned in `docs/current/plans/plan_error_variant_replay.md` (DRAFT), nothing built. Step 11g of `plan_error_policy_pointer` names this as the follow-up once arms H and I finish.
 
 ## Motivation
 
