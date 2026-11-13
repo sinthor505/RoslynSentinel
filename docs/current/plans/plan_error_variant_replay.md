@@ -1,6 +1,6 @@
 # Plan: replay a saved transcript with a substituted error text through the real agent loop and a fake tool host, in a Common-only test project
 
-**Status:** IN PROGRESS 2026-11-13. Steps 1-3 done (a99ed363, d1b30b9f, 51d6edb0, 6dc49057, 129da71e); Step 11 harvested (09ebacf1).
+**Status:** IN PROGRESS 2026-11-13. Steps 1-8 and 11 done (a99ed363, d1b30b9f, 51d6edb0, 6dc49057, 129da71e, cca1ac06, 1845498c, 2215c3dc, e1e8aac8, 8c773d97, 09ebacf1); Steps 9-10 next.
 
 ## Problem
 
@@ -248,7 +248,7 @@ Settled here (owner may overturn):
   - Confirm the texts are identical across each run's 10 transcripts.
   - Recover each job's temperature, top-p and model key from the eval-queue records or `agent.log`. If they are not found, say so and validate with the env unset (the server default), which is what a job launched without `-Temperature`/`-TopP` used.
 - Done when: the three files load; Step 5's identity test passes on their own transcripts; the settings are written in the eval doc.
-- Harvest done 2026-11-13. Two checks remain: loading the files (Step 4) and the identity test (Step 5).
+- Done: 09ebacf1 (harvest), cca1ac06 (the files load), 1845498c (identity: each arm file applied to its own run gives byte-identical `ResultJson`). Steps 4-8 done: cca1ac06, 1845498c, 2215c3dc (`ToolEffectList` classes 18 tools Read and 37 Write; tools that pick read or write by `operation` count as Write, an open decision below), e1e8aac8, 8c773d97.
   - **Texts.** In each run, the message and the trailing text are byte-identical across all 10 samples. The trailing text is the same 422 characters in E, F and G.
   - **`{SOLUTION}` not needed.** No fixture path appears in `errorData.message`, which carries only the relative path.
   - **Sampling settings.** The queue job records (`%LOCALAPPDATA%\RoslynSentinel\evalqueue\113\jobs\20261113-050504-001`, `-061048-001`, `-064033-001`) show `evalArgs` `-Scenario StopAdherenceMissingFile -Samples 10`, with no `-Temperature`/`-TopP`. The server default applied, so validation runs with the env unset.
@@ -322,6 +322,7 @@ Settled here (owner may overturn):
     - (b) record 10 NoSuchMethod/Typo histories on 9b first, which is one live job;
     - (c) build cold mode.
   - Recommended: (b).
+- **Operation-dispatched tools (open, decide before Step 12).** `Member`, `MethodSignature`, `ConstructorParameter`, `UsingDirective`, `SummaryComment`, `SyncInterface` and `ProjectDoc` are classed Write, so a view-only call is reported as `Write:<tool>` and goes off-script. Recommended: make the classification operation-aware (a read `operation` value counts as Widen and is served), a small change in `ToolEffectList` and `TranscriptToolHost`.
 - **Replay fidelity is unproven** until Steps 12-13. No wording ships on replay alone.
 - **On-script continuation is a narrow window.** It covers only calls the source run made with the same arguments; Step 13 measures how far it gets. Write calls always go off-script.
 - **`Populate` deserialization of `AgentTranscript` is untested.** If it fails, Step 3 falls back to a `Common` record mirroring `ResumeSource`.
