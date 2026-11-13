@@ -3866,4 +3866,40 @@ public class Calc
         Assert.That(ex!.Message, Does.Contain("DeleteUnusedSymbol"));
         Assert.That(ex.Message, Does.Contain("ApplyDiff"));
     }
+
+    [Test]
+    [Category("SymbolNavigationEngine")]
+    public async Task GetMemberSource_TypeWithConstructor_PreferredTargetClass_ReturnsTypeSource()
+    {
+        SetSource("public class Order { public Order() { } public int Id; }", "MemberSourceCtorClass.cs");
+
+        var (outcome, message, _, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceCtorClass.cs", "Order", preferredTarget: PreferredTarget.@class);
+        Assert.That(outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(info!.Kind, Is.EqualTo("class"));
+        Assert.That(info.Source, Does.Contain("public int Id;"));
+        Assert.That(message, Is.Null);
+    }
+
+    [Test]
+    [Category("SymbolNavigationEngine")]
+    public async Task GetMemberSource_TypeWithConstructor_Default_ReturnsConstructorAndHint()
+    {
+        SetSource("public class Order { public Order() { } public int Id; }", "MemberSourceCtorDefault.cs");
+
+        var (outcome, message, _, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceCtorDefault.cs", "Order");
+        Assert.That(outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(info!.Kind, Is.EqualTo("constructor"));
+        Assert.That(message, Does.Contain("preferredTarget: class"));
+    }
+
+    [Test]
+    [Category("SymbolNavigationEngine")]
+    public async Task GetMemberSource_PreferredTargetClass_NoTypeMatch_ReturnsMember()
+    {
+        SetSource("public class C { public void Run() { } }", "MemberSourceNoTypeMatch.cs");
+
+        var (outcome, _, _, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceNoTypeMatch.cs", "Run", preferredTarget: PreferredTarget.@class);
+        Assert.That(outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(info!.Kind, Is.EqualTo("method"));
+    }
 }

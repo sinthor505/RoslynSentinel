@@ -665,7 +665,7 @@ public class WorkspaceFileEditImpl
                 await _workspaceManager.FlushPendingFoldsAsync(cancellationToken);
                 await _workspaceManager.SyncFileFromDiskIfStaleAsync(filePathResolved, cancellationToken);
                 // GetMemberSourceAsync throws on failure and returns Modified with a non-null source.
-                var (_, _, _, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, null, null, null, true, cancellationToken);
+                var (_, _, _, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, null, null, null, true, cancellationToken: cancellationToken);
                 // Extra whole-file fetch the member read costs (the member slice alone cannot be recorded).
                 await RecordWholeFileObservedAsync(filePathResolved, cancellationToken);
                 return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source!) };

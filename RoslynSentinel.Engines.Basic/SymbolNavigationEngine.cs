@@ -2978,7 +2978,7 @@ public class SymbolNavigationEngine
     /// file (the first line starts at the first doc-comment or declaration token, so it carries no
     /// leading indentation; later lines keep the file's own). Supports class-level members and enum
     /// members. A memberName that names a type (class, interface, struct, record, enum; nested included)
-    /// returns that whole declaration with Kind = class/interface/struct/record/enum, unless a non-type member matches first; same 200-line cap. Resolution mirrors Member(remove)/Member(replace): by name, narrowed by containerName,
+    /// returns that whole declaration with Kind = class/interface/struct/record/enum, unless a non-type member matches first; same 200-line cap. preferredTarget: class returns the type even when a same-named member exists (default constructor); with the default constructor, a constructor that shares the type's name returns Message as a hint naming the class option. Resolution mirrors Member(remove)/Member(replace): by name, narrowed by containerName,
     /// then contextSnippet/lineBefore/lineAfter. With requireContainerMatch a containerName that matches
     /// no candidate is refused (NotFound, listing the types that declare the member) instead of ignored;
     /// without it the lenient fallback applies. Unlike remove/replace, an overloaded name with no
@@ -2987,7 +2987,7 @@ public class SymbolNavigationEngine
     /// 200 lines; past the cap Source is the first 200 lines, IsComplete is false, and EndLine is
     /// still the member's real last line so a follow-up file-read call is one precise call.
     /// </summary>
-    public async Task<(EditOutcome Outcome, string? Message, string? ErrorCode, MemberSourceInfo? Source)> GetMemberSourceAsync(FilePathWrapper filePath, string memberName, string? containerName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, bool requireContainerMatch = false, CancellationToken cancellationToken = default)
+    public async Task<(EditOutcome Outcome, string? Message, string? ErrorCode, MemberSourceInfo? Source)> GetMemberSourceAsync(FilePathWrapper filePath, string memberName, string? containerName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, bool requireContainerMatch = false, PreferredTarget preferredTarget = PreferredTarget.constructor, CancellationToken cancellationToken = default)
     {
         const int MaxSourceLines = 200;
 
@@ -3003,10 +3003,20 @@ public class SymbolNavigationEngine
         }
 
         var allNameCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken);
+        var typeNameCandidates = allNameCandidates
+            .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+            .ToList();
+        var classTarget = preferredTarget == PreferredTarget.@class && typeNameCandidates.Count > 0;
         var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(allNameCandidates
             .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum))
             .ToList());
-        if (requireContainerMatch && !string.IsNullOrWhiteSpace(containerName))
+        if (classTarget)
+        {
+            // preferredTarget: class takes the type declaration over a same-named member (a constructor shares its type's name).
+            var typesInContainer = SyntaxTargetResolver.FilterByContainingType(typeNameCandidates, containerName);
+            memberCandidates = typesInContainer.Count > 0 ? typesInContainer : typeNameCandidates;
+        }
+        else if (requireContainerMatch && !string.IsNullOrWhiteSpace(containerName))
         {
             // Deliberate deviation from the lenient filter below: a named container that holds no candidate is refused, not ignored.
             var narrowed = SyntaxTargetResolver.FilterByContainingTypeStrict(memberCandidates, containerName);
@@ -3088,7 +3098,14 @@ public class SymbolNavigationEngine
         };
 
         var info = new MemberSourceInfo(resolved.Name, kind, sourceText.ToString(TextSpan.FromBounds(start, end)), startLineIndex + 1, endLineIndex + 1, isComplete);
-        return (EditOutcome.Modified, null, null, info);
+        // Default target is the constructor; when a type shares the name, point at the preferredTarget: class option.
+        string? hint = null;
+        if (resolved.Kind == CandidateKind.Constructor && allNameCandidates.Any(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum))
+        {
+            hint = $"'{memberName}' also names the type {memberName}; preferredTarget: class returns the type's source.";
+        }
+
+        return (EditOutcome.Modified, hint, null, info);
     }
 
     /// <summary>
