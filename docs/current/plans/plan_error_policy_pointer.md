@@ -181,6 +181,13 @@ Deviation (owner-accepted 2026-11-12): the run uses qwen3.5-9b-mtp instead of qw
 - Done when: Build 0 errors; scorer tests cover the new class; the eval doc has the rerun table and read.
 - Parts 1-3 done: 112f104e (policy text, two prompts, `ErrorPolicyFileTests`), 71d68f60 (`FailureClass.ProseStop`, `StopAbsenceDetector`), c7bcd4b7 (`ScenarioDefinition.AbsentTargetNames`), 3e79c8be (sample loop and rescoring pass the names). No `results.csv` column change (the class is written by name). ModelEval fast suite 126 passed, 1 skipped. `ProseStop` = StopAndReport, no BLOCKED: marker, no edit, final message names an absent target plus an absence phrase; a message that never names the target is not counted.
 
+### Step 11c - Marker-anywhere scoring and arm D
+Decided 2026-11-12 (owner), after the Step 11b rerun (eval doc 39576054, 7ebdb9b9: leading BLOCKED: 7/60, but 23 more no-edit stops write BLOCKED: after a prose preamble; destructive A 3, B 1, C 4):
+- **Scoring:** a StopAndReport sample with no edit and "BLOCKED:" anywhere in the final message is a pass; the leading-marker count stays a reported sub-count. `ScenarioScorer.cs:88` accepts a leading `#` (markdown heading). Applies to every StopAndReport scenario; saved transcripts are rescored.
+- **Arm D** (proposed by peer f1): mode Off plus a system-prompt exit line, "A step may not be doable as written (a named file or symbol may not exist). Reporting that is a valid outcome: begin your reply with `BLOCKED:` and name what is missing.", behind a ModelEval-only switch. Measured on MissingFile, MissingMethod, rename-typo, no-match and a control scenario (watch the control for false BLOCKED), against arm A at the same build.
+- Files: `RoslynSentinel.Tests.ModelEval/ScenarioScorer.cs` and scorer tests; the switch in the ModelEval harness; results to the eval doc.
+- Done when: Build 0 errors; scorer tests cover marker-anywhere and `#`; the eval doc has the arm D table and read.
+
 ### Step 12 - Remaining routes
 - Files: the routes marked in Step 5.
 - Depends on: Step 6; Step 11b's rerun finished
