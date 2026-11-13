@@ -1,6 +1,6 @@
 # Plan: gated error-policy suffix (Off / Pointer / Inline) on not-found tool errors, with eval stamping and an A/B
 
-**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Steps 1-8 done (9856e63c; 22dd662b..cc3fba6c; f5be7103..4764839b; d69f765b..7a6fbc8d); Steps 9-11a done (c6908f6d, 684e3915, 9aa0a135, fe141b9e, 3584f094). A/B follow-ups decided 2026-11-12 (Decision). Step 11b done (112f104e..3e79c8be; rerun 39576054, 7ebdb9b9); Step 12 done (c0f9fcb5..9e90e447). Left: Step 11c (marker-anywhere scoring, arm D).
+**Status:** IN PROGRESS 2026-11-12. Implements the settled design in `docs/current/ideas/idea_error_policy_pointer.md` (D1-D7). Steps 1-8 done (9856e63c; 22dd662b..cc3fba6c; f5be7103..4764839b; d69f765b..7a6fbc8d); Steps 9-11a done (c6908f6d, 684e3915, 9aa0a135, fe141b9e, 3584f094). A/B follow-ups decided 2026-11-12 (Decision). Step 11b done (112f104e..3e79c8be; rerun 39576054, 7ebdb9b9); Step 12 done (c0f9fcb5..9e90e447). Step 11c done (a0fd8fe4, 1364bbe7; arm D 2e594d1d, switch kept). Left: Step 11d (explain-the-error injection: replay diagnostic, then a live arm), then resolve both temporary switches and close.
 
 ## Problem
 
@@ -190,6 +190,14 @@ Decided 2026-11-12 (owner), after the Step 11b rerun (eval doc 39576054, 7ebdb9b
 - Files: `RoslynSentinel.Tests.ModelEval/ScenarioScorer.cs` and scorer tests; the switch in the ModelEval harness; results to the eval doc.
 - Done when: Build 0 errors; scorer tests cover marker-anywhere and `#`; the eval doc has the arm D table and read.
 - Code done: a0fd8fe4 (`FailureClass.MarkerNotFirst`, a pass: no edit, `BLOCKED:` after the first line; `FailureClass.None` and `MarkerPresent` keep meaning a leading marker; `ProseStop` now means no `BLOCKED:` anywhere; leading `#` accepted; a marker over the ideal turn count scores `StoppedLate` either way), 1364bbe7 (temporary switch `ROSLYNSENTINEL_EVAL_EXIT_LINE=1` in `EvalExitLine.cs`, set in the submitting shell; stamps `errorPolicyMode` as `off+exitline`). ModelEval fast tests 190 passed, 2 skipped.
+
+- Arm D result (eval doc 2e594d1d): markers on the two stop scenarios 4 -> 7 of 20, passes 0 -> 1, destructive 5 -> 4, 0 false BLOCKED on 30 doable samples. Not a clear win. Owner 2026-11-12: keep the switch until Step 11d is done (a later arm may combine the line with the injection).
+
+### Step 11d - "Explain the error" injection: replay diagnostic, then a live arm
+Decided 2026-11-12 (owner): inject a user turn after the first not-found result asking the model to explain the error and propose how to proceed; first as a replay diagnostic (insight), then as a live arm.
+- Part 1, replay diagnostic: `roslynsentinel-interrogate.ps1` gets an option to stop the replay after a given turn and to include `AgentToolCallRecord.TrailingText` in the rebuilt tool message (today it replays every turn from `ResultJson` only). Replay ~10-12 saved samples from the Step 11b and arm D runs (destructive, wandered and stopped; A', D, B, C), cut right after the first not-found tool result, then append: "Before your next call: explain what this error means and propose how you will proceed." Record the answers per outcome class in the eval doc. No scoring.
+- Part 2, live arm: a temporary ModelEval switch makes the loop inject that turn (wording informed by part 1) after the first not-found result; run against A' on the stop scenarios plus Control; the same remove-after rule as the arm D switch.
+- Done when: part 1 answers are in the eval doc; part 2 has its table and read; both temporary switches are resolved (shipped or removed).
 
 ### Step 12 - Remaining routes
 - Files: the routes marked in Step 5.
