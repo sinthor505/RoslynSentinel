@@ -15,6 +15,7 @@ namespace RoslynSentinel.Common.AgentLoop;
 /// RoslynSentinel.Tests.Advanced's McpTasksHarness* tests). The model's own tool list comes from
 /// <see cref="McpClient.ListToolsAsync"/> on the same client, so the harness never hand-maintains a
 /// duplicate tool catalog -> it always reflects whatever the running server actually exposes.
+/// The runner talks to an <see cref="IAgentToolHost"/>; the McpClient constructor wraps the client in a <see cref="McpClientToolHost"/>.
 /// </summary>
 public sealed class ModelAgentRunner
 {
@@ -87,13 +88,30 @@ public sealed class ModelAgentRunner
     }
 
     private readonly LmStudioAgentClient _llm;
-    private readonly McpClient _mcpClient;
+    private readonly IAgentToolHost _toolHost;
     private readonly int _turnCap;
     private readonly TimeSpan _wallClockCap;
     private readonly int _maxTokensPerTurn;
     private readonly int _repeatedFailureLimit;
     private readonly ILogger<ModelAgentRunner> _logger;
     private readonly LoopAssistOptions _loopAssist;
+
+    /// <summary>
+    /// Runs against a real <see cref="McpClient"/>, wrapped in a <see cref="McpClientToolHost"/>.
+    /// The parameters are documented on the <see cref="IAgentToolHost"/> overload.
+    /// </summary>
+    public ModelAgentRunner(
+        LmStudioAgentClient llm,
+        McpClient mcpClient,
+        int repeatedFailureLimit,
+        int maxTokensPerTurn,
+        int turnCap = 25,
+        TimeSpan? wallClockCap = null,
+        ILogger<ModelAgentRunner>? logger = null,
+        LoopAssistOptions? loopAssist = null)
+        : this(llm, new McpClientToolHost(mcpClient), repeatedFailureLimit, maxTokensPerTurn, turnCap, wallClockCap, logger, loopAssist)
+    {
+    }
 
     /// <param name="repeatedFailureLimit">
     /// How many <em>consecutive</em> identically-failing tool calls end the run with
@@ -124,7 +142,7 @@ public sealed class ModelAgentRunner
     /// </param>
     public ModelAgentRunner(
         LmStudioAgentClient llm,
-        McpClient mcpClient,
+        IAgentToolHost toolHost,
         int repeatedFailureLimit,
         int maxTokensPerTurn,
         int turnCap = 25,
@@ -141,7 +159,7 @@ public sealed class ModelAgentRunner
         }
 
         _llm = llm;
-        _mcpClient = mcpClient;
+        _toolHost = toolHost;
         _repeatedFailureLimit = repeatedFailureLimit;
         _turnCap = turnCap;
         _wallClockCap = wallClockCap ?? TimeSpan.FromMinutes(10);
@@ -182,13 +200,7 @@ public sealed class ModelAgentRunner
     {
         runId ??= DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff");
 
-        var mcpTools = await _mcpClient.ListToolsAsync(cancellationToken: cancellationToken);
-        var toolDefinitions = mcpTools.Select(t => new AgentToolDefinition
-        {
-            Name = t.Name,
-            Description = t.Description,
-            ParametersSchema = t.JsonSchema,
-        }).ToList();
+        var toolDefinitions = (await _toolHost.ListToolsAsync(cancellationToken)).ToList();
         var knownToolNames = toolDefinitions.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
 
         var messages = new List<AgentChatMessage>
@@ -698,7 +710,7 @@ public sealed class ModelAgentRunner
     }
 
     /// <summary>True when the text holds tool-call markup written as plain text (a tool-call tag or a function or parameter tag).</summary>
-    private static bool ContainsToolCallMarkup(string? text)
+    public static bool ContainsToolCallMarkup(string? text)
     {
         if (string.IsNullOrEmpty(text))
         {
@@ -813,12 +825,7 @@ public sealed class ModelAgentRunner
         CallToolResult result;
         try
         {
-            result = await _mcpClient.CallToolAsync(
-                toolCall.Name,
-                arguments!,
-                progress: null,
-                options: null,
-                cancellationToken: cancellationToken);
+            result = await _toolHost.CallToolAsync(toolCall.Name, arguments!, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
