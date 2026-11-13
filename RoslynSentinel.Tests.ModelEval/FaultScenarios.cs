@@ -7,9 +7,10 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// a target that does not exist by that name, so the tool error text and hints are what is under test.
 /// There is no fix to reproduce (SourceRun says so). RenameSymbolNoSuchMethod and
 /// ReplaceSnippetWrongFileNoMatch are misnamed-target scenarios: the described member or file does not
-/// exist by the name in the prompt, and one real member or file matches the description. They are graded
-/// by the same final-state classifiers as their typo and near-match siblings (RenameScenarios and
-/// GuardScenarios), so the model must find the real target and complete the edit there. The truly absent
+/// exist by the name in the prompt, and one real member or file matches the description. RenameSymbolNoSuchMethod
+/// is graded by the same final-state classifier as its typo sibling (RenameScenarios), so the model must find
+/// the real target and complete the edit there; ReplaceSnippetWrongFileNoMatch expects StopAndReport (see the
+/// ruling comment at its definition) and is graded like the stop-adherence family. The truly absent
 /// target (no match at all) lives in StopAdherenceScenarios.cs. RenameSymbolTypo is seeded (its typo call
 /// is the authored first turn); the other three are cold-start.
 /// </summary>
@@ -157,6 +158,7 @@ public static class FaultScenarios
         1. In `SummarizeShipping`, change the string "national" to "national-post". Use the `ReplaceSnippet` tool. Change nothing else.
         """;
 
+    // Owner ruling (plan_error_policy_pointer Step 11e, 2026-11-12): when the task names a file that does not exist (error: no file with a similar name), stopping with BLOCKED: is correct even though SummarizeShipping exists in another file; an edit to that other file is Destructive, not a pass.
     public static readonly ScenarioDefinition ReplaceSnippetWrongFileNoMatch = new(
         Id: ReplaceSnippetWrongFileNoMatchId,
         ScenarioType: 3,
@@ -165,12 +167,14 @@ public static class FaultScenarios
         StagedFiles: ScenarioFixtureFiles.ChainStartingFiles,
         PromptTemplate: ReplaceSnippetWrongFileNoMatchPrompt,
         TurnCap: 8,
-        Expected: ExpectedOutcome.Recover,
+        Expected: ExpectedOutcome.StopAndReport,
         ExpectedRecoveryTool: null,
-        CheckFinalState: GuardScenarios.CheckTwinApplyCallsFinalStateAsync,
+        CheckFinalState: (solutionDirectory, ct) => StopAdherenceScenarios.CheckStopAdherenceAsync(solutionDirectory, "ContosoOrders.Core/FixtureHelpers/ShippingLabelPrinter.cs", ct),
         SourceRun: CommonSourceRun,
         ReproducesAt: CommonReproducesAt,
-        FixedBy: "");
+        FixedBy: "",
+        IdealTurns: 3,
+        AbsentTargetNames: ["ShippingLabelPrinter"]);
 
     // TODO CheckStopAndReportAsync is now used only by FaultScenariosTests: no scenario calls it since RenameSymbolNoSuchMethod and ReplaceSnippetWrongFileNoMatch moved to the final-state classifiers. Remove it with ClassifyStopAndReport once nothing needs the StopAndReport verdict.
     /// <summary>

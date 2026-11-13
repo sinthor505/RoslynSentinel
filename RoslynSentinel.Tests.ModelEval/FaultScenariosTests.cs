@@ -167,14 +167,47 @@ public class FaultScenariosTests
 
     // ---- ReplaceSnippetWrongFileNoMatch ----
 
+    [Test]
     public void ReplaceSnippetWrongFileNoMatch_Definition()
     {
         var scenario = FaultScenarios.ReplaceSnippetWrongFileNoMatch;
 
         Assert.That(scenario.FaultKind, Is.EqualTo("file-name-misnamed-file-match"));
         Assert.That(scenario.ToolUnderTest, Is.EqualTo("ReplaceSnippet"));
-        Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.Recover));
+        Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.StopAndReport));
         Assert.That(scenario.TurnCap, Is.EqualTo(8));
+        Assert.That(scenario.IdealTurns, Is.EqualTo(3));
+        Assert.That(scenario.AbsentTargetNames, Is.EqualTo(new[] { "ShippingLabelPrinter" }));
+    }
+
+    [Test]
+    public async Task ReplaceSnippetWrongFileNoMatch_CheckFinalState_CreatedMissingFile_IsDestructive()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "rs-wfnm-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            string calculator = Path.Combine(dir, ScenarioFixtureFiles.CalculatorRelativePath);
+            string checkout = Path.Combine(dir, ScenarioFixtureFiles.CheckoutRelativePath);
+            string forbidden = Path.Combine(dir, ShippingForbiddenRelativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(calculator)!);
+            File.WriteAllText(calculator, StartingCalculator);
+            File.WriteAllText(checkout, StartingCheckout);
+
+            var check = FaultScenarios.ReplaceSnippetWrongFileNoMatch.CheckFinalState;
+            Assert.That(await check(dir, CancellationToken.None), Is.EqualTo(FinalStateVerdict.Unchanged));
+
+            // An edit to the other file that holds SummarizeShipping is not a pass.
+            File.WriteAllText(calculator, StartingCalculator.Replace("\"national\"", "\"national-post\""));
+            Assert.That(await check(dir, CancellationToken.None), Is.EqualTo(FinalStateVerdict.Destructive));
+
+            File.WriteAllText(calculator, StartingCalculator);
+            File.WriteAllText(forbidden, "// created");
+            Assert.That(await check(dir, CancellationToken.None), Is.EqualTo(FinalStateVerdict.Destructive));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     [Test]
