@@ -1,6 +1,6 @@
 # Eval: error-variant replay validation (Step 12) - F identity cell drifts from live
 
-**Status:** OPEN 2026-11-13. Replay does not reproduce live arm F, even though the request is token-identical: live gives Search 19 of 20 (two sessions), replay 18 of 30. The cause lies outside the request content and is untested; Step 13 is on hold.
+**Status:** OPEN 2026-11-13. Verdict: the replay is faithful for large wording effects and for arm G, but loses arm F's live effect in both seeded and regenerate mode (live Search 19/20, replay 0.60-0.68), so it cannot rank close candidates. The cause is not traced; Steps 13-14 wait for an owner decision.
 
 ## Context
 
@@ -115,6 +115,39 @@ Done by `failure-root-cause-analyst`, read-only.
 - **What it leaves open.** Either part of the live gap is something else, or live G's 7/10 understates G.
   - The only live G data is 10 samples from the morning, and live F against live G has never been compared in the same session.
   - The next discriminating data is a live G re-run (commit `5e4694cb`, 20 samples) beside a larger regenerate F/G cell (60 each).
+
+### Same-session check: live G re-run and 60-sample regenerate F/G, 2026-11-13 night
+
+- **Live G.** Commit `5e4694cb` from a worktree, with `error-policy.md` set to the main tree's LF copy, so `ErrorPolicyHash` is `2c1da955f696`, the morning's value. 20 samples, host 113. Run `ModelTestingResults\113\RunScenario_SamplesAndScores\20261113-215004-242`.
+  - First call at turn 2: Search 14, ListSolutionItems 4, ListAll 2.
+  - The error text equals `armG.md` in 20 of 20.
+  - Pooled with the morning: **G live Search 21/30 (0.70)**.
+- **Regenerate, 60 per text** (10 F histories x 6). Run `ModelTestingResults\113\ReplayVariants_SamplesAndClassifies\20261113-215908-164`, 0 harness errors, 0 `RegenMiss`.
+  - F: Search 38/60. G: Search 43/60.
+  - Pooled with the earlier 90-row run: **F 61/90 (0.68), G 65/89 (0.73)**.
+
+| Comparison (Search against the rest, one-sided Fisher) | p |
+| --- | --- |
+| live F 19/20 above live G 21/30 | 0.031 |
+| live F above regenerate F (19/20 against 61/90) | 0.009 |
+| regenerate G above live G (65/89 against 21/30) | 0.46 (no difference) |
+| regenerate F against regenerate G | 0.27, G higher (wrong direction) |
+
+- **Reading.**
+  - **The live gap between F and G is real.** G's new 14/20 matches its morning 7/10.
+  - **G replays faithfully** in both modes (0.70 to 0.73 against live 0.70), and E's direction holds.
+  - **F is the one text whose live effect the replay loses**, in both seeded (0.60) and regenerate (0.68) mode, against live 0.95. The requests are token-identical (trace above), and regenerating turn 1 does not restore the effect, so the cause is not in the request content or the turn-1 KV state. It is not traced.
+  - **Replay can rank texts with a large effect but not a small one.** E against F or G (`ListSolutionItems` about 0.9 against about 0.3) is reproduced on two models. F against G (a ~0.25 live difference) is not reproduced and comes out reversed.
+
+## Verdict
+
+**The replay passes for large effects and fails for small ones.**
+- It reproduces large wording effects (E against F/G), 0 first-miss stops, and G's live rate.
+- It does not reproduce F's live effect or the F-over-G ranking.
+
+As built, a replay screen can reject texts that clearly do not move the model, but it cannot pick between close candidates. A live arm of 20-30 samples stays the deciding step.
+
+Step 13 (cross-history) and Step 14 (screening) are on hold pending an owner decision: either accept the replay as a coarse screen and continue, or stop the screening use until F's gap is explained.
 
 ### Sibling-model replicate: qwen3.5-4b-mtp on host 112 (exploratory)
 

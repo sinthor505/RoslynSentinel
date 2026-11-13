@@ -1,6 +1,6 @@
 # Plan: replay a saved transcript with a substituted error text through the real agent loop and a fake tool host, in a Common-only test project
 
-**Status:** IN PROGRESS 2026-11-13. Steps 1-11 done (a99ed363, d1b30b9f, 51d6edb0, 6dc49057, 129da71e, cca1ac06, 1845498c, 2215c3dc, e1e8aac8, 8c773d97, 09ebacf1, c3efa20e, e5c85478, 069455d6); Steps 12-14 (live) remain, after the two open decisions below.
+**Status:** IN PROGRESS 2026-11-13. Steps 1-11 done (a99ed363, d1b30b9f, 51d6edb0, 6dc49057, 129da71e, cca1ac06, 1845498c, 2215c3dc, e1e8aac8, 8c773d97, 09ebacf1, c3efa20e, e5c85478, 069455d6). Operation-aware classification: 1367cda4, 379ffebe. Regenerate mode: 3246bedc. Step 12 ran: faithful for large effects, but loses arm F's live effect (`evals/eval_error_variant_replay_validation.md`). Steps 13-14 are on hold for an owner decision (coarse screen or stop).
 
 ## Problem
 
