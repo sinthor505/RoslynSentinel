@@ -114,7 +114,7 @@ public class RefactoringSignatureImpl
             {
                 IsError = true,
                 // TODO resolver codes other than SymbolNotResolved and MissingParameterListOverloads (e.g. an ambiguous symbol) fall through to Exception; map each EngineErrorCode in SymbolWireResolver.ToToolErrorCode
-                ErrorData = new ResultError(SymbolWireResolver.ToToolErrorCode(resolution.Error!), resolution.Error!.Message)
+                ErrorData = SymbolWireResolver.ToResultError(resolution.Error!)
             };
         }
 

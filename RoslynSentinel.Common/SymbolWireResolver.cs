@@ -100,13 +100,28 @@ public static class SymbolWireResolver
     /// The tool-level error code for an unresolved <see cref="SymbolResolution"/>: a symbol that is not there is NotFound; a
     /// method id with several overloads is InvalidArgument (the caller must pass one full id); anything else is Exception.
     /// </summary>
-    // TODO error-policy: route does not record the missing-target kind
+    // error-policy: this mapping stays pure; the missing-target kind is recorded by ToResultError.
     public static string ToToolErrorCode(EngineError error) => error.Code switch
     {
         EngineErrorCode.SymbolNotResolved => ToolErrorCode.NotFound,
         EngineErrorCode.MissingParameterListOverloads => ToolErrorCode.InvalidArgument,
         _ => ToolErrorCode.Exception,
     };
+
+    /// <summary>
+    /// The structured tool error for an unresolved <see cref="SymbolResolution"/>: the code from <see cref="ToToolErrorCode"/>
+    /// and the engine's message. A symbol that is not there also records the missing-target kind on the call context.
+    /// </summary>
+    public static ResultError ToResultError(EngineError error)
+    {
+        if (error.Code == EngineErrorCode.SymbolNotResolved)
+        {
+            // error-policy side channel (plan_error_policy_pointer Step 12); text-neutral
+            ToolCallContext.Current?.RecordMissingTarget("symbol");
+        }
+
+        return new ResultError(ToToolErrorCode(error), error.Message);
+    }
 
     private static string NotADocCommentIdText(string? docCommentId)
         => $"'{docCommentId}' is not a documentation-comment ID: those start with a kind letter and a colon (T: type, M: method, P: property, F: field, E: event, N: namespace), for example 'T:MyApp.Orders.OrderService'. It is not a changeId from an undo hint. Find the symbol with {ToolCallHint.Call("Search", ("mode", "symbol"))} and use the ID it returns.";

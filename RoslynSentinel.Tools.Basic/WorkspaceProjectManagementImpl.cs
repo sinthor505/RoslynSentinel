@@ -921,7 +921,7 @@ public class WorkspaceProjectManagementImpl
                     return new SentinelCallToolResult<object>
                     {
                         IsError = true,
-                        ErrorData = new ResultError(SymbolWireResolver.ToToolErrorCode(resolution.Error!), resolution.Error!.Message)
+                        ErrorData = SymbolWireResolver.ToResultError(resolution.Error!)
                     };
                 }
 
