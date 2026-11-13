@@ -348,7 +348,7 @@ public class SymbolRelationshipImpl
             var droppedProjectNames = new List<string>();
             if (kind == FindReferencesKind.callers)
             {
-                var result = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                var result = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 result = ExcludeTestHits(result, c => c.FilePath, testDocProjects, droppedProjectNames);
                 var summary = SummarizeListResult.Build(result, c => c.FilePath);
                 return new SentinelCallToolResult<object>

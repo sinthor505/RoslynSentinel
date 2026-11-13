@@ -1548,6 +1548,38 @@ public class Second { public void Run() { } }";
             Assert.That(ex.Candidates.Where(c => c.Counted).Select(c => c.ContextSnippet), Has.All.Not.Empty);
         }
 
+        // -- containingType narrows an ambiguous by-name lookup to the named class --
+        [Test]
+        public async Task FindCallersAsync_NoFilePath_ContainingTypeNarrowsAmbiguousName_Resolves()
+        {
+            SetMultipleFiles(
+                ("First.cs", "public class First\r\n{\r\n    public void Run() { }\r\n    public void Caller() { Run(); }\r\n}"),
+                ("Second.cs", "public class Second\r\n{\r\n    public void Run() { }\r\n    public void Caller() { Run(); }\r\n}"));
+            var results = await _navigationEngine.FindCallersAsync(null, "Run", contextSnippet: null, containingType: "Second");
+            Assert.That(results.Select(r => r.CallerType).ToList(), Is.EqualTo(new[] { "Second" }));
+        }
+
+        [Test]
+        public async Task FindCallersAsync_NoFilePath_UnknownContainingType_ThrowsNotFoundNamingDeclaringTypes()
+        {
+            SetMultipleFiles(
+                ("First.cs", "public class First\r\n{\r\n    public void Run() { }\r\n}"),
+                ("Second.cs", "public class Second\r\n{\r\n    public void Run() { }\r\n}"));
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindCallersAsync(null, "Run", contextSnippet: null, containingType: "Nope"));
+            Assert.That(ex!.Message, Does.Contain("First"));
+            Assert.That(ex.Message, Does.Contain("Second"));
+        }
+
+        [Test]
+        public async Task FindImplementationsForMemberAsync_NoFilePath_ContainingTypeNarrowsAmbiguousName_Resolves()
+        {
+            SetMultipleFiles(
+                ("Alpha.cs", "public class Alpha\r\n{\r\n    public virtual void Run() { }\r\n}"),
+                ("Beta.cs", "public class Beta\r\n{\r\n    public virtual void Run() { }\r\n}"));
+            var ex = await Assert.CatchAsync(async () => await _navigationEngine.FindImplementationsForMemberAsync(null, "Run", contextSnippet: null, containingType: "Beta"));
+            Assert.That(ex, Is.Not.InstanceOf<ToolAmbiguousMatchException>());
+        }
+
         [Test]
         public async Task FindCallersAsync_NoFilePath_UnknownName_ThrowsNotFound()
         {

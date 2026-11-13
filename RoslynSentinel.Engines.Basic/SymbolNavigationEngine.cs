@@ -1502,6 +1502,9 @@ public class SymbolNavigationEngine
     /// filePath is optional. When omitted, the symbol is resolved by name across the solution
     /// using GetSymbolsWithName. If the name is ambiguous, all candidate locations are searched.
     /// Supply filePath to pin the resolution to a specific declaring file.
+    /// containingType optionally narrows a name that several types declare to the type with that name
+    /// (generic arguments ignored): with filePath it filters the declarations in that file, without it
+    /// it keeps only the by-name matches whose containing type matches.
     /// </summary>
     public async Task<List<CallerInfo>> FindCallersAsync(
         string? filePath,
@@ -1509,6 +1512,7 @@ public class SymbolNavigationEngine
         string? contextSnippet = null,
         string? lineBefore = null,
         string? lineAfter = null,
+        string? containingType = null,
         CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: see LocateSymbolAsync above for rationale (production-caller cascade avoided).
@@ -1551,6 +1555,18 @@ public class SymbolNavigationEngine
             // drifted lookup path").
             var declsSourceText = await document.GetTextAsync(cancellationToken);
             var declCandidates = SyntaxTargetResolver.ResolveCandidates(root, declsSourceText, symbolName, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(containingType))
+            {
+                var unfilteredDeclCandidates = declCandidates;
+                declCandidates = SyntaxTargetResolver.FilterByContainingTypeStrict(declCandidates, containingType);
+                if (declCandidates.Count == 0 && unfilteredDeclCandidates.Count > 0)
+                {
+                    var declaringTypes = string.Join(", ", unfilteredDeclCandidates.Select(c => c.ContainingTypeName).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct());
+                    throw new ToolNotFoundException(
+                        $"'{symbolName}' is declared in {declaringTypes} in '{filePath}', not in '{containingType}'. " +
+                        "The lookup never ran, so this is not a zero-references result.");
+                }
+            }
             var decls = declCandidates
                 .Select(c => c.Node)
                 .OfType<MemberDeclarationSyntax>()
@@ -1638,6 +1654,20 @@ public class SymbolNavigationEngine
             var anyText = await anyDoc.GetTextAsync(cancellationToken);
             var byNameCandidate = await ResolveCandidatesWithSemanticAsync(anyRoot, anyText, symbolName, includeSemantic: true, cancellationToken);
             var allMatches = byNameCandidate.SemanticMatches ?? [];
+            if (!string.IsNullOrWhiteSpace(containingType))
+            {
+                var containerPrefix = containingType.Split('<')[0].Trim();
+                var containerMatches = allMatches.Where(c => c.Symbol?.ContainingType?.Name == containerPrefix).ToList();
+                if (containerMatches.Count == 0 && allMatches.Count > 0)
+                {
+                    var declaringTypes = string.Join(", ", allMatches.Select(c => c.Symbol?.ContainingType?.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct());
+                    throw new ToolNotFoundException(
+                        $"symbolName '{symbolName}' is declared in {declaringTypes} (by-name lookup, no filePath), not in '{containingType}'. " +
+                        "The lookup never ran, so this is not a zero-references result.");
+                }
+
+                allMatches = containerMatches;
+            }
             var memberMatches = allMatches
                 .Where(c => c.Symbol is not INamedTypeSymbol)
                 .ToList();
@@ -1864,6 +1894,9 @@ public class SymbolNavigationEngine
     ///
     /// filePath is optional. When omitted, the symbol is resolved by name across the solution.
     /// Supply filePath to pin resolution to a specific declaring file.
+    /// containingType optionally narrows a name that several types declare to the type with that name
+    /// (generic arguments ignored): with filePath it filters the declarations in that file, without it
+    /// it keeps only the by-name matches whose containing type matches.
     /// </summary>
     public async Task<List<ImplementationInfo>> FindImplementationsForMemberAsync(
         string? filePath,
@@ -1871,6 +1904,7 @@ public class SymbolNavigationEngine
         string? contextSnippet = null,
         string? lineBefore = null,
         string? lineAfter = null,
+        string? containingType = null,
         CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: see LocateSymbolAsync above for rationale (production-caller cascade avoided).
@@ -1956,6 +1990,18 @@ public class SymbolNavigationEngine
                     // and its constructor, and the type is the intended target.
                     var declsText = await document.GetTextAsync(cancellationToken);
                     var declCandidates = SyntaxTargetResolver.ResolveCandidates(root, declsText, symbolName, cancellationToken);
+                    if (!string.IsNullOrWhiteSpace(containingType))
+                    {
+                        var unfilteredDeclCandidates = declCandidates;
+                        declCandidates = SyntaxTargetResolver.FilterByContainingTypeStrict(declCandidates, containingType);
+                        if (declCandidates.Count == 0 && unfilteredDeclCandidates.Count > 0)
+                        {
+                            var declaringTypes = string.Join(", ", unfilteredDeclCandidates.Select(c => c.ContainingTypeName).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct());
+                            throw new ToolNotFoundException(
+                                $"FindImplementations: '{symbolName}' is declared in {declaringTypes} in '{filePath}', not in '{containingType}'. " +
+                                "The lookup never ran, so this is not a zero-implementations result.");
+                        }
+                    }
                     var decls = declCandidates
                         .Select(c => c.Node)
                         .OfType<MemberDeclarationSyntax>()
@@ -2011,6 +2057,20 @@ public class SymbolNavigationEngine
             var anyText = await anyDoc.GetTextAsync(cancellationToken);
             var byNameCandidate = await ResolveCandidatesWithSemanticAsync(anyRoot, anyText, symbolName, includeSemantic: true, cancellationToken);
             var allMatches = byNameCandidate.SemanticMatches ?? [];
+            if (!string.IsNullOrWhiteSpace(containingType))
+            {
+                var containerPrefix = containingType.Split('<')[0].Trim();
+                var containerMatches = allMatches.Where(c => c.Symbol?.ContainingType?.Name == containerPrefix).ToList();
+                if (containerMatches.Count == 0 && allMatches.Count > 0)
+                {
+                    var declaringTypes = string.Join(", ", allMatches.Select(c => c.Symbol?.ContainingType?.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct());
+                    throw new ToolNotFoundException(
+                        $"FindImplementations: symbolName '{symbolName}' is declared in {declaringTypes} (by-name lookup, no filePath), not in '{containingType}'. " +
+                        "The lookup never ran, so this is not a zero-implementations result.");
+                }
+
+                allMatches = containerMatches;
+            }
             var memberMatches = allMatches
                 .Where(c => c.Symbol is not INamedTypeSymbol)
                 .ToList();
