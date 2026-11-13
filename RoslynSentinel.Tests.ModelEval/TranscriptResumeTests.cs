@@ -216,7 +216,7 @@ public class TranscriptResumeTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(rewritten.ToolCalls[0].TrailingText, Does.Contain(NewDirectory));
+            Assert.That(rewritten.ToolCalls[0].TrailingText, Does.Contain(NewDirectory.Replace('\\', '/')), "the forward-slash input keeps its slash style");
             Assert.That(rewritten.ToolCalls[0].TrailingText, Does.Not.Contain(OldGuidFolder));
             Assert.That(rewritten.ToolCalls[1].TrailingText, Is.Null);
             Assert.That(original.ToolCalls[0].TrailingText, Does.Contain(OldGuidFolder), "the source turn is not modified");
