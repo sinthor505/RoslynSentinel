@@ -459,16 +459,15 @@ public static class CompilerErrorLookupHelper
                 .Distinct()
                 .Select(ns => $"using {ns};");
 
-            return $"  '{name}' is not accessible because its namespace is not imported here. You MUST add one " +
-                "of the following `using` directives:\n"
+            return $"  '{name}' is not accessible because its namespace is not imported here; one of the " +
+                "following `using` directives is required:\n"
                 + string.Join("\n", missingNamespaces.Select(u => "    " + u))
                 + "\n  Candidates found:\n"
                 + string.Join("\n", suggestions);
         }
 
-        return $"  '{name}' is not accessible unqualified from this file. You MUST call it using the fully " +
-            "qualified name shown below (ContainingType.MemberName) - do not add a `using` directive, it will " +
-            "not fix this. Candidates found:\n"
+        return $"  '{name}' is not accessible unqualified from this file; the fully qualified name shown " +
+            "below (ContainingType.MemberName) resolves it, and a `using` directive does not. Candidates found:\n"
             + string.Join("\n", suggestions);
     }
 
