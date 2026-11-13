@@ -1,6 +1,6 @@
 # Plan: replay a saved transcript with a substituted error text through the real agent loop and a fake tool host, in a Common-only test project
 
-**Status:** APPROVED 2026-11-13. Owner approved; Steps 1-11 run unattended in Batched mode, Steps 12-14 (live) later.
+**Status:** IN PROGRESS 2026-11-13. Steps 1-3 done (a99ed363, d1b30b9f, 51d6edb0, 6dc49057, 129da71e); Step 11 harvested (09ebacf1).
 
 ## Problem
 
@@ -113,6 +113,7 @@ Settled here (owner may overturn):
   - Add the project, following the solution-file and `scripts/` conventions in `reference_working_conventions.md`.
   - Check that `scripts/build.ps1` (Solution flavor) builds it and that its tests appear in the baseline run. If test discovery is by name pattern, confirm the pattern matches.
 - Done when: `Build` 0 errors; `RunTest` on the new project passes; a full `scripts/build.ps1 -Flavor Solution` lists it.
+- Done: a99ed363. A new project needed `Build(fullBuild)` plus `LoadSolution(forceReload: true)` before the server workspace accepted `CreateFile` in it.
 
 ### Step 2 - Tool-host seam in Common
 - Files: `RoslynSentinel.Common/AgentLoop/ModelAgentRunner.cs`, new `RoslynSentinel.Common/AgentLoop/IAgentToolHost.cs`, new `RoslynSentinel.Common/AgentLoop/McpClientToolHost.cs`, a test file in the new project.
@@ -137,6 +138,7 @@ Settled here (owner may overturn):
   - `TranscriptResume.Load`/`KeepTurns` delegate to the new loader.
   - `StopMarker.IsLeading(string)` and `StopMarker.ContainsAnywhere(string)` carry the regexes from `ScenarioScorer.cs:335-338`, and the scorer's private methods delegate to them.
 - Done when: `Build` 0 errors; `TranscriptResumeTests`, `ScenarioScorerTests` and `ProseStopScoringTests` pass; a round-trip test loads a checked-in trimmed transcript.
+- Done: 51d6edb0 (`SavedTranscript`, Populate works; `ResumeSource` kept with a TODO to fold it), 6dc49057 (`StopMarker`). Step 2 done: d1b30b9f (seam), 129da71e (`RunnerToolHostTests`).
 
 ### Step 4 - Variant file loader
 - Files: new `RoslynSentinel.Tests.ErrorVariants/ErrorVariant.cs`, `ErrorVariantLoader.cs`, a test file.
