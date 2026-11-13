@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Tool schema budget exceeded - resolved (2026-11-13)
+
+Tool schema budget exceeded (2026-11-13) - `ClaudeLeanSchemaBudgetTests.CoreSurface_TotalSchemaSize_IsWithinBudget` fails at b005a220: claude-lean total schema 44089 chars, budget 44000 (largest: Git 4302, SemanticFindReplace 3864, MoveMember 3112, ReplaceSnippet 3029, Member 2653); growth since the last raise (7f758ec5) includes 4de54d93 (Search containingType description); trim descriptions or raise the constant with a reason - [doc](plans/closed/plan_error_policy_pointer.md)
+
+Evidence: f93aeca5 raised the claude-lean total budget 44000 -> 44100 (owner, measured 44089); ClaudeLeanSchemaBudgetTests green at f93aeca5
+
 ## Not-found listing offer, S1 fd279396 - resolved (2026-11-13)
 
 Not-found listing offer, S1 `fd279396` (2026-11-13) - owner of the decision is plan_error_policy_pointer (session f9); S1 drops the `ListSolutionItems` confirmation from the file not-found text when `ToolCallContext.WorkspaceCurrent` is true. Measured on qwen3.5-9b-mtp: alone it did not stop the listing call (10/10 still list), and with the stop rule it hurt (passes 3 -> 0, BudgetOut 2 -> 6; the removed sentence was the stop trigger). Next: replace the offer with a stated fact ("No file with this name or a similar name exists in this solution ...", arm G) or `Git revert fd279396` (clean). Symbol-text equivalent (`SymbolNotFoundDetail.RenderNoCandidates`) not started; a "searched every project" fact is true only for whole-solution misses - [plan](plans/plan_error_policy_pointer.md)
