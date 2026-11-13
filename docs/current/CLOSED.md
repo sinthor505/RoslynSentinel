@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Scenario eval follow-up findings - resolved (2026-11-12)
+
+Scenario eval follow-up findings (2026-11-12) - (1) both stop-adherence StopAndReport fixtures hold a semantic match (`SummarizeShipping` really exists in `OrderPricingCalculator.cs`; `ApplyLoyaltyBonus` is described as `CalcDisc`), so error-text A/Bs on them cannot be read: rebuild them as truly absent targets, then rerun old/current/stripped text; (2) the system prompt says "follow the recovery step the error names" (`AgentSystemPrompts.cs:108`) right before the stop rule; (3) empty-file guard hint suggests `DeleteFile` on a multi-type file; (4) fixture `ContosoOrders.Tests\ModelEvalGenerated\OrderCheckoutTests.cs` fails a solution build (CS0246 Xunit); (5) resume cap hits loop on ReplaceSnippet ValidationFailed and ReadFile with a type name as memberName. (Third `RenameSymbolTypo` arm done 2026-11-12: corrected-call candidates used directly 7/10.) - [doc](evals/eval_scenario_eval_followups.md)
+
+Evidence: (1)(2) fixed by plan_error_policy_pointer 9aa0a135, c6908f6d; misnamed-target pair now expects Recover 5c39c1ad; (3) b14f12d3; (4) restore flag 9a855b44, enabled 25cb918b, Build RestoreState finding acaa08bf; (5) type-name memberName returns type source 159c5d13, 183d991b, fd9bc97d, e7c79f71; CS0144 no-implementer fact 679b6123
+
 ## Not-found error orientation - resolved (2026-11-12)
 
 Not-found error orientation (2026-11-12) - not-found errors offer no typo candidates (file candidates need an identical name, `Search(mode: symbol)` none) and order a listing that cannot help (`ReplaceSnippetWrongFileNoMatch` 0 of 10, `RenameSymbolNoSuchMethod` 2 of 10); inventory of every producer, shared edit-distance candidates, "nothing similar" wording with a prefilled orientation call and a report option, sweep of bare literals - [plan](plans/closed/plan_not_found_error_orientation.md)
