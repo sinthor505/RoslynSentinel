@@ -214,6 +214,9 @@ Decided 2026-11-12 (owner), from the replays: the model weighs "the task names i
 ### Step 11f - Arm F: v2 with the listing offer removed from the error text
 - Peer f1's fd279396 drops the "ListSolutionItems ... a file not in that list does not exist" confirmation from the file-not-found text when the workspace is current. Arm F = Inline + adopted v2 at HEAD, on MissingFile now (113, 10 samples), compared with arm E's MissingFile row; MissingMethod once f1 lands the matching symbol-text change (proposed to f1 2026-11-12).
 - Done when: the eval doc has the F rows and read; then resolve the arm D switch and close.
+- Result (eval doc 000ac882): F vs E on MissingFile: passes 0 vs 3, cap 6 vs 2, first call after the miss Search 10/10 (E: ListSolutionItems 7); 0 of 20 stopped at the first miss. The model plans its own lookup either way; the removed sentence was what turned the listing result into a turn-3 stop. S1 is not a stop lever on its own.
+- Owner 2026-11-12: arm G. Peer f1 is asked to state the conclusion as a fact when the workspace is current ("No file with this name or a similar name exists in this solution (every project searched ...)"), no call offered. Run G (Inline + v2) on MissingFile, 10 samples on 113. Success = one confirming lookup then BLOCKED: at turn 3 (the Searched-then-stopped class of Step 11) or a first-miss stop.
+- Also fixed on the way: 64a4b2d5 (TranscriptResumeTests path style, ours from a24696bd), be995216 (LoopAssist.NormalizeError blanks the per-call "(Ns ago)" in the no-solution text, so repeated rejections match).
 
 ### Step 12 - Remaining routes
 - Files: the routes marked in Step 5.
