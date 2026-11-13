@@ -84,10 +84,12 @@ public class ErrorPolicyFilterTests
         string toolName,
         Dictionary<string, JsonElement> arguments,
         CallToolResult input,
-        string? missingKind = null)
+        string? missingKind = null,
+        bool hasEditEffectFact = false)
     {
         var ctx = new ToolCallContext(null, null, toolName, null, 0);
         ctx.RecordMissingTarget(missingKind);
+        ctx.HasEditEffectFact = hasEditEffectFact;
         ToolCallContext.Set(ctx);
 
         return await ErrorPolicyFilter.InvokeAsync(mode, document, toolName, arguments, null, () => ValueTask.FromResult(input));
@@ -196,6 +198,47 @@ public class ErrorPolicyFilterTests
 
         Assert.That(result, Is.SameAs(input));
         Assert.That(result.Content, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task EditEffectFact_Pointer_AppendsNoBlock()
+    {
+        // RenameSymbol with kind "method" classifies to SymbolNotFound.Edit; an edit effect from this session explains the miss, so no block.
+        var input = ErrorResult(ToolErrorCode.NotFound);
+
+        var result = await InvokeAsync(ErrorPolicyMode.Pointer, null, "RenameSymbol", Args(null), input, "method", hasEditEffectFact: true);
+
+        Assert.That(result, Is.SameAs(input));
+        Assert.That(result.Content, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task EditEffectFact_Inline_AppendsNoBlock()
+    {
+        // Same call as the Inline row of NotFoundError_ClassifiesToKey; the document does hold SymbolNotFound.Edit, so only the flag stops the block.
+        var document = ErrorPolicyDocument.Parse(FourSections);
+        var input = ErrorResult(ToolErrorCode.NotFound);
+
+        var result = await InvokeAsync(ErrorPolicyMode.Inline, document, "RenameSymbol", Args(null), input, "method", hasEditEffectFact: true);
+
+        Assert.That(result, Is.SameAs(input));
+        Assert.That(result.Content, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task EditEffectFact_False_StillAppendsPointerBlock()
+    {
+        // Same expectations as the Pointer row of NotFoundError_ClassifiesToKey for SymbolNotFound.Edit.
+        var input = ErrorResult(ToolErrorCode.NotFound);
+
+        var result = await InvokeAsync(ErrorPolicyMode.Pointer, null, "RenameSymbol", Args(null), input, "method", hasEditEffectFact: false);
+
+        Assert.That(result, Is.SameAs(input));
+        Assert.That(result.Content, Has.Count.EqualTo(2));
+        var texts = TextBlocks(result);
+        Assert.That(texts[0], Is.EqualTo(TextBlocks(ErrorResult(ToolErrorCode.NotFound)).Single()), "The first block must never be modified.");
+        Assert.That(texts[1], Is.EqualTo(ErrorPolicyFilter.PointerText(ErrorPolicyKey.SymbolNotFoundEdit)));
+        Assert.That(texts[1], Does.Contain("Error handling: " + ErrorPolicyKeys.ToWireName(ErrorPolicyKey.SymbolNotFoundEdit)));
     }
 
     [Test]

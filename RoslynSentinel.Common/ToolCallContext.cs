@@ -14,6 +14,8 @@ public sealed class ToolCallContext : IDetachedPayloadSource
 
     private int _gatePassed;
 
+    private int _hasEditEffectFact;
+
     private string? _missingTargetKind;
 
     // Edit effects recorded by this call's operations. Pending until the write chokepoint commits them with the write; committed ones
@@ -126,6 +128,16 @@ public sealed class ToolCallContext : IDetachedPayloadSource
         if (string.IsNullOrWhiteSpace(kind))
             return;
         Volatile.Write(ref _missingTargetKind, kind);
+    }
+
+    /// <summary>
+    /// True when NotFoundEvidence has attached an EditEffect finding to this call's not-found error (an earlier in-session rename, move,
+    /// removal or delete explains the miss). The error-policy filter then appends nothing, because a "the task named it, stop" rule is
+    /// wrong when the target was changed this session. Settable by the not-found evidence code; side channel only, never serialized.
+    /// </summary>
+    public bool HasEditEffectFact
+    {
+        get => Volatile.Read(ref _hasEditEffectFact) != 0; set => Volatile.Write(ref _hasEditEffectFact, value ? 1 : 0);
     }
 
     /// <summary>

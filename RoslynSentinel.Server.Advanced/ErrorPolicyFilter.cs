@@ -39,6 +39,7 @@ public static class ErrorPolicyFilter
     /// Runs the call, then, when the result is a not-found error that classifies to a key with text, appends that text as ONE
     /// trailing text block. The first block is never modified. Success results, other errors, unclassified errors and any
     /// internal failure return the result untouched: this filter never breaks a call.
+    /// The suffix is also skipped when the call's ToolCallContext has HasEditEffectFact set, because an edit effect from this session explains the miss.
     /// </summary>
     public static async ValueTask<CallToolResult> InvokeAsync(
         ErrorPolicyMode mode,
@@ -58,6 +59,12 @@ public static class ErrorPolicyFilter
         {
             if (!IsErrorResult(result))
             {
+                return result;
+            }
+
+            if (ToolCallContext.Current?.HasEditEffectFact == true)
+            {
+                logger?.LogInformation("Error policy suffix skipped for the {Tool} error: an edit effect from this session explains the miss.", toolName);
                 return result;
             }
 
