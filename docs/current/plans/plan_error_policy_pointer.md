@@ -208,6 +208,13 @@ Decided 2026-11-12 (owner), from the replays: the model weighs "the task names i
 - Measure: destructive count, BLOCKED: turn, passes; false BLOCKED on the three doable scenarios must stay 0.
 - Separately proposed to peer f1 (owner of the not-found text): in the no-similar-name case, state the exhaustive search as a fact and drop the "call ListSolutionItems to confirm" option.
 
+- Result (eval doc 34e26dc0): E vs C on 20 stop samples (9b-mtp): destructive 0 vs 4, passes 4 vs 0, BLOCKED: first 8 vs 3, mean turns 5.85 vs 7.0; only 1 of 20 stopped at the first miss (the error's ListSolutionItems/ListAll offer wins the next call). False BLOCKED 0 on Control and Typo; ReplaceSnippetWrongFileNoMatch (4b) E 2/10, C 3/10.
+- Owner decisions 2026-11-12: (1) adopt v2 as `error-policy.md` (one file again); (2) ReplaceSnippetWrongFileNoMatch expects a stop: a task naming a file that does not exist is BLOCKED even when the named method exists elsewhere (scenario expectation becomes StopAndReport; peer f1 told); (3) arm F (Step 11f).
+
+### Step 11f - Arm F: v2 with the listing offer removed from the error text
+- Peer f1's fd279396 drops the "ListSolutionItems ... a file not in that list does not exist" confirmation from the file-not-found text when the workspace is current. Arm F = Inline + adopted v2 at HEAD, on MissingFile now (113, 10 samples), compared with arm E's MissingFile row; MissingMethod once f1 lands the matching symbol-text change (proposed to f1 2026-11-12).
+- Done when: the eval doc has the F rows and read; then resolve the arm D switch and close.
+
 ### Step 12 - Remaining routes
 - Files: the routes marked in Step 5.
 - Depends on: Step 6; Step 11b's rerun finished
