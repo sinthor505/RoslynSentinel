@@ -222,6 +222,7 @@ public class FileNotFoundMessageTests
         Assert.That(text, Does.Not.Contain("ListSolutionItems"));
         Assert.That(text, Does.Not.Contain("does not exist in this solution"));
         Assert.That(text, Does.Not.Contain("lists every file"));
+        Assert.That(text, Does.EndWith(" No file with this name or a similar name exists in this solution."));
     }
 
     [Test]
@@ -236,15 +237,16 @@ public class FileNotFoundMessageTests
     }
 
     [Test]
-    public void Build_MissingFileNoCandidatesListingNotCallable_WorkspaceStateDoesNotChangeText()
+    public void Build_MissingFileNoCandidatesListingNotCallable_WorkspaceCurrentAddsOnlyTheFactSentence()
     {
         var current = BuildNoCandidateText(workspaceCurrent: true, name => name is "ReadFile" or "GetLargeResult");
         var stale = BuildNoCandidateText(workspaceCurrent: false, name => name is "ReadFile" or "GetLargeResult");
         var unknown = BuildNoCandidateText(workspaceCurrent: null, name => name is "ReadFile" or "GetLargeResult");
 
-        Assert.That(current, Is.EqualTo(unknown));
+        Assert.That(current, Is.EqualTo(unknown + " No file with this name or a similar name exists in this solution."));
         Assert.That(stale, Is.EqualTo(unknown));
         Assert.That(unknown, Does.Not.Contain("ListSolutionItems"));
+        Assert.That(current, Does.Not.Contain("ListSolutionItems"));
     }
 
     [Test]

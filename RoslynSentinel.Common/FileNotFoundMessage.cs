@@ -120,12 +120,10 @@ public static class FileNotFoundMessage
     {
         // CreateFile is deliberately not offered here: in ReplaceSnippetWrongFileNoMatch 5 of 9 failing samples created the missing file right after the option.
         var text = SpeculativeAdvice.ResolveForFile("A file read earlier under this name may since have been renamed or moved.");
-        // The intro already states the exhaustive search (exact path, bare file name, similar file name), so with a current workspace the
-        // listing only repeats it; eval replays show weak models take the option every time and then widen their search. A stale
-        // workspace (a reload failure is recorded) or an unknown state (WorkspaceCurrent null) keeps the listing, whose answer may differ.
+        // Current workspace: the intro already states the exhaustive search, so this branch states the conclusion as a fact instead of offering the listing (arm G of plan_error_policy_pointer); a stale or unknown state keeps the offer, whose answer may differ.
         if (ToolCallContext.Current?.WorkspaceCurrent == true)
         {
-            return text;
+            return text + " No file with this name or a similar name exists in this solution.";
         }
 
         if (Callable(isCallable, "ListSolutionItems"))
