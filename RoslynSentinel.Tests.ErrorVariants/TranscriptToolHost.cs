@@ -141,7 +141,7 @@ public sealed class TranscriptToolHost : IAgentToolHost
     {
         var callIndex = CallCount++;
 
-        if (ToolEffectList.IsRead(toolName))
+        if (ToolEffectList.IsReadCall(toolName, arguments))
         {
             var key = (toolName, CanonicalArguments(arguments));
             if (_scripted.TryGetValue(key, out var recorded))

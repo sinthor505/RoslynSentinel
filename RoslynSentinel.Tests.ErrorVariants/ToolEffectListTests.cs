@@ -1,3 +1,4 @@
+using System.Text.Json;
 using RoslynSentinel.Common.AgentLoop;
 
 namespace RoslynSentinel.Tests.ErrorVariants;
@@ -59,5 +60,40 @@ public sealed class ToolEffectListTests
         Assert.That(ToolEffectList.IsRead("Search"), Is.True);
         Assert.That(ToolEffectList.IsRead("Build"), Is.False);
         Assert.That(ToolEffectList.IsRead("NoSuchTool"), Is.False);
+    }
+
+    [TestCase("Member", "{\"operation\":\"view\"}")]
+    [TestCase("MethodSignature", "{\"operation\":\"view\"}")]
+    [TestCase("SyncInterface", "{\"action\":\"verify\"}")]
+    [TestCase("ProjectDoc", "{\"action\":\"trailers\"}")]
+    public void ClassifyCall_ViewOperation_IsRead(string toolName, string argumentsJson)
+    {
+        Assert.That(ToolEffectList.ClassifyCall(toolName, argumentsJson), Is.EqualTo(ToolEffect.Read));
+    }
+
+    [TestCase("Member", "{\"operation\":\"replace\"}")]
+    [TestCase("Member", "{}")]
+    [TestCase("ProjectDoc", "{\"action\":\"close\"}")]
+    [TestCase("Member", "not json")]
+    public void ClassifyCall_WriteOrMissingOperation_IsWrite(string toolName, string argumentsJson)
+    {
+        Assert.That(ToolEffectList.ClassifyCall(toolName, argumentsJson), Is.EqualTo(ToolEffect.Write));
+    }
+
+    [Test]
+    public void ClassifyCall_DictionaryWithJsonElementValue_IsRead()
+    {
+        var arguments = JsonSerializer.Deserialize<Dictionary<string, object?>>("{\"operation\":\"view\"}");
+
+        Assert.That(ToolEffectList.ClassifyCall("Member", arguments!), Is.EqualTo(ToolEffect.Read));
+    }
+
+    [TestCase("Search", "{}", ToolEffect.Read)]
+    [TestCase("Build", "{}", ToolEffect.Write)]
+    [TestCase("NoSuchTool", "{}", ToolEffect.Unknown)]
+    public void ClassifyCall_NonTableTool_MatchesClassify(string toolName, string argumentsJson, ToolEffect expected)
+    {
+        Assert.That(ToolEffectList.ClassifyCall(toolName, argumentsJson), Is.EqualTo(expected));
+        Assert.That(ToolEffectList.ClassifyCall(toolName, argumentsJson), Is.EqualTo(ToolEffectList.Classify(toolName)));
     }
 }

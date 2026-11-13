@@ -328,7 +328,13 @@ Settled here (owner may overturn):
     - (b) record 10 NoSuchMethod/Typo histories on 9b first, which is one live job;
     - (c) build cold mode.
   - Recommended: (b).
-- **Operation-dispatched tools (open, decide before Step 12).** `Member`, `MethodSignature`, `ConstructorParameter`, `UsingDirective`, `SummaryComment`, `SyncInterface` and `ProjectDoc` are classed Write, so a view-only call is reported as `Write:<tool>` and goes off-script. Recommended: make the classification operation-aware (a read `operation` value counts as Widen and is served), a small change in `ToolEffectList` and `TranscriptToolHost`.
+- **Operation-dispatched tools: DECIDED 2026-11-13 (owner), operation-aware.** These tools count as a read only for these values:
+  - `operation` `view`: `Member`, `MethodSignature`, `ConstructorParameter`, `UsingDirective`, `SummaryComment`;
+  - `action` `verify`: `SyncInterface`;
+  - `action` `read`, `list`, `trailers` or `validate`: `ProjectDoc`.
+  Any other value, or a missing value, counts as Write. The values come from the checked-in transcript header's enums.
+- **Guard scenarios: DECIDED 2026-11-13 (owner), option (b).** Record 10 NoSuchMethod/Typo histories on 9b in one live job before Step 14.
+- **Batch C additions: DECIDED 2026-11-13 (owner), keep.** These are the `SourceSettings` column, the harness-error row on a settings mismatch or failed model check, and loop assist off in replay.
 - **Replay fidelity is unproven** until Steps 12-13. No wording ships on replay alone.
 - **On-script continuation is a narrow window.** It covers only calls the source run made with the same arguments; Step 13 measures how far it gets. Write calls always go off-script.
 - **`Populate` deserialization of `AgentTranscript` is untested.** If it fails, Step 3 falls back to a `Common` record mirroring `ResumeSource`.
