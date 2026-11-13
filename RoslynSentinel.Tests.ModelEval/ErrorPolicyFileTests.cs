@@ -19,13 +19,13 @@ public sealed class ErrorPolicyFileTests
         new Dictionary<ErrorPolicyKey, string>
         {
             [ErrorPolicyKey.FileNotFoundEdit] =
-                "If you stop because of this error, start your final message with BLOCKED: and quote the error. The file does not exist. If the task named this file, stop: do not edit or create a different file.",
+                "If a tool reports that a file the task names was not found and that no file in the solution has a similar name, the task cannot be done as written. Do not make any further calls: no listing, searching, re-reading or creating. Your reply must start with BLOCKED:, then name what is missing and quote the error. If the error lists a similar name, or the file name came from you rather than the task, correct it and continue.",
             [ErrorPolicyKey.FileNotFoundLookup] =
-                "If you stop because of this error, start your final message with BLOCKED:. If the task named this file and the error lists no matching file, stop. If you chose the path yourself, make one call from the error's options; if that finds nothing, stop.",
+                "If a tool reports that a file the task names was not found and that no file in the solution has a similar name, the task cannot be done as written. Do not make any further calls: no listing, searching, re-reading or creating. Your reply must start with BLOCKED:, then name what is missing and quote the error. If the error lists a similar name, or the file name came from you rather than the task, correct it and continue.",
             [ErrorPolicyKey.SymbolNotFoundEdit] =
-                "If you stop because of this error, start your final message with BLOCKED: and quote the error. The symbol does not exist. If the task named it, stop: do not edit a different symbol or create it.",
+                "If a tool reports that a symbol the task names was not found and that no symbol in the solution has a similar name, the task cannot be done as written. Do not make any further calls: no listing, searching, re-reading or creating. Your reply must start with BLOCKED:, then name what is missing and quote the error. If the error lists a similar name, or the name came from you rather than the task, correct it and continue.",
             [ErrorPolicyKey.SymbolNotFoundLookup] =
-                "If you stop because of this error, start your final message with BLOCKED:. If the task named this symbol and the error lists no similar name, stop. If you chose the name yourself, make one call from the error's options; if that finds nothing, stop.",
+                "If a tool reports that a symbol the task names was not found and that no symbol in the solution has a similar name, the task cannot be done as written. Do not make any further calls: no listing, searching, re-reading or creating. Your reply must start with BLOCKED:, then name what is missing and quote the error. If the error lists a similar name, or the name came from you rather than the task, correct it and continue.",
         };
 
     [Test]
