@@ -216,15 +216,24 @@ public class RefactoringSignatureImpl
 
         // The edit effect ("call X renamed Y to Z") is recorded just before the write chokepoint, which commits it only if the write
         // stands. NewFilePath is the symbol's declaring file after the rename: the moved-to path when this rename also moved that file
-        // (the file move itself is not part of the symbol effect).
+        // (the file move is recorded as a separate FileMoved effect per moved file).
         var renamedSymbol = resolution.Symbol!;
         var declaringPath = renamedSymbol.Locations.Where(l => l.IsInSource).Select(l => l.SourceTree!.FilePath).FirstOrDefault(p => !string.IsNullOrEmpty(p));
         var movedDeclaringPath = declaringPath is null ? null : fileMoves.Where(m => string.Equals(m.From.Absolute, declaringPath, StringComparison.OrdinalIgnoreCase)).Select(m => m.To.Absolute).FirstOrDefault();
         var effectFilePath = movedDeclaringPath ?? declaringPath;
         var effectNewFilePath = effectFilePath is null ? null : EditEffectNames.DisplayPath(effectFilePath, solutionRoot);
-        void RecordRenameEffect() => ToolCallContext.Current?.RecordEffect(
-            EditEffectKind.Renamed, EditEffectNames.Display(renamedSymbol), renamedSymbol.GetDocumentationCommentId(),
-            EditEffectNames.SimpleName(renamedSymbol.Name), result.NewName, null, effectNewFilePath);
+        void RecordRenameEffect()
+        {
+            ToolCallContext.Current?.RecordEffect(
+                EditEffectKind.Renamed, EditEffectNames.Display(renamedSymbol), renamedSymbol.GetDocumentationCommentId(),
+                EditEffectNames.SimpleName(renamedSymbol.Name), result.NewName, null, effectNewFilePath);
+            foreach (var (from, to) in fileMoves)
+            {
+                ToolCallContext.Current?.RecordEffect(
+                    EditEffectKind.FileMoved, EditEffectNames.DisplayPath(from.Absolute, solutionRoot), null,
+                    Path.GetFileNameWithoutExtension(from.Absolute), null, null, EditEffectNames.DisplayPath(to.Absolute, solutionRoot));
+            }
+        }
 
         var apply = await ValidateAndApplyAsync(
             changes,

@@ -319,6 +319,38 @@ public class RenameSymbolRenamesFileTests
     }
 
     [Test]
+    public async Task RenameSymbol_FileMoved_RecordsAFileMovedEffectAsync()
+    {
+        using var h = new Harness(
+            ("Calc.cs", "namespace T;\r\npublic class Calc\r\n{\r\n    public int X() => 1;\r\n}\r\n"),
+            ("User.cs", "namespace T;\r\npublic class User\r\n{\r\n    public Calc Make() => new Calc();\r\n}\r\n"));
+        ToolCallContext.Set(new ToolCallContext("agentA", null, "RenameSymbol", null, long.MaxValue));
+
+        var rename = await h.RenameAsync("T:T.Calc", "StandardCalc");
+
+        Assert.That(rename.IsError, Is.False, rename.ErrorData?.Message);
+        var moved = h.Manager.EditEffects.Find("Calc").Where(e => e.Kind == EditEffectKind.FileMoved).ToList();
+        Assert.That(moved, Has.Count.EqualTo(1), "one FileMoved effect for the one moved file");
+        Assert.Multiple(() =>
+        {
+            Assert.That(moved[0].SymbolDisplay, Does.EndWith("Calc.cs"), "the old file path");
+            Assert.That(moved[0].NewFilePath, Does.EndWith("StandardCalc.cs"), "the new file path");
+        });
+    }
+
+    [Test]
+    public async Task RenameSymbol_DryRun_RecordsNoFileMovedEffectAsync()
+    {
+        using var h = new Harness(("Calc.cs", "namespace T;\r\npublic class Calc\r\n{\r\n}\r\n"));
+        ToolCallContext.Set(new ToolCallContext("agentA", null, "RenameSymbol", null, long.MaxValue));
+
+        var result = await h.Tools.RenameSymbolTool(reason: "test message", projectName: ProjectName, docCommentId: "T:T.Calc", newName: "StandardCalc", dryRun: true);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(h.Manager.EditEffects.Find("Calc").Where(e => e.Kind == EditEffectKind.FileMoved), Is.Empty, "a dry run moves nothing, so it records no move");
+    }
+
+    [Test]
     public async Task RenameSymbol_DryRun_DoesNotRecordTheMoveAsync()
     {
         using var h = new Harness(("Calc.cs", "namespace T;\r\npublic class Calc\r\n{\r\n}\r\n"));
