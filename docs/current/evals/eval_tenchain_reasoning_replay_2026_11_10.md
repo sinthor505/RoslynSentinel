@@ -891,9 +891,10 @@ calls (3.2k characters of arguments each) and their two error results (about 4.6
 misreported T3's usage. The agent log shows one POST for T3, yet the usage reads input 53720 (about twice the real prompt)
 and output 196 (the tool-call arguments alone were 6.4k characters). The inflated input tripped the runner's
 "cumulative conversation tokens ... 90 %" warning (`ModelAgentRunner.cs:306`, log only). The same spike-then-fall
-pattern appears once more in this test's results: run `113\20261112-031134-405` at T8 (66381, then 34027). Hypothesis,
-not traced: the token-based full-window check for turns with no tool calls uses the same count, so an inflated
-report on a final turn could be misread.
+pattern appears once more in this test's results: run `113\20261112-031134-405` at T8 (66381, then 34027). The
+full-window check for turns with no tool calls used the same count, so an inflated report on a final turn could have
+ended a run as ContextExhausted. Fixed in fd169537: a reported jump larger than twice the estimated added content plus
+4000 tokens (`ModelAgentRunner.IsUsageJumpImplausible`) is logged and replaced by the estimate for both checks.
 
 **Identical-success stop measured live (resume run).** Job `20261113-005825-001`, folder
 `ModelTestingResults\113\ResumeFromTranscript_SamplesTheNextTurns\20261113-005840-986`: `qwen3.5-9b-mtp` at a49ab3ec, a
