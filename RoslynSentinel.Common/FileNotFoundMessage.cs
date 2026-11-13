@@ -108,8 +108,26 @@ public static class FileNotFoundMessage
             return text + "\nRetry with the exact path of the file you meant. " + SpeculativeAdvice.ResolveForFile("If none of these is the file you meant, it does not exist in this solution.");
         }
 
+        // Current workspace (arm H of plan_error_policy_pointer, Step 11g): the server has validated the call and searched the whole solution, so the text leads with that fact.
+        if (ToolCallContext.Current?.WorkspaceCurrent == true)
+        {
+            return WorkspaceCurrentNoMatchText(requestedPath, searchedProjectCount, declaring);
+        }
+
         var notFound = intro + "No file in the solution has a similar name. ";
         return notFound + NoMatchFactsAndOptions(requestedPath, isCallable);
+    }
+
+    // The no-candidates text for a current workspace: the well-formed-call fact first, then the declaring-type sentence (when any), then the search facts. The
+    // "renamed or moved" hedge is dropped; a recorded edit-effect fact for the target file (ResolveForFile) still follows. The requested path is shown solution-relative
+    // when the call context knows the solution root (the path as given otherwise). A later slice appends an optional inventory here.
+    private static string WorkspaceCurrentNoMatchText(string requestedPath, int searchedProjectCount, string declaring)
+    {
+        var shownPath = EditEffectNames.DisplayPath(requestedPath, ToolCallContext.Current?.SolutionRoot);
+        var text = $"Your tool call and file path were well-formed, but file `{shownPath}` does not exist in the solution. " + declaring +
+                   $"Searched {searchedProjectCount} project(s) by exact path, bare file name and similar file name; path comparison ignores case, so casing is not the cause; no file in the solution has a similar name.";
+        var effectFact = SpeculativeAdvice.ResolveForFile(string.Empty);
+        return effectFact.Length > 0 ? text + " " + effectFact : text;
     }
 
     // The facts and options that follow a "no file matches" statement: a file read earlier may have been renamed or moved (a fact; the
@@ -120,12 +138,7 @@ public static class FileNotFoundMessage
     {
         // CreateFile is deliberately not offered here: in ReplaceSnippetWrongFileNoMatch 5 of 9 failing samples created the missing file right after the option.
         var text = SpeculativeAdvice.ResolveForFile("A file read earlier under this name may since have been renamed or moved.");
-        // Current workspace: the intro already states the exhaustive search, so this branch states the conclusion as a fact instead of offering the listing (arm G of plan_error_policy_pointer); a stale or unknown state keeps the offer, whose answer may differ.
-        if (ToolCallContext.Current?.WorkspaceCurrent == true)
-        {
-            return text + " No file with this name or a similar name exists in this solution.";
-        }
-
+        // A current workspace never reaches here from BuildCore (WorkspaceCurrentNoMatchText renders that case); only a stale or unknown state does.
         if (Callable(isCallable, "ListSolutionItems"))
         {
             // "A file not in that list does not exist in this solution." is deliberately not routed through SpeculativeAdvice: it states what the list means (it

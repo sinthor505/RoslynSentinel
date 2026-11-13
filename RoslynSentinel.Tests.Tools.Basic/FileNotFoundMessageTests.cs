@@ -202,7 +202,7 @@ public class FileNotFoundMessageTests
         {
             ToolCallContext.Set(workspaceCurrent is null
                 ? null
-                : new ToolCallContext(null, null, "ReadFile", null, 0) { WorkspaceCurrent = workspaceCurrent });
+                : new ToolCallContext(null, null, "ReadFile", null, 0) { WorkspaceCurrent = workspaceCurrent, SolutionRoot = _root });
             return FileNotFoundMessage.Build(missing, NoCandidates, 3, isCallable);
         }
         finally
@@ -212,17 +212,70 @@ public class FileNotFoundMessageTests
     }
 
     [Test]
-    public void Build_MissingFileNoCandidatesWorkspaceCurrent_OmitsListingSentenceKeepsFacts()
+    public void Build_MissingFileNoCandidatesWorkspaceCurrent_LeadsWithTheWellFormedFactAndKeepsSearchFacts()
     {
         var text = BuildNoCandidateText(workspaceCurrent: true, name => name == "ListSolutionItems");
+        var relative = Path.Combine("NoSuchDir", "Thing.cs");
 
-        Assert.That(text, Does.Contain("was not found in the loaded solution (searched 3 project(s) by exact path"));
-        Assert.That(text, Does.Contain("No file in the solution has a similar name"));
-        Assert.That(text, Does.Contain("may since have been renamed or moved"));
+        Assert.That(text, Does.StartWith($"Your tool call and file path were well-formed, but file `{relative}` does not exist in the solution. "));
+        Assert.That(text, Does.EndWith("Searched 3 project(s) by exact path, bare file name and similar file name; path comparison ignores case, so casing is not the cause; no file in the solution has a similar name."));
+        Assert.That(text, Does.Not.Contain(_root), "the requested path is shown solution-relative");
+        Assert.That(text, Does.Not.Contain("renamed or moved"));
         Assert.That(text, Does.Not.Contain("ListSolutionItems"));
-        Assert.That(text, Does.Not.Contain("does not exist in this solution"));
         Assert.That(text, Does.Not.Contain("lists every file"));
-        Assert.That(text, Does.EndWith(" No file with this name or a similar name exists in this solution."));
+        Assert.That(text, Does.Not.Contain("No file with this name or a similar name exists in this solution."));
+        Assert.That(text, Does.Not.Contain("was not found in the loaded solution"));
+    }
+
+    [Test]
+    public void Build_MissingFileNoCandidatesWorkspaceCurrentWithDeclaringType_PutsTheDeclaringSentenceAfterTheLead()
+    {
+        var missing = Path.Combine(_root, "NoSuchDir", "Thing.cs");
+        try
+        {
+            ToolCallContext.Set(new ToolCallContext(null, null, "ReadFile", null, 0) { WorkspaceCurrent = true, SolutionRoot = _root });
+            var text = FileNotFoundMessage.Build(missing, NoCandidates, 3, declaringTypeFiles: [("Thing", "Core/Other.cs")]);
+
+            Assert.That(text, Does.StartWith("Your tool call and file path were well-formed, but file `"));
+            Assert.That(text, Does.Contain("does not exist in the solution. Type 'Thing' is declared in Core/Other.cs. Searched 3 project(s)"));
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
+    }
+
+    [Test]
+    public void Build_MissingFileNoCandidatesWorkspaceCurrentWithRecordedFileDelete_KeepsTheEditEffectFact()
+    {
+        var missing = Path.Combine(_root, "NoSuchDir", "Thing.cs");
+        var index = new EditEffectIndex();
+        var writer = new ToolCallContext("agent-1", null, "DeleteFile", "delete", 0) { SessionId = "s1" };
+        writer.AssignToolCallId("d41f7a02");
+        writer.RecordEffect(EditEffectKind.FileDeleted, "NoSuchDir/Thing.cs", null, "Thing", null, null, "NoSuchDir/Thing.cs");
+        writer.CommitPendingEffects(index);
+        try
+        {
+            ToolCallContext.Set(new ToolCallContext("agent-1", null, "ReadFile", "look", 0)
+            {
+                SessionId = "s1",
+                TargetFilePath = missing,
+                EditEffects = index,
+                WorkspaceCurrent = true,
+                SolutionRoot = _root,
+            });
+            var text = FileNotFoundMessage.Build(missing, NoCandidates, 3);
+
+            Assert.That(text, Does.StartWith("Your tool call and file path were well-formed, but file `"));
+            Assert.That(text, Does.Contain("no file in the solution has a similar name. Call `d41f7a02` (`DeleteFile`, this agent, "));
+            Assert.That(text, Does.EndWith(" ago) deleted `NoSuchDir/Thing.cs`."));
+            Assert.That(text, Does.Not.Contain("renamed or moved"));
+            Assert.That(ToolCallContext.Current!.HasEditEffectFact, Is.True);
+        }
+        finally
+        {
+            ToolCallContext.Set(null);
+        }
     }
 
     [Test]
@@ -237,13 +290,16 @@ public class FileNotFoundMessageTests
     }
 
     [Test]
-    public void Build_MissingFileNoCandidatesListingNotCallable_WorkspaceCurrentAddsOnlyTheFactSentence()
+    public void Build_MissingFileNoCandidatesListingNotCallable_OnlyTheCurrentWorkspaceTextDiffers()
     {
         var current = BuildNoCandidateText(workspaceCurrent: true, name => name is "ReadFile" or "GetLargeResult");
         var stale = BuildNoCandidateText(workspaceCurrent: false, name => name is "ReadFile" or "GetLargeResult");
         var unknown = BuildNoCandidateText(workspaceCurrent: null, name => name is "ReadFile" or "GetLargeResult");
 
-        Assert.That(current, Is.EqualTo(unknown + " No file with this name or a similar name exists in this solution."));
+        Assert.That(current, Is.Not.EqualTo(unknown));
+        Assert.That(current, Does.StartWith("Your tool call and file path were well-formed"));
+        Assert.That(unknown, Does.StartWith("File '"));
+        Assert.That(unknown, Does.EndWith("may since have been renamed or moved."));
         Assert.That(stale, Is.EqualTo(unknown));
         Assert.That(unknown, Does.Not.Contain("ListSolutionItems"));
         Assert.That(current, Does.Not.Contain("ListSolutionItems"));
