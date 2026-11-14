@@ -109,6 +109,33 @@ public sealed class AgentTranscript
     }
 
     /// <summary>
+    /// Model's loaded context length in tokens for the run. Null when unknown or the transcript predates this field; omitted from the JSON.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ContextLength
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Reasoning replay policy mode text, for example "pressure:0.7,pinned:3", "all" or "window:10". Null when the transcript predates this field; omitted from the JSON.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ReasoningReplayMode
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Turn numbers whose request first dropped a block of reasoning. Null when none or the transcript predates this field; omitted from the JSON.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<int>? ReasoningDropTurns
+    {
+        get; set;
+    }
+
+    /// <summary>
     /// Tool name to description, for the same tools as <see cref="Tools"/>. Null, and so omitted from the JSON, for transcripts written before this was recorded.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

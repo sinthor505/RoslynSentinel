@@ -122,11 +122,12 @@ public sealed class LmStudioAgentClient
         IReadOnlyList<AgentChatMessage> messages,
         IReadOnlyList<AgentToolDefinition> tools,
         int maxTokens,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ReasoningReplayPolicy? replayPolicy = null)
     {
         try
         {
-            return await CompleteOnceAsync(messages, tools, maxTokens, cancellationToken);
+            return await CompleteOnceAsync(messages, tools, maxTokens, replayPolicy, cancellationToken);
         }
         // ContextSizeExceededException is deliberately excluded from this filter: the same prompt overflows again on retry.
         catch (Exception ex) when (ex is StreamIdleTimeoutException or InvalidOperationException or IOException)
@@ -140,7 +141,7 @@ public sealed class LmStudioAgentClient
             // consecutive failure is treated as a real, non-transient problem.
             _logger.LogWarning(
                 ex, "LM Studio call failed ({Reason}); retrying once before giving up.", ex.Message);
-            return await CompleteOnceAsync(messages, tools, maxTokens, cancellationToken);
+            return await CompleteOnceAsync(messages, tools, maxTokens, replayPolicy, cancellationToken);
         }
     }
 
@@ -148,6 +149,7 @@ public sealed class LmStudioAgentClient
         IReadOnlyList<AgentChatMessage> messages,
         IReadOnlyList<AgentToolDefinition> tools,
         int maxTokens,
+        ReasoningReplayPolicy? replayPolicy,
         CancellationToken cancellationToken)
     {
         await _loadedModelStatusCheck;
@@ -155,7 +157,7 @@ public sealed class LmStudioAgentClient
         var requestBody = new ResponsesRequest
         {
             Model = _model,
-            Input = BuildInputItems(messages),
+            Input = BuildInputItems(messages, replayPolicy),
             Tools = tools.Count > 0 ? tools.Select(ToWireTool).ToList() : null,
             ToolChoice = tools.Count > 0 ? "auto" : null,
             MaxOutputTokens = maxTokens,
@@ -531,8 +533,9 @@ public sealed class LmStudioAgentClient
     internal static int EffectiveReasoningWindow =>
         ParseReasoningWindowOverride(Environment.GetEnvironmentVariable(ReasoningWindowVariable)) ?? ReasoningReplayTurns;
 
-    private static List<object> BuildInputItems(IReadOnlyList<AgentChatMessage> messages)
+    private static List<object> BuildInputItems(IReadOnlyList<AgentChatMessage> messages, ReasoningReplayPolicy? replayPolicy)
     {
+        // TODO implement (Step 2): use replayPolicy when not null
         var assistantIndexes = messages.Select((m, i) => (m, i)).Where(x => x.m.Role == "assistant" && !x.m.IsLoopAssistNote).Select(x => x.i).ToList();
         var dropped = ReasoningDroppedTurns(assistantIndexes.Count, EffectiveReasoningWindow);
         var firstReplayed = dropped > 0 ? assistantIndexes[dropped] : 0;
@@ -588,8 +591,8 @@ public sealed class LmStudioAgentClient
     }
 
     /// <summary>The Responses input items for <paramref name="messages"/>, serialized as sent. For tests.</summary>
-    internal static string SerializeInputItems(IEnumerable<AgentChatMessage> messages) =>
-        JsonSerializer.Serialize(BuildInputItems(messages.ToList()), JsonOptions);
+    internal static string SerializeInputItems(IEnumerable<AgentChatMessage> messages, ReasoningReplayPolicy? replayPolicy = null) =>
+        JsonSerializer.Serialize(BuildInputItems(messages.ToList(), replayPolicy), JsonOptions);
 
     private static ResponsesTool ToWireTool(AgentToolDefinition tool) => new()
     {
