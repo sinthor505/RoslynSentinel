@@ -287,6 +287,10 @@ public sealed class ModelAgentRunner
         // once and cached (-1 if LM Studio couldn't report one, e.g. an older server) so a slow/down
         // context-length lookup never adds latency to every turn.
         var contextLength = await _llm.GetContextLengthAsync(cancellationToken);
+        var replayPolicy = ReasoningReplayPolicy.FromEnvironment(contextLength);
+        transcript.ContextLength = contextLength > 0 ? contextLength : null;
+        transcript.ReasoningReplayMode = replayPolicy.Mode;
+        _logger.LogInformation("Reasoning replay mode: {Mode} (context length {ContextLength}).", replayPolicy.Mode, contextLength);
         var cumulativeTokens = 0;
         // messages.Count when cumulativeTokens was last updated: the messages after it are the growth since then.
         var usageMessageCount = 0;
@@ -315,13 +319,26 @@ public sealed class ModelAgentRunner
             // rejected calls are collapsed in this replay copy only; `messages` and the transcript keep every turn.
             var turnAssists = new List<AgentAssist>();
             var replayMessages = assistTracker.CollapseForReplay(messages, turnAssists);
+            // Projected prompt size for this request: last reported total plus the estimate of messages added since (tool results).
+            var projectedPromptTokens = cumulativeTokens;
+            for (var i = usageMessageCount; i < messages.Count; i++)
+            {
+                projectedPromptTokens += EstimateMessageTokens(messages[i]);
+            }
+            var assistantTurnCount = replayMessages.Count(m => m.Role == "assistant" && !m.IsLoopAssistNote);
+            if (replayPolicy.Observe(assistantTurnCount, projectedPromptTokens))
+            {
+                _logger.LogInformation("Turn {Turn}: projected prompt {Projected} reached {Fraction:P0} of the {ContextLength}-token context; dropped reasoning of the oldest unpinned turns (total dropped {Dropped}).", turnNumber, projectedPromptTokens, ReasoningReplayPolicy.PressureFraction, contextLength, replayPolicy.DroppedTurns);
+                (transcript.ReasoningDropTurns ??= new List<int>()).Add(turnNumber);
+            }
             AgentChatMessage modelMessage;
             try
             {
-                modelMessage = await _llm.CompleteAsync(replayMessages, toolDefinitions, _maxTokensPerTurn, cancellationToken);
+                modelMessage = await _llm.CompleteAsync(replayMessages, toolDefinitions, _maxTokensPerTurn, cancellationToken, replayPolicy);
             }
             catch (ContextSizeExceededException ex)
             {
+                // TODO force a reasoning drop (policy DroppedTurns) and retry once before ending the run as ContextExhausted (plan_reasoning_replay_pressure_policy, out of scope).
                 // LM Studio rejected the request as over the context window (HTTP 500 "Context size has been exceeded"); no retry.
                 stopReason = AgentStopReason.ContextExhausted;
                 _logger.LogWarning(
