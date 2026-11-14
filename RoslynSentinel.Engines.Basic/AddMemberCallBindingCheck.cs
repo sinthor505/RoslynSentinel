@@ -60,20 +60,6 @@ public static class AddMemberCallBindingCheck
     }
 
     /// <summary>
-    /// The gate the add routes call after computing <paramref name="updatedText"/> and before returning it: throws
-    /// <see cref="ToolInvalidArgumentException"/> (message ends "Nothing was written.") when the add would re-point an existing call
-    /// or when the check cannot run; returns normally for a clean add and for every skip described on the class.
-    /// </summary>
-    /// <param name="solution">The committed solution the add is computed against.</param>
-    /// <param name="document">The document that receives the member.</param>
-    /// <param name="container">The type declaration, in <paramref name="document"/>'s original syntax tree, that receives the member.</param>
-    /// <param name="newMember">The parsed member being added.</param>
-    /// <param name="insertIndex">Index in <paramref name="container"/>'s members at which the member was inserted.</param>
-    /// <param name="updatedText">The document text with the member added.</param>
-    public static Task RequireKeepsBindingsAsync(Solution solution, Document document, TypeDeclarationSyntax container, MemberDeclarationSyntax newMember, int insertIndex, string updatedText, CancellationToken cancellationToken = default)
-        => RequireKeepsBindingsAsync(solution, document, container, new[] { newMember }, insertIndex, updatedText, cancellationToken);
-
-    /// <summary>
     /// Multi-member form of the single-member overload: the whole batch is checked in one trial, so a call that binds to one new
     /// member and the members themselves are judged together. The refusal names every member of the batch.
     /// </summary>
