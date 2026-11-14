@@ -102,9 +102,11 @@
 
 .PARAMETER IncludeTools
     CSV of tool class names to enable on each step's server instance (passed through as
-    --include-tools). Default: WorkspaceTools,SentinelSymbolTools,
-    RefactoringTools,DocumentationTools,CommentingTools,
-    AdvancedRefactoringTools.
+    --include-tools). Must register the classes behind every tool the model may call (the
+    PlanStepRunner surface: lean 18 tools plus GetDiagnostics, filtered model-side).
+    Default: WorkspaceTools,WorkspaceReadNavigationTools,WholeFileWriteTools,
+    RefactoringStructuralTools,RefactoringSignatureTools,RefactoringExtractionDocsTools,
+    CoreRefactoringTools.
 
 .PARAMETER Temperature
     Sampling temperature sent on every request (omitted entirely if not passed, letting LM Studio
@@ -165,7 +167,7 @@ param(
 
     [int]$WallClockCapMinutes = 30,
 
-    [string]$IncludeTools = 'SentinelWorkspaceTools,WorkspaceReadNavigationTools,SentinelSymbolTools,SentinelRefactoringTools,SentinelDocumentationTools,SentinelCommentingTools,SentinelAdvancedRefactoringTools',
+    [string]$IncludeTools = 'WorkspaceTools,WorkspaceReadNavigationTools,WholeFileWriteTools,RefactoringStructuralTools,RefactoringSignatureTools,RefactoringExtractionDocsTools,CoreRefactoringTools',
 
     [double]$Temperature,
 

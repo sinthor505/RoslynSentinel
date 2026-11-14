@@ -218,7 +218,9 @@ public static class Program
             progress: null, options: null, cancellationToken: CancellationToken.None);
 
         var runner = new ModelAgentRunner(
-            agentClient, mcpClient,
+            // The model sees only the lean surface plus GetDiagnostics; the runner's own
+            // LoadSolution/Build/RunTest calls go through the raw mcpClient, not through this filter.
+            agentClient, new FilteringToolHost(new McpClientToolHost(mcpClient), AgentToolAllowLists.PlanStepRunnerSurface),
             // Bail after 3 identical consecutive tool failures rather than letting the turn cap
             // absorb the loop. Run 20260910-013550-398 spent its last 23 turns (~13 minutes)
             // re-issuing one failing ReplaceSnippet call and was reported as TurnCapExceeded.
@@ -232,18 +234,7 @@ public static class Program
             wallClockCap: TimeSpan.FromMinutes(options.WallClockCapMinutes),
             logger: loggerFactory.CreateLogger<ModelAgentRunner>());
 
-        // The step text is inlined into the prompt rather than referenced by path. Handing over a
-        // path made the model re-resolve it through ProjectDoc, and in run 20260910-013550-398 that
-        // lookup silently answered with a *different* step file -> so the model spent the whole run
-        // implementing a plan nobody asked for. Passing the content by value removes the lookup,
-        // and with it any chance of substitution, regardless of how ProjectDoc resolves names.
-        // step.Body already has any frontmatter stripped, so the model sees only the step itself.
-        var userPrompt =
-            $"The solution is already loaded - do not call {ToolCallHint.Call("LoadSolution")} or {ToolCallHint.Call("ListWorkspaceSolutions")}, " +
-            "go straight to reading/editing.\n" +
-            "Implement the plan step below. It is reproduced here in full - do not look for it on " +
-            "disk, and do not read any other plan step file.\n\n" +
-            $"=== BEGIN PLAN STEP: {step.FileName} ===\n{step.Body}\n=== END PLAN STEP ===";
+        var userPrompt = StepPrompts.BuildUserPrompt(step);
 
         var result = await runner.RunAsync(ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgent), userPrompt, stepDir, CancellationToken.None, runId: runId);
 

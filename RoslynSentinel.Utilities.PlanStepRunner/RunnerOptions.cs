@@ -61,6 +61,14 @@ public sealed class RunnerOptions
         get; init;
     }
 
+    /// <summary>
+    /// Default server tool classes for --include-tools: the classes behind
+    /// AgentToolAllowLists.PlanStepRunnerSurface (the model sees only that list; the classes are
+    /// exactly those that declare those tools). LoadSolution, Build and RunTest also come from
+    /// WorkspaceTools.
+    /// </summary>
+    public const string DefaultIncludeTools = "WorkspaceTools,WorkspaceReadNavigationTools,WholeFileWriteTools,RefactoringStructuralTools,RefactoringSignatureTools,RefactoringExtractionDocsTools,CoreRefactoringTools";
+
     public static RunnerOptions Parse(string[] args)
     {
         var planDir = GetArg(args, "--plan-dir")
@@ -96,7 +104,7 @@ public sealed class RunnerOptions
         var turnCap = int.TryParse(GetArg(args, "--turn-cap"), out var tc) ? tc : 40;
         var wallClockCapMinutes = int.TryParse(GetArg(args, "--wall-clock-cap-minutes"), out var wc) ? wc : 30;
         var includeTools = GetArg(args, "--include-tools")
-            ?? "WorkspaceTools,SymbolNavigationTools,RefactoringTools,DocumentationTools,CommentingTools,CoreRefactoringTools,AdvancedRefactoringTools";
+            ?? DefaultIncludeTools;
         var clean = HasFlag(args, "--clean");
 
         if (startStep > endStep)
