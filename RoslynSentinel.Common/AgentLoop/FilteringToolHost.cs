@@ -14,6 +14,13 @@ public sealed class FilteringToolHost : IAgentToolHost
     private readonly HashSet<string> _allowed;
     private readonly string[] _allowedOrdered;
 
+    // The error JSON is read by a model, so apostrophes stay literal instead of being written as '.
+    // The text is never embedded in HTML, so the relaxed encoder is safe here.
+    private static readonly JsonSerializerOptions ErrorJsonOptions = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
     /// <summary>Wraps <paramref name="inner"/> so that only <paramref name="allowedToolNames"/> are listed or callable.</summary>
     /// <param name="inner">The host that talks to the server.</param>
     /// <param name="allowedToolNames">Tool names the model may see and call; matched ordinally.</param>
@@ -52,7 +59,7 @@ public sealed class FilteringToolHost : IAgentToolHost
         {
             error = "ToolNotAvailable",
             message = $"Tool '{toolName}' is not available in this session. Callable tools: {string.Join(", ", _allowedOrdered)}.",
-        });
+        }, ErrorJsonOptions);
         return Task.FromResult(new CallToolResult
         {
             IsError = true,
