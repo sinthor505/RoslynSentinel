@@ -2305,22 +2305,101 @@ public class MemberRefactoringEngine
             $"Recovery: call {ToolCallHint.Call("Member", ("operation", operation))} once per member, passing one full declaration each time; to keep them in order, make each call after the first as {ToolCallHint.Call("Member", ("operation", operation), ("insertAfterMemberName", "<previous member's name>"))}.";
     }
 
-    /// <summary>Splits newMemberSource into its member declarations, or null when it is not a clean member list (Step 2 stub, not yet implemented).</summary>
+    /// <summary>Splits newMemberSource into its member declarations, or null when it is not a clean member list.</summary>
     internal static IReadOnlyList<MemberDeclarationSyntax>? TrySplitMemberDeclarations(string source)
     {
-        throw new NotImplementedException(); // TODO implement (Step 2)
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            return null;
+        }
+
+        var probe = SyntaxFactory.ParseCompilationUnit("class __SentinelMemberCountProbe__\n{\n" + source + "\n}\n");
+        if (probe.ContainsDiagnostics || probe.Members.Count != 1 || probe.Members[0] is not ClassDeclarationSyntax probeClass)
+        {
+            return null;
+        }
+
+        var members = probeClass.Members;
+        if (members.Count < 2 || members.Any(m => m is IncompleteMemberSyntax))
+        {
+            return null;
+        }
+
+        // Blank lines between declarations are the next member's leading trivia in the probe; the insertion
+        // step adds its own separator, so the leading run of blank lines and whitespace is dropped here.
+        return members.Select(StripLeadingBlankLines).ToArray();
+
+        static MemberDeclarationSyntax StripLeadingBlankLines(MemberDeclarationSyntax member)
+        {
+            var trivia = member.GetLeadingTrivia();
+            var skip = 0;
+            while (skip < trivia.Count && (trivia[skip].IsKind(SyntaxKind.EndOfLineTrivia) || trivia[skip].IsKind(SyntaxKind.WhitespaceTrivia)))
+            {
+                skip++;
+            }
+
+            return member.WithLeadingTrivia(SyntaxFactory.TriviaList(trivia.Skip(skip)));
+        }
     }
 
-    /// <summary>Parses newMemberSource into one or more member declarations, throwing unparsableMessage when it is not a member list (Step 2 stub, not yet implemented).</summary>
+    /// <summary>Parses newMemberSource into one or more member declarations, throwing unparsableMessage when it is not a member list.</summary>
     internal static IReadOnlyList<MemberDeclarationSyntax> ParseNewMemberDeclarations(string newMemberSource, string unparsableMessage = "Failed to parse new member.")
     {
-        throw new NotImplementedException(); // TODO implement (Step 2)
+        var split = TrySplitMemberDeclarations(newMemberSource);
+        if (split != null)
+        {
+            return split;
+        }
+
+        var probe = SyntaxFactory.ParseCompilationUnit("class __SentinelMemberCountProbe__\n{\n" + newMemberSource + "\n}\n");
+        if (probe.Members.Count == 1 && probe.Members[0] is ClassDeclarationSyntax probeClass
+            && probeClass.Members.Count >= 2 && !probeClass.Members.Any(m => m is IncompleteMemberSyntax))
+        {
+            var probeMembers = probeClass.Members;
+            var braceIssue = DetectUnbalancedClosingBrace(newMemberSource);
+            if (braceIssue != null)
+            {
+                throw new ToolInvalidArgumentException(braceIssue);
+            }
+
+            for (var i = 0; i < probeMembers.Count; i++)
+            {
+                if (!probeMembers[i].ContainsDiagnostics)
+                {
+                    continue;
+                }
+
+                var memberError = probeMembers[i].GetDiagnostics().FirstOrDefault(d => d.Severity == DiagnosticSeverity.Error)?.GetMessage() ?? "malformed declaration";
+                throw new ToolInvalidArgumentException($"newMemberSource holds {probeMembers.Count} member declarations; declaration {i + 1} ({DescribeParsedMember(probeMembers[i])}) does not parse: {memberError}. The declarations are applied together or not at all.");
+            }
+
+            var listError = probe.GetDiagnostics().FirstOrDefault(d => d.Severity == DiagnosticSeverity.Error)?.GetMessage() ?? "malformed declaration";
+            throw new ToolInvalidArgumentException($"newMemberSource holds {probeMembers.Count} member declarations but does not parse as a list: {listError}. The declarations are applied together or not at all.");
+        }
+
+        var parsed = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
+        if (parsed == null)
+        {
+            throw new ToolInvalidArgumentException(unparsableMessage);
+        }
+
+        if (DetectTrailingUnparsedDeclaration(newMemberSource, parsed) is { } issue)
+        {
+            throw new ToolInvalidArgumentException($"newMemberSource is invalid: {issue}");
+        }
+
+        return new[] { parsed };
     }
 
-    /// <summary>Describes the added members for a multi-member add result (Step 2 stub, not yet implemented).</summary>
+    /// <summary>Describes the added members for a multi-member add result.</summary>
     internal static string DescribeAddedMembers(IReadOnlyList<MemberDeclarationSyntax> members)
     {
-        throw new NotImplementedException(); // TODO implement (Step 2)
+        if (members.Count == 1)
+        {
+            return DescribeParsedMember(members[0]);
+        }
+
+        return $"{members.Count} members: {string.Join(", ", members.Select(DescribeParsedMember))}";
     }
 
     public async Task<DocumentEditResult> AddFieldAsync(FilePathWrapper filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, bool isConst = false, CancellationToken cancellationToken = default)
