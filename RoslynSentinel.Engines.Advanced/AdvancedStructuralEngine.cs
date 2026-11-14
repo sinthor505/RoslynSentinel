@@ -2036,15 +2036,12 @@ public class StructuralRefactoringEngine
     public async Task<Dictionary<FilePathWrapper, string>> InlineMethodAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new ToolNotFoundException($"File '{Path.GetFileName(filePath)}' not found in solution.");
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
+            // TODO not-found: precondition failure, not a miss; kind-less on purpose (consider a typed validation exception)
             throw new ToolNotFoundException($"Failed to get syntax root for '{filePath}'.");
         }
 
@@ -2058,7 +2055,7 @@ public class StructuralRefactoringEngine
         }
         if (candidates.Count == 0 || semanticModel == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'.");
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'." + (candidates.Count == 0 ? " " + DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath.ToString()) : string.Empty), MissingTargetKinds.Method, methodName);
         }
 
         if (candidates.Count > 1)
@@ -2083,12 +2080,14 @@ public class StructuralRefactoringEngine
 
         if (expressionToInline == null)
         {
+            // TODO not-found: precondition failure, not a miss; kind-less on purpose (consider a typed validation exception)
             throw new ToolNotFoundException($"Cannot inline '{methodName}': only expression-body or single-return-statement methods are supported. This method has a complex body with multiple statements.");
         }
 
         var methodSymbol = semanticModel.GetDeclaredSymbol(method, cancellationToken);
         if (methodSymbol == null)
         {
+            // TODO not-found: precondition failure, not a miss; kind-less on purpose (consider a typed validation exception)
             throw new ToolNotFoundException($"Cannot inline '{methodName}': failed to resolve semantic symbol.");
         }
 
@@ -2230,9 +2229,9 @@ public class StructuralRefactoringEngine
     public async Task<Dictionary<FilePathWrapper, string>> ConvertTupleToClassAsync(FilePathWrapper filePath, string methodName, string newClassName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>(), "Method", methodName) ?? throw new ToolNotFoundException($"Method '{methodName}' not found in type.");
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>(), "Method", methodName) ?? throw new ToolNotFoundException($"Method '{methodName}' not found in type. " + DeclarationNotFoundDetail.Build("method", "methodName", methodName, root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Method, methodName);
         if (methodNode.ReturnType is not TupleTypeSyntax tupleType)
         {
             throw new ToolTargetIneligibleException("Method does not return a named tuple.");
@@ -2286,13 +2285,17 @@ public class StructuralRefactoringEngine
     public async Task<Dictionary<FilePathWrapper, string>> ChangePropertyTypeAsync(FilePathWrapper filePath, string className, string propertyName, string newType, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
         var propNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classNode?.Members.OfType<PropertyDeclarationSyntax>().Where(p => p.Identifier.Text == propertyName).ToList() ?? new System.Collections.Generic.List<PropertyDeclarationSyntax>(), "Property", propertyName);
-        if (classNode == null || propNode == null)
+        if (classNode == null)
         {
-            throw new ToolNotFoundException("Class or property not found.");
+            throw new ToolNotFoundException($"Class '{className}' not found. " + DeclarationNotFoundDetail.Build("class", "className", className, root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(c => c.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Class, className);
+        }
+        if (propNode == null)
+        {
+            throw new ToolNotFoundException($"Property '{propertyName}' not found in class '{className}'. " + DeclarationNotFoundDetail.Build("property", "propertyName", propertyName, root?.DescendantNodes().OfType<PropertyDeclarationSyntax>().Select(p => p.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Property, propertyName);
         }
 
         var newPropNode = propNode.WithType(SyntaxFactory.ParseTypeName(newType).WithTrailingTrivia(SyntaxFactory.Space));
@@ -2350,9 +2353,9 @@ public class StructuralRefactoringEngine
     public async Task<Dictionary<FilePathWrapper, string>> ConvertAnonymousToNamedAsync(FilePathWrapper filePath, string newClassName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        var anonType = root?.DescendantNodes().OfType<AnonymousObjectCreationExpressionSyntax>().FirstOrDefault() ?? throw new ToolNotFoundException("Anonymous type not found.");
+        var anonType = root?.DescendantNodes().OfType<AnonymousObjectCreationExpressionSyntax>().FirstOrDefault() ?? throw new ToolNotFoundException("Anonymous type not found.", MissingTargetKinds.Expression);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
 
         // One property per member, typed from the member's initializer (object only when the type cannot be named in a new
