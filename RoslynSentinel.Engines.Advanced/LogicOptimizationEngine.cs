@@ -65,7 +65,7 @@ public class LogicSimplificationEngine
         var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null || method.Body == null)
         {
-            throw new ToolNotFoundException("Method or body not found. " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath.ToString()), MissingTargetKinds.Method, methodName);
+            throw new ToolNotFoundException("Method or body not found." + (root.DescendantNodes().OfType<MethodDeclarationSyntax>().Any(m => m.Identifier.Text == methodName) ? string.Empty : " " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath.ToString())), MissingTargetKinds.Method, methodName);
         }
 
         var guards = new List<StatementSyntax>();
