@@ -1,6 +1,6 @@
 # Plan: replay a saved transcript with a substituted error text through the real agent loop and a fake tool host, in a Common-only test project
 
-**Status:** IN PROGRESS 2026-11-13. Steps 1-11 done (a99ed363, d1b30b9f, 51d6edb0, 6dc49057, 129da71e, cca1ac06, 1845498c, 2215c3dc, e1e8aac8, 8c773d97, 09ebacf1, c3efa20e, e5c85478, 069455d6). Operation-aware classification: 1367cda4, 379ffebe. Regenerate mode: 3246bedc. Step 12 ran: faithful for large effects, but loses arm F's live effect (`evals/eval_error_variant_replay_validation.md`). Steps 13-14 are on hold for an owner decision (coarse screen or stop).
+**Status:** IMPLEMENTED 2026-11-13. The harness is built (RoslynSentinel.Tests.ErrorVariants, scripts/roslynsentinel-errorvariants.ps1, seeded and regenerate modes) and validated live. It is a coarse first-call screen only: it loses arm F's live effect and cannot see late stops (evals/eval_error_variant_replay_validation.md). Commits a99ed363..57e9d4c8; Step 13 waived.
 
 ## Problem
 
@@ -278,6 +278,12 @@ Settled here (owner may overturn):
   - E-text `ListSolutionItems` share >= 0.5;
   - `Stop*` <= 2 of 30 for every text.
 - Done when: the eval doc records every cell, the settings and the model key, with a verdict per cell.
+- Done: 216143af. F identity drifted. Follow-ups:
+  - 6d7e614f: the trace found the request token-identical.
+  - 72bf623a: a live F re-run gave 9/10, against the morning's 10/10.
+  - 3246bedc and 3be84709: regenerate mode was added and measured.
+  - 9c594736: same-session live G and regenerate at 60 per text.
+  - Verdict: coarse screen only.
 
 ### Step 13 - LIVE validation: cross-history, and an on-script continuation look
 - Files: the same eval doc.
@@ -287,6 +293,7 @@ Settled here (owner may overturn):
   - Repeat 12(b) on histories from a different arm: A', D or G, whichever has 10 clean turn-1 ReadFile-miss transcripts.
   - Then run E's text on the E histories with N = 5, and report the off-script rate and turn of exit. E's live turn-3 stops followed a `ListSolutionItems` result, so this shows whether on-script continuation reaches that point.
 - Done when: verdicts are recorded. If 12 or 13 fails, stop, record the gap as a finding, and do not screen with the tool.
+- Waived 2026-11-13. The owner chose the coarse screen in regenerate mode, which does not replay the source history's turn 1, so cross-history is moot. A G-history cell was not run. The continuation look was covered by the regenerate runs.
 
 ### Step 14 - First screening use and close
 - Files: the eval doc, the proposal and this plan (Status lines), `docs/current/TODO.md`.
@@ -299,6 +306,13 @@ Settled here (owner may overturn):
   - Add a TODO.md entry for phase 2: a decorator over `McpClientToolHost` that swaps matching error results in live runs (the runner-boundary override, now small).
   - Close the plan and move the proposal to `proposals/closed/` via `ProjectDoc close`.
 - Done when: the screening table is recorded and the docs are closed.
+- Done:
+  - cf95c8ff: arm H and I variants harvested.
+  - Guard histories recorded on 9b: NoSuchMethod gave 5/10 false BLOCKED, Typo 0/10.
+  - b4d3cabf: the screen and its conclusions.
+  - 57e9d4c8: test pins updated.
+  - 1e11084d: the TODO follow-up for NoSuchMethod false stops; the runner-boundary phase 2 is not added, see the eval's conclusions.
+  - Full suite at b4d3cabf: all projects green apart from one pinned variant list, which was fixed in 57e9d4c8 (ErrorVariants 181 pass, 1 explicit skip).
 
 **Lanes.**
 - Step 1 comes first. Steps 2 and 3 then pair (disjoint files), and Step 4 can join either lane.

@@ -114,6 +114,6 @@ Error and hint text changes affect every caller, not only ModelEval. The surface
 ## Related
 
 - `docs/current/evals/eval_error_variant_replay_validation.md` (prompt-size and first-call split evidence).
-- `docs/current/plans/plan_error_variant_replay.md`.
+- `docs/current/plans/closed/plan_error_variant_replay.md`.
 - `docs/current/plans/closed/plan_error_policy_pointer.md` (the not-found wording arms, all on 55 tools).
 - `RoslynSentinel.Server.Advanced/ToolClassRegistry.cs` (claude-lean allow-list, used for comparison).

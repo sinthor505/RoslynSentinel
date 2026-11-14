@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Test error-message wording by substituting the tool result in a saved transcript, not by editing production code - resolved (2026-11-13)
+
+Test error-message wording by substituting the tool result in a saved transcript, not by editing production code - [doc](proposals/closed/proposal_fake_tool_responses_for_error_text_testing.md)
+
+Evidence: IMPLEMENTED 2026-11-13 via plans/closed/plan_error_variant_replay.md. The replay runs through the real loop and a fake tool host, in a Common-only test project, with seeded and regenerate modes. Live validation shows it is a coarse first-call screen only (evals/eval_error_variant_replay_validation.md). Commits a99ed363..57e9d4c8.
+
+## Error-variant replay: fidelity gap before screening - resolved (2026-11-13)
+
+Error-variant replay: fidelity gap before screening (2026-11-13) - Steps 1-12 are done and both open decisions are made (operation-aware reads 1367cda4/379ffebe, guard histories); the replay F identity cell drifted (Search 18/30 vs live 19/20, p about 0.005) so Step 13 is on hold; cut-0 regenerate mode is uncommitted WIP; next: run the ErrorVariants tests, commit it, a 30-sample F/G/E regenerate run on host 113, resume Step 13 if the F-on-F Search share is 0.8 or more, then the guard job (10 NoSuchMethod/Typo histories on 9b) and Step 14 (screen the H/I texts) - [plan](plans/closed/plan_error_variant_replay.md)
+
+Evidence: IMPLEMENTED 2026-11-13. The harness is built (RoslynSentinel.Tests.ErrorVariants, scripts/roslynsentinel-errorvariants.ps1, seeded and regenerate modes) and validated live. It is a coarse first-call screen only: it loses arm F's live effect and cannot see late stops (evals/eval_error_variant_replay_validation.md). Commits a99ed363..57e9d4c8; Step 13 waived.
+
 ## Invoke-WorktreeTests.ps1 shared worktree path - resolved (2026-11-13)
 
 `scripts/Invoke-WorktreeTests.ps1` worktree path is shared by every session (2026-11-10) - NOT DESIGNED; the skills and the reference doc all name `c:\tmp\rs-testtree`, so a second session's `-Ref` moved it mid-run (7 projects produced no TRX) and later `-SkipBuild` runs silently tested the other session's commit; suggested change: default `-RepoPath` to `c:\tmp\rs-testtree-<session id>` (or refuse when another process holds the worktree) and update `reference_autonomous_run_conventions.md` and `dispatch-implementer`

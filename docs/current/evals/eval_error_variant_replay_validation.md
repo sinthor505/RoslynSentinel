@@ -9,7 +9,7 @@ Wording decisions stay with live arms.
 
 ## Context
 
-- **What ran.** Step 12 of `plans/plan_error_variant_replay.md`: one-step replay (`scripts/roslynsentinel-errorvariants.ps1`), 3 samples per history, continue turns 1, no settings overrides (`-Temperature`/`-TopP` not passed). The source jobs ran the same way (plan Step 11 notes).
+- **What ran.** Step 12 of `plans/closed/plan_error_variant_replay.md`: one-step replay (`scripts/roslynsentinel-errorvariants.ps1`), 3 samples per history, continue turns 1, no settings overrides (`-Temperature`/`-TopP` not passed). The source jobs ran the same way (plan Step 11 notes).
 - **Host and model.** Host 113, model `qwen3.5-9b-mtp`, recorded on all 210 rows. `SourceSettings` is `unknown` on every row, because the sources predate Step 10.
 - **Sources.** MissingFile runs E `20261113-050525-257`, F `20261113-061105-032` and G `20261113-064107-618`, 10 histories each, cut after the turn-1 `ReadFile` miss.
 - **Variants.** `ErrorVariants/FileNotFound/armE.md`, `armF.md` and `armG.md`, harvested in 09ebacf1. Each reproduces its own run's recorded result byte for byte (1845498c).

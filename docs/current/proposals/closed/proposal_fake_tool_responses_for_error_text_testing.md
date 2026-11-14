@@ -1,6 +1,6 @@
 # Test error-message wording by substituting the tool result in a saved transcript, not by editing production code
 
-**Status:** PROPOSED 2026-11-13. Reviewed 2026-11-13; one-step replay planned in `docs/current/plans/plan_error_variant_replay.md` (DRAFT), nothing built. Step 11g of `plan_error_policy_pointer` names this as the follow-up once arms H and I finish.
+**Status:** IMPLEMENTED 2026-11-13 via plans/closed/plan_error_variant_replay.md. The replay runs through the real loop and a fake tool host, in a Common-only test project, with seeded and regenerate modes. Live validation shows it is a coarse first-call screen only (evals/eval_error_variant_replay_validation.md). Commits a99ed363..57e9d4c8.
 
 ## Motivation
 
