@@ -96,7 +96,7 @@ public sealed record DocumentLookupResult(
             throw new ToolAmbiguousMatchException(Describe(isCallable));
         }
 
-        throw new ToolNotFoundException(Describe(isCallable), "document", RequestedPath);
+        throw new ToolNotFoundException(Describe(isCallable), MissingTargetKinds.Document, RequestedPath);
     }
 
     /// <summary>

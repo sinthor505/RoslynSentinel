@@ -6,15 +6,16 @@ using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tests.Basic;
 
-// Ratchet for error-policy kinds (plan_error_codes_follow_cause.md): every string-literal missing-target kind that a Common,
-// Engines.Basic or Tools.Basic throw site passes to ToolNotFoundException or MemberRefactoringNotFound must either map through
-// ErrorPolicyClassifier.MapKind or be listed as deliberately unmapped below. Non-literal arguments (variables, ?? expressions) are skipped.
-// To add a kind, map it in ErrorPolicyClassifier SymbolKinds/FileKinds, or add it to MissingTargetKinds.UnmappedKinds (Common) with a reason.
+// Ratchet for error-policy kinds (plan_error_codes_follow_cause.md): every missing-target kind that a Common, Engines.Basic or Tools.Basic
+// throw site passes to ToolNotFoundException or MemberRefactoringNotFound must be a MissingTargetKinds.<Name> constant, not a string literal,
+// and must either map through ErrorPolicyClassifier.MapKind or be deliberately unmapped (MissingTargetKinds.UnmappedKinds).
+// Rule: use MissingTargetKinds constants; a new kind goes into MissingTargetKinds (Common) and into one of its three sets (FileKinds, SymbolKinds, UnmappedKinds).
+// Non-constant arguments (variables, ?? expressions) are skipped.
 [TestFixture]
 [Category("ErrorPolicyKindRatchet")]
 public class ErrorPolicyKindRatchetTests
 {
-    private const int MinimumLiteralSites = 20;
+    private const int MinimumKindSites = 30;
     private const string FactoryType = "MemberRefactoringNotFound";
     private const string FactoryFile = "RoslynSentinel.Engines.Basic/MemberRefactoringNotFound.cs";
 
@@ -22,18 +23,6 @@ public class ErrorPolicyKindRatchetTests
 
     // Statement-like and structural targets with no policy key. Compared case-insensitively.
     private static readonly IReadOnlySet<string> DeliberatelyUnmappedKinds = MissingTargetKinds.UnmappedKinds;
-
-    // Files migrated to MissingTargetKinds constants are removed from this list; a listed file without literal kinds fails the stale check. The list only shrinks.
-    private static readonly HashSet<string> NotYetMigratedFiles = new(StringComparer.Ordinal)
-    {
-        "RoslynSentinel.Engines.Basic/MemberRefactoringNotFound.cs",
-        "RoslynSentinel.Engines.Basic/ProjectStructureEngine.cs",
-        "RoslynSentinel.Engines.Basic/StructuralRefinementEngine.cs",
-        "RoslynSentinel.Engines.Basic/SymbolNavigationEngine.cs",
-        "RoslynSentinel.Engines.Basic/SyntaxUpgradeEngine.cs",
-        "RoslynSentinel.Engines.Basic/ThreadSafetyEngine.cs",
-        "RoslynSentinel.Common/DocumentLookup.cs",
-    };
 
     private static string RepoRoot()
     {
@@ -95,10 +84,25 @@ public class ErrorPolicyKindRatchetTests
         return list.Arguments.Where(argument => argument.NameColon is null).ElementAtOrDefault(position)?.Expression;
     }
 
-    private static string? LiteralText(ExpressionSyntax? expression) =>
-        expression is LiteralExpressionSyntax literal && literal.IsKind(SyntaxKind.StringLiteralExpression)
-            ? literal.Token.ValueText
-            : null;
+    // The missing-target kind an argument passes: a string literal, or a MissingTargetKinds.<Name> constant resolved to its value.
+    // IsLiteral is false for the constant form. Any other argument (a variable, a ?? expression) gives a null Kind and is skipped.
+    private static (string? Kind, bool IsLiteral) KindOf(ExpressionSyntax? expression)
+    {
+        if (expression is LiteralExpressionSyntax literal && literal.IsKind(SyntaxKind.StringLiteralExpression))
+        {
+            return (literal.Token.ValueText, true);
+        }
+
+        if (expression is MemberAccessExpressionSyntax access
+            && access.Expression is IdentifierNameSyntax receiver
+            && receiver.Identifier.ValueText == nameof(MissingTargetKinds))
+        {
+            var field = typeof(MissingTargetKinds).GetField(access.Name.Identifier.ValueText, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            return (field is { IsLiteral: true } ? (string?)field.GetRawConstantValue() : null, false);
+        }
+
+        return (null, false);
+    }
 
     private static bool IsToolNotFoundType(TypeSyntax type) => type switch
     {
@@ -120,20 +124,20 @@ public class ErrorPolicyKindRatchetTests
         return inFactoryFile && invocation.Expression is IdentifierNameSyntax call && call.Identifier.ValueText == method;
     }
 
-    private static void AddSite(List<(string Kind, string Site)> sites, string relativePath, SyntaxNode node, string? kind)
+    private static void AddSite(List<(string Kind, string Site, bool IsLiteral)> sites, string relativePath, SyntaxNode node, (string? Kind, bool IsLiteral) kind)
     {
-        if (kind is null)
+        if (kind.Kind is null)
         {
             return;
         }
 
         var line = node.SyntaxTree.GetLineSpan(node.Span).StartLinePosition.Line + 1;
-        sites.Add((kind, relativePath + ":" + line));
+        sites.Add((kind.Kind, relativePath + ":" + line, kind.IsLiteral));
     }
 
-    private static List<(string Kind, string Site)> CollectLiteralKindSites(IEnumerable<(string RelativePath, SyntaxNode Root)> sources)
+    private static List<(string Kind, string Site, bool IsLiteral)> CollectKindSites(IEnumerable<(string RelativePath, SyntaxNode Root)> sources)
     {
-        var sites = new List<(string Kind, string Site)>();
+        var sites = new List<(string Kind, string Site, bool IsLiteral)>();
         foreach (var (relativePath, root) in sources)
         {
             var inFactoryFile = relativePath == FactoryFile;
@@ -141,24 +145,28 @@ public class ErrorPolicyKindRatchetTests
             {
                 if (node is ObjectCreationExpressionSyntax creation && IsToolNotFoundType(creation.Type))
                 {
-                    AddSite(sites, relativePath, creation, LiteralText(ArgumentAt(creation.ArgumentList, 1, "missingTargetKind")));
+                    AddSite(sites, relativePath, creation, KindOf(ArgumentAt(creation.ArgumentList, 1, "missingTargetKind")));
                 }
                 else if (node is ImplicitObjectCreationExpressionSyntax implicitCreation && inFactoryFile)
                 {
-                    AddSite(sites, relativePath, implicitCreation, LiteralText(ArgumentAt(implicitCreation.ArgumentList, 1, "missingTargetKind")));
+                    AddSite(sites, relativePath, implicitCreation, KindOf(ArgumentAt(implicitCreation.ArgumentList, 1, "missingTargetKind")));
                 }
                 else if (node is InvocationExpressionSyntax invocation)
                 {
                     if (IsFactoryCall(invocation, "Declaration", inFactoryFile))
                     {
                         // The sixth parameter (missingTargetKind) wins; otherwise the kindLabel (first) argument is the kind.
-                        var kind = LiteralText(ArgumentAt(invocation.ArgumentList, 5, "missingTargetKind"))
-                            ?? LiteralText(ArgumentAt(invocation.ArgumentList, 0, "kindLabel"));
+                        var kind = KindOf(ArgumentAt(invocation.ArgumentList, 5, "missingTargetKind"));
+                        if (kind.Kind is null)
+                        {
+                            kind = KindOf(ArgumentAt(invocation.ArgumentList, 0, "kindLabel"));
+                        }
+
                         AddSite(sites, relativePath, invocation, kind);
                     }
                     else if (IsFactoryCall(invocation, "Unresolved", inFactoryFile))
                     {
-                        AddSite(sites, relativePath, invocation, LiteralText(ArgumentAt(invocation.ArgumentList, 0, "missingTargetKind")));
+                        AddSite(sites, relativePath, invocation, KindOf(ArgumentAt(invocation.ArgumentList, 0, "missingTargetKind")));
                     }
                 }
             }
@@ -173,11 +181,11 @@ public class ErrorPolicyKindRatchetTests
         var sources = ParseScannedSources();
         Assert.That(sources, Is.Not.Empty, "The scan found no .cs files in the scanned projects; the repo root lookup is broken.");
 
-        var sites = CollectLiteralKindSites(sources);
+        var sites = CollectKindSites(sources);
         Assert.That(
             sites.Count,
-            Is.GreaterThanOrEqualTo(MinimumLiteralSites),
-            $"The scan found {sites.Count} literal missing-target kind sites; expected at least {MinimumLiteralSites}. The scan is probably not matching the throw sites.");
+            Is.GreaterThanOrEqualTo(MinimumKindSites),
+            $"The scan found {sites.Count} missing-target kind sites (literal or MissingTargetKinds constant); expected at least {MinimumKindSites}. The scan is probably not matching the throw sites.");
 
         var offenders = sites
             .Where(site => !DeliberatelyUnmappedKinds.Contains(site.Kind) && ErrorPolicyClassifier.MapKind(ToolErrorCode.NotFound, site.Kind) is null)
@@ -193,27 +201,18 @@ public class ErrorPolicyKindRatchetTests
     }
 
     [Test]
-    public void LiteralMissingTargetKinds_AreOnlyInNotYetMigratedFiles()
+    public void NoRawLiteralMissingTargetKinds_UseMissingTargetKindsConstants()
     {
-        var sites = CollectLiteralKindSites(ParseScannedSources());
-        var filesWithLiterals = sites
-            .Select(site => site.Site.Substring(0, site.Site.LastIndexOf(':')))
-            .ToHashSet(StringComparer.Ordinal);
+        var literals = CollectKindSites(ParseScannedSources())
+            .Where(site => site.IsLiteral)
+            .OrderBy(site => site.Site, StringComparer.Ordinal)
+            .Select(site => $"  {site.Site} (kind \"{site.Kind}\") - use MissingTargetKinds.<Name>")
+            .ToList();
 
-        var unlisted = filesWithLiterals
-            .Where(file => !NotYetMigratedFiles.Contains(file))
-            .Order(StringComparer.Ordinal)
-            .Select(file => $"  {file}: literal missing-target kind; use MissingTargetKinds.<Name> instead of the string literal");
-        var stale = NotYetMigratedFiles
-            .Where(file => !filesWithLiterals.Contains(file))
-            .Order(StringComparer.Ordinal)
-            .Select(file => $"  {file}: no literal missing-target kind; remove from NotYetMigratedFiles");
-
-        var problems = unlisted.Concat(stale).ToList();
         Assert.That(
-            problems,
+            literals,
             Is.Empty,
-            "NotYetMigratedFiles is out of step with the literal missing-target kind sites:" + Environment.NewLine + string.Join(Environment.NewLine, problems));
+            "Missing-target kinds must be passed as MissingTargetKinds constants, not string literals:" + Environment.NewLine + string.Join(Environment.NewLine, literals));
     }
 
     [Test]

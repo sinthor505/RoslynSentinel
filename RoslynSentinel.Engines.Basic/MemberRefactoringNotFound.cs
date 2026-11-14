@@ -96,7 +96,7 @@ public static class MemberRefactoringNotFound
     {
         var message = DeclarationMessage("class", className, paramName, ClassNames(root), filePath);
         var otherKind = OtherKindFact(root, className, filePath, n => n is ClassDeclarationSyntax, "a class");
-        return new ToolNotFoundException(otherKind is null ? message : message + " " + otherKind, "class", className);
+        return new ToolNotFoundException(otherKind is null ? message : message + " " + otherKind, MissingTargetKinds.Class, className);
     }
 
     /// <summary>Enum lookup miss (kind "enum"): ModifyEnum. States when the name is declared as another kind of type.</summary>
@@ -104,23 +104,23 @@ public static class MemberRefactoringNotFound
     {
         var message = DeclarationMessage("enum", enumName, paramName, EnumNames(root), filePath);
         var otherKind = OtherKindFact(root, enumName, filePath, n => n is EnumDeclarationSyntax, "an enum");
-        return new ToolNotFoundException(otherKind is null ? message : message + " " + otherKind, "enum", enumName);
+        return new ToolNotFoundException(otherKind is null ? message : message + " " + otherKind, MissingTargetKinds.Enum, enumName);
     }
 
     /// <summary>Method lookup miss (kind "method"): MethodSignature add/remove/view, AddRemoveParams, ConvertMethodToProperty, MakeMethodStatic.</summary>
     public static ToolNotFoundException Method(string methodName, SyntaxNode? root, string filePath, string paramName = "methodName")
-        => Declaration("method", methodName, paramName, MethodNames(root), filePath);
+        => Declaration(MissingTargetKinds.Method, methodName, paramName, MethodNames(root), filePath);
 
     /// <summary>Type lookup miss (kind "type"): AddBaseType, RemoveBaseType, and SortMembers' container (pass <c>paramName: "containerName"</c>).</summary>
     public static ToolNotFoundException Type(string typeName, SyntaxNode? root, string filePath, string paramName = "typeName")
-        => Declaration("type", typeName, paramName, TypeNames(root), filePath);
+        => Declaration(MissingTargetKinds.Type, typeName, paramName, TypeNames(root), filePath);
 
     /// <summary>
     /// Member-or-type target miss (kind "member"): ChangeAccessibility, AddModifier, RemoveModifier, AddAttribute, ReplaceAttribute,
     /// RemoveAttribute (the six identical former "Cannot edit: target ..." sites).
     /// </summary>
     public static ToolNotFoundException Target(string targetName, SyntaxNode? root, string filePath, string paramName = "targetName")
-        => Declaration("declaration", targetName, paramName, MemberNames(root), filePath, "member");
+        => Declaration(MissingTargetKinds.Declaration, targetName, paramName, MemberNames(root), filePath, MissingTargetKinds.Member);
 
     /// <summary>Namespace miss (kind "namespace"): AddTopLevelType. Also lists the namespaces the file declares.</summary>
     public static ToolNotFoundException Namespace(string namespaceName, SyntaxNode? root, string filePath, string paramName = "namespaceName")
@@ -132,22 +132,22 @@ public static class MemberRefactoringNotFound
             message += $" Namespaces declared in '{filePath}': {JoinNames(names)}.";
         }
 
-        return new ToolNotFoundException(message, "namespace", namespaceName);
+        return new ToolNotFoundException(message, MissingTargetKinds.Namespace, namespaceName);
     }
 
     // ---- Exception factories: lookups inside one declaration ----
 
     /// <summary>Enum member miss (kind "enum member"): RemoveEnumMember, ReplaceEnumMember. Lists the members of the named enum.</summary>
     public static ToolNotFoundException EnumMember(string memberName, string enumName, EnumDeclarationSyntax? enumDecl, string filePath, string paramName = "memberName")
-        => new(ScopedMessage("enum member", memberName, paramName, EnumMemberNames(enumDecl), $"enum '{enumName}'", filePath), "enum member", memberName);
+        => new(ScopedMessage("enum member", memberName, paramName, EnumMemberNames(enumDecl), $"enum '{enumName}'", filePath), MissingTargetKinds.EnumMember, memberName);
 
     /// <summary>Enum member miss from a caller that holds the enum's member names rather than its syntax (RemoveEnumMember, ReplaceEnumMember read them through GetContainerMembersAsync).</summary>
     public static ToolNotFoundException EnumMember(string memberName, string enumName, IEnumerable<string> enumMemberNames, string filePath, string paramName = "memberName")
-        => new(ScopedMessage("enum member", memberName, paramName, enumMemberNames, $"enum '{enumName}'", filePath), "enum member", memberName);
+        => new(ScopedMessage("enum member", memberName, paramName, enumMemberNames, $"enum '{enumName}'", filePath), MissingTargetKinds.EnumMember, memberName);
 
     /// <summary>Constructor parameter miss (kind "parameter"): ConstructorParameter remove. Lists the parameters of the class's constructors.</summary>
     public static ToolNotFoundException ConstructorParameter(string paramName, string className, ClassDeclarationSyntax? classDecl, string filePath, string retryParamName = "paramName")
-        => new(ScopedMessage("constructor parameter", paramName, retryParamName, ConstructorParameterNames(classDecl), $"the constructors of '{className}'", filePath), "parameter", paramName);
+        => new(ScopedMessage("constructor parameter", paramName, retryParamName, ConstructorParameterNames(classDecl), $"the constructors of '{className}'", filePath), MissingTargetKinds.Parameter, paramName);
 
     /// <summary>
     /// The contextSnippet matched outside every constructor that declares <paramref name="paramName"/> (kind "parameter"): states the
@@ -162,7 +162,7 @@ public static class MemberRefactoringNotFound
             message += $" Constructors declaring '{paramName}' start at line {string.Join(", ", constructorStartLines)}. {ToolCallHint.Call("ReadFile", ("filePath", filePath), ("startLine", first.ToString(System.Globalization.CultureInfo.InvariantCulture)))} reads the first one.";
         }
 
-        return new ToolNotFoundException(message, "parameter", paramName);
+        return new ToolNotFoundException(message, MissingTargetKinds.Parameter, paramName);
     }
 
     /// <summary>
@@ -170,7 +170,7 @@ public static class MemberRefactoringNotFound
     /// RemoveAttribute. Lists the attributes the target carries.
     /// </summary>
     public static ToolNotFoundException Attribute(string attributeName, string targetName, SyntaxNode? target, string filePath, string paramName = "attributeName")
-        => new(ScopedMessage("attribute", attributeName, paramName, AttributeNames(target), $"'{targetName}'", filePath), "attribute", attributeName);
+        => new(ScopedMessage("attribute", attributeName, paramName, AttributeNames(target), $"'{targetName}'", filePath), MissingTargetKinds.Attribute, attributeName);
 
     // ---- Exception factories: documents and syntax that are present in the solution but unusable ----
 
@@ -179,7 +179,7 @@ public static class MemberRefactoringNotFound
     /// PreviewInstanceMoveCallSites and MoveMembersToBaseType sites. Offers ReadFile for the text the server holds.
     /// </summary>
     public static ToolNotFoundException Unavailable(string what, string filePath)
-        => new($"The {what} of '{filePath}' is not available: the file is a document of the loaded solution but did not produce one. {ToolCallHint.Call("ReadFile", ("filePath", filePath))} returns the text the server holds for it.", "document", filePath);
+        => new($"The {what} of '{filePath}' is not available: the file is a document of the loaded solution but did not produce one. {ToolCallHint.Call("ReadFile", ("filePath", filePath))} returns the text the server holds for it.", MissingTargetKinds.Document, filePath);
 
     /// <summary>
     /// A lookup that failed on server state rather than on a name the caller typed (for example a base class that lives in an external
