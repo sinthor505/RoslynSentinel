@@ -1,6 +1,6 @@
 # Plan: give ModelEval an 18-tool lean surface behind an env switch, A/B it against the 55-tool surface, then make it the default
 
-**Status:** IN PROGRESS 2026-11-13. Steps 1a-1b done (be340c7e, 0a0b0ecc), 2a-2e done (e68197f8..a8dee25a). 18-tool lean ModelEval surface behind an env switch, A/B against the 55-tool surface (hold point), then default switch; PlanStepRunner deferred to a TODO.md line.
+**Status:** IN PROGRESS 2026-11-13. Steps 1a-1b done (be340c7e, 0a0b0ecc), 2a-2e done (e68197f8..a8dee25a), 3a-3c and 4 done (1b440767..ef132999). Next: Step 5 live A/B. 18-tool lean ModelEval surface behind an env switch, A/B against the 55-tool surface (hold point), then default switch; PlanStepRunner deferred to a TODO.md line.
 
 ## Problem
 
@@ -347,6 +347,19 @@ the owner confirms; report who was asked and the answer in the slice report. 3a 
 - Done when: `Build` 0 errors; `ClaudeLeanSchemaBudgetTests` passes; any generated tool table under
   `docs/generated/` is regenerated if the build does not do it.
 - Lane/tier: `implementer` depth tier 1 (2 files, 2 edits).
+
+### Batch C outcome (Steps 3b, 3c, 4, 2026-11-13)
+- Done: 3b 1b440767 (`AgentSystemPrompts.cs` :46,:51,:140 name `Search`/`ListSolutionItems`); 3c-1 bc42bd39 (6 files, 8
+  sites); 3c-2 f8d817ed (chain file, 7 sites); 3c-3 03615750 (`FaultScenarios.cs`, 4 sites, after peer commit
+  1836f3ff); Step 4 ef132999 (`Member` drops the TypedMember sentence, `ListSolutionItems` `kind` description drops
+  "use ProjectDoc"; `RenameSymbol` untouched). New preamble at all 19 scenario sites: "go straight to ReadFile,
+  Search or ListSolutionItems on the paths below." Remaining `ListAll` text: comments, names, legacy fixtures and
+  the non-tool `ListAllTool` delegator in `WorkspaceTools.cs` only.
+- New `// TODO` above the `ListSolutionItems` `kind` description in `WorkspaceTools.cs`: it still says "aren't
+  searchable via SearchSolutionText", a tool name that no longer exists (`Search` replaced it). Not in the Step 4
+  decision; recommendation: drop the clause.
+- Gate record: owner confirmed "none running" at 2026-11-13, then, once peer 6f reported live host-113 runs, chose to
+  hold Steps 3b/3c/4 until they finished; 6f cleared them afterwards and released `FaultScenarios.cs` at 1836f3ff.
 
 ### Step 5 - A/B lean against full (LIVE, hold point)
 - Files: none edited; outputs go to an eval doc `docs/current/evals/eval_modeleval_lean_vs_full.md` (new, finding
