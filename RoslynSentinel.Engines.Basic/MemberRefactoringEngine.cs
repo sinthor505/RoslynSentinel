@@ -574,7 +574,7 @@ public class MemberRefactoringEngine
         {
             // The factory carries the candidates or the outline option; the search scope (declaration kinds and the snippet filter) is appended as a fact.
             var classMiss = MemberRefactoringNotFound.Class(className, root, filePath.ToString());
-            throw new ToolNotFoundException(classMiss.Message + " Searched class, interface, struct, record and enum declarations matching this name and the contextSnippet/lineBefore/lineAfter filter.", "class", className);
+            throw new ToolNotFoundException(classMiss.Message + " Searched class, interface, struct, record and enum declarations matching this name and the contextSnippet/lineBefore/lineAfter filter.", MissingTargetKinds.Class, className);
         }
 
         // TODO tuple outcome slot is always Modified; return only the list
@@ -788,7 +788,7 @@ public class MemberRefactoringEngine
             var idx = existing.FindIndex(m => m.Name == afterMemberName);
             if (idx < 0)
             {
-                throw new ToolNotFoundException(BuildInsertAnchorNotFoundMessage("insertAfterMemberName", afterMemberName, "enum", enumName, existing.Select(m => m.Name).OfType<string>().ToList(), 0), "enum member", afterMemberName);
+                throw new ToolNotFoundException(BuildInsertAnchorNotFoundMessage("insertAfterMemberName", afterMemberName, "enum", enumName, existing.Select(m => m.Name).OfType<string>().ToList(), 0), MissingTargetKinds.EnumMember, afterMemberName);
             }
 
             names.Insert(idx + 1, newToken);
@@ -798,7 +798,7 @@ public class MemberRefactoringEngine
             var idx = existing.FindIndex(m => m.Name == beforeMemberName);
             if (idx < 0)
             {
-                throw new ToolNotFoundException(BuildInsertAnchorNotFoundMessage("insertBeforeMemberName", beforeMemberName, "enum", enumName, existing.Select(m => m.Name).OfType<string>().ToList(), 0), "enum member", beforeMemberName);
+                throw new ToolNotFoundException(BuildInsertAnchorNotFoundMessage("insertBeforeMemberName", beforeMemberName, "enum", enumName, existing.Select(m => m.Name).OfType<string>().ToList(), 0), MissingTargetKinds.EnumMember, beforeMemberName);
             }
 
             names.Insert(idx, newToken);
@@ -1278,7 +1278,7 @@ public class MemberRefactoringEngine
         if (memberNode is not MethodDeclarationSyntax methodDecl)
         {
             var methodMiss = MemberRefactoringNotFound.Method(methodName, root, filePath.ToString());
-            throw new ToolNotFoundException($"{methodMiss.Message} Searched: method declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. {ToolCallHint.Call("Search", ("mode", "text"), ("query", methodName))} finds the name as text.", "method", methodName);
+            throw new ToolNotFoundException($"{methodMiss.Message} Searched: method declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. {ToolCallHint.Call("Search", ("mode", "text"), ("query", methodName))} finds the name as text.", MissingTargetKinds.Method, methodName);
         }
         // TODO tuple outcome slot is always Modified; return only the list
 
@@ -1395,7 +1395,7 @@ public class MemberRefactoringEngine
         var parameters = methodDecl.ParameterList.Parameters;
         if (parameters.Count == 0)
         {
-            throw new ToolNotFoundException($"Cannot edit: '{methodName}' has no parameters.", "parameter", paramName);
+            throw new ToolNotFoundException($"Cannot edit: '{methodName}' has no parameters.", MissingTargetKinds.Parameter, paramName);
         }
 
         var lastParam = parameters[^1];
@@ -2067,7 +2067,7 @@ public class MemberRefactoringEngine
 
         if (container == null)
         {
-            throw new ToolNotFoundException(await SyntaxTargetResolver.BuildContainerNotFoundMessageAsync(solution, root, containerName, cancellationToken), "type", containerName);
+            throw new ToolNotFoundException(await SyntaxTargetResolver.BuildContainerNotFoundMessageAsync(solution, root, containerName, cancellationToken), MissingTargetKinds.Type, containerName);
         }
 
         if (container is not TypeDeclarationSyntax typeDecl)
@@ -2127,7 +2127,7 @@ public class MemberRefactoringEngine
 
         if (container == null)
         {
-            throw new ToolNotFoundException(await SyntaxTargetResolver.BuildContainerNotFoundMessageAsync(solution, root, containerName, cancellationToken), "type", containerName);
+            throw new ToolNotFoundException(await SyntaxTargetResolver.BuildContainerNotFoundMessageAsync(solution, root, containerName, cancellationToken), MissingTargetKinds.Type, containerName);
         }
 
         if (container is not TypeDeclarationSyntax typeDecl)
@@ -2216,7 +2216,7 @@ public class MemberRefactoringEngine
         {
             var names = members.Select(SyntaxTargetResolver.GetMemberName).OfType<string>().Distinct().ToList();
             var unnamed = members.Count(m => SyntaxTargetResolver.GetMemberName(m) is null);
-            throw new ToolNotFoundException(BuildInsertAnchorNotFoundMessage(anchorParam, anchorName, "container", containerName, names, unnamed), "member", anchorName);
+            throw new ToolNotFoundException(BuildInsertAnchorNotFoundMessage(anchorParam, anchorName, "container", containerName, names, unnamed), MissingTargetKinds.Member, anchorName);
         }
 
         var candidates = new List<AmbiguousCandidate>();
@@ -2464,7 +2464,7 @@ public class MemberRefactoringEngine
 
         if (member == null)
         {
-            throw new ToolNotFoundException(await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken), "member", memberName);
+            throw new ToolNotFoundException(await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken), MissingTargetKinds.Member, memberName);
         }
 
         // Must run before the ContainsDiagnostics check below: a multi-member source always has
@@ -2585,7 +2585,7 @@ public class MemberRefactoringEngine
 
         if (container == null)
         {
-            throw new ToolNotFoundException(await SyntaxTargetResolver.BuildContainerNotFoundMessageAsync(solution, root, containerName, cancellationToken), "type", containerName);
+            throw new ToolNotFoundException(await SyntaxTargetResolver.BuildContainerNotFoundMessageAsync(solution, root, containerName, cancellationToken), MissingTargetKinds.Type, containerName);
         }
 
         if (container is EnumDeclarationSyntax)
@@ -2681,7 +2681,7 @@ public class MemberRefactoringEngine
         else
         {
             // TODO not a lookup miss: several namespaces and no namespaceName is an ambiguous target but is coded NotFound; code it Ambiguous or InvalidArgument (a tool-level branch on the code may depend on it)
-            throw new ToolNotFoundException($"File has {namespaces.Count} namespaces ({string.Join(", ", namespaces.Select(n => n.Name.ToString()))}); pass namespaceName to disambiguate.", "namespace");
+            throw new ToolNotFoundException($"File has {namespaces.Count} namespaces ({string.Join(", ", namespaces.Select(n => n.Name.ToString()))}); pass namespaceName to disambiguate.", MissingTargetKinds.Namespace);
         }
 
         if (targetNamespace != null)
@@ -2801,10 +2801,10 @@ public class MemberRefactoringEngine
                 throw new ToolNotFoundException($"'{memberName}' is a type-level declaration ({kindNames}) that Member(remove) could not delete here. " +
                     "Member(remove) deletes classes, interfaces, structs, records and enums that resolve to a symbol in the loaded solution, " +
                     $"but it cannot delete an enum member through this route: remove one with {ToolCallHint.Call("ModifyEnum")} instead. " +
-                    typeRemovalHint, "member", memberName); // hint-ok: Member(remove) in the message above is prose describing the operation, not a call to make
+                    typeRemovalHint, MissingTargetKinds.Member, memberName); // hint-ok: Member(remove) in the message above is prose describing the operation, not a call to make
             }
 
-            throw new ToolNotFoundException(await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken), "member", memberName);
+            throw new ToolNotFoundException(await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken), MissingTargetKinds.Member, memberName);
         }
 
         // Check for usages using SymbolFinder before removing
@@ -3728,19 +3728,19 @@ public class MemberRefactoringEngine
     {
         if (baseType.DeclaringSyntaxReferences.Length == 0)
         {
-            throw MemberRefactoringNotFound.Unresolved("class", baseType.Name, $"Base class '{baseType.Name}' is declared in an external assembly, so it has no source in the loaded solution to move members into.", filePath.ToString());
+            throw MemberRefactoringNotFound.Unresolved(MissingTargetKinds.Class, baseType.Name, $"Base class '{baseType.Name}' is declared in an external assembly, so it has no source in the loaded solution to move members into.", filePath.ToString());
         }
 
         var baseFile = baseType.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree.FilePath;
         if (baseFile == null)
         {
-            throw MemberRefactoringNotFound.Unresolved("class", baseType.Name, $"The declaration of base class '{baseType.Name}' carries no source file path, so the file to move members into cannot be located.");
+            throw MemberRefactoringNotFound.Unresolved(MissingTargetKinds.Class, baseType.Name, $"The declaration of base class '{baseType.Name}' carries no source file path, so the file to move members into cannot be located.");
         }
 
         var baseDoc = DocumentLookup.FindDocumentOrNull(solution, baseFile);
         if (baseDoc == null)
         {
-            throw MemberRefactoringNotFound.Unresolved("class", baseType.Name, $"Base class '{baseType.Name}' is declared in '{baseFile}', which is not a document of the loaded solution.");
+            throw MemberRefactoringNotFound.Unresolved(MissingTargetKinds.Class, baseType.Name, $"Base class '{baseType.Name}' is declared in '{baseFile}', which is not a document of the loaded solution.");
         }
 
         var baseRoot = await baseDoc.GetSyntaxRootAsync(cancellationToken);
@@ -3850,7 +3850,7 @@ public class MemberRefactoringEngine
         var targetSymbol = targetModel?.GetDeclaredSymbol(targetClassNode, cancellationToken);
         if (targetSymbol == null)
         {
-            throw MemberRefactoringNotFound.Unresolved("class", targetClassNode.Identifier.Text, $"Target class '{targetClassNode.Identifier.Text}' did not resolve to a symbol, so the call sites of the moved members cannot be rewritten against it.", targetDocument.FilePath);
+            throw MemberRefactoringNotFound.Unresolved(MissingTargetKinds.Class, targetClassNode.Identifier.Text, $"Target class '{targetClassNode.Identifier.Text}' did not resolve to a symbol, so the call sites of the moved members cannot be rewritten against it.", targetDocument.FilePath);
         }
 
         var movedSpans = membersToMove.Select(m => m.FullSpan).ToList();

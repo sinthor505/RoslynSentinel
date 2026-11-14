@@ -26,14 +26,8 @@ public class ErrorPolicyKindRatchetTests
     // Files migrated to MissingTargetKinds constants are removed from this list; a listed file without literal kinds fails the stale check. The list only shrinks.
     private static readonly HashSet<string> NotYetMigratedFiles = new(StringComparer.Ordinal)
     {
-        "RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs",
-        "RoslynSentinel.Engines.Basic/DiscoveryEngine.cs",
-        "RoslynSentinel.Engines.Basic/ImpactAnalyzer.cs",
-        "RoslynSentinel.Engines.Basic/InventoryEngine.cs",
-        "RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs",
         "RoslynSentinel.Engines.Basic/MemberRefactoringNotFound.cs",
         "RoslynSentinel.Engines.Basic/ProjectStructureEngine.cs",
-        "RoslynSentinel.Engines.Basic/SemanticRefactoringEngine.cs",
         "RoslynSentinel.Engines.Basic/StructuralRefinementEngine.cs",
         "RoslynSentinel.Engines.Basic/SymbolNavigationEngine.cs",
         "RoslynSentinel.Engines.Basic/SyntaxUpgradeEngine.cs",
@@ -195,7 +189,7 @@ public class ErrorPolicyKindRatchetTests
             offenders,
             Is.Empty,
             "Literal missing-target kinds with no policy mapping. A new kind must be added to ErrorPolicyClassifier SymbolKinds/FileKinds, "
-                + "or to the unmapped set in ErrorPolicyKindRatchetTests:" + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+                + "or to MissingTargetKinds.UnmappedKinds (Common):" + Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
 
     [Test]
