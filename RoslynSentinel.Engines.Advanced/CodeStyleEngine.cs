@@ -97,7 +97,7 @@ public class CodeStyleEngine
         var prop = RoslynSentinel.Common.NameTargetLookup.RequireSingle(propMatches, "Property", propertyName);
         if (prop == null)
         {
-            throw new ToolNotFoundException($"Property '{propertyName}' not found.", "property", propertyName);
+            throw new ToolNotFoundException($"Property '{propertyName}' not found. " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("property", "propertyName", propertyName, root?.DescendantNodes().OfType<PropertyDeclarationSyntax>().Select(propDecl => propDecl.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Property, propertyName);
         }
 
         // Only works for properties declared directly inside a class (not an interface or struct)

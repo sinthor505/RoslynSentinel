@@ -55,7 +55,7 @@ public class StructuralRefactoringEngine
 
         if (classNode == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' not found in {Path.GetFileName(filePath)}.", "class", className);
+            throw new ToolNotFoundException($"Class '{className}' not found in {Path.GetFileName(filePath)}. " + DeclarationNotFoundDetail.Build("class", "className", className, root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(classDecl => classDecl.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Class, className);
         }
 
         throw new ToolTargetIneligibleException($"Class '{className}' is not abstract; only an abstract class can be converted to an interface.");
@@ -95,10 +95,11 @@ public class StructuralRefactoringEngine
 
         if (classNode == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' not found in {Path.GetFileName(filePath)}.", "class", className);
+            throw new ToolNotFoundException($"Class '{className}' not found in {Path.GetFileName(filePath)}. " + DeclarationNotFoundDetail.Build("class", "className", className, root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(classDecl => classDecl.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Class, className);
         }
 
-        throw new ToolNotFoundException($"Class '{className}' has no constructor to replace with a factory.", "constructor", className);
+        // TODO not-found: add DeclarationNotFoundDetail candidates (the class is found; the miss is its missing constructor, not a name)
+        throw new ToolNotFoundException($"Class '{className}' has no constructor to replace with a factory.", MissingTargetKinds.Constructor, className);
     }
 
     // ExtractSuperclass is DELIBERATELY left unimplemented (stubbed): it copies only public properties and never
@@ -172,11 +173,7 @@ public class StructuralRefactoringEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         bool sameFile = string.Equals(Path.GetFullPath(sourceFilePath), Path.GetFullPath(targetFilePath), StringComparison.OrdinalIgnoreCase);
         // Load source document
-        var sourceDoc = solution.GetDocumentIdsWithFilePath(sourceFilePath).Select(solution.GetDocument).FirstOrDefault();
-        if (sourceDoc == null)
-        {
-            throw new ToolNotFoundException($"Source file '{Path.GetFileName(sourceFilePath)}' not found in solution. " + ToolCallHint.Next("GetFileOutline", "to check the file and class names.", ("filePath", sourceFilePath)), "file", sourceFilePath);
-        }
+        var sourceDoc = DocumentLookup.RequireDocument(solution, sourceFilePath);
 
         var sourceRoot = await sourceDoc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (sourceRoot == null)
@@ -187,7 +184,7 @@ public class StructuralRefactoringEngine
         var sourceClass = RoslynSentinel.Common.NameTargetLookup.RequireSingle(sourceRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         if (sourceClass == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' not found in '{Path.GetFileName(sourceFilePath)}'. " + ToolCallHint.Next("GetFileOutline", "to check the file and class names.", ("filePath", sourceFilePath)), "class", className);
+            throw new ToolNotFoundException($"Class '{className}' not found in '{Path.GetFileName(sourceFilePath)}'. " + DeclarationNotFoundDetail.Build("class", "className", className, sourceRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(classDecl => classDecl.Identifier.Text), sourceFilePath), MissingTargetKinds.Class, className);
         }
 
         // Capture class symbol BEFORE modification so SymbolFinder can resolve all references
@@ -219,11 +216,7 @@ public class StructuralRefactoringEngine
         }
         else
         {
-            var targetDoc = solution.GetDocumentIdsWithFilePath(targetFilePath).Select(solution.GetDocument).FirstOrDefault();
-            if (targetDoc == null)
-            {
-                throw new ToolNotFoundException($"Target file '{Path.GetFileName(targetFilePath)}' not found in solution. " + ToolCallHint.Next("GetFileOutline", "to check the file and class names.", ("filePath", targetFilePath)), "file", targetFilePath);
-            }
+            var targetDoc = DocumentLookup.RequireDocument(solution, targetFilePath);
 
             var targetRoot = await targetDoc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
             var targetClass = targetRoot?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
@@ -494,7 +487,7 @@ public class StructuralRefactoringEngine
         // If field not found or has no initializer, return error
         if (field == null)
         {
-            throw new ToolNotFoundException($"Field '{fieldName}' not found.", "field", fieldName);
+            throw new ToolNotFoundException($"Field '{fieldName}' not found. " + DeclarationNotFoundDetail.Build("field", "fieldName", fieldName, root?.DescendantNodes().OfType<FieldDeclarationSyntax>().SelectMany(fieldDecl => fieldDecl.Declaration.Variables).Select(variable => variable.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Field, fieldName);
         }
 
         if (field.Declaration.Variables[0].Initializer == null)

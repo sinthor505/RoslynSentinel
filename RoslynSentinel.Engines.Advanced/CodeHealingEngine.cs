@@ -87,7 +87,8 @@ public class CodeHealingEngine
         method ??= methods.FirstOrDefault();
         if (method?.Body == null)
         {
-            throw new ToolNotFoundException("Method body not found in '" + f + "'.", "method");
+            // TODO not-found: add DeclarationNotFoundDetail candidates (no method name is passed; the lookup is by line range, so there is no wanted name to rank against)
+            throw new ToolNotFoundException("Method body not found in '" + f + "'.", MissingTargetKinds.Method);
         }
 
         var retryDecl = SyntaxFactory.LocalDeclarationStatement(
