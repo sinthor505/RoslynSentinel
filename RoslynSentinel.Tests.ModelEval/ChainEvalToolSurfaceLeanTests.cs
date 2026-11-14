@@ -104,6 +104,74 @@ public class ChainEvalToolSurfaceLeanTests
     }
 
     [Test]
+    public async Task EditSnippetsArm_UnderLean_OffersEditSnippetsInsteadOfReplaceSnippet()
+    {
+        // Same shape as the EditSnippets arm in OrderPricingRefactorChainAgentTests.SetUp.
+        var hidden = new HashSet<string>(ChainEvalToolSurface.NewHiddenTools("lean", new[] { "EditSnippets" }), StringComparer.OrdinalIgnoreCase)
+        {
+            "ReplaceSnippet",
+        };
+
+        var tools = await ListOfferedToolsAsync(hidden, "EditSnippetsExperiment");
+        var names = tools.Select(t => t.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var expected = ChainEvalToolSurface.LeanAllowList
+            .Where(n => !string.Equals(n, "ReplaceSnippet", StringComparison.OrdinalIgnoreCase))
+            .Append("EditSnippets")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        Assert.That(names, Is.EquivalentTo(expected));
+    }
+
+    [Test]
+    public async Task EditSnippetsArm_OnFullSurface_StillOffersEditSnippets()
+    {
+        var hidden = new HashSet<string>(ChainEvalToolSurface.NewHiddenTools(null, new[] { "EditSnippets" }), StringComparer.OrdinalIgnoreCase)
+        {
+            "ReplaceSnippet",
+        };
+
+        var tools = await ListOfferedToolsAsync(hidden, "EditSnippetsExperiment");
+        var names = tools.Select(t => t.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(names, Does.Contain("EditSnippets"));
+            Assert.That(names, Does.Not.Contain("ReplaceSnippet"));
+        });
+    }
+
+    [Test]
+    [NonParallelizable]
+    public void LegacyFullSurfaceList_IgnoresTheToolsetVariable()
+    {
+        // Legacy whole-file fixtures never call NewHiddenTools, so they stay on the full surface
+        // regardless of this variable; this test pins the list NewFullSurfaceHiddenTools returns.
+        var saved = Environment.GetEnvironmentVariable(ChainEvalToolSurface.ToolsetEnvVar);
+        try
+        {
+            Environment.SetEnvironmentVariable(ChainEvalToolSurface.ToolsetEnvVar, "lean");
+
+            var fullSurface = ChainEvalToolSurface.NewFullSurfaceHiddenTools();
+            var envHidden = ChainEvalToolSurface.NewHiddenTools();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(fullSurface, Is.EquivalentTo(LegacyHiddenNames));
+                Assert.That(fullSurface, Has.Count.EqualTo(11));
+                Assert.That(fullSurface, Does.Contain("WriteFile"));
+                Assert.That(envHidden, Does.Contain("WriteFile"));
+                Assert.That(envHidden, Does.Not.Contain("Search"));
+                Assert.That(envHidden, Has.Count.GreaterThan(11));
+            });
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ChainEvalToolSurface.ToolsetEnvVar, saved);
+        }
+    }
+
+    [Test]
     public async Task SchemaSize_LeanIsSmallerThanFull_AndIsLogged()
     {
         var full = await ListOfferedToolsAsync(ChainEvalToolSurface.NewFullSurfaceHiddenTools());
@@ -120,8 +188,19 @@ public class ChainEvalToolSurfaceLeanTests
     private static int SchemaChars(IEnumerable<McpClientTool> tools) =>
         tools.Sum(t => JsonSerializer.Serialize(t.ProtocolTool).Length);
 
+    private static HashSet<string> ModesWith(string? extraMode)
+    {
+        var modes = new HashSet<string>(ChainEvalToolSurface.NewModes(), StringComparer.OrdinalIgnoreCase);
+        if (extraMode is not null)
+        {
+            modes.Add(extraMode);
+        }
+
+        return modes;
+    }
+
     // Same in-process server wiring as ChainEvalToolSurfaceTests.SetUp, with the hide set supplied by the caller.
-    private static async Task<IList<McpClientTool>> ListOfferedToolsAsync(HashSet<string> hideTools)
+    private static async Task<IList<McpClientTool>> ListOfferedToolsAsync(HashSet<string> hideTools, string? extraMode = null)
     {
         var clientToServer = new Pipe();
         var serverToClient = new Pipe();
@@ -136,7 +215,7 @@ public class ChainEvalToolSurfaceLeanTests
             o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
         mcpBuilder.AddRoslynSentinelToolsAdvanced(
             services,
-            ChainEvalToolSurface.NewModes(),
+            ModesWith(extraMode),
             hideTools: hideTools);
 
         var hostBuilder = Host.CreateApplicationBuilder();

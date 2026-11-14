@@ -119,7 +119,8 @@ public class OrderPricingRefactorChainAgentTests
             mcpBuilder.AddRoslynSentinelToolsAdvanced(
                 services,
                 new HashSet<string>(ChainEvalToolSurface.NewModes(), StringComparer.OrdinalIgnoreCase) { "EditSnippetsExperiment" },
-                hideTools: new HashSet<string>(ChainEvalToolSurface.NewHiddenTools(), StringComparer.OrdinalIgnoreCase) { "ReplaceSnippet" });
+                // Under lean, EditSnippets is not on LeanAllowList, so it is passed as extraAllowed; ReplaceSnippet stays hidden. On the full surface extraAllowed has no effect.
+                hideTools: new HashSet<string>(ChainEvalToolSurface.NewHiddenTools(extraAllowed: new[] { "EditSnippets" }), StringComparer.OrdinalIgnoreCase) { "ReplaceSnippet" });
         }
         else
         {
