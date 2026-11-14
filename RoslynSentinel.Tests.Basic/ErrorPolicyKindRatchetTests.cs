@@ -9,7 +9,7 @@ namespace RoslynSentinel.Tests.Basic;
 // Ratchet for error-policy kinds (plan_error_codes_follow_cause.md): every string-literal missing-target kind that a Common,
 // Engines.Basic or Tools.Basic throw site passes to ToolNotFoundException or MemberRefactoringNotFound must either map through
 // ErrorPolicyClassifier.MapKind or be listed as deliberately unmapped below. Non-literal arguments (variables, ?? expressions) are skipped.
-// To add a kind, map it in ErrorPolicyClassifier SymbolKinds/FileKinds, or add it to DeliberatelyUnmappedKinds with a reason.
+// To add a kind, map it in ErrorPolicyClassifier SymbolKinds/FileKinds, or add it to MissingTargetKinds.UnmappedKinds (Common) with a reason.
 [TestFixture]
 [Category("ErrorPolicyKindRatchet")]
 public class ErrorPolicyKindRatchetTests
@@ -21,16 +21,24 @@ public class ErrorPolicyKindRatchetTests
     private static readonly string[] ScannedProjects = { "RoslynSentinel.Common", "RoslynSentinel.Engines.Basic", "RoslynSentinel.Tools.Basic" };
 
     // Statement-like and structural targets with no policy key. Compared case-insensitively.
-    private static readonly HashSet<string> DeliberatelyUnmappedKinds = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly IReadOnlySet<string> DeliberatelyUnmappedKinds = MissingTargetKinds.UnmappedKinds;
+
+    // Files migrated to MissingTargetKinds constants are removed from this list; a listed file without literal kinds fails the stale check. The list only shrinks.
+    private static readonly HashSet<string> NotYetMigratedFiles = new(StringComparer.Ordinal)
     {
-        "project",
-        "statement",
-        "statements",
-        "expression",
-        "snippet",
-        "block",
-        "method body",
-        "switch statement",
+        "RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs",
+        "RoslynSentinel.Engines.Basic/DiscoveryEngine.cs",
+        "RoslynSentinel.Engines.Basic/ImpactAnalyzer.cs",
+        "RoslynSentinel.Engines.Basic/InventoryEngine.cs",
+        "RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs",
+        "RoslynSentinel.Engines.Basic/MemberRefactoringNotFound.cs",
+        "RoslynSentinel.Engines.Basic/ProjectStructureEngine.cs",
+        "RoslynSentinel.Engines.Basic/SemanticRefactoringEngine.cs",
+        "RoslynSentinel.Engines.Basic/StructuralRefinementEngine.cs",
+        "RoslynSentinel.Engines.Basic/SymbolNavigationEngine.cs",
+        "RoslynSentinel.Engines.Basic/SyntaxUpgradeEngine.cs",
+        "RoslynSentinel.Engines.Basic/ThreadSafetyEngine.cs",
+        "RoslynSentinel.Common/DocumentLookup.cs",
     };
 
     private static string RepoRoot()
@@ -191,6 +199,30 @@ public class ErrorPolicyKindRatchetTests
     }
 
     [Test]
+    public void LiteralMissingTargetKinds_AreOnlyInNotYetMigratedFiles()
+    {
+        var sites = CollectLiteralKindSites(ParseScannedSources());
+        var filesWithLiterals = sites
+            .Select(site => site.Site.Substring(0, site.Site.LastIndexOf(':')))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var unlisted = filesWithLiterals
+            .Where(file => !NotYetMigratedFiles.Contains(file))
+            .Order(StringComparer.Ordinal)
+            .Select(file => $"  {file}: literal missing-target kind; use MissingTargetKinds.<Name> instead of the string literal");
+        var stale = NotYetMigratedFiles
+            .Where(file => !filesWithLiterals.Contains(file))
+            .Order(StringComparer.Ordinal)
+            .Select(file => $"  {file}: no literal missing-target kind; remove from NotYetMigratedFiles");
+
+        var problems = unlisted.Concat(stale).ToList();
+        Assert.That(
+            problems,
+            Is.Empty,
+            "NotYetMigratedFiles is out of step with the literal missing-target kind sites:" + Environment.NewLine + string.Join(Environment.NewLine, problems));
+    }
+
+    [Test]
     public void DeliberatelyUnmappedKinds_MapToNull()
     {
         var mapped = DeliberatelyUnmappedKinds
@@ -201,7 +233,7 @@ public class ErrorPolicyKindRatchetTests
         Assert.That(
             mapped,
             Is.Empty,
-            "These kinds are listed as deliberately unmapped but now map to a policy key; remove them from DeliberatelyUnmappedKinds: "
+            "These kinds are listed as deliberately unmapped but now map to a policy key; remove them from MissingTargetKinds.UnmappedKinds (Common): "
                 + string.Join(", ", mapped));
     }
 }
