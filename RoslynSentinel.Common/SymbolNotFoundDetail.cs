@@ -144,7 +144,7 @@ public static class SymbolNotFoundDetail
     /// <paramref name="orientationFilePath"/> is not null and GetFileOutline is callable the call is GetFileOutline of that
     /// file; otherwise, when ListAll is callable, ListAll with the kind mapped from <paramref name="symbolKind"/>
     /// (method, property and field map to themselves; type, event and any map to "all", ListAll's nearest values) and
-    /// <paramref name="projectName"/> when not null; with neither tool callable there is no call. With a call, the text ends
+    /// <paramref name="projectName"/> when not null; when neither is callable but Search is, the call is Search with the same kind and projectName; with none callable there is no call. With a call, the text ends
     /// with the fact that a symbol missing from what that call shows does not exist in this solution.
     /// <paramref name="wholeSolution"/> says the search was not narrowed by project, file, containing type or namespace, or test exclusion (default false, last
     /// parameter so positional callers compile). With a current workspace (<see cref="ToolCallContext.WorkspaceCurrent"/>) and a whole-solution search the text
@@ -174,6 +174,18 @@ public static class SymbolNotFoundDetail
             }
 
             return text + $"To see what exists, call {ToolCallHint.Call("ListAll", pairs.ToArray())}. " + SpeculativeAdvice.Resolve($"If it is not in that list, {DoesNotExistSentence}");
+        }
+
+        if (Callable(isCallable, "Search"))
+        {
+            // TODO Search listings are capped at 30 rows, so the list may be partial; a hasMoreData-aware sentence could follow.
+            var searchPairs = new List<(string Name, string Value)> { ("mode", ListAllKindFor(symbolKind)) };
+            if (projectName is not null)
+            {
+                searchPairs.Add(("projectName", projectName));
+            }
+
+            return (text + $"To see what exists, call {ToolCallHint.Call("Search", searchPairs.ToArray())}.").TrimEnd();
         }
 
         // No orientation call is callable: the no-similar-name fact above is all that is true for every caller.

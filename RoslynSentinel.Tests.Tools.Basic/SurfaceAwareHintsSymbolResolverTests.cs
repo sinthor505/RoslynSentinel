@@ -72,4 +72,29 @@ public class SurfaceAwareHintsSymbolResolverTests
             Assert.That(lean, Does.Contain(match.Groups[1].Value), "Rendered call to a tool outside the lean surface");
         }
     }
+
+    [Test]
+    public async Task ResolveAsync_LeanSurface_NamesSearchWithKindAndProject()
+    {
+        var lean = new HashSet<string>(LeanTools);
+
+        var text = await NotFoundTextAsync(name => lean.Contains(name));
+
+        Assert.That(
+            text,
+            Is.EqualTo(
+                "Symbol 'DoThing' (method) was not found in project '" + ProjectName + "'. No symbol in the solution has a similar name. To see what exists, call "
+                + ToolCallHint.Call("Search", ("mode", "method"), ("projectName", ProjectName))
+                + "."));
+    }
+
+    [Test]
+    public void RenderNoCandidates_SearchOnlyCallable_NamesSearch()
+    {
+        var text = SymbolNotFoundDetail.RenderNoCandidates("Missing", "type", "the loaded solution", null, null, name => name == "Search");
+
+        Assert.That(text, Does.Contain(ToolCallHint.Call("Search", ("mode", "all"))));
+        Assert.That(text, Does.Not.Contain("ListAll"));
+        Assert.That(text, Does.Not.Contain("does not exist in this solution"));
+    }
 }
