@@ -37,7 +37,7 @@ public static class TwoRenameScenarios
     private const string TwoRenamesWholeFilePrompt = """
         # Task: Two renames in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.
+        The solution is already loaded - go straight to ReadFile, Search or ListSolutionItems on the paths below.
 
         You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as

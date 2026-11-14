@@ -24,7 +24,7 @@ public static class StopAdherenceScenarios
     internal const string MissingFilePrompt = """
         # Task: One small text edit
 
-        The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.
+        The solution is already loaded - go straight to ReadFile, Search or ListSolutionItems on the paths below.
 
         Use whichever MCP tool(s) fit each step below (a dedicated refactoring tool or a direct edit).
 
@@ -40,7 +40,7 @@ public static class StopAdherenceScenarios
     internal const string MissingMethodPrompt = """
         # Task: One small refactor in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded - go straight to ReadFile/Search/ListAll on the paths below.
+        The solution is already loaded - go straight to ReadFile, Search or ListSolutionItems on the paths below.
 
         Use whichever MCP tool(s) fit each step below (a dedicated refactoring tool or a direct edit).
 
