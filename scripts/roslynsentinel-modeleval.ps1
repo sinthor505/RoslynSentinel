@@ -121,7 +121,9 @@
     OrderPricingRefactorChain7 | OrderPricingRefactorChain8 | OrderPricingRefactorChain9 |
     OrderPricingRefactorChain10 | ResumeTranscript (resume a saved ten-chain transcript and resample
     the next turns; see -ResumeTranscript) | ScoreTranscript (score a saved transcript without calling a
-    model; see -ScoreTranscript) | Scenario (run a registered targeted scenario for -Samples samples; see -Scenario). Required. Accepts multiple values (e.g.
+    model; see -ScoreTranscript) | Scenario (run a registered targeted scenario for -Samples samples; see -Scenario) |
+    ShippingKindStep (Model_CompletesShippingKindStep: five independent steps of the stepped ShippingKind scenario,
+    each from a golden commit; all five by default, or the ones named by -Step). Required. Accepts multiple values (e.g.
     -Test OrderPricingRefactor,OrderPricingRefactorChain4,OrderPricingRefactorChain5) to run
     each one in turn, in the order given, all under the same -HostAddress/-Model/-Repeats -
     this is the supported way to queue a multi-test overnight sequence: it reuses this script's
@@ -232,6 +234,10 @@
     scenario's own cap applies; a positive value sets ROSLYNSENTINEL_MODELEVAL_TURN_CAP, and the script clears the variable
     otherwise so one left in the shell cannot skew a run.
 
+.PARAMETER Step
+    ShippingKindStep only: step numbers 1-5 to run (for example -Step 4,5 runs steps 4 and 5). Default: all five.
+    Each listed step is one Model_CompletesShippingKindStep test case.
+
 .EXAMPLE
     .\roslynsentinel-modeleval.ps1 -HostAddress 112 -Test SizeThreshold -Size 60
     Sweep size=60 against the .112 GTX 1080 host.
@@ -256,7 +262,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario')]
+    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario', 'ShippingKindStep')]
     [string[]]$Test,
 
     [Parameter(Position = 2)]
@@ -303,7 +309,10 @@ param(
 
     [string]$Scenario,
 
-    [int]$TurnCap = 0
+    [int]$TurnCap = 0,
+
+    [ValidateRange(1, 5)]
+    [int[]]$Step
 )
 
 $ErrorActionPreference = 'Stop'
@@ -350,6 +359,11 @@ $testNames = @{
     'ResumeTranscript'              = 'ResumeFromTranscript_SamplesTheNextTurns'
     'ScoreTranscript'               = 'ScoreSavedTranscript_AppendsOneLine'
     'Scenario'                      = 'RunScenario_SamplesAndScores'
+    'ShippingKindStep'              = 'Model_CompletesShippingKindStep'
+}
+
+if ($Step -and ($Test -notcontains 'ShippingKindStep')) {
+    throw "-Step applies only to -Test ShippingKindStep."
 }
 
 if ($Test -contains 'ResumeTranscript') {
@@ -584,9 +598,20 @@ for ($i = 1; $i -le $Repeats; $i++) {
     # Suppress that promotion for just this call so a real test failure is archived and
     # counted like any other run; $LASTEXITCODE still reflects the real per-run outcome.
     $ErrorActionPreference = 'Continue'
+    $testFilter = "Name=$testName"
+    if ($currentTest -eq 'ShippingKindStep') {
+        # Five TestCase rows share one method name: Name~ selects all five, -Step narrows to the listed cases.
+        # Parentheses are filter syntax, so the case name's own ( and ) are escaped.
+        $testFilter = if ($Step) {
+            (($Step | Sort-Object -Unique | ForEach-Object { "Name=$testName\($_\)" }) -join '|')
+        }
+        else {
+            "Name~$testName"
+        }
+    }
     & dotnet test $csproj -c Debug `
         --artifacts-path $artifactsPath `
-        --filter "Name=$testName" `
+        --filter $testFilter `
         --logger "console;verbosity=detailed"
     $exitCode = $LASTEXITCODE
     $ErrorActionPreference = 'Stop'
