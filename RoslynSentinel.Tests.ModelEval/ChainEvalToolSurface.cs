@@ -15,6 +15,7 @@ using RoslynSentinel.Tools.Advanced;
 namespace RoslynSentinel.Tests.ModelEval;
 
 // Both chain tests and the transcript-resume tests use this so the resume environment matches.
+// The lean 18-tool surface is the default; ROSLYNSENTINEL_MODELEVAL_TOOLSET=full opts out to the full surface.
 // DeleteFile is kept; the other WholeFileWrite tools (WriteFile, ApplyDiff, ApplyUnifiedDiff) and the
 // git/project tools are hidden because they are useless on a temp fixture and cost schema tokens.
 public static class ChainEvalToolSurface
@@ -23,7 +24,7 @@ public static class ChainEvalToolSurface
     public static HashSet<string> NewModes() =>
         new(new[] { "Refactor", "Workspace", "WholeFileWrite" }, StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Environment variable that selects the tool surface: "lean"; unset, empty, "full" or unknown means full.</summary>
+    /// <summary>Environment variable that selects the tool surface: "full" selects the full surface; unset, empty, "lean" or any other value selects lean.</summary>
     public const string ToolsetEnvVar = "ROSLYNSENTINEL_MODELEVAL_TOOLSET";
 
     /// <summary>The tools the lean ModelEval surface offers. Every other discovered tool is hidden.</summary>
@@ -34,8 +35,12 @@ public static class ChainEvalToolSurface
         "ChangeSignature", "ChangeAccessibility", "ModifyModifier", "UsingDirective",
     ];
 
+    /// <summary>True only for "full" (trimmed, case-insensitive). Every other value, including null, selects lean.</summary>
+    public static bool IsFullValue(string? value) => value?.Trim().Equals("full", StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>True for every value except "full" (so null, empty and unknown values select lean).</summary>
     public static bool IsLeanValue(string? value) =>
-        value?.Trim().Equals("lean", StringComparison.OrdinalIgnoreCase) == true;
+        !IsFullValue(value);
 
     /// <summary>
     /// The legacy 11-name hide set, independent of the environment. Legacy whole-file fixtures that must
@@ -55,14 +60,16 @@ public static class ChainEvalToolSurface
     {
         var value = Environment.GetEnvironmentVariable(ToolsetEnvVar);
         TestContext.Out.WriteLine(
-            IsLeanValue(value) ? $"Tool surface: lean ({LeanAllowList.Count} tools)" : "Tool surface: full (default)");
+            IsFullValue(value)
+                ? "Tool surface: full (opted out with ROSLYNSENTINEL_MODELEVAL_TOOLSET=full)"
+                : $"Tool surface: lean ({LeanAllowList.Count} tools)");
         return NewHiddenTools(value, extraAllowed);
     }
 
-    /// <summary>Hide set for an explicit toolset value (no environment read). Not lean: the full surface.</summary>
+    /// <summary>Hide set for an explicit toolset value (no environment read). "full" gives the full surface; any other value gives lean.</summary>
     public static HashSet<string> NewHiddenTools(string? toolsetValue, IEnumerable<string>? extraAllowed)
     {
-        if (!IsLeanValue(toolsetValue))
+        if (IsFullValue(toolsetValue))
         {
             return NewFullSurfaceHiddenTools();
         }

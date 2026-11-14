@@ -15,7 +15,7 @@ using RoslynSentinel.Tools.Advanced;
 namespace RoslynSentinel.Tests.ModelEval;
 
 /// <summary>
-/// Covers the lean arm of <see cref="ChainEvalToolSurface"/> (ROSLYNSENTINEL_MODELEVAL_TOOLSET=lean).
+/// Covers the lean arm of <see cref="ChainEvalToolSurface"/>, the default (ROSLYNSENTINEL_MODELEVAL_TOOLSET=full opts out).
 /// Uses the string overload of NewHiddenTools so no environment variable is mutated.
 /// </summary>
 [TestFixture]
@@ -40,14 +40,35 @@ public class ChainEvalToolSurfaceLeanTests
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     [Test]
-    public void Default_UnsetEmptyFullAndUnknownValues_ReturnTheFullSurfaceList()
+    public void Default_UnsetEmptyLeanAndUnknownValues_ReturnTheLeanSurface()
     {
-        foreach (var value in new string?[] { null, "", "full", "bogus" })
+        var lean = ChainEvalToolSurface.NewHiddenTools("lean", null);
+
+        foreach (var value in new string?[] { null, "", "lean", "bogus" })
         {
             var hidden = ChainEvalToolSurface.NewHiddenTools(value, null);
 
-            Assert.That(hidden, Is.EquivalentTo(ChainEvalToolSurface.NewFullSurfaceHiddenTools()), $"value '{value}'");
-            Assert.That(hidden, Is.EquivalentTo(LegacyHiddenNames), $"value '{value}'");
+            Assert.Multiple(() =>
+            {
+                Assert.That(hidden, Is.EquivalentTo(lean), $"value '{value}'");
+                Assert.That(ChainEvalToolSurface.LeanAllowList.Where(n => hidden.Contains(n)), Is.Empty, $"value '{value}' hides allow-listed tools");
+                Assert.That(hidden, Does.Contain("WriteFile"), $"value '{value}'");
+            });
+        }
+    }
+
+    [Test]
+    public void Full_ValuesSelectTheUnchangedFullSurfaceList()
+    {
+        foreach (var value in new[] { "full", "FULL", " full " })
+        {
+            var hidden = ChainEvalToolSurface.NewHiddenTools(value, null);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(hidden, Is.EquivalentTo(ChainEvalToolSurface.NewFullSurfaceHiddenTools()), $"value '{value}'");
+                Assert.That(hidden, Is.EquivalentTo(LegacyHiddenNames), $"value '{value}'");
+            });
         }
     }
 
