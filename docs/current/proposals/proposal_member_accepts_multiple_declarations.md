@@ -1,6 +1,6 @@
 # Let `Member` accept several member declarations in one call
 
-**Status:** ACCEPTED 2026-11-14. Owner chose option 1 (addMember accepts N declarations); option 2 (replace) is a later follow-up, after option 1 is measured. Nothing is implemented.
+**Status:** ACCEPTED 2026-11-14. Option 1 (addMember accepts N declarations) IMPLEMENTED 2026-11-14 by [plan_member_accepts_multiple_declarations](../plans/closed/plan_member_accepts_multiple_declarations.md); measurement inconclusive (see "Measurement of option 1"). Option 2 (replace accepts N) is open, in `TODO.md`.
 
 ## Motivation
 
@@ -255,6 +255,36 @@ A new `MemberAction` value or a separate tool taking `members: [{...}]`. See "Al
   criterion is zero multi-member rejections and no regression in pass rate or turn count. Also record
   how often models send N >= 2 declarations after the change, to see whether the widened description
   induces batching where it is not needed.
+
+## Measurement of option 1 (2026-11-14, plan Step 20)
+
+Same-commit before/after, 15 runs each, models `qwen3.5-9b-mtp` (host 113) and `qwen3.5-4b-mtp` (host 112; host 85
+was unreachable, so 112 stood in for it in both sets): 5x `Model_AppliesTenChainedRefactors` per host and 5x
+`Model_CompletesShippingKindStep(3)` on 113. Before = tested commit `39b111c1` (steps 1-9, text-neutral, plus a peer's
+ReasoningReplayPolicy commit); after = `993d69a9` (steps 1-21). Counting rule as in "Measurement plan" (one rejection per
+run-turn, not raw phrase hits).
+
+| | Before | After |
+| --- | --- | --- |
+| Pass rate | 15/15 | 15/15 |
+| Mean turns, ten-chain (n=10) | 26.2 (range 20-39) | 29.6 (range 24-38) |
+| Mean turns, ShippingKind step 3 (n=5) | 5.6 | 5.8 |
+| addMember multi-declaration rejections | 0 | 0 |
+| replace multi-declaration rejections | 1 (ShippingKind run `20261114-102311-129`, turn 2: `replace` of `All` with 3 new methods) | 0 |
+| `Member(addMember)` calls with N >= 2 | 0 | 0 |
+
+Reading:
+- **The new path was not exercised.** No run in either set sent an N >= 2 addMember, so the numbers show no
+  regression in pass rate and no benefit; the rejection is rare (6 distinct runs in 6492 logs earlier; 1 in these 30).
+  Outcome class: not CLEARED and not BATCH-REJECTED; nothing to compare. Over-batching (a widened description making
+  weak models paste N declarations) did not appear either: 0 of 7 addMember calls held more than one declaration.
+- **Turn count rose on the ten-chain fixture** (26.2 to 29.6), which by the plan's rule is a REGRESSION flag. No
+  model call used the changed behaviour, the ranges overlap, and n=10 per set, so this reads as run-to-run noise, but
+  it is not proven; the only model-visible changes are the `newMemberSource` description and result text.
+- **Option 2 input:** the one replace rejection in the before set is the shape option 2 targets (replace an existing
+  member plus add new ones).
+- Not measured: a targeted run that forces the multi-member shape (for example a scenario whose step asks for a method
+  plus its helper); recommend that, rather than more of these fixtures, before deciding option 2.
 
 ## Alternatives considered, not pursued
 

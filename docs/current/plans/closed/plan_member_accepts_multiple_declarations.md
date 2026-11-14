@@ -1,6 +1,6 @@
 # Plan: Member(addMember) accepts several member declarations in one call (option 1)
 
-**Status:** IN PROGRESS 2026-11-14. Steps 1-19 done (72dabecd, 50facb61, 78116e06, 888f2f3a, 55355155, f5077193, 46152134, 3e28b49e, 7c16f4c3, 46f9657b, a374e2d5, 0c47145b, 0089b8a9, d0a02544, f232a4d9, 31f8a197, cfe59359, 63340607, 53128476, 6d5b4144; Step 10 is the baseline run, no commit); Steps 20-21 next. Option 1 only (addMember, with or without an insert anchor, takes N declarations atomically); option 2 (replace takes N) is a follow-up after measurement. Batched mode, owner away. Nothing is built.
+**Status:** IMPLEMENTED 2026-11-14. Steps 1-21 done (72dabecd, 50facb61, 78116e06, 888f2f3a, 55355155, f5077193, 46152134, 3e28b49e, 7c16f4c3, 46f9657b, a374e2d5, 0c47145b, 0089b8a9, d0a02544, f232a4d9, 31f8a197, cfe59359, 63340607, 53128476, 6d5b4144; Step 10 is the baseline run, no commit; step 20 is the measurement, no commit; step 21 cleanup 993d69a9). Option 1 only (addMember, with or without an insert anchor, takes N declarations atomically); option 2 (replace takes N) is a follow-up after measurement.
 
 ## Problem
 
@@ -9,7 +9,7 @@ is rejected by `MemberRefactoringEngine.DetectMultipleMemberDeclarations`
 (`RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs:2276`). The observed shape is a natural unit of work
 ("a method plus the helper it now calls", "two fields that belong together"), not a malformed call. Evidence, motivation,
 history of the one-member guard (a parser limit, not a design choice) and the rejected alternatives are in
-[proposal_member_accepts_multiple_declarations.md](../proposals/proposal_member_accepts_multiple_declarations.md):
+[proposal_member_accepts_multiple_declarations.md](../../proposals/proposal_member_accepts_multiple_declarations.md):
 about 8 distinct rejections over 6 distinct runs (addMember 5, replace 3); worst case
 `Model_AppliesTenChainedRefactors/20261112-192512-927` rejected the same two-method payload on turns 8, 9 and 12.
 Fixing it is an environment change: the tool accepts what the model naturally composes instead of making the model
@@ -348,6 +348,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Done when (dispatcher): `MemberSingleDeclarationTests` all pass (this ends the Step 11 red window), then the whole `RoslynSentinel.Tests.Tools.Basic` project.
 
 ### Step 20 - LIVE: measure against the Step 10 baseline (live / eval step; no implementer)
+- Done: 2026-11-14, no code commit. 15 after-jobs at tested commit 993d69a9 (same hosts/models as Step 10, tree-change RunAnyway), all FINISHED-PASS. Numbers and reading are in the proposal section "Measurement of option 1": no run used the new path (0 addMember calls with N >= 2), pass rate 15/15 both sets, ten-chain mean turns 26.2 to 29.6 (flagged, read as noise).
 - Files: none (reads `ModelTestingResults/**`)
 - Depends on: 19 green, 10 (the same-commit baseline jobs, all ended), `Build(level: fullBuild)`, own-server restart, all code committed
 - Effect: measurement only
@@ -365,6 +366,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Done when: the before and after counts are written into a note on the proposal or a finding doc (the owner decides which when reading the numbers); no files are edited by this step.
 
 ### Step 21 - Closing: stub sweep, full build and test run, bookkeeping
+- Done: 993d69a9 (unused single-member RequireKeepsBindingsAsync overload removed); stub sweep clean; fullBuild 0 errors, 5 warnings all in untouched test projects; full test run on 993d69a9: 0 failures (14 skipped), 1238 s; bookkeeping in the closing commit.
 - Files: stub sweep over `RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs`, `RoslynSentinel.Common/RoslynFormattingHelper.cs`, `RoslynSentinel.Engines.Basic/AddMemberCallBindingCheck.cs`; the one cleanup edit is in `AddMemberCallBindingCheck.cs`
 - Depends on: 19 (can run before 20; 20 needs a committed tree)
 - Effect: text-neutral
