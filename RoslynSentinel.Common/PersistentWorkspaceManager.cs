@@ -25,6 +25,7 @@ namespace RoslynSentinel.Common;
 public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader, IWorkspaceReloadFailureProvider, IEditAttributionLedgerProvider, IEditEffectIndexProvider, IObservedContentLedger
 {
     private readonly ILogger<IWorkspaceManager> _logger;
+    private readonly ActiveToolSurface? _activeToolSurface;
     private MSBuildWorkspace? _workspace;
     private readonly SemaphoreSlim _solutionLock = new(1, 1);
     private FileSystemWatcher? _watcher;
@@ -341,10 +342,11 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // concurrently under NUnit's ParallelScope.Fixtures).
     private static readonly Lock MsBuildRegistrationLock = new();
 
-    public PersistentWorkspaceManager(ILogger<IWorkspaceManager> logger, IScopedOperationLedger? ledger = null)
+    public PersistentWorkspaceManager(ILogger<IWorkspaceManager> logger, IScopedOperationLedger? ledger = null, ActiveToolSurface? activeToolSurface = null)
     {
         _logger = logger;
         _ledger = ledger ?? new ScopedOperationLedgerEngine();
+        _activeToolSurface = activeToolSurface;
         _unrecoverableBreaker = new UnrecoverableCircuitBreaker(logger);
         _mutationBreaker = new MutationCircuitBreaker(logger);
         _orientationBreaker = new OrientationCircuitBreaker(logger, OrientationBreakerOptions.TripThreshold);
@@ -3687,7 +3689,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             projectName,
             docCommentId,
             cancellationToken,
-            retryCall);
+            retryCall,
+            _activeToolSurface is null ? null : _activeToolSurface.IsCallable);
 
     private static int CountLines(string text)
     {

@@ -25,13 +25,15 @@ public static class SymbolWireResolver
     /// arguments), or null to keep the neutral Search call. With a delegate each candidate also states its exact id. Invoked at
     /// render time only. Last parameter so existing positional callers compile unchanged.
     /// </param>
+    /// <param name="isCallable">Optional, for the ranked not-found text only: whether the caller can call a tool by name. Null means every tool is callable (full surface, today's text). Last parameter so existing positional callers compile unchanged.</param>
     public static async Task<SymbolResolution> ResolveAsync(
         Func<SymbolHandle, CancellationToken, Task<ISymbol?>> resolveSymbol,
         Func<CancellationToken, Task<Solution>> getCommittedSolution,
         string projectName,
         string docCommentId,
         CancellationToken cancellationToken,
-        Func<string, string?>? retryCall = null)
+        Func<string, string?>? retryCall = null,
+        Func<string, bool>? isCallable = null)
     {
         SymbolHandle handle = new SymbolHandle(projectName, docCommentId);
         ISymbol? symbol = await resolveSymbol(handle, cancellationToken);
@@ -91,7 +93,7 @@ public static class SymbolWireResolver
             Handle = handle,
             Error = new EngineError(
                 EngineErrorCode.SymbolNotResolved,
-                await BuildNotFoundTextAsync(solution, projectName, docCommentId!, retryCall, cancellationToken),
+                await BuildNotFoundTextAsync(solution, projectName, docCommentId!, retryCall, isCallable, cancellationToken),
                 DataTag.SymbolHandle)
         };
     }
@@ -150,7 +152,7 @@ public static class SymbolWireResolver
 
     // Runs the shared candidate builder over the named project (every project with that name, so a multi-target load is
     // covered); a project name that matches nothing falls back to every non-test project and says so in the scope text.
-    private static async Task<string> BuildNotFoundTextAsync(Solution solution, string projectName, string docCommentId, Func<string, string?>? retryCall, CancellationToken cancellationToken)
+    private static async Task<string> BuildNotFoundTextAsync(Solution solution, string projectName, string docCommentId, Func<string, string?>? retryCall, Func<string, bool>? isCallable, CancellationToken cancellationToken)
     {
         var named = solution.Projects.Where(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase)).ToList();
         IReadOnlyCollection<Project> searched;
@@ -171,9 +173,9 @@ public static class SymbolWireResolver
 
         var (query, kind) = ParseId(docCommentId);
 
-        // TODO isCallable: the workspace manager has no ActiveToolSurface, so hints name tools unconditionally (as the old text did)
+        // The callable check comes from the caller (the workspace manager passes its ActiveToolSurface).
         // wholeSolution stays false: a named project, or the non-test fallback, is a narrowed search.
-        return await SymbolNotFoundDetail.BuildAsync(searched, query, kind, scope, listAllProject, isCallable: null, nextCall: null, cancellationToken, retryCall);
+        return await SymbolNotFoundDetail.BuildAsync(searched, query, kind, scope, listAllProject, isCallable: isCallable, nextCall: null, cancellationToken, retryCall);
     }
 
     // "M:Ns.Type.Name(System.Int32)" -> ("Ns.Type.Name", "method"); generic arity markers are dropped; N and unknown kinds search any kind.
