@@ -1,11 +1,10 @@
 # Plan: LibGit2Sharp follow-ups - route trial evidence, audit, default-on, config operation, patch text
 
-**Status:** IN PROGRESS 2026-11-12. Steps 1-13, 15-18, 20, 21 done (6a58ffd6..ee512c94); Step 14 (live gate) run 2026-11-13 with D.1-D.4 met
-(table in Step 14; D.3 needs one `commit-graph write`); D.5 and Step 19 (the flip) open. Approved 2026-11-12. Follow-ups to proposal_libgit2sharp_in_process_git; decisions recorded; Steps 22-23 (lists) skipped unless a caller shows cost.
+**Status:** DONE 2026-11-14 except Steps 22-23 (skipped unless a caller shows cost). Steps 1-21 done (6a58ffd6..9deef607); Step 14 (live gate) run 2026-11-13 with D.1-D.5 met (table in Step 14); Step 19 flipped the route default to ON in 9deef607. Approved 2026-11-12. Follow-ups to proposal_libgit2sharp_in_process_git; decisions recorded.
 
 ## Problem
 
-The in-process commit route (`git config roslynsentinel.inProcessCommit`, default off, trial on in this repo)
+The in-process commit route (`git config roslynsentinel.inProcessCommit`; this paragraph describes the state when the plan was written: default off, trial on in this repo, now default on since Step 19)
 landed on 2026-11-12 (see [the proposal](../proposals/proposal_libgit2sharp_in_process_git.md), "Current state and
 next" and 5c). It is wired as a trial with no way to judge it:
 
@@ -47,7 +46,7 @@ Where each route decision is made and whether it reaches the log. "Logged" means
 
 | Decision | Decided at | Logged today |
 | --- | --- | --- |
-| Route off / key absent / not boolean | `InProcessCommitRoute.IsEnabled` `:55-67`, called `GitImpl.cs:3478` | No, by design (a disabled route counts nothing) |
+| Route off (key `false` or non-true-like text; unset is ON since Step 19) | `InProcessCommitRoute.IsEnabled` `:55-67`, called `GitImpl.cs:3478` | No, by design (a disabled route counts nothing) |
 | `IsEnabled` throws (any exception) | same, `catch` returns false | No; indistinguishable from "off" |
 | Amend (also a blank message) | `GitImpl.cs:3486`; reason text says "an amend rewrites HEAD" | Yes |
 | Paths given without `scope=listed` | `GitImpl.cs:3493` | Yes |
@@ -589,7 +588,7 @@ a one-file staged diff and a 20-file staged diff: CLI patch (the exact command `
   decline reason class a count. Then a table: each criterion D.1-D.5, measured value, pass/fail.
 - Done when: the table is in this plan and the criteria are judged against it. No FAIL is the bar to proceed; any
   FAIL stops Steps 19 until fixed. (The owner has accepted the criteria; the go to flip is the table passing.)
-- **Run 2026-11-13 (todo punchlist item 6), status: criteria D.1-D.4 judged below; D.5 and the Step 19 go are the owner's.**
+- **Run 2026-11-13 (todo punchlist item 6), status: D.1-D.4 judged then; D.3 and D.5 closed 2026-11-14 (table below); Step 19 flipped.**
   Second setup: throwaway repo `c:\tmp\rs-commit-trial-repo` (`core.autocrlf=false`, route key `true`, a later repo-local
   `commit-msg` hook) plus a linked worktree `c:\tmp\rs-commit-trial-wt` (branch `wt-branch`), driven through an HTTP test
   instance (`McpServerControl(LaunchTestInstance)`, then `LoadSolution` of a one-project `Trial.slnx` in the repo: `Git`
@@ -617,9 +616,13 @@ a one-file staged diff and a 20-file staged diff: CLI patch (the exact command `
   | --- | --- | --- |
   | D.1 volume and time | 373 taken in this repo (+21 second setup), 3 UTC dates | pass |
   | D.2 two setups, 10+ taken in the second | autocrlf=false repo plus linked worktree, no hook for the taken ones; 21 taken | pass |
-  | D.3 audit exit 0 with fsck | second repo exit 0; this repo exit 1 solely from the stale commit-graph (plain fsck exit 0) | pass after `commit-graph write`, owner to confirm |
+  | D.3 audit exit 0 with fsck | second repo exit 0; this repo exit 1 solely from the stale commit-graph (plain fsck exit 0); after the owner ran `git commit-graph write --reachable --split=replace` (2026-11-14), `Test-CommitRouteLog.ps1 -RepoPath .` exits 0: fsck ok, 0 fail, 0 warn | pass |
   | D.4 declines in the catalogue | CR rule, amend, hook, merge in progress; no `libgit2 failed:` or exception reason | pass |
-  | D.5 no human report | not checkable by an agent | open (owner) |
+  | D.5 no human report | owner noticed no commit problems and no session reported any; peers fd, 5d and the ContosoOrder session each answered NONE; read-only spot-check (2026-11-14) of 12 sampled taken commits plus the last 100: no wrong, lost or duplicated commit, author `wc` throughout, file counts equal the logged pathCount for all 11 only-paths commits | pass |
+  | D.1 (re-measured 2026-11-14) | 431 taken commits on 3 UTC dates | pass |
+  | D.2 (re-measured 2026-11-14) | 21 taken in a second repo (`core.autocrlf=false`) plus a linked worktree | pass |
+
+  Go to flip: all of D.1-D.5 hold; Step 19 landed in 9deef607.
 
 ### Step 15 (D) - pin the route off in `GitTestRepo.InitRepo`
 - Done: 91278598
@@ -681,6 +684,10 @@ a one-file staged diff and a 20-file staged diff: CLI patch (the exact command `
 - Size: D1 (1 new file).
 
 ### Step 19 (D) - flip the default (behaviour-changing)
+- Done: 9deef607 (`DefaultEnabled = true`, `IsEnabled` three-state through `GetConfigValue`: unset -> default, true/yes/on or a
+  non-zero integer -> on, any other text including an empty value -> off, an exception -> off; a CLI failure reading the key
+  yields null and so the default, after which the route's own declines apply; route test renamed and inverted, explicit-false
+  and garbage-value tests added; docs updated). Live check after restart is the main session's.
 - Files: `RoslynSentinel.Common/InProcessCommitRoute.cs` (`IsEnabled` `:55-67`, class summary `:7`),
   `RoslynSentinel.Tools.Basic/GitImpl.cs` (comment at `:609`, `TryCommitInProcessAsync` summary), the
   route test file (`:560`)
@@ -844,8 +851,8 @@ Open items carry options and a recommendation (the planner's, not a decision). I
 
 **D. Default-on**
 - D1-D3. RESOLVED 2026-11-12 (owner): criteria accepted, flip applies to all repos, invalid value counts as off.
-- D4. Cross-plan baseline dependency (open): Step 19 changes the commit path every other plan's runs use. Do it when no
-  other plan holds a commit-timing A/B baseline (none is known to me; ask the peer sessions).
+- D4. Cross-plan baseline dependency: RESOLVED 2026-11-14. Step 19 changes the commit path every other plan's runs use;
+  the peer sessions fd, 5d and the ContosoOrder session answered that none holds a commit-timing A/B baseline.
 - D5. With the three-state read, `GetConfigValue` returns null for unset and also for a CLI exit 128 (not a
   repository). Such a repo would read "unset" and turn the route on, after which the route's own declines decide
   (a non-repository declines at the first reader call). Accepted; revisit if the log ever shows it.
@@ -912,3 +919,4 @@ Open items carry options and a recommendation (the planner's, not a decision). I
 - **Choice:** No. First run Step 14 in a second repo with a different setup (`core.autocrlf=false`, or commits from a linked worktree) through the manual checklist (plain commit, only-paths commit, commit-msg hook decline, amend, merge in progress) until 10 or more are taken there, run `scripts/Test-CommitRouteLog.ps1` with fsck, then Step 19 once D.1-D.5 hold. Steps 22-23 (in-process tag/worktree lists) stay skipped.
 - **Why:** Trial data in this repo is clean (319 taken, 1 declined CR-byte rule dropped in d8b112e6, 0 fallbacks/errors, audit exit 0 with `-SkipFsck`) but D.2 (two setups, 10+ taken in the second) is unmet and D.3 (fsck) was not run; D.1 is met once 2026-11-14 UTC has taken lines.
 - **Acceptance:** D.1-D.5 hold and the audit with fsck exits 0.
+- **Outcome (2026-11-14):** acceptance met (Step 14 table); Step 19 flipped the default in 9deef607.

@@ -1,6 +1,6 @@
 # Adopt LibGit2Sharp in-process for read-mostly git operations
 
-**Status:** APPROVED (partly) 2026-11-10. The owner approved runner consolidation (step 0), the spike (step 1) and stage 1 (step 2) on 2026-11-10; all three landed the same day (see Results). Stage 2 (step 3) and restricting native binaries to win-x64 were approved later on 2026-11-10; stage 3 landed scoped to whole-file stage/unstage. Stage 4 (step 5, commit) was approved on 2026-11-11 and landed 2026-11-12: 5a, 5b and 5c done; the in-process commit route is default off and on as a trial in this repo.
+**Status:** APPROVED (partly) 2026-11-10. The owner approved runner consolidation (step 0), the spike (step 1) and stage 1 (step 2) on 2026-11-10; all three landed the same day (see Results). Stage 2 (step 3) and restricting native binaries to win-x64 were approved later on 2026-11-10; stage 3 landed scoped to whole-file stage/unstage. Stage 4 (step 5, commit) was approved on 2026-11-11 and landed 2026-11-12: 5a, 5b and 5c done; the in-process commit route was default off with a trial in this repo and became default ON on 2026-11-14 (plan_libgit2sharp_followups.md, Step 19; `git config roslynsentinel.inProcessCommit false` turns it off per repository).
 
 ## Current state and next (2026-11-12)
 
@@ -11,7 +11,7 @@
 - **Still the CLI:** hunk staging, amend, merge conclusion, signing, blocking hooks, push/fetch/pull,
   revert, stash apply/pop, worktree add/remove, diff/show patch text, tag and worktree lists,
   `git config` writes; and `git commit` itself whenever the route declines.
-- **Trial (this repo only, default off elsewhere):** each route outcome is one line in
+- **Trial (as of 2026-11-12 this repo only, default off elsewhere; default ON since 2026-11-14, Step 19):** each route outcome is one line in
   `.git/roslynsentinel/commit-route.jsonl` (`ab4bbd15`, relaxed escaping `abec2588`). Since the CR
   decline was dropped (`d8b112e6`) CRLF code commits take the route (first: `abec2588`); the
   post-commit server prebuild still fires. Tools.Basic full run green at `abec2588`, Tests.Basic at
@@ -259,7 +259,7 @@ Hook policy: the hook files stay (they cover shell, IDE and rebase/merge commits
 repo's hooks cannot be recreated); the server runs `post-*` hooks itself only for commits it made in
 process.
 
-**5c done (2026-11-12), route DEFAULT OFF:** 5c-1 `a6462ec5` CAS commit primitive
+**5c done (2026-11-12), route DEFAULT OFF (flipped to default ON on 2026-11-14, Step 19 of plan_libgit2sharp_followups.md; the text below is the 2026-11-12 state):** 5c-1 `a6462ec5` CAS commit primitive
 (`Libgit2GitReader.CasCommit.cs`, `Libgit2Native.cs`); 5c-2 `5d108b73` hook runner (`GitHooks.cs`,
 `GitShellLocator.cs`); 5c-3 `79fae5b2` message cleanup and trailers (`GitCommitMessage.cs`, byte
 parity with git 2.55); 5c-4 `d23e3f15` route in `GitImpl.CommitAsync` (`InProcessCommitRoute.cs`),

@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## LibGit2Sharp in-process commit: Step 14 gate and Step 19 default-on flip - resolved (2026-11-14)
+
+LibGit2Sharp in-process commit: D.5 and Step 19 flip left (2026-11-13) - Step 14 second-setup trial done 2026-11-13 (21 taken in an autocrlf=false repo plus linked worktree, audit with fsck exit 0); D.3 met after the owner's `git commit-graph write` (audit exit 0 with fsck), D.5 met (no report from the owner or peers, spot-check of 12 + 100 taken commits clean), Step 19 flipped the default to ON in 9deef607 (`roslynsentinel.inProcessCommit` unset = on, false or non-true-like text = off); Steps 22-23 stay skipped; Small - [plan](plans/plan_libgit2sharp_followups.md)
+
+Evidence: 9deef607 (Step 19), Step 14 table in plans/plan_libgit2sharp_followups.md (D.1-D.5 pass); GitInProcessCommitRouteTests (key absent taken, explicit false and garbage take the CLI path). Remaining stray defects stay in a shrunk OPEN entry.
+
 ## Engines.Advanced not-found sweep (candidates + MissingTargetKinds) - resolved (2026-11-14)
 
 Engines.Advanced not-found sweep: candidates + `MissingTargetKinds` (2026-11-13) - 136 `new ToolNotFoundException(` sites, 0 on `MissingTargetKinds`; slice 1 = the 14 `ProjectLookup.FindProject` sites through one shared helper over `ProjectNotFoundDetail` (AntiPattern 10, AsyncOptimization 2, A12 2), then about 20 sites per slice per engine file onto `NameCandidates`/`SymbolNotFoundDetail`/`MissingTargetKinds` with facts and options only; last step adds Engines.Advanced to `ErrorPolicyKindRatchetTests.ScannedProjects` and removes the `// TODO error-policy` in `ErrorPolicyClassifier.MapKind`; `CodeTransformTools` and `GitImpl` stay deferred with a `// TODO` each; Medium, sweep lane - [doc](references/reference_not_found_error_inventory.md)
