@@ -282,6 +282,17 @@ Read-only, by code (no executed tool-level test). Full report in the run tracker
 - **Choice:** Add a scenario whose not-found query carries `containingType` or `filePath` and A/B inventory on vs off at n=30 on qwen3.5-4b-mtp (~40 min), then decide the default.
 - **Why:** No eval evidence exists; only unit tests (`NotFoundInventoryTests`) cover it.
 - **Acceptance:** Scenario in Tests.ModelEval, two 30-sample cells, default decision recorded here.
+- **Result (todo punchlist #8, 2026-11-14):** scenario `SearchContainingTypeMiss` (`FaultScenarios.cs`, commit 1836f3ff; type 4, seeded first call `Search(mode: symbol, query: ApplyLoyaltyBonus, containingType: OrderPricingCalculator)`, Recover, TurnCap 8, `RenameScenarios.CheckFinalStateAsync`), qwen3.5-4b-mtp on host 112, `ROSLYNSENTINEL_ERROR_POLICY_MODE=Inline`, both cells from a worktree at 1836f3ff (`commit` column 1836f3ff, `dirty` false; run folders `20261114-021339-962` inventory on, `20261114-023209-355` off under `ModelTestingResults/112/RunScenario_SamplesAndScores/` in `c:\tmp\rs-eval-item8`). Validity: `errorPolicyMode` `inline+inventory` on 30/30 on rows and `inline` on 30/30 off rows; the seeded result carries the "Type `...OrderPricingCalculator` declares 4 members: CalcDisc, DescribeOrder, SummarizeShipping, _unrelatedField" sentence in 30/30 on samples, 0/30 off (transcripts escape the backtick as `\u0060`). Over 30 (0 Inconclusive):
+
+  | | on | off | Fisher p |
+  | --- | --- | --- | --- |
+  | pass | 22 | 19 | 0.58 |
+  | BudgetOut | 1 | 4 | 0.35 |
+  | FalseDoneClaim | 4 | 2 | 0.67 |
+  | GaveUpEarly (`BLOCKED:`) | 3 | 4 | 1.0 |
+  | mean turns | 6.67 | 7.13 | |
+
+  First post-seed call: on ReadFile 15, ListAll 8, ListSolutionItems 4, Search 3; off ListAll 17, ReadFile 8, ListSolutionItems 3, Search 2 (the inventory doubles direct ReadFile use; the "call ListAll" lead in the error text still wins for 8 on and 17 off samples). **Decision: deferred.** The Decisions give no threshold and every difference is inside noise at n=30, so the default stays off (owner: flip, or n=60 more per cell). Inventory text defect found: the member list is followed by the next sentence with no separator (TODO.md).
 
 ### (c) Unenumerated kind strings
 
