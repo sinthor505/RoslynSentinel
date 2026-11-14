@@ -777,7 +777,7 @@ public class StructuralRefactoringEngine
  ?? root.FindToken(position).Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null)
         {
-            throw new ToolNotFoundException(SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "expression", "directly contains the whole expression to extract"), "expression");
+            throw new ToolNotFoundException(SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "expression", "directly contains the whole expression to extract"), MissingTargetKinds.Expression);
         }
 
         var containingStatement = expression.Ancestors().OfType<StatementSyntax>().FirstOrDefault();
@@ -823,7 +823,7 @@ public class StructuralRefactoringEngine
         var idx = currentBlock.Statements.IndexOf(currentStatement);
         if (idx < 0)
         {
-            throw new ToolNotFoundException("Statement not found in block.", "statement");
+            throw new ToolNotFoundException("Statement not found in block.", MissingTargetKinds.Statement);
         }
 
         var newBlock = currentBlock.WithStatements(currentBlock.Statements.Insert(idx, varDecl));
@@ -839,11 +839,7 @@ public class StructuralRefactoringEngine
     public async Task<DocumentEditResult> MoveTypeToOuterScopeAsync(FilePathWrapper filePath, string nestedTypeName, bool allowWidenToInternal = false, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new ToolNotFoundException($"File '{filePath}' not found.", "file");
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -855,7 +851,7 @@ public class StructuralRefactoringEngine
         var nestedType = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<TypeDeclarationSyntax>().Where(t => t.Identifier.Text == nestedTypeName).ToList(), "Type", nestedTypeName);
         if (nestedType == null)
         {
-            throw new ToolNotFoundException($"Type '{nestedTypeName}' not found.", "type", nestedTypeName);
+            throw new ToolNotFoundException($"Type '{nestedTypeName}' not found. " + DeclarationNotFoundDetail.Build("type", "nestedTypeName", nestedTypeName, root.DescendantNodes().OfType<TypeDeclarationSyntax>().Select(t => t.Identifier.Text), filePath.ToString()), MissingTargetKinds.Type, nestedTypeName);
         }
 
         // Check if type is actually nested (parent is a type, not namespace/file scope)
@@ -917,7 +913,7 @@ public class StructuralRefactoringEngine
         var currentContainer = newRoot?.GetCurrentNode(container);
         if (newRoot == null || currentContainer == null)
         {
-            throw new ToolNotFoundException($"Failed to remove nested type '{nestedTypeName}'.", "type", nestedTypeName);
+            throw new ToolNotFoundException($"Failed to remove nested type '{nestedTypeName}'.", MissingTargetKinds.Type, nestedTypeName);
         }
 
         // Only the re-added type is annotated for formatting.
@@ -1208,11 +1204,7 @@ public class StructuralRefactoringEngine
     public async Task<DocumentEditResult> IntroduceParameterObjectAsync(FilePathWrapper filePath, string methodName, string? newTypeName = null, string[]? parameterNames = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new ToolNotFoundException("File not found.", "file");
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var newLine = SyntaxFactory.EndOfLine(await _workspaceManager.ResolveEolAsync(document, cancellationToken));
         var root = RequireSyntaxRoot(await document.GetSyntaxRootAsync(cancellationToken), filePath.ToString());
@@ -1283,7 +1275,7 @@ public class StructuralRefactoringEngine
                 var containing = representatives.Where(m => m.FullSpan.Contains(snippetMatch.Start)).ToList();
                 if (containing.Count == 0)
                 {
-                    throw new ToolNotFoundException($"contextSnippet is not inside any method named '{methodName}'.", "method", methodName);
+                    throw new ToolNotFoundException($"contextSnippet is not inside any method named '{methodName}'.", MissingTargetKinds.Method, methodName);
                 }
 
                 methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(containing, "Method", methodName);
@@ -1291,7 +1283,7 @@ public class StructuralRefactoringEngine
         }
         if (methodNode == null)
         {
-            throw new ToolNotFoundException("Method not found.", "method", methodName);
+            throw new ToolNotFoundException("Method not found. " + DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath.ToString()), MissingTargetKinds.Method, methodName);
         }
 
         // Check if method implements an interface
@@ -1674,7 +1666,7 @@ public class StructuralRefactoringEngine
 
         if (target == null)
         {
-            throw new ToolNotFoundException($"Member '{memberName}' not found in '{Path.GetFileName(filePath)}'.", "member", memberName);
+            throw new ToolNotFoundException($"Member '{memberName}' not found in '{Path.GetFileName(filePath)}'. " + DeclarationNotFoundDetail.Build("member", "memberName", memberName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text).Concat(root.DescendantNodes().OfType<PropertyDeclarationSyntax>().Select(p => p.Identifier.Text)).Concat(root.DescendantNodes().OfType<ConstructorDeclarationSyntax>().Select(c => c.Identifier.Text)), filePath.ToString()), MissingTargetKinds.Member, memberName);
         }
 
         SyntaxNode newTarget;
