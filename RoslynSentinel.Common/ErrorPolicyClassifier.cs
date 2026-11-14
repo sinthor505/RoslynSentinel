@@ -17,37 +17,6 @@ public enum ErrorPolicyTargetKind
 /// </summary>
 public static class ErrorPolicyClassifier
 {
-    private static readonly HashSet<string> FileKinds = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "document",
-        "file",
-    };
-
-    // Kind values passed as literals to ToolNotFoundException and MemberRefactoringNotFound are guarded by ErrorPolicyKindRatchetTests.
-    // Unknown kinds map to null (no policy key).
-    // TODO error-policy: extend ErrorPolicyKindRatchetTests to the Engines.Advanced throw sites (not yet covered by the ratchet).
-    private static readonly HashSet<string> SymbolKinds = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "class",
-        "interface",
-        "type",
-        "record",
-        "enum",
-        "enum member",
-        "method",
-        "member",
-        "declaration",
-        "property",
-        "field",
-        "constructor",
-        "parameter",
-        "attribute",
-        "namespace",
-        "symbol",
-        "container",
-        "using directive",
-    };
-
     /// <summary>
     /// Returns the target kind for a tool error, or null when the error does not map to a policy key.
     /// The comparison is case-insensitive and the kind is trimmed before matching.
@@ -69,18 +38,21 @@ public static class ErrorPolicyClassifier
             return null;
         }
 
+        // Kind values passed as literals to ToolNotFoundException and MemberRefactoringNotFound are guarded by ErrorPolicyKindRatchetTests.
+        // Unknown kinds map to null (no policy key).
+        // TODO error-policy: extend ErrorPolicyKindRatchetTests to the Engines.Advanced throw sites (not yet covered by the ratchet).
         var kind = missingTargetKind?.Trim();
         if (string.IsNullOrEmpty(kind))
         {
             return null;
         }
 
-        if (FileKinds.Contains(kind))
+        if (MissingTargetKinds.FileKinds.Contains(kind))
         {
             return ErrorPolicyTargetKind.File;
         }
 
-        if (SymbolKinds.Contains(kind))
+        if (MissingTargetKinds.SymbolKinds.Contains(kind))
         {
             return ErrorPolicyTargetKind.Symbol;
         }
