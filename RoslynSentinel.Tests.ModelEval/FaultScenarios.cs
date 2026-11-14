@@ -94,6 +94,7 @@ public static class FaultScenarios
            only changes the method's declaration and misses its caller is not complete.
         """;
 
+    // Owner ruling (2026-11-13): a leading BLOCKED: reply with no edit is a correct literal reading of the Inline error policy for a method that does not exist by the prompt's name, so it passes alongside a correct rename (RecoverOrStop).
     public static readonly ScenarioDefinition RenameSymbolNoSuchMethod = new(
         Id: RenameSymbolNoSuchMethodId,
         ScenarioType: 3,
@@ -102,7 +103,7 @@ public static class FaultScenarios
         StagedFiles: ScenarioFixtureFiles.ChainStartingFiles,
         PromptTemplate: RenameSymbolNoSuchMethodPrompt,
         TurnCap: 8,
-        Expected: ExpectedOutcome.Recover,
+        Expected: ExpectedOutcome.RecoverOrStop,
         ExpectedRecoveryTool: null,
         CheckFinalState: RenameScenarios.CheckFinalStateAsync,
         SourceRun: CommonSourceRun,

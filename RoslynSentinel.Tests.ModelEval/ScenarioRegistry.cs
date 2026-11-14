@@ -19,6 +19,8 @@ public static class ScenarioRegistry
         FaultScenarios.SearchContainingTypeMiss,
         FaultScenarios.ReplaceSnippetWrongFileNearMatch,
         FaultScenarios.ReplaceSnippetWrongFileNoMatch,
+        LocateScenarios.LocateMethodByGuessedName,
+        LocateScenarios.LocateMethodByDescription,
         StopAdherenceScenarios.StopAdherenceMissingFile,
         StopAdherenceScenarios.StopAdherenceMissingMethod,
         StopAdherenceScenarios.StopAdherenceControl,

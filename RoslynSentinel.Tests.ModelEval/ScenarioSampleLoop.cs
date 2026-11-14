@@ -107,11 +107,11 @@ public static class ScenarioSampleLoop
                         scenario.ToolUnderTest,
                         scenario.Expected,
                         scenario.ExpectedRecoveryTool,
-                        outcome.Verdict,
+                        scenario.GateVerdictOnReply(outcome.Verdict, result.Transcript.FinalMessage()),
                         result.StopReason,
                         seededTurns: scenario.ResumeKeepTurns,
                         idealTurns: scenario.IdealTurns,
-                        turnCap: scenario.TurnCap,
+                        turnCap: scenario.EffectiveTurnCap,
                         absentTargetNames: scenario.AbsentTargetNames);
                     sample = new ScenarioSample(
                         scenario.Id,

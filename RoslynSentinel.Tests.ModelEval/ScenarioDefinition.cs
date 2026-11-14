@@ -10,7 +10,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <param name="ToolUnderTest">Tool whose first call and recovery are scored (for example ReplaceSnippet).</param>
 /// <param name="StagedFiles">Files added to the fixture before the run: path relative to the fixture solution directory (for example ContosoOrders.Core/FixtureHelpers/OrderCheckout.cs) to full content.</param>
 /// <param name="PromptTemplate">User prompt; string.Format placeholder {0} is the ContosoOrders.Core project directory of the fixture.</param>
-/// <param name="TurnCap">Maximum model turns.</param>
+/// <param name="TurnCap">Maximum model turns. A live run uses <see cref="ScenarioDefinition.EffectiveTurnCap"/>, which ROSLYNSENTINEL_MODELEVAL_TURN_CAP overrides.</param>
 /// <param name="Expected">Whether the model should recover or stop and report.</param>
 /// <param name="ExpectedRecoveryTool">Tool the model should call right after the first error; null when not graded.</param>
 /// <param name="CheckFinalState">Reads the fixture after the run (argument: the fixture solution directory) and returns the verdict.</param>
@@ -26,6 +26,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <param name="EndOnCorrectFinalState">Resume scenarios only: true ends a live sample early (AgentStopReason.TargetReached) as soon as CheckFinalState returns FinalStateVerdict.Correct after a live turn; false = run to the model's own finish or the turn cap. CheckFinalState must be cheap (text-only, no build) because it runs after every live turn.</param>
 /// <param name="ResumeFaultExtraCalls">Seeded resume scenarios only (ResumeFaultSeeded true): further authored calls placed in the SAME assistant turn as the ResumeFaultTool call, executed in order after it on the fixture, each with its real result. {SOLUTION} in the arguments is replaced as for ResumeFaultArguments. null/empty = the turn holds only the ResumeFaultTool call. Ignored for an unseeded fault.</param>
 /// <param name="AbsentTargetNames">StopAndReport scenarios only: names of the task's target that does not exist in the solution (for example a file or method name). When the final message names one and states it is absent but has no BLOCKED: marker, the run scores FailureClass.ProseStop (see StopAbsenceDetector). null = never ProseStop.</param>
+/// <param name="ReplyMustName">Locate scenarios only: a name the model's final message must contain (whole word, case-insensitive) for a Correct final-state verdict to stand; without it the verdict is demoted to Unchanged (see <see cref="GateVerdictOnReply"/>). null = the reply is not graded.</param>
 public sealed record ScenarioDefinition(
     string Id,
     int ScenarioType,
@@ -49,8 +50,57 @@ public sealed record ScenarioDefinition(
     // A separate target-predicate field may become necessary later for flexibility (owner request); today the target is exactly CheckFinalState == Correct.
     bool EndOnCorrectFinalState = false,
     IReadOnlyList<(string Tool, string Arguments)>? ResumeFaultExtraCalls = null,
-    IReadOnlyList<string>? AbsentTargetNames = null)
+    IReadOnlyList<string>? AbsentTargetNames = null,
+    string? ReplyMustName = null)
 {
+    /// <summary>Environment variable holding a positive integer that replaces TurnCap for a live run (the script's -TurnCap).</summary>
+    public const string TurnCapVariable = "ROSLYNSENTINEL_MODELEVAL_TURN_CAP";
+
+    /// <summary>
+    /// Parses the TurnCapVariable text: null for an unset or empty value (no override), the value for a positive integer.
+    /// Throws FormatException for anything else, so a typo cannot silently run at the default cap.
+    /// </summary>
+    public static int? ParseTurnCapOverride(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        if (!int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var cap) || cap <= 0)
+        {
+            throw new FormatException($"{TurnCapVariable} must be a positive integer, got '{text}'.");
+        }
+
+        return cap;
+    }
+
+    /// <summary>
+    /// The live turn cap: TurnCapVariable when set, otherwise TurnCap. Reads the process environment, so unit tests that
+    /// need a fixed value use ParseTurnCapOverride or TurnCap instead.
+    /// </summary>
+    public int EffectiveTurnCap => ParseTurnCapOverride(Environment.GetEnvironmentVariable(TurnCapVariable)) ?? TurnCap;
+
+    /// <summary>
+    /// Reply gate for locate scenarios. With ReplyMustName null, or a verdict other than Correct, returns the verdict unchanged.
+    /// Otherwise Correct stands only when <paramref name="finalMessage"/> contains ReplyMustName as a whole word (case-insensitive);
+    /// when it does not, the verdict becomes Unchanged (nothing edited, but no answer), so a BLOCKED: or not-found reply
+    /// scores as a stop (GaveUpEarly) or FalseDoneClaim instead of a pass.
+    /// </summary>
+    public FinalStateVerdict? GateVerdictOnReply(FinalStateVerdict? verdict, string finalMessage)
+    {
+        if (ReplyMustName is null || verdict != FinalStateVerdict.Correct)
+        {
+            return verdict;
+        }
+
+        var named = System.Text.RegularExpressions.Regex.IsMatch(
+            finalMessage ?? string.Empty,
+            @"\b" + System.Text.RegularExpressions.Regex.Escape(ReplyMustName) + @"\b",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        return named ? FinalStateVerdict.Correct : FinalStateVerdict.Unchanged;
+    }
+
     /// <summary>
     /// True when this scenario runs through the resume path: it replays a saved transcript, or it is a seeded-fault
     /// scenario with no transcript (authored-only seed, nothing to replay).
@@ -60,7 +110,7 @@ public sealed record ScenarioDefinition(
     /// <summary>
     /// The runner turn cap for a resume sample: the kept turns, plus the authored fault turn when seeded, plus the live turns (TurnCap).
     /// </summary>
-    public int ResumeTurnCap => ResumeKeepTurns + (ResumeFaultSeeded ? 1 : 0) + TurnCap;
+    public int ResumeTurnCap => ResumeKeepTurns + (ResumeFaultSeeded ? 1 : 0) + EffectiveTurnCap;
 
     /// <summary>
     /// Live turns the model itself took: excludes kept turns and the authored fault turn. For a sample that ended with

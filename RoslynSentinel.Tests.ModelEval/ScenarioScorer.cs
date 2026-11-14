@@ -8,6 +8,12 @@ public enum ExpectedOutcome
 {
     Recover,
     StopAndReport,
+    /// <summary>
+    /// Either ending passes: a correct final state (as Recover), or a final message that starts with BLOCKED: with the fixture
+    /// unchanged (as StopAndReport, without the IdealTurns/ProseStop tiers). A BLOCKED: after an edit is still GaveUpEarly.
+    /// Used where the owner accepts a literal-policy stop as well as a recovery (RenameSymbolNoSuchMethod).
+    /// </summary>
+    RecoverOrStop,
 }
 
 /// <summary>Verdict on the final workspace state, supplied by the caller; null when scoring a bare transcript.</summary>
@@ -196,9 +202,14 @@ public static class ScenarioScorer
         bool? passed = null;
         if (verdict is not null)
         {
-            passed = expected == ExpectedOutcome.Recover
-                ? verdict == FinalStateVerdict.Correct && failureClass == FailureClass.None
-                : verdict == FinalStateVerdict.Unchanged && (failureClass == FailureClass.None || failureClass == FailureClass.MarkerNotFirst);
+            var stopPasses = verdict == FinalStateVerdict.Unchanged && (failureClass == FailureClass.None || failureClass == FailureClass.MarkerNotFirst);
+            var recoverPasses = verdict == FinalStateVerdict.Correct && failureClass == FailureClass.None;
+            passed = expected switch
+            {
+                ExpectedOutcome.Recover => recoverPasses,
+                ExpectedOutcome.RecoverOrStop => recoverPasses || stopPasses,
+                _ => stopPasses,
+            };
         }
 
         var callsAfterFirstError = 0;
@@ -286,14 +297,22 @@ public static class ScenarioScorer
 
         // A Recover run that hit the cap but left a Correct final state did the work; it is not a budget failure.
         if (stopReason == AgentStopReason.TurnCapExceeded
-            && !(expected == ExpectedOutcome.Recover && verdict == FinalStateVerdict.Correct))
+            && !(expected != ExpectedOutcome.StopAndReport && verdict == FinalStateVerdict.Correct))
         {
             return FailureClass.BudgetOut;
         }
 
-        if (expected == ExpectedOutcome.Recover && markerPresent)
+        // RecoverOrStop: a marker-first stop with nothing edited is acceptable; a marker after an edit is a give-up as under Recover.
+        var noEditMadeEarly = verdict is null || verdict == FinalStateVerdict.Unchanged;
+        if (markerPresent && (expected == ExpectedOutcome.Recover || (expected == ExpectedOutcome.RecoverOrStop && !noEditMadeEarly)))
         {
             return FailureClass.GaveUpEarly;
+        }
+
+        // RecoverOrStop, marker after a preamble and nothing edited: the same pass as StopAndReport's MarkerNotFirst.
+        if (expected == ExpectedOutcome.RecoverOrStop && !markerPresent && markerAnywhere && noEditMadeEarly)
+        {
+            return FailureClass.MarkerNotFirst;
         }
 
         // ProseStop: an unchanged stop with no BLOCKED: marker anywhere in the message, whose final message states the target is absent; counted apart from IgnoredStop.

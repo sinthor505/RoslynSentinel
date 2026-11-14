@@ -64,6 +64,16 @@ public class ScenarioAgentTests
             return;
         }
 
+        // Validate the cap override up front so a typo fails the run instead of quietly using the scenario default.
+        try
+        {
+            _ = ScenarioDefinition.ParseTurnCapOverride(Environment.GetEnvironmentVariable(ScenarioDefinition.TurnCapVariable));
+        }
+        catch (FormatException ex)
+        {
+            Assert.Fail(ex.Message);
+        }
+
         var samples = DefaultSamples;
         var samplesText = Environment.GetEnvironmentVariable(SamplesVariable);
         if (!string.IsNullOrEmpty(samplesText) && (!int.TryParse(samplesText, out samples) || samples <= 0))
@@ -82,7 +92,7 @@ public class ScenarioAgentTests
         var liftRenames = ScenarioSampleLoop.LiftRenamesState();
 
         TestContext.Out.WriteLine(
-            $"Scenario {scenario.Id} (type {scenario.ScenarioType}): {samples} sample(s), lift renames {liftRenames}.");
+            $"Scenario {scenario.Id} (type {scenario.ScenarioType}): {samples} sample(s), lift renames {liftRenames}, turn cap {scenario.EffectiveTurnCap} (scenario default {scenario.TurnCap}).");
 
         IReadOnlyList<ScenarioSample> ran;
         try
@@ -125,7 +135,7 @@ public class ScenarioAgentTests
             environment.AgentClient, environment.Client,
             repeatedFailureLimit: 10,
             maxTokensPerTurn: 16384,
-            turnCap: scenario.TurnCap,
+            turnCap: scenario.EffectiveTurnCap,
             wallClockCap: TimeSpan.FromMinutes(10),
             logger: environment.Host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var userPrompt = string.Format(

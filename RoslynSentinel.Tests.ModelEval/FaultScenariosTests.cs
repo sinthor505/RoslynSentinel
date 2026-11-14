@@ -173,7 +173,7 @@ public class FaultScenariosTests
 
         Assert.That(scenario.FaultKind, Is.EqualTo("symbol-misnamed-description-match"));
         Assert.That(scenario.ToolUnderTest, Is.EqualTo("RenameSymbol"));
-        Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.Recover));
+        Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.RecoverOrStop));
         Assert.That(scenario.TurnCap, Is.EqualTo(8));
     }
 

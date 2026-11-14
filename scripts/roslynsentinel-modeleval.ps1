@@ -227,6 +227,11 @@
 .PARAMETER Scenario
     Scenario only (required there): id of a scenario in ScenarioRegistry (RoslynSentinel.Tests.ModelEval). Runs it for -Samples samples, each on a fresh fixture, and writes one scored CSV line per sample to results.csv in the run folder (ROSLYNSENTINEL_MODELEVAL_SCENARIO).
 
+.PARAMETER TurnCap
+    Scenario only: replaces the scenario definition's TurnCap (maximum live model turns) for this run. Default 0 = unset, the
+    scenario's own cap applies; a positive value sets ROSLYNSENTINEL_MODELEVAL_TURN_CAP, and the script clears the variable
+    otherwise so one left in the shell cannot skew a run.
+
 .EXAMPLE
     .\roslynsentinel-modeleval.ps1 -HostAddress 112 -Test SizeThreshold -Size 60
     Sweep size=60 against the .112 GTX 1080 host.
@@ -296,7 +301,9 @@ param(
 
     [string]$ScoreTool = 'ReplaceSnippet',
 
-    [string]$Scenario
+    [string]$Scenario,
+
+    [int]$TurnCap = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -489,10 +496,18 @@ else {
 if ($currentTest -eq 'Scenario') {
     $env:ROSLYNSENTINEL_MODELEVAL_SCENARIO = $Scenario
     $env:ROSLYNSENTINEL_MODELEVAL_SCENARIO_SAMPLES = "$Samples"
-    Write-Host "    Scenario=$Scenario samples=$Samples" -ForegroundColor Cyan
+    # Always set or cleared (never left from the shell) so a stale cap cannot skew a run.
+    if ($TurnCap -gt 0) {
+        $env:ROSLYNSENTINEL_MODELEVAL_TURN_CAP = "$TurnCap"
+    }
+    else {
+        Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_TURN_CAP -ErrorAction SilentlyContinue
+    }
+    $capShown = if ($TurnCap -gt 0) { "$TurnCap" } else { '<scenario default>' }
+    Write-Host "    Scenario=$Scenario samples=$Samples turnCap=$capShown" -ForegroundColor Cyan
 }
 else {
-    Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_SCENARIO, Env:\ROSLYNSENTINEL_MODELEVAL_SCENARIO_SAMPLES -ErrorAction SilentlyContinue
+    Remove-Item Env:\ROSLYNSENTINEL_MODELEVAL_SCENARIO, Env:\ROSLYNSENTINEL_MODELEVAL_SCENARIO_SAMPLES, Env:\ROSLYNSENTINEL_MODELEVAL_TURN_CAP -ErrorAction SilentlyContinue
 }
 
 $csproj = Join-Path $repoRoot 'RoslynSentinel.Tests.ModelEval\RoslynSentinel.Tests.ModelEval.csproj'
