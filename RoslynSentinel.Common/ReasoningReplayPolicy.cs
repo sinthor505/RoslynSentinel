@@ -22,7 +22,27 @@ public sealed class ReasoningReplayPolicy
     /// <param name="fixedWindow">Number of recent turns to replay in block mode, or null for pressure mode.</param>
     public ReasoningReplayPolicy(int contextLength, int? fixedWindow)
     {
-        throw new NotImplementedException(); // TODO implement (Step 2)
+        ContextLength = contextLength;
+        if ((fixedWindow is null or < 0) && contextLength <= 0)
+        {
+            FixedWindow = LmStudioAgentClient.ReasoningReplayTurns;
+            Mode = $"window:{FixedWindow} (context length unknown)";
+        }
+        else if (fixedWindow == 0)
+        {
+            FixedWindow = 0;
+            Mode = "all";
+        }
+        else if (fixedWindow > 0)
+        {
+            FixedWindow = fixedWindow;
+            Mode = $"window:{fixedWindow}";
+        }
+        else
+        {
+            FixedWindow = null;
+            Mode = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"pressure:{PressureFraction},pinned:{PinnedTurns}");
+        }
     }
 
     /// <summary>
@@ -32,7 +52,7 @@ public sealed class ReasoningReplayPolicy
     /// <returns>The policy for this run.</returns>
     public static ReasoningReplayPolicy FromEnvironment(int contextLength)
     {
-        throw new NotImplementedException(); // TODO implement (Step 2)
+        return new ReasoningReplayPolicy(contextLength, LmStudioAgentClient.ParseReasoningWindowOverride(Environment.GetEnvironmentVariable(LmStudioAgentClient.ReasoningWindowVariable)));
     }
 
     /// <summary>Context length of the model, in tokens, that the policy was created for.</summary>
@@ -50,12 +70,28 @@ public sealed class ReasoningReplayPolicy
     /// <summary>
     /// Observes the projected prompt size for the next request and drops turns when pressure mode requires it.
     /// </summary>
-    /// <param name="assistantTurns">Number of assistant turns so far, including notes.</param>
+    /// <param name="assistantTurns">Number of non-note assistant turns so far.</param>
     /// <param name="projectedPromptTokens">Projected prompt size of the next request, in tokens.</param>
     /// <returns>True when this call dropped turns.</returns>
     public bool Observe(int assistantTurns, int projectedPromptTokens)
     {
-        throw new NotImplementedException(); // TODO implement (Step 2)
+        if (FixedWindow is not null)
+        {
+            return false;
+        }
+
+        if (projectedPromptTokens >= ContextLength * PressureFraction)
+        {
+            // The dropped set only grows, so the prompt prefix stays stable between drops.
+            var replayable = assistantTurns - PinnedTurns - DroppedTurns;
+            if (replayable >= 2)
+            {
+                DroppedTurns += replayable / 2;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -66,6 +102,16 @@ public sealed class ReasoningReplayPolicy
     /// <returns>True when the turn's reasoning is replayed.</returns>
     public bool ReplaysReasoning(int assistantTurnIndex, int assistantTurns)
     {
-        throw new NotImplementedException(); // TODO implement (Step 2)
+        if (FixedWindow is null)
+        {
+            return assistantTurnIndex < PinnedTurns || assistantTurnIndex >= PinnedTurns + DroppedTurns;
+        }
+
+        if (FixedWindow == 0)
+        {
+            return true;
+        }
+
+        return assistantTurnIndex >= LmStudioAgentClient.ReasoningDroppedTurns(assistantTurns, FixedWindow.Value);
     }
 }

@@ -535,7 +535,23 @@ public sealed class LmStudioAgentClient
 
     private static List<object> BuildInputItems(IReadOnlyList<AgentChatMessage> messages, ReasoningReplayPolicy? replayPolicy)
     {
-        // TODO implement (Step 2): use replayPolicy when not null
+        // A null policy keeps the legacy block window (EffectiveReasoningWindow) below.
+        if (replayPolicy is not null)
+        {
+            var assistantCount = messages.Count(m => m.Role == "assistant" && !m.IsLoopAssistNote);
+            var turnOfMessage = new Dictionary<int, int>();
+            var turn = 0;
+            for (var idx = 0; idx < messages.Count; idx++)
+            {
+                if (messages[idx].Role == "assistant" && !messages[idx].IsLoopAssistNote)
+                {
+                    turnOfMessage[idx] = turn++;
+                }
+            }
+
+            return messages.SelectMany((m, i) => ToInputItems(m, replayReasoning: !turnOfMessage.TryGetValue(i, out var k) || replayPolicy.ReplaysReasoning(k, assistantCount))).ToList();
+        }
+
         var assistantIndexes = messages.Select((m, i) => (m, i)).Where(x => x.m.Role == "assistant" && !x.m.IsLoopAssistNote).Select(x => x.i).ToList();
         var dropped = ReasoningDroppedTurns(assistantIndexes.Count, EffectiveReasoningWindow);
         var firstReplayed = dropped > 0 ? assistantIndexes[dropped] : 0;
