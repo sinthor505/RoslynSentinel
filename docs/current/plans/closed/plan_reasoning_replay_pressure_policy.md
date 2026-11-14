@@ -1,6 +1,6 @@
 # Plan: replay all reasoning until 70% of the context, then drop the oldest half; pin the first 3 turns
 
-**Status:** IN PROGRESS 2026-11-14. Steps 1-7 done (0f134491, f33130d4, fdb784ec, 7156bea4, 616df7e9, a8bd8beb; 16e09c44 adds the pressure override); Step 8 found a drop-thrash defect, fix awaiting an owner decision.
+**Status:** IMPLEMENTED 2026-11-14. Steps 1-8 done: 0f134491, f33130d4, fdb784ec, 7156bea4, 616df7e9, a8bd8beb; pressure override 16e09c44; drop-thrash fix 39b111c1 (10-turn minimum drop block, 10% hysteresis). Live: 113 5/5 and 112 5/5 at 0.7 with no drop; 112 5/5 at 0.5 after the fix with single, spaced drops.
 
 ## Problem
 
@@ -245,6 +245,9 @@ warning (`ContextUsageWarningFraction = 0.8`, not 90%) and the tool-less-turn `C
 - Done when: both batches reported with the classes above; commit the write-up with
   `Closes: plan_reasoning_replay_pressure_policy`.
 - Lane: `modeleval-runner` or the dispatcher via the queue.
+- Done: 8a 113 5/5 and 112 5/5 `PassNoDrop` (drop path not reached at 0.7); 8b at pressure 0.5 found drop thrash; 8c
+  after 39b111c1, 112 5/5 with single, spaced drops (results in the proposal). 113 x3 at 0.5
+  (`20261114-092150-001..003`) still queued at close; results go to the proposal.
 
 ## Out of scope
 
@@ -252,15 +255,18 @@ warning (`ContextUsageWarningFraction = 0.8`, not 90%) and the tool-less-turn `C
 - Recovering from `ContextSizeExceededException` by forcing a drop and retrying (today it ends the run as
   `ContextExhausted`); leave a `// TODO` at the catch in Step 4 if the implementer sees a clean spot.
 - CSV columns for the new fields (`ScenarioSampleCsv`): transcript-only to avoid the column-count migration.
-- Making the threshold or pin count configurable.
+- Making the threshold or pin count configurable. (Added during Step 8 for live tests only:
+  `ROSLYNSENTINEL_REASONING_PRESSURE` / `-ReasoningPressure`, 16e09c44; the default stays 0.7.)
+- Closing full run at 39b111c1: every project in the worktree default set passed (Tests 991, Advanced 1680, Basic 1752,
+  Tools.Basic 3284 + 4 skipped, Server 859 + 9 skipped, others clean); ModelEval offline set passed at 616df7e9 and the
+  runner tests again at 39b111c1.
 
 ## Risks and open decisions
 
-- **OPEN (blocks closing): drop thrash.** Step 8b at pressure 0.5 (112 `20261114-085254-907`) dropped on every turn
-  T24-T32 because dropping ~80-token reasoning items never brought the projection back under the threshold; nine cold
-  turns. Fix options and recommendation (hysteresis of 10% of the context plus a 10-turn minimum drop block): proposal
-  "Open questions". `// TODO` in `ReasoningReplayPolicy.Observe`. Needs an owner decision, then one implementer slice
-  (`ReasoningReplayPolicy.cs` + `ReasoningReplayPolicyTests.cs`) and a re-run of Step 8b.
+- **RESOLVED: drop thrash.** Step 8b at pressure 0.5 (112 `20261114-085254-907`) dropped on every turn T24-T32 because
+  dropping ~80-token reasoning items never brought the projection back under the threshold. Owner chose hysteresis
+  (10% of the context) plus a 10-turn minimum drop block; fixed in 39b111c1; Step 8c (112 x5 at 0.5) shows single,
+  spaced drops.
 
 - **Projection error.** `EstimateMessageTokens` is an estimate; a single very large tool result could push a request
   past the context before a drop. The 70% margin covers typical results (largest observed ~4.6k characters); the

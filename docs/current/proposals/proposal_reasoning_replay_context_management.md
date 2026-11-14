@@ -1,6 +1,6 @@
 # Replace the block-stepped reasoning window with pressure-based dropping and auto-compaction
 
-**Status:** APPROVED 2026-11-14. Options 2 and 3 approved for all harnesses (threshold 70%); steps 1a (full reasoning fits with room to spare) and 1b (no measurable effect of a block drop at T21) done; auto-compaction (option 4) is a follow-up.
+**Status:** APPROVED 2026-11-14. Options 2 and 3 built for all harnesses by plan_reasoning_replay_pressure_policy (0f134491..39b111c1: 70% pressure, first 3 turns pinned, 10-turn minimum drop block, 10% hysteresis); auto-compaction (option 4) is a follow-up.
 
 ## Decisions (owner, 2026-11-14)
 
@@ -112,6 +112,23 @@ include other sessions' commits).
   (cached 9046) came without a drop; hypothesis: the loop-assist collapse rewrote the history on the repeated call.
   Untraced.
 
+### After the thrash fix (39b111c1: 10-turn minimum drop block, 10% hysteresis), pressure 0.5, 112
+
+Jobs `20261114-092149-001..005`, all on 39b111c1, folders under `ModelTestingResults\112\Model_AppliesTenChainedRefactors\`.
+
+| Folder | Result | Turns | `ReasoningDropTurns` | Cold turns after T1 | Sum TTFT |
+| --- | --- | --- | --- | --- | --- |
+| `20261114-094643-651` | passed | 27 | 26 | T26 | 81 s |
+| `20261114-095035-170` | passed | 29 | 25 | T25 | 84 s |
+| `20261114-095431-951` | passed | 32 | 30 | T15 (8.3k new content, no drop), T30 | 88 s |
+| `20261114-095911-868` | passed | 27 | none | none | 45 s |
+| `20261114-100221-385` | passed | 40 | 29, 37 | T29, T37 | 156 s |
+
+- 5/5 passed; no thrash. Every drop is a single cold turn; the only two-drop run (`-100221-385`) spaced them 8 turns
+  apart, the second after the projection grew from 29.3k to 35.9k (> 10% of 60160).
+- Each drop's cold turn re-processes ~20k tokens (cached falls to ~9k, the system prompt and tools), about 30-40 s of
+  TTFT on this host; acceptable at one per 8+ turns.
+
 ## Motivation
 
 `LmStudioAgentClient` replays each assistant turn's reasoning (`ToInputItems`, `RoslynSentinel.Common/LmStudioAgentClient.cs`)
@@ -205,7 +222,7 @@ block window entirely.
 
 ## Open questions
 
-- **Drop thrash fix (decision needed).** Options: (a) hysteresis - after a drop, no further drop until the projected
+- **Drop thrash fix (decided 2026-11-14: (a) plus (b), built in 39b111c1).** Options: (a) hysteresis - after a drop, no further drop until the projected
   prompt has grown by 10% of the context beyond its size at the previous drop; (b) minimum drop block - drop only when
   at least 10 unpinned turns are replayable (so at most one drop per 5+ turns); (c) effectiveness check - estimate the
   reasoning tokens a drop would remove and skip drops that would not get under the threshold. Recommendation: (a) plus
@@ -230,5 +247,5 @@ block window entirely.
 
 - `docs/current/evals/eval_tenchain_reasoning_replay_2026_11_10.md` - cache analysis, host comparison, Batch Y.
 - `docs/current/plans/closed/plan_modeleval_lean_tool_surface.md` - the 18-tool surface.
-- `docs/current/plans/plan_reasoning_replay_pressure_policy.md` - implements options 2 and 3.
+- `docs/current/plans/closed/plan_reasoning_replay_pressure_policy.md` - implemented options 2 and 3.
 - Commits 564a2813 (block window), fd169537 (implausible usage jump guard).
