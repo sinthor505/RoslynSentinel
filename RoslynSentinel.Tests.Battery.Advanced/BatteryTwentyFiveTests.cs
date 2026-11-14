@@ -750,7 +750,7 @@ public class Outer {
         _workspaceManager.SetTestSolution(solution);
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await TestEnginesAdvanced.StructuralRefactoringEngine(_workspaceManager).MoveTypeToOuterScopeAsync("NoFile.cs", "Inner"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(ex.Message, Does.Contain("File 'NoFile.cs' not found"));
+        Assert.That(ex.Message, Does.Contain("File 'NoFile.cs' was not found"));
     }
 }
 
