@@ -1,6 +1,6 @@
 # Plan: Member(addMember) accepts several member declarations in one call (option 1)
 
-**Status:** IN PROGRESS 2026-11-14. Steps 1-5 done (72dabecd, 50facb61, 78116e06, 888f2f3a, 55355155). Option 1 only (addMember, with or without an insert anchor, takes N declarations atomically); option 2 (replace takes N) is a follow-up after measurement. Batched mode, owner away. Nothing is built.
+**Status:** IN PROGRESS 2026-11-14. Steps 1-9 done (72dabecd, 50facb61, 78116e06, 888f2f3a, 55355155, f5077193, 46152134, 3e28b49e, 7c16f4c3); Step 10 baseline next. Option 1 only (addMember, with or without an insert anchor, takes N declarations atomically); option 2 (replace takes N) is a follow-up after measurement. Batched mode, owner away. Nothing is built.
 
 ## Problem
 
@@ -172,6 +172,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Parallel-ready: with Steps 2, 3 and 4 (pairs only).
 
 ### Step 6 - Tests: splitter, parse errors, DescribeAdded (proposal test 6 and the Q5 check)
+- Done: f5077193
 - Files: `RoslynSentinel.Tests.Tools.Basic/MemberSplitDeclarationsTests.cs` (new; `InternalsVisibleTo` for `Engines.Basic` is granted to this project only)
 - Depends on: 2, 3
 - Effect: tests only
@@ -186,6 +187,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Parallel-ready: with Step 7 (different projects).
 
 ### Step 7 - Tests: N-member insertion formatting (proposal tests 1 and 2, helper level)
+- Done: 46152134
 - Files: `RoslynSentinel.Tests.Basic/InsertMembersFormatCharacterizationTests.cs` (new; same pattern as `InsertMemberFormatCharacterizationTests`, which calls the Common helper directly)
 - Depends on: 4
 - Effect: tests only
@@ -195,6 +197,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Parallel-ready: with Step 6; and with Step 3 or 5.
 
 ### Step 8 - AddMembersAsync body and the typed-caller guard (text-neutral)
+- Done: 3e28b49e
 - Files: `RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs`
 - Depends on: 2, 4, 5
 - Effect: text-neutral. `AddMembersAsync` has no caller yet (Step 9 tests it directly); `AddMemberAsync` keeps its old body, so every existing caller is unchanged. The typed-caller guard emits the text those callers get today (`newMemberSource is invalid: <add-branch text of DetectMultipleMemberDeclarations>`); the only difference is order: the guard now runs before the container and enum checks.
@@ -205,6 +208,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Done when: `Build` 0 errors. Dispatcher runs: `MemberRefactoringTests` (AddMember_*), `AddMemberCallBindingTests`, `MemberAddExpressionBodyIndentTests`, `MemberSingleDeclarationTests` (all still green here: the tool still rejects), then Step 9.
 
 ### Step 9 - Tests: AddMembersAsync directly (engine level) and the typed-caller guard (proposal tests 1, 6 at engine level)
+- Done: 7c16f4c3
 - Files: `RoslynSentinel.Tests.Basic/AddMembersAsyncTests.cs` (new; public API only, fixture pattern of `AddMemberCallBindingTests`: `SetFiles`, `_memberRefactoringEngine`)
 - Depends on: 8
 - Effect: tests only
