@@ -49,4 +49,38 @@ public class ProjectLookupTests
         Assert.That(ProjectLookup.FindProject(solution, "alpha", ignoreCase: true), Is.Not.Null);
         Assert.That(ProjectLookup.FindProject(solution, "alpha"), Is.Null);
     }
+
+    [Test]
+    public void RequireProject_Match_ReturnsIt()
+    {
+        var solution = new AdhocWorkspace().CurrentSolution
+            .AddProject(ProjectInfo.Create(ProjectId.CreateNewId(), VersionStamp.Default, "Alpha", "Alpha", LanguageNames.CSharp, filePath: @"C:\repo\Alpha.csproj"));
+
+        var project = ProjectLookup.RequireProject(solution, "Alpha");
+
+        Assert.That(project.Name, Is.EqualTo("Alpha"));
+    }
+
+    [Test]
+    public void RequireProject_NoMatch_ThrowsToolNotFoundWithProjectKindAndLoadedNames()
+    {
+        var solution = new AdhocWorkspace().CurrentSolution
+            .AddProject(ProjectInfo.Create(ProjectId.CreateNewId(), VersionStamp.Default, "Alpha", "Alpha", LanguageNames.CSharp, filePath: @"C:\repo\Alpha.csproj"));
+
+        var ex = Assert.Throws<ToolNotFoundException>(() => ProjectLookup.RequireProject(solution, "Missing"));
+
+        Assert.That(ex!.MissingTargetKind, Is.EqualTo("project"));
+        Assert.That(ex.Message, Does.Contain("Missing").And.Contain("Alpha"));
+    }
+
+    [Test]
+    public void RequireProject_DifferentCasing_MatchesByDefault()
+    {
+        var solution = new AdhocWorkspace().CurrentSolution
+            .AddProject(ProjectInfo.Create(ProjectId.CreateNewId(), VersionStamp.Default, "Alpha", "Alpha", LanguageNames.CSharp, filePath: @"C:\repo\Alpha.csproj"));
+
+        var project = ProjectLookup.RequireProject(solution, "alpha");
+
+        Assert.That(project.Name, Is.EqualTo("Alpha"));
+    }
 }

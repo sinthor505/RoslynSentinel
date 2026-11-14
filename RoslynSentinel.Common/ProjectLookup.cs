@@ -19,4 +19,12 @@ public static class ProjectLookup
         }
         return matches[0];
     }
+
+    /// <summary>
+    /// Finds the project by name or throws a ToolNotFoundException whose message carries ranked candidates and the loaded project names (ProjectNotFoundDetail); the shared not-found handling for tools that resolve a project by name.
+    /// </summary>
+    public static Microsoft.CodeAnalysis.Project RequireProject(Microsoft.CodeAnalysis.Solution solution, string projectName, bool ignoreCase = true, string paramName = "projectName")
+    {
+        return FindProject(solution, projectName, ignoreCase) ?? throw new ToolNotFoundException(ProjectNotFoundDetail.Build(projectName, solution.Projects.Select(p => p.Name).ToList(), paramName), MissingTargetKinds.Project, projectName);
+    }
 }
