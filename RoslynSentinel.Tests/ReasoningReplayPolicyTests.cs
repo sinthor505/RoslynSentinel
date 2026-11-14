@@ -135,6 +135,43 @@ public class ReasoningReplayPolicyTests
         Assert.That(new ReasoningReplayPolicy(1000, 10).Mode, Is.EqualTo("window:10"));
     }
 
+    [Test]
+    public void LowerPressureFraction_DropsEarlier_AndIsNamedInTheMode()
+    {
+        var policy = new ReasoningReplayPolicy(1000, null, 0.5);
+
+        Assert.That(policy.Mode, Is.EqualTo("pressure:0.5,pinned:3"));
+        Assert.That(policy.Observe(30, 499), Is.False);
+        Assert.That(policy.Observe(30, 500), Is.True);
+        Assert.That(policy.DroppedTurns, Is.EqualTo(13));
+    }
+
+    [TestCase(0.0)]
+    [TestCase(-0.1)]
+    [TestCase(1.5)]
+    public void PressureFractionOutOfRange_Throws(double fraction)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => _ = new ReasoningReplayPolicy(1000, null, fraction));
+    }
+
+    [TestCase(null, null)]
+    [TestCase("", null)]
+    [TestCase(" 0.5 ", 0.5)]
+    [TestCase("1", 1.0)]
+    public void ParsePressureFractionOverride_AcceptsUnsetOrAFraction(string? text, double? expected)
+    {
+        Assert.That(ReasoningReplayPolicy.ParsePressureFractionOverride(text), Is.EqualTo(expected));
+    }
+
+    [TestCase("0")]
+    [TestCase("1.2")]
+    [TestCase("half")]
+    public void ParsePressureFractionOverride_Throws_WhenNotAFractionAboveZero(string text)
+    {
+        var ex = Assert.Throws<FormatException>(() => ReasoningReplayPolicy.ParsePressureFractionOverride(text));
+        Assert.That(ex!.Message, Does.Contain(ReasoningReplayPolicy.PressureFractionVariable));
+    }
+
     private static AgentChatMessage[] PlanTurns(int count) => Enumerable.Range(1, count)
         .Select(i => new AgentChatMessage
         {

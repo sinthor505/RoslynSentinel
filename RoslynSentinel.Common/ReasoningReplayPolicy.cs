@@ -15,14 +15,27 @@ public sealed class ReasoningReplayPolicy
     public const double PressureFraction = 0.7;
 
     /// <summary>
+    /// Overrides <see cref="PressureFraction"/> for experiments, for example a lower threshold to force a drop in a
+    /// live run: a number greater than 0 and at most 1. Unset or empty keeps the default.
+    /// </summary>
+    public const string PressureFractionVariable = "ROSLYNSENTINEL_REASONING_PRESSURE";
+
+    /// <summary>
     /// Creates a policy for a model with the given context length. A non-null fixed window selects block mode;
     /// null selects pressure mode.
     /// </summary>
     /// <param name="contextLength">Loaded context length of the model, in tokens.</param>
     /// <param name="fixedWindow">Number of recent turns to replay in block mode, or null for pressure mode.</param>
-    public ReasoningReplayPolicy(int contextLength, int? fixedWindow)
+    /// <param name="pressureFraction">Fraction of the context at which pressure mode drops turns (0 &lt; value &lt;= 1).</param>
+    public ReasoningReplayPolicy(int contextLength, int? fixedWindow, double pressureFraction = PressureFraction)
     {
+        if (pressureFraction is <= 0 or > 1 || double.IsNaN(pressureFraction))
+        {
+            throw new ArgumentOutOfRangeException(nameof(pressureFraction), pressureFraction, "The pressure fraction must be greater than 0 and at most 1.");
+        }
+
         ContextLength = contextLength;
+        EffectivePressureFraction = pressureFraction;
         if ((fixedWindow is null or < 0) && contextLength <= 0)
         {
             FixedWindow = LmStudioAgentClient.ReasoningReplayTurns;
@@ -41,7 +54,7 @@ public sealed class ReasoningReplayPolicy
         else
         {
             FixedWindow = null;
-            Mode = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"pressure:{PressureFraction},pinned:{PinnedTurns}");
+            Mode = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"pressure:{EffectivePressureFraction},pinned:{PinnedTurns}");
         }
     }
 
@@ -52,8 +65,33 @@ public sealed class ReasoningReplayPolicy
     /// <returns>The policy for this run.</returns>
     public static ReasoningReplayPolicy FromEnvironment(int contextLength)
     {
-        return new ReasoningReplayPolicy(contextLength, LmStudioAgentClient.ParseReasoningWindowOverride(Environment.GetEnvironmentVariable(LmStudioAgentClient.ReasoningWindowVariable)));
+        return new ReasoningReplayPolicy(
+            contextLength,
+            LmStudioAgentClient.ParseReasoningWindowOverride(Environment.GetEnvironmentVariable(LmStudioAgentClient.ReasoningWindowVariable)),
+            ParsePressureFractionOverride(Environment.GetEnvironmentVariable(PressureFractionVariable)) ?? PressureFraction);
     }
+
+    /// <summary>
+    /// Parses the <see cref="PressureFractionVariable"/> text: null when unset or empty, the value for a number greater
+    /// than 0 and at most 1 (invariant culture).
+    /// </summary>
+    internal static double? ParsePressureFractionOverride(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        if (double.TryParse(text.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value) && value > 0 && value <= 1)
+        {
+            return value;
+        }
+
+        throw new FormatException($"{PressureFractionVariable} must be a number greater than 0 and at most 1, got '{text}'.");
+    }
+
+    /// <summary>Fraction of the context at which pressure mode drops turns for this run.</summary>
+    public double EffectivePressureFraction { get; }
 
     /// <summary>Context length of the model, in tokens, that the policy was created for.</summary>
     public int ContextLength { get; }
@@ -80,7 +118,7 @@ public sealed class ReasoningReplayPolicy
             return false;
         }
 
-        if (projectedPromptTokens >= ContextLength * PressureFraction)
+        if (projectedPromptTokens >= ContextLength * EffectivePressureFraction)
         {
             // The dropped set only grows, so the prompt prefix stays stable between drops.
             var replayable = assistantTurns - PinnedTurns - DroppedTurns;

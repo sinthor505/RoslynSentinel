@@ -243,6 +243,11 @@
     policy). A value >= 0 sets ROSLYNSENTINEL_REASONING_WINDOW; the script clears the variable otherwise so one left in
     the shell cannot skew a run. The transcript records ReasoningReplayMode, ContextLength and ReasoningDropTurns.
 
+.PARAMETER ReasoningPressure
+    Every test: the context fraction at which the pressure policy drops reasoning (default 0.7). Use a lower value (for
+    example 0.5) to force a drop in a live run. Default 0 = unset; a value in (0, 1] sets
+    ROSLYNSENTINEL_REASONING_PRESSURE, and the script clears the variable otherwise. Ignored when -ReasoningWindow >= 0.
+
 .PARAMETER Step
     ShippingKindStep only: step numbers 1-5 to run (for example -Step 4,5 runs steps 4 and 5). Default: all five.
     Each listed step is one Model_CompletesShippingKindStep test case.
@@ -322,6 +327,9 @@ param(
 
     [ValidateRange(-1, 1000)]
     [int]$ReasoningWindow = -1,
+
+    [ValidateRange(0.0, 1.0)]
+    [double]$ReasoningPressure = 0,
 
     [ValidateRange(1, 5)]
     [int[]]$Step
@@ -470,6 +478,13 @@ if ($ReasoningWindow -ge 0) {
 }
 else {
     Remove-Item Env:\ROSLYNSENTINEL_REASONING_WINDOW -ErrorAction SilentlyContinue
+}
+if ($ReasoningPressure -gt 0) {
+    $env:ROSLYNSENTINEL_REASONING_PRESSURE = $ReasoningPressure.ToString([System.Globalization.CultureInfo]::InvariantCulture)
+    Write-Host "    ROSLYNSENTINEL_REASONING_PRESSURE=$($env:ROSLYNSENTINEL_REASONING_PRESSURE)" -ForegroundColor Cyan
+}
+else {
+    Remove-Item Env:\ROSLYNSENTINEL_REASONING_PRESSURE -ErrorAction SilentlyContinue
 }
 if ($PSBoundParameters.ContainsKey('Temperature')) {
     $env:ROSLYNSENTINEL_LLM_TEMPERATURE = $Temperature

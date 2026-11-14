@@ -64,6 +64,29 @@ keeps it. Folders under `ModelTestingResults\113\ResumeFromTranscript_SamplesThe
   weaker or wordier model (4b on 112/85) could still differ. The policy change therefore rests mainly on cache and fit,
   not on a measured quality gain.
 
+## Pressure policy live (plan_reasoning_replay_pressure_policy Step 8, 2026-11-14)
+
+Default policy (`pressure:0.7,pinned:3`, read from each transcript's `ReasoningReplayMode`), `OrderPricingRefactorChain10`,
+jobs `20261114-081713-001..005` (113) and `20261114-081714-001..005` (112), commits 616df7e9-287d94d7 (later ones
+include other sessions' commits).
+
+| Host | Model | `ContextLength` | Pass | Turns | Peak input (real) | Drops | Cold turns after T1 | Model time |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 113 | `qwen3.5-9b-mtp` | 80128 | 5/5 | 31-38 | 37.7k-42.6k | none | none | 210-286 s |
+| 112 | `qwen3.5-4b-mtp` | 60160 | 5/5 | 25-39 | 30.7k-42.2k | none | one (T7, new content) | 156-232 s |
+
+- Outcome classes: 113 5 x `PassNoDrop` (ideal). 112 5 x `PassNoDrop`: the drop path was not exercised live. The
+  closest run (`112\...\20261114-081734-814`) reached 42181 real input at its final turn T39, 69 tokens over 70% of
+  60160; the projection made before that request (previous total 41837 plus the estimated tool result) stayed just
+  below the threshold.
+- The usage-jump guard (fd169537) kept LM Studio miscounts from triggering drops: in `-081734-814` T11 and T16
+  reported 44884 and 52287 total tokens (cached 51819 at T16) against ~22k and ~26k real; the runner logged
+  "treating the report as a miscount" both times and no drop fired.
+- No cache break at T21/T31 in any of the ten runs. Earlier 112 ten-chain on the 55-tool surface and block window:
+  869 s model time for 30 turns (`20261112-214630-218`); not like for like (tool surface also changed).
+- Drop path coverage: unit tests (`ReasoningReplayPolicyTests`) and the runner test
+  (`ReasoningReplayRunnerTests.PressureMode_DropsOnceTheProjectedPromptReachesSeventyPercent`) only.
+
 ## Motivation
 
 `LmStudioAgentClient` replays each assistant turn's reasoning (`ToInputItems`, `RoslynSentinel.Common/LmStudioAgentClient.cs`)
