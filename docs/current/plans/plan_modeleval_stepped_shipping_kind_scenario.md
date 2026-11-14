@@ -1,6 +1,6 @@
 # Plan: Stepped ShippingKind ModelEval scenario on ContosoOrders with a golden commit per step
 
-**Status:** APPROVED 2026-11-13. Implementation review done (decisions in "Decisions 2026-11-13 (implementation review)"); Batched, one orchestrator for Steps 1-7b; not started.
+**Status:** IN PROGRESS 2026-11-13. Steps 1-7b done (f0f03fbf, 5977fe75, d9bf2b51, ec7881b6, f1d68375, 59a0332a, 97a5a63f); Steps 8-9 left.
 
 ## Problem
 
@@ -129,6 +129,7 @@ Turns, wall time and `StopReason` are recorded per step. No turn ideal is set ye
 ## Steps
 
 ### Step 1 - Contract skeleton
+- Done: f0f03fbf
 - Files (all new, one `CreateFile` each, in this order):
   `RoslynSentinel.Tests.ModelEval/GoldenStepRepository.cs`,
   `RoslynSentinel.Tests.ModelEval/Fixtures/ShippingKindStepGoldens.cs`,
@@ -156,6 +157,7 @@ Turns, wall time and `StopReason` are recorded per step. No turn ideal is set ye
 - Lane: `implementer`
 
 ### Step 2 - Seed, golden files and prompts
+- Done: 5977fe75
 - Files: `RoslynSentinel.Tests.ModelEval/Fixtures/ShippingKindStepGoldens.cs`
 - Depends on: Step 1
 - Effect: text-neutral
@@ -169,6 +171,7 @@ Turns, wall time and `StopReason` are recorded per step. No turn ideal is set ye
 - Lane: `implementer` (pairs with Step 3; disjoint files)
 
 ### Step 3 - GoldenStepRepository
+- Done: d9bf2b51
 - Files: `RoslynSentinel.Tests.ModelEval/GoldenStepRepository.cs`
 - Depends on: Step 1
 - Effect: text-neutral
@@ -190,6 +193,7 @@ Turns, wall time and `StopReason` are recorded per step. No turn ideal is set ye
 - Lane: `implementer` (pairs with Step 2)
 
 ### Step 4 - Step checks and check-test sources
+- Done: ec7881b6
 - Files: `RoslynSentinel.Tests.ModelEval/ShippingKindStepChecks.cs`
 - Depends on: Step 1 (content follows the "Check per step" table)
 - Effect: text-neutral
@@ -212,6 +216,7 @@ Turns, wall time and `StopReason` are recorded per step. No turn ideal is set ye
 - Lane: `implementer`
 
 ### Step 5 - No-model golden self-test
+- Done: f1d68375 (self-test 9/9 green)
 - Files: `RoslynSentinel.Tests.ModelEval/ShippingKindStepGoldenTests.cs` (new)
 - Depends on: Steps 2, 3, 4
 - Effect: text-neutral
@@ -230,6 +235,7 @@ Turns, wall time and `StopReason` are recorded per step. No turn ideal is set ye
 - Lane: `test-writer` (pairs with Step 6; disjoint files)
 
 ### Step 6 - Model test class
+- Done: 59a0332a
 - Files: `RoslynSentinel.Tests.ModelEval/ShippingKindSteppedAgentTests.cs` (new)
 - Depends on: Steps 2, 3, 4
 - Effect: behaviour-changing for eval runs only: five new explicit test cases
@@ -265,6 +271,7 @@ Turns, wall time and `StopReason` are recorded per step. No turn ideal is set ye
 - Lane: `implementer-senior` (about 140 copied SetUp lines plus a TearDown exceed the implementer budget)
 
 ### Step 7b - Script selection
+- Done: 97a5a63f
 - Files: `scripts/roslynsentinel-modeleval.ps1`
 - Depends on: Step 6 (test name)
 - Effect: behaviour-changing for the script only (new `-Test` value and parameter)
@@ -279,6 +286,7 @@ Turns, wall time and `StopReason` are recorded per step. No turn ideal is set ye
 - Lane: orchestrator direct edit (non-C# file)
 
 ### Step 7 - Stub sweep
+- Done: no commit (0 NotImplementedException hits)
 - Files: the five new files
 - Depends on: Steps 2-6
 - Effect: text-neutral
