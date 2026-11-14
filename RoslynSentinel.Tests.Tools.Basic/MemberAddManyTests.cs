@@ -74,7 +74,7 @@ public class MemberAddManyTests
         foreach (var fragment in fragments)
         {
             var index = text.IndexOf(fragment, StringComparison.Ordinal);
-            Assert.That(index, Is.GreaterThan(last), $"'{fragment}' must be present and follow the previous fragment");
+            Assert.That(index, Is.GreaterThan(last), $"'{fragment}' must be present and follow the previous fragment. actual:\n{text}");
             last = index;
         }
     }
@@ -94,8 +94,8 @@ public class MemberAddManyTests
         {
             Assert.That(result.StatusMessage, Is.EqualTo("Added 2 members: Method 'Gamma', Method 'Delta' to 'SingleDeclTarget' in MemberAddManyFixture.cs."));
             Assert.That(after, Does.Contain("public int Alpha() => 1;"), "existing members must survive");
-            Assert.That(Regex.IsMatch(after, @"Beta\(\) => 2;\r?\n\r?\n[ \t]+public int Gamma\(\) => 3;\r?\n\r?\n[ \t]+public int Delta\(\) => 4;\r?\n[ \t]+\}"),
-                Is.True, "the block must follow Beta with one blank line between members and close the class after Delta");
+            Assert.That(Regex.IsMatch(after, @"Beta\(\) => 2;\r?\n\r?\n[ \t]+public int Gamma\(\) => 3;\r?\n\r?\n[ \t]+public int Delta\(\) => 4;\r?\n\}"),
+                Is.True, "the block must follow Beta with one blank line between members and close the class after Delta. actual:\n" + after);
         });
         AssertInOrder(after, "Alpha() => 1;", "Beta() => 2;", "Gamma() => 3;", "Delta() => 4;");
     }
@@ -115,8 +115,8 @@ public class MemberAddManyTests
         {
             Assert.That(result.StatusMessage, Is.EqualTo("Added 3 members: Method 'X', Method 'Y', Method 'Z' to 'SingleDeclTarget' in MemberAddManyFixture.cs."));
             Assert.That(after, Does.Contain("public int Alpha() => 1;"), "existing members must survive");
-            Assert.That(Regex.IsMatch(after, @"Beta\(\) => 2;\r?\n\r?\n[ \t]+public int X\(\) => 5;\r?\n\r?\n[ \t]+public int Y\(\) => 6;\r?\n\r?\n[ \t]+public int Z\(\) => 7;\r?\n[ \t]+\}"),
-                Is.True, "the block must follow Beta with one blank line between each member and close the class after Z");
+            Assert.That(Regex.IsMatch(after, @"Beta\(\) => 2;\r?\n\r?\n[ \t]+public int X\(\) => 5;\r?\n\r?\n[ \t]+public int Y\(\) => 6;\r?\n\r?\n[ \t]+public int Z\(\) => 7;\r?\n\}"),
+                Is.True, "the block must follow Beta with one blank line between each member and close the class after Z. actual:\n" + after);
         });
         AssertInOrder(after, "Alpha() => 1;", "Beta() => 2;", "X() => 5;", "Y() => 6;", "Z() => 7;");
     }
@@ -150,7 +150,9 @@ public class MemberAddManyTests
         Assert.Multiple(() =>
         {
             Assert.That(result.IsError, Is.True, "a caller with no helper in the file must fail the compile gate");
-            Assert.That(result.ErrorData?.Message, Does.Contain("CS0103"));
+            Assert.That(result.ErrorData?.Message, Does.Contain("introduces new compiler errors"));
+            Assert.That((result.ErrorData?.Detail ?? string.Empty) + string.Concat(result.ErrorData?.StructuredDetail?.Select(d => d.ToString() ?? string.Empty) ?? []), Does.Contain("CS0103"),
+                "the compile gate must carry CS0103 in the refusal's diagnostics (Detail or StructuredDetail)");
         });
         Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "a refused add must not write");
     }
@@ -170,7 +172,7 @@ public class MemberAddManyTests
         {
             Assert.That(result.StatusMessage, Is.EqualTo("Added 2 members: Method 'Gamma', Method 'Delta' after 'Alpha' in 'SingleDeclTarget' in MemberAddManyFixture.cs."));
             Assert.That(Regex.IsMatch(after, @"Alpha\(\) => 1;\r?\n\r?\n[ \t]+public int Gamma\(\) => 3;\r?\n\r?\n[ \t]+public int Delta\(\) => 4;\r?\n\r?\n[ \t]+public int Beta\(\) => 2;"),
-                Is.True, "the block must sit between Alpha and Beta, contiguous, with one blank line between members");
+                Is.True, "the block must sit between Alpha and Beta, contiguous, with one blank line between members. actual:\n" + after);
         });
         AssertInOrder(after, "Alpha() => 1;", "Gamma() => 3;", "Delta() => 4;", "Beta() => 2;");
     }
@@ -190,7 +192,7 @@ public class MemberAddManyTests
         {
             Assert.That(result.StatusMessage, Is.EqualTo("Added 2 members: Method 'Gamma', Method 'Delta' before 'Beta' in 'SingleDeclTarget' in MemberAddManyFixture.cs."));
             Assert.That(Regex.IsMatch(after, @"Alpha\(\) => 1;\r?\n\r?\n[ \t]+public int Gamma\(\) => 3;\r?\n\r?\n[ \t]+public int Delta\(\) => 4;\r?\n\r?\n[ \t]+public int Beta\(\) => 2;"),
-                Is.True, "the block must sit between Alpha and Beta, contiguous, with one blank line between members");
+                Is.True, "the block must sit between Alpha and Beta, contiguous, with one blank line between members. actual:\n" + after);
         });
         AssertInOrder(after, "Alpha() => 1;", "Gamma() => 3;", "Delta() => 4;", "Beta() => 2;");
     }
