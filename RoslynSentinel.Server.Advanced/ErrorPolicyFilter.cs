@@ -17,6 +17,9 @@ namespace RoslynSentinel.Server.Advanced;
 /// </summary>
 public static class ErrorPolicyFilter
 {
+    /// <summary>Inline entries longer than this many characters are reported by <see cref="WarnLongEntries"/>.</summary>
+    public const int LongEntryThreshold = 1000;
+
     /// <summary>The pointer sentence for a key, used in <see cref="ErrorPolicyMode.Pointer"/>.</summary>
     public static string PointerText(ErrorPolicyKey key) =>
         "Your instructions have an '" + ErrorPolicyDocument.RenderedHeading(key) + "' rule for this case; apply it.";
@@ -33,6 +36,50 @@ public static class ErrorPolicyFilter
             ErrorPolicyMode.Inline => document is not null && document.Entries.TryGetValue(key, out var entry) ? entry : null,
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// The document's entries longer than <paramref name="threshold"/> characters, as (wire name, entry text length) pairs.
+    /// Empty when the document is null.
+    /// </summary>
+    public static IReadOnlyList<(string Key, int Length)> FindLongEntries(ErrorPolicyDocument? document, int threshold = LongEntryThreshold)
+    {
+        if (document is null)
+        {
+            return Array.Empty<(string Key, int Length)>();
+        }
+
+        var longEntries = new List<(string Key, int Length)>();
+        foreach (var (key, text) in document.Entries)
+        {
+            if (text.Length > threshold)
+            {
+                longEntries.Add((ErrorPolicyKeys.ToWireName(key), text.Length));
+            }
+        }
+
+        return longEntries;
+    }
+
+    /// <summary>
+    /// Logs one warning per long entry. The caller invokes it on the first call-tool call, because no logger exists at registration.
+    /// Does nothing when the logger is null or the list is empty.
+    /// </summary>
+    public static void WarnLongEntries(IReadOnlyList<(string Key, int Length)> longEntries, ILogger? logger)
+    {
+        if (logger is null || longEntries.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var (key, length) in longEntries)
+        {
+            logger.LogWarning(
+                "Error policy Inline entry {Key} is {Length} characters (over {Threshold}); Inline text is appended after the offload step, so it is outside the offload budget and shares the EchoReserveChars margin with other stamps.",
+                key,
+                length,
+                LongEntryThreshold);
+        }
     }
 
     /// <summary>

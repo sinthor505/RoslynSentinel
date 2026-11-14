@@ -96,7 +96,7 @@ fills the budget; a given `limit` is an upper bound.
 ### Call-tool filters
 
 First added is outermost (csharp-sdk `McpServerImpl.BuildFilterPipeline` folds from the last filter inward). The order is
-the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (14 filters; the loop latch is listed as 3a to keep the older item numbers), pinned by
+the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationExtensionsBasic.cs` (14 filters, 15 when the error policy is on; the loop latch and the error policy are listed as 3a and 7a to keep the older item numbers), pinned by
 `ToolTelemetryFilterOrderTests` via `CallToolFilterNames`. In registration order:
 
 1. `AddAgentIdentityFilter` (`Server.Advanced/AgentIdentityCapture.cs`): strips `_agentId`/`_agentType`/`_sessionId` from the
@@ -138,6 +138,14 @@ the `CallToolFilterRegistrations` table in `Server.Advanced/ServiceRegistrationE
    `workspaceStaleReason`, `workspaceStaleRecovery` onto the first text block (state read after `next`).
 7. `AddToolErrorFilter` domain-failure sync: response JSON with top-level `isError:true` -> protocol-level
    `CallToolResult.IsError=true` (same name and polarity).
+7a. `AddErrorPolicyFilter` (`Server.Advanced/ErrorPolicyFilter.cs`, registered only when `ErrorPolicyOptions.Mode` is not `Off`,
+   directly outside `WorkspaceNotLoaded`): on a not-found error result that `ErrorPolicyClassifier` maps to a key, appends the
+   operator's policy pointer (`Pointer` mode) or inline entry (`Inline` mode) as ONE trailing text block; the first block is never
+   modified, and nothing is appended when the call's `ToolCallContext` has `HasEditEffectFact` set. It sits outside
+   `LargeResultOffload` (item 10), so the appended block is added after the offload step and is exempt from the offload budget by
+   construction; `EchoReserveChars` is only the shared margin. The mode and policy file are read once at startup, and the first
+   tool call logs a warning for each Inline entry over `ErrorPolicyFilter.LongEntryThreshold` (1000) characters. A diagnostic aid:
+   any failure leaves the result untouched.
 8. `AddWorkspaceNotLoadedFilter` exception catch-all (`CallToolFailureHandler`): an escaped exception becomes a structured
    failure body (`ToolErrorMapper.ToResultError`: `SolutionNotLoadedException` keeps its actionable message, a typed
    `ToolException` keeps its code) with `IsError=true`; a client abort is rethrown. A thrown error never reaches the

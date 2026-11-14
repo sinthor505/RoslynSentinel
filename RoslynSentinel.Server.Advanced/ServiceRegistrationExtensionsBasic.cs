@@ -159,18 +159,29 @@ public static class RoslynSentinelServiceExtensionsBasic
     private static void AddErrorPolicyFilter(IMcpRequestFilterBuilder filters)
     {
         var mode = ErrorPolicyOptions.Mode;
-        // TODO error-policy: Inline text is outside the offload budget; EchoReserveChars (2560) is shared with other stamps, keep entries short
         ErrorPolicyDocument? document = mode == ErrorPolicyMode.Inline ? ErrorPolicyDocument.Load(ErrorPolicyOptions.PolicyFilePath!) : null;
+        var longEntries = ErrorPolicyFilter.FindLongEntries(document);
+        var warned = 0;
         filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
             ModelContextProtocol.Protocol.CallToolRequestParams,
             ModelContextProtocol.Protocol.CallToolResult>(
-            (context, cancellationToken) => ErrorPolicyFilter.InvokeAsync(
-                mode,
-                document,
-                context.Params?.Name,
-                context.Params?.Arguments,
-                context.Server.Services?.GetService<ILoggerFactory>()?.CreateLogger("ErrorPolicyFilter"),
-                () => next(context, cancellationToken))));
+            (context, cancellationToken) =>
+            {
+                var logger = context.Server.Services?.GetService<ILoggerFactory>()?.CreateLogger("ErrorPolicyFilter");
+                // The long-entry warning is logged on the first tool call because no logger exists at registration.
+                if (longEntries.Count > 0 && Interlocked.Exchange(ref warned, 1) == 0)
+                {
+                    ErrorPolicyFilter.WarnLongEntries(longEntries, logger);
+                }
+
+                return ErrorPolicyFilter.InvokeAsync(
+                    mode,
+                    document,
+                    context.Params?.Name,
+                    context.Params?.Arguments,
+                    logger,
+                    () => next(context, cancellationToken));
+            }));
     }
 
     /// <summary>Names of the call-tool filters in the order <see cref="AddRoslynSentinelToolsBasic"/> registers them (outermost first), for the current error-policy mode.</summary>
