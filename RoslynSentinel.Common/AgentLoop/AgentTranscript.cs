@@ -260,6 +260,10 @@ public enum AgentStopReason
     ModelFinished,
     TurnCapExceeded,
     WallClockCapExceeded,
+    /// <summary>
+    /// The model named a tool outside the list it was shown on <see cref="ModelAgentRunner.ConsecutiveUnavailableToolLimit"/>
+    /// consecutive calls. Each such call before that got the host's error result as its tool message and the run continued.
+    /// </summary>
     UnknownToolRequested,
 
     /// <summary>

@@ -400,9 +400,12 @@ Standing preferences (user, 2026-09-13):
   plus `GetDiagnostics`. `Program.cs` wraps the MCP client in `FilteringToolHost`, a model-side `IAgentToolHost`
   filter: `ListToolsAsync` returns only allowed tools, and `CallToolAsync` for any other name returns a
   `ToolNotAvailable` error that lists the callable tools (the inner host is not called).
-- A model that requests a tool absent from the list it was shown ends the run with `AgentStopReason.UnknownToolRequested`
-  (the `ModelAgentRunner` known-tool check fires before the host), so the filter's error result is a second line of
-  defence for other hosts and direct callers.
+- A model that requests a tool absent from the list it was shown gets the host's error result as that call's tool
+  message (the filter's `ToolNotAvailable` error with the callable tool names) and the run continues. After
+  `ModelAgentRunner.ConsecutiveUnavailableToolLimit` (3) consecutive such calls the run ends with
+  `AgentStopReason.UnknownToolRequested`; a call to a listed tool resets the count. This applies to every
+  `ModelAgentRunner` caller (ModelEval, sub-agent, PlanStepRunner); a non-filtering host returns the server's own
+  unknown-tool error for such a call.
 - The runner's own `LoadSolution`, `Build` and `RunTest` calls use the raw MCP client and are not filtered. A computed
   `--hide-tools` list cannot do this job: a hidden tool is not registered at all, so the runner's `LoadSolution` would fail.
 - The server registers the classes behind those tools through `--include-tools`; the default is

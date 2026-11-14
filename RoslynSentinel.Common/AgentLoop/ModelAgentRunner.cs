@@ -45,6 +45,12 @@ public sealed class ModelAgentRunner
     internal const int IdenticalSuccessNudgeAt = 3;
 
     /// <summary>
+    /// How many consecutive tool calls naming a tool outside the list shown to the model end the run with
+    /// <see cref="AgentStopReason.UnknownToolRequested"/>. A call to a listed tool resets the count.
+    /// </summary>
+    public const int ConsecutiveUnavailableToolLimit = 3;
+
+    /// <summary>
     /// Fixed allowance, in tokens, on top of twice the estimated growth before a reported usage jump counts as
     /// implausible (see <see cref="IsUsageJumpImplausible"/>). Covers estimator error on turns that add little.
     /// </summary>
@@ -286,6 +292,8 @@ public sealed class ModelAgentRunner
         var usageMessageCount = 0;
         // Consecutive turns whose text held tool-call markup and no parsed tool call (zero-tool-call branch below).
         var consecutiveMalformedToolCallTurns = 0;
+        // Consecutive tool calls naming a tool outside knownToolNames; a call to a listed tool resets it.
+        var consecutiveUnavailableToolCalls = 0;
         // Consecutive successful calls with the same tool and arguments (reason ignored); any other call resets the streak.
         string? lastSuccessKey = null;
         var identicalSuccessCount = 0;
@@ -448,13 +456,6 @@ public sealed class ModelAgentRunner
             }
 
             consecutiveMalformedToolCallTurns = 0;
-            var unknownCall = modelMessage.ToolCalls.FirstOrDefault(tc => !knownToolNames.Contains(tc.Name));
-            if (unknownCall is not null)
-            {
-                stopReason = AgentStopReason.UnknownToolRequested;
-                _logger.LogWarning("Turn {Turn}: model requested unknown tool '{Tool}', stopping.", turnNumber, unknownCall.Name);
-                break;
-            }
 
             var callIndexInTurn = 0;
             // Injections wait until every tool result of this turn is in `messages`: a message between a call and
@@ -503,6 +504,27 @@ public sealed class ModelAgentRunner
                     Content = ModelFacingToolContent(resultJson, trailingText),
                 });
                 await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
+
+                var unavailable = !knownToolNames.Contains(toolCall.Name);
+                if (unavailable)
+                {
+                    consecutiveUnavailableToolCalls++;
+                    _logger.LogWarning(
+                        "Turn {Turn}: model called '{Tool}', which is not in the tool list shown to it ({Count} consecutive unavailable call(s)).",
+                        turnNumber, toolCall.Name, consecutiveUnavailableToolCalls);
+                    if (consecutiveUnavailableToolCalls >= ConsecutiveUnavailableToolLimit)
+                    {
+                        stopReason = AgentStopReason.UnknownToolRequested;
+                        _logger.LogWarning(
+                            "Turn {Turn}: {Count} consecutive calls named tools outside the list shown to the model (limit {Limit}) - ending the run.",
+                            turnNumber, consecutiveUnavailableToolCalls, ConsecutiveUnavailableToolLimit);
+                        break;
+                    }
+                }
+                else
+                {
+                    consecutiveUnavailableToolCalls = 0;
+                }
 
                 var injection = assistTracker.Observe(toolCall, resultJson, isError);
                 if (injection is not null)
@@ -611,7 +633,7 @@ public sealed class ModelAgentRunner
                 await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
             }
 
-            if (stopReason is AgentStopReason.RepeatedToolFailure or AgentStopReason.LoopLatchIgnored or AgentStopReason.RepeatedIdenticalCall)
+            if (stopReason is AgentStopReason.RepeatedToolFailure or AgentStopReason.LoopLatchIgnored or AgentStopReason.RepeatedIdenticalCall or AgentStopReason.UnknownToolRequested)
             {
                 break;
             }

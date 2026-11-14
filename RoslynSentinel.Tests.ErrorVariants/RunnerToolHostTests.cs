@@ -120,7 +120,94 @@ public class RunnerToolHostTests
         });
     }
 
-    private static ModelAgentRunner NewRunner(ScriptedModelHandler model, IAgentToolHost host)
+    [Test]
+    public async Task UnlistedCall_ReturnsToolNotAvailable_AndRunContinues()
+    {
+        var inner = new FakeToolHost("Listed", new CallToolResult { Content = [new TextContentBlock { Text = "{\"ok\":true}" }] });
+        var host = new FilteringToolHost(inner, ["Listed"]);
+        var model = new ScriptedModelHandler(
+            ScriptedModelHandler.FunctionCallSse("Hidden", "{}"),
+            ScriptedModelHandler.FunctionCallSse("Listed", "{}"),
+            ScriptedModelHandler.FinalMessageSse("done"));
+        var runner = NewRunner(model, host);
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.ModelFinished));
+            Assert.That(result.Transcript.Turns[0].ToolCalls.Single().IsError, Is.True);
+            Assert.That(model.Requests, Has.Count.EqualTo(3));
+            Assert.That(ScriptedModelHandler.ToolOutput(model.Requests[1]), Does.Contain("ToolNotAvailable").And.Contain("Listed"), "the unlisted call's result names the callable tools");
+            Assert.That(inner.LastToolName, Is.EqualTo("Listed"), "the unlisted call never reaches the inner host");
+        });
+    }
+
+    [Test]
+    public async Task ListedCall_IsUnaffectedByTheFilter()
+    {
+        var inner = new FakeToolHost("Listed", new CallToolResult { Content = [new TextContentBlock { Text = "{\"ok\":true}" }] });
+        var host = new FilteringToolHost(inner, ["Listed"]);
+        var model = new ScriptedModelHandler(
+            ScriptedModelHandler.FunctionCallSse("Listed", "{}"),
+            ScriptedModelHandler.FinalMessageSse("done"));
+        var runner = NewRunner(model, host);
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.ModelFinished));
+            Assert.That(ScriptedModelHandler.ToolOutput(model.Requests[1]), Is.EqualTo("{\"ok\":true}"));
+            Assert.That(result.Transcript.Turns[0].ToolCalls.Single().IsError, Is.False);
+            Assert.That(inner.LastToolName, Is.EqualTo("Listed"));
+        });
+    }
+
+    [Test]
+    public async Task KeepsCallingUnavailableTools_EndsWithUnknownToolRequested()
+    {
+        var inner = new FakeToolHost("Listed", new CallToolResult { Content = [new TextContentBlock { Text = "{\"ok\":true}" }] });
+        var host = new FilteringToolHost(inner, ["Listed"]);
+        var model = new ScriptedModelHandler(
+            ScriptedModelHandler.FunctionCallSse("Hidden1", "{}"),
+            ScriptedModelHandler.FunctionCallSse("Hidden2", "{}"),
+            ScriptedModelHandler.FunctionCallSse("Hidden3", "{}"),
+            ScriptedModelHandler.FinalMessageSse("must never be requested"));
+        var runner = NewRunner(model, host);
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        var calls = result.Transcript.Turns.SelectMany(turn => turn.ToolCalls).ToList();
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.UnknownToolRequested));
+            Assert.That(model.Requests, Has.Count.EqualTo(ModelAgentRunner.ConsecutiveUnavailableToolLimit), "the final message is never requested");
+            Assert.That(calls, Has.Count.EqualTo(ModelAgentRunner.ConsecutiveUnavailableToolLimit));
+            Assert.That(calls.All(call => call.IsError), Is.True, "every unlisted call got the host's error result");
+        });
+    }
+
+    [Test]
+    public async Task ListedCallResetsTheUnavailableCount()
+    {
+        var inner = new FakeToolHost("Listed", new CallToolResult { Content = [new TextContentBlock { Text = "{\"ok\":true}" }] });
+        var host = new FilteringToolHost(inner, ["Listed"]);
+        var model = new ScriptedModelHandler(
+            ScriptedModelHandler.FunctionCallSse("Hidden1", "{}"),
+            ScriptedModelHandler.FunctionCallSse("Hidden2", "{}"),
+            ScriptedModelHandler.FunctionCallSse("Listed", "{}"),
+            ScriptedModelHandler.FunctionCallSse("Hidden3", "{}"),
+            ScriptedModelHandler.FunctionCallSse("Hidden4", "{}"),
+            ScriptedModelHandler.FinalMessageSse("done"));
+        var runner = NewRunner(model, host, turnCap: 8);
+
+        var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
+
+        Assert.That(result.StopReason, Is.EqualTo(AgentStopReason.ModelFinished), "two unlisted calls, a listed call, then two more unlisted calls never reach the limit of three in a row");
+    }
+
+    private static ModelAgentRunner NewRunner(ScriptedModelHandler model, IAgentToolHost host, int turnCap = 5)
     {
         LlmOptions.Configure(["--llm-model", "runnertoolhost-test-model"]);
         var httpClient = new HttpClient(model)
@@ -134,7 +221,7 @@ public class RunnerToolHostTests
             agentClient, host,
             repeatedFailureLimit: 10,
             maxTokensPerTurn: 8192,
-            turnCap: 5,
+            turnCap: turnCap,
             wallClockCap: TimeSpan.FromMinutes(2),
             logger: new NullLogger<ModelAgentRunner>(),
             loopAssist: LoopAssistOptions.Off);
