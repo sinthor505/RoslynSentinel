@@ -1,6 +1,6 @@
 # Let `Member` accept several member declarations in one call
 
-**Status:** PROPOSED 2026-11-14. Awaiting owner decision on which option (1-4) to build; nothing is implemented.
+**Status:** ACCEPTED 2026-11-14. Owner chose option 1 (addMember accepts N declarations); option 2 (replace) is a later follow-up, after option 1 is measured. Nothing is implemented.
 
 ## Motivation
 
@@ -145,9 +145,14 @@ and counts `probeClass.Members`), so the building block for accepting N declarat
   stray-brace tests. The outline shows **no test of the multi-member rejection through
   `insertAfterMemberName` / `insertBeforeMemberName`**, the path the ShippingKind step 3 run actually hit.
 
+## Decision
+
+- 2026-11-14 (owner): build option 1. Option 2 is a follow-up, revisited after the option 1
+  measurement; options 3 and 4 are not pursued.
+
 ## Proposal
 
-Four options. None is decided; the owner picks.
+Four options; see "Decision".
 
 ### Option 1 (recommended first): addMember accepts N declarations
 
@@ -270,7 +275,7 @@ A new `MemberAction` value or a separate tool taking `members: [{...}]`. See "Al
 
 ## Open questions
 
-1. Option 1 or 1+2 together, or option 3 only? Owner decides.
+1. Settled 2026-11-14: option 1 now, option 2 later (see "Decision").
 2. Atomic insert and the anchor semantics for `insertAfterMemberName` with N members: block inserted after
    the anchor, in source order (assumed here); should an anchor be allowed to name one of the members
    being added? Assumed no.
