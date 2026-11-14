@@ -245,3 +245,7 @@ Done via Haiku 5.5 implementer (A1, A2, A3, cap fix) and test-writer. Defects 2-
   consumer is a gated tool. The snippet-failure "not safe" report in Analyze stays a result. Check the
   Experimental `CodeTransformTools` ~243 caller handles the throw. Check: the three tests assert
   `ToolNotFoundException` with ErrorCode NotFound.
+
+## Decisions (todo review 2026-11-13, second session)
+
+- **The 203 of 413 generic `Exception` figure** predates the 11-11..11-13 typing work (cf95f356, a63d48f5, 1594f54f, bd480d35); every ReplaceSnippet failure path read in `WorkspaceFileEditImpl.cs` now carries a typed code and `Exception` comes only from the outer catch for non-`ToolException`s. Re-measure before any code: run `ClassifyError` (`AgentToolErrorAssertions.cs:116`) over post-11-12 10-chain transcripts and group `Exception` results by message prefix. **Acceptance:** 0 or a few `Exception` results closes the item; each producer found gets a typed code and a test asserting it.

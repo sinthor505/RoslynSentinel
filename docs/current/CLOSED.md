@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Migrate Engines.Advanced missing-target kinds to MissingTargetKinds - resolved (2026-11-13)
+
+Migrate `RoslynSentinel.Engines.Advanced` missing-target kinds to `MissingTargetKinds` (2026-11-14) - 136 `ToolNotFoundException` sites there, about 43 pass a literal kind ("class", "method", "parameter", "expression", "snippet", "statement", ...); move them to the shared constants in slices per engine file and add `RoslynSentinel.Engines.Advanced` to the scan in `ErrorPolicyKindRatchetTests` (scope is Common, Engines.Basic, Tools.Basic today; the `// TODO error-policy` in `ErrorPolicyClassifier.MapKind` names the gap). Also review whether `AdvancedStructuralEngine` literals "expression"/"snippet"/"statement" are in `MissingTargetKinds.UnmappedKinds` (they are); size with the same sweep lane (about 20 sites per slice) - [doc](plans/closed/plan_error_policy_pointer.md)
+
+Evidence: merged into the READY Engines.Advanced not-found sweep (todo review 2026-11-13, reference_not_found_error_inventory.md Decisions)
+
+## Edit-tool guidance contradicts commit e0ceceab - resolved (2026-11-13)
+
+Edit-tool guidance contradicts commit e0ceceab (2026-11-11) - `references/reference_edit_tool_gotchas.md:14` and the CLAUDE.md line "Never pass `filePath` with `batchEdits`" predate e0ceceab, which accepts the pair; verify against the source and fix both - [doc](references/reference_edit_tool_gotchas.md)
+
+Evidence: CLAUDE.md and references/reference_edit_tool_gotchas.md now state the accepted rule (top-level filePath is a default for batch items; mixing with oldContent/newContent/selectors is rejected), verified against WorkspaceFileEditImpl.cs hasTopLevelFilePathOnly (todo review 2026-11-13)
+
 ## Not-found wording: pre-H baseline for RenameSymbolNoSuchMethod - resolved (2026-11-13)
 
 Not-found wording: pre-H baseline for RenameSymbolNoSuchMethod (2026-11-13) - from arms H/I (eval_error_policy_pointer_ab.md, 93404d12): run 3 x 10 samples on qwen3.5-4b-mtp (host 112, `ROSLYNSENTINEL_ERROR_POLICY_MODE=Inline`) from a worktree at 44e5a1cc (parent of 1f3451c1) with `scripts/roslynsentinel-modeleval.ps1 -Scenario RenameSymbolNoSuchMethod -Samples 10`; compare BLOCKED, FalseDoneClaim and pass counts with H (6/30 BLOCKED) and I (5/30); a baseline of 1/30 or fewer means revisit the "well-formed, but X does not exist" lead; new 2026-11-14 (qwen3.5-9b-mtp, live, eval_error_variant_replay_validation.md "Policy Off against Inline"): Inline policy stops without doing the task in 12/20 (BLOCKED or FalseDoneClaim, citing "the error handling rules" while naming the real method CalcDisc) vs Off 1/10 (p 0.011); passes 1/20 vs 0/10; Off hits the turn cap (8) in 9/10, so also rerun with a higher cap; the fix belongs in the policy's "no similar name -> stop" rule (a described-not-named target must not trigger it), not in tool text; Small-Medium (~30 min model time) - [doc](plans/closed/plan_error_policy_pointer.md)

@@ -101,7 +101,7 @@ non-C# files; shell is fine for files outside the repo. Why: chokepointing surfa
 hides them - the awkwardness is the finding.
 
 Edit-tool traps (batch edits, exact snippet match, enum `values`, parameter order):
-`docs/current/references/reference_edit_tool_gotchas.md`. Never pass `filePath` with `batchEdits`.
+`docs/current/references/reference_edit_tool_gotchas.md`. A top-level `filePath` beside `batchEdits` is only the default for items without their own.
 
 ## Tool failures and hooks
 

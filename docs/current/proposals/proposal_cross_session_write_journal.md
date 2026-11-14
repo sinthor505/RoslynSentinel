@@ -251,3 +251,7 @@ Worth their own TODO entries:
 - Memories: `project_per_session_mcp_server_isolation`, `project_externaldrift_false_positive_cross_check_gitstatus`,
   `project_concurrent_sessions`, `project_operation_blob_json_gotchas`,
   `reference_central_mcp_request_filter_pipeline`.
+
+## Decisions (todo review 2026-11-13, second session)
+
+- **Scope: minimal slice, full JSONL journal dropped.** The edit attribution ledger and blob `AppliedBy*` fields already name writers in validate findings, `Git(status)`, build/test errors and not-found notes, and the drift halt that motivated the proposal was removed (step 8c), so what remains is explanation text. Build: `WriteRefusal.StaleReadError` (`Common/WriteRefusal.cs:48`) looks up each failed file in `EditAttributionLedger` (the static method needs a ledger handle) and appends "last changed by agent X via tool Y N ago: reason", with the blob fallback `NotFoundEvidence` uses for sibling sessions; remove the `// TODO per-file attribution`. **Acceptance:** test where agent A writes, agent B holds a stale read and edits, and the message names agent A, the tool and the reason; a second test with no ledger entry keeps the old text.

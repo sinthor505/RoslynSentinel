@@ -513,3 +513,7 @@ source check of 2026-11-13.
     proposal names 113). The owner will be present during the run; mid-run decisions (for example a host crash,
     an infra re-run, or a scenario that looks to be failing for an environment reason) are asked of the owner with
     a recommendation rather than decided by the runner.
+
+## Decisions (todo review 2026-11-13, second session)
+
+- **TODO.md line** rewritten to IN-PROGRESS (Steps 1-4 done, Step 5 pilot running, Steps 6-7 pending); the plan stays the single source. Note from the review: at n=10 the Wilson intervals will nearly always overlap, so run n=30 on any scenario that is close before the Step 6 default flip.
