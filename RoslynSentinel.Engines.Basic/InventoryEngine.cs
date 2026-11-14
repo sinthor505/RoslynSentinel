@@ -58,7 +58,7 @@ public class InventoryEngine
         return new ToolNotFoundException(
             $"{lookup.Describe()} Disk and load facts: existsOnDisk={existsOnDisk}, projectsLoaded={projectCount}. " +
             "A project that failed to load leaves its files out of the solution.",
-            "document", normalizedPath);
+            MissingTargetKinds.Document, normalizedPath);
     }
 
     public async Task<CodeInventoryReport> GetCodeInventoryAsync2(FilePathWrapper filePath, CancellationToken cancellationToken = default)

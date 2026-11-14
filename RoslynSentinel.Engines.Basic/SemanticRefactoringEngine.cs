@@ -188,7 +188,7 @@ public class SemanticRefactoringEngine
         {
             var propertyMessage = MemberRefactoringNotFound.DeclarationMessage("property", propertyName, "propertyName", classNode.Members.OfType<PropertyDeclarationSyntax>().Select(p => p.Identifier.Text), filePath.ToString())
                                   + $" Only the properties declared directly in class '{className}' were searched.";
-            throw new ToolNotFoundException(propertyMessage, "property", propertyName);
+            throw new ToolNotFoundException(propertyMessage, MissingTargetKinds.Property, propertyName);
         }
 
         var getter = SyntaxFactory.MethodDeclaration(propNode.Type, $"Get{propertyName}")
@@ -225,7 +225,7 @@ public class SemanticRefactoringEngine
         var nodes = root?.DescendantNodes(span).Where(n => n is StatementSyntax && n.Parent is BlockSyntax).Cast<StatementSyntax>().ToList();
         if (nodes == null || nodes.Count == 0)
         {
-            throw new ToolNotFoundException($"No statements were found in lines {startLine}-{endLine} of '{filePath}', which has {sourceText.Lines.Count} line(s): no statement inside a block body has its span within that range. A constructor header, a field or an attribute list is not a statement of a block body. To see the line range of each member, call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()))}.", "statements");
+            throw new ToolNotFoundException($"No statements were found in lines {startLine}-{endLine} of '{filePath}', which has {sourceText.Lines.Count} line(s): no statement inside a block body has its span within that range. A constructor header, a field or an attribute list is not a statement of a block body. To see the line range of each member, call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()))}.", MissingTargetKinds.Statements);
         }
 
         return await WrapStatementsInUsingAsync(filePath, document, root!, nodes, disposalName, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
@@ -269,7 +269,7 @@ public class SemanticRefactoringEngine
 
         if (nodes.Count == 0)
         {
-            throw new ToolNotFoundException(SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "statement", "directly contains the statement(s) to wrap") + $" Searched: statements containing the snippet match and statements on the snippet's line. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use {ToolCallHint.Call("GetFileOutline")} to find the lines.", "statements");
+            throw new ToolNotFoundException(SnippetNodeKindError.Describe(sourceText, root, snippetMatch, "statement", "directly contains the statement(s) to wrap") + $" Searched: statements containing the snippet match and statements on the snippet's line. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use {ToolCallHint.Call("GetFileOutline")} to find the lines.", MissingTargetKinds.Statements);
         }
 
         // TODO this snippet form selects only the statement(s) containing the snippet, so it cannot cover a multi-statement range (the using block would be empty); WrapRange using is meant for startLine/endLine

@@ -399,7 +399,7 @@ public class DiscoveryEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException("Could not get syntax root.");
-        var container = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<TypeDeclarationSyntax>().Where(t => t.Identifier.Text == containerName).ToList(), "Type", containerName) ?? throw MemberRefactoringNotFound.Declaration("type", containerName, "containerName", root.DescendantNodes().OfType<TypeDeclarationSyntax>().Select(t => t.Identifier.Text), filePath.ToString());
+        var container = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<TypeDeclarationSyntax>().Where(t => t.Identifier.Text == containerName).ToList(), "Type", containerName) ?? throw MemberRefactoringNotFound.Declaration(MissingTargetKinds.Type, containerName, "containerName", root.DescendantNodes().OfType<TypeDeclarationSyntax>().Select(t => t.Identifier.Text), filePath.ToString());
         // Standard C# ordering: fields(0) -> constructors(1) -> destructors(2) -> properties(3) -> events(4) -> methods(5) -> nested(6)
         static int MemberOrder(MemberDeclarationSyntax m) => m switch
         {

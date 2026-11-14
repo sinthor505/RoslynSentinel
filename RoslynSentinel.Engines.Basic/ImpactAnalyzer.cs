@@ -220,7 +220,7 @@ public class ImpactAnalyzer
 
         if (symbol == null)
         {
-            throw MemberRefactoringNotFound.Unresolved("symbol", $"{line}:{column}",
+            throw MemberRefactoringNotFound.Unresolved(MissingTargetKinds.Symbol, $"{line}:{column}",
                 $"No symbol was found at line {line}, column {column} of '{filePath}': the node there ({token.Parent?.GetType().Name}) has no declared or referenced symbol.", filePath.ToString());
         }
 

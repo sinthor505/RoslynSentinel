@@ -1532,7 +1532,7 @@ public class BasicRefactoringEngine
         if (classNode == null)
         {
             var fileClassNames = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(classNode2 => classNode2.Identifier.Text) ?? Enumerable.Empty<string>();
-            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. " + DeclarationNotFoundDetail.Build("class", "className", className, fileClassNames, filePath.ToString()), "class", className);
+            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. " + DeclarationNotFoundDetail.Build("class", "className", className, fileClassNames, filePath.ToString()), MissingTargetKinds.Class, className);
         }
 
         // Extract public instance methods (exclude static, constructors)
@@ -2113,7 +2113,7 @@ public class BasicRefactoringEngine
         method ??= RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations in the file by name. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to list its methods, or {ToolCallHint.Call("Search", ("mode", "method"), ("query", methodName))}. {DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath, includeOutlineCall: false)}", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations in the file by name. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to list its methods, or {ToolCallHint.Call("Search", ("mode", "method"), ("query", methodName))}. {DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath, includeOutlineCall: false)}", MissingTargetKinds.Method, methodName);
         }
 
         if (method.Body == null)
@@ -2155,7 +2155,7 @@ public class BasicRefactoringEngine
         method ??= RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations in the file by name. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to list its methods, or {ToolCallHint.Call("Search", ("mode", "method"), ("query", methodName))}. {DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath, includeOutlineCall: false)}", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations in the file by name. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to list its methods, or {ToolCallHint.Call("Search", ("mode", "method"), ("query", methodName))}. {DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath, includeOutlineCall: false)}", MissingTargetKinds.Method, methodName);
         }
 
         if (method.Body == null)
@@ -2314,7 +2314,7 @@ public class BasicRefactoringEngine
             var detail = usingNames.Count == 0
                 ? DeclarationNotFoundDetail.BuildNoneDeclared("using directive", filePath)
                 : DeclarationNotFoundDetail.Build("using directive", "namespaceName", namespaceName, usingNames, filePath);
-            throw new ToolNotFoundException($"Using directive '{namespaceName}' not found. {detail}", "using directive", namespaceName);
+            throw new ToolNotFoundException($"Using directive '{namespaceName}' not found. {detail}", MissingTargetKinds.UsingDirective, namespaceName);
         }
 
         return new DocumentEditResult
@@ -2373,7 +2373,7 @@ public class BasicRefactoringEngine
 
         if (target == null)
         {
-            throw new ToolNotFoundException($"Cannot edit: target not found. {DeclarationNotFoundDetail.Build("declaration", "targetName", targetName, DeclarationNamesIn(root), filePath)}", "declaration", targetName);
+            throw new ToolNotFoundException($"Cannot edit: target not found. {DeclarationNotFoundDetail.Build("declaration", "targetName", targetName, DeclarationNamesIn(root), filePath)}", MissingTargetKinds.Declaration, targetName);
         }
 
         // baseIndent is derived first because docText bakes it into every line of the synthetic doc
@@ -2518,7 +2518,7 @@ public class BasicRefactoringEngine
 
         if (target == null)
         {
-            throw new ToolNotFoundException($"Cannot edit: target not found. {DeclarationNotFoundDetail.Build("declaration", "targetName", targetName, DeclarationNamesIn(root), filePath)}", "declaration", targetName);
+            throw new ToolNotFoundException($"Cannot edit: target not found. {DeclarationNotFoundDetail.Build("declaration", "targetName", targetName, DeclarationNamesIn(root), filePath)}", MissingTargetKinds.Declaration, targetName);
         }
 
         if (!target.GetLeadingTrivia().Any(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)))
@@ -2562,7 +2562,7 @@ public class BasicRefactoringEngine
 
         if (target == null)
         {
-            throw new ToolNotFoundException($"Target '{targetName}' not found in '{filePath}'. Searched: symbols named '{targetName}' in the file. Next: {ToolCallHint.Call("Search", ("mode", "symbol"), ("query", targetName))} or {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))}. {DeclarationNotFoundDetail.Build("declaration", "targetName", targetName, DeclarationNamesIn(root), filePath, includeOutlineCall: false)}", "symbol", targetName);
+            throw new ToolNotFoundException($"Target '{targetName}' not found in '{filePath}'. Searched: symbols named '{targetName}' in the file. Next: {ToolCallHint.Call("Search", ("mode", "symbol"), ("query", targetName))} or {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))}. {DeclarationNotFoundDetail.Build("declaration", "targetName", targetName, DeclarationNamesIn(root), filePath, includeOutlineCall: false)}", MissingTargetKinds.Symbol, targetName);
         }
 
         var docTrivia = target.GetLeadingTrivia().FirstOrDefault(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
@@ -2613,13 +2613,13 @@ public class BasicRefactoringEngine
         }).OrderBy(b => b.Span.Length).FirstOrDefault();
         if (block == null)
         {
-            throw new ToolNotFoundException($"No block body of '{filePath}', which has {tree.GetText(cancellationToken).Lines.Count} line(s), contains lines {startLine}-{endLine}. A constructor header, a field or an attribute list is not inside a block body. To see the line range of each member, call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()))}.", "block");
+            throw new ToolNotFoundException($"No block body of '{filePath}', which has {tree.GetText(cancellationToken).Lines.Count} line(s), contains lines {startLine}-{endLine}. A constructor header, a field or an attribute list is not inside a block body. To see the line range of each member, call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()))}.", MissingTargetKinds.Block);
         }
 
         var targeted = block.Statements.Where(s => StatementStartLine(s) <= endLine && StatementEndLine(s) >= startLine).ToList();
         if (targeted.Count == 0)
         {
-            throw new ToolNotFoundException($"No statement of the block body that contains lines {startLine}-{endLine} of '{filePath}' (which has {tree.GetText(cancellationToken).Lines.Count} line(s)) overlaps that range. To see the line range of each member, call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()))}.", "statement");
+            throw new ToolNotFoundException($"No statement of the block body that contains lines {startLine}-{endLine} of '{filePath}' (which has {tree.GetText(cancellationToken).Lines.Count} line(s)) overlaps that range. To see the line range of each member, call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()))}.", MissingTargetKinds.Statement);
         }
 
         var tryBlock = SyntaxFactory.Block(SyntaxFactory.List(targeted));
@@ -2688,7 +2688,7 @@ public class BasicRefactoringEngine
         }).OrderBy(b => b.Span.Length).FirstOrDefault();
         if (block == null)
         {
-            throw new ToolNotFoundException($"The snippet matched at line {startLine} of '{filePath}', which has {sourceText.Lines.Count} line(s), and no block body contains that line. A constructor header, a field or an attribute list is not inside a block body. To see the line range of each member, call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()))}.", "block");
+            throw new ToolNotFoundException($"The snippet matched at line {startLine} of '{filePath}', which has {sourceText.Lines.Count} line(s), and no block body contains that line. A constructor header, a field or an attribute list is not inside a block body. To see the line range of each member, call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()))}.", MissingTargetKinds.Block);
         }
 
         // StatementStartLine and StatementEndLine are unused
@@ -2705,7 +2705,7 @@ public class BasicRefactoringEngine
 
         if (targeted.Count == 0)
         {
-            throw new ToolNotFoundException($"The snippet matched at line {startLine} of '{filePath}' (which has {sourceText.Lines.Count} line(s)) inside a block body, but no statement of that block contains it. To see the line range of each member, call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()))}.", "statement");
+            throw new ToolNotFoundException($"The snippet matched at line {startLine} of '{filePath}' (which has {sourceText.Lines.Count} line(s)) inside a block body, but no statement of that block contains it. To see the line range of each member, call {ToolCallHint.Call("GetFileOutline", ("filePath", filePath.ToString()))}.", MissingTargetKinds.Statement);
         }
 
         // Build the try/catch as in the original
@@ -2832,7 +2832,7 @@ public class BasicRefactoringEngine
         var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. {DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath)}", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. {DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath)}", MissingTargetKinds.Method, methodName);
         }
 
         var currentParams = method.ParameterList.Parameters.Select(p => p.Identifier.Text).ToList();
