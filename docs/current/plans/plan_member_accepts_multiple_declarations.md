@@ -1,6 +1,6 @@
 # Plan: Member(addMember) accepts several member declarations in one call (option 1)
 
-**Status:** IN PROGRESS 2026-11-14. Steps 1-14 done (72dabecd, 50facb61, 78116e06, 888f2f3a, 55355155, f5077193, 46152134, 3e28b49e, 7c16f4c3, 46f9657b, a374e2d5, 0c47145b, 0089b8a9; Step 10 is the baseline run, no commit); Step 15 next. Option 1 only (addMember, with or without an insert anchor, takes N declarations atomically); option 2 (replace takes N) is a follow-up after measurement. Batched mode, owner away. Nothing is built.
+**Status:** IN PROGRESS 2026-11-14. Steps 1-19 done (72dabecd, 50facb61, 78116e06, 888f2f3a, 55355155, f5077193, 46152134, 3e28b49e, 7c16f4c3, 46f9657b, a374e2d5, 0c47145b, 0089b8a9, d0a02544, f232a4d9, 31f8a197, cfe59359, 63340607, 53128476, 6d5b4144; Step 10 is the baseline run, no commit); Steps 20-21 next. Option 1 only (addMember, with or without an insert anchor, takes N declarations atomically); option 2 (replace takes N) is a follow-up after measurement. Batched mode, owner away. Nothing is built.
 
 ## Problem
 
@@ -282,6 +282,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Parallel-ready: with Step 12 or 13 (disjoint projects: Common and Tests.Server versus Engines.Basic or Tools.Basic).
 
 ### Step 15 - Tests: tool-level N-member add (proposal tests 1, 2 and 4)
+- Done: d0a02544, f232a4d9
 - Files: `RoslynSentinel.Tests.Tools.Basic/MemberAddManyTests.cs` (new; `InMemoryWorkspace` and `MemberTool`, the pattern of `MemberSingleDeclarationTests`)
 - Depends on: 13
 - Effect: tests only
@@ -296,6 +297,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Parallel-ready: with Step 17 (different projects; preferred pair).
 
 ### Step 16 - Tests: atomicity, the silent-drop guard, anchor hint (proposal tests 3 and 6)
+- Done: 31f8a197, cfe59359
 - Files: `RoslynSentinel.Tests.Tools.Basic/MemberAddManyGuardTests.cs` (new)
 - Depends on: 13, 12
 - Effect: tests only
@@ -308,6 +310,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Parallel-ready: weak, with Step 18 only if the dispatcher accepts two agents in `Tests.Tools.Basic` (both are new files in the same project). Safe to run alone.
 
 ### Step 17 - Tests: binding check refuses a batch member that re-points a call (proposal test 5)
+- Done: 63340607
 - Files: `RoslynSentinel.Tests.Basic/AddMemberManyCallBindingTests.cs` (new; same fixture pattern as `AddMemberCallBindingTests`: `SetFiles`, `_memberRefactoringEngine`)
 - Depends on: 8 (11 for the anchor variant)
 - Effect: tests only
@@ -323,6 +326,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Parallel-ready: with Step 15 (preferred pair; different projects).
 
 ### Step 18 - Tests: one changeId, undo reverts the batch, N effect rows (proposal test 3, UndoLastApply; Q5 end to end)
+- Done: 53128476
 - Files: `RoslynSentinel.Tests.Tools.Basic/MemberAddManyUndoTests.cs` (new; real on-disk workspace, the `EditEffectUndoTests` setup: `PersistentWorkspaceManager`, `TestSolutionFixture`, `NewEditImpl`; `InMemoryWorkspace` is documented as unsuitable for undo-from-disk)
 - Depends on: 13
 - Effect: tests only
@@ -332,6 +336,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Parallel-ready: weak (same project as Steps 15, 16, 19); run alone or with Step 17.
 
 ### Step 19 - Convert the existing rejection tests
+- Done: 6d5b4144 (test renamed to AddMember_WithTwoMembers_AddsBothInOrderAsync; the red window of Steps 11-19 is closed)
 - Files: `RoslynSentinel.Tests.Tools.Basic/MemberSingleDeclarationTests.cs`
 - Depends on: 13
 - Effect: tests only
