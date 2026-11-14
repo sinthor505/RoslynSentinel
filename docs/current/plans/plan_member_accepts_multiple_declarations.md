@@ -1,6 +1,6 @@
 # Plan: Member(addMember) accepts several member declarations in one call (option 1)
 
-**Status:** IN PROGRESS 2026-11-14. Steps 1-10 done (72dabecd, 50facb61, 78116e06, 888f2f3a, 55355155, f5077193, 46152134, 3e28b49e, 7c16f4c3; Step 10 is the baseline, no commit); Step 11 next. Option 1 only (addMember, with or without an insert anchor, takes N declarations atomically); option 2 (replace takes N) is a follow-up after measurement. Batched mode, owner away. Nothing is built.
+**Status:** IN PROGRESS 2026-11-14. Steps 1-14 done (72dabecd, 50facb61, 78116e06, 888f2f3a, 55355155, f5077193, 46152134, 3e28b49e, 7c16f4c3, 46f9657b, a374e2d5, 0c47145b, 0089b8a9; Step 10 is the baseline run, no commit); Step 15 next. Option 1 only (addMember, with or without an insert anchor, takes N declarations atomically); option 2 (replace takes N) is a follow-up after measurement. Batched mode, owner away. Nothing is built.
 
 ## Problem
 
@@ -236,6 +236,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Done when: all 15 jobs have ended in FINISHED-PASS or FINISHED-FAIL, or the failed ones are resubmitted and have started; the hold on Step 11 is released when the last job has started.
 
 ### Step 11 - Insert anchors accept N; AddMemberAsync delegates (the behaviour change)
+- Done: 46f9657b
 - Files: `RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs`
 - Depends on: 8 and 10 (hold: the last baseline job has started); 9 should be green first
 - Effect: behaviour-changing. `Member(insertAfterMemberName / insertBeforeMemberName)` and `AddMemberAsync` with a multi-declaration source now insert instead of being rejected (the engine; the tool is wired in Step 13). Starts the red window of `MemberSingleDeclarationTests.AddMember_WithTwoMembers_*` (see Execution rules).
@@ -247,6 +248,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Done when: `Build` 0 errors. Dispatcher runs: `MemberRefactoringTests.InsertMemberAfter_*`, `InsertMemberBefore_*`, `MemberNameEventIndexerAnchorTests`, `AddMemberCallBindingTests` (13 tests: with the delegate they now reach the list overload of the binding check for N = 1), `AddMembersAsyncTests` (Step 9). Expected to fail until Step 19: `MemberSingleDeclarationTests.AddMember_WithTwoMembers_*` (see Execution rules).
 
 ### Step 12 - Anchor-not-found hint for an anchor that names an added member
+- Done: a374e2d5
 - Files: `RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs`
 - Depends on: 11
 - Effect: behaviour-changing (error text: one appended fact)
@@ -256,6 +258,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Parallel-ready: with Step 13 or Step 14 (different projects).
 
 ### Step 13 - Tool layer: addMember path uses AddMembersAsync, result text, schema description
+- Done: 0c47145b
 - Files: `RoslynSentinel.Tools.Basic/RefactoringStructuralImpl.cs`, `RoslynSentinel.Tools.Basic/RefactoringStructuralTools.cs`
 - Depends on: 3, 11
 - Effect: behaviour-changing. `Member(addMember)` accepts N declarations with and without anchors; `statusMessage` for N >= 2 reads `Added 2 members: Method 'A', Method 'B' to 'C' in F.cs.`; the `newMemberSource` description changes.
@@ -266,6 +269,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Done when: `Build` 0 errors, and `Search(mode: text, query: "Exactly one member declaration")` returns no hit in `RoslynSentinel.Tools.Basic`.
 
 ### Step 14 - Oversize advice and the gotchas reference
+- Done: 0089b8a9
 - Files: `RoslynSentinel.Common/WriteToolAdviceHelper.cs`, `RoslynSentinel.Tests.Server/WriteToolAdviceHelperTests.cs`, `docs/current/references/reference_edit_tool_gotchas.md`
 - Depends on: none technically; schedule with or after Step 13 so the advice never describes a tool that does not exist yet (and after the Step 10 hold: it is a `*.cs` change that changes model-visible text)
 - Effect: behaviour-changing (advice sentence for `RejectedContentShape.MultipleMembers` and `FileLevel`)
