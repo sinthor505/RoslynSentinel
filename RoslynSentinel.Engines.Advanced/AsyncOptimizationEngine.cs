@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
 using RoslynSentinel.Common;
+using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Engines.Advanced;
 
@@ -59,10 +60,10 @@ public class AsyncOptimizationEngine
     public async Task<DocumentEditResult> OptimizeToValueTaskAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodMatches = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>();
-        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName) ?? throw new ToolNotFoundException($"Method '{methodName}' not found in document.");
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName) ?? throw new ToolNotFoundException($"Method '{methodName}' not found in document. " + DeclarationNotFoundDetail.Build("method", "methodName", methodName, root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Method, methodName);
 
         // Safety checks
         var awaitCount = methodNode.DescendantNodes().OfType<AwaitExpressionSyntax>().Count();
@@ -138,7 +139,7 @@ public class AsyncOptimizationEngine
         var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
         if (methodNode == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found. " + ToolCallHint.Next("GetFileOutline", "to list the methods in the file.", ("filePath", filePath.ToString())), "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found. " + ToolCallHint.Next("GetFileOutline", "to list the methods in the file.", ("filePath", filePath.ToString())), MissingTargetKinds.Method, methodName);
         }
         if (methodNode.Body == null)
         {
@@ -325,7 +326,7 @@ public class AsyncOptimizationEngine
     public async Task<DocumentEditResult> GenerateAsyncOverloadAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default, string? callerContainingType = null)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodMatches = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>();
         var methodNode = await ResolveMethodByNameAsync(document, methodMatches, methodName, callerContainingType, cancellationToken);
@@ -333,7 +334,7 @@ public class AsyncOptimizationEngine
 
         if (classNode == null || methodNode == null)
         {
-            throw new ToolNotFoundException("Class or method not found.");
+            throw new ToolNotFoundException("Class or method not found. " + DeclarationNotFoundDetail.Build("method", "methodName", methodName, root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Method, methodName);
         }
 
         var asyncMethodName = methodName + "Async";
@@ -428,10 +429,7 @@ public class AsyncOptimizationEngine
         string? callerContainingType = null)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath)
-                               .Select(solution.GetDocument)
-                               .FirstOrDefault() ?? throw new ToolNotFoundException(
-                $"File '{filePath}' not found in the loaded solution. Ensure LoadSolution has been called.", "file", filePath);
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new ToolInvalidArgumentException($"Could not get syntax root for '{filePath}'.");
 
@@ -446,7 +444,7 @@ public class AsyncOptimizationEngine
         if (classNode == null || methodNode == null)
         {
             throw new ToolNotFoundException(
-                $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.", "method", methodName);
+                $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive. " + DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath.ToString()), MissingTargetKinds.Method, methodName);
         }
 
         // ── Precondition checks ──────────────────────────────────────────────
@@ -649,9 +647,9 @@ public class AsyncOptimizationEngine
                                                                                        .OfType<MethodDeclarationSyntax>()
                                                                                        .Where(m => m.Identifier.Text == methodName)
                                                                                        .ToList(), callerContainingType), "Method", methodName)
-            ?? throw new ToolNotFoundException($"Method '{methodName}' not found in the bridged document.", "method", methodName);
+            ?? throw new ToolNotFoundException($"Method '{methodName}' not found in the bridged document. " + DeclarationNotFoundDetail.Build("method", "methodName", methodName, bridgedRoot.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath.ToString()), MissingTargetKinds.Method, methodName);
         var bridgedClass = bridgeInNewClass.Parent as ClassDeclarationSyntax
-            ?? throw new ToolNotFoundException($"Method '{methodName}' is not a direct member of a class.", "method", methodName);
+            ?? throw new ToolNotFoundException($"Method '{methodName}' is not a direct member of a class.", MissingTargetKinds.Method, methodName);
 
         // The overload gets a blank line before it and the original trailing line break after it.
         asyncMethod = asyncMethod
@@ -691,10 +689,7 @@ public class AsyncOptimizationEngine
         string? callerContainingType = null)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath)
-                               .Select(solution.GetDocument)
-                               .FirstOrDefault() ?? throw new ToolNotFoundException(
-                $"File '{filePath}' not found in the loaded solution. Ensure LoadSolution has been called.", "file", filePath);
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new ToolInvalidArgumentException($"Could not get syntax root for '{filePath}'.");
         var methodMatches = root.DescendantNodes()
@@ -703,7 +698,7 @@ public class AsyncOptimizationEngine
             .ToList();
         var methodNode = await ResolveMethodByNameAsync(document, methodMatches, methodName, callerContainingType, cancellationToken)
             ?? throw new ToolNotFoundException(
-                $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.", "method", methodName);
+                $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive. " + DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath.ToString()), MissingTargetKinds.Method, methodName);
 
         if (methodNode.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)))
         {
@@ -880,7 +875,7 @@ public class AsyncOptimizationEngine
 
         if (methodNode == null)
         {
-            throw new ToolNotFoundException($"Method '{asyncMethodName}' not found in document.", "method", asyncMethodName);
+            throw new ToolNotFoundException($"Method '{asyncMethodName}' not found in document. " + DeclarationNotFoundDetail.Build("method", "asyncMethodName", asyncMethodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath.ToString()), MissingTargetKinds.Method, asyncMethodName);
         }
 
         var body = (SyntaxNode?)methodNode.Body ?? methodNode.ExpressionBody;
