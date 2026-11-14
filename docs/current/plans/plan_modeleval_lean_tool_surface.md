@@ -1,6 +1,6 @@
 # Plan: give ModelEval an 18-tool lean surface behind an env switch, A/B it against the 55-tool surface, then make it the default
 
-**Status:** IN PROGRESS 2026-11-13. Steps 1a-1b done (be340c7e, 0a0b0ecc). 18-tool lean ModelEval surface behind an env switch, A/B against the 55-tool surface (hold point), then default switch; PlanStepRunner deferred to a TODO.md line.
+**Status:** IN PROGRESS 2026-11-13. Steps 1a-1b done (be340c7e, 0a0b0ecc), 2a-2e done (e68197f8..a8dee25a). 18-tool lean ModelEval surface behind an env switch, A/B against the 55-tool surface (hold point), then default switch; PlanStepRunner deferred to a TODO.md line.
 
 ## Problem
 
@@ -248,6 +248,23 @@ edit. If the EditSnippets arm is already done in 1a, this slice is only the lega
   source of truth).
 - Done when: `Build` 0 errors; golden-string and lean-surface tests per site.
 - Lane/tier: `implementer` depth tier 1 (2 source files plus a test file); `test-writer`.
+
+### Batch B outcome (Steps 2a-2e, 2026-11-13)
+- Done: 2a e68197f8 + b839a447 (isCallable through `SymbolWireResolver.ResolveAsync`; `PersistentWorkspaceManager` takes
+  an optional `ActiveToolSurface`; no-candidate text names `Search` when `ListAll`/`GetFileOutline` are not callable);
+  2b 0c045363 (`Validate` takes `isCallable`; `BuildParameterHints`); 2c 8c39e6e1 (`TruncationRecoveryAdvice`,
+  `NoMatchBrowseAdvice`); 2d bae0f0e6 + dc1a68d7 (`BuildEngine` and `WorkspaceBuildTestImpl` get the surface);
+  2e dd9b206e (`OrientationBreakerFallbackText(isCallable)`, public because Server.Advanced has no
+  InternalsVisibleTo; its TODO removed).
+- Deliberately unchanged, comment-only TODOs in a8dee25a: `ProjectStructureEngine` :80 (its only caller is a tool not
+  on the lean list), `TestingEngine` :331 (`AddBenchmarkStub`, not on the lean list), `SymbolNavigationEngine`
+  :2793-2794,:2881 (names `FindReferences`; needs a designed `Search(mode: references)` text, the one real remaining
+  gap), `PersistentWorkspaceManager` :435 (a TODO to add `ListWorkspaceSolutions`, not a lean-unavailable name).
+- Golden tests are copies of the HEAD source text with `ToolCallHint.Call(...)` segments, not strings captured by
+  running HEAD (`ToolCallHint` renders from the live tool catalog). No manager-level test for
+  `PersistentWorkspaceManager.ResolveFromWireAsync` (no helper loads a solution into a manager).
+- Open follow-up (owner question, recommendation: only if the A/B shows models failing there): design the lean
+  `Search(mode: references)` text for the `SymbolNavigationEngine` sites.
 
 ### Step 3 - Prompt rewording: ListAll -> ListSolutionItems/Search (behaviour-changing)
 Slices 3a-3c. 3b and 3c are behaviour-changing (3a is read-only). Schedule after Step 2.
