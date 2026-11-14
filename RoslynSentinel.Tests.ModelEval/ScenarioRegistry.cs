@@ -16,6 +16,7 @@ public static class ScenarioRegistry
         GuardScenarios.EmptyInterfaceRemoval,
         FaultScenarios.RenameSymbolTypo,
         FaultScenarios.RenameSymbolNoSuchMethod,
+        FaultScenarios.SearchContainingTypeMiss,
         FaultScenarios.ReplaceSnippetWrongFileNearMatch,
         FaultScenarios.ReplaceSnippetWrongFileNoMatch,
         StopAdherenceScenarios.StopAdherenceMissingFile,

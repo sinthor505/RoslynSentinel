@@ -19,11 +19,12 @@ public class FaultScenariosTests
         FaultScenarios.ReplaceSnippetWrongFileNoMatch,
     ];
 
-    // All four fault scenarios, including the seeded RenameSymbolTypo (type 4), for the shape tests that do not check ScenarioType.
+    // All five fault scenarios, including the two seeded type-4 scenarios (RenameSymbolTypo, SearchContainingTypeMiss), for the shape tests that do not check ScenarioType.
     private static IEnumerable<ScenarioDefinition> AllFaultDefinitions =>
     [
         FaultScenarios.RenameSymbolTypo,
         FaultScenarios.RenameSymbolNoSuchMethod,
+        FaultScenarios.SearchContainingTypeMiss,
         FaultScenarios.ReplaceSnippetWrongFileNearMatch,
         FaultScenarios.ReplaceSnippetWrongFileNoMatch,
     ];
@@ -34,6 +35,7 @@ public class FaultScenariosTests
 
     [TestCase(FaultScenarios.RenameSymbolTypoId)]
     [TestCase(FaultScenarios.RenameSymbolNoSuchMethodId)]
+    [TestCase(FaultScenarios.SearchContainingTypeMissId)]
     [TestCase(FaultScenarios.ReplaceSnippetWrongFileNearMatchId)]
     [TestCase(FaultScenarios.ReplaceSnippetWrongFileNoMatchId)]
     public void Registry_FindsFaultScenarioIgnoringCase(string id)
@@ -122,6 +124,45 @@ public class FaultScenariosTests
 
         Assert.That(prompt, Does.Contain("CalcDsc"));
         Assert.That(prompt, Does.Not.Contain("CalcDisc"));
+    }
+
+    // ---- SearchContainingTypeMiss ----
+
+    [Test]
+    public void SearchContainingTypeMiss_Definition()
+    {
+        var scenario = FaultScenarios.SearchContainingTypeMiss;
+
+        Assert.That(scenario.FaultKind, Is.EqualTo("symbol-containing-type-miss"));
+        Assert.That(scenario.ToolUnderTest, Is.EqualTo("Search"));
+        Assert.That(scenario.Expected, Is.EqualTo(ExpectedOutcome.Recover));
+        Assert.That(scenario.ScenarioType, Is.EqualTo(4));
+        Assert.That(scenario.ResumeFaultSeeded, Is.True);
+        Assert.That(scenario.ResumeFaultTool, Is.EqualTo("Search"));
+        Assert.That(scenario.TurnCap, Is.EqualTo(8));
+        Assert.That(scenario.ResumeTurnCap, Is.EqualTo(1 + scenario.TurnCap));
+        Assert.That(scenario.IsResumeSample, Is.True);
+        Assert.That(scenario.EndOnCorrectFinalState, Is.True);
+    }
+
+    [Test]
+    public void SearchContainingTypeMiss_ResumeFaultArguments_AreValidJsonNamingTheMissingMemberAndContainer()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(FaultScenarios.SearchContainingTypeMiss.ResumeFaultArguments!);
+        var root = doc.RootElement;
+
+        Assert.That(root.GetProperty("mode").GetString(), Is.EqualTo("symbol"));
+        Assert.That(root.GetProperty("query").GetString(), Is.EqualTo("ApplyLoyaltyBonus"));
+        Assert.That(root.GetProperty("containingType").GetString(), Is.EqualTo("OrderPricingCalculator"));
+        Assert.That(root.GetProperty("reason").GetString(), Is.Not.Empty);
+    }
+
+    [Test]
+    public void SearchContainingTypeMiss_PromptNamesTheMissingMethod()
+    {
+        var prompt = Format(FaultScenarios.SearchContainingTypeMiss);
+
+        Assert.That(prompt, Does.Contain("ApplyLoyaltyBonus"));
     }
 
     // ---- RenameSymbolNoSuchMethod ----

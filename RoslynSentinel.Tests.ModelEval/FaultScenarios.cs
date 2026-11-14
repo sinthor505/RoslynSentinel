@@ -11,8 +11,8 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// is graded by the same final-state classifier as its typo sibling (RenameScenarios), so the model must find
 /// the real target and complete the edit there; ReplaceSnippetWrongFileNoMatch expects StopAndReport (see the
 /// ruling comment at its definition) and is graded like the stop-adherence family. The truly absent
-/// target (no match at all) lives in StopAdherenceScenarios.cs. RenameSymbolTypo is seeded (its typo call
-/// is the authored first turn); the other three are cold-start.
+/// target (no match at all) lives in StopAdherenceScenarios.cs. RenameSymbolTypo and SearchContainingTypeMiss are
+/// seeded; the other three are cold-start.
 /// </summary>
 public static class FaultScenarios
 {
@@ -20,6 +20,8 @@ public static class FaultScenarios
     public const string RenameSymbolNoSuchMethodId = "RenameSymbolNoSuchMethod";
     public const string ReplaceSnippetWrongFileNearMatchId = "ReplaceSnippetWrongFileNearMatch";
     public const string ReplaceSnippetWrongFileNoMatchId = "ReplaceSnippetWrongFileNoMatch";
+
+    public const string SearchContainingTypeMissId = "SearchContainingTypeMiss";
 
     private const string CommonSourceRun = "none: constructed fault variant (see FaultKind); not seen in a recorded run";
     private const string CommonReproducesAt = "measured by this scenario (no fix exists; the error text and hints are what is under test)";
@@ -106,6 +108,28 @@ public static class FaultScenarios
         SourceRun: CommonSourceRun,
         ReproducesAt: CommonReproducesAt,
         FixedBy: "");
+
+    // Seeded Search call with a containingType whose member does not exist; the result text is the real not-found text. It carries the member inventory only while ROSLYNSENTINEL_NOTFOUND_INVENTORY is on (item 8 of the todo punchlist, plan_error_policy_pointer).
+    public static readonly ScenarioDefinition SearchContainingTypeMiss = new(
+        Id: SearchContainingTypeMissId,
+        ScenarioType: 4,
+        FaultKind: "symbol-containing-type-miss",
+        ToolUnderTest: "Search",
+        StagedFiles: ScenarioFixtureFiles.ChainStartingFiles,
+        PromptTemplate: RenameSymbolNoSuchMethodPrompt,
+        TurnCap: 8,
+        Expected: ExpectedOutcome.Recover,
+        ExpectedRecoveryTool: null,
+        CheckFinalState: RenameScenarios.CheckFinalStateAsync,
+        SourceRun: CommonSourceRun,
+        ReproducesAt: CommonReproducesAt,
+        FixedBy: "",
+        ResumeFaultTool: "Search",
+        ResumeFaultSeeded: true,
+        ResumeFaultArguments: """
+            {"reason":"find ApplyLoyaltyBonus in OrderPricingCalculator so it can be renamed","mode":"symbol","query":"ApplyLoyaltyBonus","containingType":"OrderPricingCalculator"}
+            """,
+        EndOnCorrectFinalState: true);
 
     private const string ReplaceSnippetWrongFileNearMatchPrompt = """
         # Task: One small text edit
