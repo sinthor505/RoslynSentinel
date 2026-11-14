@@ -80,7 +80,9 @@ public class MemberAddManyGuardTests
         Assert.Multiple(() =>
         {
             Assert.That(result.IsError, Is.True, "a second declaration with an undefined type must fail the compile gate");
-            Assert.That(result.ErrorData?.Message, Does.Contain("CS0246"));
+            Assert.That(result.ErrorData?.Message, Does.Contain("introduces new compiler errors"));
+            Assert.That((result.ErrorData?.Detail ?? string.Empty) + string.Concat(result.ErrorData?.StructuredDetail?.Select(d => d.ToString() ?? string.Empty) ?? []), Does.Contain("CS0246"),
+                "the compile gate must carry CS0246 in the refusal's diagnostics (Detail or StructuredDetail)");
         });
         Assert.Multiple(() =>
         {
