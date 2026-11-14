@@ -10,7 +10,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 
 /// <summary>
 /// The in-process commit route of <c>GitImpl.CommitAsync</c> (step 5c-4 of proposal_libgit2sharp_in_process_git.md), switched on per repository by git config <c>roslynsentinel.inProcessCommit=true</c>
-/// (default off). Taken: a whole-index commit and a commit of listed paths (tracked, untracked, deleted, with trailers) leave the same hash, message bytes, tree, index, status and remaining-staged list
+/// (default on; explicit false or a non-boolean value keeps the CLI). Taken: a whole-index commit and a commit of listed paths (tracked, untracked, deleted, with trailers) leave the same hash, message bytes, tree, index, status and remaining-staged list
 /// as the CLI route does in a twin repository, an fsck-clean repository, the reflog entry <c>commit: &lt;subject&gt;</c> on HEAD and the branch, a post-commit hook that runs, and no git process at all
 /// (git's trace2 log). Declined to the CLI, each counted with its reason on the route (<see cref="InProcessCommitRoute.DeclineCount"/>): a blocking hook, an amend, a merge in progress, signing, a filter
 /// attribute, a branch that moved while the commit was built. Off: the route is not entered, its counters do not move and the CLI commits.
@@ -615,14 +615,55 @@ public class GitInProcessCommitRouteTests
         AssertDeclined(route, "nothing to commit", directory, "plain");
     }
 
-    // ---- off by default ----
+    // ---- default on; explicit false or garbage is the CLI path ----
 
     [Test]
-    public async Task InProcessCommit_ConfigAbsent_TheRouteIsNotTaken_NothingIsCounted_AndTheCliCommitsAsync()
+    public async Task InProcessCommit_ConfigAbsent_TheRouteIsTaken_AndNoGitProcessStartsAsync()
     {
         var route = new InProcessCommitRoute();
-        var directory = NewRepo("off", inProcess: false);
+        var directory = NewRepo("absent", inProcess: false);
         RunGit(directory, "config", "--unset", InProcessCommitRoute.ConfigKey);
+        Write(directory, "a.txt", "changed\n");
+
+        GitCommitResult? result = null;
+        var impl = NewImpl(route);
+        var spawned = await SpawnedGitCommandsAsync(directory, async () =>
+            result = await impl.CommitAsync(directory, "in process commit", GitStageScope.listed, "a.txt", amend: false, CancellationToken.None));
+
+        AssertCommitted(directory, result!);
+        AssertTaken(route, directory, "only-paths");
+        Assert.That(spawned, Is.Empty, "the in-process route starts no git process for the commit");
+    }
+
+    [Test]
+    public async Task InProcessCommit_ConfigExplicitFalse_TakesTheCliPath_AndCountsNothingAsync()
+    {
+        var route = new InProcessCommitRoute();
+        var directory = NewRepo("explicit-false", inProcess: false);
+        RunGit(directory, "config", InProcessCommitRoute.ConfigKey, "false");
+        Write(directory, "a.txt", "changed\n");
+
+        GitCommitResult? result = null;
+        var impl = NewImpl(route);
+        var spawned = await SpawnedGitCommandsAsync(directory, async () =>
+            result = await impl.CommitAsync(directory, "plain cli commit", GitStageScope.listed, "a.txt", amend: false, CancellationToken.None));
+
+        AssertCommitted(directory, result!);
+        Assert.Multiple(() =>
+        {
+            Assert.That(route.TakenCount, Is.Zero);
+            Assert.That(route.DeclineCount, Is.Zero);
+            Assert.That(route.LastDeclineReason, Is.Null);
+            Assert.That(spawned, Is.EqualTo(new[] { "commit" }), "exactly the CLI commit, as before the route existed");
+        });
+    }
+
+    [Test]
+    public async Task InProcessCommit_ConfigGarbageValue_TakesTheCliPathAsync()
+    {
+        var route = new InProcessCommitRoute();
+        var directory = NewRepo("garbage", inProcess: false);
+        RunGit(directory, "config", InProcessCommitRoute.ConfigKey, "banana");
         Write(directory, "a.txt", "changed\n");
 
         GitCommitResult? result = null;

@@ -632,7 +632,7 @@ public class GitImpl : IGitOperations
     // Injectable (internal constructor) so a test can force one backend; production always uses the shared GitReaders.Default.
     private readonly IGitReader _gitReader;
 
-    // The default-off in-process commit route (git config roslynsentinel.inProcessCommit; see CommitAsync and InProcessCommitRoute). Injectable so a test sees its own counters and can move the branch mid-commit; production uses the shared one.
+    // The default-on in-process commit route (git config roslynsentinel.inProcessCommit=false turns it off; see CommitAsync and InProcessCommitRoute). Injectable so a test sees its own counters and can move the branch mid-commit; production uses the shared one.
     private readonly InProcessCommitRoute _commitRoute;
 
     public GitImpl(ISolutionProvider workspaceManager)
@@ -3589,7 +3589,7 @@ public class GitImpl : IGitOperations
                     return new GitCommitResult { IsError = true, Error = stageResult.Error };
             }
 
-            // Opt-in (git config roslynsentinel.inProcessCommit=true, default off): a plain new commit made in process through the compare-and-swap primitive, with no git process.
+            // Default on (git config roslynsentinel.inProcessCommit=false turns it off): a plain new commit made in process through the compare-and-swap primitive, with no git process.
             // Null (the route is off, or it declined and counted why) continues below with exactly the CLI path of before.
             if (await TryCommitInProcessAsync(gitRoot, message, amend, scope, paths, listedFilePaths, classifiedListed, cancellationToken) is { } inProcessResult)
                 return inProcessResult;
@@ -3729,7 +3729,7 @@ public class GitImpl : IGitOperations
     }
 
     /// <summary>
-    /// The in-process commit route of <see cref="CommitAsync"/> (git config <c>roslynsentinel.inProcessCommit</c>, default off; see <see cref="InProcessCommitRoute"/>): returns the finished result when the commit was made
+    /// The in-process commit route of <see cref="CommitAsync"/> (git config <c>roslynsentinel.inProcessCommit</c>, default on; see <see cref="InProcessCommitRoute"/>): returns the finished result when the commit was made
     /// in process, null for "continue with the CLI path exactly as before" (the route is off, or it declined: counted with its reason on the route). Simple case only: a plain new commit (an amend is a counted decline) of the
     /// whole index, or of listed paths (<c>scope=listed</c>). The listed paths' content is staged FIRST, tracked ones here (<c>git add -u</c>, in process where libgit2 can) and untracked ones by the pre-stage
     /// CommitAsync already ran, so HEAD plus those index entries is what <c>git commit --only -- paths</c> would store; entries of other paths stay untouched, as with --only. Every decline decidable without

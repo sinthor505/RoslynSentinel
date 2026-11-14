@@ -4,7 +4,7 @@ namespace RoslynSentinel.Common;
 /// The in-process commit route of the Git tool's commit (step 5c-4 of proposal_libgit2sharp_in_process_git.md): a plain new commit of the whole index, or of listed paths whose content the caller has
 /// already staged, made through <see cref="Libgit2GitReader.CommitWithCompareAndSwap"/> with the message <see cref="GitCommitMessage"/> produces, followed by an unawaited post-commit hook.
 /// Everything else is declined, and a decline always means "the caller runs the git CLI exactly as it did before this route existed" (never an error): see <see cref="DeclineBeforeStaging"/>
-/// and <see cref="Commit"/> for every rule and its reason text. The route is OFF unless git config <see cref="ConfigKey"/> is true (<see cref="IsEnabled"/>); a later change flips that default.
+/// and <see cref="Commit"/> for every rule and its reason text. The route is ON unless git config <see cref="ConfigKey"/> is false or any non-true-like text (unset means <see cref="DefaultEnabled"/> = true; see <see cref="IsEnabled"/>).
 /// <para>
 /// Counters (process-wide on <see cref="Shared"/>, shown in the <c>gitBackend</c> block of McpServerStatus beside the reader's): <see cref="TakenCount"/> commits made in process,
 /// <see cref="DeclineCount"/> and <see cref="LastDeclineReason"/> for every call of an ENABLED route that went to the CLI (a disabled route counts nothing). A decline is normal traffic and is never logged to stderr.
@@ -18,8 +18,11 @@ namespace RoslynSentinel.Common;
 /// </summary>
 internal sealed class InProcessCommitRoute
 {
-    /// <summary>The git config key (true enables the route; absent or false keeps the CLI path).</summary>
+    /// <summary>The git config key (unset or a true-like value uses the route; false or any other text keeps the CLI path).</summary>
     internal const string ConfigKey = "roslynsentinel.inProcessCommit";
+
+    /// <summary>The value of the route when the git config key is unset; a set value (see IsEnabled) always wins.</summary>
+    internal const bool DefaultEnabled = true;
 
     // Hooks git runs around a commit that this route does not run: any of them present (or unresolvable) means the CLI commits. post-commit is launched in process (see Commit);
     // the three blocking hooks are checked by GitHooks.HasBlockingHook.
@@ -56,15 +59,31 @@ internal sealed class InProcessCommitRoute
     /// <summary>The reason of the most recent decline; null while none has happened.</summary>
     internal string? LastDeclineReason => Volatile.Read(ref _lastDeclineReason);
 
+    /// <summary>True for the git config values that switch the route on: true, yes or on (any case, surrounding whitespace ignored) or a non-zero integer.</summary>
+    private static bool IsTrueLike(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.Equals("true", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("yes", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("on", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return int.TryParse(trimmed, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var number) && number != 0;
+    }
+
     /// <summary>
-    /// True when git config <see cref="ConfigKey"/> is true for the repository containing <paramref name="workingDirectory"/>, read through the reader seam like <c>roslynsentinel.commitTrailers</c>
-    /// (every level, a linked worktree through its main repository). Absent, false, unreadable or any exception is false.
+    /// True when the route is enabled for the repository containing <paramref name="workingDirectory"/>, read through the reader seam like <c>roslynsentinel.commitTrailers</c>
+    /// (every level, a linked worktree through its main repository). Unset gives <see cref="DefaultEnabled"/>, a true-like value (see IsTrueLike) gives true, and any other text
+    /// gives false. An exception is false.
     /// </summary>
     internal bool IsEnabled(IGitReader reader, string workingDirectory, TimeSpan cliTimeout)
     {
         try
         {
-            return reader.GetBoolConfig(workingDirectory, ConfigKey, cliTimeout) == true;
+            var value = reader.GetConfigValue(workingDirectory, ConfigKey, cliTimeout);
+            return value is null ? DefaultEnabled : IsTrueLike(value);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
