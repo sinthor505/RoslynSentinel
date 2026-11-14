@@ -65,7 +65,7 @@ public class LogicSimplificationEngine
         var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null || method.Body == null)
         {
-            throw new ToolNotFoundException("Method or body not found.", "method", methodName);
+            throw new ToolNotFoundException("Method or body not found. " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath.ToString()), MissingTargetKinds.Method, methodName);
         }
 
         var guards = new List<StatementSyntax>();
@@ -700,13 +700,13 @@ public class LogicSimplificationEngine
         var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' was not found in '{filePath}'.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' was not found in '{filePath}'. " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath), MissingTargetKinds.Method, methodName);
         }
 
         var ifStmt = method.DescendantNodes().OfType<IfStatementSyntax>().FirstOrDefault();
         if (ifStmt == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' in '{filePath}' contains no if statement to convert.");
+            throw new ToolNotFoundException($"Method '{methodName}' in '{filePath}' contains no if statement to convert.", MissingTargetKinds.Statement, methodName);
         }
 
         if (!TryExtractIfChainBranches(ifStmt, out var condVar, out var branches, out var defaultResult))
@@ -745,13 +745,13 @@ public class LogicSimplificationEngine
         var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' was not found in '{filePath}'.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' was not found in '{filePath}'. " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath), MissingTargetKinds.Method, methodName);
         }
 
         var ifStmt = method.DescendantNodes().OfType<IfStatementSyntax>().FirstOrDefault();
         if (ifStmt == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' in '{filePath}' contains no if statement to convert.");
+            throw new ToolNotFoundException($"Method '{methodName}' in '{filePath}' contains no if statement to convert.", MissingTargetKinds.Statement, methodName);
         }
 
         if (!TryExtractIfChainBranches(ifStmt, out var condVar, out var branches, out var defaultResult))
@@ -790,7 +790,7 @@ public class LogicSimplificationEngine
         var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>(), "Method", methodName);
         if (methodNode == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("method", "methodName", methodName, root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text) ?? Enumerable.Empty<string>(), filePath), MissingTargetKinds.Method, methodName);
         }
         if (!methodNode.ParameterList.Parameters.Any())
         {
@@ -825,7 +825,7 @@ public class LogicSimplificationEngine
         var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>(), "Method", methodName);
         if (methodNode == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("method", "methodName", methodName, root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text) ?? Enumerable.Empty<string>(), filePath), MissingTargetKinds.Method, methodName);
         }
         if (!methodNode.ParameterList.Parameters.Any())
         {
@@ -903,7 +903,7 @@ public class LogicSimplificationEngine
         var forEach = root.DescendantNodes().OfType<ForEachStatementSyntax>().FirstOrDefault(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line);
         if (forEach == null)
         {
-            throw new ToolNotFoundException($"No foreach statement starts at line {line} in '{filePath}'.");
+            throw new ToolNotFoundException($"No foreach statement starts at line {line} in '{filePath}'.", MissingTargetKinds.Statement);
         }
 
         var collection = forEach.Expression;
@@ -984,7 +984,7 @@ public class LogicSimplificationEngine
         var forStmt = root.DescendantNodes().OfType<ForStatementSyntax>().FirstOrDefault(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line);
         if (forStmt == null)
         {
-            throw new ToolNotFoundException($"No for statement starts at line {line} in '{filePath}'.");
+            throw new ToolNotFoundException($"No for statement starts at line {line} in '{filePath}'.", MissingTargetKinds.Statement);
         }
 
         if (forStmt.Declaration == null || forStmt.Declaration.Variables.Count == 0)
@@ -1028,7 +1028,7 @@ public class LogicSimplificationEngine
         var whileStmt = root.DescendantNodes().OfType<WhileStatementSyntax>().FirstOrDefault(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line);
         if (whileStmt == null)
         {
-            throw new ToolNotFoundException($"No while loop found at line {line} in '{filePath}'.");
+            throw new ToolNotFoundException($"No while loop found at line {line} in '{filePath}'.", MissingTargetKinds.Statement);
         }
 
         if (whileStmt.Condition is not BinaryExpressionSyntax condBin || condBin.Left is not IdentifierNameSyntax counterIdent)
@@ -1204,7 +1204,7 @@ public class LogicSimplificationEngine
         var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (methodNode == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. " + ToolCallHint.Next("GetFileOutline", "to list the methods in the file.", ("filePath", filePath.ToString())), "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath.ToString()), MissingTargetKinds.Method, methodName);
         }
         if (methodNode.Body == null)
         {
