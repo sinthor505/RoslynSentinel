@@ -1227,7 +1227,7 @@ public class SymbolNavigationEngine
         var methodSymbol = model.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
         if (methodSymbol == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' in '{filePath}' has no resolvable symbol. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to confirm the method declaration.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' in '{filePath}' has no resolvable symbol. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to confirm the method declaration.", MissingTargetKinds.Method, methodName);
         }
 
         var visited = new HashSet<string>();
@@ -1360,7 +1360,7 @@ public class SymbolNavigationEngine
         var methodSymbol = model.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
         if (methodSymbol == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' in '{filePath}' has no resolvable symbol. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to confirm the method declaration.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' in '{filePath}' has no resolvable symbol. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to confirm the method declaration.", MissingTargetKinds.Method, methodName);
         }
 
         var visited = new HashSet<string>();
@@ -3014,7 +3014,7 @@ public class SymbolNavigationEngine
             throw new ToolNotFoundException(
                 MemberRefactoringNotFound.DeclarationMessage("container", containerName, "containerName", MemberRefactoringNotFound.TypeNames(root), filePath.ToString()) +
                 " Searched: class, interface, struct, record and enum declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. " +
-                $"{ToolCallHint.Call("Search", ("mode", "text"), ("query", containerName))} finds the name as text.", "container", containerName);
+                $"{ToolCallHint.Call("Search", ("mode", "text"), ("query", containerName))} finds the name as text.", MissingTargetKinds.Container, containerName);
         }
 
         // TODO tuple outcome slot is always Modified; return only the list
@@ -3102,7 +3102,7 @@ public class SymbolNavigationEngine
                     message += " " + await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: false, cancellationToken);
                 }
 
-                throw new ToolNotFoundException(message, "member", memberName, candidates: candidates);
+                throw new ToolNotFoundException(message, MissingTargetKinds.Member, memberName, candidates: candidates);
             }
 
             memberCandidates = narrowed;
@@ -3123,7 +3123,7 @@ public class SymbolNavigationEngine
             else
             {
                 throw new ToolNotFoundException(
-                    await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken), "member", memberName);
+                    await MemberNotFoundDetail.BuildAsync(document, root, memberName, containerName, includeHead: true, cancellationToken), MissingTargetKinds.Member, memberName);
             }
         }
 

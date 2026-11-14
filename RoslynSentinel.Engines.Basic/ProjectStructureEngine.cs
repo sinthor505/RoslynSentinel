@@ -67,7 +67,7 @@ public class SolutionStructureEngine
         if (nsNode == null)
         {
             // TODO zero-result, not a lookup miss: the file resolved and simply declares no namespace; reclassify as ToolTargetIneligibleException so the error code is not NotFound
-            throw new ToolNotFoundException($"No namespace declaration found in '{filePath}', so its target folder cannot be derived. Next: {ToolCallHint.Call("ReadFile")} the file to confirm it declares a namespace.", "namespace");
+            throw new ToolNotFoundException($"No namespace declaration found in '{filePath}', so its target folder cannot be derived. Next: {ToolCallHint.Call("ReadFile")} the file to confirm it declares a namespace.", MissingTargetKinds.Namespace);
         }
 
         var ns = nsNode.Name.ToString();
@@ -77,7 +77,7 @@ public class SolutionStructureEngine
         if (projectDir == null)
         {
             // TODO not a lookup miss (the project resolved but has no directory on disk): reclassify as ToolTargetIneligibleException so the error code is not NotFound
-            throw new ToolNotFoundException($"Project directory not found for '{filePath}'. Next: {ToolCallHint.Call("ListAll")} to confirm the owning project.", "project");
+            throw new ToolNotFoundException($"Project directory not found for '{filePath}'. Next: {ToolCallHint.Call("ListAll")} to confirm the owning project.", MissingTargetKinds.Project);
         }
 
         // Strip the default namespace from the beginning of the file's namespace
@@ -376,7 +376,7 @@ public class SolutionStructureEngine
     /// <paramref name="paramName"/> is the tool parameter a retry sets.
     /// </summary>
     internal static ToolNotFoundException ProjectNotFound(string projectName, Solution solution, string paramName = "projectName")
-        => new(ProjectNotFoundDetail.Build(projectName, solution.Projects.Select(p => p.Name).ToList(), paramName), "project", projectName);
+        => new(ProjectNotFoundDetail.Build(projectName, solution.Projects.Select(p => p.Name).ToList(), paramName), MissingTargetKinds.Project, projectName);
 
     /// <summary>
     /// Extracts all public API members (methods, properties, constructors) from a project or file.
