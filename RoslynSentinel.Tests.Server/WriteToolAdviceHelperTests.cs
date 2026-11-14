@@ -175,7 +175,7 @@ public class WriteToolAdviceHelperTests
     [Test]
     public void AdviseForOversizedEdit_MultipleMembersShape_SaysSeveralMembersNotWholeMember()
     {
-        // Member takes one declaration per call, so several members must be told to go one call each.
+        // addMember takes several declarations in one call; replace takes one, so the advice names both.
         var helper = new WriteToolAdviceHelper([WholeFileWriteClass, RefactoringClass]);
 
         var advice = helper.AdviseForOversizedEdit("ReplaceSnippet", RejectedContentShape.MultipleMembers);
@@ -184,6 +184,8 @@ public class WriteToolAdviceHelperTests
         {
             Assert.That(advice.Sentence, Does.Contain("several members"));
             Assert.That(advice.Sentence, Does.Contain("Member call"));
+            Assert.That(advice.Sentence, Does.Contain("addMember"));
+            Assert.That(advice.Sentence, Does.Not.Contain("one call per member"));
             Assert.That(advice.Sentence, Does.Not.Contain("whole method/property/constructor"));
         });
     }
@@ -200,6 +202,24 @@ public class WriteToolAdviceHelperTests
         {
             Assert.That(advice.Sentence, Does.Contain("usings"));
             Assert.That(advice.Sentence, Does.Not.Contain("whole method/property/constructor"));
+        });
+    }
+
+    [Test]
+    public void AdviseForOversizedEdit_MemberNotExposed_MultipleMembersAndFileLevelNameNeitherMemberNorAddMember()
+    {
+        // The neighbouring ToolNames test checks only advice.ToolNames, not the sentence prose, so this case guards a gated tool being named in the text.
+        var helper = new WriteToolAdviceHelper([WholeFileWriteClass]);
+
+        var multiple = helper.AdviseForOversizedEdit("ReplaceSnippet", RejectedContentShape.MultipleMembers);
+        var fileLevel = helper.AdviseForOversizedEdit("ReplaceSnippet", RejectedContentShape.FileLevel);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(multiple.Sentence, Does.Not.Contain("Member"));
+            Assert.That(multiple.Sentence, Does.Not.Contain("addMember"));
+            Assert.That(fileLevel.Sentence, Does.Not.Contain("Member"));
+            Assert.That(fileLevel.Sentence, Does.Not.Contain("addMember"));
         });
     }
 

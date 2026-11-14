@@ -16,7 +16,7 @@ when one of them rejects an edit.
   rename a field and all its usages in one atomic batch.
 - Snippets must match exactly, whitespace and line endings included; copy context from a
   `ReadFile`/`GetMethodSource` result, never invent it.
-- `Member(addMember)` takes one declaration per call; use `addTopLevelType` for a new top-level type.
+- `Member(addMember)` takes one or more declarations per call (atomic, one changeId); `Member(replace)` takes exactly one; use `addTopLevelType` for a new top-level type.
   `Member` cannot edit an existing top-level record - use `ReplaceSnippet`.
 - `ModifyEnum`'s `values` is the complete list; omitting a member deletes it.
 - `CancellationToken` is always the last parameter; new parameters go before it.
