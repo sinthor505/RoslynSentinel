@@ -9,6 +9,7 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 
+using RoslynSentinel.Common.AgentLoop;
 using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tools.Advanced;
 
@@ -27,13 +28,8 @@ public static class ChainEvalToolSurface
     /// <summary>Environment variable that selects the tool surface: "full" selects the full surface; unset, empty, "lean" or any other value selects lean.</summary>
     public const string ToolsetEnvVar = "ROSLYNSENTINEL_MODELEVAL_TOOLSET";
 
-    /// <summary>The tools the lean ModelEval surface offers. Every other discovered tool is hidden.</summary>
-    public static readonly IReadOnlyList<string> LeanAllowList =
-    [
-        "ReadFile", "GetFileOutline", "Search", "ListSolutionItems", "GetLargeResult", "ReplaceSnippet", "Member",
-        "RenameSymbol", "CreateFile", "DeleteFile", "Build", "RunTest", "GetMethodSource", "UndoLastApply",
-        "ChangeSignature", "ChangeAccessibility", "ModifyModifier", "UsingDirective",
-    ];
+    /// <summary>The tools the lean ModelEval surface offers, forwarded from AgentToolAllowLists.Lean (the single source). Every other discovered tool is hidden.</summary>
+    public static readonly IReadOnlyList<string> LeanAllowList = AgentToolAllowLists.Lean;
 
     /// <summary>True only for "full" (trimmed, case-insensitive). Every other value, including null, selects lean.</summary>
     public static bool IsFullValue(string? value) => value?.Trim().Equals("full", StringComparison.OrdinalIgnoreCase) == true;
