@@ -113,7 +113,7 @@ public class RefactoringStructuralTools
     [McpServerTool(Name = "Member")]
     [Produces(DataTag.ChangeId)]
     //[Description("Add (as a raw source member, a generated typed property/field, or a brand-new top-level type), remove, replace, or view a type member (method, property, field, constructor). This is the right choice even for a one-line change inside a member - read the member's current source first (e.g. via GetMethodSourceTool/ReadFileTool), copy it verbatim, make your edit, and pass the whole resulting member as newMemberSource, not a fragment. Prefer this over a unified diff to edit part of a member: a whole-member replacement can't drift out of sync the way a hand-built diff hunk can.")]
-    [Description("Add, remove, replace, or view a raw source member, or add a brand-new top-level type. Also views constructors. A generated typed property/field is the TypedMember tool.")]
+    [Description("Add, remove, replace, or view a raw source member, or add a brand-new top-level type. Also views constructors.")]
     public Task<SentinelCallToolResult<object>> MemberTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
