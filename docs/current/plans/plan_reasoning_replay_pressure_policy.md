@@ -1,6 +1,6 @@
 # Plan: replay all reasoning until 70% of the context, then drop the oldest half; pin the first 3 turns
 
-**Status:** IN PROGRESS 2026-11-14. Steps 1-3 done (0f134491, f33130d4, fdb784ec).
+**Status:** IN PROGRESS 2026-11-14. Steps 1-6 done (0f134491, f33130d4, fdb784ec, 7156bea4, 616df7e9, a8bd8beb); Steps 7-8 running.
 
 ## Problem
 
@@ -177,6 +177,7 @@ warning (`ContextUsageWarningFraction = 0.8`, not 90%) and the tool-less-turn `C
     without a new write.
 - Done when: `Build(level: quickBuild)` 0 errors.
 - Lane: `implementer` (depth tier 1: 1 file, ~3 edits). Peer check first (Execution rules).
+- Done: 7156bea4 (TODO left at the `ContextSizeExceededException` catch: force a drop and retry once)
 
 ### Step 5 - Runner test
 - Files: `RoslynSentinel.Tests.ModelEval/ReasoningReplayRunnerTests.cs` (new)
@@ -201,6 +202,8 @@ warning (`ContextUsageWarningFraction = 0.8`, not 90%) and the tool-less-turn `C
   - `Transcript_WithoutReasoningReplayFields_Deserializes` (pattern: `Transcript_WithoutStampProperties_Deserializes`).
 - Done when (dispatcher): `RunTest(scope: project, scopeName: RoslynSentinel.Tests.ModelEval, filter: "FullyQualifiedName~ReasoningReplayRunnerTests|FullyQualifiedName~ContextExhaustedRunnerTests")` all pass.
 - Lane: `test-writer`.
+- Done: 616df7e9 (12/12 filtered; the first draft's scripted `McpServerStatus` calls omitted the mandatory `reason`
+  and ended as `RepeatedToolFailure`)
 
 ### Step 6 - Script help and docs
 - Files: `scripts/roslynsentinel-modeleval.ps1`, `docs/current/proposals/proposal_reasoning_replay_context_management.md`
@@ -212,6 +215,7 @@ warning (`ContextUsageWarningFraction = 0.8`, not 90%) and the tool-less-turn `C
   option 4 follow-up".
 - Done when: script parses (`pwsh -NoProfile -Command "[System.Management.Automation.Language.Parser]::ParseFile('scripts/roslynsentinel-modeleval.ps1',[ref]$null,[ref]$null) | Out-Null"`).
 - Lane: main session (non-C# files).
+- Done: a8bd8beb (proposal Status line updated at close)
 
 ### Step 7 - Stub check and test runs
 - Files: none
