@@ -191,37 +191,35 @@ public sealed class TestSolutionFixture : IDisposable
         };
         startInfo.ArgumentList.Add("restore");
         startInfo.ArgumentList.Add(solutionPath);
+        // A leaked MSBuild worker node (nodeReuse) keeps the redirected pipes open after restore exits, so stop it from being spawned.
+        startInfo.ArgumentList.Add("-nodeReuse:false");
+        startInfo.ArgumentList.Add("--disable-build-servers");
+        startInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
+        startInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
 
         using var process = System.Diagnostics.Process.Start(startInfo)
             ?? throw new InvalidOperationException("TestSolutionFixture could not start 'dotnet restore'.");
 
-        // Read both streams while the process runs so a full pipe cannot deadlock WaitForExit.
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
+        // Waits for the root process to exit, not for pipe EOF, so a grandchild holding the pipes cannot stall the fixture.
+        var result = RoslynSentinel.Common.ChildProcessCapture
+            .RunAsync(process, TimeSpan.FromMinutes(5), System.Threading.CancellationToken.None)
+            .GetAwaiter().GetResult();
 
-        if (!process.WaitForExit(TimeSpan.FromMinutes(5)))
+        var output = result.StdOut + result.StdErr;
+        var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        var start = Math.Max(0, lines.Length - 40);
+        var tail = string.Join(Environment.NewLine, lines, start, lines.Length - start);
+
+        if (result.TimedOut)
         {
-            try
-            {
-                process.Kill(entireProcessTree: true);
-            }
-            catch (InvalidOperationException)
-            {
-                // Process exited between the timeout and the kill.
-            }
-
             throw new InvalidOperationException(
-                $"TestSolutionFixture 'dotnet restore' for '{solutionPath}' did not finish within 5 minutes.");
+                $"TestSolutionFixture 'dotnet restore' for '{solutionPath}' did not finish within 5 minutes (RootExited={result.RootExited}). Last 40 lines of output:{Environment.NewLine}{tail}");
         }
 
-        var output = stdoutTask.GetAwaiter().GetResult() + stderrTask.GetAwaiter().GetResult();
-        if (process.ExitCode != 0)
+        if (result.ExitCode != 0)
         {
-            var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            var start = Math.Max(0, lines.Length - 40);
-            var tail = string.Join(Environment.NewLine, lines, start, lines.Length - start);
             throw new InvalidOperationException(
-                $"TestSolutionFixture 'dotnet restore' for '{solutionPath}' exited with code {process.ExitCode}. Last 40 lines of output:{Environment.NewLine}{tail}");
+                $"TestSolutionFixture 'dotnet restore' for '{solutionPath}' exited with code {result.ExitCode}. Last 40 lines of output:{Environment.NewLine}{tail}");
         }
     }
 
