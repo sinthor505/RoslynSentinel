@@ -1,6 +1,6 @@
 # Plan: give ModelEval an 18-tool lean surface behind an env switch, A/B it against the 55-tool surface, then make it the default
 
-**Status:** APPROVED 2026-11-13. 18-tool lean ModelEval surface behind an env switch, A/B against the 55-tool surface (hold point), then default switch; PlanStepRunner deferred to a TODO.md line.
+**Status:** IN PROGRESS 2026-11-13. Steps 1a-1b done (be340c7e, 0a0b0ecc). 18-tool lean ModelEval surface behind an env switch, A/B against the 55-tool surface (hold point), then default switch; PlanStepRunner deferred to a TODO.md line.
 
 ## Problem
 
@@ -151,6 +151,11 @@ Steps 5 and 6 are hold-gated. Step 7 is independent and deferrable.
   an unknown value returns the default.
 - Lane/tier: `implementer` depth tier 1 for `ChainEvalToolSurface.cs` (and the arm edit if it lands here); the
   test file goes to `test-writer`. The dispatcher runs the tests.
+- Done: be340c7e (2026-11-13). Lean schema 29,741 chars for 18 tools vs 80,057 chars for the 55-tool surface,
+  measured in-process (a different method from the 114k estimate; compare like with like). Signatures:
+  `NewHiddenTools(IEnumerable<string>? extraAllowed = null)` reads the env var; `NewHiddenTools(string? toolsetValue,
+  IEnumerable<string>? extraAllowed)`; `NewFullSurfaceHiddenTools()`; `LeanAllowList`; `IsLeanValue`; `ToolsetEnvVar`;
+  private `LoadToolAssemblies()` handles the assembly-timing hazard.
 
 ### Step 1b - Wire the EditSnippets arm and the legacy-fixture opt-out
 Shrunk by the owner's resume-family decision (2026-11-13): there are no per-family extras for the resume family,
@@ -175,6 +180,10 @@ edit. If the EditSnippets arm is already done in 1a, this slice is only the lega
   `ChangeAccessibility` and `ModifyModifier` are on the list).
 - Lane/tier: `implementer` depth tier 1 (up to 3 source files plus a test file; split if the reference search
   finds more legacy call sites).
+- Done: 0a0b0ecc (2026-11-13). The legacy whole-file fixtures never call `NewHiddenTools`, so they needed no edit
+  (a test pins it). Resume check done with `ResumeDriftProbeTests.Probe_ReplaysTheCaptureAndPrintsDrift`: all 7
+  tools in the kept turns are still offered under lean; the output is identical on the full surface, and both
+  report `SchemaChanged: ReadFile: properties.preferredTarget differs` (pre-existing, not caused by lean).
 
 ### Step 2a - Surface-aware hints: SymbolWireResolver, SymbolNotFoundDetail and the workspace manager
 - Files: `RoslynSentinel.Common/SymbolWireResolver.cs` (signature :153, TODO :174, `isCallable: null` call :176,
