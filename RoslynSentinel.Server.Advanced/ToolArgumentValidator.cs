@@ -1432,6 +1432,8 @@ public static class ToolArgumentValidator
                             matched = true;
                     }
 
+                    // TODO per-value option hint for near-miss enum values, first case Search(mode: "file"/"files"/"filename")
+                    // -> "file names: ListSolutionItems(kind: files)"; only name a tool active on the caller's surface (2 of 6492 eval logs, ShippingKind step 4).
                     if (!matched && members.Count > 0)
                     {
                         var suggestion = SuggestClosest(actualValue, members);
