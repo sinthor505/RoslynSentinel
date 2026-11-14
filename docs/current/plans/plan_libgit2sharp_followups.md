@@ -1,7 +1,7 @@
 # Plan: LibGit2Sharp follow-ups - route trial evidence, audit, default-on, config operation, patch text
 
-**Status:** IN PROGRESS 2026-11-12. Steps 1-13, 15-18, 20, 21 done (6a58ffd6..ee512c94); Step 14 (live gate) and Step 19
-(the flip) open. Approved 2026-11-12. Follow-ups to proposal_libgit2sharp_in_process_git; decisions recorded; Steps 22-23 (lists) skipped unless a caller shows cost.
+**Status:** IN PROGRESS 2026-11-12. Steps 1-13, 15-18, 20, 21 done (6a58ffd6..ee512c94); Step 14 (live gate) run 2026-11-13 with D.1-D.4 met
+(table in Step 14; D.3 needs one `commit-graph write`); D.5 and Step 19 (the flip) open. Approved 2026-11-12. Follow-ups to proposal_libgit2sharp_in_process_git; decisions recorded; Steps 22-23 (lists) skipped unless a caller shows cost.
 
 ## Problem
 
@@ -589,6 +589,37 @@ a one-file staged diff and a 20-file staged diff: CLI patch (the exact command `
   decline reason class a count. Then a table: each criterion D.1-D.5, measured value, pass/fail.
 - Done when: the table is in this plan and the criteria are judged against it. No FAIL is the bar to proceed; any
   FAIL stops Steps 19 until fixed. (The owner has accepted the criteria; the go to flip is the table passing.)
+- **Run 2026-11-13 (todo punchlist item 6), status: criteria D.1-D.4 judged below; D.5 and the Step 19 go are the owner's.**
+  Second setup: throwaway repo `c:\tmp\rs-commit-trial-repo` (`core.autocrlf=false`, route key `true`, a later repo-local
+  `commit-msg` hook) plus a linked worktree `c:\tmp\rs-commit-trial-wt` (branch `wt-branch`), driven through an HTTP test
+  instance (`McpServerControl(LaunchTestInstance)`, then `LoadSolution` of a one-project `Trial.slnx` in the repo: `Git`
+  resolves its repository from the loaded solution's directory). Shell git only created the repo, the side branch, the merge
+  state, the hook and the worktree; every commit under test went through `Git(commit)`. Evidence copy:
+  `c:\tmp\rs-commit-trial-evidence\` (log and audit JSON; the throwaway repos are deleted).
+  - Commits: 21 `taken` (8 plain incl. the initial commit and a trailer message, 13 only-paths: 3 tracked with another staged
+    file left behind, 3 untracked, a CRLF-content file (taken: no conversion with autocrlf=false), a side-branch and a
+    pre-merge commit, 3 untracked + 3 plain from the linked worktree) and 4 `declined`: commit-msg hook present (2),
+    merge in progress (1), amend (1). Each decline fell back to a CLI commit that succeeded (hook accept, merge commit,
+    amend); the hook reject case returned a CLI error as intended. Audit after the first 10 taken and at the end:
+    `Test-CommitRouteLog.ps1` exit 0, ok 14, unchecked 8 (7 whole-index, 1 initial commit without parent), warn 0, fail 0,
+    fsck ok; a main-repo `git fsck --no-dangling` also exit 0.
+  - Main repo (`-RepoPath` this repo, fsck on): 373 taken (205 on 2026-11-12, 125 on 11-13, 43 on 11-14 UTC), 2 declined
+    (CR-byte rule 1, amend 1), ok 227, unchecked 146, warn 0, no commit-level FAIL; the script exits 1 only on `fail:fsck`,
+    which is a stale split commit-graph (4 commits, none in the route log, unreachable from any ref or reflog:
+    "failed to parse commit ... from object database for commit-graph"); `git -c core.commitGraph=false fsck --no-dangling`
+    exits 0. Regenerating the graph (`git commit-graph write --reachable --split=replace`) was refused by the dog-fooding
+    hook (it matches "commit" in "commit-graph"), so it was left for the owner; re-run the audit afterwards.
+  - Findings: (1) `Git(commit)` reports a commit-msg hook rejection as `errorCode: GitNothingToCommit` with the hint "Stage
+    changes first" (CLI route, wrong code and hint); (2) `Test-CommitRouteLog.ps1` classes a stale commit-graph as
+    `fail:fsck`, and the commit-less "initial" line as `unchecked:pre-step-1 line` (both script nits, TODO).
+
+  | Criterion | Measured | Result |
+  | --- | --- | --- |
+  | D.1 volume and time | 373 taken in this repo (+21 second setup), 3 UTC dates | pass |
+  | D.2 two setups, 10+ taken in the second | autocrlf=false repo plus linked worktree, no hook for the taken ones; 21 taken | pass |
+  | D.3 audit exit 0 with fsck | second repo exit 0; this repo exit 1 solely from the stale commit-graph (plain fsck exit 0) | pass after `commit-graph write`, owner to confirm |
+  | D.4 declines in the catalogue | CR rule, amend, hook, merge in progress; no `libgit2 failed:` or exception reason | pass |
+  | D.5 no human report | not checkable by an agent | open (owner) |
 
 ### Step 15 (D) - pin the route off in `GitTestRepo.InitRepo`
 - Done: 91278598
