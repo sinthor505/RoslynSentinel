@@ -70,58 +70,84 @@ public static class AddMemberCallBindingCheck
     /// <param name="newMember">The parsed member being added.</param>
     /// <param name="insertIndex">Index in <paramref name="container"/>'s members at which the member was inserted.</param>
     /// <param name="updatedText">The document text with the member added.</param>
-    public static async Task RequireKeepsBindingsAsync(Solution solution, Document document, TypeDeclarationSyntax container, MemberDeclarationSyntax newMember, int insertIndex, string updatedText, CancellationToken cancellationToken = default)
+    public static Task RequireKeepsBindingsAsync(Solution solution, Document document, TypeDeclarationSyntax container, MemberDeclarationSyntax newMember, int insertIndex, string updatedText, CancellationToken cancellationToken = default)
+        => RequireKeepsBindingsAsync(solution, document, container, new[] { newMember }, insertIndex, updatedText, cancellationToken);
+
+    /// <summary>
+    /// Multi-member form of the single-member overload: the whole batch is checked in one trial, so a call that binds to one new
+    /// member and the members themselves are judged together. The refusal names every member of the batch.
+    /// </summary>
+    public static async Task RequireKeepsBindingsAsync(Solution solution, Document document, TypeDeclarationSyntax container, IReadOnlyList<MemberDeclarationSyntax> newMembers, int insertIndex, string updatedText, CancellationToken cancellationToken = default)
     {
-        var name = CheckedNameOf(newMember);
-        if (name is null || !await NameAppearsAsync(solution, name, cancellationToken))
+        var appears = false;
+        foreach (var name in newMembers.Select(CheckedNameOf).OfType<string>().Distinct(StringComparer.Ordinal))
+        {
+            if (await NameAppearsAsync(solution, name, cancellationToken))
+            {
+                appears = true;
+                break;
+            }
+        }
+
+        if (!appears)
         {
             return;
         }
 
-        var check = await CheckAsync(solution, document.Id, container, newMember, insertIndex, updatedText, cancellationToken);
-        if (check.IsRefusal)
+        var check = await CheckAsync(solution, document.Id, container, newMembers, insertIndex, updatedText, cancellationToken);
+        if (!check.IsRefusal)
         {
-            if (newMember is ConstructorDeclarationSyntax)
-            {
-                // Rename does not apply to a constructor (it must carry the type's name): the fix is the argument or the parameters.
-                throw new ToolInvalidArgumentException(CallBindingCheck.FormatRefusal(check, $"add a constructor to '{container.Identifier.ValueText}'", bindsElsewhereFix: "cast the captured call's argument to the original parameter type, or change the new constructor's parameters", unmatchedFix: "review that call by hand before retrying, or change the new constructor's parameters"));
-            }
-
-            var kind = newMember is PropertyDeclarationSyntax ? "property" : "method";
-            throw new ToolInvalidArgumentException(CallBindingCheck.FormatRefusal(check, $"add {kind} '{name}' to '{container.Identifier.ValueText}'", bindsElsewhereFix: "rename the new member, or cast the captured call's argument to the original parameter type", unmatchedFix: "review that call by hand before retrying, or rename the new member"));
+            return;
         }
-    }
 
-    /// <summary>Multi-member overload of RequireKeepsBindingsAsync (Step 5 stub, not yet implemented).</summary>
-    public static Task RequireKeepsBindingsAsync(Solution solution, Document document, TypeDeclarationSyntax container, IReadOnlyList<MemberDeclarationSyntax> newMembers, int insertIndex, string updatedText, CancellationToken cancellationToken = default)
-    {
-        throw new NotImplementedException(); // TODO implement (Step 5)
+        var target = container.Identifier.ValueText;
+        if (newMembers.Count > 1)
+        {
+            var listed = string.Join(", ", newMembers.Select(DescribeMember));
+            throw new ToolInvalidArgumentException(CallBindingCheck.FormatRefusal(check, $"add members {listed} to '{target}'", bindsElsewhereFix: "rename the new member or members, or cast the captured call's argument to the original parameter type", unmatchedFix: "review that call by hand before retrying, or rename the new member or members"));
+        }
+
+        if (newMembers[0] is ConstructorDeclarationSyntax)
+        {
+            // Rename does not apply to a constructor (it must carry the type's name): the fix is the argument or the parameters.
+            throw new ToolInvalidArgumentException(CallBindingCheck.FormatRefusal(check, $"add a constructor to '{target}'", bindsElsewhereFix: "cast the captured call's argument to the original parameter type, or change the new constructor's parameters", unmatchedFix: "review that call by hand before retrying, or change the new constructor's parameters"));
+        }
+
+        throw new ToolInvalidArgumentException(CallBindingCheck.FormatRefusal(check, $"add {DescribeMember(newMembers[0])} to '{target}'", bindsElsewhereFix: "rename the new member, or cast the captured call's argument to the original parameter type", unmatchedFix: "review that call by hand before retrying, or rename the new member"));
     }
 
     /// <summary>
     /// Captures the bindings of the new member's name in <paramref name="original"/> and in a trial with <paramref name="updatedText"/>
     /// applied, and compares them. Fails closed: anything that cannot be located or captured returns a CheckFailed result.
     /// </summary>
-    public static async Task<CallBindingCheckResult> CheckAsync(Solution original, DocumentId documentId, TypeDeclarationSyntax container, MemberDeclarationSyntax newMember, int insertIndex, string updatedText, CancellationToken cancellationToken = default)
+    public static Task<CallBindingCheckResult> CheckAsync(Solution original, DocumentId documentId, TypeDeclarationSyntax container, MemberDeclarationSyntax newMember, int insertIndex, string updatedText, CancellationToken cancellationToken = default)
+        => CheckAsync(original, documentId, container, new[] { newMember }, insertIndex, updatedText, cancellationToken);
+
+    /// <summary>
+    /// Captures the bindings of the names of every new member in <paramref name="original"/> and in ONE trial with
+    /// <paramref name="updatedText"/> applied, and compares them: a call that re-points to one new member and a call that re-points to
+    /// another are judged in the same trial. Fails closed: anything that cannot be located or captured returns a CheckFailed result.
+    /// </summary>
+    public static async Task<CallBindingCheckResult> CheckAsync(Solution original, DocumentId documentId, TypeDeclarationSyntax container, IReadOnlyList<MemberDeclarationSyntax> newMembers, int insertIndex, string updatedText, CancellationToken cancellationToken = default)
     {
         try
         {
-            var name = CheckedNameOf(newMember);
-            if (name is null)
+            var names = newMembers.Select(CheckedNameOf).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
+            if (names.Count == 0)
             {
                 return CallBindingCheckResult.Ok(0);
             }
 
-            var scope = new CallBindingScope(new[] { name });
+            var scope = new CallBindingScope(names);
             var before = await CallBindingCheck.CaptureAsync(original, scope, cancellationToken);
             if (before.Problems.Count == 0 && before.Observations.Count == 0)
             {
-                // The name is never bound anywhere today, and the new member's text adds sites only inside the new member.
+                // The names are never bound anywhere today, and the new members' text adds sites only inside the new members.
                 return CallBindingCheckResult.Ok(0);
             }
 
             var trial = original.WithDocumentText(documentId, SourceText.From(updatedText));
-            var (newId, ownErrors, failure) = await LocateNewMemberAsync(trial, documentId, container, newMember, name, insertIndex, cancellationToken);
+            var (newIds, ownErrors, failure) = await LocateNewMembersAsync(trial, documentId, container, newMembers, insertIndex, cancellationToken);
             if (failure is not null)
             {
                 return CallBindingCheckResult.Failed(failure);
@@ -133,8 +159,13 @@ public static class AddMemberCallBindingCheck
                 return CallBindingCheckResult.Ok(0);
             }
 
-            var after = WithoutAddedCandidate(await CallBindingCheck.CaptureAsync(trial, scope, cancellationToken), newId!);
-            return CallBindingCheck.Compare(before, after, new CallBindingExpectations { AddedMemberIds = new[] { newId! } });
+            var after = await CallBindingCheck.CaptureAsync(trial, scope, cancellationToken);
+            foreach (var newId in newIds)
+            {
+                after = WithoutAddedCandidate(after, newId);
+            }
+
+            return CallBindingCheck.Compare(before, after, new CallBindingExpectations { AddedMemberIds = newIds });
         }
         catch (OperationCanceledException)
         {
@@ -145,12 +176,6 @@ public static class AddMemberCallBindingCheck
             // Only the exception type is echoed: its text can carry file paths.
             return CallBindingCheckResult.Failed($"the add check raised {ex.GetType().Name}");
         }
-    }
-
-    /// <summary>Multi-member overload of CheckAsync (Step 5 stub, not yet implemented).</summary>
-    public static Task<CallBindingCheckResult> CheckAsync(Solution original, DocumentId documentId, TypeDeclarationSyntax container, IReadOnlyList<MemberDeclarationSyntax> newMembers, int insertIndex, string updatedText, CancellationToken cancellationToken = default)
-    {
-        throw new NotImplementedException(); // TODO implement (Step 5)
     }
 
     /// <summary>
@@ -178,46 +203,87 @@ public static class AddMemberCallBindingCheck
         return snapshot with { Observations = observations };
     }
 
+    /// <summary>Kind and name of a member for refusal text, for example "method 'Save'" or "property 'P'".</summary>
+    private static string DescribeMember(MemberDeclarationSyntax member) => member switch
+    {
+        MethodDeclarationSyntax method => $"method '{method.Identifier.ValueText}'",
+        PropertyDeclarationSyntax property => $"property '{property.Identifier.ValueText}'",
+        ConstructorDeclarationSyntax constructor => $"constructor '{constructor.Identifier.ValueText}'",
+        FieldDeclarationSyntax field => $"field '{field.Declaration.Variables.First().Identifier.ValueText}'",
+        EventFieldDeclarationSyntax eventField => $"event '{eventField.Declaration.Variables.First().Identifier.ValueText}'",
+        _ => "member",
+    };
+
+    /// <summary>The nodes whose symbols a member declares: each declarator of a field or event field, otherwise the member itself.</summary>
+    private static IEnumerable<SyntaxNode> DeclaredNodesOf(MemberDeclarationSyntax member) => member switch
+    {
+        FieldDeclarationSyntax field => field.Declaration.Variables.Cast<SyntaxNode>(),
+        EventFieldDeclarationSyntax eventField => eventField.Declaration.Variables.Cast<SyntaxNode>(),
+        _ => new SyntaxNode[] { member },
+    };
+
     /// <summary>
-    /// Finds the added member in the trial (the container is the type with one more member than before, the member is at the insert
-    /// index) and returns its documentation id, whether it has compile errors of its own, or the reason it could not be located.
+    /// Finds the added members in the trial (the container is the type with one more member per new member than before, and they sit
+    /// at the insert index in order) and returns their documentation ids, whether any has compile errors of its own, or the reason they
+    /// could not be located.
     /// </summary>
-    private static async Task<(string? Id, bool OwnErrors, string? Failure)> LocateNewMemberAsync(Solution trial, DocumentId documentId, TypeDeclarationSyntax container, MemberDeclarationSyntax newMember, string name, int insertIndex, CancellationToken cancellationToken)
+    private static async Task<(IReadOnlyList<string> Ids, bool OwnErrors, string? Failure)> LocateNewMembersAsync(Solution trial, DocumentId documentId, TypeDeclarationSyntax container, IReadOnlyList<MemberDeclarationSyntax> newMembers, int insertIndex, CancellationToken cancellationToken)
     {
         var document = trial.GetDocument(documentId);
         var root = document is null ? null : await document.GetSyntaxRootAsync(cancellationToken);
         var model = document is null ? null : await document.GetSemanticModelAsync(cancellationToken);
         if (root is null || model is null)
         {
-            return (null, false, "the trial document has no syntax tree or semantic model");
+            return (Array.Empty<string>(), false, "the trial document has no syntax tree or semantic model");
         }
 
         var arity = container.TypeParameterList?.Parameters.Count ?? 0;
+        var added = newMembers.Count;
         var matches = root.DescendantNodes().OfType<TypeDeclarationSyntax>()
-            .Where(t => t.Kind() == container.Kind() && t.Identifier.ValueText == container.Identifier.ValueText && (t.TypeParameterList?.Parameters.Count ?? 0) == arity && t.Members.Count == container.Members.Count + 1)
+            .Where(t => t.Kind() == container.Kind() && t.Identifier.ValueText == container.Identifier.ValueText && (t.TypeParameterList?.Parameters.Count ?? 0) == arity && t.Members.Count == container.Members.Count + added)
             .ToList();
         if (matches.Count > 1)
         {
             matches = matches.Where(t => t.SpanStart == container.SpanStart).ToList();
         }
 
-        if (matches.Count != 1 || insertIndex < 0 || insertIndex >= matches[0].Members.Count)
+        if (matches.Count != 1 || insertIndex < 0 || insertIndex + added > matches[0].Members.Count)
         {
-            return (null, false, "the added member could not be located in the trial");
+            return (Array.Empty<string>(), false, "the added member could not be located in the trial");
         }
 
-        var added = matches[0].Members[insertIndex];
-        if (added.Kind() != newMember.Kind() || CheckedNameOf(added) != name)
+        var addedMembers = new List<MemberDeclarationSyntax>(added);
+        for (var i = 0; i < added; i++)
         {
-            return (null, false, "the added member could not be matched in the trial");
+            var addedMember = matches[0].Members[insertIndex + i];
+            if (addedMember.Kind() != newMembers[i].Kind() || CheckedNameOf(addedMember) != CheckedNameOf(newMembers[i]))
+            {
+                return (Array.Empty<string>(), false, "the added member could not be matched in the trial");
+            }
+
+            addedMembers.Add(addedMember);
         }
 
-        if (model.GetDiagnostics(added.Span, cancellationToken).Any(d => d.Severity == DiagnosticSeverity.Error))
+        if (addedMembers.Any(m => model.GetDiagnostics(m.Span, cancellationToken).Any(d => d.Severity == DiagnosticSeverity.Error)))
         {
-            return (null, true, null);
+            return (Array.Empty<string>(), true, null);
         }
 
-        var id = model.GetDeclaredSymbol(added, cancellationToken)?.OriginalDefinition.GetDocumentationCommentId();
-        return id is null ? (null, false, $"the added member '{name}' has no documentation id") : (id, false, null);
+        var ids = new List<string>();
+        foreach (var addedMember in addedMembers)
+        {
+            foreach (var declared in DeclaredNodesOf(addedMember))
+            {
+                var id = model.GetDeclaredSymbol(declared, cancellationToken)?.OriginalDefinition.GetDocumentationCommentId();
+                if (id is null)
+                {
+                    return (Array.Empty<string>(), false, $"the added member '{CheckedNameOf(addedMember) ?? DescribeMember(addedMember)}' has no documentation id");
+                }
+
+                ids.Add(id);
+            }
+        }
+
+        return (ids, false, null);
     }
 }
