@@ -1409,6 +1409,25 @@ public static class ToolArgumentValidator
                     }
                 }
 
+                // 3b-number. Declared string enum but the caller sent a JSON number (e.g. operation: 4).
+                //     The SDK's JsonStringEnumConverter accepts a number as an ordinal, so it would bind silently.
+                if (actualKind == System.Text.Json.JsonValueKind.Number &&
+                    propertySchema.TryGetProperty("enum", out var numberEnumNode) &&
+                    numberEnumNode.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    var numberMembers = new System.Collections.Generic.List<string>();
+                    foreach (var entry in numberEnumNode.EnumerateArray())
+                    {
+                        if (entry.ValueKind == System.Text.Json.JsonValueKind.String && entry.GetString() is { } numberMember)
+                            numberMembers.Add(numberMember);
+                    }
+
+                    if (numberMembers.Count > 0)
+                    {
+                        return $"Parameter '{argument.Key}' of tool '{toolName}' expects one of {string.Join(", ", numberMembers)}; got number {argument.Value.GetRawText()}. Nothing was executed.";
+                    }
+                }
+
                 // 3c. Declared object or array (alone or with null, never also string, never an enum) but
                 //     the caller sent a string that CoerceStringToStructured could not parse into that shape.
                 if (actualKind == System.Text.Json.JsonValueKind.String &&
