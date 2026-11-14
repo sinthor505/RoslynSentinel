@@ -2,7 +2,6 @@ using Microsoft.CodeAnalysis;
 
 namespace RoslynSentinel.Common;
 
-// TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses
 /// <summary>
 /// Arm I of plan_error_policy_pointer (Step 11g): the member inventory appended to a no-candidates symbol-not-found text by
 /// <see cref="SymbolNotFoundDetail.BuildAsync"/>. <see cref="BuildAsync"/> returns null (nothing is appended) unless
@@ -104,7 +103,7 @@ internal static class NotFoundMemberInventory
     {
         var names = SortedDistinct(DeclaredMemberNames(type, null));
         var subject = $"Type `{type.ToDisplayString()}`";
-        return names.Count == 0 ? $"{subject} declares no members." : $"{subject} declares {MemberCount(names)}: {string.Join(", ", names.Take(MaxNames))}";
+        return names.Count == 0 ? $"{subject} declares no members." : $"{subject} declares {MemberCount(names)}: {string.Join(", ", names.Take(MaxNames))}.";
     }
 
     private static async Task<string> FileInventoryTextAsync(
@@ -132,7 +131,7 @@ internal static class NotFoundMemberInventory
         var names = SortedDistinct(types.SelectMany(t => DeclaredMemberNames(t, filePath)));
         return names.Count == 0
             ? $"File `{shownPath}` declares {typeCount} type(s) and no members."
-            : $"File `{shownPath}` declares {MemberCount(names)} across {typeCount} type(s): {string.Join(", ", names.Take(MaxNames))}";
+            : $"File `{shownPath}` declares {MemberCount(names)} across {typeCount} type(s): {string.Join(", ", names.Take(MaxNames))}.";
     }
 
     private static List<string> SortedDistinct(IEnumerable<string> names) =>

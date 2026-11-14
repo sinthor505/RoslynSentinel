@@ -5,7 +5,6 @@ using RoslynSentinel.Tests.Battery.Basic;
 
 namespace RoslynSentinel.Tests.Basic;
 
-// TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses
 /// <summary>
 /// Step 11g arm I of plan_error_policy_pointer. The file-miss folder list is always on (no switch): it follows the well-formed lead and search facts of the current-workspace no-candidates text. The symbol member inventory stays behind <see cref="NotFoundInventoryOptions"/>; with that switch off every symbol text equals the text without the member list. The symbol switch is forced per test through <see cref="NotFoundInventoryOptions.OverrideForCurrentContext"/> (an AsyncLocal scope, so parallel fixtures never see it) and the ambient <see cref="ToolCallContext"/> is cleared in TearDown.
 /// </summary>
@@ -217,8 +216,27 @@ public class NotFoundInventoryTests
         using var on = NotFoundInventoryOptions.OverrideForCurrentContext(true);
         var text = await BuildSymbolTextAsync(solution, "ApplyLoyaltyBonus", containingType: "OrderPricingCalculator");
 
-        Assert.That(text, Is.EqualTo(today + $" Type `Fixture.OrderPricingCalculator` declares 3 members: {OrderPricingMembers}"));
+        Assert.That(text, Is.EqualTo(today + $" Type `Fixture.OrderPricingCalculator` declares 3 members: {OrderPricingMembers}."));
         Assert.That(today, Does.Contain("If it is not in that list, the symbol does not exist in this solution."), "a narrowed search keeps today's text");
+    }
+
+    [Test]
+    public async Task BuildAsync_SwitchOnMemberLists_EndWithAPeriodSoTheNextSentenceDoesNotGlueOn()
+    {
+        var solution = BuildSymbolSolution();
+        SetContext(true);
+        using var on = NotFoundInventoryOptions.OverrideForCurrentContext(true);
+
+        var typeText = await BuildSymbolTextAsync(solution, "ApplyLoyaltyBonus", containingType: "OrderPricingCalculator");
+        var fileText = await BuildSymbolTextAsync(solution, "ApplyLoyaltyBonus", containerFilePath: OrderPricingFixture.FileName);
+
+        foreach (var text in new[] { typeText, fileText })
+        {
+            Assert.That(text, Does.EndWith("."));
+            var withNextSentence = text + " 1 test project(s) were also searched.";
+            Assert.That(withNextSentence, Does.Contain(". 1 test project(s)"));
+            Assert.That(withNextSentence, Does.Not.Contain("OrderCheckout 1 test"));
+        }
     }
 
     [Test]
@@ -231,7 +249,7 @@ public class NotFoundInventoryTests
         var text = await BuildSymbolTextAsync(solution, "ApplyLoyaltyBonus", wholeSolution: true, containingType: "OrderPricingCalculator");
 
         Assert.That(text, Does.StartWith("Your tool call was well-formed, but symbol `ApplyLoyaltyBonus` does not exist in the solution. "));
-        Assert.That(text, Does.EndWith($" Type `Fixture.OrderPricingCalculator` declares 3 members: {OrderPricingMembers}"));
+        Assert.That(text, Does.EndWith($" Type `Fixture.OrderPricingCalculator` declares 3 members: {OrderPricingMembers}."));
     }
 
     [Test]
@@ -244,7 +262,7 @@ public class NotFoundInventoryTests
         var text = await BuildSymbolTextAsync(solution, "OrderPricingCalculator.ApplyLoyaltyBonus", wholeSolution: true);
 
         Assert.That(text, Does.StartWith("Your tool call was well-formed, but symbol `ApplyLoyaltyBonus` does not exist in the solution. "));
-        Assert.That(text, Does.EndWith($" Type `Fixture.OrderPricingCalculator` declares 3 members: {OrderPricingMembers}"));
+        Assert.That(text, Does.EndWith($" Type `Fixture.OrderPricingCalculator` declares 3 members: {OrderPricingMembers}."));
     }
 
     [Test]
@@ -257,8 +275,8 @@ public class NotFoundInventoryTests
         var text = await BuildSymbolTextAsync(solution, "ApplyLoyaltyBonus", containerFilePath: "Gadget.cs");
         var orderText = await BuildSymbolTextAsync(solution, "ApplyLoyaltyBonus", containerFilePath: OrderPricingFixture.FileName);
 
-        Assert.That(text, Does.EndWith(" File `Gadget.cs` declares 3 members across 1 type(s): Changed, Inner, Widgets"));
-        Assert.That(orderText, Does.EndWith($" File `{OrderPricingFixture.FileName}` declares 3 members across 1 type(s): {OrderPricingMembers}"));
+        Assert.That(text, Does.EndWith(" File `Gadget.cs` declares 3 members across 1 type(s): Changed, Inner, Widgets."));
+        Assert.That(orderText, Does.EndWith($" File `{OrderPricingFixture.FileName}` declares 3 members across 1 type(s): {OrderPricingMembers}."));
     }
 
     [Test]
@@ -333,7 +351,7 @@ public class NotFoundInventoryTests
         var text = await BuildSymbolTextAsync(solution, "ApplyLoyaltyBonus", containingType: "Gadget");
 
         var expectedFirst30 = string.Join(", ", Enumerable.Range(1, 30).Select(i => $"F{i:00}"));
-        Assert.That(text, Does.EndWith($" Type `Fixture.Gadget` declares 35 members (first 30 of 35): {expectedFirst30}"));
+        Assert.That(text, Does.EndWith($" Type `Fixture.Gadget` declares 35 members (first 30 of 35): {expectedFirst30}."));
         Assert.That(text, Does.Not.Contain("F31"));
     }
 
