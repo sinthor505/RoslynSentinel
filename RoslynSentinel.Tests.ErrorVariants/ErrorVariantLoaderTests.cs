@@ -128,7 +128,7 @@ public sealed class ErrorVariantLoaderTests
     [Test]
     public void HarvestedFileNotFoundVariants_Load()
     {
-        foreach (var id in new[] { "armE", "armF", "armG" })
+        foreach (var id in new[] { "armE", "armF", "armG", "armH", "armI" })
         {
             var variant = ErrorVariantLoader.Load(Code, id);
 

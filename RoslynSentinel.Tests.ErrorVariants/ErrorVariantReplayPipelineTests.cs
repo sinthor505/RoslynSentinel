@@ -266,7 +266,7 @@ public class ErrorVariantReplayPipelineTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(all.Select(variant => variant.Id), Is.EqualTo(new[] { "armE", "armF", "armG" }));
+            Assert.That(all.Select(variant => variant.Id), Is.EqualTo(new[] { "armE", "armF", "armG", "armH", "armI" }));
             Assert.That(bare, Has.Count.EqualTo(1), "the same variant named twice is loaded once");
             Assert.That(bare[0].ErrorCode, Is.EqualTo("FileNotFound"));
             Assert.That(() => ErrorVariantReplay.ResolveVariants(["*"], root), Throws.TypeOf<InvalidOperationException>().With.Message.Contains("<errorCode>/*"));
