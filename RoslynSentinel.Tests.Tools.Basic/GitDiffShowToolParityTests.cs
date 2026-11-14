@@ -910,6 +910,26 @@ public class GitDiffShowToolParityTests
     }
 
     [Test]
+    public async Task Show_MessageHasThePlatformNewlinesWhetherTheSeamOrTheCliServedTheHeader()
+    {
+        CommitBaseline();
+        Write(_repo, "a.txt", "second\n");
+        RunGit(_repo, "add", "-A");
+        Commit(_repo, "subject line\n\nbody line\nSigned-off-by: Test <test@example.com>");
+
+        var viaSeam = await Show(new Libgit2GitReader(), _repo, "HEAD");
+        var viaCli = await Show(new CliGitReader(), _repo, "HEAD");
+        var newLine = Environment.NewLine;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(viaSeam.Message, Is.EqualTo(string.Join(newLine, "subject line", "", "body line", "Signed-off-by: Test <test@example.com>")));
+            Assert.That(viaSeam.Message.Replace(newLine, string.Empty), Does.Not.Contain("\n").And.Not.Contain("\r"), "no bare LF or CR once the platform newline is removed");
+            Assert.That(viaCli.Message, Is.EqualTo(viaSeam.Message), "the seam-served and CLI-served headers must give the same message text");
+        });
+    }
+
+    [Test]
     public async Task Show_MergeCommit_ListsTheDiffAgainstTheFirstParentAsync()
     {
         CommitBaseline();

@@ -2988,7 +2988,7 @@ public class GitImpl : IGitOperations
                 Hash = header.Sha,
                 Author = header.AuthorName,
                 Date = header.AuthorDate,
-                Message = header.Message.Trim('\n', '\r'),
+                Message = RejoinLines(header.Message).Trim('\n', '\r'),
                 Diff = diff,
                 FilesChanged = filesChanged,
                 Warning = DetectDecodeCorruption(diff) ?? DetectDecodeCorruption(header.Message),
