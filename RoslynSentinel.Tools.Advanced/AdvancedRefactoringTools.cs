@@ -1129,7 +1129,9 @@ public class AdvancedRefactoringTools
                         IsError = true,
                         ErrorData = apply.Error
                     };
-                var ownFileDescription = apply.ChangeId is not null ? $"Moves '{typeName}' to its own file. Call {ToolCallHint.Call("UndoLastApply", ("changeId", apply.ChangeId))} to revert if needed." : $"Moves '{typeName}' to its own file.";
+                var ownFileDescription = changes.Count == 0
+                    ? $"'{typeName}' is already in its own file; nothing moved."
+                    : apply.ChangeId is not null ? $"Moves '{typeName}' to its own file. Call {ToolCallHint.Call("UndoLastApply", ("changeId", apply.ChangeId))} to revert if needed." : $"Moves '{typeName}' to its own file.";
                 return new SentinelCallToolResult<AppliedChangeSummary>
                 {
                     IsError = false,

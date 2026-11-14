@@ -1218,6 +1218,11 @@ public class BasicRefactoringEngine
         // Guard: if the type's name already matches the source file name, it's already in its own file -> nothing to move
         if (string.Equals(typeName, Path.GetFileNameWithoutExtension(document.Name), StringComparison.OrdinalIgnoreCase))
         {
+            if (IsDifferentFolder(targetFolder, document.FilePath ?? filePath))
+            {
+                throw new ToolInvalidArgumentException($"'{typeName}' is already the only type declared in its own file '{Path.GetFileName(document.FilePath ?? filePath)}', so there is nothing to split out. MoveType does not move files, so targetFolder '{targetFolder}' has no effect here. Options: omit targetFolder (the call then reports no changes), or create the file in the new folder and delete the old one by hand.");
+            }
+
             return new Dictionary<FilePathWrapper, string>();
         }
 
@@ -1278,6 +1283,33 @@ public class BasicRefactoringEngine
         }
 
         return moveResult;
+    }
+
+    // True when targetFolder names a folder other than the source file's directory. An unknown source directory counts as different.
+    private static bool IsDifferentFolder(string? targetFolder, string sourceFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(targetFolder))
+        {
+            return false;
+        }
+
+        var sourceDirectory = Path.GetDirectoryName(sourceFilePath);
+        if (string.IsNullOrEmpty(sourceDirectory))
+        {
+            return true;
+        }
+
+        try
+        {
+            var target = Path.GetFullPath(targetFolder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var source = Path.GetFullPath(sourceDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return !string.Equals(target, source, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (ArgumentException)
+        {
+            // An unparseable path cannot be the source folder; report it as different so the refusal names targetFolder.
+            return true;
+        }
     }
 
     // Rewrites qualified Outer.Nested references to Nested (adding the using where the file cannot see the namespace) for a nested type that is being lifted to top level.

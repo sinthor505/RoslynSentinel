@@ -367,4 +367,43 @@ public class Holder
         var diagnostics = CompileProposedTexts(solution, changes);
         Assert.That(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).Select(d => d.ToString()), Is.Empty);
     }
+
+    [Test]
+    public async Task MoveTypeToFile_SingleTypeFile_NoTargetFolder_ReturnsEmpty()
+    {
+        // Arrange
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("DummyApp", new[] {
+            ("Solo.cs", @"
+namespace MyApp;
+public class Solo { }
+")
+        });
+        _workspaceManager.SetTestSolution(solution);
+
+        // Act
+        var changes = await _refactoringEngine.MoveTypeToFileAsync("Solo.cs", "Solo");
+
+        // Assert
+        Assert.That(changes, Is.Empty);
+    }
+
+    [Test]
+    public async Task MoveTypeToFile_SingleTypeFile_DifferingTargetFolder_RefusesNamingTargetFolder()
+    {
+        // Arrange
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("DummyApp", new[] {
+            ("Solo.cs", @"
+namespace MyApp;
+public class Solo { }
+")
+        });
+        _workspaceManager.SetTestSolution(solution);
+
+        // Act
+        var ex = await Assert.ThrowsAsync<ToolInvalidArgumentException>(() => _refactoringEngine.MoveTypeToFileAsync("Solo.cs", "Solo", @"C:\proj\OtherFolder"));
+
+        // Assert
+        Assert.That(ex.Message, Does.Contain("targetFolder"));
+        Assert.That(ex.Message, Does.Not.Contain("MoveFile"));
+    }
 }
