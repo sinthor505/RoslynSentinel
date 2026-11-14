@@ -887,8 +887,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                         Func<string, bool>? isCallable = surface is null ? null : surface.IsCallable;
                         return new ModelContextProtocol.Protocol.CallToolResult
                         {
-                            // TODO this fallback (reached only if the breaker resets between IsTripped and StateMessage) still names ListAll/ListSolutionItems unconditionally
-                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = automaticBreaker.StateMessage(isCallable) ?? $"{ToolCallHint.Call("Search", ("mode", "text"))} is DISABLED. You MUST call {ToolCallHint.Call("ListAll", ("kind", "all"))} or {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} now." }],
+                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = automaticBreaker.StateMessage(isCallable) ?? OrientationBreakerFallbackText(isCallable) }],
                             IsError = true,
                         };
                     }
@@ -932,6 +931,28 @@ public static class RoslynSentinelServiceExtensionsBasic
 
                 return result;
             }));
+    }
+
+    // Public, not internal: RoslynSentinel.Server.Advanced has no InternalsVisibleTo for its tests, so the Tests.Server fixtures call this directly.
+    public static string OrientationBreakerFallbackText(Func<string, bool>? isCallable)
+    {
+        bool Callable(string toolName) => isCallable is null || isCallable(toolName);
+
+        var searchCall = ToolCallHint.Call("Search", ("mode", "text"));
+        var listingCalls = new List<string>();
+        if (Callable("ListAll"))
+        {
+            listingCalls.Add(ToolCallHint.Call("ListAll", ("kind", "all")));
+        }
+
+        if (Callable("ListSolutionItems"))
+        {
+            listingCalls.Add(ToolCallHint.Call("ListSolutionItems", ("kind", "all")));
+        }
+
+        return listingCalls.Count == 0
+            ? $"{searchCall} is DISABLED. No listing tool is callable on this surface."
+            : $"{searchCall} is DISABLED. You MUST call {string.Join(" or ", listingCalls)} now.";
     }
 
     private static void AddHaltStampFilter(IMcpRequestFilterBuilder filters)
