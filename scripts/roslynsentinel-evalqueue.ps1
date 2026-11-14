@@ -40,7 +40,8 @@
     Job states
       Queued, Running, Finished (the run completed; 'passed' says whether the tests passed), Cancelled,
       TimedOut (stopped at -TimeLimitMinutes), Crashed (ended without a run folder: build failure or
-      testhost crash; or the worker died), TreeChanged.
+      testhost crash; or the worker died; or no run folder after -NoRunFolderMinutes, a stuck SetUp),
+      TreeChanged.
 
 .PARAMETER HostAddress
     Host alias (112, 113, 85) or an LM Studio base URL. Same values as roslynsentinel-modeleval.ps1.
@@ -67,6 +68,11 @@
 
 .PARAMETER TimeLimitMinutes
     Stop the run after this long (default 40).
+
+.PARAMETER NoRunFolderMinutes
+    Stop the run, as Crashed, when it has written no run folder after this long (default 20; 0 = off). A
+    run folder appears when the test's SetUp has finished, so this catches a SetUp that is stuck before the
+    agent starts instead of waiting for the full time limit.
 
 .PARAMETER NoStart
     submit only: queue without starting the worker (tests and maintenance).
@@ -104,6 +110,7 @@ param(
     [string]$EvalArgs = '',
     [ValidateSet('Refuse', 'RunAnyway')][string]$OnTreeChange = 'Refuse',
     [double]$TimeLimitMinutes = 40,
+    [double]$NoRunFolderMinutes = 20,
     [switch]$Force,
     [switch]$NoStart,
     [string[]]$Id,
@@ -480,6 +487,7 @@ function Invoke-Submit {
                     repeatIndex       = if ($Force) { 0 } else { $index }
                     onTreeChange      = $OnTreeChange
                     timeLimitMinutes  = $TimeLimitMinutes
+                    noRunFolderMinutes = $NoRunFolderMinutes
                     commit            = $tree.commit
                     dirty             = $tree.dirty
                     fingerprint       = $tree.fingerprint
@@ -741,11 +749,21 @@ function Invoke-Worker {
         Write-WorkerLog "job $($Job.id) started: $($Job.test) model=$($Job.model) session=$($Job.session) child=$childId"
 
         $deadline = $started.AddMinutes([double]$Job.timeLimitMinutes)
+        # A run that has written no run folder after this long is stuck in test SetUp (for example the fixture's
+        # dotnet restore waiting on a pipe a leaked MSBuild node holds open), not running the model. Jobs
+        # submitted before this setting existed have no value and keep the old behaviour (time limit only).
+        $noRunFolderMinutes = if ($Job.PSObject.Properties['noRunFolderMinutes']) { [double]$Job.noRunFolderMinutes } else { 0 }
+        $nextFolderCheck = $started.AddMinutes($noRunFolderMinutes)
         $stopAs = $null
         while (-not $process.WaitForExit(2000)) {
             $current = Read-Job (Get-JobPath $Job)
             if ($current -and $current.cancelRequested) { $stopAs = 'Cancelled'; break }
             if ([datetime]::UtcNow -gt $deadline) { $stopAs = 'TimedOut'; break }
+            if ($noRunFolderMinutes -gt 0 -and [datetime]::UtcNow -gt $nextFolderCheck) {
+                if (@(Get-RunFolders $Job | Where-Object { $_ -notin $before }).Count -eq 0) { $stopAs = 'SetupStalled'; break }
+                # A run folder exists, so the run is past SetUp: stop checking.
+                $noRunFolderMinutes = 0
+            }
         }
         if ($stopAs) {
             & taskkill.exe /PID $childId /T /F *> $null
@@ -763,6 +781,10 @@ function Invoke-Worker {
             $j.exitCode = $exitCode
             $j.runFolders = $newFolders
             if ($stopAs -eq 'Cancelled') { $j.state = 'Cancelled' }
+            elseif ($stopAs -eq 'SetupStalled') {
+                $j.state = 'Crashed'
+                $j.reason = "Stopped: no run folder after $($j.noRunFolderMinutes) minute(s), so the test was stuck in SetUp before the agent started (see the log's last line). Not a model result."
+            }
             elseif ($stopAs -eq 'TimedOut') {
                 $j.state = 'TimedOut'
                 $j.reason = "Stopped at the time limit of $($j.timeLimitMinutes) minute(s)."

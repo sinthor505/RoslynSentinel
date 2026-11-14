@@ -195,6 +195,12 @@ try {
     $null = Invoke-Queue 'wait' @{ Id = $timed.id }
     Assert-That ((Get-JobById $timed.id).state -eq 'TimedOut') 'Time limit: a run past its limit ends TimedOut'
 
+    # A run that writes no run folder within -NoRunFolderMinutes is stuck in SetUp: stopped as Crashed, well before the time limit.
+    $stalled = @((Submit @{ Test = 'Slow'; NoStart = $false; NoRunFolderMinutes = 0.05; Force = $true }).queued)[0]
+    $null = Invoke-Queue 'wait' @{ Id = $stalled.id }
+    $stalledDone = Get-JobById $stalled.id
+    Assert-That ($stalledDone.state -eq 'Crashed' -and $stalledDone.reason -like '*SetUp*' -and $stalledDone.durationSeconds -lt 60) 'No run folder: a run stuck before its run folder ends Crashed with a SetUp reason'
+
     # --- tree changed between submit and dispatch (last: it leaves the repo dirty) --------------------------
     New-Queue
     $pinned = @((Submit @{ Test = 'Quick' }).queued)[0]

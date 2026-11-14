@@ -433,6 +433,9 @@ Write-Host ""
 
 $env:ROSLYNSENTINEL_LLM_BASE_URL = $baseUrl
 $env:ROSLYNSENTINEL_LLM_MODEL = $Model
+# Child dotnet/MSBuild processes the test spawns (the fixture's dotnet restore) must not leave reusable
+# MSBuild nodes behind: an orphaned node can hold a redirected pipe open and stall test SetUp for 15+ minutes.
+$env:MSBUILDDISABLENODEREUSE = '1'
 if ($PSBoundParameters.ContainsKey('Temperature')) {
     $env:ROSLYNSENTINEL_LLM_TEMPERATURE = $Temperature
 }
