@@ -947,7 +947,7 @@ public class RefactoringStructuralImpl
         string description;
         if (insertAfterMemberName is null && insertBeforeMemberName is null)
         {
-            updated = await _memberRefactoringEngine.AddMemberAsync(filePathResolved, containerName!, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+            updated = await _memberRefactoringEngine.AddMembersAsync(filePathResolved, containerName!, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
             // TODO Member dry run reports "Added new member" in statusMessage although nothing was written; word it "Would add" when dryRun
             description = $"{DescribeMemberOutcome(updated, "Added new member")} to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
         }
