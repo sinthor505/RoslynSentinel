@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
 
@@ -243,5 +244,52 @@ public class SurfaceAwareHintsBuildTestingTests
             level: BuildVerifyLevel.fullBuildThrowaway, scope: ToolScope.project, scopeName: "Nope", isCallable: _ => false);
         AssertNoCallableHint(unknown.Error!.Message);
         projectManager.Dispose();
+    }
+
+    [Test]
+    public async Task Build_QuickBuildZeroProjectsNoSurface_NamesListAll()
+    {
+        var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        workspaceManager.SetTestSolution(TestSolutionBuilder.CreateEmptySolution());
+        var impl = new WorkspaceBuildTestImpl(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager),
+            TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager)),
+            TestEngines.TestRunEngine(workspaceManager), NullLogger<WorkspaceBuildTestImpl>.Instance);
+
+        var result = await impl.Build("zero-project build hint check", BuildVerifyLevel.quickBuild, ToolScope.solution);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.Message, Does.Contain(ToolCallHint.Call("ListAll", ("kind", "all"))));
+
+        workspaceManager.Dispose();
+    }
+
+    [Test]
+    public async Task Build_QuickBuildZeroProjectsLeanSurface_NamesOnlyCallableListing()
+    {
+        var workspaceManager = TestEngines.PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        workspaceManager.SetTestSolution(TestSolutionBuilder.CreateEmptySolution());
+
+        var none = new HashSet<string>();
+        var assemblies = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => a.GetName().Name?.StartsWith("RoslynSentinel", StringComparison.Ordinal) == true)
+            .ToArray();
+        var activeClasses = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (_, className) in McpToolSchemaPatcher.DiscoverAllDeclaredTools(assemblies))
+        {
+            activeClasses.Add(className);
+        }
+
+        var surface = new ActiveToolSurface("test", none, none, none, activeClasses, classModes: null, allowedToolNames: LeanSurface);
+        var impl = new WorkspaceBuildTestImpl(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager),
+            TestEngines.BuildEngine(workspaceManager, TestEngines.DiagnosticEngine(workspaceManager)),
+            TestEngines.TestRunEngine(workspaceManager), NullLogger<WorkspaceBuildTestImpl>.Instance, surface);
+
+        var result = await impl.Build("zero-project build hint check", BuildVerifyLevel.quickBuild, ToolScope.solution);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.Message, Does.Contain(ToolCallHint.Call("ListSolutionItems", ("kind", "all"))));
+        Assert.That(result.ErrorData!.Message, Does.Not.Contain("ListAll"));
+
+        workspaceManager.Dispose();
     }
 }

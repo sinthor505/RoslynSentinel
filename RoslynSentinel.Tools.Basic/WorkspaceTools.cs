@@ -63,7 +63,7 @@ public class WorkspaceTools
         _projectManagement = new WorkspaceProjectManagementImpl(workspaceManager, structuralRefinementEngine, logger,
             // Built internally (not a WorkspaceTools ctor param) so the many `new WorkspaceTools(...)` test call sites need no update.
             new SolutionStructureEngine(workspaceManager, config));
-        _buildTest = new WorkspaceBuildTestImpl(workspaceManager, diagnosticEngine, buildEngine, testRunEngine, logger);
+        _buildTest = new WorkspaceBuildTestImpl(workspaceManager, diagnosticEngine, buildEngine, testRunEngine, logger, activeToolSurface);
         _fileEdit = new WorkspaceFileEditImpl(workspaceManager, readNav, logger, validationEngine, symbolNavigationEngine, writeAdvice, activeToolSurface);
         _healthMisc = new WorkspaceHealthMiscImpl(workspaceManager, config, buildEngine, logger);
 

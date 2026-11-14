@@ -17,15 +17,21 @@ public class WorkspaceBuildTestImpl
     private readonly TestRunEngine _testRunEngine;
     private readonly ILogger _logger;
 
+    // Which tools this server can serve, for the build zero-project hints; null (unit tests, hosts without a surface) = every tool callable.
+    private readonly ActiveToolSurface? _activeToolSurface;
+
     public WorkspaceBuildTestImpl(IWorkspaceManager workspaceManager, DiagnosticEngine diagnosticEngine,
-        BuildEngine buildEngine, TestRunEngine testRunEngine, ILogger logger)
+        BuildEngine buildEngine, TestRunEngine testRunEngine, ILogger logger, ActiveToolSurface? activeToolSurface = null)
     {
         _workspaceManager = workspaceManager;
         _diagnosticEngine = diagnosticEngine;
         _buildEngine = buildEngine;
         _testRunEngine = testRunEngine;
         _logger = logger;
+        _activeToolSurface = activeToolSurface;
     }
+
+    private Func<string, bool>? CallableCheck => _activeToolSurface is null ? null : _activeToolSurface.IsCallable;
 
     public async Task<SentinelCallToolResult<object>> GetDiagnostics(ToolCallReason reason, ToolScope scope = ToolScope.solution,
         string? scopeName = null, bool summarize = false, int maxDetails = 50, int topN = 20,
@@ -85,8 +91,8 @@ public class WorkspaceBuildTestImpl
             if (verify != BuildVerifyLevel.noBuild)
             {
                 var buildRun = verify is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway
-                    ? await _buildEngine.RunFullBuildAsync(cancellationToken, level: verify)
-                    : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken);
+                    ? await _buildEngine.RunFullBuildAsync(cancellationToken, level: verify, isCallable: CallableCheck)
+                    : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken, isCallable: CallableCheck);
                 if (buildRun.TryGetData(out var rawBuild))
                 {
                     // Project like Build does (breakdown, root-cause order); every error is inline and the result marshaller pages a long list.
@@ -382,8 +388,8 @@ public class WorkspaceBuildTestImpl
             // useScratchDir is obsolete: true with level=fullBuild means the throwaway level.
             var fullBuildLevel = level == BuildVerifyLevel.fullBuild && useScratchDir ? BuildVerifyLevel.fullBuildThrowaway : level;
             var result = isFullBuild
-                ? await _buildEngine.RunFullBuildAsync(cancellationToken, maxDetails, level: fullBuildLevel, scope: scope, scopeName: scopeName)
-                : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken);
+                ? await _buildEngine.RunFullBuildAsync(cancellationToken, maxDetails, level: fullBuildLevel, scope: scope, scopeName: scopeName, isCallable: CallableCheck)
+                : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken, isCallable: CallableCheck);
 
             if (!result.TryGetData(out var buildResult))
             {
