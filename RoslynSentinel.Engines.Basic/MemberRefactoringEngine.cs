@@ -2074,27 +2074,14 @@ public class MemberRefactoringEngine
         {
             // Fallback: append (also covers enum containers, which AddMemberAsync rejects loudly
             // rather than silently no-op'ing - see docs/current/issue_member_add_silent_persistence.md).
-            return await AddMemberAsync(filePath, containerName, newMemberSource, null, null, null, cancellationToken);
+            return await AddMembersAsync(filePath, containerName, newMemberSource, null, null, null, cancellationToken);
         }
 
-        var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
-        if (newMember == null)
-        {
-            throw new ToolInvalidArgumentException("Cannot edit: invalid member source.");
-        }
-
-        var trailingIssue = DetectMultipleMemberDeclarations(newMemberSource, "addMember")
-            ?? DetectTrailingUnparsedDeclaration(newMemberSource, newMember);
-        if (trailingIssue != null)
-        {
-            throw new ToolInvalidArgumentException($"newMemberSource is invalid: {trailingIssue}");
-        }
-
-        var insertedDescription = DescribeParsedMember(newMember);
-        //newMember = newMember.WithAddedByComment("InsertMemberAfter");
+        var newMembers = ParseNewMemberDeclarations(newMemberSource, "Cannot edit: invalid member source.");
+        var insertedDescription = DescribeAddedMembers(newMembers);
         var insertIndex = ResolveInsertAnchorIndex(filePath, typeDecl, containerName, "insertAfterMemberName", afterMemberName) + 1;
-        var updatedText = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(document, root!, typeDecl, insertIndex, newMember, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
-        await AddMemberCallBindingCheck.RequireKeepsBindingsAsync(solution, document, typeDecl, newMember, insertIndex, updatedText, cancellationToken);
+        var updatedText = await RoslynFormattingHelper.InsertMemberDeclarationsAndFormatInsertionAsync(document, root!, typeDecl, insertIndex, newMembers, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
+        await AddMemberCallBindingCheck.RequireKeepsBindingsAsync(solution, document, typeDecl, newMembers, insertIndex, updatedText, cancellationToken);
 
         return new DocumentEditResult
         {
@@ -2134,27 +2121,14 @@ public class MemberRefactoringEngine
         {
             // Fallback: append (also covers enum containers, which AddMemberAsync rejects loudly
             // rather than silently no-op'ing - see docs/current/issue_member_add_silent_persistence.md).
-            return await AddMemberAsync(filePath, containerName, newMemberSource, null, null, null, cancellationToken);
+            return await AddMembersAsync(filePath, containerName, newMemberSource, null, null, null, cancellationToken);
         }
 
-        var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
-        if (newMember == null)
-        {
-            throw new ToolInvalidArgumentException("Cannot edit: invalid member source.");
-        }
-
-        var trailingIssue = DetectMultipleMemberDeclarations(newMemberSource, "addMember")
-            ?? DetectTrailingUnparsedDeclaration(newMemberSource, newMember);
-        if (trailingIssue != null)
-        {
-            throw new ToolInvalidArgumentException($"newMemberSource is invalid: {trailingIssue}");
-        }
-
-        var insertedDescription = DescribeParsedMember(newMember);
-        //newMember = newMember.WithAddedByComment("InsertMemberBefore");
+        var newMembers = ParseNewMemberDeclarations(newMemberSource, "Cannot edit: invalid member source.");
+        var insertedDescription = DescribeAddedMembers(newMembers);
         var insertIndex = ResolveInsertAnchorIndex(filePath, typeDecl, containerName, "insertBeforeMemberName", beforeMemberName);
-        var updatedText = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(document, root!, typeDecl, insertIndex, newMember, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
-        await AddMemberCallBindingCheck.RequireKeepsBindingsAsync(solution, document, typeDecl, newMember, insertIndex, updatedText, cancellationToken);
+        var updatedText = await RoslynFormattingHelper.InsertMemberDeclarationsAndFormatInsertionAsync(document, root!, typeDecl, insertIndex, newMembers, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
+        await AddMemberCallBindingCheck.RequireKeepsBindingsAsync(solution, document, typeDecl, newMembers, insertIndex, updatedText, cancellationToken);
 
         return new DocumentEditResult
         {
@@ -2271,8 +2245,9 @@ public class MemberRefactoringEngine
     /// those inputs keep their existing "not a valid member" diagnosis.
     /// </summary>
     /// <param name="source">The caller-supplied newMemberSource.</param>
-    /// <param name="operation">"replace" or "addMember" - selects the recovery advice.</param>
+    /// <param name="operation">"replace" or "addMember" - selects the recovery advice. "replace" is the live rejection for multi-declaration source. "addMember" now serves only the AddFieldAsync / AddPropertyAsync single-declaration guard (RequireSingleDeclaration); the member add and insert paths batch through AddMembersAsync and no longer call it.</param>
     /// <param name="targetMemberName">replace only: the member being replaced.</param>
+    // TODO drop the operation parameter of DetectMultipleMemberDeclarations once the typed callers move to AddMembersAsync
     internal static string? DetectMultipleMemberDeclarations(string source, string operation, string? targetMemberName = null)
     {
         if (string.IsNullOrWhiteSpace(source))
@@ -2582,6 +2557,7 @@ public class MemberRefactoringEngine
         // Must run before the ContainsDiagnostics check below: a multi-member source always has
         // parse diagnostics (the 2nd declaration is skipped-token trivia on the 1st), so checking
         // diagnostics first misreported it as "not a valid member declaration".
+        // TODO replace still takes one declaration; allow N when exactly one declaration matches the target, once the addMember batching is measured
         var multipleMembersIssue = DetectMultipleMemberDeclarations(newSource, "replace", memberName);
         if (multipleMembersIssue != null)
         {
@@ -2675,70 +2651,10 @@ public class MemberRefactoringEngine
         return SyntaxFactory.TriviaList(oldLeading.Take(keepCount).Concat(newLeading.Skip(newDocStart)));
     }
 
-    public async Task<DocumentEditResult> AddMemberAsync(FilePathWrapper filePath, string containerName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    // TODO fold the AddMemberAsync wrapper into callers once TypedMember callers move to AddMembersAsync
+    public Task<DocumentEditResult> AddMemberAsync(FilePathWrapper filePath, string containerName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
-        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = DocumentLookup.RequireDocument(solution, filePath);
-
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var sourceText = await document.GetTextAsync(cancellationToken);
-        if (root == null || sourceText == null)
-        {
-            throw new ToolInvalidArgumentException("Cannot parse file.");
-        }
-
-        BaseTypeDeclarationSyntax? container = null;
-        var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, containerName, cancellationToken)
-            .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
-            .ToList();
-        container = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
-
-        if (container == null)
-        {
-            throw new ToolNotFoundException(await SyntaxTargetResolver.BuildContainerNotFoundMessageAsync(solution, root, containerName, cancellationToken), MissingTargetKinds.Type, containerName);
-        }
-
-        if (container is EnumDeclarationSyntax)
-        {
-            throw new ToolTargetIneligibleException($"Cannot add a member to enum \"{containerName}\" via AddMember: enum members " +
-                "are not MemberDeclarationSyntax and use comma-separated syntax, not this method's " +
-                "member grammar. Use ModifyEnumAsync instead.");
-        }
-
-        if (container is not TypeDeclarationSyntax typeContainer)
-        {
-            throw new NotSupportedException(
-                $"AddMemberAsync: unhandled container type {container.GetType().Name} for \"{containerName}\". " +
-                "This is a bug - every BaseTypeDeclarationSyntax subtype must resolve to a TypeDeclarationSyntax here; " +
-                "silently returning the container unchanged would falsely report success.");
-        }
-
-        var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
-        if (newMember == null)
-        {
-            throw new ToolInvalidArgumentException("Failed to parse new member.");
-        }
-
-        var trailingIssue = DetectMultipleMemberDeclarations(newMemberSource, "addMember")
-            ?? DetectTrailingUnparsedDeclaration(newMemberSource, newMember);
-        if (trailingIssue != null)
-        {
-            throw new ToolInvalidArgumentException($"newMemberSource is invalid: {trailingIssue}");
-        }
-
-        var addedDescription = DescribeParsedMember(newMember);
-        //newMember = newMember.WithAddedByComment("AddMember");
-        var updatedText = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(document, root!, typeContainer, typeContainer.Members.Count, newMember, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
-        await AddMemberCallBindingCheck.RequireKeepsBindingsAsync(solution, document, typeContainer, newMember, typeContainer.Members.Count, updatedText, cancellationToken);
-        return new DocumentEditResult
-        {
-            Outcome = EditOutcome.Modified,
-            FilePath = filePath,
-            Message = $"// Added {addedDescription}.",
-            UpdatedText = updatedText
-        };
+        return AddMembersAsync(filePath, containerName, newMemberSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
     }
 
     /// <summary>Adds one or more member declarations in one write: all new members are inserted together and bound-checked once.</summary>
