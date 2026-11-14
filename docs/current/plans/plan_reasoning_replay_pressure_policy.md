@@ -1,6 +1,6 @@
 # Plan: replay all reasoning until 70% of the context, then drop the oldest half; pin the first 3 turns
 
-**Status:** APPROVED 2026-11-14. Reviewed against source; Batched run (A = Steps 1-3, B = Steps 4-5) starting.
+**Status:** IN PROGRESS 2026-11-14. Steps 1-3 done (0f134491, f33130d4, fdb784ec).
 
 ## Problem
 
@@ -104,6 +104,7 @@ warning (`ContextUsageWarningFraction = 0.8`, not 90%) and the tool-less-turn `C
     (turn numbers whose request first dropped a block).
 - Done when: `Build(level: quickBuild)` 0 errors.
 - Lane: `implementer` (depth tier 1: 3 files, ~9 edits).
+- Done: 0f134491
 
 ### Step 2 - Policy behaviour and client wiring
 - Files: `RoslynSentinel.Common/ReasoningReplayPolicy.cs`, `RoslynSentinel.Common/LmStudioAgentClient.cs`
@@ -129,6 +130,7 @@ warning (`ContextUsageWarningFraction = 0.8`, not 90%) and the tool-less-turn `C
     reasoning). Remove the Step 1 TODO.
 - Done when: `Build(level: quickBuild)` 0 errors.
 - Lane: `implementer` (depth tier 1: 2 files, ~6 edits). Step 3 follows it (not a pair; see Decisions).
+- Done: f33130d4
 
 ### Step 3 - Policy unit tests
 - Files: `RoslynSentinel.Tests/ReasoningReplayPolicyTests.cs` (new)
@@ -150,6 +152,7 @@ warning (`ContextUsageWarningFraction = 0.8`, not 90%) and the tool-less-turn `C
   - Do not set `ROSLYNSENTINEL_REASONING_WINDOW` in tests (process-wide); construct with `fixedWindow` directly.
 - Done when (dispatcher): `RunTest(scope: project, scopeName: RoslynSentinel.Tests, filter: "FullyQualifiedName~ReasoningReplayPolicyTests|FullyQualifiedName~LmStudioAgentClientInputItemsTests|FullyQualifiedName~LoopAssistTrackerTests")` all pass.
 - Lane: `test-writer`.
+- Done: fdb784ec (86/86 passed)
 
 ### Step 4 - Runner wiring and transcript fields
 - Files: `RoslynSentinel.Common/AgentLoop/ModelAgentRunner.cs`
