@@ -276,7 +276,22 @@ public static class RoslynFormattingHelper
     /// what caused both symptoms this helper exists to avoid.
     /// <paramref name = "eol"/> is the line ending of the separators and of every changed line.
     /// </summary>
-    public static async Task<string> InsertMemberDeclarationAndFormatInsertionAsync(Document document, SyntaxNode root, TypeDeclarationSyntax container, int insertIndex, MemberDeclarationSyntax newMember, string eol, CancellationToken cancellationToken = default)
+    public static Task<string> InsertMemberDeclarationAndFormatInsertionAsync(Document document, SyntaxNode root, TypeDeclarationSyntax container, int insertIndex, MemberDeclarationSyntax newMember, string eol, CancellationToken cancellationToken = default)
+    {
+        return InsertMemberDeclarationsAndFormatInsertionAsync(document, root, container, insertIndex, new[] { newMember }, eol, cancellationToken);
+    }
+
+    /// <summary>
+    /// Inserts <paramref name = "newMembers"/> into <paramref name = "container"/>'s member list at
+    /// <paramref name = "insertIndex"/> (the position the first new member should occupy in the resulting
+    /// list, in source order) and formats only the inserted members, instead of the whole container.
+    /// Generalises <see cref="InsertMemberDeclarationAndFormatInsertionAsync"/> to N members; for one member
+    /// the output is identical. Blank-line separators follow the same rules as the single-member method:
+    /// one blank line before the first new member when there is a preceding sibling, one blank line between
+    /// consecutive new members, and one blank line before the following sibling when it lacks one.
+    /// <paramref name = "eol"/> is the line ending of the separators and of every changed line.
+    /// </summary>
+    public static async Task<string> InsertMemberDeclarationsAndFormatInsertionAsync(Document document, SyntaxNode root, TypeDeclarationSyntax container, int insertIndex, IReadOnlyList<MemberDeclarationSyntax> newMembers, string eol, CancellationToken cancellationToken = default)
     {
         var members = container.Members;
         var precedingMember = insertIndex > 0 ? members[insertIndex - 1] : null;
@@ -285,27 +300,31 @@ public static class RoslynFormattingHelper
         var indentTrivia = (precedingMember ?? followingMember)?.GetLeadingTrivia().LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia)) ?? default;
         var indentText = indentTrivia != default ? indentTrivia.ToFullString() : "    ";
 
-        // Only one line ending is needed here to produce a single blank line: precedingMember's own
-        // trailing trivia (standard Roslyn attachment - a token's trailing trivia runs through the
-        // end-of-line that terminates its own line) already supplies the line break that ends
-        // precedingMember's line. Adding a second line ending here on top of that one is what previously
-        // produced two blank lines instead of one - see MemberInsertAfterEolTests.
-        var blankLineBefore = precedingMember != null
-            ? new[] { SyntaxFactory.EndOfLine(eol), SyntaxFactory.Whitespace(indentText) }
-            : new[] { SyntaxFactory.Whitespace(indentText) };
-        var newMemberWithTrivia = newMember
-            .WithLeadingTrivia(blankLineBefore.Concat(newMember.GetLeadingTrivia()))
-            .WithTrailingTrivia(SyntaxFactory.EndOfLine(eol));
+        // Each new member gets a leading separator (a line ending when it has a preceding sibling or
+        // an earlier new member, plus the indent) and one trailing line ending. See the single-member
+        // method for why the separator carries only one line ending.
+        var annotatedNewMembers = new MemberDeclarationSyntax[newMembers.Count];
+        for (var i = 0; i < newMembers.Count; i++)
+        {
+            var separatorBefore = precedingMember != null || i > 0
+                ? new[] { SyntaxFactory.EndOfLine(eol), SyntaxFactory.Whitespace(indentText) }
+                : new[] { SyntaxFactory.Whitespace(indentText) };
+            annotatedNewMembers[i] = newMembers[i]
+                .WithLeadingTrivia(separatorBefore.Concat(newMembers[i].GetLeadingTrivia()))
+                .WithTrailingTrivia(SyntaxFactory.EndOfLine(eol))
+                .WithAdditionalAnnotations(Formatter.Annotation);
+        }
 
-        var annotatedNewMember = newMemberWithTrivia.WithAdditionalAnnotations(Formatter.Annotation);
+        var newMembersList = members;
+        for (var i = 0; i < annotatedNewMembers.Length; i++)
+        {
+            newMembersList = newMembersList.Insert(insertIndex + i, annotatedNewMembers[i]);
+        }
 
-        var newMembersList = members.Insert(insertIndex, annotatedNewMember);
-
-        // If a following sibling exists but its own leading trivia has no blank line (e.g. it used to
-        // be the first member, right after the container's opening brace), give it one now -> the new
-        // member is being inserted immediately before it, so it needs the same separator every other
+        // If a following sibling exists but its own leading trivia has no blank line, give it one: the
+        // last new member is inserted immediately before it, so it needs the same separator every other
         // pair of siblings in this container already has.
-        if (followingMember != null)
+        if (followingMember != null && annotatedNewMembers.Length > 0)
         {
             var followingLeadingTrivia = followingMember.GetLeadingTrivia();
             var hasBlankLine = followingLeadingTrivia.Count(t => t.IsKind(SyntaxKind.EndOfLineTrivia)) >= 2;
@@ -314,15 +333,12 @@ public static class RoslynFormattingHelper
                 var followingIndentTrivia = followingLeadingTrivia.LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia));
                 var followingIndentText = followingIndentTrivia != default ? followingIndentTrivia.ToFullString() : indentText;
                 var nonWhitespaceLeading = followingLeadingTrivia.Where(t => !t.IsKind(SyntaxKind.WhitespaceTrivia) && !t.IsKind(SyntaxKind.EndOfLineTrivia));
-                // Only one line ending here for the same reason as blankLineBefore above: newMemberWithTrivia's
-                // trailing trivia (set above to a single end-of-line) already supplies the line
-                // break that ends the new member's own line, so this only needs to add the blank line
-                // itself, not a second line-ending on top of it.
+                // Only one line ending here: the last new member's trailing trivia already ends its line.
                 var newFollowingLeading = new SyntaxTriviaList(SyntaxFactory.EndOfLine(eol))
                     .AddRange(nonWhitespaceLeading)
                     .Add(SyntaxFactory.Whitespace(followingIndentText));
                 var updatedFollowingMember = followingMember.WithLeadingTrivia(newFollowingLeading);
-                newMembersList = newMembersList.Replace(newMembersList[insertIndex + 1], updatedFollowingMember);
+                newMembersList = newMembersList.Replace(newMembersList[insertIndex + annotatedNewMembers.Length], updatedFollowingMember);
             }
         }
 
@@ -331,12 +347,6 @@ public static class RoslynFormattingHelper
 
         var formattedDoc = await FormatAnnotatedSpansAsync(document, newRoot, eol, cancellationToken);
         return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
-    }
-
-    /// <summary>Inserts several member declarations at insertIndex and formats the insertion (Step 4 stub, not yet implemented).</summary>
-    public static Task<string> InsertMemberDeclarationsAndFormatInsertionAsync(Document document, SyntaxNode root, TypeDeclarationSyntax container, int insertIndex, IReadOnlyList<MemberDeclarationSyntax> newMembers, string eol, CancellationToken cancellationToken = default)
-    {
-        throw new NotImplementedException(); // TODO implement (Step 4)
     }
 
     /// <summary>
