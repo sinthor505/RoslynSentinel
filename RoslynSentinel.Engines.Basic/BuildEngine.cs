@@ -39,8 +39,10 @@ public class BuildEngine
         _logger = logger;
     }
 
+    /// <summary>Quick (in-memory) build of the scope: diagnostics only, no dotnet build.</summary>
+    /// <param name="isCallable">Tool-callability predicate for the active surface; null means every tool is callable (full surface). Selects the listing tool and LoadSolution named in zero-project messages.</param>
     public async Task<EngineResultWrapper<BuildResult>> RunQuickBuildAsync(
-        ToolScope scope, string? scopeName, int maxDetails, CancellationToken cancellationToken = default)
+        ToolScope scope, string? scopeName, int maxDetails, CancellationToken cancellationToken = default, Func<string, bool>? isCallable = null)
     {
         var start = DateTime.UtcNow;
         DiagnosticSummary? summary;
@@ -103,7 +105,7 @@ public class BuildEngine
                 EngineOutcome.InvalidInput,
                 new EngineError(
                     EngineErrorCode.BuildNotRun,
-                    $"Quick build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to nothing -- no compile verdict is available. Call {ToolCallHint.Call("ListAll", ("kind", "all"))} to see valid project/file names."));
+                    $"Quick build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to nothing -- no compile verdict is available.{ListingSentence(ListingCall(isCallable), "to see valid project/file names.")}"));
         }
 
         // The engine returns every diagnostic: solution scope fetched the uncapped list (int.MaxValue) and
@@ -191,12 +193,52 @@ public class BuildEngine
     /// layer treats a detail that is only this note as clean (it drops the stdout/stderr tails).</summary>
     public const string ThrowawayDetailPrefix = "fullBuildThrowaway: output went to ";
 
+    /// <summary>Names the listing tool for a zero-project message: ListAll when callable, else ListSolutionItems, else null.</summary>
+    private static string? ListingCall(Func<string, bool>? isCallable)
+    {
+        if (isCallable is null || isCallable("ListAll"))
+        {
+            return ToolCallHint.Call("ListAll", ("kind", "all"));
+        }
+
+        return isCallable("ListSolutionItems") ? ToolCallHint.Call("ListSolutionItems", ("kind", "all")) : null;
+    }
+
+    /// <summary>Returns " Call {listing} {tail}", or an empty string when no listing tool is callable.</summary>
+    private static string ListingSentence(string? listing, string tail) =>
+        listing is null ? string.Empty : " Call " + listing + " " + tail;
+
+    /// <summary>Zero-project full build message; names LoadSolution and the listing tool only when they are callable.</summary>
+    private static string NoProjectsMessage(Func<string, bool>? isCallable)
+    {
+        const string Head = "Full build compiled zero projects. The loaded solution contains no projects -- no compile verdict is available.";
+        var listing = ListingCall(isCallable);
+        var loadSolutionCallable = isCallable is null || isCallable("LoadSolution");
+        if (loadSolutionCallable && listing is not null)
+        {
+            return Head + " Call " + ToolCallHint.Call("LoadSolution") + " with a populated .slnx/.sln, or " + listing + " to inspect the current workspace.";
+        }
+
+        if (loadSolutionCallable)
+        {
+            return Head + " Call " + ToolCallHint.Call("LoadSolution") + " with a populated .slnx/.sln.";
+        }
+
+        if (listing is not null)
+        {
+            return Head + " Call " + listing + " to inspect the current workspace.";
+        }
+
+        return Head;
+    }
+
     /// <summary>Runs `dotnet build` on the whole solution (scope=solution, default), only the scoped project and its project references (scope=project), or the file's containing project and its references (scope=file). <paramref name="level"/> = fullBuild writes the projects'
     /// own bin/obj (and keeps the competing-build probe); fullBuildThrowaway writes to
     /// .roslynsentinel/build/&lt;instance&gt;/ and skips the probe. <paramref name="useScratchDir"/> is obsolete:
     /// true is the same as level = fullBuildThrowaway. Both levels hold the server-wide <see cref="BuildGate"/>.</summary>
+    /// <param name="isCallable">Tool-callability predicate for the active surface; null means every tool is callable (full surface). Selects the listing tool and LoadSolution named in zero-project messages.</param>
     public async Task<EngineResultWrapper<BuildResult>> RunFullBuildAsync(CancellationToken cancellationToken = default, int maxDetails = 50, bool useScratchDir = false,
-        BuildVerifyLevel level = BuildVerifyLevel.fullBuild, ToolScope scope = ToolScope.solution, string? scopeName = null)
+        BuildVerifyLevel level = BuildVerifyLevel.fullBuild, ToolScope scope = ToolScope.solution, string? scopeName = null, Func<string, bool>? isCallable = null)
     {
         var throwaway = useScratchDir || level == BuildVerifyLevel.fullBuildThrowaway;
         var usedLevel = throwaway ? BuildVerifyLevel.fullBuildThrowaway : BuildVerifyLevel.fullBuild;
@@ -216,7 +258,7 @@ public class BuildEngine
                 EngineOutcome.InvalidInput,
                 new EngineError(
                     EngineErrorCode.BuildNotRun,
-                    $"Full build compiled zero projects. The loaded solution contains no projects -- no compile verdict is available. Call {ToolCallHint.Call("LoadSolution")} with a populated .slnx/.sln, or {ToolCallHint.Call("ListAll", ("kind", "all"))} to inspect the current workspace."));
+                    NoProjectsMessage(isCallable)));
         }
 
         string buildTargetPath = solutionPath;
@@ -249,7 +291,7 @@ public class BuildEngine
                     EngineOutcome.InvalidInput,
                     new EngineError(
                         EngineErrorCode.BuildNotRun,
-                        $"Full build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to no project in the loaded solution -- no compile verdict is available. Call {ToolCallHint.Call("ListAll", ("kind", "all"))} to see valid project/file names."));
+                        $"Full build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to no project in the loaded solution -- no compile verdict is available.{ListingSentence(ListingCall(isCallable), "to see valid project/file names.")}"));
             }
 
             // Scoped build: the project plus every project it transitively references.

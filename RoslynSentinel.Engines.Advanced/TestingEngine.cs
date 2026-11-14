@@ -328,6 +328,7 @@ public class TestingEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
+            // TODO names ListAll unconditionally: AddBenchmarkStub is not on the lean ModelEval surface (plan_modeleval_lean_tool_surface Step 2d); make it surface-aware if that changes
             throw new ToolNotFoundException($"Syntax root could not be read for '{filePath}'. Searched: the document's syntax tree. Next: confirm the file is in the loaded solution with {ToolCallHint.Call("ListAll")}, then retry.");
         }
 
