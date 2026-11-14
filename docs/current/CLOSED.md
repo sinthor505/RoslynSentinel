@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Error-policy kind ratchet and shared MissingTargetKinds (Basic scope) - resolved (2026-11-13)
+
+Error-policy kind ratchet and shared `MissingTargetKinds` (2026-11-13) - (a) a Tests.Basic source-scan ratchet (pattern: `BareFileWriteRatchetTests`) that fails when a literal kind passed to `ToolNotFoundException` or `MemberRefactoringNotFound.Unresolved/Declaration` is in neither `ErrorPolicyClassifier` `FileKinds`/`SymbolKinds` nor the test's deliberately-unmapped set (project, statement, expression, snippet, block), and map or list `using directive` (`BasicRefactoringEngine.cs:2285`); (b) then one shared `MissingTargetKinds` constant set used by the throw sites and the classifier, with a test that every member is classified, migrated in slices for Basic tools and engines only (Advanced later); Medium for (a), Large for (b) - [doc](plans/closed/plan_error_policy_pointer.md)
+
+Evidence: 927f0d0b (ratchet + using directive), d80dfffc (MissingTargetKinds + MissingTargetKindsTests), 9fa21af0, ac312aad, 13511491, 69c34693, 136f37d2, c97fc499 (Engines.Basic and Common sites migrated; ErrorPolicyKindRatchetTests fails on any raw literal kind in Common, Engines.Basic, Tools.Basic). Engines.Advanced (136 ToolNotFoundException sites, ~43 with literal kinds) is not covered: see the new TODO.
+
+## `MoveType` ownFile refuses a differing `targetFolder` for a single-type file - resolved (2026-11-13)
+
+`MoveType` ownFile refuses a differing `targetFolder` when the type already has the file's name (2026-11-13) - the guard in `BasicRefactoringEngine.MoveTypeToFileAsync` (~1219) returns a facts+options error (nothing to split; MoveType does not move files; options: create/delete by hand, MoveFile once built) when `targetFolder` differs from the source folder, no or same folder keeps `no_changes`; fix the "Moves 'X' to its own file" description for `no_changes` (`AdvancedRefactoringTools.cs:1132`); tests in `MoveTypeToFileTests`: `Solo.cs` plus a differing folder gives an error naming `targetFolder`, the two existing empty-return tests stay green; Small - [doc](proposals/proposal_move_file_tool.md)
+
+Evidence: 59cd4717; MoveTypeToFileTests (2 new) plus BugFixTests/RegressionTests empty-return tests green (25 tests in the filtered run). Error text names targetFolder, not MoveFile; update it once MoveFile exists.
+
 ## ModelEval LM Studio context-exceeded is non-retryable (ContextExhausted) - resolved (2026-11-13)
 
 ModelEval harness: LM Studio "Context size has been exceeded" (HTTP 500) is non-retryable and scored `ContextExhausted` (2026-11-13) - batch H6 R3/R5 died at ~44k of a 70144 load; `LmStudioAgentClient.CompleteOnceAsync` throws a dedicated exception type that the retry filter in `CompleteAsync` excludes; `ModelAgentRunner` (~310) catches it and finishes the run as `AgentStopReason.ContextExhausted` (transcript written, Converged false) and logs cumulative tokens plus context length; tests next to `ContextExhaustedRunnerTests`: a scripted 500 gives one request and ContextExhausted, any other 500 or IO error still retries once; Small-Medium - [doc](evals/eval_tenchain_reasoning_replay_2026_11_10.md)
