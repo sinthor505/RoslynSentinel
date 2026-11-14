@@ -5,8 +5,8 @@ namespace RoslynSentinel.Tests.ModelEval;
 
 /// <summary>
 /// Resume scenarios (type 2): history is seeded from a tracked capture in ResumeTranscripts and the live
-/// model continues from there. The first one resumes a ten-chain run after a RenameSymbol at turn 4 whose
-/// later ReplaceSnippet still named the old method (NotFound at turn 12 of the capture run).
+/// model continues from there. The first one resumes a ten-chain run (turns 1-11) after a RenameSymbol at turn 5 that
+/// already rewrote the OrderCheckout.cs call site; the failure it models is a later ReplaceSnippet whose oldContent still names the old method.
 /// </summary>
 public static class ResumeScenarios
 {
@@ -31,8 +31,8 @@ public static class ResumeScenarios
         Expected: ExpectedOutcome.Recover,
         ExpectedRecoveryTool: "ReadFile",
         CheckFinalState: CheckStaleCallerEditFinalStateAsync,
-        SourceRun: "10-chain run 20261112-031134-405 (plan_targeted_tool_scenario_evals batch C, commit c7bddd9e) turn 12: ReplaceSnippet on OrderCheckout.cs with oldContent still naming CalcDisc after the turn 4 RenameSymbol, NotFound",
-        ReproducesAt: "not measured (regression guard; the capture run hit it at turn 12, resume rate measured by this scenario)",
+        SourceRun: "10-chain run 20261114-082018-100 (host 113, qwen3.5-9b-mtp, lean tool surface, commit 70b436d5), turns 1-11: RenameSymbol CalcDisc to CalculateDiscountedTotal at turn 5 (it rewrote the OrderCheckout.cs call site), OrderCheckout.cs otherwise untouched; the NotFound failure it models (ReplaceSnippet on OrderCheckout.cs with oldContent still naming CalcDisc) was seen at turn 12 of the earlier 55-tool run 20261112-031134-405 and is not part of this capture",
+        ReproducesAt: "not measured (regression guard; the failure was seen at turn 12 of run 20261112-031134-405, resume rate measured by this scenario)",
         FixedBy: "",
         ResumeTranscript: "stale-caller-edit-after-rename.json",
         ResumeKeepTurns: 11,
@@ -49,7 +49,7 @@ public static class ResumeScenarios
         Expected: ExpectedOutcome.Recover,
         ExpectedRecoveryTool: "ReadFile",
         CheckFinalState: CheckStaleCallerEditFinalStateAsync,
-        SourceRun: "stale workspace variant of: 10-chain run 20261112-031134-405 (plan_targeted_tool_scenario_evals batch C, commit c7bddd9e) turn 12: ReplaceSnippet on OrderCheckout.cs with oldContent still naming CalcDisc after the turn 4 RenameSymbol, NotFound",
+        SourceRun: "stale workspace variant of: 10-chain run 20261114-082018-100 (host 113, lean tool surface, commit 70b436d5), turns 1-11, RenameSymbol at turn 5; original failure: ReplaceSnippet on OrderCheckout.cs with oldContent still naming CalcDisc after the rename, NotFound (run 20261112-031134-405 turn 12)",
         ReproducesAt: "not measured (resume faulted scenario, rate measured by this scenario)",
         FixedBy: "",
         ResumeTranscript: "stale-caller-edit-after-rename.json",
@@ -72,7 +72,7 @@ public static class ResumeScenarios
         Expected: ExpectedOutcome.Recover,
         ExpectedRecoveryTool: "ReadFile",
         CheckFinalState: CheckStaleCallerEditFinalStateAsync,
-        SourceRun: "authored failed-last-call variant of: 10-chain run 20261112-031134-405 (plan_targeted_tool_scenario_evals batch C, commit c7bddd9e) turn 12: ReplaceSnippet on OrderCheckout.cs with oldContent still naming CalcDisc after the turn 4 RenameSymbol, NotFound",
+        SourceRun: "authored failed-last-call variant of: 10-chain run 20261114-082018-100 (host 113, lean tool surface, commit 70b436d5), turns 1-11, RenameSymbol at turn 5; original failure: ReplaceSnippet on OrderCheckout.cs with oldContent still naming CalcDisc after the rename, NotFound (run 20261112-031134-405 turn 12)",
         ReproducesAt: "not measured (resume faulted scenario, rate measured by this scenario)",
         FixedBy: "",
         ResumeTranscript: "stale-caller-edit-after-rename.json",
