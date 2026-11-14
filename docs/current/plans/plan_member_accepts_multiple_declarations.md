@@ -1,6 +1,6 @@
 # Plan: Member(addMember) accepts several member declarations in one call (option 1)
 
-**Status:** IN PROGRESS 2026-11-14. Steps 1-9 done (72dabecd, 50facb61, 78116e06, 888f2f3a, 55355155, f5077193, 46152134, 3e28b49e, 7c16f4c3); Step 10 baseline next. Option 1 only (addMember, with or without an insert anchor, takes N declarations atomically); option 2 (replace takes N) is a follow-up after measurement. Batched mode, owner away. Nothing is built.
+**Status:** IN PROGRESS 2026-11-14. Steps 1-10 done (72dabecd, 50facb61, 78116e06, 888f2f3a, 55355155, f5077193, 46152134, 3e28b49e, 7c16f4c3; Step 10 is the baseline, no commit); Step 11 next. Option 1 only (addMember, with or without an insert anchor, takes N declarations atomically); option 2 (replace takes N) is a follow-up after measurement. Batched mode, owner away. Nothing is built.
 
 ## Problem
 
@@ -222,6 +222,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Parallel-ready: with Step 10 (a queue submission, no implementing agent).
 
 ### Step 10 - LIVE: same-commit baseline (queue jobs; holds Step 11)
+- Done: 2026-11-14, no code commit. 15 jobs, all FINISHED-PASS at tested commit 39b111c1 (steps 1-9 plus a peer's ReasoningReplayPolicy commit): host 113 qwen3.5-9b-mtp ten-chain x5 (20261114-090609-001..005) and ShippingKindStep -Step 3 x5 (090611-001..005); host 112 qwen3.5-4b-mtp ten-chain x5 (090610-002..005 plus resubmit 102706-001 for the crashed 090610-001). Deviation: host 85 LM Studio was unreachable, 112 replaced it; Step 20 must use the same hosts and models. The rejection counts per the Step 20 rule have not been taken yet; they come from the run folders under `ModelTestingResults/{112,113}/`.
 - Files: none (the queue reads the working tree and writes `ModelTestingResults/**`)
 - Depends on: 8 committed and the tree compile-green (Steps 1-8 are text-neutral, so this tree behaves like today's server for every model-visible text). Step 9 may be in progress.
 - Effect: measurement only. HOLD: Step 11 and every later behaviour-changing step must not be started until the LAST baseline job has started (each job builds the working tree when it starts, so a behaviour change in the tree before then contaminates that job).
