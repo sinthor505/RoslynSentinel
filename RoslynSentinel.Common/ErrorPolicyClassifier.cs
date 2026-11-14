@@ -23,7 +23,9 @@ public static class ErrorPolicyClassifier
         "file",
     };
 
-    // TODO error-policy: kind values passed to ToolNotFoundException as variables were not enumerated by the Step 1 inventory; unknown kinds map to null (no policy key)
+    // Kind values passed as literals to ToolNotFoundException and MemberRefactoringNotFound are guarded by ErrorPolicyKindRatchetTests.
+    // Unknown kinds map to null (no policy key).
+    // TODO error-policy: extend ErrorPolicyKindRatchetTests to the Engines.Advanced throw sites (not yet covered by the ratchet).
     private static readonly HashSet<string> SymbolKinds = new(StringComparer.OrdinalIgnoreCase)
     {
         "class",
@@ -43,6 +45,7 @@ public static class ErrorPolicyClassifier
         "namespace",
         "symbol",
         "container",
+        "using directive",
     };
 
     /// <summary>
