@@ -2079,7 +2079,7 @@ public class MemberRefactoringEngine
 
         var newMembers = ParseNewMemberDeclarations(newMemberSource, "Cannot edit: invalid member source.");
         var insertedDescription = DescribeAddedMembers(newMembers);
-        var insertIndex = ResolveInsertAnchorIndex(filePath, typeDecl, containerName, "insertAfterMemberName", afterMemberName) + 1;
+        var insertIndex = ResolveInsertAnchorIndex(filePath, typeDecl, containerName, "insertAfterMemberName", afterMemberName, newMemberNames: newMembers.Select(SyntaxTargetResolver.GetMemberName).OfType<string>().ToList()) + 1;
         var updatedText = await RoslynFormattingHelper.InsertMemberDeclarationsAndFormatInsertionAsync(document, root!, typeDecl, insertIndex, newMembers, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         await AddMemberCallBindingCheck.RequireKeepsBindingsAsync(solution, document, typeDecl, newMembers, insertIndex, updatedText, cancellationToken);
 
@@ -2126,7 +2126,7 @@ public class MemberRefactoringEngine
 
         var newMembers = ParseNewMemberDeclarations(newMemberSource, "Cannot edit: invalid member source.");
         var insertedDescription = DescribeAddedMembers(newMembers);
-        var insertIndex = ResolveInsertAnchorIndex(filePath, typeDecl, containerName, "insertBeforeMemberName", beforeMemberName);
+        var insertIndex = ResolveInsertAnchorIndex(filePath, typeDecl, containerName, "insertBeforeMemberName", beforeMemberName, newMemberNames: newMembers.Select(SyntaxTargetResolver.GetMemberName).OfType<string>().ToList());
         var updatedText = await RoslynFormattingHelper.InsertMemberDeclarationsAndFormatInsertionAsync(document, root!, typeDecl, insertIndex, newMembers, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
         await AddMemberCallBindingCheck.RequireKeepsBindingsAsync(solution, document, typeDecl, newMembers, insertIndex, updatedText, cancellationToken);
 
@@ -2144,7 +2144,7 @@ public class MemberRefactoringEngine
     /// and the container, states what was searched, lists the usable anchors and gives the listing call to make next.
     /// An anchor is always a literal member name; a value such as "after:Foo" is looked up as that exact name.
     /// </summary>
-    private static string BuildInsertAnchorNotFoundMessage(string anchorParam, string anchorName, string containerKind, string containerName, IReadOnlyList<string> anchorNames, int unnamedMemberCount)
+    private static string BuildInsertAnchorNotFoundMessage(string anchorParam, string anchorName, string containerKind, string containerName, IReadOnlyList<string> anchorNames, int unnamedMemberCount, IReadOnlyCollection<string>? newMemberNames = null)
     {
         const int listCap = 25;
         var ranked = NameCandidates.Rank(anchorName, anchorNames, n => n);
@@ -2162,11 +2162,14 @@ public class MemberRefactoringEngine
         var unnamedNote = unnamedMemberCount > 0
             ? $" {unnamedMemberCount} member(s) have no matchable name (operators, indexers, events, delegates) and cannot be an anchor."
             : string.Empty;
+        var clashNote = newMemberNames is not null && newMemberNames.Contains(anchorName, StringComparer.Ordinal)
+            ? $" '{anchorName}' is declared in newMemberSource; an anchor must name a member already in the container."
+            : string.Empty;
         return $"Cannot edit: member '{anchorName}' ({anchorParam}) not found in {containerKind} '{containerName}'. "
             + $"Searched: the direct members of that {containerKind} by exact name ('{anchorName}' is taken as a literal member name, not a prefixed value such as 'after:Name'). "
             + $"Anchors available: {listed}.{unnamedNote} "
             + similarNote
-            + $"Next: {ToolCallHint.Call("Member", ("operation", "view"), ("containerName", containerName))} lists its members with signatures; retry with one of them as {anchorParam}, or omit both anchors to append.{notFoundNote}";
+            + $"Next: {ToolCallHint.Call("Member", ("operation", "view"), ("containerName", containerName))} lists its members with signatures; retry with one of them as {anchorParam}, or omit both anchors to append.{notFoundNote}{clashNote}";
     }
 
     /// <summary>
@@ -2175,7 +2178,7 @@ public class MemberRefactoringEngine
     /// (with candidates) when several do: addMember's contextSnippet/lineBefore/lineAfter locate the container, so an overloaded
     /// anchor cannot be narrowed. Nothing is written in either case.
     /// </summary>
-    private static int ResolveInsertAnchorIndex(FilePathWrapper filePath, TypeDeclarationSyntax typeDecl, string containerName, string anchorParam, string anchorName)
+    private static int ResolveInsertAnchorIndex(FilePathWrapper filePath, TypeDeclarationSyntax typeDecl, string containerName, string anchorParam, string anchorName, IReadOnlyCollection<string>? newMemberNames = null)
     {
         var members = typeDecl.Members;
         var matches = Enumerable.Range(0, members.Count)
@@ -2190,7 +2193,7 @@ public class MemberRefactoringEngine
         {
             var names = members.Select(SyntaxTargetResolver.GetMemberName).OfType<string>().Distinct().ToList();
             var unnamed = members.Count(m => SyntaxTargetResolver.GetMemberName(m) is null);
-            throw new ToolNotFoundException(BuildInsertAnchorNotFoundMessage(anchorParam, anchorName, "container", containerName, names, unnamed), MissingTargetKinds.Member, anchorName);
+            throw new ToolNotFoundException(BuildInsertAnchorNotFoundMessage(anchorParam, anchorName, "container", containerName, names, unnamed, newMemberNames), MissingTargetKinds.Member, anchorName);
         }
 
         var candidates = new List<AmbiguousCandidate>();
