@@ -1,6 +1,6 @@
 # Plan: Member(addMember) accepts several member declarations in one call (option 1)
 
-**Status:** APPROVED 2026-11-14. Option 1 only (addMember, with or without an insert anchor, takes N declarations atomically); option 2 (replace takes N) is a follow-up after measurement. Batched mode, owner away. Nothing is built.
+**Status:** IN PROGRESS 2026-11-14. Steps 1-5 done (72dabecd, 50facb61, 78116e06, 888f2f3a, 55355155). Option 1 only (addMember, with or without an insert anchor, takes N declarations atomically); option 2 (replace takes N) is a follow-up after measurement. Batched mode, owner away. Nothing is built.
 
 ## Problem
 
@@ -107,6 +107,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 ## Steps
 
 ### Step 1 - Contract skeleton (one compile-green write per file)
+- Done: 72dabecd
 - Files: `RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs`, `RoslynSentinel.Common/RoslynFormattingHelper.cs`,
   `RoslynSentinel.Engines.Basic/AddMemberCallBindingCheck.cs`
 - Depends on: none
@@ -124,6 +125,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Done when: `Build` 0 errors for `RoslynSentinel.Common` and `RoslynSentinel.Engines.Basic`, and `Search(mode: text, query: "TODO implement", fileGlob: "**/{MemberRefactoringEngine,RoslynFormattingHelper,AddMemberCallBindingCheck}.cs")` lists exactly these 7 stubs (the three files held none before).
 
 ### Step 2 - Splitter, parse and describe bodies
+- Done: 50facb61 (adds a fallback not named below: probe has diagnostics but no single member does, e.g. a missing closing `}` -> throws `newMemberSource holds N member declarations but does not parse as a list: ...`; Step 6 must test it)
 - Files: `RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs`
 - Depends on: 1
 - Effect: text-neutral (no callers until Steps 3, 8, 11)
@@ -137,6 +139,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Parallel-ready: with Step 4 (different projects, disjoint files).
 
 ### Step 3 - DescribeAdded sees every declaration
+- Done: 78116e06
 - Files: `RoslynSentinel.Engines.Basic/MemberEditEffectFacts.cs`
 - Depends on: 2
 - Effect: text-neutral for one member (the existing `EditEffectEmitterTests.DescribeAdded_ParsesEveryDeclaredName_AndEnumMembers` input is unchanged); for N members the effect list gains the missing rows. No caller sends N until Step 13.
@@ -146,6 +149,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Parallel-ready: with Step 5.
 
 ### Step 4 - N-member insertion and formatting
+- Done: 888f2f3a
 - Files: `RoslynSentinel.Common/RoslynFormattingHelper.cs`
 - Depends on: 1
 - Effect: text-neutral. The single-member method becomes a one-line delegate to the new one, which must produce byte-identical output for N = 1.
@@ -155,6 +159,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Parallel-ready: with Step 2 and with Step 5.
 
 ### Step 5 - Binding check for N members (one combined trial)
+- Done: 55355155
 - Files: `RoslynSentinel.Engines.Basic/AddMemberCallBindingCheck.cs`
 - Depends on: 1
 - Effect: text-neutral. The single-member `RequireKeepsBindingsAsync` and `CheckAsync` become delegates to the list overloads with `[newMember]`; N = 1 behaviour and refusal text are unchanged.
@@ -173,7 +178,7 @@ Decided by the owner on 2026-11-14 (the owner is away for the run; nothing is pe
 - Lane: `test-writer` (1 new file)
 - Change: NUnit 5; pure unit tests, no workspace.
   - `TrySplitMemberDeclarations`: two methods; field plus method; method plus helper; three declarations; blank lines 0, 1 and 3 between declarations and a CRLF source all yield members whose leading trivia starts with no end-of-line; a doc comment on the second member is kept; returns null for: one declaration, whitespace, a stray `}` after the last member, a missing `}`, a malformed second declaration, a valid declaration followed by a body fragment such as `return 1;` (`IncompleteMemberSyntax`).
-  - `ParseNewMemberDeclarations`: one valid member returns one element; one malformed member throws the unchanged `newMemberSource is invalid: The source does not parse as a single valid declaration ...` text; three declarations with the second malformed throws and the message names `declaration 2` and `Method 'B'`; stray `}` after two valid declarations throws the `extra or unbalanced '}'` text; a valid method followed by `return 1;` throws the existing `DetectTrailingUnparsedDeclaration` message and does NOT contain `declaration 2`; the `unparsableMessage` argument is the text thrown for a null single parse (both default `Failed to parse new member.` and an explicit `Cannot edit: invalid member source.`); nothing is returned in any throwing case.
+  - `ParseNewMemberDeclarations`: one valid member returns one element; one malformed member throws the unchanged `newMemberSource is invalid: The source does not parse as a single valid declaration ...` text; three declarations with the second malformed throws and the message names `declaration 2` and `Method 'B'`; stray `}` after two valid declarations throws the `extra or unbalanced '}'` text; a valid method followed by `return 1;` throws the existing `DetectTrailingUnparsedDeclaration` message and does NOT contain `declaration 2`; the `unparsableMessage` argument is the text thrown for a null single parse (both default `Failed to parse new member.` and an explicit `Cannot edit: invalid member source.`); a list with a missing closing `}` (probe has diagnostics, no single member does) throws `newMemberSource holds N member declarations but does not parse as a list: ...` (Step 2 fallback); nothing is returned in any throwing case.
   - `DescribeAddedMembers`: `Method 'A'` for one, `2 members: Method 'A', Field '_b'` for two.
   - `MemberEditEffectFacts.DescribeAdded`: two methods give two rows in source order; `private int _a, _b;` plus a method gives three rows; a one-member input gives the same rows as before.
 - Done when (dispatcher): all new tests in `MemberSplitDeclarationsTests` pass; `EditEffectEmitterTests.DescribeAdded_ParsesEveryDeclaredName_AndEnumMembers` still passes.
