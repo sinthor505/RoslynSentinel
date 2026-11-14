@@ -291,6 +291,19 @@ the owner confirms; report who was asked and the answer in the slice report. 3a 
 - Done when: the inventory (file, line, classification) is in the dispatcher report and cut into slices of at most
   8 files and 25 call sites each.
 - Lane/tier: `explore-tier1`.
+- Done 2026-11-13 (inventory). 22 PROMPT sites in 9 files. `AgentSystemPrompts.cs` :46,:51,:140. The 19 scenario sites
+  share one preamble sentence ("The solution is already loaded - go straight to ReadFile/Search/ListAll on the
+  paths below."): `BatchShapeScenarios.cs:17`, `FaultScenarios.cs:30,76,113,146`, `GuardScenarios.cs:36,189`,
+  `InterfaceScenarios.cs:38`, `StopAdherenceScenarios.cs:27,43`, `RenameScenarios.cs:35`,
+  `TwoRenameScenarios.cs:40`, and `OrderPricingRefactorChainAgentTests.cs:259,361,497,679,870,1084,1448` (the
+  proposal's chain lines were one low). No test pins prompt text (identity tests such as
+  `ErrorPolicyEvalPromptTests` compare to the constant and survive a reword). No target prompt names another
+  non-lean tool. Left alone: `ErrorPolicyIntentTable.cs:104` (intent-table key, not model text),
+  `Tests.ErrorVariants/ToolEffectList.cs:38`, `LargeResultPagingAgentTests.cs:73`, `PlanOnlyAgentTests.cs:72`
+  (comment) and the legacy fixtures (`OrderPricingRefactorAgentTests.cs:51`, `PlanImplementVerifyAgentTests.cs`
+  :68,109,144,173,191,204, `WholeFileRewriteAgentTests.cs:182`). Slices: 3b = `AgentSystemPrompts.cs` (3 sites);
+  3c-1 = the 7 scenario files above except the chain file (12 sites); 3c-2 =
+  `OrderPricingRefactorChainAgentTests.cs` (7 sites).
 
 #### Step 3b - AgentSystemPrompts.cs
 - Files: `RoslynSentinel.Common/AgentLoop/AgentSystemPrompts.cs` (:46, :51, :140; :60 names `GetMethodSource`, which
