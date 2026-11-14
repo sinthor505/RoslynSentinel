@@ -1335,8 +1335,10 @@ public static class RoslynSentinelServiceExtensionsBasic
                     if (coerceNotes is not null)
                         aliasNotes = aliasNotes is null ? coerceNotes : [.. aliasNotes, .. coerceNotes];
 
+                    var validationSurface = context.Server.Services?.GetService<ActiveToolSurface>();
+                    Func<string, bool>? validationIsCallable = validationSurface is null ? null : validationSurface.IsCallable;
                     var validationError = ToolArgumentValidator.Validate(
-                        context.Server, context.Params?.Name, context.Params?.Arguments);
+                        context.Server, context.Params?.Name, context.Params?.Arguments, validationIsCallable);
 
                     if (validationError is not null)
                     {

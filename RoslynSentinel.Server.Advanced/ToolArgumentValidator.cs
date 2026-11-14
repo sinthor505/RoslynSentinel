@@ -457,26 +457,61 @@ public static class ToolArgumentValidator
 
         return previous[b.Length];
     }// Added by AddMember (expected - used for diagnostics)
+
     /// <summary>
     /// Per-parameter recovery hint appended to a missing-required-parameter error: an example
     /// value, and the tool that discovers a real one where such a tool exists. Rejecting a call
-    /// without naming a way to obtain the missing value just relocates the guessing.
+    /// without naming a way to obtain the missing value just relocates the guessing. A discovery
+    /// tool is named only when <paramref name="isCallable"/> reports it callable; null means every
+    /// tool is callable (the full surface), which yields the full-surface text.
     /// </summary>
-    private static System.Collections.Generic.Dictionary<string, string> ParameterHints => new(StringComparer.Ordinal)
+    private static System.Collections.Generic.Dictionary<string, string> BuildParameterHints(System.Func<string, bool>? isCallable)
     {
-        ["solutionPath"] = $"the absolute path to a .slnx/.sln/.csproj file, e.g. \"C:\\\\repos\\\\MyApp\\\\MyApp.slnx\". Call {ToolCallHint.Call("ListWorkspaceSolutions")} to discover the solutions available on this host.",
-        ["filePath"] = $"a repo-relative or absolute path to a file in the loaded solution, e.g. \"src/Orders/OrderService.cs\". Call {ToolCallHint.Call("ListAll", ("kind", "all"))} or {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} to list the files in the solution.",
-        ["filePath"] = $"a repo-relative or absolute path to a file in the loaded solution, e.g. \"src/Orders/OrderService.cs\". Call {ToolCallHint.Call("ListAll", ("kind", "all"))} or {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} to list the files in the solution.",
-        ["docCommentId"] = $"a documentation comment ID, e.g. \"M:MyApp.Orders.OrderService.Total(System.Int32)\". Call {ToolCallHint.Call("Search", ("mode", "symbol"))} to obtain the exact ID for a symbol - do not hand-write one.",
-        ["reason"] = "a short phrase (at least 10 characters, containing a space) saying why you are calling this tool right now, e.g. \"checking the working tree before staging\".",
-        ["operation"] = "one of the operation names listed in this tool's schema enum. Re-read the tool's parameter schema and pick one of them verbatim.",
-        ["typeName"] = $"the name of a type in the loaded solution, e.g. \"OrderService\". Call {ToolCallHint.Call("ListAll", ("kind", "class"))} or {ToolCallHint.Call("Search", ("mode", "symbol"))} to find the exact name.",
-        ["memberName"] = $"the name of a member on the target type, e.g. \"CalculateTotal\". Call {ToolCallHint.Call("Member", ("operation", "view"))} or {ToolCallHint.Call("GetFileOutline")} to list a container's members.",
-        ["containerName"] = $"the name of the type that holds the member, e.g. \"OrderService\". Call {ToolCallHint.Call("GetFileOutline")} to see the types declared in a file.",
-        ["oldContent"] = $"the exact text to replace, copied verbatim from a prior {ToolCallHint.Call("ReadFile")} or {ToolCallHint.Call("GetMethodSource")} result - not retyped from memory.",
-        ["newContent"] = "the replacement text.",
-        ["message"] = "the commit message describing what the change does.",
-    };
+        bool Callable(string toolName) => isCallable is null || isCallable(toolName);
+
+        // " Call {calls} <purpose>." for the callable calls, joined with " or "; empty when none is callable.
+        string CallSentence(System.Collections.Generic.IReadOnlyList<string> calls, string purpose) =>
+            calls.Count == 0 ? string.Empty : $" Call {string.Join(" or ", calls)} {purpose}.";
+
+        var solutionPathSentence = Callable("ListWorkspaceSolutions")
+            ? $" Call {ToolCallHint.Call("ListWorkspaceSolutions")} to discover the solutions available on this host."
+            : string.Empty;
+
+        var fileListCalls = new System.Collections.Generic.List<string>();
+        if (Callable("ListAll"))
+        {
+            fileListCalls.Add(ToolCallHint.Call("ListAll", ("kind", "all")));
+        }
+        if (Callable("ListSolutionItems"))
+        {
+            fileListCalls.Add(ToolCallHint.Call("ListSolutionItems", ("kind", "all")));
+        }
+
+        var typeFindCalls = new System.Collections.Generic.List<string>();
+        if (Callable("ListAll"))
+        {
+            typeFindCalls.Add(ToolCallHint.Call("ListAll", ("kind", "class")));
+        }
+        if (Callable("Search"))
+        {
+            typeFindCalls.Add(ToolCallHint.Call("Search", ("mode", "symbol")));
+        }
+
+        return new(StringComparer.Ordinal)
+        {
+            ["solutionPath"] = $"the absolute path to a .slnx/.sln/.csproj file, e.g. \"C:\\\\repos\\\\MyApp\\\\MyApp.slnx\".{solutionPathSentence}",
+            ["filePath"] = $"a repo-relative or absolute path to a file in the loaded solution, e.g. \"src/Orders/OrderService.cs\".{CallSentence(fileListCalls, "to list the files in the solution")}",
+            ["docCommentId"] = $"a documentation comment ID, e.g. \"M:MyApp.Orders.OrderService.Total(System.Int32)\". Call {ToolCallHint.Call("Search", ("mode", "symbol"))} to obtain the exact ID for a symbol - do not hand-write one.",
+            ["reason"] = "a short phrase (at least 10 characters, containing a space) saying why you are calling this tool right now, e.g. \"checking the working tree before staging\".",
+            ["operation"] = "one of the operation names listed in this tool's schema enum. Re-read the tool's parameter schema and pick one of them verbatim.",
+            ["typeName"] = $"the name of a type in the loaded solution, e.g. \"OrderService\".{CallSentence(typeFindCalls, "to find the exact name")}",
+            ["memberName"] = $"the name of a member on the target type, e.g. \"CalculateTotal\". Call {ToolCallHint.Call("Member", ("operation", "view"))} or {ToolCallHint.Call("GetFileOutline")} to list a container's members.",
+            ["containerName"] = $"the name of the type that holds the member, e.g. \"OrderService\". Call {ToolCallHint.Call("GetFileOutline")} to see the types declared in a file.",
+            ["oldContent"] = $"the exact text to replace, copied verbatim from a prior {ToolCallHint.Call("ReadFile")} or {ToolCallHint.Call("GetMethodSource")} result - not retyped from memory.",
+            ["newContent"] = "the replacement text.",
+            ["message"] = "the commit message describing what the change does.",
+        };
+    }
 
     /// <summary>
     /// Rewrites <paramref name="arguments"/> in place so that a parameter name differing from a
@@ -1240,11 +1275,13 @@ public static class ToolArgumentValidator
     /// keeps hitting.
     /// </para>
     /// </summary>
+    /// <param name="isCallable">The active surface's callable test; null means every tool is callable (the full surface). A discovery tool is named in a hint only when it is callable.</param>
     /// <returns>An error message to return to the caller, or null when the arguments are valid.</returns>
     public static string? Validate(
         ModelContextProtocol.Server.McpServer? server,
         string? toolName,
-        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments)
+        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments,
+        System.Func<string, bool>? isCallable = null)
     {
         var schema = TryGetSchemaParameters(server, toolName);
         if (schema is null)
@@ -1311,10 +1348,11 @@ public static class ToolArgumentValidator
             builder.Append(string.Join(", ", missing.Select(missingName => $"'{missingName}'")));
             builder.Append(" for tool '").Append(toolName).Append("'. ");
 
+            var parameterHints = BuildParameterHints(isCallable);
             foreach (var name in missing)
             {
                 builder.Append($"Pass {name}: ");
-                builder.Append(ParameterHints.TryGetValue(name, out var hint)
+                builder.Append(parameterHints.TryGetValue(name, out var hint)
                     ? hint
                     : "see this parameter's description in the tool's schema for its accepted values.");
                 builder.Append(' ');
