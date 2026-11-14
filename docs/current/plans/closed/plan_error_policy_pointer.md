@@ -293,6 +293,18 @@ Read-only, by code (no executed tool-level test). Full report in the run tracker
   | mean turns | 6.67 | 7.13 | |
 
   First post-seed call: on ReadFile 15, ListAll 8, ListSolutionItems 4, Search 3; off ListAll 17, ReadFile 8, ListSolutionItems 3, Search 2 (the inventory doubles direct ReadFile use; the "call ListAll" lead in the error text still wins for 8 on and 17 off samples). **Decision: deferred.** The Decisions give no threshold and every difference is inside noise at n=30, so the default stays off (owner: flip, or n=60 more per cell). Inventory text defect found: the member list is followed by the next sentence with no separator (TODO.md).
+- **Pooled n=60 per cell (todo punchlist #8 follow-up, 2026-11-14):** a second batch of 30 samples per cell, same scenario, model, host 112, Inline policy and commit 1836f3ff (worktree `c:\tmp\rs-eval-item8b`, `dirty` false, inventory on via `ROSLYNSENTINEL_NOTFOUND_INVENTORY=1`; run folders `20261114-034530-947` on, `20261114-040317-496` off under `ModelTestingResults/112/RunScenario_SamplesAndScores/`, evidence copies in `c:\tmp\rs-eval-item8b-logs`). Validity as before: `errorPolicyMode` `inline+inventory` on 30/30 on rows and `inline` on 30/30 off rows, the "declares 4 members" inventory sentence in 30/30 on transcripts and 0/30 off, 0 Inconclusive. The two batches share commit and conditions (separate runs on the same host about 1.5 h apart), so they are pooled. Second batch alone: on pass 25, BudgetOut 0, FalseDoneClaim 3, GaveUpEarly 2, mean turns 6.37; off pass 19, BudgetOut 5, FalseDoneClaim 2, GaveUpEarly 4, mean turns 7.50.
+
+  | n=60 per cell | on | off | Fisher p (two-sided) |
+  | --- | --- | --- | --- |
+  | pass | 47 (78%) | 38 (63%) | 0.107 |
+  | BudgetOut | 1 | 9 | 0.017 |
+  | FalseDoneClaim | 7 | 4 | 0.53 |
+  | GaveUpEarly (`BLOCKED:`) | 5 | 8 | 0.56 |
+  | BLOCKED + FalseDone | 12 | 12 | 1.0 |
+  | mean turns | 6.52 | 7.32 | |
+
+  Reading: pass rate is +15 points with the inventory on but not significant (p 0.11); the one clear difference is BudgetOut (1 vs 9, p 0.017, unadjusted across five comparisons, about 0.08 Bonferroni-adjusted, and picked after seeing the n=30 numbers). The failures that are not turn-cap exhaustion (BLOCKED + FalseDone) are identical (12 vs 12), so the inventory removes "ran out of turns" cases without adding wrong stops. Every pooled difference leans on, nothing is harmed: this supports the default flip recorded in the Outcome below (the flip landed from the owner's review while this batch ran). Caveat: one scenario and one 4B model.
 - **Outcome (todo punchlist #10, 2026-11-14):** the owner's review (2026-11-13) flipped the default on. Separator fixed first (c4ccfce4, 839b66e7: both member-list sentences now end with a period, so the `hiddenNote` and `exactMatch=false` sentences appended by `SymbolNavigationImpl.LocateSymbol` no longer glue on), then `ROSLYNSENTINEL_NOTFOUND_INVENTORY` defaults on (ff8b35ac): unset, empty, `1` and `true` are on, any other value (for example `0` or `false`) is off. The ModelEval `errorPolicyMode` stamp now carries `+inventory` by default; pass `ROSLYNSENTINEL_NOTFOUND_INVENTORY=0` for an inventory-off cell.
 
 ### (c) Unenumerated kind strings
