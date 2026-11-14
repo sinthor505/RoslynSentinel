@@ -31,7 +31,7 @@ public class ReasoningReplayRunnerTests
 {
     private const string ModelId = "reasoning-replay-test-model";
     private const string ToolName = "McpServerStatus";
-    private const int ToolTurnCount = 11;
+    private const int ToolTurnCount = 17;
 
     private IHost _host = null!;
     private McpClient _mcpClient = null!;
@@ -107,12 +107,15 @@ public class ReasoningReplayRunnerTests
     }
 
     [Test]
-    public async Task PressureMode_DropsOnceTheProjectedPromptReachesSeventyPercent()
+    public async Task PressureMode_DropsOnceAtTurnFourteen_AndNotAgainWithinTheHysteresisBand()
     {
-        // Turns 1-11 make a tool call; turn 12 is the plain finish. Request index i carries the reasoning of turns 1..i.
-        // Totals: the 7000 reported after turn 8 projects the request of turn 9 to >= 70% of 10000, so the oldest two of the
-        // five replayable turns (4 and 5) are dropped once. The later low totals do not drop anything further.
-        var totals = new[] { 1000, 1000, 1000, 1000, 1000, 1000, 4000, 7000, 1000, 1000, 1000 };
+        // Turns 1-17 make a tool call; turn 18 is the plain finish. Request index i carries the reasoning of turns 1..i+1.
+        // Totals (index i = total reported after turn i+1): 1000 for turns 1-11, 4000 for turn 12, 7000 for turn 13,
+        // 7500 for turn 14, 7800 for turn 15, then clamped at 7800. The request of turn 13 projects about 4000 plus a small
+        // tool-result estimate, under the 7000 threshold. The request of turn 14 projects >= 7000 with 13 prior assistant
+        // turns: 3 pinned + 10 replayable, so 5 are dropped (turns 4-8). The later totals grow by less than 10% of the
+        // context (1000), so the hysteresis band holds and no second drop happens.
+        var totals = new[] { 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 4000, 7000, 7500, 7800 };
         var runner = NewRunner(contextLength: 10000, totals, ToolTurns(ToolTurnCount));
 
         var result = await runner.RunAsync("system", "user", _runDirectory, TestContext.CurrentContext.CancellationToken);
@@ -124,31 +127,49 @@ public class ReasoningReplayRunnerTests
             Assert.That(result.Transcript.ContextLength, Is.EqualTo(10000));
             Assert.That(result.Transcript.ReasoningReplayMode, Is.EqualTo("pressure:0.7,pinned:3"));
             Assert.That(result.Transcript.ReasoningDropTurns, Is.Not.Null);
-            Assert.That(result.Transcript.ReasoningDropTurns!, Is.EqualTo(new[] { 9 }));
+            Assert.That(result.Transcript.ReasoningDropTurns!, Is.EqualTo(new[] { 14 }));
             Assert.That(bodies, Has.Count.EqualTo(ToolTurnCount + 1));
 
-            // Request index 8 is turn 9: turns 4 and 5 are dropped, pinned turns 1-3 and later turns 6-8 are kept.
-            Assert.That(bodies[8], Does.Not.Contain(Marker(4)));
-            Assert.That(bodies[8], Does.Not.Contain(Marker(5)));
-            Assert.That(bodies[8], Does.Contain(Marker(1)));
-            Assert.That(bodies[8], Does.Contain(Marker(2)));
-            Assert.That(bodies[8], Does.Contain(Marker(3)));
-            Assert.That(bodies[8], Does.Contain(Marker(6)));
-            Assert.That(bodies[8], Does.Contain(Marker(7)));
-            Assert.That(bodies[8], Does.Contain(Marker(8)));
-
-            // Request index 7 is turn 8, before the drop: every reasoning so far is present.
-            for (var k = 1; k <= 7; k++)
+            // Request index 13 is turn 14: turns 4-8 are dropped; pinned turns 1-3 and turns 9-13 are kept.
+            for (var k = 4; k <= 8; k++)
             {
-                Assert.That(bodies[7], Does.Contain(Marker(k)), $"turn {k} reasoning should be present before the drop");
+                Assert.That(bodies[13], Does.Not.Contain(Marker(k)), $"turn {k} reasoning should be dropped");
             }
 
-            Assert.That(CountMarkers(bodies[8]), Is.EqualTo(6));
-            Assert.That(CountMarkers(bodies[8]), Is.LessThan(CountMarkers(bodies[7])));
+            for (var k = 1; k <= 3; k++)
+            {
+                Assert.That(bodies[13], Does.Contain(Marker(k)), $"pinned turn {k} reasoning should be kept");
+            }
 
-            // The dropped set only grows: the last request still lacks turns 4 and 5.
-            Assert.That(bodies[^1], Does.Not.Contain(Marker(4)));
-            Assert.That(bodies[^1], Does.Not.Contain(Marker(5)));
+            for (var k = 9; k <= 13; k++)
+            {
+                Assert.That(bodies[13], Does.Contain(Marker(k)), $"turn {k} reasoning should be kept");
+            }
+
+            // Request index 12 is turn 13, before the drop: every reasoning so far is present.
+            for (var k = 1; k <= 12; k++)
+            {
+                Assert.That(bodies[12], Does.Contain(Marker(k)), $"turn {k} reasoning should be present before the drop");
+            }
+
+            Assert.That(CountMarkers(bodies[13]), Is.EqualTo(8));
+            Assert.That(CountMarkers(bodies[13]), Is.LessThan(CountMarkers(bodies[12])));
+
+            // The dropped set only grows and nothing else drops: the last request still lacks turns 4-8 and keeps the rest.
+            for (var k = 4; k <= 8; k++)
+            {
+                Assert.That(bodies[^1], Does.Not.Contain(Marker(k)));
+            }
+
+            for (var k = 1; k <= 3; k++)
+            {
+                Assert.That(bodies[^1], Does.Contain(Marker(k)));
+            }
+
+            for (var k = 9; k <= ToolTurnCount; k++)
+            {
+                Assert.That(bodies[^1], Does.Contain(Marker(k)), $"turn {k} reasoning should not be dropped again");
+            }
         });
     }
 
@@ -209,7 +230,7 @@ public class ReasoningReplayRunnerTests
             agentClient, _mcpClient,
             repeatedFailureLimit: 10,
             maxTokensPerTurn: 8192,
-            turnCap: 14,
+            turnCap: 24,
             wallClockCap: TimeSpan.FromMinutes(2),
             logger: new NullLogger<ModelAgentRunner>(),
             loopAssist: LoopAssistOptions.Off);

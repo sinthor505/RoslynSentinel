@@ -146,6 +146,34 @@ public class ReasoningReplayPolicyTests
         Assert.That(policy.DroppedTurns, Is.EqualTo(13));
     }
 
+    [Test]
+    public void Pressure_AfterADrop_WaitsForTenPercentGrowth_InsteadOfDroppingEveryTurn()
+    {
+        // The 112 thrash case: the prompt stays above the threshold after a drop because reasoning is a small share.
+        var policy = new ReasoningReplayPolicy(1000, null);
+
+        Assert.That(policy.Observe(40, 750), Is.True);
+        var afterFirst = policy.DroppedTurns;
+        Assert.That(policy.Observe(41, 760), Is.False, "still above 70% but grew less than 10% of the context");
+        Assert.That(policy.Observe(42, 849), Is.False);
+        Assert.That(policy.DroppedTurns, Is.EqualTo(afterFirst));
+        Assert.That(policy.Observe(43, 850), Is.True, "grew by 100 tokens (10% of 1000) beyond the first drop");
+    }
+
+    [Test]
+    public void Pressure_NeedsTenReplayableTurns_BeforeItDrops()
+    {
+        var policy = new ReasoningReplayPolicy(1000, null);
+
+        // 12 turns: 3 pinned, 9 replayable - below the 10-turn block.
+        Assert.That(policy.Observe(12, 900), Is.False);
+        Assert.That(policy.DroppedTurns, Is.Zero);
+
+        // 13 turns: 10 replayable, drops half.
+        Assert.That(policy.Observe(13, 900), Is.True);
+        Assert.That(policy.DroppedTurns, Is.EqualTo(5));
+    }
+
     [TestCase(0.0)]
     [TestCase(-0.1)]
     [TestCase(1.5)]

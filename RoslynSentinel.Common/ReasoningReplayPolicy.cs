@@ -21,6 +21,21 @@ public sealed class ReasoningReplayPolicy
     public const string PressureFractionVariable = "ROSLYNSENTINEL_REASONING_PRESSURE";
 
     /// <summary>
+    /// Fewest replayable (unpinned, not yet dropped) turns a drop needs. A drop removes half of them, so drops come at
+    /// least half this many turns apart.
+    /// </summary>
+    public const int MinDropTurns = 10;
+
+    /// <summary>
+    /// After a drop, no further drop until the projected prompt has grown by this fraction of the context beyond its size
+    /// at that drop. Stops a run whose pressure comes from tool results (which dropping reasoning cannot relieve) from
+    /// dropping, and breaking the prompt cache, on every turn.
+    /// </summary>
+    public const double HysteresisFraction = 0.1;
+
+    private int _lastDropProjection;
+
+    /// <summary>
     /// Creates a policy for a model with the given context length. A non-null fixed window selects block mode;
     /// null selects pressure mode.
     /// </summary>
@@ -118,21 +133,29 @@ public sealed class ReasoningReplayPolicy
             return false;
         }
 
-        if (projectedPromptTokens >= ContextLength * EffectivePressureFraction)
+        if (projectedPromptTokens < ContextLength * EffectivePressureFraction)
         {
-            // The dropped set only grows, so the prompt prefix stays stable between drops.
-            // TODO drop thrash: when reasoning is a small share of the prompt, a drop does not bring the projection
-            // back under the threshold, so this drops again on every following turn (one cache break per turn; live run
-            // 112 20261114-085254-907 at pressure 0.5 dropped at T24-T32). Needs hysteresis or a minimum drop block.
-            var replayable = assistantTurns - PinnedTurns - DroppedTurns;
-            if (replayable >= 2)
-            {
-                DroppedTurns += replayable / 2;
-                return true;
-            }
+            return false;
         }
 
-        return false;
+        // Hysteresis and the minimum block stop drop thrash: when reasoning is a small share of the prompt, one drop does
+        // not bring the projection back under the threshold (live run 112 20261114-085254-907 at pressure 0.5 dropped on
+        // every turn T24-T32, one cache break each).
+        if (_lastDropProjection > 0 && projectedPromptTokens < _lastDropProjection + (ContextLength * HysteresisFraction))
+        {
+            return false;
+        }
+
+        // The dropped set only grows, so the prompt prefix stays stable between drops.
+        var replayable = assistantTurns - PinnedTurns - DroppedTurns;
+        if (replayable < MinDropTurns)
+        {
+            return false;
+        }
+
+        DroppedTurns += replayable / 2;
+        _lastDropProjection = projectedPromptTokens;
+        return true;
     }
 
     /// <summary>
