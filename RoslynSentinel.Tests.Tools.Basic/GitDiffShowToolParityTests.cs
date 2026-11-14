@@ -867,7 +867,8 @@ public class GitDiffShowToolParityTests
             Assert.That(Lines(rootShow), Is.EqualTo(new[] { "A\ta.txt", "A\tb.txt", "A\tdir/c.txt" }));
             Assert.That(rootShow.Message, Is.EqualTo("baseline"));
             Assert.That(Lines(head), Is.EqualTo(new[] { "M\ta.txt", "A\té new.txt" }.OrderBy(l => l[2..], StringComparer.Ordinal).ToArray()));
-            Assert.That(head.Message, Is.EqualTo("second commit\n\nwith a body\nand more lines"));
+            // Git(show) messages carry the platform newline, as Git(commit) and Git(log) do (RejoinLines, owner choice 2026-11-14), so this is not a bare "\n" on Windows.
+            Assert.That(head.Message, Is.EqualTo(string.Join(Environment.NewLine, "second commit", "", "with a body", "and more lines")));
             Assert.That(byBranch.Hash, Is.EqualTo(head.Hash));
         });
     }
