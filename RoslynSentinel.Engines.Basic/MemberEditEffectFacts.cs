@@ -114,17 +114,30 @@ public static class MemberEditEffectFacts
             return tree.DescendantNodes().OfType<EnumMemberDeclarationSyntax>().Select(m => m.Identifier.Text).ToList();
         }
 
-        return SyntaxFactory.ParseMemberDeclaration(source) switch
+        var members = MemberRefactoringEngine.TrySplitMemberDeclarations(source)
+            ?? new[] { SyntaxFactory.ParseMemberDeclaration(source)! };
+        var names = new List<string>();
+        foreach (var member in members)
         {
-            BaseTypeDeclarationSyntax type => [type.Identifier.Text],
-            DelegateDeclarationSyntax del => [del.Identifier.Text],
-            MethodDeclarationSyntax method => [method.Identifier.Text],
-            ConstructorDeclarationSyntax ctor => [ctor.Identifier.Text],
-            PropertyDeclarationSyntax property => [property.Identifier.Text],
-            EventDeclarationSyntax evt => [evt.Identifier.Text],
-            IndexerDeclarationSyntax => ["this"],
-            BaseFieldDeclarationSyntax field => field.Declaration.Variables.Select(v => v.Identifier.Text).ToList(),
-            _ => [],
-        };
+            names.AddRange(NamesOf(member));
+        }
+
+        return names;
+
+        static List<string> NamesOf(MemberDeclarationSyntax? member)
+        {
+            return member switch
+            {
+                BaseTypeDeclarationSyntax type => [type.Identifier.Text],
+                DelegateDeclarationSyntax del => [del.Identifier.Text],
+                MethodDeclarationSyntax method => [method.Identifier.Text],
+                ConstructorDeclarationSyntax ctor => [ctor.Identifier.Text],
+                PropertyDeclarationSyntax property => [property.Identifier.Text],
+                EventDeclarationSyntax evt => [evt.Identifier.Text],
+                IndexerDeclarationSyntax => ["this"],
+                BaseFieldDeclarationSyntax field => field.Declaration.Variables.Select(v => v.Identifier.Text).ToList(),
+                _ => [],
+            };
+        }
     }
 }
