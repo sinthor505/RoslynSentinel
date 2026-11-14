@@ -197,4 +197,52 @@ public class ShippingKindSteppedAgentTests
     {
         await RunStepAsync(step, ShippingKindStepGoldens.PromptForStepV2(step));
     }
+
+    // The name must not contain "Model_CompletesShippingKindStep" because the baseline script filter is Name~ on that string.
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
+    public async Task Model_RunsShippingKindStepPromptV3(int step)
+    {
+        await RunStepAsync(step, ShippingKindStepGoldens.PromptForStepV3(step));
+    }
+
+    // The name must not contain "Model_CompletesShippingKindStep" because the baseline script filter is Name~ on that string.
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
+    public async Task Model_RunsShippingKindStepPromptV5(int step)
+    {
+        await RunStepAsync(step, ShippingKindStepGoldens.PromptForStepV5(step));
+    }
+
+    // The name must not contain "Model_CompletesShippingKindStep" because the baseline script filter is Name~ on that string.
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
+    public async Task Model_RunsShippingKindStepPromptV6(int step)
+    {
+        await RunStepAsync(step, ShippingKindStepGoldens.PromptForStepV6(step));
+    }
+
+    // The name must not contain "Model_CompletesShippingKindStep" because the baseline script filter is Name~ on that string.
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
+    public async Task Model_RunsShippingKindStepPromptV4(int step)
+    {
+        await RunStepAsync(step, ShippingKindStepGoldens.PromptForStepV4(step));
+    }
 }

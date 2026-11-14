@@ -348,7 +348,11 @@ A bare pass/fail sends the analyst back into transcripts to learn what happened.
 - Prompt variants: `-Test ShippingKindStep` runs the V1 prompts (`ShippingKindStepGoldens.PromptStepNV1`);
   `-Test ShippingKindStepV2` runs `Model_RunsShippingKindStepPromptV2` with the V2 prompts for steps 2, 3 and 5
   (steps 1 and 4 reuse V1 as a control). Both share `ShippingKindSteppedAgentTests.RunStepAsync(step, prompt)`; a new
-  variant is a prompt set plus a thin test plus a script alias. Results land under the variant's own test name. A
+  variant is a prompt set plus a thin test plus a script alias. Further variants: `ShippingKindStepV3` (V2 plus
+  constants-not-names in step 3 and literals-then-`IsExpedited` in step 5), `V4` (Haiku-style five-line brief for all
+  five steps; the most prescriptive, a ceiling test), `V5` (defined behaviour and end-state wording, no search nudge),
+  `V6` (V5 plus a search-before-replying sentence in step 5 only). V3, V5 and V6 reuse V1 for steps 1 and 4. Results land
+  under the variant's own test name. A
   variant's test name must not contain `Model_CompletesShippingKindStep` (the V1 filter is `Name~` on it).
 - Per-step output in the archived run folder `ModelTestingResults/<host>/Model_CompletesShippingKindStep(<k>)/<timestamp>/`:
   `step-<k>.golden.diff` (the model's tree against the golden tag, a report only, not graded) and

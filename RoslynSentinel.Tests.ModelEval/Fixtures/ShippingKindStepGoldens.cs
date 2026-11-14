@@ -294,6 +294,70 @@ internal static class ShippingKindStepGoldens
         In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), replace every shipping kind string literal with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express). Wherever the code checks 'express or overnight' (kind == Express || kind == Overnight, however it is written), replace the whole condition with a call to ShippingKinds.IsExpedited(kind). No || comparison of those two constants may remain. Behaviour must not change. Change no other file. Reply with what you changed.
         """;
 
+    private const string PromptStep3V3 = """
+        Add three public static methods to ShippingKinds (ContosoOrders.Core/Shipping/ShippingKinds.cs). bool IsKnown(string? kind): true only when kind is exactly one of the four constants. bool IsExpedited(string? kind): true only for Express or Overnight, false for every other value including null. string Normalize(string kind): `var n = kind.Trim().ToLowerInvariant();` return n when IsKnown(n), otherwise throw ArgumentException. Do not use string.Normalize. Compare against the constants themselves, never their names written as text. Change no other file. Reply with what you changed.
+        """;
+
+    private const string PromptStep5V3 = """
+        In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), do two things. First, replace every shipping kind string literal in both files with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express), including literals inside other expressions such as a ternary. Then replace each check for 'express or overnight' with a call to ShippingKinds.IsExpedited. Behaviour must not change. Change no other file. Reply with what you changed.
+        """;
+
+    private const string PromptStep2V5 = """
+        Create ContosoOrders.Core/Shipping/ShippingKinds.cs: a public static class ShippingKinds in the same namespace, written the same way, as the other files in that folder. It has four public const string fields, Standard, Express, Overnight and Pickup, whose values are the lower-case names ("standard", "express", "overnight", "pickup"), and a public static IReadOnlySet<string> property All holding the four values. Change no other file. Reply with what you created.
+        """;
+
+    private const string PromptStep3V5 = """
+        Add three public static methods to ShippingKinds (ContosoOrders.Core/Shipping/ShippingKinds.cs): IsKnown(string? kind), IsExpedited(string? kind) and string Normalize(string kind). IsKnown is true only for the four constant values: IsKnown("pickup") is true; IsKnown("Pickup"), IsKnown("rocket") and IsKnown(null) are false. IsExpedited is true only for the Express and Overnight values: IsExpedited("express") is true; IsExpedited("pickup") and IsExpedited(null) are false. Normalize returns the trimmed, lower-case form of kind when that is a known kind, so Normalize("  Pickup ") returns "pickup"; otherwise it throws ArgumentException, so Normalize("rocket") throws. The methods compare against the constants, never their names written as text. Change no other file. Reply with what you changed.
+        """;
+
+    private const string PromptStep5V5 = """
+        In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), express every shipping kind through ShippingKinds. When you finish, neither file contains a quoted shipping kind value anywhere (comparisons, ternaries, return values), each is written as qualified ShippingKinds.<Name>, and no condition tests Express and Overnight separately, because ShippingKinds.IsExpedited covers that. Behaviour must not change. Change no other file. Reply with what you changed.
+        """;
+
+    private const string PromptStep5V6 = """
+        In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), express every shipping kind through ShippingKinds. When you finish, neither file contains a quoted shipping kind value anywhere (comparisons, ternaries, return values), each is written as qualified ShippingKinds.<Name>, and no condition tests Express and Overnight separately, because ShippingKinds.IsExpedited covers that. Behaviour must not change. Change no other file. Before replying, search both files for quoted shipping kind values and fix any that remain. Reply with what you changed.
+        """;
+
+    private const string PromptStep1V4 = """
+        Files: ContosoOrders.Core/Shipping/*.cs (read only)
+        Symbols: every comparison or case label against a shipping kind string literal
+        Operation: find every use of the quoted values "standard", "express", "overnight", "pickup" in a comparison or case label
+        Acceptance: the reply has one line per occurrence (file name, method name, literal) and names every file that has one
+        Out of scope: change no file
+        """;
+
+    private const string PromptStep2V4 = """
+        Files: ContosoOrders.Core/Shipping/ShippingKinds.cs (new file)
+        Symbols: public static class ShippingKinds, in a file-scoped namespace written like the other files in the folder
+        Operation: add public const string Standard = "standard", Express = "express", Overnight = "overnight", Pickup = "pickup"; add public static IReadOnlySet<string> All { get; } = new HashSet<string> { Standard, Express, Overnight, Pickup };
+        Acceptance: the project still compiles; reply with what you created
+        Out of scope: change no other file
+        """;
+
+    private const string PromptStep3V4 = """
+        Files: ContosoOrders.Core/Shipping/ShippingKinds.cs
+        Symbols: add IsKnown, IsExpedited, Normalize to ShippingKinds
+        Operation: bool IsKnown(string? kind) => kind == Standard || kind == Express || kind == Overnight || kind == Pickup; bool IsExpedited(string? kind) => kind == Express || kind == Overnight; string Normalize(string kind): var n = kind.Trim().ToLowerInvariant(); return n when IsKnown(n), otherwise throw ArgumentException
+        Acceptance: the project still compiles; reply with what you changed
+        Out of scope: change no other file; do not use string.Normalize
+        """;
+
+    private const string PromptStep4V4 = """
+        Files: ContosoOrders.Core/Shipping/ShippingFeeCalculator.cs, ContosoOrders.Core/Shipping/ShipmentValidator.cs
+        Symbols: every shipping kind string literal in both files
+        Operation: replace each quoted kind value with the matching ShippingKinds.<Name> (Standard, Express, Overnight, Pickup), then search each file for quoted values that remain
+        Acceptance: none remain in either file, behaviour is unchanged, the project still compiles; reply with the number of literals replaced per file
+        Out of scope: change no other file
+        """;
+
+    private const string PromptStep5V4 = """
+        Files: ContosoOrders.Core/Shipping/DeliveryEstimator.cs, ContosoOrders.Core/Shipping/CarrierSelector.cs
+        Symbols: every shipping kind string literal and every 'express or overnight' condition in both files
+        Operation: replace every quoted kind value, including inside a ternary, with the matching ShippingKinds.<Name>; replace each express-or-overnight condition with ShippingKinds.IsExpedited(kind); then search both files for quoted values that remain
+        Acceptance: none remain, no condition tests Express and Overnight separately, behaviour is unchanged, the project still compiles; reply with what you changed
+        Out of scope: change no other file
+        """;
+
     public static string PromptForStep(int step)
     {
         return step switch
@@ -319,6 +383,70 @@ internal static class ShippingKindStepGoldens
             3 => PromptStep3V2,
             4 => PromptStep4V1,
             5 => PromptStep5V2,
+            _ => throw new ArgumentOutOfRangeException(nameof(step)),
+        };
+    }
+
+    /// <summary>
+    /// V3 = V2 plus a constants-not-names line (step 3) and a literals-then-IsExpedited step 5; steps 1 and 4 reuse V1.
+    /// </summary>
+    public static string PromptForStepV3(int step)
+    {
+        return step switch
+        {
+            1 => PromptStep1V1,
+            2 => PromptStep2V2,
+            3 => PromptStep3V3,
+            4 => PromptStep4V1,
+            5 => PromptStep5V3,
+            _ => throw new ArgumentOutOfRangeException(nameof(step)),
+        };
+    }
+
+    /// <summary>
+    /// V5 = behaviour/postcondition wording, no search nudge; steps 1 and 4 reuse V1.
+    /// </summary>
+    public static string PromptForStepV5(int step)
+    {
+        return step switch
+        {
+            1 => PromptStep1V1,
+            2 => PromptStep2V5,
+            3 => PromptStep3V5,
+            4 => PromptStep4V1,
+            5 => PromptStep5V5,
+            _ => throw new ArgumentOutOfRangeException(nameof(step)),
+        };
+    }
+
+    /// <summary>
+    /// V6 = V5 plus a search-before-replying nudge in step 5 only.
+    /// </summary>
+    public static string PromptForStepV6(int step)
+    {
+        return step switch
+        {
+            1 => PromptStep1V1,
+            2 => PromptStep2V5,
+            3 => PromptStep3V5,
+            4 => PromptStep4V1,
+            5 => PromptStep5V6,
+            _ => throw new ArgumentOutOfRangeException(nameof(step)),
+        };
+    }
+
+    /// <summary>
+    /// V4 = Haiku-style brief for all five steps (the most prescriptive variant; a ceiling test).
+    /// </summary>
+    public static string PromptForStepV4(int step)
+    {
+        return step switch
+        {
+            1 => PromptStep1V4,
+            2 => PromptStep2V4,
+            3 => PromptStep3V4,
+            4 => PromptStep4V4,
+            5 => PromptStep5V4,
             _ => throw new ArgumentOutOfRangeException(nameof(step)),
         };
     }
