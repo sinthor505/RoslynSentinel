@@ -247,7 +247,7 @@ warning (`ContextUsageWarningFraction = 0.8`, not 90%) and the tool-less-turn `C
 - Lane: `modeleval-runner` or the dispatcher via the queue.
 - Done: 8a 113 5/5 and 112 5/5 `PassNoDrop` (drop path not reached at 0.7); 8b at pressure 0.5 found drop thrash; 8c
   after 39b111c1, 112 5/5 with single, spaced drops (results in the proposal). 113 x3 at 0.5
-  (`20261114-092150-001..003`) still queued at close; results go to the proposal.
+  (`20261114-092150-001..003`, after close): 3/3 passed, one single drop (T31), results in the proposal.
 
 ## Out of scope
 

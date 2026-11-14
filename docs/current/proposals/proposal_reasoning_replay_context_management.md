@@ -129,6 +129,18 @@ Jobs `20261114-092149-001..005`, all on 39b111c1, folders under `ModelTestingRes
 - Each drop's cold turn re-processes ~20k tokens (cached falls to ~9k, the system prompt and tools), about 30-40 s of
   TTFT on this host; acceptable at one per 8+ turns.
 
+### After the thrash fix, pressure 0.5, 113 (`qwen3.5-9b-mtp`, threshold ~40k of 80128)
+
+Jobs `20261114-092150-001..003` (39b111c1, 89572d5a, 5b383c9a), all passed.
+
+| Folder | Turns | `ReasoningDropTurns` | Cold turns after T1 | Sum TTFT |
+| --- | --- | --- | --- | --- |
+| `20261114-102735-311` | 27 | none (real peak 34.6k; T14 reported 51518, logged as a miscount) | none | 17 s |
+| `20261114-103128-022` | 29 | none (peak 36.3k) | none | 19 s |
+| `20261114-103544-083` | 40 | 31 | T31 | 44 s |
+
+- One drop, one cold turn; the usage-jump guard again kept a miscount from triggering a drop.
+
 ## Motivation
 
 `LmStudioAgentClient` replays each assistant turn's reasoning (`ToInputItems`, `RoslynSentinel.Common/LmStudioAgentClient.cs`)
