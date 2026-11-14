@@ -121,6 +121,9 @@ public sealed class ReasoningReplayPolicy
         if (projectedPromptTokens >= ContextLength * EffectivePressureFraction)
         {
             // The dropped set only grows, so the prompt prefix stays stable between drops.
+            // TODO drop thrash: when reasoning is a small share of the prompt, a drop does not bring the projection
+            // back under the threshold, so this drops again on every following turn (one cache break per turn; live run
+            // 112 20261114-085254-907 at pressure 0.5 dropped at T24-T32). Needs hysteresis or a minimum drop block.
             var replayable = assistantTurns - PinnedTurns - DroppedTurns;
             if (replayable >= 2)
             {

@@ -1,6 +1,6 @@
 # Plan: replay all reasoning until 70% of the context, then drop the oldest half; pin the first 3 turns
 
-**Status:** IN PROGRESS 2026-11-14. Steps 1-6 done (0f134491, f33130d4, fdb784ec, 7156bea4, 616df7e9, a8bd8beb); Steps 7-8 running.
+**Status:** IN PROGRESS 2026-11-14. Steps 1-7 done (0f134491, f33130d4, fdb784ec, 7156bea4, 616df7e9, a8bd8beb; 16e09c44 adds the pressure override); Step 8 found a drop-thrash defect, fix awaiting an owner decision.
 
 ## Problem
 
@@ -228,6 +228,7 @@ warning (`ContextUsageWarningFraction = 0.8`, not 90%) and the tool-less-turn `C
   `ModelEvalAssemblySetUp` in the `.LiveModel` namespace, which ignores them without a host): 0 failures.
 - Done when: all of the above hold.
 - Lane: dispatcher.
+- Done: 616df7e9 worktree run (Tests 978/978, ModelEval 488 + 40 live skipped, ErrorVariants 185 + 1 skipped, 0 failed)
 
 ### Step 8 - LIVE verification
 - Files: none (results into the proposal's eval section or `docs/current/evals/`)
@@ -254,6 +255,12 @@ warning (`ContextUsageWarningFraction = 0.8`, not 90%) and the tool-less-turn `C
 - Making the threshold or pin count configurable.
 
 ## Risks and open decisions
+
+- **OPEN (blocks closing): drop thrash.** Step 8b at pressure 0.5 (112 `20261114-085254-907`) dropped on every turn
+  T24-T32 because dropping ~80-token reasoning items never brought the projection back under the threshold; nine cold
+  turns. Fix options and recommendation (hysteresis of 10% of the context plus a 10-turn minimum drop block): proposal
+  "Open questions". `// TODO` in `ReasoningReplayPolicy.Observe`. Needs an owner decision, then one implementer slice
+  (`ReasoningReplayPolicy.cs` + `ReasoningReplayPolicyTests.cs`) and a re-run of Step 8b.
 
 - **Projection error.** `EstimateMessageTokens` is an estimate; a single very large tool result could push a request
   past the context before a drop. The 70% margin covers typical results (largest observed ~4.6k characters); the

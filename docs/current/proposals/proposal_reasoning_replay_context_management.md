@@ -87,6 +87,31 @@ include other sessions' commits).
 - Drop path coverage: unit tests (`ReasoningReplayPolicyTests`) and the runner test
   (`ReasoningReplayRunnerTests.PressureMode_DropsOnceTheProjectedPromptReachesSeventyPercent`) only.
 
+### Forced drops at pressure 0.5 (112, 2026-11-14)
+
+`-ReasoningPressure 0.5` (threshold ~30k of 60160), `qwen3.5-4b-mtp`, jobs `20261114-084959-001..005`, folders under
+`ModelTestingResults\112\Model_AppliesTenChainedRefactors\`.
+
+| Folder | Result | Turns | `ReasoningDropTurns` | Cold turns after T1 | Sum TTFT |
+| --- | --- | --- | --- | --- | --- |
+| `20261114-085026-505` | failed, `RepeatedIdenticalCall` | 19 | none (peak 24.5k) | T19 | 46 s |
+| `20261114-085254-907` | passed | 32 | 24-32 (every turn) | T24-T32, all at 9.0-9.2k cached | 393 s |
+| `20261114-090243-749` | passed | 30 | 30 | T30 | 74 s |
+| `20261114-090628-187` | passed | 22 | none (peak 33.1k, projection below) | none | 32 s |
+| `20261114-090919-650` | passed | 25 | 25 | T25 | 73 s |
+
+- **Defect: drop thrash.** In `-085254-907` the first drop (T24) did not bring the projection back under 30k: this
+  model writes ~80 reasoning tokens per turn, so reasoning is a small share of a prompt dominated by tool results. The
+  policy then dropped again on every turn (halving the remaining unpinned turns, then one turn at a time), breaking
+  the cache on all nine turns and costing ~320 s of TTFT. Once the unpinned turns run out it would drop one turn
+  every other turn indefinitely. The same can happen at the 0.7 default once a run passes 70%. `// TODO` at the drop
+  rule in `ReasoningReplayPolicy.Observe`; fix options are under "Open questions".
+- Single drops behave as designed: `-090243-749` and `-090919-650` dropped once (on their final turn) with exactly one
+  cold turn.
+- `-085026-505` failed before any drop (peak 24.5k < 30k), so the failure is not the policy's. Its T19 cold turn
+  (cached 9046) came without a drop; hypothesis: the loop-assist collapse rewrote the history on the repeated call.
+  Untraced.
+
 ## Motivation
 
 `LmStudioAgentClient` replays each assistant turn's reasoning (`ToInputItems`, `RoslynSentinel.Common/LmStudioAgentClient.cs`)
@@ -179,6 +204,13 @@ block window entirely.
   stable and keeps arbitrary fragments; not pursued.
 
 ## Open questions
+
+- **Drop thrash fix (decision needed).** Options: (a) hysteresis - after a drop, no further drop until the projected
+  prompt has grown by 10% of the context beyond its size at the previous drop; (b) minimum drop block - drop only when
+  at least 10 unpinned turns are replayable (so at most one drop per 5+ turns); (c) effectiveness check - estimate the
+  reasoning tokens a drop would remove and skip drops that would not get under the threshold. Recommendation: (a) plus
+  (b): bounded, cheap, and a run whose pressure comes from tool results stops dropping instead of thrashing (the
+  existing `ContextExhausted` handling covers a real overflow).
 
 - Does full reasoning fit 80k for every passing ten-chain run, and what is the real lean overhead in tokens? (Step 1a.)
 - Does the block step measurably hurt the following turns? Unmeasured; the 2026-11-12/13 runs passed with it.
