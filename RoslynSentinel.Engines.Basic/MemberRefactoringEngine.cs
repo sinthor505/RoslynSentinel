@@ -2305,6 +2305,16 @@ public class MemberRefactoringEngine
             $"Recovery: call {ToolCallHint.Call("Member", ("operation", operation))} once per member, passing one full declaration each time; to keep them in order, make each call after the first as {ToolCallHint.Call("Member", ("operation", operation), ("insertAfterMemberName", "<previous member's name>"))}.";
     }
 
+    // TODO drop RequireSingleDeclaration once the typed callers move to AddMembersAsync
+    /// <summary>Guard for the typed callers AddFieldAsync/AddPropertyAsync, which keep accepting exactly one declaration.</summary>
+    private static void RequireSingleDeclaration(string source)
+    {
+        if (DetectMultipleMemberDeclarations(source, "addMember") is { } issue)
+        {
+            throw new ToolInvalidArgumentException($"newMemberSource is invalid: {issue}");
+        }
+    }
+
     /// <summary>Splits newMemberSource into its member declarations, or null when it is not a clean member list.</summary>
     internal static IReadOnlyList<MemberDeclarationSyntax>? TrySplitMemberDeclarations(string source)
     {
@@ -2412,7 +2422,9 @@ public class MemberRefactoringEngine
                 throw new ArgumentException("A const field needs an initializer.");
             }
 
-            return await AddMemberAsync(filePath, containerName, $"{accessibility} const {fieldType} {fieldName} = {initializer};", contextSnippet, lineBefore, lineAfter, cancellationToken);
+            var constSource = $"{accessibility} const {fieldType} {fieldName} = {initializer};";
+            RequireSingleDeclaration(constSource);
+            return await AddMemberAsync(filePath, containerName, constSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
         }
 
         var parts = new System.Text.StringBuilder();
@@ -2434,7 +2446,9 @@ public class MemberRefactoringEngine
         }
 
         parts.Append(';');
-        return await AddMemberAsync(filePath, containerName, parts.ToString(), contextSnippet, lineBefore, lineAfter, cancellationToken);
+        var source = parts.ToString();
+        RequireSingleDeclaration(source);
+        return await AddMemberAsync(filePath, containerName, source, contextSnippet, lineBefore, lineAfter, cancellationToken);
     }
 
     public async Task<DocumentEditResult> SortMembersAsync(FilePathWrapper filePath, string containerName, CancellationToken cancellationToken = default)
@@ -2490,6 +2504,7 @@ public class MemberRefactoringEngine
     {
         var setter = hasSetter ? (isInit ? " init;" : " set;") : "";
         var source = $"{accessibility} {propertyType} {propertyName} {{ get;{setter} }}";
+        RequireSingleDeclaration(source);
         return await AddMemberAsync(filePath, containerName, source, contextSnippet, lineBefore, lineAfter, cancellationToken);
     }
 
@@ -2726,10 +2741,58 @@ public class MemberRefactoringEngine
         };
     }
 
-    /// <summary>Adds several member declarations in one write (Step 8 stub, not yet implemented).</summary>
-    public Task<DocumentEditResult> AddMembersAsync(FilePathWrapper filePath, string containerName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    /// <summary>Adds one or more member declarations in one write: all new members are inserted together and bound-checked once.</summary>
+    public async Task<DocumentEditResult> AddMembersAsync(FilePathWrapper filePath, string containerName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException(); // TODO implement (Step 8)
+        // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
+        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var document = DocumentLookup.RequireDocument(solution, filePath);
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            throw new ToolInvalidArgumentException("Cannot parse file.");
+        }
+
+        BaseTypeDeclarationSyntax? container = null;
+        var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, containerName, cancellationToken)
+            .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+            .ToList();
+        container = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
+
+        if (container == null)
+        {
+            throw new ToolNotFoundException(await SyntaxTargetResolver.BuildContainerNotFoundMessageAsync(solution, root, containerName, cancellationToken), MissingTargetKinds.Type, containerName);
+        }
+
+        if (container is EnumDeclarationSyntax)
+        {
+            throw new ToolTargetIneligibleException($"Cannot add a member to enum \"{containerName}\" via AddMember: enum members " +
+                "are not MemberDeclarationSyntax and use comma-separated syntax, not this method's " +
+                "member grammar. Use ModifyEnumAsync instead.");
+        }
+
+        if (container is not TypeDeclarationSyntax typeContainer)
+        {
+            throw new NotSupportedException(
+                $"AddMembersAsync: unhandled container type {container.GetType().Name} for \"{containerName}\". " +
+                "This is a bug - every BaseTypeDeclarationSyntax subtype must resolve to a TypeDeclarationSyntax here; " +
+                "silently returning the container unchanged would falsely report success.");
+        }
+
+        var newMembers = ParseNewMemberDeclarations(newMemberSource);
+        var addedDescription = DescribeAddedMembers(newMembers);
+        var updatedText = await RoslynFormattingHelper.InsertMemberDeclarationsAndFormatInsertionAsync(document, root!, typeContainer, typeContainer.Members.Count, newMembers, await _workspaceManager.ResolveEolAsync(document, cancellationToken), cancellationToken);
+        await AddMemberCallBindingCheck.RequireKeepsBindingsAsync(solution, document, typeContainer, newMembers, typeContainer.Members.Count, updatedText, cancellationToken);
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = $"// Added {addedDescription}.",
+            UpdatedText = updatedText
+        };
     }
 
     /// <summary>
