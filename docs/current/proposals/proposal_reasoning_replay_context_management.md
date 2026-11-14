@@ -1,11 +1,12 @@
 # Replace the block-stepped reasoning window with pressure-based dropping and auto-compaction
 
-**Status:** APPROVED 2026-11-14. Options 2 and 3 approved for all harnesses (threshold 70%); step 1a measured (full reasoning fits with room to spare); step 1b queued; auto-compaction (option 4) is a follow-up.
+**Status:** APPROVED 2026-11-14. Options 2 and 3 approved for all harnesses (threshold 70%); steps 1a (full reasoning fits with room to spare) and 1b (no measurable effect of a block drop at T21) done; auto-compaction (option 4) is a follow-up.
 
 ## Decisions (owner, 2026-11-14)
 
 - Pressure threshold starts at 70% of the context.
-- Keep the plan-bearing reasoning pinned (option 3). See "Step 1a results": turn 1's reasoning is not where the plan is.
+- Pin the reasoning of the first 3 assistant turns (option 3), never dropped. Turn 1 alone was the first choice, but
+  turn 1 carries no plan ("Step 1a results"); the first 3 turns cover the plan in 13 of 14 runs for about 1k tokens.
 - All harnesses are in scope: ModelEval, PlanStepRunner and `SubAgentModelRun` (every `LmStudioAgentClient` user).
 - Run the resume A/B at T21 (step 1b) before shipping.
 - The context size is already tracked and written to the transcript, so the budget mechanism exists (verify the path in
@@ -40,6 +41,27 @@ folder, `20261114-050005-573`, `-050600-117`, `-051213-112`, `-051743-803`, `-05
 - **Turn 1 carries no plan.** Turn 1's reasoning is 21-98 tokens in all 14 runs (the model reads the file first). The
   plan is written right after the first read: the first reasoning item of >= 200 tokens is at T2 or T3 (230-800 tokens)
   in 13 of 14 runs; in `-051452-584` none of T1-T6 reaches 200. Pinning "turn 1" would pin almost nothing.
+
+## Step 1b results (2026-11-14)
+
+`ResumeFromTranscript_SamplesTheNextTurns` on 113 (`qwen3.5-9b-mtp`), keeping 21 turns of two full-reasoning transcripts
+from step 1a, 10 samples of 6 live turns per arm. At 21 kept turns window 10 drops the reasoning of turns 1-10; window 0
+keeps it. Folders under `ModelTestingResults\113\ResumeFromTranscript_SamplesTheNextTurns\`.
+
+| Transcript | Window | Folder | First live prompt | First calls (10/10) | Tool errors |
+| --- | --- | --- | --- | --- | --- |
+| `-062009-128` (38 turns) | 0 | `20261114-064607-909` | 25778 | ReplaceSnippet, then Search, RenameSymbol (10/10 reach RenameSymbol) | 0 |
+| `-062009-128` | 10 | `20261114-065453-313` | 24578 | ReplaceSnippet, Search, RenameSymbol, 3 ReadFile (identical in all 10) | 0 |
+| `-062439-386` (32 turns) | 0 | `20261114-070202-031` | 30860 | Build, RunTest, then ReadFile/ReplaceSnippet/Build/RunTest | 0 |
+| `-062439-386` | 10 | `20261114-071428-297` | 27956 | Build, RunTest, then the same mix | 0 |
+
+- The window applied: the window-10 prompts are 1.2k and 2.9k tokens smaller at T22.
+- No visible effect of dropping 10 turns of reasoning: within each transcript both arms make the same next calls, with
+  no tool errors and no extra re-reads in the dropped arm (window 10 on `-062009-128` was, if anything, less varied).
+- Limits: one model, 6 turns, and `results.csv` scores call sequences, not whether the chain step finished correctly.
+  This model writes little reasoning (~150-190 tokens per turn) and the history keeps every tool call and result, so a
+  weaker or wordier model (4b on 112/85) could still differ. The policy change therefore rests mainly on cache and fit,
+  not on a measured quality gain.
 
 ## Motivation
 
@@ -94,17 +116,17 @@ d. **Whole-run A/B.** Full vs block (vs sliding, as a control), n >= 10 per arm,
    before T21 and never drop anything, so arms barely differ there.
 e. **Recall probe.** At a fixed turn past a step, ask for the plan of an earlier step (the 2026-11-10 codeword method).
 
-### 2. Pressure-based dropping (recommended default, not decided)
+### 2. Pressure-based dropping (decided, threshold 70%)
 
-Replay all reasoning until the projected prompt passes a threshold of the context (for example 70%), then drop the oldest
+Replay all reasoning until the projected prompt passes a threshold of the context (70% to start), then drop the oldest
 half of the replayed reasoning in one step. The prefix stays stable until the threshold, so the cache breaks only when
 space actually runs out; at 80k on the lean surface it may never fire in a ten-chain run. `ModelAgentRunner` already
 estimates cumulative tokens (90% warning, `ModelAgentRunner.cs:306`) and guards against implausible usage reports
 (`IsUsageJumpImplausible`, fd169537); the client needs that budget passed in rather than a fixed count.
 
-### 3. Pin the first turn's reasoning (cheap, combinable)
+### 3. Pin the first 3 turns' reasoning (decided, cheap, combinable)
 
-Always replay turn 1's reasoning, which usually states the overall plan. It sits at the start of the prompt, so it costs
+Always replay the reasoning of the first 3 assistant turns, which state the overall plan (T2 or T3 in 13 of 14 runs). It sits at the start of the prompt, so it costs
 no cache stability, and it can be combined with any window.
 
 ### 4. Auto-compaction (design topic; needs its own plan)
