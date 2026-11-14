@@ -235,10 +235,13 @@
     otherwise so one left in the shell cannot skew a run.
 
 .PARAMETER ReasoningWindow
-    Every test: the reasoning replay window of the agent client (LmStudioAgentClient.ReasoningReplayTurns, default 10:
-    the oldest turns lose their reasoning a block of that many at a time). 0 replays every turn's reasoning. Default -1 =
-    unset, the client's own default applies; a value >= 0 sets ROSLYNSENTINEL_REASONING_WINDOW, and the script clears the
-    variable otherwise so one left in the shell cannot skew a run.
+    Every test: which assistant turns replay their reasoning (ReasoningReplayPolicy, created by ModelAgentRunner).
+    Default -1 = unset: the pressure policy - replay all reasoning until the projected prompt reaches 70% of the model's
+    context, then drop the oldest half of the unpinned turns; the first 3 turns are always kept (if the context length
+    is unknown, a 10-turn block window). 0 = replay every turn's reasoning, never drop. N > 0 = the legacy block window
+    of N (the oldest turns lose their reasoning N at a time, no pinned turns; 10 was the default before the pressure
+    policy). A value >= 0 sets ROSLYNSENTINEL_REASONING_WINDOW; the script clears the variable otherwise so one left in
+    the shell cannot skew a run. The transcript records ReasoningReplayMode, ContextLength and ReasoningDropTurns.
 
 .PARAMETER Step
     ShippingKindStep only: step numbers 1-5 to run (for example -Step 4,5 runs steps 4 and 5). Default: all five.

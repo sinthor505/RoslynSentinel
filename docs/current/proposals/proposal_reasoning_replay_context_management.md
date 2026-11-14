@@ -9,8 +9,9 @@
   turn 1 carries no plan ("Step 1a results"); the first 3 turns cover the plan in 13 of 14 runs for about 1k tokens.
 - All harnesses are in scope: ModelEval, PlanStepRunner and `SubAgentModelRun` (every `LmStudioAgentClient` user).
 - Run the resume A/B at T21 (step 1b) before shipping.
-- The context size is already tracked and written to the transcript, so the budget mechanism exists (verify the path in
-  the plan).
+- The context size is already tracked, so the budget mechanism exists. Correction found while planning: the runner
+  fetches it (`GetContextLengthAsync`) for its warning and stop checks but did not write it to the transcript;
+  `plan_reasoning_replay_pressure_policy` adds `ContextLength` to the transcript.
 - Auto-compaction is a follow-up proposal or plan.
 
 ## Step 1a results (2026-11-14)
@@ -121,7 +122,7 @@ e. **Recall probe.** At a fixed turn past a step, ask for the plan of an earlier
 Replay all reasoning until the projected prompt passes a threshold of the context (70% to start), then drop the oldest
 half of the replayed reasoning in one step. The prefix stays stable until the threshold, so the cache breaks only when
 space actually runs out; at 80k on the lean surface it may never fire in a ten-chain run. `ModelAgentRunner` already
-estimates cumulative tokens (90% warning, `ModelAgentRunner.cs:306`) and guards against implausible usage reports
+estimates cumulative tokens (a log-only warning at 80%, `ContextUsageWarningFraction = 0.8`) and guards against implausible usage reports
 (`IsUsageJumpImplausible`, fd169537); the client needs that budget passed in rather than a fixed count.
 
 ### 3. Pin the first 3 turns' reasoning (decided, cheap, combinable)
@@ -174,4 +175,5 @@ block window entirely.
 
 - `docs/current/evals/eval_tenchain_reasoning_replay_2026_11_10.md` - cache analysis, host comparison, Batch Y.
 - `docs/current/plans/closed/plan_modeleval_lean_tool_surface.md` - the 18-tool surface.
+- `docs/current/plans/plan_reasoning_replay_pressure_policy.md` - implements options 2 and 3.
 - Commits 564a2813 (block window), fd169537 (implausible usage jump guard).
