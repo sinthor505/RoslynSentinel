@@ -244,7 +244,7 @@ public class AdvancedRefactoringEngine
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className);
         if (classNode == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' was not found in '{System.IO.Path.GetFileName(filePath)}'. Searched: class declarations in this file. Next: {ToolCallHint.Call("Search", ("mode", "class"), ("query", className))}", "class", className);
+            throw new ToolNotFoundException($"Class '{className}' was not found in '{System.IO.Path.GetFileName(filePath)}'." + " " + DeclarationNotFoundDetail.Build(MissingTargetKinds.Class, "className", className, classRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(c => c.Identifier.Text), filePath), MissingTargetKinds.Class, className);
         }
 
         // Collect public non-static non-override methods and properties from the class
@@ -292,7 +292,7 @@ public class AdvancedRefactoringEngine
 
         if (interfaceNode == null || interfaceDocument == null || interfaceRoot == null)
         {
-            throw new ToolNotFoundException($"Interface '{interfaceName}' was not found in '{System.IO.Path.GetFileName(filePath)}' or any other loaded document. Searched: all project documents. Next: {ToolCallHint.Call("Search", ("mode", "interface"), ("query", interfaceName))}", "interface", interfaceName);
+            throw new ToolNotFoundException($"Interface '{interfaceName}' was not found in '{System.IO.Path.GetFileName(filePath)}' or any other loaded document. Searched: all project documents. Next: {ToolCallHint.Call("Search", ("mode", "interface"), ("query", interfaceName))}", MissingTargetKinds.Interface, interfaceName);
         }
 
         // Collect existing interface member signatures (for deduplication)

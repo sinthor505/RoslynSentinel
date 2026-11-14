@@ -40,7 +40,6 @@ public static class ErrorPolicyClassifier
 
         // Kind values passed as literals to ToolNotFoundException and MemberRefactoringNotFound are guarded by ErrorPolicyKindRatchetTests.
         // Unknown kinds map to null (no policy key).
-        // TODO error-policy: extend ErrorPolicyKindRatchetTests to the Engines.Advanced throw sites (not yet covered by the ratchet).
         var kind = missingTargetKind?.Trim();
         if (string.IsNullOrEmpty(kind))
         {

@@ -6,7 +6,7 @@ using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tests.Basic;
 
-// Ratchet for error-policy kinds (plan_error_codes_follow_cause.md): every missing-target kind that a Common, Engines.Basic or Tools.Basic
+// Ratchet for error-policy kinds (plan_error_codes_follow_cause.md): every missing-target kind that a Common, Engines.Basic, Engines.Advanced or Tools.Basic
 // throw site passes to ToolNotFoundException or MemberRefactoringNotFound must be a MissingTargetKinds.<Name> constant, not a string literal,
 // and must either map through ErrorPolicyClassifier.MapKind or be deliberately unmapped (MissingTargetKinds.UnmappedKinds).
 // Rule: use MissingTargetKinds constants; a new kind goes into MissingTargetKinds (Common) and into one of its three sets (FileKinds, SymbolKinds, UnmappedKinds).
@@ -19,7 +19,7 @@ public class ErrorPolicyKindRatchetTests
     private const string FactoryType = "MemberRefactoringNotFound";
     private const string FactoryFile = "RoslynSentinel.Engines.Basic/MemberRefactoringNotFound.cs";
 
-    private static readonly string[] ScannedProjects = { "RoslynSentinel.Common", "RoslynSentinel.Engines.Basic", "RoslynSentinel.Tools.Basic" };
+    private static readonly string[] ScannedProjects = { "RoslynSentinel.Common", "RoslynSentinel.Engines.Basic", "RoslynSentinel.Engines.Advanced", "RoslynSentinel.Tools.Basic" };
 
     // Statement-like and structural targets with no policy key. Compared case-insensitively.
     private static readonly IReadOnlySet<string> DeliberatelyUnmappedKinds = MissingTargetKinds.UnmappedKinds;
