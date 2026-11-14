@@ -68,6 +68,49 @@ public class WorkspaceReadNavigationImpl
     /// <summary>The surface's callable check for error text that names other tools, or null when there is no surface.</summary>
     private Func<string, bool>? CallableCheck => _activeToolSurface is null ? null : _activeToolSurface.IsCallable;
 
+    // Tool-naming tail of the ListAll truncation warning; names only tools isCallable reports callable (null = every tool), ListSolutionItems standing in for ListAll.
+    internal static string TruncationRecoveryAdvice(Func<string, bool>? isCallable)
+    {
+        bool Callable(string tool) => isCallable is null || isCallable(tool);
+
+        var callers = new List<string>();
+        if (Callable("Search")) callers.Add(ToolCallHint.Call("Search", ("mode", "references")));
+        if (Callable("QuerySymbolRelationships")) callers.Add(ToolCallHint.Call("QuerySymbolRelationships"));
+
+        var orientation = new List<string>();
+        if (Callable("ListAll")) orientation.Add(ToolCallHint.Call("ListAll"));
+        else if (Callable("ListSolutionItems")) orientation.Add(ToolCallHint.Call("ListSolutionItems"));
+        if (Callable("GetFileOutline")) orientation.Add(ToolCallHint.Call("GetFileOutline"));
+
+        var callerClause = callers.Count == 0 ? null : "For all callers/implementations of a symbol use " + string.Join(" or ", callers);
+        var orientationClause = orientation.Count == 0 ? null : "for orientation use " + string.Join(" or ", orientation);
+
+        if (callerClause is null && orientationClause is null) return "";
+        if (orientationClause is null) return callerClause + ".";
+        if (callerClause is null) return char.ToUpperInvariant(orientationClause[0]) + orientationClause[1..] + ".";
+        return callerClause + "; " + orientationClause + ".";
+    }
+
+    // Tool-naming sentence of the SearchSolutionText zero-match warning; names only tools isCallable reports callable (null = every tool), ListSolutionItems standing in for ListAll.
+    internal static string NoMatchBrowseAdvice(Func<string, bool>? isCallable)
+    {
+        bool Callable(string tool) => isCallable is null || isCallable(tool);
+
+        var items = new List<string>();
+        if (Callable("ListAll")) items.Add(ToolCallHint.Call("ListAll") + " to browse the solution's structure");
+        else if (Callable("ListSolutionItems")) items.Add(ToolCallHint.Call("ListSolutionItems") + " to browse the solution's structure");
+        if (Callable("ProjectDoc")) items.Add("ProjectDoc to read plan/handoff/documentation files directly");
+        if (Callable("GetFileOutline")) items.Add("GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file");
+
+        return items.Count switch
+        {
+            0 => "",
+            1 => "Use " + items[0] + ".",
+            2 => "Use " + items[0] + ", or " + items[1] + ".",
+            _ => "Use " + string.Join(", ", items.GetRange(0, items.Count - 1)) + ", or " + items[^1] + ".",
+        };
+    }
+
     // The message offers ranked file candidates (same or similar file name) with a prefilled ReadFile
     // call, says plainly when no loaded file has a similar name, and offers to report the file as
     // non-existent. Searching by file name turns most wrong-path retries into a one-shot redirect.
@@ -646,7 +689,7 @@ public class WorkspaceReadNavigationImpl
                     HasMoreData = true,
                     ListSummary = summary,
                     StatusMessage = hiddenTestHint,
-                    WarningDetails = $"Truncated: showing the first {entries.Count} of {totalMatches} matching declarations (cap {maxItems}), spread over {summary.FileCount} files and {summary.ByProject!.Count} projects - listSummary.byProject and listSummary.byFile (top {summary.ByFile.Count} files, {summary.TruncatedFileCount} more files not shown) count ALL matches, use them to pick where to look. Narrow with query (name filter) or projectName, or use mode: symbol. For all callers/implementations of a symbol use {ToolCallHint.Call("Search", ("mode", "references"))} or {ToolCallHint.Call("QuerySymbolRelationships")}; for orientation use {ToolCallHint.Call("ListAll")} or {ToolCallHint.Call("GetFileOutline")}."
+                    WarningDetails = $"Truncated: showing the first {entries.Count} of {totalMatches} matching declarations (cap {maxItems}), spread over {summary.FileCount} files and {summary.ByProject!.Count} projects - listSummary.byProject and listSummary.byFile (top {summary.ByFile.Count} files, {summary.TruncatedFileCount} more files not shown) count ALL matches, use them to pick where to look. Narrow with query (name filter) or projectName, or use mode: symbol.{(TruncationRecoveryAdvice(CallableCheck) is { Length: > 0 } advice ? " " + advice : "")}"
                 };
             }
 
@@ -1264,9 +1307,8 @@ public class WorkspaceReadNavigationImpl
                     {
                         warnings.Add(
                             $"No matches were found for '{pattern}' as either a literal substring or a regex pattern. Try adjusting the search pattern. Matching is case-insensitive and per line, over C# source files only; a|b alternation is supported. The text may have been reworded, so search for a shorter distinctive fragment, or search each alternative separately. " +
-                            $"If you were searching for a known symbol by name, use {ToolCallHint.Call("Search", ("mode", "symbol"))} instead (semantic lookup, not text matching). " +
-                            $"Use {ToolCallHint.Call("ListAll")} to browse the solution's structure, ProjectDoc to read plan/handoff/documentation files directly, or " +
-                            "GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
+                            $"If you were searching for a known symbol by name, use {ToolCallHint.Call("Search", ("mode", "symbol"))} instead (semantic lookup, not text matching)." +
+                            (NoMatchBrowseAdvice(CallableCheck) is { Length: > 0 } advice ? " " + advice : ""));
                     }
                     if (hiddenHint.Length > 0)
                     {
