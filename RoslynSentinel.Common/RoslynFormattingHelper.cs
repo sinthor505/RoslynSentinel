@@ -333,6 +333,12 @@ public static class RoslynFormattingHelper
         return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
+    /// <summary>Inserts several member declarations at insertIndex and formats the insertion (Step 4 stub, not yet implemented).</summary>
+    public static Task<string> InsertMemberDeclarationsAndFormatInsertionAsync(Document document, SyntaxNode root, TypeDeclarationSyntax container, int insertIndex, IReadOnlyList<MemberDeclarationSyntax> newMembers, string eol, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException(); // TODO implement (Step 4)
+    }
+
     /// <summary>
     /// Formats only the nodes of <paramref name="rewrittenRoot"/> that carry <see cref="Formatter.Annotation"/>,
     /// then puts the result in the line ending <paramref name="eol"/>. This is the existing-root path of the

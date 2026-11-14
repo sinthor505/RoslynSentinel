@@ -92,6 +92,12 @@ public static class AddMemberCallBindingCheck
         }
     }
 
+    /// <summary>Multi-member overload of RequireKeepsBindingsAsync (Step 5 stub, not yet implemented).</summary>
+    public static Task RequireKeepsBindingsAsync(Solution solution, Document document, TypeDeclarationSyntax container, IReadOnlyList<MemberDeclarationSyntax> newMembers, int insertIndex, string updatedText, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException(); // TODO implement (Step 5)
+    }
+
     /// <summary>
     /// Captures the bindings of the new member's name in <paramref name="original"/> and in a trial with <paramref name="updatedText"/>
     /// applied, and compares them. Fails closed: anything that cannot be located or captured returns a CheckFailed result.
@@ -139,6 +145,12 @@ public static class AddMemberCallBindingCheck
             // Only the exception type is echoed: its text can carry file paths.
             return CallBindingCheckResult.Failed($"the add check raised {ex.GetType().Name}");
         }
+    }
+
+    /// <summary>Multi-member overload of CheckAsync (Step 5 stub, not yet implemented).</summary>
+    public static Task<CallBindingCheckResult> CheckAsync(Solution original, DocumentId documentId, TypeDeclarationSyntax container, IReadOnlyList<MemberDeclarationSyntax> newMembers, int insertIndex, string updatedText, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException(); // TODO implement (Step 5)
     }
 
     /// <summary>

@@ -2305,6 +2305,24 @@ public class MemberRefactoringEngine
             $"Recovery: call {ToolCallHint.Call("Member", ("operation", operation))} once per member, passing one full declaration each time; to keep them in order, make each call after the first as {ToolCallHint.Call("Member", ("operation", operation), ("insertAfterMemberName", "<previous member's name>"))}.";
     }
 
+    /// <summary>Splits newMemberSource into its member declarations, or null when it is not a clean member list (Step 2 stub, not yet implemented).</summary>
+    internal static IReadOnlyList<MemberDeclarationSyntax>? TrySplitMemberDeclarations(string source)
+    {
+        throw new NotImplementedException(); // TODO implement (Step 2)
+    }
+
+    /// <summary>Parses newMemberSource into one or more member declarations, throwing unparsableMessage when it is not a member list (Step 2 stub, not yet implemented).</summary>
+    internal static IReadOnlyList<MemberDeclarationSyntax> ParseNewMemberDeclarations(string newMemberSource, string unparsableMessage = "Failed to parse new member.")
+    {
+        throw new NotImplementedException(); // TODO implement (Step 2)
+    }
+
+    /// <summary>Describes the added members for a multi-member add result (Step 2 stub, not yet implemented).</summary>
+    internal static string DescribeAddedMembers(IReadOnlyList<MemberDeclarationSyntax> members)
+    {
+        throw new NotImplementedException(); // TODO implement (Step 2)
+    }
+
     public async Task<DocumentEditResult> AddFieldAsync(FilePathWrapper filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, bool isConst = false, CancellationToken cancellationToken = default)
     {
         if (isConst)
@@ -2627,6 +2645,12 @@ public class MemberRefactoringEngine
             Message = $"// Added {addedDescription}.",
             UpdatedText = updatedText
         };
+    }
+
+    /// <summary>Adds several member declarations in one write (Step 8 stub, not yet implemented).</summary>
+    public Task<DocumentEditResult> AddMembersAsync(FilePathWrapper filePath, string containerName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException(); // TODO implement (Step 8)
     }
 
     /// <summary>
