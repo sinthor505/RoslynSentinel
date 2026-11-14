@@ -128,6 +128,11 @@ public class ShippingKindSteppedAgentTests
     [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_CompletesShippingKindStep(int step)
     {
+        await RunStepAsync(step, ShippingKindStepGoldens.PromptForStep(step));
+    }
+
+    private async Task RunStepAsync(int step, string prompt)
+    {
         var cancellationToken = TestContext.CurrentContext.CancellationToken;
         Directory.CreateDirectory(_runDirectory);
 
@@ -145,7 +150,7 @@ public class ShippingKindSteppedAgentTests
         var stopwatch = Stopwatch.StartNew();
         var result = await runner.RunAsync(
             ErrorPolicyWiring.ComposePrompt(AgentSystemPrompts.CodingAgent),
-            ShippingKindStepGoldens.PromptForStep(step),
+            prompt,
             _runDirectory,
             cancellationToken);
         stopwatch.Stop();
@@ -179,5 +184,17 @@ public class ShippingKindSteppedAgentTests
         File.WriteAllText(Path.Combine(_runDirectory, $"step-{step}.outcome.txt"), summary + "\r\n");
 
         Assert.That(outcome, Is.EqualTo(ShippingKindStepOutcome.Pass), $"{detail} Transcript: {result.TranscriptPath}");
+    }
+
+    // The name must not contain "Model_CompletesShippingKindStep" because the baseline script filter is Name~ on that string.
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
+    public async Task Model_RunsShippingKindStepPromptV2(int step)
+    {
+        await RunStepAsync(step, ShippingKindStepGoldens.PromptForStepV2(step));
     }
 }

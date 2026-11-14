@@ -262,35 +262,63 @@ internal static class ShippingKindStepGoldens
         return files;
     }
 
-    private const string PromptStep1 = """
+    private const string PromptStep1V1 = """
         The files under ContosoOrders.Core/Shipping compare shipping kinds as string literals (for example "express"). Find every such comparison or case label. Do not change any file. Reply with one line per occurrence: file name, method name, literal.
         """;
 
-    private const string PromptStep2 = """
+    private const string PromptStep2V1 = """
         Create ContosoOrders.Core/Shipping/ShippingKinds.cs with a public static class ShippingKinds in namespace ContosoOrders.Core. It has four public const string fields: Standard = "standard", Express = "express", Overnight = "overnight", Pickup = "pickup", and a public static IReadOnlySet<string> property All holding the four values. Change no other file. Reply with what you created.
         """;
 
-    private const string PromptStep3 = """
+    private const string PromptStep3V1 = """
         Add three public static methods to ShippingKinds (ContosoOrders.Core/Shipping/ShippingKinds.cs). bool IsKnown(string? kind): true when kind is exactly one of the four constants. bool IsExpedited(string? kind): true for Express or Overnight. string Normalize(string kind): trims and lower-cases kind, returns it when IsKnown, otherwise throws ArgumentException. Change no other file. Reply with what you changed.
         """;
 
-    private const string PromptStep4 = """
+    private const string PromptStep4V1 = """
         In ShippingFeeCalculator.cs and ShipmentValidator.cs (ContosoOrders.Core/Shipping), replace every shipping kind string literal with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express). Behaviour must not change. Change no other file. Reply with the number of literals replaced per file.
         """;
 
-    private const string PromptStep5 = """
+    private const string PromptStep5V1 = """
         In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), replace every shipping kind string literal with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express), and replace each check for 'express or overnight' with a call to ShippingKinds.IsExpedited. Behaviour must not change. Change no other file. Reply with what you changed.
+        """;
+
+    private const string PromptStep2V2 = """
+        Create ContosoOrders.Core/Shipping/ShippingKinds.cs with a public static class ShippingKinds. The folder is Shipping but the namespace is exactly ContosoOrders.Core (not ContosoOrders.Core.Shipping): every other file in the folder uses it and callers depend on it. Use a file-scoped namespace: namespace ContosoOrders.Core; It has four public const string fields: Standard = "standard", Express = "express", Overnight = "overnight", Pickup = "pickup", and a public static IReadOnlySet<string> property All holding the four values. Change no other file. Reply with what you created.
+        """;
+
+    private const string PromptStep3V2 = """
+        Add three public static methods to ShippingKinds (ContosoOrders.Core/Shipping/ShippingKinds.cs). bool IsKnown(string? kind): true only when kind is exactly one of the four constants. bool IsExpedited(string? kind): true only for Express or Overnight, false for every other value including null. string Normalize(string kind): `var n = kind.Trim().ToLowerInvariant();` return n when IsKnown(n), otherwise throw ArgumentException. Do not use string.Normalize. Change no other file. Reply with what you changed.
+        """;
+
+    private const string PromptStep5V2 = """
+        In DeliveryEstimator.cs and CarrierSelector.cs (ContosoOrders.Core/Shipping), replace every shipping kind string literal with the matching ShippingKinds constant, written qualified as ShippingKinds.<Name> (for example ShippingKinds.Express). Wherever the code checks 'express or overnight' (kind == Express || kind == Overnight, however it is written), replace the whole condition with a call to ShippingKinds.IsExpedited(kind). No || comparison of those two constants may remain. Behaviour must not change. Change no other file. Reply with what you changed.
         """;
 
     public static string PromptForStep(int step)
     {
         return step switch
         {
-            1 => PromptStep1,
-            2 => PromptStep2,
-            3 => PromptStep3,
-            4 => PromptStep4,
-            5 => PromptStep5,
+            1 => PromptStep1V1,
+            2 => PromptStep2V1,
+            3 => PromptStep3V1,
+            4 => PromptStep4V1,
+            5 => PromptStep5V1,
+            _ => throw new ArgumentOutOfRangeException(nameof(step)),
+        };
+    }
+
+    /// <summary>
+    /// V2 changes only steps 2, 3 and 5; steps 1 and 4 reuse V1 as an in-batch control.
+    /// </summary>
+    public static string PromptForStepV2(int step)
+    {
+        return step switch
+        {
+            1 => PromptStep1V1,
+            2 => PromptStep2V2,
+            3 => PromptStep3V2,
+            4 => PromptStep4V1,
+            5 => PromptStep5V2,
             _ => throw new ArgumentOutOfRangeException(nameof(step)),
         };
     }

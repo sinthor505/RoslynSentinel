@@ -345,6 +345,11 @@ A bare pass/fail sends the analyst back into transcripts to learn what happened.
   Outcome per step: `Pass`, `OutOfScopeEdit`, `CheckFailed`, `BuildBroken`, `Blocked`, `NotConverged`.
 - All five: `.\scripts\roslynsentinel-modeleval.ps1 -Test ShippingKindStep -Model <key>` (queue it on a
   shared host). One step or a range: add `-Step 4` or `-Step 4,5`.
+- Prompt variants: `-Test ShippingKindStep` runs the V1 prompts (`ShippingKindStepGoldens.PromptStepNV1`);
+  `-Test ShippingKindStepV2` runs `Model_RunsShippingKindStepPromptV2` with the V2 prompts for steps 2, 3 and 5
+  (steps 1 and 4 reuse V1 as a control). Both share `ShippingKindSteppedAgentTests.RunStepAsync(step, prompt)`; a new
+  variant is a prompt set plus a thin test plus a script alias. Results land under the variant's own test name. A
+  variant's test name must not contain `Model_CompletesShippingKindStep` (the V1 filter is `Name~` on it).
 - Per-step output in the archived run folder `ModelTestingResults/<host>/Model_CompletesShippingKindStep(<k>)/<timestamp>/`:
   `step-<k>.golden.diff` (the model's tree against the golden tag, a report only, not graded) and
   `step-<k>.outcome.txt` (class, turns, wall time, StopReason).

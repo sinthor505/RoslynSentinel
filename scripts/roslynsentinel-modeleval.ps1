@@ -123,7 +123,9 @@
     the next turns; see -ResumeTranscript) | ScoreTranscript (score a saved transcript without calling a
     model; see -ScoreTranscript) | Scenario (run a registered targeted scenario for -Samples samples; see -Scenario) |
     ShippingKindStep (Model_CompletesShippingKindStep: five independent steps of the stepped ShippingKind scenario,
-    each from a golden commit; all five by default, or the ones named by -Step). Required. Accepts multiple values (e.g.
+    each from a golden commit; all five by default, or the ones named by -Step) | ShippingKindStepV2
+    (Model_RunsShippingKindStepPromptV2: the same five steps with the V2 prompts for steps 2, 3 and 5; steps 1 and 4
+    reuse the V1 prompts as a control; -Step works the same). Required. Accepts multiple values (e.g.
     -Test OrderPricingRefactor,OrderPricingRefactorChain4,OrderPricingRefactorChain5) to run
     each one in turn, in the order given, all under the same -HostAddress/-Model/-Repeats -
     this is the supported way to queue a multi-test overnight sequence: it reuses this script's
@@ -276,7 +278,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario', 'ShippingKindStep')]
+    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'LargeResultPaging', 'LargeResultPagingReadFileOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10', 'ResumeTranscript', 'ScoreTranscript', 'Scenario', 'ShippingKindStep', 'ShippingKindStepV2')]
     [string[]]$Test,
 
     [Parameter(Position = 2)]
@@ -380,10 +382,12 @@ $testNames = @{
     'ScoreTranscript'               = 'ScoreSavedTranscript_AppendsOneLine'
     'Scenario'                      = 'RunScenario_SamplesAndScores'
     'ShippingKindStep'              = 'Model_CompletesShippingKindStep'
+    # The V2 name must not contain 'Model_CompletesShippingKindStep': the V1 filter below is Name~ on that string.
+    'ShippingKindStepV2'            = 'Model_RunsShippingKindStepPromptV2'
 }
 
-if ($Step -and ($Test -notcontains 'ShippingKindStep')) {
-    throw "-Step applies only to -Test ShippingKindStep."
+if ($Step -and ($Test -notcontains 'ShippingKindStep') -and ($Test -notcontains 'ShippingKindStepV2')) {
+    throw "-Step applies only to -Test ShippingKindStep or ShippingKindStepV2."
 }
 
 if ($Test -contains 'ResumeTranscript') {
@@ -635,7 +639,7 @@ for ($i = 1; $i -le $Repeats; $i++) {
     # counted like any other run; $LASTEXITCODE still reflects the real per-run outcome.
     $ErrorActionPreference = 'Continue'
     $testFilter = "Name=$testName"
-    if ($currentTest -eq 'ShippingKindStep') {
+    if ($currentTest -in 'ShippingKindStep', 'ShippingKindStepV2') {
         # Five TestCase rows share one method name: Name~ selects all five, -Step narrows to the listed cases.
         # Parentheses are filter syntax, so the case name's own ( and ) are escaped.
         $testFilter = if ($Step) {
