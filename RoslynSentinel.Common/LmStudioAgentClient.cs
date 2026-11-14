@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -127,6 +128,7 @@ public sealed class LmStudioAgentClient
         {
             return await CompleteOnceAsync(messages, tools, maxTokens, cancellationToken);
         }
+        // ContextSizeExceededException is deliberately excluded from this filter: the same prompt overflows again on retry.
         catch (Exception ex) when (ex is StreamIdleTimeoutException or InvalidOperationException or IOException)
         {
             // One retry for transient LM Studio flakiness observed live: the SSE connection going
@@ -176,6 +178,11 @@ public sealed class LmStudioAgentClient
         {
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogWarning("LM Studio request failed: {StatusCode} {Body}", response.StatusCode, errorBody);
+            if (response.StatusCode == HttpStatusCode.InternalServerError &&
+                errorBody.Contains("Context size has been exceeded", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ContextSizeExceededException($"LM Studio context size exceeded ({response.StatusCode}): {errorBody}");
+            }
             throw new InvalidOperationException($"LM Studio request failed with {response.StatusCode}: {errorBody}");
         }
 
@@ -800,6 +807,9 @@ public sealed class LmStudioAgentClient
 
 /// <summary>Thrown when an LM Studio SSE stream stops producing any data for longer than <see cref="LlmOptions.StreamIdleTimeoutSeconds"/>, distinguishing a dead connection from real user/test cancellation.</summary>
 public sealed class StreamIdleTimeoutException(string message) : Exception(message);
+
+/// <summary>Thrown when LM Studio answers HTTP 500 with "Context size has been exceeded"; not retried because the same prompt overflows again.</summary>
+public sealed class ContextSizeExceededException(string message) : Exception(message);
 
 /// <summary>One message in the running conversation the harness maintains itself (not tied to the wire format).</summary>
 public sealed class AgentChatMessage
