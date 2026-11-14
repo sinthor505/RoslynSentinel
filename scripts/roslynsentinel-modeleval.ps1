@@ -234,6 +234,12 @@
     scenario's own cap applies; a positive value sets ROSLYNSENTINEL_MODELEVAL_TURN_CAP, and the script clears the variable
     otherwise so one left in the shell cannot skew a run.
 
+.PARAMETER ReasoningWindow
+    Every test: the reasoning replay window of the agent client (LmStudioAgentClient.ReasoningReplayTurns, default 10:
+    the oldest turns lose their reasoning a block of that many at a time). 0 replays every turn's reasoning. Default -1 =
+    unset, the client's own default applies; a value >= 0 sets ROSLYNSENTINEL_REASONING_WINDOW, and the script clears the
+    variable otherwise so one left in the shell cannot skew a run.
+
 .PARAMETER Step
     ShippingKindStep only: step numbers 1-5 to run (for example -Step 4,5 runs steps 4 and 5). Default: all five.
     Each listed step is one Model_CompletesShippingKindStep test case.
@@ -310,6 +316,9 @@ param(
     [string]$Scenario,
 
     [int]$TurnCap = 0,
+
+    [ValidateRange(-1, 1000)]
+    [int]$ReasoningWindow = -1,
 
     [ValidateRange(1, 5)]
     [int[]]$Step
@@ -450,6 +459,15 @@ $env:ROSLYNSENTINEL_LLM_MODEL = $Model
 # Child dotnet/MSBuild processes the test spawns (the fixture's dotnet restore) must not leave reusable
 # MSBuild nodes behind: an orphaned node can hold a redirected pipe open and stall test SetUp for 15+ minutes.
 $env:MSBUILDDISABLENODEREUSE = '1'
+# Always set or cleared (never left from the shell) so a stale window cannot skew a run.
+if ($ReasoningWindow -ge 0) {
+    $env:ROSLYNSENTINEL_REASONING_WINDOW = "$ReasoningWindow"
+    $windowShown = if ($ReasoningWindow -eq 0) { '0 (replay all reasoning)' } else { "$ReasoningWindow" }
+    Write-Host "    ROSLYNSENTINEL_REASONING_WINDOW=$windowShown" -ForegroundColor Cyan
+}
+else {
+    Remove-Item Env:\ROSLYNSENTINEL_REASONING_WINDOW -ErrorAction SilentlyContinue
+}
 if ($PSBoundParameters.ContainsKey('Temperature')) {
     $env:ROSLYNSENTINEL_LLM_TEMPERATURE = $Temperature
 }

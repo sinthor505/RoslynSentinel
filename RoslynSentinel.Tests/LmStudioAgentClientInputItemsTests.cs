@@ -114,6 +114,32 @@ public class LmStudioAgentClientInputItemsTests
         Assert.That(later.Take(earlier.Count), Is.EqualTo(earlier));
     }
 
+    [TestCase(0, 45, 0)]
+    [TestCase(10, 19, 0)]
+    [TestCase(10, 23, 10)]
+    [TestCase(20, 45, 20)]
+    public void ReasoningDroppedTurns_StepsByTheGivenWindow_AndZeroKeepsAll(int window, int turns, int expectedDropped)
+    {
+        Assert.That(LmStudioAgentClient.ReasoningDroppedTurns(turns, window), Is.EqualTo(expectedDropped));
+    }
+
+    [TestCase(null, null)]
+    [TestCase("", null)]
+    [TestCase(" 0 ", 0)]
+    [TestCase("15", 15)]
+    public void ParseReasoningWindowOverride_AcceptsUnsetOrNonNegative(string? text, int? expected)
+    {
+        Assert.That(LmStudioAgentClient.ParseReasoningWindowOverride(text), Is.EqualTo(expected));
+    }
+
+    [TestCase("-1")]
+    [TestCase("all")]
+    public void ParseReasoningWindowOverride_Throws_WhenNotANonNegativeInteger(string text)
+    {
+        var ex = Assert.Throws<FormatException>(() => LmStudioAgentClient.ParseReasoningWindowOverride(text));
+        Assert.That(ex!.Message, Does.Contain(LmStudioAgentClient.ReasoningWindowVariable));
+    }
+
     // InputMessageItem carries no "type" property on the wire; report it as "message".
     private static string Type(JsonElement item) =>
         item.TryGetProperty("type", out var t) ? t.GetString()! : "message";

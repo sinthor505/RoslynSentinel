@@ -495,12 +495,46 @@ public sealed class LmStudioAgentClient
     /// and the time to first token grew to 107 s on a slow host). Stepping breaks the cache once per block.
     /// </summary>
     internal static int ReasoningDroppedTurns(int assistantTurns) =>
-        Math.Max(0, (assistantTurns / ReasoningReplayTurns - 1) * ReasoningReplayTurns);
+        ReasoningDroppedTurns(assistantTurns, ReasoningReplayTurns);
+
+    /// <summary>
+    /// <see cref="ReasoningDroppedTurns(int)"/> for a block of <paramref name="window"/> turns; 0 replays every turn's reasoning.
+    /// </summary>
+    internal static int ReasoningDroppedTurns(int assistantTurns, int window) =>
+        window <= 0 ? 0 : Math.Max(0, (assistantTurns / window - 1) * window);
+
+    /// <summary>
+    /// Overrides <see cref="ReasoningReplayTurns"/> for experiments: a non-negative integer, 0 = replay all reasoning.
+    /// Unset or empty keeps the default.
+    /// </summary>
+    internal const string ReasoningWindowVariable = "ROSLYNSENTINEL_REASONING_WINDOW";
+
+    /// <summary>
+    /// Parses the <see cref="ReasoningWindowVariable"/> text: null when unset or empty, the value for a non-negative integer.
+    /// </summary>
+    internal static int? ParseReasoningWindowOverride(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        if (int.TryParse(text.Trim(), out var value) && value >= 0)
+        {
+            return value;
+        }
+
+        throw new FormatException($"{ReasoningWindowVariable} must be a non-negative integer (0 = replay all reasoning), got '{text}'.");
+    }
+
+    /// <summary>The live reasoning window: <see cref="ReasoningWindowVariable"/> when set, otherwise <see cref="ReasoningReplayTurns"/>.</summary>
+    internal static int EffectiveReasoningWindow =>
+        ParseReasoningWindowOverride(Environment.GetEnvironmentVariable(ReasoningWindowVariable)) ?? ReasoningReplayTurns;
 
     private static List<object> BuildInputItems(IReadOnlyList<AgentChatMessage> messages)
     {
         var assistantIndexes = messages.Select((m, i) => (m, i)).Where(x => x.m.Role == "assistant" && !x.m.IsLoopAssistNote).Select(x => x.i).ToList();
-        var dropped = ReasoningDroppedTurns(assistantIndexes.Count);
+        var dropped = ReasoningDroppedTurns(assistantIndexes.Count, EffectiveReasoningWindow);
         var firstReplayed = dropped > 0 ? assistantIndexes[dropped] : 0;
         return messages.SelectMany((m, i) => ToInputItems(m, replayReasoning: i >= firstReplayed)).ToList();
     }
