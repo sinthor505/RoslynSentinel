@@ -1021,7 +1021,7 @@ public class AsyncOptimizationEngine
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new ToolInvalidArgumentException("Could not get syntax root.");
         var awaitExprs = root.DescendantNodes().OfType<AwaitExpressionSyntax>()
             .Where(a => !(a.Expression is InvocationExpressionSyntax inv &&
@@ -1061,7 +1061,7 @@ public class AsyncOptimizationEngine
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException("File not found.", "file", filePath);
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new ToolInvalidArgumentException("Could not get syntax root.");
         var configureAwaitInvocations = root.DescendantNodes().OfType<InvocationExpressionSyntax>()
@@ -1107,7 +1107,7 @@ public class AsyncOptimizationEngine
         var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
         if (methodNode == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found. " + DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath.ToString()), MissingTargetKinds.Method, methodName);
         }
 
         var returnTypeStr = methodNode.ReturnType.ToString().Trim();
@@ -1273,7 +1273,7 @@ public class AsyncOptimizationEngine
         var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(NarrowByContainingType(methodMatches, callerContainingType), "Method", methodName);
         if (methodNode == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in file. Method names are case-sensitive; use the exact name as declared in source.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in file. Method names are case-sensitive; use the exact name as declared in source. " + DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath.ToString()), MissingTargetKinds.Method, methodName);
         }
 
         // Check if method already has a CancellationToken parameter
@@ -1887,10 +1887,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         string? callerContainingType = null)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath)
-                               .Select(solution.GetDocument)
-                               .FirstOrDefault() ?? throw new ToolNotFoundException(
-                $"File '{filePath}' not found in the loaded solution. Ensure LoadSolution has been called.", "file", filePath);
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new ToolInvalidArgumentException($"Could not get syntax root for '{filePath}'.");
 
@@ -1899,7 +1896,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                              .OfType<MethodDeclarationSyntax>()
                              .Where(m => m.Identifier.Text == methodName).ToList();
         var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(NarrowByContainingType(methodMatches, callerContainingType), "Method", methodName) ?? throw new ToolNotFoundException(
-                $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.", "method", methodName);
+                $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive. " + DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath.ToString()), MissingTargetKinds.Method, methodName);
         var methodLine = methodNode.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
 
         // Find any pre-existing MigrationCandidate for the audit trail.
@@ -2473,7 +2470,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
             if (!projects.Any())
             {
                 throw new ToolNotFoundException(
-                    $"Project '{projectName}' not found in the loaded solution.", "project", projectName);
+                    ProjectNotFoundDetail.Build(projectName, solution.Projects.Select(p => p.Name).ToList()), MissingTargetKinds.Project, projectName);
             }
         }
 
@@ -3063,7 +3060,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
         if (methodNode == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in file.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in file. " + DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath.ToString()), MissingTargetKinds.Method, methodName);
         }
 
         result.MethodFound = true;
@@ -3310,13 +3307,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var fileResult = new PropagateCtFileResult { FilePath = filePath };
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath)
-                               .Select(solution.GetDocument)
-                               .FirstOrDefault();
-        if (document == null)
-        {
-            throw new ToolNotFoundException("File not found in the loaded solution.");
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
