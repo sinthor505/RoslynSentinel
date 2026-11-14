@@ -7,8 +7,8 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 /// <summary>
-/// MemberTool(replace/addMember) take exactly one member declaration in newMemberSource. A source with
-/// several members used to be rejected by replace as "not a valid member declaration" (the engine's
+/// MemberTool addMember takes one or more member declarations in newMemberSource; replace takes exactly
+/// one. A replace source with several members used to be rejected as "not a valid member declaration" (the engine's
 /// ContainsDiagnostics check fired before its multi-declaration check, and the tool layer then
 /// overwrote the engine message with a hardcoded generic string) - which sent agents off rewriting a
 /// perfectly valid member instead of splitting the call. These tests pin the specific message: how
@@ -148,7 +148,7 @@ public class MemberSingleDeclarationTests
     [TestCase(null, null)]
     [TestCase("Alpha", null)]
     [TestCase(null, "Beta")]
-    public async Task AddMember_WithTwoMembers_ReportsCountNamesAndOneCallPerMemberAsync(string? insertAfterMemberName, string? insertBeforeMemberName)
+    public async Task AddMember_WithTwoMembers_AddsBothInOrderAsync(string? insertAfterMemberName, string? insertBeforeMemberName)
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = BuildTools(workspace.Manager);
@@ -162,16 +162,34 @@ public class MemberSingleDeclarationTests
             insertBeforeMemberName: insertBeforeMemberName,
             newMemberSource: "public int Gamma() => 3;\n\npublic string Name { get; set; } = \"\";");
 
-        Assert.That(!result.IsError, Is.False);
-        var message = result.ErrorData!.Message;
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var text = workspace.ReadText(FixtureRelativePath);
+        var alpha = text.IndexOf("public int Alpha()", StringComparison.Ordinal);
+        var beta = text.IndexOf("public int Beta()", StringComparison.Ordinal);
+        var gamma = text.IndexOf("public int Gamma()", StringComparison.Ordinal);
+        var name = text.IndexOf("public string Name", StringComparison.Ordinal);
         Assert.Multiple(() =>
         {
-            Assert.That(result.ErrorData.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-            Assert.That(message, Does.Contain("2 member declarations"));
-            Assert.That(message, Does.Contain("Method 'Gamma'"));
-            Assert.That(message, Does.Contain("Property 'Name'"));
-            Assert.That(message, Does.Contain("addMember takes exactly one member per call"));
-            Assert.That(message, Does.Contain("operation: addMember").And.Contain("once per member"));
+            Assert.That(gamma, Is.GreaterThan(-1), "Gamma was not added.");
+            Assert.That(name, Is.GreaterThan(gamma), "Name must follow Gamma.");
+            Assert.That(result.ErrorData?.Message ?? string.Empty, Does.Not.Contain("addMember takes exactly one member per call"));
+            var description = (result.SuccessData as RoslynSentinel.Common.AppliedChangeSummary)?.Description ?? string.Empty;
+            Assert.That(description, Does.Not.Contain("addMember takes exactly one member per call"));
+            Assert.That(description, Does.Contain("Added 2 members"));
         });
+        if (insertAfterMemberName is null && insertBeforeMemberName is null)
+        {
+            // No anchor: the declarations are appended after the last member, Beta.
+            Assert.That(gamma, Is.GreaterThan(beta));
+        }
+        else
+        {
+            // Anchor "Alpha" (insertAfter) and anchor "Beta" (insertBefore) both land between Alpha and Beta.
+            Assert.Multiple(() =>
+            {
+                Assert.That(gamma, Is.GreaterThan(alpha));
+                Assert.That(name, Is.LessThan(beta));
+            });
+        }
     }
 }
