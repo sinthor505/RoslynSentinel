@@ -48,7 +48,7 @@ public class TestingEngine
 
         var methodMatches = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .Where(m => m.Identifier.Text == methodName).ToList();
-        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName) ?? throw new ToolNotFoundException($"Method {methodName} not found.");
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName) ?? throw new ToolNotFoundException($"Method {methodName} not found." + " " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath.ToString()), MissingTargetKinds.Method, methodName);
         var conditionals = new List<string>();
         int complexity = 1;
 
@@ -80,7 +80,7 @@ public class TestingEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException($"Could not parse syntax root for file: {filePath}");
 
         var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>()
-            .Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className) ?? throw new ToolNotFoundException($"Class {className} not found in file: {filePath}");
+            .Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className) ?? throw new ToolNotFoundException($"Class {className} not found in file: {filePath}." + " " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("class", "className", className, root.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(c => c.Identifier.Text), filePath.ToString()), MissingTargetKinds.Class, className);
         var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString() ?? "Global";
         var publicMethods = classNode.Members.OfType<MethodDeclarationSyntax>()
             .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)));
@@ -329,6 +329,7 @@ public class TestingEngine
         if (root == null)
         {
             // TODO names ListAll unconditionally: AddBenchmarkStub is not on the lean ModelEval surface (plan_modeleval_lean_tool_surface Step 2d); make it surface-aware if that changes
+            // TODO not-found: precondition failure, not a miss; kind-less on purpose (consider a typed validation exception)
             throw new ToolNotFoundException($"Syntax root could not be read for '{filePath}'. Searched: the document's syntax tree. Next: confirm the file is in the loaded solution with {ToolCallHint.Call("ListAll")}, then retry.");
         }
 
@@ -336,7 +337,7 @@ public class TestingEngine
             .Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
         if (classNode == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. Searched: class declarations in the file. Next: {ToolCallHint.Call("Search", ("mode", "class"), ("query", className))} to confirm the name.", "class", className);
+            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'." + " " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("class", "className", className, root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(c => c.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Class, className);
         }
         bool isStaticClass = classNode.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
 

@@ -27,7 +27,7 @@ public class InstrumentationEngine
         var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>(), "Method", methodName);
         if (methodNode == null || methodNode.Body == null)
         {
-            throw new ToolNotFoundException($"Method or body not found: {methodName}");
+            throw new ToolNotFoundException($"Method or body not found: {methodName}." + (methodNode == null ? " " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("method", "methodName", methodName, root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()) : ""), MissingTargetKinds.Method, methodName);
         }
 
         var catchBlock = SyntaxFactory.CatchClause(
@@ -61,7 +61,7 @@ public class InstrumentationEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className) ?? throw new ToolNotFoundException($"Class not found: {className}");
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className) ?? throw new ToolNotFoundException($"Class not found: {className}." + " " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("class", "className", className, root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(c => c.Identifier.Text) ?? Enumerable.Empty<string>(), filePath.ToString()), MissingTargetKinds.Class, className);
         var publicMethods = classNode.Members.OfType<MethodDeclarationSyntax>()
             .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)) && m.Body != null)
             .ToList();
@@ -106,7 +106,7 @@ public class InstrumentationEngine
         var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (methodNode == null || methodNode.Body == null)
         {
-            throw new ToolNotFoundException($"Method or body not found: {methodName} in file: {filePath}");
+            throw new ToolNotFoundException($"Method or body not found: {methodName} in file: {filePath}." + (methodNode == null ? " " + RoslynSentinel.Engines.Basic.DeclarationNotFoundDetail.Build("method", "methodName", methodName, root.DescendantNodes().OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text), filePath.ToString()) : ""), MissingTargetKinds.Method, methodName);
         }
 
         // Shared annotation for every node introduced below (the added using directive, if any, and
