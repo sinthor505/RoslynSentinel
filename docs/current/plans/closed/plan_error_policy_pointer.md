@@ -293,6 +293,7 @@ Read-only, by code (no executed tool-level test). Full report in the run tracker
   | mean turns | 6.67 | 7.13 | |
 
   First post-seed call: on ReadFile 15, ListAll 8, ListSolutionItems 4, Search 3; off ListAll 17, ReadFile 8, ListSolutionItems 3, Search 2 (the inventory doubles direct ReadFile use; the "call ListAll" lead in the error text still wins for 8 on and 17 off samples). **Decision: deferred.** The Decisions give no threshold and every difference is inside noise at n=30, so the default stays off (owner: flip, or n=60 more per cell). Inventory text defect found: the member list is followed by the next sentence with no separator (TODO.md).
+- **Outcome (todo punchlist #10, 2026-11-14):** the owner's review (2026-11-13) flipped the default on. Separator fixed first (c4ccfce4, 839b66e7: both member-list sentences now end with a period, so the `hiddenNote` and `exactMatch=false` sentences appended by `SymbolNavigationImpl.LocateSymbol` no longer glue on), then `ROSLYNSENTINEL_NOTFOUND_INVENTORY` defaults on (ff8b35ac): unset, empty, `1` and `true` are on, any other value (for example `0` or `false`) is off. The ModelEval `errorPolicyMode` stamp now carries `+inventory` by default; pass `ROSLYNSENTINEL_NOTFOUND_INVENTORY=0` for an inventory-off cell.
 
 ### (c) Unenumerated kind strings
 

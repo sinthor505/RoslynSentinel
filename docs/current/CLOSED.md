@@ -8,6 +8,24 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Not-found member inventory: flip default to on - resolved (2026-11-13)
+
+Not-found member inventory: flip default to on (2026-11-13) - the n=30 A/B (35e2af4b) showed no harm (pass 22/30 vs 19/30, p 0.58); after the separator fix, set the `ROSLYNSENTINEL_NOTFOUND_INVENTORY` default on in `NotFoundInventoryOptions`, pin it in `NotFoundInventoryOptionsTests`, remove the TODOs at `NotFoundMemberInventory.cs:5` and `ModelEvalAssemblySetUp.cs:34`; Small - [doc](plans/closed/plan_error_policy_pointer.md)
+
+Evidence: todo punchlist #10: ff8b35ac (ROSLYNSENTINEL_NOTFOUND_INVENTORY on when unset/empty/1/true, off for any other value; NotFoundInventoryOptionsTests pin it; TODOs removed). Filtered runs on ff8b35ac: Tests.Tools.Basic ~NotFound|LocateSymbol|SymbolNotFound 318/318, Tests.Basic 224/224, Tests.Advanced 107/107, Tests.ModelEval 23/23 (filter ~NotFound|ErrorPolicy). Note: the ModelEval errorPolicyMode stamp now carries +inventory by default.
+
+## Not-found member inventory text lacks a separator before the next sentence - resolved (2026-11-13)
+
+Not-found member inventory text lacks a separator before the next sentence (2026-11-13) - fix in `SymbolNotFoundDetail.BuildAsync` and `SymbolNavigationImpl.LocateSymbol`; unit test asserts the inventory text is followed by punctuation or a newline; Small - [doc](plans/closed/plan_error_policy_pointer.md)
+
+Evidence: todo punchlist #10: c4ccfce4 and 839b66e7 (both member-list sentences in NotFoundMemberInventory end with a period, so the hiddenNote and exactMatch=false sentences LocateSymbol appends no longer glue on; fixed in the inventory text rather than at each append site); NotFoundInventoryTests.BuildAsync_SwitchOnMemberLists_EndWithAPeriodSoTheNextSentenceDoesNotGlueOn. The file-miss folder list (FileNotFoundMessage, "contains N files: ...") has no trailing period either; nothing appends after it today.
+
+## Re-measure generic Exception codes on ReplaceSnippet failures - resolved (2026-11-13)
+
+Re-measure generic `Exception` codes on ReplaceSnippet failures (2026-11-13) - the 203/413 figure predates the 11-11..11-13 typing work (cf95f356, a63d48f5, 1594f54f, bd480d35); run `ClassifyError` (`AgentToolErrorAssertions.cs:116`) over post-11-12 10-chain transcripts and group `Exception` results by message prefix; 0 or a few = close, any producer gets a typed code plus a test; Small - [plan](plans/plan_error_codes_follow_cause.md)
+
+Evidence: todo punchlist #11 (2026-11-14): no-model scan of the ClassifyError/ErrorCodeOf logic (c:\tmp\Scan-ExceptionCodes.ps1) over the 76 post-bd480d35 10-chain transcripts (hosts 112, 113, 85; 2034 tool calls, 311 error results) found 0 Exception results (ValidationFailed 136, NotFound 127, InvalidArgument 34, FileNotFound 10, no code 2, TargetIneligible 2); the same scan over all 2064 transcripts newer than the commit (11414 calls, 2652 errors) also found 0 Exception results. The 203/413 figure is stale; no producer left to type.
+
 ## Migrate Engines.Advanced missing-target kinds to MissingTargetKinds - resolved (2026-11-13)
 
 Migrate `RoslynSentinel.Engines.Advanced` missing-target kinds to `MissingTargetKinds` (2026-11-14) - 136 `ToolNotFoundException` sites there, about 43 pass a literal kind ("class", "method", "parameter", "expression", "snippet", "statement", ...); move them to the shared constants in slices per engine file and add `RoslynSentinel.Engines.Advanced` to the scan in `ErrorPolicyKindRatchetTests` (scope is Common, Engines.Basic, Tools.Basic today; the `// TODO error-policy` in `ErrorPolicyClassifier.MapKind` names the gap). Also review whether `AdvancedStructuralEngine` literals "expression"/"snippet"/"statement" are in `MissingTargetKinds.UnmappedKinds` (they are); size with the same sweep lane (about 20 sites per slice) - [doc](plans/closed/plan_error_policy_pointer.md)
