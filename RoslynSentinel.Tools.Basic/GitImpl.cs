@@ -89,6 +89,7 @@ public static class GitErrorCodes
     /// <summary>Maps a GitTool failure code to the canonical status. Every GitTool code is a refusal or failure, so none maps to a non-error status; an unknown or fallback code is Failed.</summary>
     public static ResultStatus ToResultStatus(string? code) => code switch
     {
+        // TODO error-policy: GitErrorCodes PathNotFound and TargetNotFound map to ResultStatus.NotFound with no MissingTargetKinds kind or NameCandidates detail (deferred from the Engines.Advanced not-found sweep, TODO.md); migrate onto MissingTargetKinds with facts and options only.
         PathNotFound or TargetNotFound => ResultStatus.NotFound,
         RefRequired or ActionRequired or InvalidName or HunkSelection or HunkStale => ResultStatus.InvalidInput,
         IgnoredPath or NothingToCommit or NoChanges or OperationInProgress or AlreadyExists or WorkingTreeDirty

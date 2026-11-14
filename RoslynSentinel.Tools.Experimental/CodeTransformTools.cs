@@ -784,6 +784,7 @@ public class CodeTransformTools
 
     private static SentinelCallToolResult<object> GeneratorFailure(string code, string error)
     {
+        // TODO error-policy: ToolErrorCode.NotFound is mapped to a hint without a kind or NameCandidates detail (deferred from the Engines.Advanced not-found sweep, TODO.md); migrate onto MissingTargetKinds with facts and options only.
         var hint = code == ToolErrorCode.NotFound
             ? $" Call {ToolCallHint.Call("GetFileOutline", ("filePath", "<the file>"))} to confirm the class name, then retry with that exact className."
             : code == ToolErrorCode.TargetIneligible
