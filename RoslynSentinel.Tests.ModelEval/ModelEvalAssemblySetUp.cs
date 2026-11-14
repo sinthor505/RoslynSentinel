@@ -31,8 +31,7 @@ public class ModelEvalAssemblySetUp
         // The in-process eval server never runs ServerStdio/ServerHttp, so read the experimental server flags'
         // env vars here (ROSLYNSENTINEL_LIFT_RENAMES, ROSLYNSENTINEL_LOOP_LATCH); unset leaves them off.
         LiftRenamesOptions.Configure([]);
-        // TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses
-        // Reads ROSLYNSENTINEL_NOTFOUND_INVENTORY (1 or true turns the symbol member inventory on; the file-miss folder list is always on; the stamp below carries +inventory).
+        // Reads ROSLYNSENTINEL_NOTFOUND_INVENTORY (on by default; 0 or false turns the symbol member inventory off; the file-miss folder list is always on; the stamp below carries +inventory while it is on).
         NotFoundInventoryOptions.Configure([]);
         LoopLatchOptions.Configure([]);
         // Reads ROSLYNSENTINEL_ERROR_POLICY_MODE / _FILE; unset leaves the policy Off. For Pointer/Inline with no file,

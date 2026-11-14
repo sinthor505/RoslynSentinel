@@ -1,11 +1,10 @@
 namespace RoslynSentinel.Common;
 
-// TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses
 /// <summary>
 /// Startup switch for the symbol member inventory of plan_error_policy_pointer (Step 11g, arm I): when on, a no-candidates symbol-not-found text for a current workspace
 /// ends with the member names of the container the symbol was looked up in. The file-miss folder list is NOT behind this switch (it is always on).
 /// Populated once at startup via <see cref="Configure"/>: <c>--notfound-inventory</c> first, then the <c>ROSLYNSENTINEL_NOTFOUND_INVENTORY</c> environment variable.
-/// Only "1" and "true" (case-insensitive, trimmed) turn it on; anything else, and unset, leaves it off, and the off text is exactly the text without the member list.
+/// On by default: unset, empty, "1" and "true" (case-insensitive, trimmed) keep it on; any other value (e.g. "0" or "false") turns it off, and the off text is exactly the text without the member list.
 /// </summary>
 public static class NotFoundInventoryOptions
 {
@@ -14,7 +13,7 @@ public static class NotFoundInventoryOptions
     /// <summary>The suffix the ModelEval harness adds to the errorPolicyMode stamp when the switch is on.</summary>
     public const string StampSuffix = "+inventory";
 
-    private static bool _enabled;
+    private static bool _enabled = true;
 
     // Same deviation as LiftRenamesOptions: tests need the switch on in one test and off in the next without a process restart, and an
     // AsyncLocal override stays safe under parallel test runs, where a settable static would leak between fixtures.
@@ -30,11 +29,11 @@ public static class NotFoundInventoryOptions
         _enabled = ParseEnabled(raw);
     }
 
-    /// <summary>True for "1" or "true" (case-insensitive, whitespace-trimmed); false for null, empty and anything else.</summary>
+    /// <summary>True for null, empty or whitespace (unset), and for "1" or "true" (case-insensitive, whitespace-trimmed); false for any other value, such as "0", "false" or "bogus".</summary>
     public static bool ParseEnabled(string? raw)
     {
         var trimmed = raw?.Trim();
-        return trimmed == "1" || string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase);
+        return string.IsNullOrEmpty(trimmed) || trimmed == "1" || string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Test hook: forces <see cref="Enabled"/> for the current async flow until the returned scope is disposed.</summary>

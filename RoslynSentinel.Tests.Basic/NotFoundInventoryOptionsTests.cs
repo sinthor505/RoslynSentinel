@@ -2,7 +2,6 @@ using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tests.Basic;
 
-// TODO symbol member inventory untested (plan_error_policy_pointer arm I never reached a container); decide default after an eval that exercises containingType/filePath misses
 // NotFoundInventoryOptions is static (process-wide state) and reads a process environment variable, so this fixture must not run in parallel with other tests.
 [NonParallelizable]
 public class NotFoundInventoryOptionsTests
@@ -28,11 +27,11 @@ public class NotFoundInventoryOptionsTests
     }
 
     [Test]
-    public void Configure_NoArgsOrEnv_IsOff()
+    public void Configure_NoArgsOrEnv_IsOn()
     {
         NotFoundInventoryOptions.Configure([]);
 
-        Assert.That(NotFoundInventoryOptions.Enabled, Is.False);
+        Assert.That(NotFoundInventoryOptions.Enabled, Is.True);
     }
 
     [TestCase("1")]
@@ -53,7 +52,6 @@ public class NotFoundInventoryOptionsTests
     [TestCase("on")]
     [TestCase("yes")]
     [TestCase("2")]
-    [TestCase("")]
     [TestCase("bogus")]
     public void Configure_EnvVarOtherValue_LeavesItOff(string value)
     {
@@ -83,14 +81,22 @@ public class NotFoundInventoryOptionsTests
     }
 
     [Test]
-    public void Configure_CalledAgainWithoutTheEnvVar_TurnsItOffAgain()
+    public void Configure_CalledAgainWithoutTheEnvVar_TurnsItOnAgain()
     {
-        Environment.SetEnvironmentVariable(Env, "1");
+        Environment.SetEnvironmentVariable(Env, "0");
         NotFoundInventoryOptions.Configure([]);
-        Assert.That(NotFoundInventoryOptions.Enabled, Is.True);
+        Assert.That(NotFoundInventoryOptions.Enabled, Is.False);
 
         Environment.SetEnvironmentVariable(Env, null);
         NotFoundInventoryOptions.Configure([]);
+
+        Assert.That(NotFoundInventoryOptions.Enabled, Is.True);
+    }
+
+    [Test]
+    public void Configure_FlagFalseValue_TurnsItOffEvenWithNoEnvVar()
+    {
+        NotFoundInventoryOptions.Configure(["--notfound-inventory=false"]);
 
         Assert.That(NotFoundInventoryOptions.Enabled, Is.False);
     }
@@ -98,12 +104,12 @@ public class NotFoundInventoryOptionsTests
     [Test]
     public void OverrideForCurrentContext_WinsUntilDisposed()
     {
-        using (NotFoundInventoryOptions.OverrideForCurrentContext(true))
+        using (NotFoundInventoryOptions.OverrideForCurrentContext(false))
         {
-            Assert.That(NotFoundInventoryOptions.Enabled, Is.True);
+            Assert.That(NotFoundInventoryOptions.Enabled, Is.False);
         }
 
-        Assert.That(NotFoundInventoryOptions.Enabled, Is.False);
+        Assert.That(NotFoundInventoryOptions.Enabled, Is.True);
     }
 
     [TestCase("off", true, "off+inventory")]
