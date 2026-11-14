@@ -83,7 +83,8 @@ public class LmStudioClientRetryTests
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            if (request.RequestUri!.AbsolutePath.EndsWith("/api/v0/models", StringComparison.Ordinal))
+            if (request.Method != HttpMethod.Post ||
+                !request.RequestUri!.AbsolutePath.EndsWith("/responses", StringComparison.Ordinal))
             {
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
             }
